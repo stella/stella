@@ -5,7 +5,10 @@ import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
-import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
+import {
+  loadLatestSkillRevision,
+  lockSkillForAnchor,
+} from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -54,10 +57,12 @@ const createSkillProposal = createSafeRootHandler(
           throw editableOrigin.error;
         }
 
+        await lockSkillForAnchor(tx, params.skillId);
+
         const baseRevision = await loadLatestSkillRevision(tx, {
           skillId: params.skillId,
+
           organizationId: session.activeOrganizationId,
-          lock: "share",
         });
         if (!baseRevision) {
           panic("agent skill has no revision");

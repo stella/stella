@@ -1214,23 +1214,14 @@ const agentSkillChildVisibleCheck = (tableName: string) => sql`(
 
 /**
  * Revisions are written only by the `record_agent_skill_revision` trigger
- * (SECURITY DEFINER). The app role reads them and may lock them: proposals
- * and comments take `FOR SHARE` on the revision they anchor to so a
- * concurrent save cannot coalesce into it, and a row lock is checked against
- * the update policy. Its `WITH CHECK (false)` refuses every actual update, and
- * with no insert or delete policy row security refuses those outright.
+ * (SECURITY DEFINER), so the app role gets a select policy and nothing else:
+ * with no insert/update/delete policy, row security refuses those outright.
  */
 export const agentSkillRevisionPolicies = () => [
   p.pgPolicy("agent_skill_revision_select", {
     for: "select",
     to: stella,
     using: agentSkillChildVisibleCheck("agent_skill_revisions"),
-  }),
-  p.pgPolicy("agent_skill_revision_lock", {
-    for: "update",
-    to: stella,
-    using: agentSkillChildVisibleCheck("agent_skill_revisions"),
-    withCheck: denyAllRows,
   }),
 ];
 

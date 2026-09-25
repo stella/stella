@@ -177,17 +177,34 @@ describe("agent skill policy migrations", () => {
     expect(migrated.rows).toEqual(fromSchema.rows);
   });
 
-  test("the revision lock migration creates the policy the schema declares", async () => {
-    const policyNames = ["agent_skill_revision_lock"];
-    const fromSchema = await readPolicies(policyNames);
+  test("the anchor lock migration installs a pinned definer function only the app role may call", async () => {
     await testDb.execute(
-      sql`DROP POLICY "agent_skill_revision_lock" ON "agent_skill_revisions"`,
+      sql`DROP FUNCTION IF EXISTS "lock_agent_skill_for_anchor"(uuid)`,
     );
-    await applyMigration("20260925174100_agent_skill_revision_lock_policy");
-    const migrated = await readPolicies(policyNames);
+    await applyMigration("20260925174100_agent_skill_anchor_lock");
 
-    expect(fromSchema.rows).toHaveLength(1);
-    expect(migrated.rows).toEqual(fromSchema.rows);
+    const rows = await testDb.execute<{
+      securityDefiner: boolean;
+      config: string[] | null;
+      appRoleMayCall: boolean;
+    }>(sql`
+      SELECT
+        p.prosecdef AS "securityDefiner",
+        p.proconfig AS config,
+        pg_catalog.has_function_privilege(
+          'stella', p.oid, 'EXECUTE'
+        ) AS "appRoleMayCall"
+      FROM pg_catalog.pg_proc p
+      WHERE p.proname = 'lock_agent_skill_for_anchor'
+    `);
+
+    expect(rows.rows).toEqual([
+      {
+        securityDefiner: true,
+        config: ["search_path=pg_catalog, public"],
+        appRoleMayCall: true,
+      },
+    ]);
   });
 });
 
@@ -273,41 +290,72 @@ describe("agent skill domain values", () => {
   });
 });
 
-describe("agent skill revision RLS", () => {
-  test("a viewer may lock a revision but never update it", async () => {
+describe("agent skill anchor lock", () => {
+  test("a member may lock a team skill they can see, and still never update a revision", async () => {
     const skillId = await insertSkill({
       organizationId: ids.orgA,
       scope: "team",
-      slug: `revision-lock-${Bun.randomUUIDv7()}`,
+      slug: `anchor-lock-${Bun.randomUUIDv7()}`,
       userId: ids.userAdmin,
     });
 
-    const locked = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tx
-          .select({ id: agentSkillRevisions.id })
-          .from(agentSkillRevisions)
-          .where(eq(agentSkillRevisions.skillId, skillId))
-          .for("share"),
-      ids.userA1,
-    );
-    const updateError = await scopedQuery(
+    const lockError = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       async (tx) =>
         await tryCatch(async () => {
-          await tx
-            .update(agentSkillRevisions)
-            .set({ body: "rewritten" })
-            .where(eq(agentSkillRevisions.skillId, skillId));
+          await tx.execute(sql`SELECT lock_agent_skill_for_anchor(${skillId})`);
         }),
+      ids.userA1,
+    );
+    // No update policy on revisions: even a manager's update matches no row.
+    const updated = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) =>
+        await tx
+          .update(agentSkillRevisions)
+          .set({ body: "rewritten" })
+          .where(eq(agentSkillRevisions.skillId, skillId))
+          .returning({ id: agentSkillRevisions.id }),
       ids.userAdmin,
     );
 
-    expect(locked).toHaveLength(1);
-    expect(isPgError(updateError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+    expect(lockError).toBeNull();
+    expect(updated).toEqual([]);
+  });
+
+  test("a skill the caller cannot see is refused", async () => {
+    const privateSkillId = await insertSkill({
+      organizationId: ids.orgA,
+      scope: "private",
+      slug: `anchor-private-${Bun.randomUUIDv7()}`,
+      userId: ids.userA2,
+    });
+    const foreignSkillId = await insertSkill({
+      organizationId: ids.orgB,
+      scope: "team",
+      slug: `anchor-foreign-${Bun.randomUUIDv7()}`,
+      userId: ids.userB1,
+    });
+
+    const lockAsMember = async (skillId: SafeId<"agentSkill">) =>
+      await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) =>
+          await tryCatch(async () => {
+            await tx.execute(
+              sql`SELECT lock_agent_skill_for_anchor(${skillId})`,
+            );
+          }),
+        ids.userA1,
+      );
+    const privateError = await lockAsMember(privateSkillId);
+    const foreignError = await lockAsMember(foreignSkillId);
+
+    expect(isPgError(privateError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+    expect(isPgError(foreignError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });
 

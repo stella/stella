@@ -188,3 +188,67 @@ describe("a member reviewing a team skill", () => {
     expect(rows).toEqual([{ anchorText: "Team" }]);
   });
 });
+
+describe("an owner saving a team skill a member anchored to", () => {
+  const ownerSafeDb = (): SafeDb =>
+    asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+    );
+
+  const saveAsOwner = async (
+    skillId: SafeId<"agentSkill">,
+    body: string,
+  ): Promise<void> => {
+    const saved = await ownerSafeDb()(
+      async (tx) =>
+        await tx
+          .update(agentSkills)
+          .set({ body })
+          .where(eq(agentSkills.id, skillId)),
+    );
+    if (saved.isErr()) {
+      throw saved.error;
+    }
+  };
+
+  const revisionBodies = async (skillId: SafeId<"agentSkill">) =>
+    await testDb
+      .select({
+        revisionNumber: agentSkillRevisions.revisionNumber,
+        body: agentSkillRevisions.body,
+      })
+      .from(agentSkillRevisions)
+      .where(eq(agentSkillRevisions.skillId, skillId))
+      .orderBy(agentSkillRevisions.revisionNumber);
+
+  test("records a new revision instead of rewriting the anchored one", async () => {
+    const { skillId } = await insertTeamSkillWithProposal();
+    await saveAsOwner(skillId, "Owner draft");
+    // Within the coalescing window the owner's next save rewrites their own
+    // latest revision while nothing anchors to it.
+    await saveAsOwner(skillId, "Owner draft, revised");
+
+    const proposed = await createSkillProposal.handler(
+      createTestHandlerContext<
+        Parameters<typeof createSkillProposal.handler>[0]
+      >({
+        memberRole: { role: "member" },
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: memberSafeDb(),
+        params: { skillId },
+        body: { summary: "Anchor to the owner's draft" },
+      }),
+    );
+    if (!("id" in proposed)) {
+      throw new TypeError("expected the proposal to be created");
+    }
+    await saveAsOwner(skillId, "Owner edit after the proposal");
+
+    expect(await revisionBodies(skillId)).toEqual([
+      { revisionNumber: 1, body: "Team body" },
+      { revisionNumber: 2, body: "Owner draft, revised" },
+      { revisionNumber: 3, body: "Owner edit after the proposal" },
+    ]);
+  });
+});
