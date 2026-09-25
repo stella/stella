@@ -223,6 +223,8 @@ describe("pgErrorFields", () => {
       "error.cause.pg_column": "email",
       "error.cause.pg_schema": "public",
       "error.cause.pg_routine": "_bt_check_unique",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
     });
   });
 
@@ -246,6 +248,8 @@ describe("pgErrorFields", () => {
       "error.cause.pg_constraint": "users_email_key",
       "error.cause.pg_table": "users",
       "error.cause.pg_column": "email",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
     });
   });
 

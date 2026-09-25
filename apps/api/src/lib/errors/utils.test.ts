@@ -44,7 +44,11 @@ describe("errorSystemFields", () => {
   });
 
   test("handles non-Error values", () => {
-    expect(errorSystemFields("boom")).toEqual({ "error.type": "UnknownError" });
+    expect(errorSystemFields("boom")).toEqual({
+      "error.type": "UnknownError",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
+    });
   });
 
   test("never throws on hostile system-field accessors", () => {
@@ -63,7 +67,11 @@ describe("errorSystemFields", () => {
         get: () => panic("syscall getter failed"),
       },
     });
-    expect(errorSystemFields(error)).toEqual({ "error.type": "Error" });
+    expect(errorSystemFields(error)).toEqual({
+      "error.type": "Error",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
+    });
   });
 });
 
@@ -258,11 +266,17 @@ describe("errorFingerprint", () => {
     expect(errorFingerprint(error)).toEqual({
       "error.class": "Error",
       "error.code": "Error",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
     });
   });
 
   test("handles non-Error values", () => {
-    expect(errorFingerprint("boom")).toEqual({ "error.class": "UnknownError" });
+    expect(errorFingerprint("boom")).toEqual({
+      "error.class": "UnknownError",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
+    });
   });
 
   // The fingerprint exists to survive the logger's PII redaction. If a

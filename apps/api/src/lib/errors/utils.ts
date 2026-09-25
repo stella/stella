@@ -6,9 +6,18 @@ import { createDevErrorLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
+import {
+  errorClassName,
+  errorTag,
+  isErrorInstance,
+} from "@/api/lib/errors/error-tag";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
-import { pgErrorFields } from "@/api/lib/pg-error";
+import {
+  identityFields,
+  shadowGradeFields,
+  systemFields,
+} from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 // Re-exported so callers keep one import path, while modules that must not
 // pay this file's import-time env read can take them from the split module.
@@ -23,35 +32,10 @@ export { errorClassName, errorTag };
  * `error.message`, these are safe to ship to analytics dashboards,
  * so this extends `errorTag` rather than replacing it.
  */
-export const errorSystemFields = (error: unknown): Record<string, string> => {
-  const fields: Record<string, string> = { "error.type": errorTag(error) };
-  if (!(error instanceof Error)) {
-    return fields;
-  }
-  const code = safeErrorCode(error);
-  if (code !== undefined) {
-    fields["error.code"] = code;
-  }
-  const errno = safeErrorNumberProperty(error, "errno");
-  if (errno !== undefined) {
-    fields["error.errno"] = String(errno);
-  }
-  const syscall = safeErrorStringProperty(error, "syscall");
-  if (syscall !== undefined) {
-    fields["error.syscall"] = syscall;
-  }
-  const cause = safeErrorCause(error);
-  if (cause !== undefined) {
-    fields["error.cause.type"] = errorTag(cause);
-    if (cause instanceof Error) {
-      const causeCode = safeErrorCode(cause);
-      if (causeCode !== undefined) {
-        fields["error.cause.code"] = causeCode;
-      }
-    }
-  }
-  return fields;
-};
+export const errorSystemFields = (error: unknown): Record<string, string> => ({
+  ...systemFields(readEvidence(error)),
+  ...shadowGradeFields(error),
+});
 
 /**
  * `errorSystemFields` plus the raw error message under `error.msg`.
@@ -76,7 +60,7 @@ export const connectionErrorFields = (
   error: unknown,
 ): Record<string, string> => {
   const fields = errorSystemFields(error);
-  if (error instanceof Error) {
+  if (isErrorInstance(error)) {
     const message = safeErrorMessage(error);
     if (message !== undefined) {
       fields["error.msg"] = message;
@@ -127,14 +111,6 @@ const safeErrorStringProperty = (
   return typeof value === "string" && value !== "" ? value : undefined;
 };
 
-const safeErrorNumberProperty = (
-  error: Error,
-  key: string,
-): number | undefined => {
-  const value = safeErrorProperty(error, key);
-  return typeof value === "number" ? value : undefined;
-};
-
 export const safeErrorCause = (error: Error): unknown => {
   try {
     return Reflect.get(error, "cause");
@@ -153,18 +129,6 @@ export const safeErrorCode = (error: Error): string | undefined =>
 
 const safeErrorMessage = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "message");
-
-/**
- * The message exactly as the stack's own header carries it, empty string
- * included. `safeErrorMessage` reports an empty message as absent, which is
- * what the telemetry fields want; frame parsing needs the distinction, because
- * an error raised without a message still has a stack whose header line is the
- * bare class name and whose frames follow it.
- */
-const safeErrorMessageText = (error: Error): string | undefined => {
-  const value = safeErrorProperty(error, "message");
-  return typeof value === "string" ? value : undefined;
-};
 
 const safeErrorStack = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "stack");
@@ -203,183 +167,21 @@ export const unredactedErrorFields = (
  *
  * A class name, error code, and `file:line:col` code location carry no
  * client data, so they are safe at any sink. The attribute keys are
- * chosen to NOT match the logger's PII redaction regex
- * (`/(?:body|content|email|fileName|message|name|title)/i`), so they
- * survive `sanitizeLogAttributes`. Stack parsing is fully defensive:
- * `stack` may be undefined, multiline, or minified. The message prefix
- * is skipped before frame detection because user content may itself
- * contain lines shaped like stack frames. This never throws; a missing
- * frame is simply omitted.
+ * chosen to NOT match the logger's PII redaction regex, so they survive
+ * `sanitizeLogAttributes`. The fields are read from the shared failure
+ * snapshot (`failure-evidence.ts`), which also owns the defensive stack
+ * parsing, and carry the grade the failure would get.
+ *
+ * A Drizzle query failure wraps the driver's PostgresError as a cause; its
+ * SQLSTATE and schema identifiers are the actionable, non-PII detail, so the
+ * pg fields ride along.
  */
 export type ErrorFingerprint = Record<string, string>;
 
-const STACK_FRAME_PREFIX = "at ";
-
-const isAsciiDigits = (value: string): boolean => {
-  if (!value) {
-    return false;
-  }
-  for (const char of value) {
-    if (char < "0" || char > "9") {
-      return false;
-    }
-  }
-  return true;
-};
-
-const hasWhitespace = (value: string): boolean => {
-  for (const char of value) {
-    if (char.trim() === "") {
-      return true;
-    }
-  }
-  return false;
-};
-
-const frameLocation = (line: string): string | undefined => {
-  const trimmedStart = line.trimStart();
-  if (trimmedStart === line || !trimmedStart.startsWith(STACK_FRAME_PREFIX)) {
-    return undefined;
-  }
-
-  const locationEnd = trimmedStart.endsWith(")")
-    ? trimmedStart.length - 1
-    : trimmedStart.length;
-  const columnSeparator = trimmedStart.lastIndexOf(":", locationEnd - 1);
-  if (columnSeparator === -1) {
-    return undefined;
-  }
-  const lineSeparator = trimmedStart.lastIndexOf(":", columnSeparator - 1);
-  if (lineSeparator === -1) {
-    return undefined;
-  }
-
-  const lineNumber = trimmedStart.slice(lineSeparator + 1, columnSeparator);
-  const columnNumber = trimmedStart.slice(columnSeparator + 1, locationEnd);
-  if (!isAsciiDigits(lineNumber) || !isAsciiDigits(columnNumber)) {
-    return undefined;
-  }
-
-  const openingParen = trimmedStart.lastIndexOf("(", lineSeparator);
-  const locationStart =
-    openingParen === -1 ? STACK_FRAME_PREFIX.length : openingParen + 1;
-  const location = trimmedStart.slice(locationStart, locationEnd);
-  if (!location || hasWhitespace(location)) {
-    return undefined;
-  }
-  // Keep only the code location. A stack symbol can be inferred from a
-  // computed property key and therefore carry matter or personal data; Bun
-  // also suffixes colliding symbols during bundling, so it is neither safe
-  // telemetry nor a stable identity.
-  return location;
-};
-
-const stackFrameLines = (error: Error, stack: string): string[] => {
-  const message = safeErrorMessageText(error);
-  if (message === undefined) {
-    return [];
-  }
-
-  const lines = stack.split("\n");
-  const firstLine = lines.at(0);
-  if (firstLine === undefined) {
-    return [];
-  }
-
-  if (message === "") {
-    const name = safeErrorStringProperty(error, "name");
-    if (
-      name === undefined ||
-      name.includes("\n") ||
-      name.includes("\r") ||
-      name !== errorClassName(error) ||
-      firstLine !== name
-    ) {
-      return [];
-    }
-    return lines.slice(1);
-  }
-
-  const messageLines = message.split("\n");
-  const firstMessageLine = messageLines.at(0);
-  if (firstMessageLine && !firstLine.endsWith(firstMessageLine)) {
-    return [];
-  }
-
-  return lines.slice(messageLines.length);
-};
-
-const topStackFrame = (error: Error): string | undefined => {
-  try {
-    const stack = safeErrorStack(error);
-    if (stack === undefined) {
-      return undefined;
-    }
-    for (const line of stackFrameLines(error, stack)) {
-      const location = frameLocation(line);
-      if (location) {
-        return location;
-      }
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-};
-
-const stableErrorCode = (error: Error): string =>
-  safeErrorCode(error) ?? errorTag(error);
-
-const deepestCause = (error: Error): Error | undefined => {
-  try {
-    const seen = new WeakSet<object>([error]);
-    let current = safeErrorCause(error);
-    let deepest: Error | undefined;
-    let depth = 0;
-    while (current instanceof Error && depth < 5 && !seen.has(current)) {
-      seen.add(current);
-      deepest = current;
-      current = safeErrorCause(current);
-      depth += 1;
-    }
-    return deepest;
-  } catch {
-    return undefined;
-  }
-};
-
-export const errorFingerprint = (error: unknown): ErrorFingerprint => {
-  if (!(error instanceof Error)) {
-    return { "error.class": "UnknownError" };
-  }
-  const fingerprint: ErrorFingerprint = {
-    "error.class": errorClassName(error),
-    "error.code": stableErrorCode(error),
-  };
-  const frame = topStackFrame(error);
-  if (frame !== undefined) {
-    fingerprint["error.frame"] = frame;
-  }
-  const cause = deepestCause(error);
-  if (cause) {
-    // A wrapper (`UnhandledException`, a boundary TaggedError) otherwise
-    // hides what actually failed: the tag is structural, so it ships under
-    // the same contract as `error.class`. Deliberately absent from the
-    // grouping fingerprint and the suppression key — the wrap site is the
-    // defect's identity, the cause its detail.
-    fingerprint["error.cause.class"] = errorTag(cause);
-    const causeFrame = topStackFrame(cause);
-    if (causeFrame !== undefined) {
-      fingerprint["error.cause.frame"] = causeFrame;
-    }
-  }
-  // A Drizzle query failure wraps the driver's PostgresError as a cause; its
-  // SQLSTATE and schema identifiers are the actionable, non-PII detail. Without
-  // this the 5xx fingerprint carries only error types, and diagnosis needs the
-  // RDS server logs.
-  Object.assign(fingerprint, pgErrorFields(error));
-  return fingerprint;
-};
+export const errorFingerprint = (error: unknown): ErrorFingerprint => ({
+  ...identityFields(readEvidence(error)),
+  ...shadowGradeFields(error),
+});
 
 /**
  * Surface an error in dev. Two sinks:
