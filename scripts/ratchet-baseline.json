@@ -1090,7 +1090,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 110,
+    "count": 114,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1102,7 +1102,7 @@
       "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 6,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
@@ -1110,7 +1110,7 @@
       "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,
       "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts": 2,
-      "apps/api/src/handlers/chat/upload-files.ts": 1,
+      "apps/api/src/handlers/chat/upload-files.ts": 3,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/documents/compare.ts": 1,
       "apps/api/src/handlers/entities/versions/delete.ts": 1,

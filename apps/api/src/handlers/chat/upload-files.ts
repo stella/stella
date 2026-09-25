@@ -156,6 +156,7 @@ export const uploadMessageFiles = async ({
 
     const parsedPart = parseMessageFileDataUrl({ part });
     if (Result.isError(parsedPart)) {
+      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(parsedPart.error);
     }
 
@@ -170,6 +171,7 @@ export const uploadMessageFiles = async ({
       workspaceId,
     });
     if (Result.isError(uploadedFile)) {
+      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(uploadedFile.error);
     }
 

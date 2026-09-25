@@ -351,6 +351,7 @@ export const runIngestionPipeline = async ({
           step: "runIngestionPipeline.processSupplement",
         });
         if (error instanceof TimeoutError) {
+          // db-await-in-loop: runs once, as the loop returns; it writes the collected failures in one insert
           await flushIngestionFailures(failures);
           return databaseTimeoutHaltReason(error);
         }
@@ -365,6 +366,7 @@ export const runIngestionPipeline = async ({
         continue;
       }
       if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+        // db-await-in-loop: runs once, as the loop returns; it writes the collected failures in one insert
         await flushIngestionFailures(failures);
         return `Supplement ${supplement.document.sourceDocumentId} not placed (${placed.value.reason}); cursor held for retry`;
       }

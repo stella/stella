@@ -44,7 +44,8 @@
 // literal array (`Promise.all([a(tx), b(tx)])`) has a fixed length and is not
 // fan-out. A site whose statement is a `return`/`throw`, or is followed in its
 // statement list by an exit from the loop, runs once per loop and is not
-// flagged, unless a `try` with a `catch` around it can go round again.
+// flagged, but only where nothing can bypass that exit: no `continue` targets
+// the loop, and no `try` with a `catch` or `finally` sits in between.
 // `items.forEach(async ...)` starts work without awaiting it and is
 // not tracked, as before. A `Result.tryPromise` callback runs in place, so a
 // loop around it is still the loop.
@@ -386,16 +387,65 @@ const breaksOutOf = (jump: ts.BreakStatement, loop: ts.Node): boolean => {
   );
 };
 
+// The loop a `continue` goes round again: the nearest loop, or the loop its
+// label names. Null when it would have to cross a function boundary.
+const continueTarget = (jump: ts.ContinueStatement): ts.Node | null => {
+  const label = jump.label?.text;
+  let current: ts.Node = jump.parent;
+  while (!ts.isSourceFile(current)) {
+    if (isFunctionBoundary(current)) {
+      return null;
+    }
+    if (label === undefined && isIterationStatement(current)) {
+      return current;
+    }
+    if (
+      label !== undefined &&
+      ts.isLabeledStatement(current) &&
+      current.label.text === label
+    ) {
+      return current.statement;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+// Can anything in `loop` go round it again early? Any `continue` targeting it,
+// labelled or not, and wherever it sits, can bypass an exit that follows a
+// site, so its presence voids the exemption for the whole loop.
+const isContinuedAnywhere = (loop: ts.Node): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found || isFunctionBoundary(node)) {
+      return;
+    }
+    if (ts.isContinueStatement(node) && continueTarget(node) === loop) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(loop, visit);
+  return found;
+};
+
 const isLoopExit = (statement: ts.Statement, loop: ts.Node): boolean =>
   ts.isReturnStatement(statement) ||
   ts.isThrowStatement(statement) ||
   (ts.isBreakStatement(statement) && breaksOutOf(statement, loop));
 
 // Is the site's statement itself a `return`/`throw`, or followed in its own
-// statement list by an unconditional exit from `loop`? Then it runs at most
-// once per run of the loop, however many iterations came before it:
-// `if (failed) { await flush(); return; }`.
+// statement list by an exit from `loop`? Then it runs at most once per run of
+// the loop, however many iterations came before it:
+// `if (failed) { await flush(); return; }`. Exempted only where nothing can
+// bypass or override that exit: no `continue` targets the loop anywhere in
+// it, and no `try` between the site and the loop has a `catch` (a retry) or a
+// `finally` (which can replace the exit).
 const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
+  if (isContinuedAnywhere(loop)) {
+    return false;
+  }
   let statement: ts.Node = site;
   while (
     statement.parent !== loop &&
@@ -409,16 +459,15 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
     }
   }
   // An exit inside a callback that runs in place (a `Result.tryPromise`
-  // body) leaves the callback, not the loop. Inside a `try` with a `catch`,
-  // a failing call skips the exit, and the catch may go round again: a
-  // bounded retry is still a loop.
+  // body) leaves the callback, not the loop. Inside a `try` with a `catch`, a
+  // failing call skips the exit and the catch may go round again; a `finally`
+  // can replace the exit with its own completion.
   for (let scope = statement.parent; scope !== loop; scope = scope.parent) {
     if (
       isFunctionBoundary(scope) ||
       ts.isSourceFile(scope) ||
-      (ts.isTryStatement(scope.parent) &&
-        scope.parent.tryBlock === scope &&
-        scope.parent.catchClause !== undefined)
+      (ts.isTryStatement(scope) &&
+        (scope.catchClause !== undefined || scope.finallyBlock !== undefined))
     ) {
       return false;
     }

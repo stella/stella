@@ -159,11 +159,51 @@ export const exits = async () => {
       await saveOne(id); // expect: helper
       return id;
     });
+  }
+  for (const id of ids) {
+    await saveOne(id);
+    break;
+  }
+  for (const id of ids) {
+    await saveOne(id);
+    throw new Error(String(id));
+  }
+};
+
+export const bypassedExits = async (skip: (id: number) => boolean) => {
+  for (const id of ids) {
     try {
       await saveOne(id); // expect: helper
       return;
     } catch {
       continue;
+    }
+  }
+  for (const id of ids) {
+    await saveOne(id); // expect: helper
+    if (skip(id)) continue;
+    return;
+  }
+  outer: for (const id of ids) {
+    await saveOne(id); // expect: helper
+    for (const other of ids) {
+      if (other === id) continue outer;
+    }
+    return;
+  }
+  for (const id of ids) {
+    try {
+      return await saveOne(id); // expect: helper
+    } finally {
+      continue;
+    }
+  }
+  for (const id of ids) {
+    try {
+      await saveOne(id); // expect: helper
+      break;
+    } finally {
+      await pure(id);
     }
   }
 };
