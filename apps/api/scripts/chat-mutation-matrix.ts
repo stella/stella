@@ -180,9 +180,11 @@ const withMutatedFile = async <T>(
     writeFileSync(target, original);
   };
   const abandon = (exitCode: number) => {
+    // The child first: a recorder still running could otherwise write its
+    // recordings after they were put back.
+    activeScenario?.kill("SIGKILL");
     restore();
     restoreRecordings?.();
-    activeScenario?.kill();
     process.exit(exitCode);
   };
   const onSignal = (signal: TerminationSignal) => {

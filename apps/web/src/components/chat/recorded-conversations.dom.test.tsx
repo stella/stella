@@ -139,10 +139,34 @@ const readRecording = (scenario: string): RecordedConversation => {
     ),
   );
   // SAFETY: the recorder writes exactly this shape (its
-  // `RecordedConversation`); a recording that drifts from it fails the replay.
+  // `RecordedConversation`); the step kinds and endings it may use are
+  // checked below, so a recorder that adds one fails here, not silently.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above.
-  return parsed as RecordedConversation;
+  const recording = parsed as RecordedConversation;
+  for (const { action, exchanges } of recording.steps) {
+    expect(STEP_KINDS, scenario).toContain(action.type);
+    for (const { ended } of exchanges) {
+      expect(EXCHANGE_ENDINGS, scenario).toContain(ended);
+    }
+  }
+  return recording;
 };
+
+/** Every step kind and response ending this replay performs. */
+const STEP_KINDS: readonly RecordedAction["type"][] = [
+  "answer",
+  "approve",
+  "auto-approve",
+  "client-tool",
+  "drop-connection",
+  "send",
+  "stop",
+];
+const EXCHANGE_ENDINGS: readonly RecordedExchange["ended"][] = [
+  "complete",
+  "connection-lost",
+  "disconnected",
+];
 
 // --- The fake server -------------------------------------------------------
 
@@ -710,8 +734,6 @@ const expectedScreen = (page: RecordedPage): ScreenState => {
 
 // --- Requests ------------------------------------------------------------------
 
-const UUID_PATTERN =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
 const CLIENT_ID_PATTERN = /(?:run|msg)-(?:recorded-\d+|\d{13}-[0-9a-z]{6})/gu;
 const INSTANT_PATTERN = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gu;
 
@@ -730,28 +752,29 @@ const sortKeys = (value: unknown): unknown => {
 };
 
 /**
- * A request body with the values a page mints for itself made comparable:
- * ids keep their identity (named by first appearance), instants are dropped,
- * object keys are sorted. Everything else must be equal.
+ * A conversation's request bodies with the values a page mints for itself
+ * made comparable: its run and message ids keep their identity across the
+ * whole conversation (named by first appearance), instants are dropped, and
+ * object keys are sorted. Every other value, the thread's and messages' ids
+ * included, must be equal.
  */
-const comparableRequest = (body: unknown): unknown => {
+const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
   const names = new Map<string, string>();
-  const rename = (prefix: string) => (match: string) => {
+  const rename = (match: string) => {
     const known = names.get(match);
     if (known !== undefined) {
       return known;
     }
-    const next = `${prefix}-${String(names.size + 1)}`;
+    const next = `${match.slice(0, 3)}-${String(names.size + 1)}`;
     names.set(match, next);
     return next;
   };
-  return JSON.parse(
-    JSON.stringify(sortKeys(body))
-      .replaceAll(UUID_PATTERN, (match) => rename("id")(match))
-      .replaceAll(CLIENT_ID_PATTERN, (match) =>
-        rename(match.slice(0, 3))(match),
-      )
-      .replaceAll(INSTANT_PATTERN, "<instant>"),
+  return bodies.map((body): unknown =>
+    JSON.parse(
+      JSON.stringify(sortKeys(body))
+        .replaceAll(CLIENT_ID_PATTERN, rename)
+        .replaceAll(INSTANT_PATTERN, "<instant>"),
+    ),
   );
 };
 
@@ -908,6 +931,7 @@ const performAction = async ({
     }
     default: {
       action satisfies never;
+      expect.unreachable("A recorded step this replay cannot perform");
     }
   }
 };
@@ -1012,10 +1036,10 @@ const replay = async (scenario: string) => {
   }
   // The page posted what the recorded page posted, request for request.
   expect(
-    server.posted.map(({ body }) => comparableRequest(body)),
+    comparableRequests(server.posted.map(({ body }) => body)),
     finding(RENDER_ORACLE.requestsMatchRecorded, scenario),
   ).toEqual(
-    server.posted.map(({ exchange }) => comparableRequest(exchange.request)),
+    comparableRequests(server.posted.map(({ exchange }) => exchange.request)),
   );
   return { recording, server };
 };
@@ -1067,15 +1091,6 @@ describe("a recorded conversation, rendered", () => {
         readRecording(scenario).steps.map(({ action }) => action.type),
       ),
     );
-    const everyKind: RecordedAction["type"][] = [
-      "answer",
-      "approve",
-      "auto-approve",
-      "client-tool",
-      "drop-connection",
-      "send",
-      "stop",
-    ];
-    expect([...kinds].toSorted()).toEqual(everyKind.toSorted());
+    expect([...kinds].toSorted()).toEqual(STEP_KINDS.toSorted());
   });
 });
