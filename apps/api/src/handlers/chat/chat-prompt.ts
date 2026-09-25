@@ -2524,7 +2524,7 @@ export const buildRequestedSkillsSection = ({
   });
   if (loaded.length > 0) {
     sections.unshift(
-      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Do not call `load-skill` for them again.",
+      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
     );
   }
   if (notPreloaded.length > 0) {

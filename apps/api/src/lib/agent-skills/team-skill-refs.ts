@@ -5,6 +5,7 @@ import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
+import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -101,9 +102,12 @@ export const teamSkillRefsMessage = ({
   }
   const sections = [
     `LINKED SKILLS: A prompt that contains a link of the form [label](${SKILL_REF_HREF_PREFIX}slug) asks you to answer it with that skill's method.`,
-    ...loaded.map(
-      ({ body, name, slug }) =>
-        `SKILL ${slug} (${name}) instructions:\n${body}`,
+    // The same per-skill cap chat applies. Extraction has no load-skill tool,
+    // so a longer body is cut and says so.
+    ...loaded.map(({ body, name, slug }) =>
+      body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS
+        ? `SKILL ${slug} (${name}) instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; the rest is cut):\n${body.slice(0, ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)}`
+        : `SKILL ${slug} (${name}) instructions:\n${body}`,
     ),
   ];
   const missing = [...notPreloaded, ...unavailable];

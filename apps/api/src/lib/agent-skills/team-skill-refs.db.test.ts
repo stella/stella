@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
+import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -96,6 +97,22 @@ describe("skill refs in property prompts", () => {
     expect(message).toContain(`Instructions of ${TEAM}.`);
     expect(message).toContain(PRIVATE);
     expect(message).not.toContain(`Instructions of ${PRIVATE}.`);
+  });
+
+  test("a linked skill body past the prompt cap is cut and says so", () => {
+    const body = "x".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS + 1);
+
+    const message = teamSkillRefsMessage({
+      loaded: [{ body, name: "Long", slug: "long" }],
+      notPreloaded: [],
+      unavailable: [],
+    });
+
+    expect(message).toContain("the rest is cut");
+    expect(message).not.toContain(body);
+    expect(message).toContain(
+      body.slice(0, ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS),
+    );
   });
 
   test("prompts without skill links add nothing", async () => {
