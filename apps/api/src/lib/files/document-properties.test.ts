@@ -1,9 +1,14 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, it } from "bun:test";
+import { panic } from "better-result";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
 import { DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 import type { DocumentProperty } from "@stll/api-contract";
+
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   constrainDocumentPropertiesEditability,
@@ -759,5 +764,106 @@ describe("writeDocumentProperties", () => {
     });
 
     expect(result).toEqual({ status: "unreadable" });
+  });
+});
+
+describe("document property failure reporting", () => {
+  let analytics: RecordingAnalytics;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+  });
+
+  const exceptionClasses = () =>
+    analytics.exceptions().map((event) => event.properties["error.class"]);
+
+  // Bytes whose first access panics, standing in for a fault inside the reader
+  // rather than a malformed file.
+  const panickingBytes = () =>
+    asTestRaw<ArrayBuffer>({
+      get [Symbol.iterator]() {
+        return panic("document bytes unavailable");
+      },
+    });
+
+  const notAnArchive = () =>
+    toArrayBuffer(new TextEncoder().encode("not a zip at all"));
+  const notAPdf = () => toArrayBuffer(new TextEncoder().encode("not a pdf"));
+
+  it("answers a malformed file as unreadable without reporting it", async () => {
+    const results = [
+      await extractDocumentProperties({
+        bytes: notAnArchive(),
+        mimeType: DOCX_MIME_TYPE,
+      }),
+      await extractDocumentProperties({
+        bytes: notAPdf(),
+        mimeType: PDF_MIME_TYPE,
+      }),
+      await scrubDocumentProperties({
+        bytes: notAnArchive(),
+        mimeType: ODT_MIME_TYPE,
+      }),
+      await scrubDocumentProperties({
+        bytes: notAPdf(),
+        mimeType: PDF_MIME_TYPE,
+      }),
+      await scrubDocumentProperties({
+        bytes: await zipOf({
+          "docProps/core.xml": "<wrong/>",
+          "docProps/app.xml": APP_XML,
+        }),
+        mimeType: DOCX_MIME_TYPE,
+      }),
+      await writeDocumentProperties({
+        bytes: notAnArchive(),
+        mimeType: DOCX_MIME_TYPE,
+        values: { author: "Petra" },
+      }),
+    ];
+
+    expect(results.map(({ status }) => status)).toEqual(
+      results.map(() => "unreadable"),
+    );
+    expect(exceptionClasses()).toEqual([]);
+  });
+
+  it("reports a panic raised while reading and still answers unreadable", async () => {
+    const result = await extractDocumentProperties({
+      bytes: panickingBytes(),
+      mimeType: PDF_MIME_TYPE,
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+    expect(exceptionClasses()).toEqual(["Panic"]);
+  });
+
+  it("reports a panic raised while scrubbing and still answers unreadable", async () => {
+    const result = await scrubDocumentProperties({
+      bytes: panickingBytes(),
+      mimeType: PDF_MIME_TYPE,
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+    expect(exceptionClasses()).toEqual(["Panic"]);
+  });
+
+  it("reports an internal failure while writing and still answers unreadable", async () => {
+    const result = await writeDocumentProperties({
+      bytes: await zipOf({
+        "docProps/core.xml": CORE_XML,
+        "docProps/app.xml": APP_XML,
+      }),
+      mimeType: DOCX_MIME_TYPE,
+      // Not a string, so escaping the value fails inside the writer.
+      values: { author: asTestRaw<string>(42) },
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+    expect(exceptionClasses()).toEqual(["TypeError"]);
   });
 });
