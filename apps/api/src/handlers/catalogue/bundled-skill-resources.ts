@@ -84,7 +84,15 @@ export const toParsedBundledSkillPackage = ({
 }): Result<ParsedSkillPackage, HandlerError> =>
   Result.try({
     try: () => {
-      const parsed = parseSkillFile(source);
+      const parsedFile = parseSkillFile(source);
+      if (parsedFile.isErr()) {
+        throw new HandlerError({
+          status: 500,
+          message: `Bundled skill file is invalid: ${expectedSlug}`,
+          cause: parsedFile.error,
+        });
+      }
+      const parsed = parsedFile.value;
       assertBundledSkillMetadata({
         expectedSlug,
         metadata: parsed.metadata,

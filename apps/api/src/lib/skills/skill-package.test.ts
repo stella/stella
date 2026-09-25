@@ -322,6 +322,32 @@ Instructions.`,
     expect(result.value.description).toBe(description);
   });
 
+  test("reports why invalid frontmatter was refused", async () => {
+    const cases = [
+      ["name: no-description", "must include name and description"],
+      ["name: [not, a, string]\ndescription: Valid.", "name must be a string"],
+      ["name: bad-yaml\ndescription: : :\n  - [", "must be valid YAML"],
+      [
+        "name: typed-metadata\ndescription: Valid.\nmetadata:\n  attempts: 3",
+        "metadata values must be strings",
+      ],
+    ] as const;
+
+    for (const [frontmatter, reason] of cases) {
+      const result = await parseUpload(
+        new File([`---\n${frontmatter}\n---\n\nInstructions.`], "SKILL.md", {
+          type: "text/markdown",
+        }),
+      );
+
+      if (Result.isOk(result)) {
+        throw new Error(`Expected frontmatter to be refused: ${frontmatter}`);
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toContain(reason);
+    }
+  });
+
   test("rejects oversized frontmatter before chat metadata storage", async () => {
     const result = await parseUpload(
       new File(

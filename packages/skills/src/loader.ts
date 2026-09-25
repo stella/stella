@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { getSkillResourceKind } from "./resource-kinds";
 import type { SkillResourceKind } from "./resource-kinds";
@@ -59,7 +59,7 @@ export const listSkillMetadata = (): SkillMetadata[] =>
 
 export const loadSkill = (skillId: string): StellaSkill => {
   const skill = getSkill(skillId);
-  const parsed = parseSkillFile(skill.source);
+  const parsed = parseBundledSkillFile(skill.source);
 
   return {
     ...parsed.metadata,
@@ -97,7 +97,16 @@ export const readSkillResource = ({
 };
 
 const readSkillMetadata = (skillId: string): SkillMetadata =>
-  parseSkillFile(getSkill(skillId).source).metadata;
+  parseBundledSkillFile(getSkill(skillId).source).metadata;
+
+/** Bundled skills are checked in; an invalid one is a build defect. */
+const parseBundledSkillFile = (source: string): ParsedSkillFile => {
+  const parsed = parseSkillFile(source);
+  if (parsed.isErr()) {
+    return panic(`Bundled skill file is invalid: ${parsed.error.message}`);
+  }
+  return parsed.value;
+};
 
 const getSkill = (skillId: string) => {
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(skillId)) {
@@ -112,69 +121,86 @@ const getSkill = (skillId: string) => {
   return skill;
 };
 
-export const parseSkillFile = (
-  source: string,
-): {
+/** A SKILL.md file whose frontmatter does not satisfy the skill format. */
+export class SkillFileError extends TaggedError("SkillFileError")<{
+  message: string;
+}> {}
+
+export type ParsedSkillFile = {
   body: string;
   metadata: SkillMetadata;
-} => {
-  const normalizedSource = source
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n");
-
-  if (!normalizedSource.startsWith("---\n")) {
-    panic("Skill file missing frontmatter");
-  }
-
-  let end = normalizedSource.indexOf("\n---\n", 4);
-  if (end === -1 && normalizedSource.endsWith("\n---")) {
-    end = normalizedSource.length - "\n---".length;
-  }
-  if (end === -1) {
-    panic("Skill file missing frontmatter terminator");
-  }
-
-  const frontmatter = parseFrontmatter(normalizedSource.slice(4, end));
-
-  return {
-    metadata: {
-      compatibility: frontmatter.compatibility ?? null,
-      description: frontmatter.description,
-      license: frontmatter.license ?? frontmatter.metadata?.["license"] ?? null,
-      metadata: frontmatter.metadata ?? {},
-      name: frontmatter.name,
-      version: frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,
-    },
-    body: normalizedSource.slice(end + "\n---".length).trim(),
-  };
 };
 
-const parseFrontmatter = (source: string): Frontmatter => {
-  const parsed = parseYaml(source);
-  if (!isPlainRecord(parsed)) {
-    panic("Skill file frontmatter must be a YAML mapping");
-  }
+const skillFileError = (message: string) =>
+  Result.err(new SkillFileError({ message }));
 
-  const name = readRequiredString(parsed, "name");
-  const description = readRequiredString(parsed, "description");
+export const parseSkillFile = (
+  source: string,
+): Result<ParsedSkillFile, SkillFileError> =>
+  Result.gen(function* () {
+    const normalizedSource = source
+      .replaceAll("\r\n", "\n")
+      .replaceAll("\r", "\n");
 
-  return {
-    compatibility: readOptionalString(parsed, "compatibility"),
-    description,
-    license: readOptionalString(parsed, "license"),
-    metadata: readMetadata(parsed["metadata"]),
-    name,
-    version: readOptionalString(parsed, "version"),
-  };
-};
+    if (!normalizedSource.startsWith("---\n")) {
+      return skillFileError("Skill file missing frontmatter");
+    }
 
-const parseYaml = (source: string): unknown => {
-  try {
-    return Bun.YAML.parse(source);
-  } catch {
-    return panic("Skill file frontmatter must be valid YAML");
-  }
-};
+    let end = normalizedSource.indexOf("\n---\n", 4);
+    if (end === -1 && normalizedSource.endsWith("\n---")) {
+      end = normalizedSource.length - "\n---".length;
+    }
+    if (end === -1) {
+      return skillFileError("Skill file missing frontmatter terminator");
+    }
+
+    const frontmatter = yield* parseFrontmatter(normalizedSource.slice(4, end));
+
+    return Result.ok({
+      metadata: {
+        compatibility: frontmatter.compatibility ?? null,
+        description: frontmatter.description,
+        license:
+          frontmatter.license ?? frontmatter.metadata?.["license"] ?? null,
+        metadata: frontmatter.metadata ?? {},
+        name: frontmatter.name,
+        version:
+          frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,
+      },
+      body: normalizedSource.slice(end + "\n---".length).trim(),
+    });
+  });
+
+const parseFrontmatter = (
+  source: string,
+): Result<Frontmatter, SkillFileError> =>
+  Result.gen(function* () {
+    const parsed = yield* parseYaml(source);
+    if (!isPlainRecord(parsed)) {
+      return skillFileError("Skill file frontmatter must be a YAML mapping");
+    }
+
+    const name = yield* readRequiredString(parsed, "name");
+    const description = yield* readRequiredString(parsed, "description");
+
+    return Result.ok({
+      compatibility: yield* readOptionalString(parsed, "compatibility"),
+      description,
+      license: yield* readOptionalString(parsed, "license"),
+      metadata: yield* readMetadata(parsed["metadata"]),
+      name,
+      version: yield* readOptionalString(parsed, "version"),
+    });
+  });
+
+const parseYaml = (source: string): Result<unknown, SkillFileError> =>
+  Result.try({
+    try: () => Bun.YAML.parse(source),
+    catch: () =>
+      new SkillFileError({
+        message: "Skill file frontmatter must be valid YAML",
+      }),
+  });
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -188,41 +214,50 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
 const readRequiredString = (
   frontmatter: Record<string, unknown>,
   field: "description" | "name",
-): string => {
-  const value = readOptionalString(frontmatter, field);
-  if (value === undefined || value.trim().length === 0) {
-    panic("Skill file frontmatter must include name and description");
-  }
-  return value;
-};
+): Result<string, SkillFileError> =>
+  Result.gen(function* () {
+    const value = yield* readOptionalString(frontmatter, field);
+    if (value === undefined || value.trim().length === 0) {
+      return skillFileError(
+        "Skill file frontmatter must include name and description",
+      );
+    }
+    return Result.ok(value);
+  });
 
 const readOptionalString = (
   frontmatter: Record<string, unknown>,
   field: Exclude<keyof Frontmatter, "metadata">,
-): string | undefined => {
+): Result<string | undefined, SkillFileError> => {
   const value = frontmatter[field];
   if (value === undefined || typeof value === "string") {
-    return value;
+    return Result.ok(value);
   }
-  return panic(`Skill file frontmatter ${field} must be a string`);
+  return skillFileError(`Skill file frontmatter ${field} must be a string`);
 };
 
-const readMetadata = (value: unknown): Record<string, string> | undefined => {
+const readMetadata = (
+  value: unknown,
+): Result<Record<string, string> | undefined, SkillFileError> => {
   if (value === undefined) {
-    return undefined;
+    return Result.ok(undefined);
   }
   if (!isPlainRecord(value)) {
-    panic("Skill file frontmatter metadata must be a string mapping");
+    return skillFileError(
+      "Skill file frontmatter metadata must be a string mapping",
+    );
   }
 
   const entries: [string, string][] = [];
   for (const [key, metadataValue] of Object.entries(value)) {
     if (typeof metadataValue !== "string") {
-      panic("Skill file frontmatter metadata values must be strings");
+      return skillFileError(
+        "Skill file frontmatter metadata values must be strings",
+      );
     }
     entries.push([key, metadataValue]);
   }
-  return Object.fromEntries(entries);
+  return Result.ok(Object.fromEntries(entries));
 };
 
 export const normalizeResourcePath = (resourcePath: string): string => {

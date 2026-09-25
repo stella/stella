@@ -13,7 +13,7 @@ const FILE_TREE_PATH_PATTERN =
 describe("skill blueprints", () => {
   for (const blueprint of BLUEPRINTS) {
     describe(blueprint.id, () => {
-      const parsed = parseSkillFile(blueprint.source);
+      const parsed = parseSkillFile(blueprint.source).unwrap();
 
       test("frontmatter name is a valid skill slug", () => {
         expect(parsed.metadata.name).toMatch(SKILL_NAME_PATTERN);

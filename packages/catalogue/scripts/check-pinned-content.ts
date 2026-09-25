@@ -547,17 +547,16 @@ const checkSkillFile = async (
     };
   }
 
-  let parsed: ReturnType<typeof parseSkillFile>;
-  try {
-    parsed = parseSkillFile(file.content);
-  } catch (error) {
+  const parsedFile = parseSkillFile(file.content);
+  if (parsedFile.isErr()) {
     return {
       byteLength: file.byteLength,
       errors: [
-        `${target.slug}: SKILL.md frontmatter is invalid (${errorMessage(error)})`,
+        `${target.slug}: SKILL.md frontmatter is invalid (${parsedFile.error.message})`,
       ],
     };
   }
+  const parsed = parsedFile.value;
 
   const errors: string[] = [];
   if (!SKILL_NAME_PATTERN.test(parsed.metadata.name)) {

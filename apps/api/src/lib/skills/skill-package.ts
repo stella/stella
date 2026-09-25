@@ -497,7 +497,15 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   const skillFile = findSkillFile(files);
   const rootPrefix = skillFolderPrefix(skillFile.path);
   const relativeSkillSource = skillFile.content;
-  const parsed = parseSkillFile(relativeSkillSource);
+  const parsedFile = parseSkillFile(relativeSkillSource);
+  if (parsedFile.isErr()) {
+    throw new HandlerError({
+      status: 400,
+      message: parsedFile.error.message,
+      cause: parsedFile.error,
+    });
+  }
+  const parsed = parsedFile.value;
   const name = parsed.metadata.name;
 
   if (!SKILL_NAME_PATTERN.test(name)) {

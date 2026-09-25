@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
@@ -46,7 +46,11 @@ const buildParsedBlueprint = (
     return null;
   }
 
-  const { body, metadata } = parseSkillFile(blueprint.source);
+  const parsed = parseSkillFile(blueprint.source);
+  if (parsed.isErr()) {
+    return panic(`Blueprint skill file is invalid: ${parsed.error.message}`);
+  }
+  const { body, metadata } = parsed.value;
   const contentHash = hashAuthoredSkillContent({
     body,
     description: metadata.description,
