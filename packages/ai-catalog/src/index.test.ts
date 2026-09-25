@@ -20,7 +20,6 @@ import {
   MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
-  MODEL_STREAMING_TOOL_USE,
   MODEL_TEMPERATURE_POLICIES,
   MODEL_ROLES,
   REASONING_EFFORTS,
@@ -184,13 +183,6 @@ describe("BYOK provider role support", () => {
         role: "pdf",
       }),
     ).toBe(false);
-    expect(
-      isBYOKModelRoleSupported({
-        provider: "bedrock",
-        modelId: "us.deepseek.r1-v1:0",
-        role: "pdf",
-      }),
-    ).toBe(false);
   });
 });
 
@@ -236,6 +228,21 @@ describe("resolveWorkingBYOKModelForRole", () => {
         role: "reasoning",
       }),
     ).toBe(BYOK_DEFAULT_MODELS.google.reasoning);
+  });
+
+  test("heals a Bedrock model that cannot take tools on every role", () => {
+    // DeepSeek R1 on Bedrock accepts no tool definitions, and every role
+    // sends tools or structured output, so a stored selection moves to
+    // the provider default instead of failing each request.
+    for (const role of MODEL_ROLES) {
+      expect(
+        resolveWorkingBYOKModelForRole({
+          provider: "bedrock",
+          modelId: "us.deepseek.r1-v1:0",
+          role,
+        }),
+      ).toBe(BYOK_DEFAULT_MODELS.bedrock[role]);
+    }
   });
 
   test("heals a dropped model on the pdf role to a document-capable default", () => {
@@ -468,21 +475,6 @@ describe("resolveReasoningEffort", () => {
 });
 
 describe("supportsStreamingToolUse", () => {
-  test("declares the Bedrock DeepSeek R1 streaming tool-use limit", () => {
-    expect(MODEL_STREAMING_TOOL_USE["us.deepseek.r1-v1:0"]).toBe("unsupported");
-    expect(supportsStreamingToolUse("us.deepseek.r1-v1:0")).toBe(false);
-  });
-
-  test("keeps every other offered model on the streaming tool path", () => {
-    for (const modelIds of Object.values(BYOK_MODEL_OPTIONS)) {
-      for (const modelId of modelIds) {
-        expect(supportsStreamingToolUse(modelId)).toBe(
-          modelId !== "us.deepseek.r1-v1:0",
-        );
-      }
-    }
-  });
-
   test("treats an uncatalogued id as tool-capable", () => {
     // Custom deployments and env overrides never reach the catalog;
     // withholding tools from them would silently strip the agent loop.

@@ -94,6 +94,11 @@ export type UpstreamCapabilities = {
    * override; `null` when the record does not publish it.
    */
   temperature: boolean | null;
+  /**
+   * models.dev `tool_call`: whether the model accepts tool definitions;
+   * `null` when the record does not publish it.
+   */
+  toolCall: boolean | null;
 };
 
 /** OpenRouter's concrete provider-default effort for each published model. */
@@ -184,6 +189,8 @@ export const parseUpstreamCapabilities = (
       typeof modelVal["temperature"] === "boolean"
         ? modelVal["temperature"]
         : null,
+    toolCall:
+      typeof modelVal["tool_call"] === "boolean" ? modelVal["tool_call"] : null,
   };
 };
 

@@ -330,7 +330,6 @@ export const BYOK_MODEL_OPTIONS = {
     "us.amazon.nova-micro-v1:0",
     "openai.gpt-oss-120b-1:0",
     "openai.gpt-oss-20b-1:0",
-    "us.deepseek.r1-v1:0",
   ],
   mistral: [
     "mistral-large-latest",
@@ -573,10 +572,6 @@ export const MODEL_DISPLAY_METADATA = {
   "openai.gpt-oss-20b-1:0": {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
-  },
-  "us.deepseek.r1-v1:0": {
-    displayName: "DeepSeek R1",
-    iconProvider: "bedrock",
   },
   "mistral-large-latest": {
     displayName: "Mistral Large",
@@ -957,10 +952,6 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
-  // 2026-09-21 weekly provider canary: Bedrock Converse answers every
-  // streaming request that carries a toolConfig with "This model doesn't
-  // support tool use in streaming mode."
-  "us.deepseek.r1-v1:0": "unsupported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
@@ -1179,7 +1170,6 @@ export const CONTEXT_WINDOW_TOKENS = {
   "us.amazon.nova-micro-v1:0": 128_000, // Nova Micro: 128K input.
   "openai.gpt-oss-120b-1:0": 128_000, // gpt-oss on Bedrock: 128K.
   "openai.gpt-oss-20b-1:0": 128_000,
-  "us.deepseek.r1-v1:0": 128_000, // DeepSeek-R1: 128K.
 } as const satisfies Readonly<Record<string, number>>;
 
 type ModelRateWithoutContextWindow = Exclude<
