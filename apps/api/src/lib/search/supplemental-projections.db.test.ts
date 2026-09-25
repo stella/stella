@@ -8,7 +8,10 @@ import {
 } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
@@ -20,6 +23,7 @@ import {
   reindexWorkspacesForContact,
   upsertContactSearchDocument,
   upsertWorkspaceSearchDocument,
+  upsertWorkspaceSearchDocuments,
 } from "@/api/lib/search/index-global";
 import { buildSearchPreviewPassages } from "@/api/lib/search/preview-passages";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -60,11 +64,19 @@ type Counts = { reads: number; transactions: number; statements: number };
  * The test database behind a counter: every read the rebuild issues, every
  * transaction it opens, and every statement inside one.
  */
-const countingDatabase = (): {
+const countingDatabase = ({
+  failAt,
+}: {
+  /** Throw before this statement (1-based) of this transaction (1-based). */
+  failAt?: { transaction: number; statement: number };
+} = {}): {
   counts: Counts;
   database: ProjectionDatabase;
+  /** Every statement issued inside a transaction, per transaction. */
+  written: SQL[][];
 } => {
   const counts: Counts = { reads: 0, transactions: 0, statements: 0 };
+  const written: SQL[][] = [];
   const counted =
     <Args extends unknown[], Result>(run: (...args: Args) => Result) =>
     (...args: Args): Result => {
@@ -86,18 +98,28 @@ const countingDatabase = (): {
     select: counted(db.select.bind(db)),
     transaction: async (run: (tx: unknown) => Promise<unknown>) => {
       counts.transactions += 1;
+      const transaction = counts.transactions;
+      const statements: SQL[] = [];
+      written.push(statements);
       return await db.transaction(
         async (tx) =>
           await run({
             execute: async (query: SQL) => {
+              if (
+                failAt?.transaction === transaction &&
+                failAt.statement === statements.length + 1
+              ) {
+                throw new Error("injected projection write failure");
+              }
               counts.statements += 1;
+              statements.push(query);
               return (await tx.execute(query)).rows;
             },
           }),
       );
     },
   });
-  return { counts, database };
+  return { counts, database, written };
 };
 
 const seedOrganization = async (org: number) => {
@@ -218,6 +240,89 @@ describe("batched supplemental rebuild", () => {
     });
     expect((await projectionCount(3))?.matters).toBe(BATCH + 20);
   });
+
+  // Every batch writer locks projection rows in id order, so two cascades
+  // over overlapping matters wait on each other and never deadlock.
+  test("writes matters in id order, batch by batch, whatever order it is handed", async () => {
+    await seedOrganization(5);
+    await seedWorkspaces(5, BATCH + 20);
+    const ids = Array.from({ length: BATCH + 20 }, (_, index) =>
+      workspaceId(5, index + 1),
+    );
+
+    const ordered = countingDatabase();
+    await upsertWorkspaceSearchDocuments(ids.toReversed(), ordered.database);
+
+    const dialect = new PgDialect();
+    const upsertOrder = ordered.written.flatMap((statements) =>
+      dialect
+        .sqlToQuery(statements.at(0) ?? sql``)
+        .params.filter(
+          (param): param is string =>
+            typeof param === "string" && ids.some((id) => id === param),
+        ),
+    );
+    expect(upsertOrder).toEqual(ids.toSorted(compareCodeUnit));
+    expect(ordered.written).toHaveLength(2);
+  });
+
+  test("a failing batch rolls back alone, and a replay completes", async () => {
+    await seedOrganization(6);
+    await seedWorkspaces(6, BATCH + 20);
+    const ids = Array.from({ length: BATCH + 20 }, (_, index) =>
+      workspaceId(6, index + 1),
+    ).toSorted(compareCodeUnit);
+    await upsertWorkspaceSearchDocuments(ids, countingDatabase().database);
+    await db.execute(
+      sql`UPDATE workspaces SET name = name || ' renamed' WHERE organization_id = ${orgId(6)}`,
+    );
+
+    // The second batch throws after its passage delete, before the insert.
+    const failing = countingDatabase({
+      failAt: { transaction: 2, statement: 3 },
+    });
+    const failure: unknown = await upsertWorkspaceSearchDocuments(
+      ids,
+      failing.database,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({
+      message: "injected projection write failure",
+    });
+
+    const state = async () => {
+      const result = await db.execute<{
+        id: string;
+        renamed: boolean;
+        passages: number;
+      }>(sql`
+        SELECT d.workspace_id::text AS id,
+          d.title LIKE '% renamed' AS renamed,
+          (SELECT count(*)::int FROM workspace_search_document_preview_passages p
+            WHERE p.workspace_id = d.workspace_id
+              AND p.generation = d.preview_generation) AS passages
+        FROM workspace_search_documents d
+        WHERE d.organization_id = ${orgId(6)}
+        ORDER BY d.workspace_id
+      `);
+      return result.rows;
+    };
+    const afterFailure = await state();
+    // The first batch committed; the second kept its previous projection and
+    // passages, delete included.
+    expect(afterFailure.map(({ renamed }) => renamed)).toEqual(
+      ids.map((_, index) => index < BATCH),
+    );
+    expect(afterFailure.every(({ passages }) => passages > 0)).toBe(true);
+
+    await upsertWorkspaceSearchDocuments(ids, countingDatabase().database);
+    const replayed = await state();
+    expect(replayed.every(({ renamed }) => renamed)).toBe(true);
+    expect(replayed.every(({ passages }) => passages > 0)).toBe(true);
+    expect(await generationMismatches(6)).toEqual([]);
+  });
 });
 
 type ProjectionSnapshot = {
@@ -228,7 +333,7 @@ type ProjectionSnapshot = {
 // Everything but the generation id, which is random per write; its
 // consistency is asserted separately.
 const snapshot = async (org: number): Promise<ProjectionSnapshot> => {
-  const documents = await db.execute<Record<string, unknown>>(sql`
+  const documents = await db.execute(sql`
     SELECT 'contact' AS kind, contact_id::text AS id, organization_id,
       contact_type, title, searchable_text, updated_at::text AS updated_at,
       tsv::text AS tsv
@@ -239,7 +344,7 @@ const snapshot = async (org: number): Promise<ProjectionSnapshot> => {
     FROM workspace_search_documents WHERE organization_id = ${orgId(org)}
     ORDER BY kind, id
   `);
-  const passages = await db.execute<Record<string, unknown>>(sql`
+  const passages = await db.execute(sql`
     SELECT 'contact' AS kind, contact_id::text AS id, ordinal, content,
       tsv::text AS tsv
     FROM contact_search_document_preview_passages
@@ -424,5 +529,39 @@ describe("batched rebuild parity", () => {
       ),
     );
     expect(clientPassages.length).toBeGreaterThan(1);
+
+    // A matter's text: its references, its client, then each party's role,
+    // notes and contact fields.
+    const matterText = (id: string) =>
+      documents.find((document) => document["id"] === id)?.["searchable_text"];
+    expect(matterText(workspaceId(4, 1))).toBe(
+      [
+        "M-1",
+        "INV-7",
+        "Nováková & partneři",
+        "Nováková & partneři s.r.o.",
+        "office@example.com Podatelna",
+        "+420 123 456",
+        "klient vip",
+      ].join(" "),
+    );
+    expect(matterText(workspaceId(4, 2))).toBe(
+      "M-2 witness svědek محمد علي محمد علي",
+    );
+
+    // Every projected source has passages under its own generation.
+    const withoutPassages = await db.execute<{ id: string }>(sql`
+      SELECT contact_id::text AS id FROM contact_search_documents d
+      WHERE organization_id = ${orgId(4)} AND NOT EXISTS (
+        SELECT 1 FROM contact_search_document_preview_passages p
+        WHERE p.contact_id = d.contact_id AND p.generation = d.preview_generation)
+      UNION ALL
+      SELECT workspace_id::text FROM workspace_search_documents d
+      WHERE organization_id = ${orgId(4)} AND NOT EXISTS (
+        SELECT 1 FROM workspace_search_document_preview_passages p
+        WHERE p.workspace_id = d.workspace_id AND p.generation = d.preview_generation)
+    `);
+    expect(withoutPassages.rows).toEqual([]);
+    expect(documents).toHaveLength(4);
   });
 });
