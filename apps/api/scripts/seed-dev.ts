@@ -436,8 +436,8 @@ export const createMockDocx = async (
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
       `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
       `<Default Extension="xml" ContentType="application/xml"/>` +
-      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${ 
-      SEED_STYLES_CONTENT_TYPE 
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
       }</Types>`,
   );
 
@@ -478,8 +478,8 @@ export const createMockDocx = async (
     ?.file(
       "document.xml.rels",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${ 
-        SEED_STYLES_RELATIONSHIP 
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
+          SEED_STYLES_RELATIONSHIP
         }</Relationships>`,
     );
   zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
@@ -850,8 +850,8 @@ const createSupplierAgreementDocx = async (
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
       `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
       `<Default Extension="xml" ContentType="application/xml"/>` +
-      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${ 
-      SEED_STYLES_CONTENT_TYPE 
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
       }<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>` +
       `</Types>`,
   );
@@ -965,8 +965,8 @@ const createSupplierAgreementDocx = async (
       "document.xml.rels",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${ 
-        SEED_STYLES_RELATIONSHIP 
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
+          SEED_STYLES_RELATIONSHIP
         }</Relationships>`,
     );
   zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
