@@ -296,16 +296,18 @@ const codeSetRows = (): GradingRow[] => [
 ];
 
 // Written out per provider case, not read from the classifier.
-const PROVIDER_REASONS: Readonly<Record<string, FailureReason>> = {
+type ProviderCaseName = (typeof PROVIDER_FAILURE_CASES)[number]["name"];
+
+const PROVIDER_REASONS = {
   "an exhausted quota": "quota_exhausted",
   "an upstream billing stop": "provider_billing",
   "a rejected credential": "provider_credentials_rejected",
-};
-const PROVIDER_GRADES: Readonly<Record<string, FailureGrade>> = {
+} as const satisfies Record<ProviderCaseName, FailureReason>;
+const PROVIDER_GRADES = {
   "an exhausted quota": "transient",
   "an upstream billing stop": "anticipated",
   "a rejected credential": "anticipated",
-};
+} as const satisfies Record<ProviderCaseName, FailureGrade>;
 
 // A provider case's own cause is a shared constant: classifying it at the AI
 // boundary would leak into every other test, so each row gets a copy.
@@ -487,7 +489,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     grade: "transient",
     rule: "brand",
   },
-  ...PROVIDER_FAILURE_CASES.flatMap(({ name, cause }) => [
+  ...PROVIDER_FAILURE_CASES.flatMap(({ name, cause }): GradingRow[] => [
     {
       name: `${name} through aiHandlerError`,
       error: () =>
@@ -738,10 +740,14 @@ describe("wrapper properties", () => {
 });
 
 describe("sink expectations", () => {
+  type ExpectedExample = {
+    readonly error: () => unknown;
+    readonly request?: FailureRequestState;
+  };
   type ExpectedCase = {
     readonly expectation: FailureExpectation;
-    readonly positive: { error: () => unknown; request?: FailureRequestState };
-    readonly negative: { error: () => unknown; request?: FailureRequestState };
+    readonly positive: ExpectedExample;
+    readonly negative: ExpectedExample;
   };
 
   const EXPECTED_REASON_CASES = {
@@ -773,7 +779,11 @@ describe("sink expectations", () => {
     },
   } as const satisfies Record<ExpectedReason, ExpectedCase>;
 
-  test.each(entriesOf(EXPECTED_REASON_CASES))(
+  const expectedCases: [string, ExpectedCase][] = entriesOf(
+    EXPECTED_REASON_CASES,
+  );
+
+  test.each(expectedCases)(
     "%s has a positive and a negative case",
     (reason, { expectation, positive, negative }) => {
       const sink = failureSink({ event: "expecting", expected: [expectation] });

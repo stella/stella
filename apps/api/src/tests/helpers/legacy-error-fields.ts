@@ -81,7 +81,7 @@ const hasNumericSuffix = (value: string, prefix: string): boolean => {
  * suffix emitted by the bundler. This keeps caller-controlled values out of
  * telemetry and persisted error codes.
  */
-export const errorClassName = (error: Error): string => {
+const errorClassName = (error: Error): string => {
   const taggedName = taggedErrorName(error);
   if (taggedName !== undefined) {
     return taggedName;
@@ -107,7 +107,7 @@ export const errorClassName = (error: Error): string => {
  * traces; those may contain privileged document content, file
  * names, or client data that must not reach analytics dashboards.
  */
-export const errorTag = (error: unknown): string => {
+const errorTag = (error: unknown): string => {
   const taggedName = taggedErrorName(error);
   if (taggedName !== undefined) {
     return taggedName;
@@ -329,7 +329,7 @@ const safeErrorNumberProperty = (
   return typeof value === "number" ? value : undefined;
 };
 
-export const safeErrorCause = (error: Error): unknown => {
+const safeErrorCause = (error: Error): unknown => {
   try {
     return Reflect.get(error, "cause");
   } catch {
@@ -337,7 +337,7 @@ export const safeErrorCause = (error: Error): unknown => {
   }
 };
 
-export const safeErrorCode = (error: Error): string | undefined =>
+const safeErrorCode = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "code") ??
   // An AWS SDK service exception carries its service error code as `name`,
   // and marks itself with `$fault`; any other error's name is its class.
@@ -560,7 +560,7 @@ const httpStatusFromValue = (value: unknown): number | null => {
   return httpStatusFromString(value);
 };
 
-export const providerStatusCode = (error: unknown): number | null => {
+const providerStatusCode = (error: unknown): number | null => {
   if (!isRecord(error)) {
     return null;
   }

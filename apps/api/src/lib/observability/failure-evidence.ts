@@ -157,12 +157,14 @@ const attempt = <TValue>(
   read: () => TValue,
   fallback: TValue,
 ): TValue => {
-  const result = Result.try(read);
+  // Boxed: `Result.try` infers through `Awaited`, which a bare generic
+  // cannot satisfy.
+  const result = Result.try(() => ({ read: read() }));
   if (Result.isError(result)) {
     state.failed = true;
     return fallback;
   }
-  return result.value;
+  return result.value.read;
 };
 
 const readKey = (state: ReadState, value: object, key: string): unknown =>
