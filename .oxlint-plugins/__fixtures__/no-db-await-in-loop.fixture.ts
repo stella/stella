@@ -39,6 +39,9 @@ declare const context: {
   ingestionDb: typeof safeDb;
   backfillDb: typeof safeDb;
 };
+// The names worker and repair code gives its injected handle.
+declare const database: typeof db;
+declare const transaction: typeof tx;
 declare const tables: Record<string, unknown>;
 declare const items: { id: string }[];
 declare const groups: { items: { id: string }[] }[];
@@ -68,6 +71,35 @@ export const forOfLoopAwaitInsert = async () => {
   for (const item of items) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
     await tx.insert(itemsTable).values(item);
+  }
+};
+
+// An injected handle named `database` or `transaction` is the same handle.
+export const forOfLoopAwaitDatabaseChain = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    await database.select().from(itemsTable).where(item.id);
+  }
+};
+
+export const forOfLoopAwaitTransactionChain = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    await transaction.insert(itemsTable).values(item);
+  }
+};
+
+export const forOfLoopHelperDatabaseArgument = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    await upsertRow(database, item);
+  }
+};
+
+export const forOfLoopHelperDatabaseProperty = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    await upsertRow({ database }, item);
   }
 };
 
@@ -477,4 +509,17 @@ export const mapHelperHandleWithoutFanOut = () => {
 export const promiseAllLiteralArrayHelperHandle = async () => {
   const first = items[0] ?? { id: "" };
   await Promise.all([upsertRow(tx, first), upsertRow(ctx.tx, first)]);
+};
+
+// One batched statement on an injected handle, outside any loop.
+export const databaseBatchedOutsideLoop = async () => {
+  await database
+    .select()
+    .from(itemsTable)
+    .where(
+      inArray(
+        idColumn,
+        items.map((item) => item.id),
+      ),
+    );
 };

@@ -15,15 +15,15 @@ import type {
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
+import type { AnalysisStore } from "@/api/lib/case-law/analysis-store-core";
+import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 
 import type { AnalysisOutput } from "./analysis-output";
-import type { AnalysisStore } from "./analysis-store-core";
 import {
   applyAnalysisUpdate,
   type AnalysisSubject,
   type AnalysisUpdateFences,
 } from "./analysis-update";
-import { analysisSentinel } from "./stored-analysis";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000a1",

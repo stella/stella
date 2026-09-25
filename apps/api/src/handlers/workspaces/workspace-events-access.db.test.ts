@@ -15,11 +15,7 @@ import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import {
-  getAuth,
-  resolveUserRealtimeAuthorization,
-  resolveWorkspaceRealtimeAudience,
-} from "@/api/lib/auth";
+import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -48,10 +44,7 @@ beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
   // The same connection authorizers the server starts with, so an event
   // broadcast during the test re-checks access the way production does.
-  startSse({
-    user: resolveUserRealtimeAuthorization,
-    workspace: resolveWorkspaceRealtimeAudience,
-  });
+  startSse(realtimeAuthorizers);
 });
 
 afterAll(async () => {

@@ -115,6 +115,7 @@ import {
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -964,6 +965,7 @@ export const processDocumentProcessingRun = async (
             return;
           }
           const extractionOutcome = await executeNativeExtraction({
+            database,
             fileField: source.content,
             lifecycleSignal,
             readSource: async (input) =>
@@ -1013,7 +1015,7 @@ export const processDocumentProcessingRun = async (
           }
           await indexDocumentProjectionAtJobBoundary({
             indexEntity: async () =>
-              await getSearchMaintenance().indexEntity(run.entityId),
+              await upsertSearchDocument(run.entityId, { database }),
           });
           lifecycleSignal.throwIfAborted();
           await completeDocumentProcessingRun({ claimToken, database, run });
@@ -1101,7 +1103,7 @@ export const processDocumentProcessingRun = async (
 
       await indexDocumentProjectionAtJobBoundary({
         indexEntity: async () =>
-          await getSearchMaintenance().indexEntity(run.entityId),
+          await upsertSearchDocument(run.entityId, { database }),
       });
       lifecycleSignal.throwIfAborted();
 

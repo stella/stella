@@ -9,7 +9,8 @@
 //
 // Detection is intentionally simple and lexical:
 //   - A DB await is an `AwaitExpression` whose argument is a call chain
-//     rooted at the identifier `db` or `tx` (e.g. `db.insert(...).values(...)`,
+//     rooted at a handle identifier (`db`, `tx`, `rootDb`, or the injected
+//     `database` / `transaction`; e.g. `db.insert(...).values(...)`,
 //     `tx.query.foo.findMany()`, `db.transaction(async (tx) => ...)`,
 //     `rootDb.select()...`), OR a call whose callee resolves to a runner
 //     handle (`safeDb`, `scopedDb`, `ingestionDb`, `backfillDb`) — bare
@@ -17,8 +18,9 @@
 //     destructured from a handler context) or as a property access
 //     (`ctx.safeDb(cb)`, `context.scopedDb(cb)`).
 //   - A HANDLE await is an `AwaitExpression` whose argument is any other call
-//     that receives a database handle (`db`, `tx`, `safeDb`, `scopedDb`,
-//     `rootDb`, `ingestionDb`, `backfillDb`) as an argument: a bare identifier
+//     that receives a database handle (`db`, `tx`, `database`, `transaction`,
+//     `safeDb`, `scopedDb`, `rootDb`, `ingestionDb`, `backfillDb`) as an
+//     argument: a bare identifier
 //     (`upsertRow(tx, row)`), a member access landing on or rooted at one
 //     (`upsertRow(ctx.tx, row)`), or an object-literal property carrying one
 //     by key, shorthand, or value (`helper({ tx, id })`,
@@ -152,6 +154,8 @@ const DB_HANDLE_KIND = {
   db: "chain-root",
   tx: "chain-root",
   rootDb: "chain-root",
+  database: "chain-root",
+  transaction: "chain-root",
   safeDb: "runner",
   scopedDb: "runner",
   ingestionDb: "runner",

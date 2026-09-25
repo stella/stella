@@ -63,7 +63,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
         );
       }, FLOW_STEP_JOB_TIMEOUT_MS);
       try {
-        await executeFlowStep(job.data, controller.signal);
+        await executeFlowStep(job.data, controller.signal, { database: db });
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
         controller.signal.throwIfAborted();
@@ -99,12 +99,14 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
       return;
     }
 
-    failFlowRunFromWorker(job.data, error).catch((finalizeError: unknown) => {
-      captureError(finalizeError, {
-        runId: job.data.runId,
-        stepIndex: String(job.data.stepIndex),
-      });
-    });
+    failFlowRunFromWorker(job.data, error, { database: db }).catch(
+      (finalizeError: unknown) => {
+        captureError(finalizeError, {
+          runId: job.data.runId,
+          stepIndex: String(job.data.stepIndex),
+        });
+      },
+    );
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
@@ -183,6 +185,7 @@ export const reconcileOrphanedFlowRuns = async (
     if (signal?.aborted === true) {
       break;
     }
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await database
       .select({
         id: flowRuns.id,

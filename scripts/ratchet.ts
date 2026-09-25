@@ -63,10 +63,15 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
+import { ROOT_CONNECTION_DOORS } from "./ownership";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_SOURCE_GLOBS,
 } from "./result-boundary-globs";
+import {
+  countRootConnectionShapes,
+  isRootConnectionModule,
+} from "./root-connection-shapes";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -690,11 +695,6 @@ const countDirectAuditLogInserts = (content: string): number => {
 // Value imports of the root connection handle, static or dynamic, by alias
 // or relative path. Request handlers are covered by lint; this keeps the
 // remaining sites visible. Type-only imports are not counted.
-const ROOT_CONNECTION_MODULE_SUFFIX = "db/root";
-const isRootConnectionModule = (node: ts.Node | undefined): boolean =>
-  node !== undefined &&
-  ts.isStringLiteralLike(node) &&
-  node.text.endsWith(ROOT_CONNECTION_MODULE_SUFFIX);
 const countRootConnectionImportsAs = (
   content: string,
   scriptKind: ts.ScriptKind,
@@ -747,6 +747,12 @@ const countDirectRootConnectionImports = (content: string): number =>
     countRootConnectionImportsAs(content, ts.ScriptKind.TS),
     countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
   );
+
+// The worker hosts and doors that hand the root connection on by design. The
+// lint rule confining each door's importers reads the same rows.
+const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
+  ROOT_CONNECTION_DOORS.flatMap((door) => door.owner),
+);
 
 // `audit: skip` directives: occurrences in comments only, found as the
 // occurrences that stripping comments removes.
@@ -2567,10 +2573,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "implicit-root-connection-shapes",
+    description:
+      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, object-literal dependency properties, module-level calls and aliases, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts). Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt; everything else takes its connection as a required dependency",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/db/root.ts" ||
+      ROOT_CONNECTION_DOOR_FILES.has(file),
+    count: countRootConnectionShapes,
+  },
+  {
+    scope: "file",
     id: "audit-skip-directives",
     description:
-      "`// audit: skip - <reason>` comments in API handlers, each exempting a database write from require-audit-on-mutation; the fix is an audit recorder call in the same transaction",
-    include: ["apps/api/src/handlers/**/*.ts"],
+      "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
+    include: ["apps/api/src/**/*.ts"],
     exclude: isExcludedSource,
     count: countAuditSkipDirectives,
   },
@@ -3449,6 +3467,38 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
 ];
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
+
+// One of each shape the implicit-root counter owns (the exhaustive cases live
+// in scripts/root-connection-shapes.test.ts); the same content written to a
+// door's path must count nothing.
+const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
+  'import { rootDb } from "@/api/db/root";',
+  'import { rootDb as owner } from "../db/root";',
+  'import * as root from "@/api/db/root";',
+  "export const load = async (db = rootDb) => db;",
+  "export const read = ({ database = owner }) => database;",
+  "export const pick = (db?: typeof owner) => db ?? root.rootDb;",
+  "export const write = async (ok: boolean, fn: () => Promise<void>) =>",
+  "  ok ? await rootDb.transaction(fn) : undefined;",
+  "export const deps = { db: rootDb };",
+  "export const store = createStore(rootDb);",
+  "export const explicit = async () => await notify([], rootDb);",
+  "export const shadowed = (rootDb: unknown) => ({ db: rootDb });",
+  'const text = "db = rootDb";',
+];
+const SELF_TEST_IMPLICIT_ROOT_CONNECTION = `${IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES.join("\n")}\n`;
+// Expected: default, destructured default, namespace fallback, conditional,
+// dependency property, module-level call (6). The explicit argument inside a
+// function, the shadowing parameter and the string are not shapes.
+const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 6;
+// A worker host, whose dependency property is the design, not a leak.
+const IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE =
+  "apps/api/src/api-background-workers.ts";
+const SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR = [
+  'import { rootDb } from "@/api/db/root";',
+  'export const host = startWorkers("api", { db: rootDb });',
+  "",
+].join("\n");
 
 const AUDIT_SKIP_FIXTURE_LINES = [
   "// audit: skip - scheduler bookkeeping, no user action",
@@ -4581,6 +4631,16 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/scripts/implicit-root-connection.ts",
+      SELF_TEST_IMPLICIT_ROOT_CONNECTION,
+    );
+    writeFixture(
+      root,
+      IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE,
+      SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR,
+    );
+    writeFixture(
+      root,
       "apps/web/src/shared-helper-shapes.tsx",
       SELF_TEST_SHARED_WEB_HELPERS,
     );
@@ -4990,6 +5050,10 @@ const runSelfTest = (): number => {
       ],
       ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      [
+        "implicit-root-connection-shapes",
+        EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
+      ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
       [
         "repeated-timestamp-cursor-boundary",
@@ -5001,6 +5065,12 @@ const runSelfTest = (): number => {
       if (metric.count !== expected) {
         failures.push(`${id} counted ${metric.count}, expected ${expected}`);
       }
+    }
+    if (
+      IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE in
+      requireSnapshot(snapshot, "implicit-root-connection-shapes").files
+    ) {
+      failures.push("implicit-root-connection-shapes did not exempt a door");
     }
 
     failures.push(...legacyPaintSelfTestFailures(snapshot));

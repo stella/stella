@@ -23,6 +23,11 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
+import {
+  analysisStore,
+  storesAnalyses,
+} from "@/api/lib/case-law/analysis-store";
+import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -33,10 +38,8 @@ import {
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
-import { analysisStore, storesAnalyses } from "./analysis-store";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
-import { storedAnalysisState } from "./stored-analysis";
 
 /**
  * Run the AI generation in the background. Updates the DB

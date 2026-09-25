@@ -18,10 +18,8 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
 
 const createEntityBodySchema = t.Object({

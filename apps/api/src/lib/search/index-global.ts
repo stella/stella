@@ -67,7 +67,6 @@ import type {
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
-const WORKSPACE_REINDEX_CONCURRENCY = 4;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
 
@@ -1580,11 +1579,33 @@ export const searchGlobalFacet = async (
 ): Promise<{ buckets: FacetBucket[] }> =>
   await scopedDb(async (tx) => await readGlobalFacet(query, tx));
 
-export const upsertContactSearchDocument = async (
-  contactId: SafeId<"contact">,
+/**
+ * The connection a contact or matter projection is rebuilt on. The caller
+ * chooses it: the standing repair drain passes its own, and a request's
+ * post-commit flush goes through `projection-repair-flush.ts`.
+ */
+type SearchDocumentDatabase = Pick<
+  typeof rootDb,
+  "query" | "select" | "transaction"
+>;
+
+// Contact and matter projections are rebuilt in batches of at most
+// `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
+// relations, then one transaction of four statements: the projection upsert,
+// the preview-passage delete and insert, and the generation stamp. The work a
+// rebuild does grows with its number of batches, not its number of sources.
+// Every source in a batch shares the batch's preview generation, so each
+// source's projection and passages are replaced together, atomically.
+
+const writeContactProjections = async (
+  contactIds: readonly SafeId<"contact">[],
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const contact = await rootDb.query.contacts.findFirst({
-    where: { id: { eq: contactId } },
+  if (contactIds.length === 0) {
+    return;
+  }
+  const sources = await database.query.contacts.findMany({
+    where: { id: { in: [...contactIds] } },
     columns: {
       id: true,
       organizationId: true,
@@ -1606,54 +1627,65 @@ export const upsertContactSearchDocument = async (
       currency: true,
       updatedAt: true,
     },
+    // Id order is the order the batch locks projection rows in.
+    orderBy: { id: "asc" },
+    limit: contactIds.length,
   });
-
-  if (!contact) {
+  if (sources.length === 0) {
     return;
   }
 
-  const searchableText = compact([
-    contact.prefix,
-    contact.firstName,
-    contact.middleName,
-    contact.lastName,
-    contact.suffix,
-    contact.organizationName,
-    contact.notes,
-    emailsToText(contact.emails),
-    phonesToText(contact.phones),
-    addressesToText(contact.addresses),
-    tagsToText(contact.tags),
-    contact.registrationNumber,
-    contact.taxId,
-    contact.currency,
-  ]);
+  const projections = sources.map((contact) => {
+    const searchableText = compact([
+      contact.prefix,
+      contact.firstName,
+      contact.middleName,
+      contact.lastName,
+      contact.suffix,
+      contact.organizationName,
+      contact.notes,
+      emailsToText(contact.emails),
+      phonesToText(contact.phones),
+      addressesToText(contact.addresses),
+      tagsToText(contact.tags),
+      contact.registrationNumber,
+      contact.taxId,
+      contact.currency,
+    ]);
+    return {
+      contact,
+      searchableText,
+      passages: buildSearchPreviewPassages(contact.displayName, searchableText),
+    };
+  });
   const previewGeneration = Bun.randomUUIDv7();
-  const previewPassages = buildSearchPreviewPassages(
-    contact.displayName,
-    searchableText,
-  );
+  const ids = projections.map(({ contact }) => contact.id);
 
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO contact_search_documents (
         contact_id, organization_id, contact_type,
         title, searchable_text, updated_at, tsv
-      ) VALUES (
-        ${contact.id},
-        ${contact.organizationId},
-        ${contact.type},
-        ${contact.displayName},
-        ${searchableText},
-        ${contact.updatedAt},
-        to_tsvector(
-          'simple',
-          unaccent(arabic_normalize(
-            coalesce(${contact.displayName}, '') || ' ' ||
-            coalesce(${searchableText}, '')
-          ))
-        )
-      )
+      ) VALUES ${sql.join(
+        projections.map(
+          ({ contact, searchableText }) => sql`(
+            ${contact.id},
+            ${contact.organizationId},
+            ${contact.type},
+            ${contact.displayName},
+            ${searchableText},
+            ${contact.updatedAt},
+            to_tsvector(
+              'simple',
+              unaccent(arabic_normalize(
+                coalesce(${contact.displayName}, '') || ' ' ||
+                coalesce(${searchableText}, '')
+              ))
+            )
+          )`,
+        ),
+        sql`, `,
+      )}
       ON CONFLICT (contact_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         contact_type = EXCLUDED.contact_type,
@@ -1664,32 +1696,41 @@ export const upsertContactSearchDocument = async (
     `);
     await tx.execute(sql`
       DELETE FROM contact_search_document_preview_passages
-      WHERE contact_id = ${contact.id}
+      WHERE contact_id = ANY(${typedPgArray(ids, "uuid")})
     `);
     await tx.execute(sql`
       INSERT INTO contact_search_document_preview_passages (
         contact_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
-        generation: previewGeneration,
-        leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
-        passages: previewPassages,
-        regconfig: sql`'simple'`,
-        useUnaccent: true,
-      })}
+      ) VALUES ${sql.join(
+        projections.map(({ contact, passages }) =>
+          buildSearchPreviewPassageValueRows({
+            generation: previewGeneration,
+            leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
+            passages,
+            regconfig: sql`'simple'`,
+            useUnaccent: true,
+          }),
+        ),
+        sql`, `,
+      )}
     `);
     await tx.execute(sql`
       UPDATE contact_search_documents
       SET preview_generation = ${previewGeneration}::uuid
-      WHERE contact_id = ${contact.id}
+      WHERE contact_id = ANY(${typedPgArray(ids, "uuid")})
     `);
   });
 };
 
-export const upsertWorkspaceSearchDocument = async (
-  workspaceId: SafeId<"workspace">,
+const writeWorkspaceProjections = async (
+  workspaceIds: readonly SafeId<"workspace">[],
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const workspace = await rootDb.query.workspaces.findFirst({
-    where: { id: { eq: workspaceId } },
+  if (workspaceIds.length === 0) {
+    return;
+  }
+  const sources = await database.query.workspaces.findMany({
+    where: { id: { in: [...workspaceIds] } },
     columns: {
       id: true,
       organizationId: true,
@@ -1733,72 +1774,83 @@ export const upsertWorkspaceSearchDocument = async (
         },
       },
     },
+    // Id order is the order the batch locks projection rows in.
+    orderBy: { id: "asc" },
+    limit: workspaceIds.length,
   });
-
-  if (!workspace) {
+  if (sources.length === 0) {
     return;
   }
 
-  const client = workspace.client;
-  const partyText = workspace.workspaceContacts.map(
-    ({ role, notes, contact }) =>
-      compact([
-        role,
-        notes,
-        contact?.displayName,
-        contact?.organizationName,
-        contact?.firstName,
-        contact?.lastName,
-        emailsToText(contact?.emails),
-        phonesToText(contact?.phones),
-        tagsToText(contact?.tags),
-      ]),
-  );
-
-  const searchableText = compact([
-    workspace.reference,
-    workspace.billingReference,
-    client?.displayName,
-    client?.organizationName,
-    client?.firstName,
-    client?.lastName,
-    emailsToText(client?.emails),
-    phonesToText(client?.phones),
-    tagsToText(client?.tags),
-    ...partyText,
-  ]);
-  const updatedAt =
-    latestDate([
-      workspace.createdAt,
-      workspace.lastActivityAt,
-      client?.updatedAt,
-      ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
-    ]) ?? workspace.lastActivityAt;
+  const projections = sources.map((workspace) => {
+    const client = workspace.client;
+    const partyText = workspace.workspaceContacts.map(
+      ({ role, notes, contact }) =>
+        compact([
+          role,
+          notes,
+          contact?.displayName,
+          contact?.organizationName,
+          contact?.firstName,
+          contact?.lastName,
+          emailsToText(contact?.emails),
+          phonesToText(contact?.phones),
+          tagsToText(contact?.tags),
+        ]),
+    );
+    const searchableText = compact([
+      workspace.reference,
+      workspace.billingReference,
+      client?.displayName,
+      client?.organizationName,
+      client?.firstName,
+      client?.lastName,
+      emailsToText(client?.emails),
+      phonesToText(client?.phones),
+      tagsToText(client?.tags),
+      ...partyText,
+    ]);
+    const updatedAt =
+      latestDate([
+        workspace.createdAt,
+        workspace.lastActivityAt,
+        client?.updatedAt,
+        ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
+      ]) ?? workspace.lastActivityAt;
+    return {
+      workspace,
+      searchableText,
+      updatedAt,
+      passages: buildSearchPreviewPassages(workspace.name, searchableText),
+    };
+  });
   const previewGeneration = Bun.randomUUIDv7();
-  const previewPassages = buildSearchPreviewPassages(
-    workspace.name,
-    searchableText,
-  );
+  const ids = projections.map(({ workspace }) => workspace.id);
 
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO workspace_search_documents (
         workspace_id, organization_id,
         title, searchable_text, updated_at, tsv
-      ) VALUES (
-        ${workspace.id},
-        ${workspace.organizationId},
-        ${workspace.name},
-        ${searchableText},
-        ${updatedAt},
-        to_tsvector(
-          'simple',
-          unaccent(arabic_normalize(
-            coalesce(${workspace.name}, '') || ' ' ||
-            coalesce(${searchableText}, '')
-          ))
-        )
-      )
+      ) VALUES ${sql.join(
+        projections.map(
+          ({ workspace, searchableText, updatedAt }) => sql`(
+            ${workspace.id},
+            ${workspace.organizationId},
+            ${workspace.name},
+            ${searchableText},
+            ${updatedAt},
+            to_tsvector(
+              'simple',
+              unaccent(arabic_normalize(
+                coalesce(${workspace.name}, '') || ' ' ||
+                coalesce(${searchableText}, '')
+              ))
+            )
+          )`,
+        ),
+        sql`, `,
+      )}
       ON CONFLICT (workspace_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         title = EXCLUDED.title,
@@ -1808,25 +1860,64 @@ export const upsertWorkspaceSearchDocument = async (
     `);
     await tx.execute(sql`
       DELETE FROM workspace_search_document_preview_passages
-      WHERE workspace_id = ${workspace.id}
+      WHERE workspace_id = ANY(${typedPgArray(ids, "uuid")})
     `);
     await tx.execute(sql`
       INSERT INTO workspace_search_document_preview_passages (
         workspace_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
-        generation: previewGeneration,
-        leadingValues: [sql`${workspace.id}`, sql`${workspace.organizationId}`],
-        passages: previewPassages,
-        regconfig: sql`'simple'`,
-        useUnaccent: true,
-      })}
+      ) VALUES ${sql.join(
+        projections.map(({ workspace, passages }) =>
+          buildSearchPreviewPassageValueRows({
+            generation: previewGeneration,
+            leadingValues: [
+              sql`${workspace.id}`,
+              sql`${workspace.organizationId}`,
+            ],
+            passages,
+            regconfig: sql`'simple'`,
+            useUnaccent: true,
+          }),
+        ),
+        sql`, `,
+      )}
     `);
     await tx.execute(sql`
       UPDATE workspace_search_documents
       SET preview_generation = ${previewGeneration}::uuid
-      WHERE workspace_id = ${workspace.id}
+      WHERE workspace_id = ANY(${typedPgArray(ids, "uuid")})
     `);
   });
+};
+
+export const upsertContactSearchDocument = async (
+  contactId: SafeId<"contact">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeContactProjections([contactId], database);
+};
+
+export const upsertWorkspaceSearchDocuments = async (
+  workspaceIds: readonly SafeId<"workspace">[],
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  // Sorted, so every writer locks projection rows in one order (the keyset
+  // order) and two overlapping cascades wait on each other instead of
+  // deadlocking.
+  const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
+  for (let start = 0; start < pending.length; start += REINDEX_BATCH_SIZE) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batch of at most REINDEX_BATCH_SIZE matters per iteration: one read and one four-statement transaction per batch, never per matter
+    await writeWorkspaceProjections(
+      pending.slice(start, start + REINDEX_BATCH_SIZE),
+      database,
+    );
+  }
+};
+
+export const upsertWorkspaceSearchDocument = async (
+  workspaceId: SafeId<"workspace">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeWorkspaceProjections([workspaceId], database);
 };
 
 type SearchActivityDatabase = {
@@ -1847,34 +1938,11 @@ export const syncWorkspaceSearchActivity = async (
   `);
 };
 
-export const upsertWorkspaceSearchDocuments = async (
-  workspaceIds: readonly SafeId<"workspace">[],
-): Promise<void> => {
-  const pending = [...new Set(workspaceIds)];
-  const workers: Promise<void>[] = [];
-  const workerCount = Math.min(WORKSPACE_REINDEX_CONCURRENCY, pending.length);
-
-  for (let workerIndex = 0; workerIndex < workerCount; workerIndex += 1) {
-    workers.push(
-      (async () => {
-        while (pending.length > 0) {
-          const workspaceId = pending.shift();
-          if (!workspaceId) {
-            return;
-          }
-          await upsertWorkspaceSearchDocument(workspaceId);
-        }
-      })(),
-    );
-  }
-
-  await Promise.all(workers);
-};
-
 export const reindexWorkspacesForContact = async (
   contactId: SafeId<"contact">,
+  database: SearchDocumentDatabase,
 ): Promise<void> => {
-  const contact = await rootDb.query.contacts.findFirst({
+  const contact = await database.query.contacts.findFirst({
     where: { id: { eq: contactId } },
     columns: { organizationId: true },
   });
@@ -1883,7 +1951,7 @@ export const reindexWorkspacesForContact = async (
     return;
   }
 
-  const rows = await rootDb
+  const rows = await database
     .select({ id: workspaces.id })
     .from(workspaces)
     .leftJoin(
@@ -1901,63 +1969,104 @@ export const reindexWorkspacesForContact = async (
     )
     .groupBy(workspaces.id);
 
-  await upsertWorkspaceSearchDocuments(rows.map(({ id }) => id));
+  await upsertWorkspaceSearchDocuments(
+    rows.map(({ id }) => id),
+    database,
+  );
 };
 
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  let lastContactId: SafeId<"contact"> | null = null;
-  let hasMoreContacts = true;
+  await rebuildSupplementalSearchDocuments(organizationId, rootDb);
+};
 
-  while (hasMoreContacts) {
+type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
+
+// One keyset page of an organization's contacts, rebuilt as one batch.
+const rebuildContactPage = async (
+  organizationId: SafeId<"organization">,
+  after: SafeId<"contact"> | null,
+  database: SearchDocumentDatabase,
+): Promise<KeysetPage<SafeId<"contact">>> => {
+  const page = await database
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      after
+        ? and(
+            eq(contacts.organizationId, organizationId),
+            gt(contacts.id, after),
+          )
+        : eq(contacts.organizationId, organizationId),
+    )
+    .orderBy(asc(contacts.id))
+    .limit(REINDEX_BATCH_SIZE);
+  await writeContactProjections(
+    page.map(({ id }) => id),
+    database,
+  );
+  return {
+    last: page.at(-1)?.id ?? after,
+    more: page.length === REINDEX_BATCH_SIZE,
+  };
+};
+
+// One keyset page of an organization's matters, rebuilt as one batch.
+const rebuildWorkspacePage = async (
+  organizationId: SafeId<"organization">,
+  after: SafeId<"workspace"> | null,
+  database: SearchDocumentDatabase,
+): Promise<KeysetPage<SafeId<"workspace">>> => {
+  const page = await database
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      after
+        ? and(
+            eq(workspaces.organizationId, organizationId),
+            gt(workspaces.id, after),
+          )
+        : eq(workspaces.organizationId, organizationId),
+    )
+    .orderBy(asc(workspaces.id))
+    .limit(REINDEX_BATCH_SIZE);
+  await writeWorkspaceProjections(
+    page.map(({ id }) => id),
+    database,
+  );
+  return {
+    last: page.at(-1)?.id ?? after,
+    more: page.length === REINDEX_BATCH_SIZE,
+  };
+};
+
+// Keyset pages of one organization's contacts, then its matters. Each page
+// is one batch: a read of its sources and one projection transaction.
+export const rebuildSupplementalSearchDocuments = async (
+  organizationId: SafeId<"organization">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  let contactPage: KeysetPage<SafeId<"contact">> = { last: null, more: true };
+  while (contactPage.more) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const batch = await rootDb
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(
-        lastContactId
-          ? and(
-              eq(contacts.organizationId, organizationId),
-              gt(contacts.id, lastContactId),
-            )
-          : eq(contacts.organizationId, organizationId),
-      )
-      .orderBy(asc(contacts.id))
-      .limit(REINDEX_BATCH_SIZE);
-
-    for (const contact of batch) {
-      await upsertContactSearchDocument(contact.id);
-    }
-
-    hasMoreContacts = batch.length === REINDEX_BATCH_SIZE;
-    lastContactId = batch.at(-1)?.id ?? lastContactId;
+    contactPage = await rebuildContactPage(
+      organizationId,
+      contactPage.last,
+      database,
+    );
   }
 
-  let lastWorkspaceId: SafeId<"workspace"> | null = null;
-  let hasMoreWorkspaces = true;
-
-  while (hasMoreWorkspaces) {
+  let workspacePage: KeysetPage<SafeId<"workspace">> = {
+    last: null,
+    more: true,
+  };
+  while (workspacePage.more) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-    const batch = await rootDb
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        lastWorkspaceId
-          ? and(
-              eq(workspaces.organizationId, organizationId),
-              gt(workspaces.id, lastWorkspaceId),
-            )
-          : eq(workspaces.organizationId, organizationId),
-      )
-      .orderBy(asc(workspaces.id))
-      .limit(REINDEX_BATCH_SIZE);
-
-    for (const workspace of batch) {
-      await upsertWorkspaceSearchDocument(workspace.id);
-    }
-
-    hasMoreWorkspaces = batch.length === REINDEX_BATCH_SIZE;
-    lastWorkspaceId = batch.at(-1)?.id ?? lastWorkspaceId;
+    workspacePage = await rebuildWorkspacePage(
+      organizationId,
+      workspacePage.last,
+      database,
+    );
   }
 };

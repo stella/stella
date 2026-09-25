@@ -5,8 +5,8 @@ import nodePath from "node:path";
 
 import { stellaCaseLawAnalysisWriter } from "@/api/db/rls";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { createDbAnalysisStore } from "@/api/handlers/case-law/analysis/analysis-store-core";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import {
   CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS,
   CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS,

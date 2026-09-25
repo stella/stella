@@ -63,6 +63,126 @@ export type OwnershipEntry = {
   readonly enforcement: OwnershipEnforcement;
 };
 
+const FLUSHES_ITS_OWN_SEARCH_MARKS =
+  "Flushes the search marks its own transaction committed.";
+
+// The modules that hand the owner connection (`rootDb`) to other code on
+// purpose. A worker host injects it into the workers it starts; every other
+// row is a door: it runs one named owner operation for callers that hold no
+// connection able to perform it, and exports that operation, never the
+// connection. Its `allowed` list is the exact set of modules that may call
+// it, enforced by `confine-owner`.
+//
+// `scripts/ratchet.ts` reads the owners below as the only files exempt from
+// the `implicit-root-connection-shapes` metric (see
+// `scripts/root-connection-shapes.ts`), so the lint allowlist and the metric's
+// exemptions cannot drift apart. Adding a door here does not add a shape to
+// the baseline; it moves one out of it, and review of the row is the gate.
+export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "root-connection-worker-hosts",
+    capability:
+      "Handing the owner connection to the queue workers a process hosts",
+    owner: [
+      "apps/api/src/api-background-workers.ts",
+      "apps/api/src/scripts/document-processing-worker.ts",
+    ],
+    summary:
+      "Each process that runs BullMQ workers builds its host here and passes the " +
+      "owner connection into every worker it starts (`BullMqWorkerContext.db`). " +
+      "Workers take that handle as a required dependency and hand it to their " +
+      "collaborators; none of them imports the connection itself.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "flow-run-completion-notice",
+    capability:
+      "Notifying a flow run's actor when a reviewer completes the run",
+    owner: ["apps/api/src/lib/flows/flow-run-completion-notice.ts"],
+    summary:
+      "Approving a run's last review gate completes a run whose actor is usually " +
+      "another user. Resolving that actor and filing their notification are both " +
+      "cross-user, so one operation does both on the owner connection, with the " +
+      "recipient derived from the run and a run-keyed idempotency key.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/flows/flow-run-completion-notice"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/flows/flow-executor.ts",
+          reason:
+            "The review-gate resolver files the notice when an approval finishes the run.",
+        },
+      ],
+    },
+  },
+  {
+    id: "search-projection-flush",
+    capability: "Flushing a mutation's search marks after it commits",
+    owner: ["apps/api/src/lib/search/projection-repair-flush.ts"],
+    summary:
+      "The repair queue and the search projections are system state that a " +
+      "request scope cannot settle. These operations repair exactly the sources " +
+      "the caller hands in, whose marks its own transaction committed; the " +
+      "scheduled drain runs the same steps on the scheduler's own connection.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/search/projection-repair-flush"],
+      allowed: [
+        "apps/api/src/handlers/chat/tools/workspace-tools.ts",
+        "apps/api/src/handlers/contacts/create.ts",
+        "apps/api/src/handlers/contacts/delete.ts",
+        "apps/api/src/handlers/contacts/import.ts",
+        "apps/api/src/handlers/contacts/update.ts",
+        "apps/api/src/handlers/entities/clip.ts",
+        "apps/api/src/handlers/entities/copy.ts",
+        "apps/api/src/handlers/entities/create.ts",
+        "apps/api/src/handlers/entities/duplicate.ts",
+        "apps/api/src/handlers/entities/rename.ts",
+        "apps/api/src/handlers/entities/versions/delete.ts",
+        "apps/api/src/handlers/fields/kanban-placement/update.ts",
+        "apps/api/src/handlers/fields/upsert.ts",
+        "apps/api/src/handlers/signals/acceptances/create.ts",
+        "apps/api/src/handlers/uploads/entity-create-tree.ts",
+        "apps/api/src/handlers/workspaces/contacts/create.ts",
+        "apps/api/src/handlers/workspaces/contacts/delete.ts",
+        "apps/api/src/handlers/workspaces/create.ts",
+        "apps/api/src/handlers/workspaces/duplicate.ts",
+        "apps/api/src/handlers/workspaces/update.ts",
+        "apps/api/src/lib/flows/flow-executor.ts",
+        "apps/api/src/lib/tasks/create-task-entity.ts",
+      ].map((importer) => ({
+        path: importer,
+        reason: FLUSHES_ITS_OWN_SEARCH_MARKS,
+      })),
+    },
+  },
+  {
+    id: "case-law-analysis-store",
+    capability: "Storing a generated case-law decision analysis",
+    owner: ["apps/api/src/lib/case-law/analysis-store.ts"],
+    summary:
+      "An analysis is global corpus state written from a background task that " +
+      "outlives its request. The store's claim/save/clear operations are the " +
+      "only way the generation handlers reach the row, and a deployment reading " +
+      "a shared corpus never writes there.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/case-law/analysis-store"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/analysis/generate.ts",
+          reason: "Generates and stores a decision's analysis.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/analysis/significance-run.ts",
+          reason: "Stores the significance pass over an analysis.",
+        },
+      ],
+    },
+  },
+] as const satisfies readonly OwnershipEntry[];
+
 export const OWNERSHIP = [
   {
     id: "desktop-http-client",
@@ -907,6 +1027,7 @@ export const OWNERSHIP = [
       "emissions still outside it, per file.",
     enforcement: { kind: "none" },
   },
+  ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
