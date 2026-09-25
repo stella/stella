@@ -624,9 +624,9 @@ describe("loading a user's active MCP connections", () => {
       userId,
     });
 
-    expect(loaded.map((row) => [row.userConnectionId, row.type])).toEqual([
-      ["conn_1", "oauth2"],
-      ["conn_3", "none"],
+    expect(loaded.map((row) => `${row.userConnectionId}:${row.type}`)).toEqual([
+      "conn_1:oauth2",
+      "conn_3:none",
     ]);
     expect(listing.updates()).toBe(1);
     expect(hasStatusSet("needs_reauth")).toBe(true);

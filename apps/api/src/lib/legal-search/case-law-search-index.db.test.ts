@@ -255,10 +255,7 @@ test(
         error.mock.calls.filter(
           ([signature, fields]) =>
             signature === "case_law.search_index.backfill_failed" &&
-            typeof fields === "object" &&
-            fields !== null &&
-            "decisionId" in fields &&
-            fields.decisionId === failing,
+            fields?.["decisionId"] === failing,
         ),
       ).toHaveLength(1);
     } finally {
