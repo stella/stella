@@ -1,7 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
-import { panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { panic, TaggedError } from "better-result";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -103,6 +103,11 @@ const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedTurnSettles,
 ]);
+
+/** The page's connection dropping because the process serving it died. */
+class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
+  message: string;
+}> {}
 
 /** The HTTP answer the route gives a refused request, as the browser sees it. */
 const refusalResponse = (rejection: unknown): Response => {
@@ -359,6 +364,38 @@ export const createApprovalHarness = ({
   const delivered = new Map<string, DeliveredInterrupt[]>();
   let inFlight = 0;
 
+  /** Threads whose next web request is served by a process that then dies. */
+  const crashingThreads = new Set<string>();
+
+  /**
+   * Serves `body` until the run reaches a stalling model call, then lets the
+   * serving process die: nothing reads the rest of the response, the page's
+   * connection drops, and the run never persists what it did after its last
+   * write. The turn's lease is then expired, as a dead owner's would be.
+   */
+  const crashDuring = async (body: SendBody): Promise<Response> => {
+    const threadId = body.threadId;
+    const stalled = provider.stalled(threadId);
+    // The dying process never sees the page go away, so no signal reaches it.
+    const result = await sendMessage.handler(contextFromBody(body));
+    if (!(result instanceof Response && result.ok)) {
+      return refusalResponse(result);
+    }
+    // Reading the stream is what runs the turn; it stops at the stall.
+    void drainResponse(result);
+    await stalled;
+    // The earliest lease the row allows: just after the turn was created.
+    await testDb
+      .update(chatTurns)
+      .set({
+        leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
+      })
+      .where(
+        and(eq(chatTurns.threadId, threadId), eq(chatTurns.status, "running")),
+      );
+    throw new ChatConnectionLostError({ message: "Failed to fetch" });
+  };
+
   /**
    * The route for the web client: the posted JSON is validated against the
    * route's body schema, sent to the real handler, checked, and its SSE body
@@ -380,6 +417,9 @@ export const createApprovalHarness = ({
       return new Response(JSON.stringify({ message: "Invalid body" }), {
         status: 422,
       });
+    }
+    if (crashingThreads.delete(raw.threadId)) {
+      return await crashDuring(raw);
     }
     const outcome = await sendAndCheck(contextFromBody(raw, signal));
     if (outcome.status === "rejected") {
@@ -581,6 +621,14 @@ export const createApprovalHarness = ({
   return {
     approveContext,
     checkWebClient,
+    /**
+     * Makes `threadId`'s next web request die mid-run: the process serving
+     * it stops at the run's next stalling model call (script one), and the
+     * turn's lease expires.
+     */
+    crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
+      crashingThreads.add(threadId);
+    },
     /** Restores the model seam and `fetch`; call once the test is done. */
     close: () => {
       globalThis.fetch = originalFetch;

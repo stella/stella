@@ -16,9 +16,11 @@ import {
   getChatAttachmentUrl,
   isChatAttachmentPart,
   chatMessageFromPersisted,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { settleOpenToolCallsForOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatMessagePrefixRow } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePrefixOnTx } from "@/api/handlers/chat/history-window";
 import type {
@@ -190,17 +192,30 @@ const remapChatAttachmentPart = (
 const settleForkedPendingInteractions = (
   message: PersistableChatMessage,
 ): PersistableChatMessage => {
-  // Parts, not the stored outcome, decide: a pre-outcome message carries no
-  // `turnOutcome` and can still hold an unanswered call.
-  const pending = getAwaitingUserInteractions({
-    parts: message.parts,
-    role: message.role,
+  // An approved call without its result may already have run in the source
+  // thread; the fork gets its outcome as unknown, never the approval.
+  const settled = toPersistableChatMessage({
+    ...message,
+    parts: settleOpenToolCallsForOutcome({
+      outcome: "cancelled",
+      parts: message.parts,
+    }),
   });
-  if (pending.length === 0) {
-    return message;
+  // A pre-outcome message carries no `turnOutcome` and can still hold an
+  // unanswered call, so the parts decide too. A message that awaited the user
+  // is superseded on the fork even when settling left nothing to answer.
+  const pending = getAwaitingUserInteractions({
+    parts: settled.parts,
+    role: settled.role,
+  });
+  if (
+    pending.length === 0 &&
+    settled.metadata?.turnOutcome?.type !== "awaiting-user"
+  ) {
+    return settled;
   }
   return attachTerminalTurnOutcome({
-    message: cancelPendingChatToolCalls(message),
+    message: cancelPendingChatToolCalls(settled),
     turnOutcome: { reason: "superseded", type: "cancelled" },
   });
 };

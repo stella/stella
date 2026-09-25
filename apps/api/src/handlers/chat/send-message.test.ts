@@ -1215,7 +1215,11 @@ describe("send message turn persistence", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: selectWithThreadLock,
-          update: () => ({ set: () => ({ where: async () => [] }) }),
+          update: () => ({
+            set: () => ({
+              where: () => ({ returning: async () => [] }),
+            }),
+          }),
         },
       }),
     );

@@ -37,8 +37,32 @@ const SIDE_CALL_TEXT = "Scripted side answer";
 type ThreadScripts = {
   /** The provider options of every model call the thread made, in order. */
   modelOptions: unknown[];
+  /** Resolves the current `stalled` promise and arms the next one. */
+  onStall: () => void;
   queue: ScriptedRun[];
+  /** Resolves once a request on the thread reaches a stalling turn. */
+  stalled: Promise<undefined>;
   unscriptedCalls: string[];
+};
+
+const newThreadScripts = (): ThreadScripts => {
+  const scripts: ThreadScripts = {
+    modelOptions: [],
+    onStall: () => undefined,
+    queue: [],
+    stalled: Promise.resolve(undefined),
+    unscriptedCalls: [],
+  };
+  const arm = () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    scripts.stalled = promise;
+    scripts.onStall = () => {
+      resolve(undefined);
+      arm();
+    };
+  };
+  arm();
+  return scripts;
 };
 
 const threads = new Map<string, ThreadScripts>();
@@ -87,6 +111,9 @@ const adapter: AnyTextAdapter = {
         message: "The scripted run has no iteration left",
       });
     }
+    if (turn.type === "stall") {
+      scripts.onStall();
+    }
     yield* scriptedTurnChunks(turn, { index, model, runId, threadId });
   },
   structuredOutput: async ({ outputSchema }) => {
@@ -121,11 +148,7 @@ export const installScriptedProvider = () => {
     if (existing !== undefined) {
       return existing;
     }
-    const created: ThreadScripts = {
-      modelOptions: [],
-      queue: [],
-      unscriptedCalls: [],
-    };
+    const created = newThreadScripts();
     threads.set(threadId, created);
     owned.add(threadId);
     return created;
@@ -135,6 +158,10 @@ export const installScriptedProvider = () => {
     /** Queues the runs `threadId`'s next requests answer, one per request. */
     script: (threadId: string, ...scripted: readonly ScriptedRun[]) => {
       scriptsOf(threadId).queue.push(...scripted);
+    },
+    /** Resolves once `threadId`'s next request reaches a stalling turn. */
+    stalled: async (threadId: string): Promise<void> => {
+      await scriptsOf(threadId).stalled;
     },
     /** `threadId`'s findings since the last call, cleared on read, so the next
      *  step starts clean. */

@@ -878,6 +878,33 @@ describe("a conversation's live view", () => {
   );
 
   test(
+    "runs a server call at once when its model step also asks for an approval",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["plain", "approval"] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: one model step holds a server
+        // call and a call that waits on the user.
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ReloadPage().run(model, real);
+
+        await new ResolveCards(
+          ["approve", "approve", "approve", "approve"],
+          [[{ ...STEP, text: true }]],
+        ).run(model, real);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
     "accepts an approval whose model arguments spell absent fields as null",
     async () => {
       // Strict tool schemas make every optional field required and nullable,
@@ -936,6 +963,101 @@ describe("a conversation's live view", () => {
         await new ReloadPage().run(model, real);
       } finally {
         closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "runs an approved call once when the process serving it dies",
+    async () => {
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [
+          {
+            type: "step",
+            toolCalls: [
+              {
+                arguments: approvalToolArguments("NDA"),
+                toolCallId: "call-nda",
+                toolName: APPROVAL_TOOL_NAME,
+              },
+            ],
+          },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
+        harness.script(threadId, [{ type: "stall" }]);
+        harness.crashDuringNextRequest(threadId);
+        await real.client.approve("call-nda", true);
+        real.client.dispose();
+        // The fixture must reach the fault: the call ran before the process
+        // died, so no result was stored.
+        expect(harness.executions).toEqual(["NDA"]);
+
+        real.client = await harness.openWebClient(threadId);
+        harness.script(threadId, [
+          { toolCalls: [], text: "Anything else?", type: "step" },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks");
+        // This page loaded before the next turn settled the dead one, so only
+        // a fresh load shows the settled call.
+        real.client.dispose();
+        real.client = await harness.openWebClient(threadId);
+        await harness.expectSoundWebClient({ client: real.client, threadId });
+
+        expect(harness.executions).toEqual(["NDA"]);
+      } finally {
+        closeConversation({ real });
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "asks again for an approval whose call id an interrupted turn used",
+    async () => {
+      // Some providers number tool calls per response, so a later turn can
+      // reuse an earlier turn's call id.
+      const reusedId = "call_0";
+      const deleteCall = (name: string) => ({
+        type: "step" as const,
+        toolCalls: [
+          {
+            arguments: approvalToolArguments(name),
+            toolCallId: reusedId,
+            toolName: APPROVAL_TOOL_NAME,
+          },
+        ],
+      });
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [deleteCall("first")]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete one");
+        harness.script(threadId, [{ type: "stall" }]);
+        harness.crashDuringNextRequest(threadId);
+        await real.client.approve(reusedId, true);
+        real.client.dispose();
+        // The fixture must reach the fault: the first call ran before the
+        // process died.
+        expect(harness.executions).toEqual(["first"]);
+
+        real.client = await harness.openWebClient(threadId);
+        harness.script(threadId, [deleteCall("second")]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete another");
+
+        expect({
+          card: real.client
+            .cards()
+            .some(
+              ({ kind, toolCallId }) =>
+                kind === "approval" && toolCallId === reusedId,
+            ),
+          secondRan: harness.executions.includes("second"),
+        }).toEqual({ card: true, secondRan: false });
+      } finally {
+        closeConversation({ real });
       }
     },
     propertyTestTimeout(30_000),
