@@ -7,7 +7,8 @@
 // mutation, and requires the scenario to fail AT that oracle: the failure
 // output must name the oracle id. A failure that names no oracle (a compile
 // error, a setup failure, a timeout) is not a kill. The file is restored after
-// every run, whatever happens.
+// every run, and on SIGINT, SIGTERM, SIGHUP or an uncaught error the runner
+// restores it, stops the scenario and exits without starting the next entry.
 //
 // An entry whose mutation no longer applies (its search text is gone or not
 // unique) fails until it is replaced, or retired with a reason. `pending`
@@ -17,12 +18,14 @@
 //   bun apps/api/scripts/chat-mutation-matrix.ts            run every active entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --only ID  run one entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --check    validate the data only
+//   bun apps/api/scripts/chat-mutation-matrix.ts --self-test check the restore
 //
 // On demand and nightly (`.github/workflows/nightly-property-test.yml`), never
 // per PR: each entry runs its scenario twice.
 
 import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
@@ -111,6 +114,69 @@ const escapeRegExp = (text: string): string =>
 
 type ScenarioRun = { output: string; passed: boolean; timedOut: boolean };
 
+/** The scenario process running now, stopped if the runner is. */
+let activeScenario: Bun.Subprocess | undefined;
+
+type TerminationSignal = Extract<
+  NodeJS.Signals,
+  "SIGHUP" | "SIGINT" | "SIGTERM"
+>;
+
+/** The signals that stop the runner, with the exit code each one ends in. */
+const TERMINATION_SIGNALS = {
+  SIGHUP: 129,
+  SIGINT: 130,
+  SIGTERM: 143,
+} as const satisfies Record<TerminationSignal, number>;
+
+/**
+ * Runs `body` with `target` holding `mutated`, then puts the original back.
+ * A termination signal or an uncaught error restores it too, stops the
+ * scenario and exits, so no mutation outlives the runner and no later entry
+ * starts.
+ */
+const withMutatedFile = async <T>(
+  target: string,
+  mutated: string,
+  body: () => Promise<T>,
+): Promise<T> => {
+  const original = readFileSync(target, "utf-8");
+  const restore = () => {
+    writeFileSync(target, original);
+  };
+  const abandon = (exitCode: number) => {
+    restore();
+    activeScenario?.kill();
+    process.exit(exitCode);
+  };
+  const onSignal = (signal: TerminationSignal) => {
+    abandon(TERMINATION_SIGNALS[signal]);
+  };
+  const onUncaught = (error: unknown) => {
+    console.error(error);
+    abandon(1);
+  };
+  const signals = Object.keys(TERMINATION_SIGNALS).filter(
+    (name): name is TerminationSignal => name in TERMINATION_SIGNALS,
+  );
+  for (const signal of signals) {
+    process.once(signal, onSignal);
+  }
+  process.once("uncaughtException", onUncaught);
+  process.once("unhandledRejection", onUncaught);
+  try {
+    writeFileSync(target, mutated);
+    return await body();
+  } finally {
+    restore();
+    for (const signal of signals) {
+      process.off(signal, onSignal);
+    }
+    process.off("uncaughtException", onUncaught);
+    process.off("unhandledRejection", onUncaught);
+  }
+};
+
 const runScenario = async (
   scenario: Entry["scenario"],
 ): Promise<ScenarioRun> => {
@@ -125,6 +191,7 @@ const runScenario = async (
     ],
     { cwd: API_ROOT, stderr: "pipe", stdout: "pipe" },
   );
+  activeScenario = child;
   const timer = setTimeout(() => {
     child.kill();
   }, SCENARIO_TIMEOUT_MS);
@@ -134,6 +201,7 @@ const runScenario = async (
     child.exited,
   ]);
   clearTimeout(timer);
+  activeScenario = undefined;
   const output = `${stdout}\n${stderr}`;
   return {
     output,
@@ -159,16 +227,11 @@ const runEntry = async (
     return { detail: "the unmutated scenario fails", entry, killed: false };
   }
   const target = path.join(API_ROOT, entry.file);
-  const original = readFileSync(target, "utf-8");
-  const restore = () => {
-    writeFileSync(target, original);
-  };
-  process.once("SIGINT", restore);
-  try {
-    writeFileSync(
-      target,
-      original.replace(entry.search, () => entry.replace),
-    );
+  const mutatedSource = readFileSync(target, "utf-8").replace(
+    entry.search,
+    () => entry.replace,
+  );
+  return await withMutatedFile(target, mutatedSource, async () => {
     const mutated = await runScenario(entry.scenario);
     if (mutated.timedOut) {
       return { detail: "timed out (not a kill)", entry, killed: false };
@@ -187,14 +250,98 @@ const runEntry = async (
           entry,
           killed: false,
         };
+  });
+};
+
+/**
+ * `--hold`: mutates `file` and waits, or throws once it is mutated with
+ * `--throw`; the self-test ends it from outside.
+ */
+const hold = async (file: string, throws: boolean): Promise<never> =>
+  await withMutatedFile(file, "mutated\n", async () => {
+    console.log("mutated");
+    if (throws) {
+      setTimeout(() => {
+        panic("an uncaught error while mutated");
+      }, 0);
+    }
+    return await new Promise<never>(() => {
+      // Keeps the process alive until the self-test ends it.
+      setInterval(() => undefined, 60_000);
+    });
+  });
+
+/** Every way the runner can be ended leaves the file as it was. */
+const selfTest = async (): Promise<number> => {
+  const directory = mkdtempSync(path.join(tmpdir(), "chat-mutation-matrix-"));
+  const failures: string[] = [];
+  try {
+    const endings = [
+      ...Object.entries(TERMINATION_SIGNALS).map(([signal, code]) => ({
+        code,
+        label: signal,
+        signal,
+        throws: false,
+      })),
+      { code: 1, label: "uncaught error", signal: undefined, throws: true },
+    ];
+    for (const ending of endings) {
+      const file = path.join(directory, `${ending.label}.ts`);
+      writeFileSync(file, "original\n");
+      const child = Bun.spawn(
+        [
+          "bun",
+          import.meta.path,
+          "--hold",
+          file,
+          ...(ending.throws ? ["--throw"] : []),
+        ],
+        { stderr: "ignore", stdout: "pipe" },
+      );
+      const reader = child.stdout.getReader();
+      const first = await reader.read();
+      const mutated = readFileSync(file, "utf-8") === "mutated\n";
+      if (ending.signal !== undefined) {
+        child.kill(ending.signal);
+      }
+      const exitCode = await child.exited;
+      const restored = readFileSync(file, "utf-8") === "original\n";
+      if (first.done === true || !mutated) {
+        failures.push(`${ending.label}: the file was never mutated`);
+      }
+      if (!restored) {
+        failures.push(`${ending.label}: the file was not restored`);
+      }
+      if (exitCode !== ending.code) {
+        failures.push(
+          `${ending.label}: exited ${String(exitCode)}, expected ${String(ending.code)}`,
+        );
+      }
+    }
   } finally {
-    restore();
-    process.off("SIGINT", restore);
+    rmSync(directory, { force: true, recursive: true });
   }
+  for (const failure of failures) {
+    console.error(`  ${failure}`);
+  }
+  if (failures.length === 0) {
+    console.log("chat mutation matrix self-test: ok.");
+  }
+  return failures.length === 0 ? 0 : 1;
 };
 
 const main = async (): Promise<number> => {
   const args = process.argv.slice(2);
+  const holdIndex = args.indexOf("--hold");
+  if (holdIndex !== -1) {
+    return await hold(
+      args[holdIndex + 1] ?? panic("--hold needs a file"),
+      args.includes("--throw"),
+    );
+  }
+  if (args.includes("--self-test")) {
+    return await selfTest();
+  }
   const entries = readMatrix();
   const problems = validate(entries);
   if (problems.length > 0) {

@@ -94,6 +94,9 @@ jobs:
       # behaviour of the chat pipeline from the tree and requires its scenario
       # to fail at the oracle the entry names. A survivor, a failure at any
       # other point, or an entry whose mutation no longer applies fails the
-      # job. Too slow for PR CI: every entry runs its scenario twice.
+      # job. Too slow for PR CI: every entry runs its scenario twice. The
+      # --self-test run first proves a stopped runner leaves no mutation behind.
       - name: Chat mutation matrix
-        run: bun apps/api/scripts/chat-mutation-matrix.ts
+        run: |
+          bun apps/api/scripts/chat-mutation-matrix.ts --self-test
+          bun apps/api/scripts/chat-mutation-matrix.ts
