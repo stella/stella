@@ -158,26 +158,6 @@ describe("tool-call history pruning", () => {
 });
 
 describe("streaming tool-use capability gate", () => {
-  test("refuses a tool-carrying turn on a model without streaming tool use", () => {
-    expect(
-      chatTurnRejectsStreamingTools({
-        model: { modelId: "us.deepseek.r1-v1:0" },
-        toolCount: 12,
-      }),
-    ).toBe(true);
-  });
-
-  test("allows a turn that offers no tools at all", () => {
-    // The sandbox path reaches stella tools through its MCP bridge, so its
-    // stream carries no tool schemas and the provider limit never applies.
-    expect(
-      chatTurnRejectsStreamingTools({
-        model: { modelId: "us.deepseek.r1-v1:0" },
-        toolCount: 0,
-      }),
-    ).toBe(false);
-  });
-
   test("allows a tool-carrying turn on a model that streams tools", () => {
     expect(
       chatTurnRejectsStreamingTools({

@@ -13,6 +13,11 @@ export type CapabilityOverride = {
   documentInputReason: string;
   reasoningEfforts: readonly ReasoningEffort[] | null;
   temperatureSupported: boolean;
+  /**
+   * Every role sends tool definitions or structured output, so an
+   * offered model must accept tools.
+   */
+  toolCalling: true;
   /** Why the upstream source cannot answer for this model. Dated. */
   reason: string;
 };

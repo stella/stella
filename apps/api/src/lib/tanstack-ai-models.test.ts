@@ -542,25 +542,6 @@ describe("TanStack text model resolution", () => {
     }
   });
 
-  test("withholds streaming structured output from a Bedrock model without streaming tool use", () => {
-    const orgConfig = orgConfigForProvider("bedrock");
-    orgConfig.overrideModels.chat = {
-      provider: "bedrock",
-      modelId: "us.deepseek.r1-v1:0",
-    };
-
-    const model = getTanStackTextModelForRole("chat", orgConfig, {
-      organizationId: orgId,
-    });
-
-    expect(modelAcceptsStreamingToolUse(model)).toBe(false);
-    // Absent, not throwing: the engine reads this property to decide
-    // whether to stream the forced structured-output tool or to await it
-    // on the non-streaming Converse call, which the model does accept.
-    expect(model.adapter.structuredOutputStream).toBeUndefined();
-    expect(model.adapter.structuredOutput).toBeDefined();
-  });
-
   test("keeps streaming structured output for a Bedrock model with streaming tool use", () => {
     const orgConfig = orgConfigForProvider("bedrock");
     orgConfig.overrideModels.chat = {
