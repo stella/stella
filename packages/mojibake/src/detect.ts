@@ -167,7 +167,10 @@ type UndoneWord = { text: string; failed: boolean };
  * encode was not produced by reading it; it splits the word and stays as it
  * is, so a quotation mark added after the text was mis-read does not block
  * the repair of the letters around it. `failed` reports a non-ASCII run that
- * is not valid in the actual charset.
+ * is not valid in the actual charset, or a letter the assumed charset has no
+ * byte for: text read through the pair cannot contain it, so a word that
+ * does is evidence against the pair (Slovak "že" rules out anything read as
+ * Latin-1).
  */
 const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
   let text = "";
@@ -191,6 +194,7 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
       run += char;
     } else {
       flush();
+      failed ||= isLetter(char);
       text += char;
     }
   }
