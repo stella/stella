@@ -14,6 +14,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // tsconfig, which only the runtime honours, so they are imported by URL and
 // their surface is checked at load. A rename in the web app fails here, at
 // load, instead of silently driving something else.
+//
+// Which parts are cards the user can act on is decided in React components
+// (see `cardsOf`), so that one rule is mirrored here from the web predicates
+// it is built on, and `chat-web-client.test.ts` pins the mirror to them.
 
 const WEB_CHAT_RUNTIME_URL = new URL(
   "../../../../web/src/features/chat/chat-runtime.ts",
@@ -50,6 +54,11 @@ type WebChatRuntime = {
 };
 
 type WebChatModules = {
+  /** `chat-ui-tools.ts`: a tool part that renders as an approval card. */
+  isApprovalPart: (part: unknown) => boolean;
+  /** `chat-ui-tools.ts`: a stored call of a tool the web app does not know,
+   *  rendered as a plain tool row. */
+  isOpaquePersistedChatToolCallPart: (part: unknown) => boolean;
   createChatRuntime: (props: {
     context: undefined;
     initialMessages: UIMessage[];
@@ -90,7 +99,9 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     !hasFunction(runtime, "createChatRuntime") ||
     !hasFunction(runtime, "sendThreadChatMessage") ||
     !hasFunction(runtime, "resetChatRequestStateForTests") ||
-    !hasFunction(uiTools, "sanitizeRunningToolCalls")
+    !hasFunction(uiTools, "sanitizeRunningToolCalls") ||
+    !hasFunction(uiTools, "isApprovalPart") ||
+    !hasFunction(uiTools, "isOpaquePersistedChatToolCallPart")
   ) {
     return panic("The web chat modules no longer export the chat runtime");
   }
@@ -98,6 +109,9 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
   // which this file states once in `WebChatModules`.
   loadedWebChat = asTestRaw<WebChatModules>({
     createChatRuntime: runtime.createChatRuntime,
+    isApprovalPart: uiTools.isApprovalPart,
+    isOpaquePersistedChatToolCallPart:
+      uiTools.isOpaquePersistedChatToolCallPart,
     resetChatRequestStateForTests: runtime.resetChatRequestStateForTests,
     sanitizeRunningToolCalls: uiTools.sanitizeRunningToolCalls,
     sendThreadChatMessage: runtime.sendThreadChatMessage,
@@ -106,7 +120,7 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
 };
 
 /** One card the user can act on in the live view. */
-type LiveCard =
+export type LiveCard =
   | {
       approvalId: string;
       kind: "approval";
@@ -115,33 +129,53 @@ type LiveCard =
     }
   | { kind: "answer"; toolCallId: string; toolName: string };
 
-/** The cards `messages` renders for the user to act on, in display order. */
-const cardsOf = (messages: readonly UIMessage[]): LiveCard[] =>
+/**
+ * The cards `messages` renders for the user to act on, in display order.
+ *
+ * A mirror of the web app's rendering, which has no pure selector for it:
+ * `renderPart` in `apps/web/src/components/chat/chat-thread-messages.tsx`
+ * shows an unknown tool's stored call as a plain row (line 1538), an
+ * `ask-user` call as `AskUserCard` (line 1549), and any `isApprovalPart` call
+ * as `ToolApprovalCard` (line 1623). `ToolApprovalCard` offers Allow and Deny
+ * while the part is `approval-requested` (`tool-approval-card.tsx:732`);
+ * `AskUserCard` offers its form once the input has streamed and until the
+ * call is `complete` (`ask-user-card.tsx:164`). The web predicates are called,
+ * not copied.
+ */
+export const cardsOf = (
+  web: Pick<
+    WebChatModules,
+    "isApprovalPart" | "isOpaquePersistedChatToolCallPart"
+  >,
+  messages: readonly UIMessage[],
+): LiveCard[] =>
   messages.flatMap(({ parts }) =>
     parts.flatMap((part): LiveCard[] => {
-      if (part.type !== "tool-call") {
+      if (
+        part.type !== "tool-call" ||
+        web.isOpaquePersistedChatToolCallPart(part)
+      ) {
         return [];
       }
-      if (
-        part.state === "approval-requested" &&
-        part.approval !== undefined &&
-        part.approval.approved === undefined
-      ) {
-        return [
-          {
-            approvalId: part.approval.id,
-            kind: "approval",
-            toolCallId: part.id,
-            toolName: part.name,
-          },
-        ];
+      if (part.name === ASK_USER_TOOL_NAME) {
+        return part.state !== "input-streaming" &&
+          part.state !== "complete" &&
+          part.input !== undefined &&
+          part.input !== null
+          ? [{ kind: "answer", toolCallId: part.id, toolName: part.name }]
+          : [];
       }
-      // The web app's only user-input card (`USER_INPUT_TOOL_NAMES`); other
-      // open calls render as running tools, not as cards.
-      return part.name === ASK_USER_TOOL_NAME &&
-        part.state === "input-complete" &&
-        part.output === undefined
-        ? [{ kind: "answer", toolCallId: part.id, toolName: part.name }]
+      return web.isApprovalPart(part) &&
+        part.state === "approval-requested" &&
+        part.approval !== undefined
+        ? [
+            {
+              approvalId: part.approval.id,
+              kind: "approval",
+              toolCallId: part.id,
+              toolName: part.name,
+            },
+          ]
         : [];
     }),
   );
@@ -232,7 +266,7 @@ export const createWebChatClient = async ({
   };
 
   const messages = () => runtime.getSnapshot().messages;
-  const cards = () => cardsOf(messages());
+  const cards = () => cardsOf(web, messages());
   const requireCard = (toolCallId: string): LiveCard =>
     cards().find((card) => card.toolCallId === toolCallId) ??
     panic(`The card for ${toolCallId} is not on screen`);
