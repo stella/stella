@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
 
+import { getOutputTokenLimit } from "@stll/ai-catalog";
 import {
   propertyConfig,
   propertySeed,
@@ -19,6 +20,7 @@ import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
+  HARNESS_CHAT_MODEL_ID,
   PLAIN_TOOL_ARGUMENTS,
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
@@ -780,6 +782,43 @@ describe("a conversation's live view", () => {
         // The fixture must reach the fault: the model call failed.
         expect(real.ledger.latest).toBe("failed");
         await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "bounds every model call of a turn by the model's catalog output limit",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [
+            [
+              { ...STEP, calls: ["plain"] },
+              { ...STEP, text: true },
+            ],
+          ],
+          "Draft the NDA",
+        ).run(model, real);
+        const calls = real.harness.modelOptionsOf(real.threadId);
+        // The fixture must reach the fault: a turn of two model calls.
+        expect(calls).toHaveLength(2);
+        // The harness's chat model is OpenAI's, which reads the allowance
+        // from `max_output_tokens`.
+        expect(
+          calls.map((options) =>
+            typeof options === "object" && options !== null
+              ? Reflect.get(options, "max_output_tokens")
+              : undefined,
+          ),
+        ).toEqual([
+          getOutputTokenLimit(HARNESS_CHAT_MODEL_ID),
+          getOutputTokenLimit(HARNESS_CHAT_MODEL_ID),
+        ]);
       } finally {
         closeConversation(conversation);
       }

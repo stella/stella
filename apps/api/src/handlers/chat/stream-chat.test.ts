@@ -2542,10 +2542,9 @@ describe("chat stream client-disconnect persistence", () => {
       .map((part) => (part.type === "text" ? part.content : ""))
       .join("");
 
-  // A dropped client connection `.return()`s the stream generator mid-run. The
-  // metered provider call is decoupled from the socket, so the completed-or-
-  // partial content must be persisted (finish reported as not aborted) rather
-  // than lost.
+  // A dropped client connection aborts the provider call and `.return()`s the
+  // stream generator mid-run. The partial content produced before the abort
+  // must be persisted (finish reported as not aborted) rather than lost.
   test("persists the accumulated assistant message when the client disconnects mid-stream", async () => {
     const abortSignal = new AbortController().signal;
     const { getResponseMessage, processor } = accumulatingProcessor();

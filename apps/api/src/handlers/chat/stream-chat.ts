@@ -151,6 +151,7 @@ import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/prov
 import { withSseHeartbeat } from "@/api/lib/sse";
 import {
   abortControllerFromSignal,
+  chatTurnOutputTokens,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
@@ -1199,7 +1200,7 @@ const runChatAttempt = async function* ({
     modelOptions: mergeGenerationOptions({
       caching,
       model,
-      maxOutputTokens: undefined,
+      maxOutputTokens: chatTurnOutputTokens(model),
       serviceTier: "standard",
       temperature: getTemperatureForRole(role),
     }),
@@ -1831,15 +1832,16 @@ export const processServerChatStream = async function* ({
     };
   } finally {
     // Client-disconnect teardown: Bun's `ReadableStream.cancel()` fires when the
-    // socket drops, tanstack breaks its `for await` on the aborted controller,
-    // and that `.return()`s this generator mid-stream, so neither the
-    // natural-completion finish nor the `catch` ran. The metered provider call
-    // is decoupled from the socket, so the model kept producing and was metered;
-    // persist whatever content accumulated so a completed-or-partial answer is
-    // not silently lost on remount. Skipped when the stream already finished or
-    // failed, and a no-op when nothing accumulated (finalizeStream drops
-    // whitespace-only messages). Awaiting here completes even on teardown, and
-    // persistence uses the shared RLS pool, not a request-scoped handle.
+    // socket drops and aborts the run's controller. `chat()` hands that signal
+    // to the provider request, so the model call is cancelled with the socket;
+    // tanstack breaks its `for await`, and that `.return()`s this generator
+    // mid-stream, so neither the natural-completion finish nor the `catch` ran.
+    // Persist whatever content accumulated before the abort as an interrupted
+    // turn, so a partial answer is not silently lost on remount. Skipped when
+    // the stream already finished or failed, and a no-op when nothing
+    // accumulated (finalizeStream drops whitespace-only messages). Awaiting here
+    // completes even on teardown, and persistence uses the shared RLS pool, not
+    // a request-scoped handle.
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,

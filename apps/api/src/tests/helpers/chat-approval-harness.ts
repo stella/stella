@@ -70,10 +70,13 @@ export const PLAIN_TOOL_ARGUMENTS = "{}";
 export const approvalToolArguments = (name: string): string =>
   JSON.stringify({ name });
 
+/** The model the harness's organization answers chat turns with. */
+export const HARNESS_CHAT_MODEL_ID = "gpt-5.4-mini";
+
 const orgAIConfig = {
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
   overrideModels: {
-    chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+    chat: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
     fast: { provider: "openai", modelId: "gpt-5.4-nano" },
     pdf: { provider: "openai", modelId: "gpt-5.4" },
     reasoning: { provider: "openai", modelId: "gpt-5.4" },
@@ -589,6 +592,9 @@ export const createApprovalHarness = ({
     openWebClient,
     readThreadMessages,
     reloadView,
+    /** The provider options of `threadId`'s model calls so far. */
+    modelOptionsOf: (threadId: SafeId<"chatThread">) =>
+      provider.modelOptionsOf(threadId),
     /** Queues the model's runs for `threadId`'s next requests, one each. */
     script: (threadId: SafeId<"chatThread">, ...runs: ScriptedRun[]) => {
       provider.script(threadId, ...runs);
