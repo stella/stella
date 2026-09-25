@@ -11,9 +11,13 @@ type TabChange = { status?: string; url?: string };
 type FakeTab = { id: number; status: string; url: string };
 type Injection = {
   args?: [{ kind: string }];
-  target: { frameIds?: number[]; tabId: number };
+  target: { documentIds?: string[]; frameIds?: number[]; tabId: number };
 };
-type InjectionResult = { frameId: number; result: unknown }[];
+type InjectionResult = {
+  documentId?: string;
+  frameId: number;
+  result: unknown;
+}[];
 
 const CONTROLLER_ID = "controller-1";
 const CONTROLLER_TAB_ID = 1;
@@ -31,10 +35,15 @@ const frameSnapshot = (title: string, url = PAGE_URL) => ({
 const createFakeChrome = () => {
   const session: Record<string, unknown> = {
     browserControlledTab: {
+      adopted: false,
       controllerId: CONTROLLER_ID,
-      revision: "revision-1",
+      snapshot: {
+        documents: { "0": "document-top", "3": "document-frame" },
+        revision: "revision-1",
+        tabId: CONTROLLED_TAB_ID,
+        url: PAGE_URL,
+      },
       tabId: CONTROLLED_TAB_ID,
-      url: PAGE_URL,
     },
     browserController: {
       controllerId: CONTROLLER_ID,
@@ -152,7 +161,7 @@ const createFakeChrome = () => {
     },
   };
 
-  return { chrome, emit, handlers, log, tabs };
+  return { chrome, emit, handlers, log, session, tabs };
 };
 
 let fake = createFakeChrome();
@@ -203,6 +212,23 @@ const click = (ref = "e:0:1") =>
     target: { name: "Pay invoice", ref, role: "button" },
   }) satisfies BrowserControlCommand;
 
+const OBSERVED_TAB = { revision: "revision-1", tabId: CONTROLLED_TAB_ID };
+
+const run = async (
+  command: BrowserControlCommand,
+  {
+    observedTab = OBSERVED_TAB,
+    signal = new AbortController().signal,
+  }: {
+    observedTab?: typeof OBSERVED_TAB | null;
+    signal?: AbortSignal;
+  } = {},
+) =>
+  await executeBrowserCommand(CONTROLLER_ID, command, {
+    observedTab,
+    signal,
+  });
+
 describe("outcome of a dispatched action", () => {
   test("is unknown when the page cannot be read after the click", async () => {
     const { handlers } = installFakeChrome();
@@ -211,7 +237,7 @@ describe("outcome of a dispatched action", () => {
       throw new TypeError("Frame with ID 0 was removed.");
     };
 
-    const result = await executeBrowserCommand(CONTROLLER_ID, click());
+    const result = await run(click());
     expect(result).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
       status: "error",
@@ -226,7 +252,7 @@ describe("outcome of a dispatched action", () => {
       { frameId: 0, result: frameSnapshot("Home") },
     ];
 
-    expect(await executeBrowserCommand(CONTROLLER_ID, click())).toMatchObject({
+    expect(await run(click())).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
   });
@@ -238,7 +264,7 @@ describe("outcome of a dispatched action", () => {
       return [{ frameId: 0, result: { ok: true } }];
     };
 
-    expect(await executeBrowserCommand(CONTROLLER_ID, click())).toMatchObject({
+    expect(await run(click())).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
   });
@@ -250,7 +276,7 @@ describe("outcome of a dispatched action", () => {
       return [{ frameId: 0, result: { ok: true } }];
     };
 
-    expect(await executeBrowserCommand(CONTROLLER_ID, click())).toMatchObject({
+    expect(await run(click())).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
   });
@@ -262,9 +288,9 @@ describe("outcome of a dispatched action", () => {
       throw new TypeError("The page is being unloaded.");
     };
 
-    expect(
-      await executeBrowserCommand(CONTROLLER_ID, { action: "go-back" }),
-    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown });
+    expect(await run({ action: "go-back" })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    });
   });
 
   test("keeps a refusal from the page before acting as that refusal", async () => {
@@ -280,7 +306,11 @@ describe("outcome of a dispatched action", () => {
       },
     ];
 
-    expect(await executeBrowserCommand(CONTROLLER_ID, click())).toMatchObject({
+    expect(await run(click())).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.sensitiveField,
+    });
+    // Nothing ran, so the same snapshot's refs still address the page.
+    expect(await run(click())).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.sensitiveField,
     });
   });
@@ -304,7 +334,7 @@ describe("outcome of a dispatched action", () => {
       return [{ frameId: 0, result: frameSnapshot("Receipt", nextUrl) }];
     };
 
-    const result = await executeBrowserCommand(CONTROLLER_ID, click());
+    const result = await run(click());
     expect(result).toMatchObject({
       snapshot: { title: "Receipt", url: nextUrl },
       status: "success",
@@ -324,9 +354,9 @@ describe("frame policy for actions", () => {
     ];
     handlers["action"] = () => [{ frameId: 3, result: { ok: true } }];
 
-    expect(
-      await executeBrowserCommand(CONTROLLER_ID, click("e:3:0.1")),
-    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.unsupportedPage });
+    expect(await run(click("e:3:0.1"))).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+    });
     expect(log).not.toContain("inject:action");
   });
 });
@@ -339,10 +369,10 @@ describe("controlled tab confinement", () => {
       { frameId: 0, result: frameSnapshot("Home") },
     ];
 
-    const result = await executeBrowserCommand(CONTROLLER_ID, {
-      action: "open",
-      url: PAGE_URL,
-    });
+    const result = await run(
+      { action: "open", url: PAGE_URL },
+      { observedTab: null },
+    );
     expect(result).toMatchObject({ status: "success" });
     expect(log.slice(0, 3)).toEqual([
       "create:about:blank",
@@ -370,7 +400,123 @@ describe("controlled tab confinement", () => {
 
     expect(
       await adoptControlledTab(CONTROLLER_ID, userTab(5, PAGE_URL)),
-    ).toEqual({ status: "adopted", url: PAGE_URL });
+    ).toEqual({ status: "adopted", tabId: 5, url: PAGE_URL });
     expect(log).toEqual(["rules:5"]);
+  });
+});
+
+describe("stopping a command", () => {
+  test("a command stopped before it starts never reaches the page", async () => {
+    const { handlers, log } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: { ok: true } }];
+    const stop = new AbortController();
+    stop.abort();
+
+    expect(await run(click(), { signal: stop.signal })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.cancelled,
+    });
+    expect(log).toEqual([]);
+  });
+
+  test("a stop after the click reports an unknown outcome at once", async () => {
+    const { emit, handlers } = installFakeChrome();
+    handlers["action"] = () => {
+      // The click starts a navigation that never finishes.
+      emit(CONTROLLED_TAB_ID, { status: "loading" });
+      return [{ frameId: 0, result: { ok: true } }];
+    };
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 50);
+    const started = Date.now();
+
+    const result = await run(click(), { signal: stop.signal });
+    expect(result).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    });
+    expect(JSON.stringify(result)).toContain("stopped");
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe("command identity", () => {
+  test("acts in the exact document the snapshot read", async () => {
+    const { handlers } = installFakeChrome();
+    const targets: Injection["target"][] = [];
+    handlers["locate"] = (injection) => {
+      targets.push(injection.target);
+      return [
+        {
+          frameId: 3,
+          result: { origin: "https://example.com", url: PAGE_URL },
+        },
+      ];
+    };
+    handlers["action"] = (injection) => {
+      targets.push(injection.target);
+      return [{ frameId: 3, result: { ok: true } }];
+    };
+    handlers["snapshot"] = () => [
+      {
+        documentId: "document-next",
+        frameId: 0,
+        result: frameSnapshot("Paid"),
+      },
+    ];
+
+    expect(await run(click("e:3:0.1"))).toMatchObject({ status: "success" });
+    expect(targets).toEqual([
+      { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
+      { documentIds: ["document-frame"], tabId: CONTROLLED_TAB_ID },
+    ]);
+  });
+
+  test("refuses a ref whose frame loaded another document", async () => {
+    const { handlers, log } = installFakeChrome();
+    handlers["locate"] = () => {
+      throw new TypeError("No document with id document-frame.");
+    };
+    handlers["action"] = () => [{ frameId: 3, result: { ok: true } }];
+
+    expect(await run(click("e:3:0.1"))).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    });
+    expect(log).not.toContain("inject:action");
+  });
+
+  test("refuses a ref into a frame the snapshot never read", async () => {
+    const { log } = installFakeChrome();
+
+    expect(await run(click("e:5:0.1"))).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    });
+    expect(log).toEqual([]);
+  });
+
+  test("refuses to act after the user handed chat another tab", async () => {
+    const { log } = installFakeChrome();
+
+    for (const command of [
+      click(),
+      { action: "go-back" },
+      { action: "open", url: PAGE_URL },
+    ] satisfies BrowserControlCommand[]) {
+      expect(
+        await run(command, { observedTab: { ...OBSERVED_TAB, tabId: 99 } }),
+      ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.tabChanged });
+    }
+    expect(log).toEqual([]);
+  });
+
+  test("a dispatched action retires the refs of the snapshot it used", async () => {
+    const { handlers, session } = installFakeChrome();
+    handlers["action"] = () => [{ frameId: 0, result: undefined }];
+
+    expect(await run(click())).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    });
+    expect(session["browserControlledTab"]).toMatchObject({ snapshot: null });
+    expect(await run(click())).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    });
   });
 });

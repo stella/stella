@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   isControllableFrame,
   isPublicHostname,
-  NON_PUBLIC_HTTPS_URL_PATTERNS,
+  NON_PUBLIC_SECURE_URL_PATTERNS,
   parseControllableUrl,
 } from "./origin-policy";
 
@@ -125,7 +125,7 @@ describe("controllable origin policy", () => {
 describe("network rule host patterns", () => {
   // Chrome evaluates the patterns with RE2; they use only syntax RE2 and
   // JavaScript read the same way, so this checks the rules the tab gets.
-  const patterns = NON_PUBLIC_HTTPS_URL_PATTERNS.map(
+  const patterns = NON_PUBLIC_SECURE_URL_PATTERNS.map(
     (pattern) => new RegExp(pattern, "iu"),
   );
   const nonPublicUrl = {
@@ -138,6 +138,7 @@ describe("network rule host patterns", () => {
         expect(nonPublicUrl.test(`https://${hostname}${suffix}`)).toBe(true);
       }
       expect(nonPublicUrl.test(`https://user:pw@${hostname}/`)).toBe(true);
+      expect(nonPublicUrl.test(`wss://${hostname}/socket`)).toBe(true);
     }
   });
 
@@ -146,6 +147,7 @@ describe("network rule host patterns", () => {
       for (const suffix of ["/", ":8443/x", "?q=1", "#top", ""]) {
         expect(nonPublicUrl.test(`https://${hostname}${suffix}`)).toBe(false);
       }
+      expect(nonPublicUrl.test(`wss://${hostname}/socket`)).toBe(false);
     }
     expect(nonPublicUrl.test("https://example.com/localhost")).toBe(false);
     expect(

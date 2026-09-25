@@ -6,11 +6,12 @@ import {
 
 import { hasAllSiteAccess } from "./access";
 import {
+  BROWSER_COMMAND_BUDGET_STORAGE_KEY,
   BROWSER_CONTROLLER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
   BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY,
 } from "./storage-keys";
-import { releaseControlledTab } from "./tab-containment";
+import { releaseContainedTabs } from "./tab-containment";
 import { trustedStellaOriginFromUrl } from "./trusted-origin";
 
 export type BrowserController = {
@@ -22,6 +23,7 @@ export type BrowserController = {
 const CONTROLLER_DATA_STORAGE_KEYS = [
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
   BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY,
+  BROWSER_COMMAND_BUDGET_STORAGE_KEY,
 ] as const;
 
 const CONTROLLER_SESSION_STORAGE_KEYS = [
@@ -76,63 +78,73 @@ export const browserControllerMatchesSender = (
   controller.tabId === tabId &&
   controller.origin === trustedStellaOriginFromUrl(rawUrl);
 
-const controllerStatusResponse = async (
-  controllerId: string | null,
-): Promise<BrowserExtensionResponse> => ({
-  allSitesGranted: await hasAllSiteAccess(),
-  controllerId,
-  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-  requestId: "controller-changed",
-  source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-  type: "pong",
-});
-
-const notifyControllerTab = async (
+/**
+ * Tells a stella tab which controller and controlled tab it now has, so the
+ * web client drops what it approved for the previous ones.
+ */
+export const notifyControllerTab = async (
   tabId: number,
-  controllerId: string | null,
+  status: { controlledTabId: number | null; controllerId: string | null },
 ): Promise<void> => {
-  const response = await controllerStatusResponse(controllerId);
+  const response = {
+    allSitesGranted: await hasAllSiteAccess(),
+    controlledTabId: status.controlledTabId,
+    controllerId: status.controllerId,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: "controller-changed",
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+    type: "pong",
+  } satisfies BrowserExtensionResponse;
   await chrome.tabs.sendMessage(tabId, response).catch(() => undefined);
 };
 
-export type PairActiveStellaTabResult =
+export type PairStellaTabResult =
   | { controller: BrowserController; status: "paired" }
   | { status: "unsupported-tab" };
 
-export const pairActiveStellaTab =
-  async (): Promise<PairActiveStellaTabResult> => {
-    const tab = (
-      await chrome.tabs.query({ active: true, currentWindow: true })
-    ).at(0);
-    const origin = tab?.url ? trustedStellaOriginFromUrl(tab.url) : null;
-    if (tab?.id === undefined || origin === null) {
-      return { status: "unsupported-tab" };
-    }
+/** Makes the stella tab the popup was opened on the controller. */
+export const pairStellaTab = async (
+  tabId: number,
+): Promise<PairStellaTabResult> => {
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  const origin = tab?.url ? trustedStellaOriginFromUrl(tab.url) : null;
+  if (tab?.id === undefined || origin === null) {
+    return { status: "unsupported-tab" };
+  }
 
-    const previous = await readBrowserController();
-    const controller = {
-      controllerId: crypto.randomUUID(),
-      origin,
-      tabId: tab.id,
-    } satisfies BrowserController;
-    await chrome.storage.session.set({
-      [BROWSER_CONTROLLER_STORAGE_KEY]: controller,
+  const previous = await readBrowserController();
+  const controller = {
+    controllerId: crypto.randomUUID(),
+    origin,
+    tabId: tab.id,
+  } satisfies BrowserController;
+  await chrome.storage.session.set({
+    [BROWSER_CONTROLLER_STORAGE_KEY]: controller,
+  });
+  await chrome.storage.session.remove([...CONTROLLER_DATA_STORAGE_KEYS]);
+  await releaseContainedTabs();
+  if (previous && previous.tabId !== controller.tabId) {
+    await notifyControllerTab(previous.tabId, {
+      controlledTabId: null,
+      controllerId: null,
     });
-    await chrome.storage.session.remove([...CONTROLLER_DATA_STORAGE_KEYS]);
-    await releaseControlledTab();
-    if (previous && previous.tabId !== controller.tabId) {
-      await notifyControllerTab(previous.tabId, null);
-    }
-    await notifyControllerTab(controller.tabId, controller.controllerId);
-    return { controller, status: "paired" };
-  };
+  }
+  await notifyControllerTab(controller.tabId, {
+    controlledTabId: null,
+    controllerId: controller.controllerId,
+  });
+  return { controller, status: "paired" };
+};
 
 export const disconnectBrowserController = async (): Promise<void> => {
   const controller = await readBrowserController();
   await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
-  await releaseControlledTab();
+  await releaseContainedTabs();
   if (controller) {
-    await notifyControllerTab(controller.tabId, null);
+    await notifyControllerTab(controller.tabId, {
+      controlledTabId: null,
+      controllerId: null,
+    });
   }
 };
 
@@ -145,5 +157,5 @@ export const forgetBrowserControllerTab = async (
   }
   await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
   // Control ended, so the user's former controlled tab is theirs again.
-  await releaseControlledTab();
+  await releaseContainedTabs();
 };

@@ -73,7 +73,9 @@ describe("browser controller lease", () => {
           "browserController",
           "browserControlledTab",
           "browserExecutionReceipts",
+          "browserCommandBudget",
         ],
+        "browserContainedTabs",
       ]);
       expect(removedRuleIds).toEqual([CONTROLLED_TAB_RULE_IDS]);
     } finally {

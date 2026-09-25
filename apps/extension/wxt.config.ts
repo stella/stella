@@ -16,6 +16,9 @@ export default defineConfig({
     minimum_chrome_version: "128",
     name: "__MSG_extensionName__",
     optional_host_permissions: ["https://*/*"],
+    // Granted with website access in one prompt; used only to cancel
+    // downloads a controlled page starts from script.
+    optional_permissions: ["downloads"],
     permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
   },
   srcDir: "src",

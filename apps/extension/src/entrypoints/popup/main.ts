@@ -1,17 +1,9 @@
 import { panic } from "better-result";
 
-import {
-  hasAllSiteAccess,
-  removeAllSiteAccess,
-  requestAllSiteAccess,
-} from "../../lib/access";
-import {
-  disconnectBrowserController,
-  pairActiveStellaTab,
-  readBrowserController,
-} from "../../lib/controller";
+import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
+import { readBrowserController } from "../../lib/controller";
 import { parseControllableUrl } from "../../lib/origin-policy";
-import { adoptControlledTab } from "../../lib/tab-executor";
+import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
 const statusElement = document.querySelector("#status");
@@ -112,12 +104,30 @@ grantButton.addEventListener("click", () => {
   grantButton.disabled = true;
 });
 
+const adoptFailureMessage = {
+  done: "unsupportedTab",
+  failed: "accessUpdateFailed",
+  "unsupported-page": "adoptUnsupported",
+  "unsupported-tab": "unsupportedTab",
+} as const satisfies Record<
+  Exclude<PopupResponse["status"], "adopted">,
+  string
+>;
+
+// Pairing, adopting, disconnecting and revoking are changes the worker
+// makes, in order with the browser commands they must not race.
 connectButton.addEventListener("click", () => {
   connectButton.disabled = true;
-  pairActiveStellaTab()
-    .then(async (result) => {
-      if (result.status === "unsupported-tab") {
-        statusElement.textContent = message("unsupportedTab");
+  readActiveTab()
+    .then(async (activeTab) => {
+      const result =
+        activeTab?.id === undefined
+          ? ({ status: "unsupported-tab" } as const)
+          : await sendPopupRequest({ tabId: activeTab.id, type: "pair" });
+      if (result.status !== "done") {
+        statusElement.textContent = message(
+          result.status === "failed" ? "accessUpdateFailed" : "unsupportedTab",
+        );
         return undefined;
       }
       await renderAccess();
@@ -133,18 +143,18 @@ connectButton.addEventListener("click", () => {
 
 adoptButton.addEventListener("click", () => {
   adoptButton.disabled = true;
-  Promise.all([readBrowserController(), readActiveTab()])
-    .then(async ([controller, activeTab]) => {
-      if (controller === null || activeTab === null) {
+  readActiveTab()
+    .then(async (activeTab) => {
+      if (activeTab?.id === undefined) {
         statusElement.textContent = message("unsupportedTab");
         return undefined;
       }
-      const result = await adoptControlledTab(
-        controller.controllerId,
-        activeTab,
-      );
-      if (result.status === "unsupported-page") {
-        statusElement.textContent = message("adoptUnsupported");
+      const result = await sendPopupRequest({
+        tabId: activeTab.id,
+        type: "adopt",
+      });
+      if (result.status !== "adopted") {
+        statusElement.textContent = message(adoptFailureMessage[result.status]);
         return undefined;
       }
       statusElement.textContent = message(
@@ -163,7 +173,7 @@ adoptButton.addEventListener("click", () => {
 
 disconnectButton.addEventListener("click", () => {
   disconnectButton.disabled = true;
-  disconnectBrowserController()
+  sendPopupRequest({ type: "disconnect" })
     .then(renderAccess)
     .catch(() => {
       statusElement.textContent = message("accessUpdateFailed");
@@ -175,8 +185,7 @@ disconnectButton.addEventListener("click", () => {
 
 revokeButton.addEventListener("click", () => {
   revokeButton.disabled = true;
-  removeAllSiteAccess()
-    .then(disconnectBrowserController)
+  sendPopupRequest({ type: "revoke" })
     .then(renderAccess)
     .catch(() => {
       statusElement.textContent = message("accessUpdateFailed");

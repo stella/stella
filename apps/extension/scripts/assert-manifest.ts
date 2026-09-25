@@ -57,6 +57,11 @@ if (
 if (!exactSet(manifest.optional_host_permissions, ["https://*/*"])) {
   panic("Extension optional host permissions drifted");
 }
+// Requested with website access, used only to cancel downloads a controlled
+// page starts from `blob:` or `data:` URLs.
+if (!exactSet(manifest.optional_permissions, ["downloads"])) {
+  panic("Extension optional permissions drifted");
+}
 if (manifest.host_permissions !== undefined) {
   panic("Extension must not declare mandatory host_permissions");
 }
