@@ -170,7 +170,7 @@ describe("agent skill policy migrations", () => {
       "agent_skill_resource_delete",
     ];
     const fromSchema = await readPolicies(policyNames);
-    await applyMigration("20260925100000_agent_skill_write_policies");
+    await applyMigration("20260925174000_agent_skill_write_policies");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(policyNames.length);
@@ -183,7 +183,7 @@ describe("agent skill policy migrations", () => {
     await testDb.execute(
       sql`DROP POLICY "agent_skill_revision_lock" ON "agent_skill_revisions"`,
     );
-    await applyMigration("20260925100100_agent_skill_revision_lock_policy");
+    await applyMigration("20260925174100_agent_skill_revision_lock_policy");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(1);
@@ -265,7 +265,7 @@ describe("agent skill domain values", () => {
         sql.raw(`ALTER TABLE "${table}" DROP CONSTRAINT "${constraint}"`),
       );
     }
-    await applyMigration("20260925100200_agent_skill_domain_checks");
+    await applyMigration("20260925174200_agent_skill_domain_checks");
     const migrated = await readDomainChecks();
 
     expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);
@@ -339,8 +339,9 @@ describe("agent skill write RLS", () => {
     }
   };
 
-  for (const { scope, actor, allowed } of writeCases) {
-    test(`${actor} ${allowed ? "may" : "may not"} update or delete a ${scope} skill and its resources`, async () => {
+  test.each(writeCases)(
+    "$actor updating or deleting a $scope skill and its resources is allowed: $allowed",
+    async ({ scope, actor, allowed }) => {
       const skillId = await insertSkill({
         organizationId: ids.orgA,
         scope,
@@ -425,8 +426,8 @@ describe("agent skill write RLS", () => {
           true,
         );
       }
-    });
-  }
+    },
+  );
 
   test("only an owner or admin may create a team skill", async () => {
     const insertAs = async (userId: SafeId<"user">) =>
@@ -507,7 +508,12 @@ type SkillRowOptions = {
   userId: SafeId<"user">;
 };
 
-const skillRow = ({ organizationId, scope, slug, userId }: SkillRowOptions) => ({
+const skillRow = ({
+  organizationId,
+  scope,
+  slug,
+  userId,
+}: SkillRowOptions) => ({
   id: testId<"agentSkill">(),
   organizationId,
   userId,
