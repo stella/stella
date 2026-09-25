@@ -1,8 +1,7 @@
 import { Result, UnhandledException } from "better-result";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   contacts,
   entities,
@@ -15,12 +14,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   reindexWorkspacesForContact,
   upsertContactSearchDocument,
   upsertWorkspaceSearchDocument,
 } from "@/api/lib/search/index-global";
-import { getSearchProvider } from "@/api/lib/search/provider";
 
 /**
  * The one path by which an entity, contact, or matter search projection is
@@ -28,8 +27,8 @@ import { getSearchProvider } from "@/api/lib/search/provider";
  *
  * A mutation marks its source dirty inside its own transaction, so the mark
  * commits or rolls back with the edit. After the commit the caller flushes
- * that mark: the same claim/repair/settle steps the scheduler runs, applied
- * to the rows it just wrote. A flush lost to a restart, a crash, or a deploy
+ * that mark (`projection-repair-flush.ts`): the same claim/repair/settle
+ * steps the scheduler runs, applied to the rows it just wrote. A flush lost to a restart, a crash, or a deploy
  * changes nothing durable — the row is still there, and the standing drain
  * repairs it on its next pass.
  *
@@ -58,7 +57,7 @@ const REPAIR_RETRY_MAX_SECONDS = 6 * 60 * 60;
  */
 const REPAIR_MAX_ATTEMPTS = 8;
 
-const SEARCH_PROJECTION_KIND = {
+export const SEARCH_PROJECTION_KIND = {
   contact: "contact",
   entity: "entity",
   workspace: "workspace",
@@ -69,6 +68,13 @@ type SearchProjectionRepairDb = Pick<
   typeof rootDb,
   "delete" | "select" | "update"
 >;
+
+/**
+ * The one connection a drain or flush runs on: the queue claims and
+ * settlements, and every projection rebuild they trigger.
+ */
+type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
+  Pick<typeof rootDb, "query" | "transaction">;
 
 export type SearchProjectionRepairDeps = {
   db: SearchProjectionRepairDb;
@@ -92,22 +98,35 @@ type ClaimedRepair = {
  * searchable text as client or party. Splitting the two would let a rename
  * refresh the contact while every matter carrying that name kept the old one.
  */
-const repairContactProjection = async (sourceId: string): Promise<void> => {
+const repairContactProjection = async (
+  sourceId: string,
+  database: SearchProjectionRepairDatabase,
+): Promise<void> => {
   const contactId = toSafeId<"contact">(sourceId);
-  await upsertContactSearchDocument(contactId);
-  await reindexWorkspacesForContact(contactId);
+  await upsertContactSearchDocument(contactId, database);
+  await reindexWorkspacesForContact(contactId, database);
 };
 
-const defaultRepairDeps: SearchProjectionRepairDeps = {
-  db: rootDb,
+/**
+ * Claims, settlements and every projection rebuild bound to one connection,
+ * so no part of a drain or a flush reaches for a connection of its own.
+ */
+export const createSearchProjectionRepairDeps = (
+  database: SearchProjectionRepairDatabase,
+): SearchProjectionRepairDeps => ({
+  db: database,
   repair: {
-    contact: repairContactProjection,
+    contact: async (sourceId) =>
+      await repairContactProjection(sourceId, database),
     entity: async (sourceId) =>
-      await getSearchProvider().indexEntity(toSafeId<"entity">(sourceId)),
+      await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
     workspace: async (sourceId) =>
-      await upsertWorkspaceSearchDocument(toSafeId<"workspace">(sourceId)),
+      await upsertWorkspaceSearchDocument(
+        toSafeId<"workspace">(sourceId),
+        database,
+      ),
   },
-};
+});
 
 const uniqueIds = <T extends string>(ids: readonly T[]): T[] => [
   ...new Set(ids),
@@ -398,7 +417,12 @@ const repairClaimed = async ({
   return run.outcome;
 };
 
-const flushSearchRepairs = async ({
+/**
+ * Repair the queued marks of exactly these sources, and no others. A
+ * request's post-commit flush reaches this through
+ * `projection-repair-flush.ts`.
+ */
+export const flushSearchRepairs = async ({
   deps,
   kind,
   sourceIds,
@@ -419,38 +443,8 @@ const flushSearchRepairs = async ({
   return await repairClaimed({ claims, deps, signal: undefined });
 };
 
-export const flushEntitySearchRepairs = async (
-  entityIds: readonly SafeId<"entity">[],
-  deps: SearchProjectionRepairDeps = defaultRepairDeps,
-): Promise<SearchProjectionRepairOutcome> =>
-  await flushSearchRepairs({
-    deps,
-    kind: SEARCH_PROJECTION_KIND.entity,
-    sourceIds: entityIds,
-  });
-
-export const flushContactSearchRepairs = async (
-  contactIds: readonly SafeId<"contact">[],
-  deps: SearchProjectionRepairDeps = defaultRepairDeps,
-): Promise<SearchProjectionRepairOutcome> =>
-  await flushSearchRepairs({
-    deps,
-    kind: SEARCH_PROJECTION_KIND.contact,
-    sourceIds: contactIds,
-  });
-
-export const flushWorkspaceSearchRepairs = async (
-  workspaceIds: readonly SafeId<"workspace">[],
-  deps: SearchProjectionRepairDeps = defaultRepairDeps,
-): Promise<SearchProjectionRepairOutcome> =>
-  await flushSearchRepairs({
-    deps,
-    kind: SEARCH_PROJECTION_KIND.workspace,
-    sourceIds: workspaceIds,
-  });
-
 type DrainSearchProjectionRepairOptions = {
-  deps?: SearchProjectionRepairDeps;
+  deps: SearchProjectionRepairDeps;
   limit?: number;
   signal?: AbortSignal | undefined;
 };
@@ -461,10 +455,10 @@ type DrainSearchProjectionRepairOptions = {
  * projections have drifted.
  */
 export const drainSearchProjectionRepairQueue = async ({
-  deps = defaultRepairDeps,
+  deps,
   limit = SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
   signal,
-}: DrainSearchProjectionRepairOptions = {}): Promise<SearchProjectionRepairOutcome> => {
+}: DrainSearchProjectionRepairOptions): Promise<SearchProjectionRepairOutcome> => {
   if (signal?.aborted === true) {
     return { failed: 0, repaired: 0 };
   }

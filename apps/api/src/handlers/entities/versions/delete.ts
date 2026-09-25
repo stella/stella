@@ -28,10 +28,8 @@ import {
   broadcastWorkspaceResourceUpdated,
 } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -101,7 +99,7 @@ export const deleteEntityVersionHandler = async function* ({
         .orderBy(asc(fields.propertyId))
         .limit(LIMITS.propertiesCount);
       for (const { propertyId } of targetProperties) {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- ordered advisory-lock acquisition; a single statement guarantees no evaluation order
+        // db-await-in-loop: ordered advisory-lock acquisition; a single statement guarantees no evaluation order
         await lockDocxEditTarget({
           entityId: params.entityId,
           propertyId,

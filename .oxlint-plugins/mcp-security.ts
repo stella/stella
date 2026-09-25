@@ -34,7 +34,7 @@ const REDACTOR_MODULE =
   "apps/api/src/lib/mcp-upstream/oauth-registration-response";
 const JOIN_METHODS: ReadonlySet<string> = new Set(["leftJoin", "innerJoin"]);
 const OAUTH_CLIENT_JOIN_ALLOWED_FILES = [
-  "apps/api/src/handlers/chat/tools/external-mcp-tools.ts",
+  "apps/api/src/lib/mcp-upstream/connections.ts",
 ];
 
 const isRedactionCall = (context: RuleContext, node: unknown): boolean => {

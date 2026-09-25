@@ -6,6 +6,7 @@ import {
   RESOURCE_TYPE,
   toResourceName,
 } from "@stll/api-contract";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
   GlobalSearchHit,
@@ -16,10 +17,11 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   canUseAskAIShortcut,
   createDialogCloseActionQueue,
+  getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
-  getEntityLocationRoute,
-  getEntityWorkspaceRoute,
+  getEntityLocation,
+  getRecentFileLocation,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
@@ -31,6 +33,7 @@ import {
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
+type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 describe("lazy search groups", () => {
@@ -263,6 +266,79 @@ describe("search chat result routing", () => {
   });
 });
 
+describe("search dialog case-law routes", () => {
+  const decisionId = "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b";
+  const decisionResource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: toSafeId<"caseLawDecision">(decisionId),
+  });
+  const caseLawHit = (
+    overrides: Pick<
+      CaseLawGlobalSearchHit,
+      "language" | "languageAlternates" | "slug"
+    >,
+  ): CaseLawGlobalSearchHit => ({
+    id: `case-law:${decisionId}`,
+    type: "case-law",
+    resource: decisionResource,
+    resourceName: toResourceName(decisionResource),
+    decisionId,
+    caseNumber: "C-1/24",
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "C-1/24" },
+    ],
+    court: "Court of Justice",
+    country: "EU",
+    decisionDate: null,
+    title: "C-1/24 - Court of Justice",
+    headline: "The <mark>indemnity</mark> clause",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    ...overrides,
+  });
+
+  test("opens a hit on its stored slug, at the matched words", () => {
+    expect(
+      getCaseLawHitRoute(
+        caseLawHit({ language: "en", languageAlternates: [], slug: "c-1-24" }),
+      ),
+    ).toEqual({
+      to: "/law/$country/cases/$court/$slug",
+      params: { country: "eu", court: "court-of-justice", slug: "c-1-24" },
+      search: { q: "indemnity" },
+    });
+  });
+
+  test("names the language of a hit published in several", () => {
+    expect(
+      getCaseLawHitRoute(
+        caseLawHit({
+          language: "fr",
+          languageAlternates: [{ language: "en" }, { language: "fr" }],
+          slug: "c-1-24-fr",
+        }),
+      ),
+    ).toEqual({
+      to: "/law/$country/cases/$court/$language/$slug",
+      params: {
+        country: "eu",
+        court: "court-of-justice",
+        language: "fr",
+        slug: "c-1-24-fr",
+      },
+      search: { q: "indemnity" },
+    });
+  });
+
+  test("falls back to the id form only for a hit without a stored slug", () => {
+    const route = getCaseLawHitRoute(
+      caseLawHit({ language: "en", languageAlternates: [], slug: null }),
+    );
+
+    expect(route.to).toBe("/law/$country/cases/$court/$slug");
+    expect(route.params.slug.startsWith("c-1-24--")).toBeTrue();
+  });
+});
+
 describe("search dialog close actions", () => {
   test("runs a queued route action once, only after close completes", () => {
     const queue = createDialogCloseActionQueue();
@@ -348,14 +424,7 @@ describe("document routes", () => {
     });
   });
 
-  test("routes non-document entity hits to the all view", () => {
-    expect(getEntityWorkspaceRoute({ workspaceId: "workspace-1" })).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-    });
-  });
-
-  test("opens the containing folder for a modifier-activated entity hit", () => {
+  test("reveals a modifier-activated entity hit in its file tree", () => {
     const documentHit = getRecentFilePreviewHit({
       entityId: "entity-1",
       openedAt: "2026-07-31T05:00:00.000Z",
@@ -364,24 +433,40 @@ describe("document routes", () => {
       workspaceName: "Disclosure review",
     });
 
-    expect(
-      getEntityLocationRoute({ ...documentHit, parentId: "folder-1" }),
-    ).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-      search: { folder: "folder-1" },
-    });
+    expect(getEntityLocation({ ...documentHit, parentId: "folder-1" })).toEqual(
+      {
+        type: "tree",
+        workspaceId: "workspace-1",
+        entityId: "entity-1",
+        fallbackFolderId: "folder-1",
+      },
+    );
     // Matter-root entities carry no folder scope.
-    expect(getEntityLocationRoute(documentHit)).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
+    expect(getEntityLocation(documentHit)).toEqual({
+      type: "tree",
+      workspaceId: "workspace-1",
+      entityId: "entity-1",
+      fallbackFolderId: null,
     });
     // Hits without a containing matter location keep their normal open.
     expect(
-      getEntityLocationRoute(
-        chatHit({ threadId: "thread-1", workspaceId: null }),
-      ),
+      getEntityLocation(chatHit({ threadId: "thread-1", workspaceId: null })),
     ).toBeNull();
+  });
+
+  test("opens a task's matter, since the file tree lists no tasks", () => {
+    const entityHit = getRecentFilePreviewHit({
+      entityId: "subtask-1",
+      openedAt: "2026-07-31T05:00:00.000Z",
+      title: "File the reply",
+      workspaceId: "workspace-1",
+      workspaceName: "Disclosure review",
+    });
+
+    // A subtask's parent is another task, equally absent from the tree.
+    expect(
+      getEntityLocation({ ...entityHit, type: "task", parentId: "task-1" }),
+    ).toEqual({ type: "matter", workspaceId: "workspace-1" });
   });
 
   test("opens a recent file directly when its field id was persisted", () => {
@@ -398,16 +483,17 @@ describe("document routes", () => {
     });
   });
 
-  test("opens the all view for a recent file without a field id", () => {
+  test("locates a recent file by its own tree row", () => {
     expect(
-      getRecentFileRoute({
+      getRecentFileLocation({
         entityId: "entity-1",
-        fileFieldId: null,
         workspaceId: "workspace-1",
       }),
     ).toEqual({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId: "workspace-1", viewId: "all" },
+      type: "tree",
+      workspaceId: "workspace-1",
+      entityId: "entity-1",
+      fallbackFolderId: null,
     });
   });
 });

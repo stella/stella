@@ -16,10 +16,8 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import {
-  enqueueEntitySearchRepairs,
-  flushEntitySearchRepairs,
-} from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { isRecord } from "@/api/lib/type-guards";
 
 const refSchema = (description: string) =>

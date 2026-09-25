@@ -38,7 +38,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // `JSON.parse` on a persisted string is intentional.
 import { panic } from "better-result";
 
-import { isIdentifier, unwrapExpression } from "./utils.ts";
+import { isAstNode, isIdentifier, unwrapExpression } from "./utils.ts";
 
 const STORAGE_IDENTIFIERS = new Set(["localStorage", "sessionStorage"]);
 
@@ -94,12 +94,11 @@ const isStorageGetItemCall = (node: unknown): boolean => {
 };
 
 const isJsonParseCallee = (callee: unknown): boolean =>
-  typeof callee === "object" &&
-  callee !== null &&
-  (callee as { type?: unknown }).type === "MemberExpression" &&
-  (callee as { computed?: unknown }).computed === false &&
-  isIdentifier((callee as { object: unknown }).object, "JSON") &&
-  isIdentifier((callee as { property: unknown }).property, "parse");
+  isAstNode(callee) &&
+  callee.type === "MemberExpression" &&
+  callee.computed === false &&
+  isIdentifier(callee.object, "JSON") &&
+  isIdentifier(callee.property, "parse");
 
 export default eslintCompatPlugin({
   meta: { name: "no-raw-stored-json" },

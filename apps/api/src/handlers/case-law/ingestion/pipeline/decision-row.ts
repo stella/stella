@@ -312,6 +312,7 @@ export const writeDecisionRowWithSlug = async (
       attempt,
     });
     rowWrite = await Result.tryPromise({
+      // db-await-in-loop: slug-collision retry: the next candidate slug depends on this write's unique-violation outcome; attempts are capped
       try: async () => await writeRow(slug),
       catch: (cause: unknown) => cause,
     });

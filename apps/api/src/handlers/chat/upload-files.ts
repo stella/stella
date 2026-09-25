@@ -156,10 +156,11 @@ export const uploadMessageFiles = async ({
 
     const parsedPart = parseMessageFileDataUrl({ part });
     if (Result.isError(parsedPart)) {
+      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(parsedPart.error);
     }
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- an upload must land before the next; a failure rolls the earlier ones back
+    // db-await-in-loop: an upload must land before the next; a failure rolls the earlier ones back
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
@@ -170,6 +171,7 @@ export const uploadMessageFiles = async ({
       workspaceId,
     });
     if (Result.isError(uploadedFile)) {
+      // db-await-in-loop: runs once, as the loop returns; it rolls back the uploads so far
       return await fail(uploadedFile.error);
     }
 

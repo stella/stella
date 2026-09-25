@@ -12,7 +12,7 @@ import {
 import type {
   BatchPropertyDependency,
   ExecutionPlanProperty,
-  PropertyDependency,
+  PropertyDependencyEdge,
 } from "@/api/lib/workflow/get-execution-plan";
 
 const aiModelTool = {
@@ -76,7 +76,7 @@ const propertyMap = <Value>(
 const propertyDependency = (
   property: string,
   dependsOn: string,
-): PropertyDependency => ({
+): PropertyDependencyEdge => ({
   propertyId: propertyId(property),
   dependsOnPropertyId: propertyId(dependsOn),
   condition: null,
@@ -95,7 +95,7 @@ describe("buildDependencyGraph", () => {
       createProperty("p1"),
       createProperty("p2"),
     ];
-    const edges: PropertyDependency[] = [];
+    const edges: PropertyDependencyEdge[] = [];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
@@ -112,7 +112,7 @@ describe("buildDependencyGraph", () => {
       createProperty("C"),
       createProperty("D"),
     ];
-    const edges: PropertyDependency[] = [
+    const edges: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "A"),
       propertyDependency("D", "B"),
@@ -135,7 +135,7 @@ describe("buildDependencyGraph", () => {
 
   test("builds graph with self-dependency A -> A", () => {
     const properties: ExecutionPlanProperty[] = [createProperty("A")];
-    const edges: PropertyDependency[] = [propertyDependency("A", "A")];
+    const edges: PropertyDependencyEdge[] = [propertyDependency("A", "A")];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
@@ -149,7 +149,7 @@ describe("buildDependencyGraph", () => {
       createProperty("A"),
       createProperty("B"),
     ];
-    const edges: PropertyDependency[] = [
+    const edges: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("B", "A"),
     ];
@@ -168,7 +168,7 @@ describe("buildDependencyGraph", () => {
       createProperty("A"),
       createProperty("B"),
     ];
-    const edges: PropertyDependency[] = [
+    const edges: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "B"),
     ];
@@ -400,7 +400,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("B"),
       createProperty("C"),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "A"),
     ];
@@ -418,7 +418,9 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("A"),
       createProperty("B"),
     ];
-    const dependencies: PropertyDependency[] = [propertyDependency("B", "A")];
+    const dependencies: PropertyDependencyEdge[] = [
+      propertyDependency("B", "A"),
+    ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
 
@@ -436,7 +438,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("B"),
       createProperty("C"),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "B"),
     ];
@@ -462,7 +464,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("C"),
       createProperty("D"),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "A"),
       propertyDependency("D", "B"),
@@ -514,7 +516,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("B", { status: "stale" }),
       createProperty("C", { status: "fresh" }),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "A"),
     ];
@@ -534,7 +536,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("B", { status: "fresh" }),
       createProperty("C", { status: "fresh" }),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "B"),
     ];
@@ -552,7 +554,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("A"),
       createProperty("B"),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("B", "A"),
       propertyDependency("C", "B"),
     ];
@@ -591,7 +593,7 @@ describe("COMPUTED_PROPERTY_TOOL_TYPES", () => {
       createProperty("B", { tool: manualInputTool }),
       createProperty("C", { tool: verdictTool }),
     ];
-    const dependencies: PropertyDependency[] = [
+    const dependencies: PropertyDependencyEdge[] = [
       propertyDependency("A", "F"),
       propertyDependency("B", "F"),
       propertyDependency("C", "F"),

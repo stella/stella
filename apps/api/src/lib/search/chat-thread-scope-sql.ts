@@ -11,9 +11,9 @@ type ChatThreadScopeArgs = {
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-// Chat threads are private to the calling user, and global search runs on
-// the RLS-bypassing root connection. This predicate reproduces the
-// chat-thread RLS scope (db/rls.ts) explicitly.
+// Chat threads are private to the calling user. Global search reads them on
+// the request's scoped handle, and this predicate states the chat-thread RLS
+// scope (db/rls.ts) explicitly as well, so the query plan narrows early.
 export const chatThreadScopeSql = ({
   userId,
   organizationId,

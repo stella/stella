@@ -13,7 +13,7 @@ const readFixture = async (
   // committed alongside the tests; runtime validation here would only
   // catch drift between an upstream payload and the committed JSON,
   // which is precisely what the assertions below check anyway.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as RechercheEntreprisesSearchResponse;
 };
 

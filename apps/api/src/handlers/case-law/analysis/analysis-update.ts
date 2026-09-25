@@ -22,12 +22,12 @@ import type {
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
+import type { AnalysisStore } from "@/api/lib/case-law/analysis-store-core";
+import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 
 import { buildDecisionAnalysis, type AnalysisOutput } from "./analysis-output";
-import type { AnalysisStore } from "./analysis-store-core";
-import { storedAnalysisState } from "./stored-analysis";
 
 /** As much of a decision row as writing an analysis depends on. */
 export type AnalysisSubject = {

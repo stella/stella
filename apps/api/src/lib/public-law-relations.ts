@@ -9,17 +9,21 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
+  caseLawCourtWeights: "case_law_court_weights",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
   caseLawProvisionCitations: "case_law_provision_citations",
+  caseLawSearchDocuments: "case_law_search_documents",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
+  legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
 } as const;
 
@@ -42,18 +46,20 @@ export type PublicLawColumnGrantsByRelation = Readonly<
  *
  * - `required`: this release reads the column, so a role that cannot read it
  *   cannot serve. A missing grant fails the attestation.
- * - `permitted`: the grant exists but this release does not read it. A missing
- *   grant still serves, and holding the grant is not over-privilege.
+ * - `permitted`: this release does not read it. The role may hold the grant
+ *   or not, and serves either way.
  *
- * Anything readable beyond required plus permitted is over-privilege and fails
- * the attestation either way.
+ * The attestation holds the role to `required ⊆ grants ⊆ required ∪
+ * permitted`, column by column; a table-wide grant is refused outright.
  *
- * Staging rule: the release whose migration grants a column lists it
- * `permitted`, and the release that starts reading it flips it to `required`.
- * Granting and reading in one release stays a single `required` entry. Give a
- * grant up in the reverse order: drop the read and the column to `permitted`
- * first, revoke in a later release. Either way both releases boot while the
- * migration and the code are one step apart.
+ * Both bounds come from the running release's own map, and a release cannot
+ * know a column a later map adds: it reads any grant outside its map as
+ * over-privilege. So a new grant ships as `required`, in the same release as
+ * the read that needs it and the migration that grants it. That is a
+ * coordinated cutover; no earlier release serves against the widened role.
+ * Giving a grant up runs the other way: drop the read and mark the column
+ * `permitted` first, revoke in a later release, so both releases serve while
+ * the two steps are apart.
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
@@ -70,6 +76,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   // which pack owes the rewrite stay on the owning service side.
   case_law_corpus_tombstones: {
     location: "required",
+  },
+  // The court registry the public ranking and court chips read. The row id
+  // and its creation time are bookkeeping.
+  case_law_court_weights: {
+    country: "required",
+    court_pattern: "required",
+    tier: "required",
+    tier_label: "required",
+    weight: "required",
   },
   case_law_decision_identifiers: {
     decision_id: "required",
@@ -119,6 +134,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     created_at: "required",
     updated_at: "required",
   },
+  // The text-search configuration a language's query is parsed with. It is
+  // read from the database whose search documents it has to match.
+  case_law_fts_configs: {
+    language: "required",
+    regconfig: "required",
+    use_unaccent: "required",
+  },
   // Only what a portrait is served from. The roster's own fields (name, term
   // dates, where the row was read) are not part of a decision's projection.
   case_law_judges: {
@@ -151,6 +173,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     span_end: "required",
     work_source: "required",
     confidence: "required",
+  },
+  // What a search matches, ranks and cuts its headline from. The stored
+  // title, the preview generation and the refresh time serve the indexer.
+  case_law_search_documents: {
+    decision_id: "required",
+    language: "required",
+    regconfig: "required",
+    tsv: "required",
+    searchable_text: "required",
   },
   case_law_statute_citation_counts: {
     source_id: "required",
@@ -233,6 +264,17 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     created_at: "required",
     updated_at: "required",
   },
+  // The legislation twin of the case-law search document. `retry_after` is
+  // the eligibility a search filters on: a document whose indexing is still
+  // being retried is not offered yet.
+  legislation_search_documents: {
+    document_id: "required",
+    language: "required",
+    regconfig: "required",
+    tsv: "required",
+    searchable_text: "required",
+    retry_after: "required",
+  },
   legislation_sources: {
     id: "required",
     descriptor: "required",
@@ -250,8 +292,9 @@ export type PublicLawColumnPair = {
 
 /**
  * Flatten a grant map into one entry per column, tag included. Every column
- * the reader role may hold is here; migrations grant exactly this set, and the
- * `required` subset is what a release cannot serve without.
+ * the reader role may hold is here; migrations grant within this set, and the
+ * `required` subset is what they must grant and a release cannot serve
+ * without.
  */
 export const publicLawColumnPairs = (
   grants: PublicLawColumnGrantsByRelation,

@@ -46,7 +46,7 @@
 //
 // Escape hatch (genuinely bounded, e.g. a full per-org config set that
 // is already capped on the write path, or a deliberate aggregation):
-//   // eslint-disable-next-line require-query-limit/require-query-limit
+//   // oxlint-disable-next-line require-query-limit/require-query-limit
 //   // SAFETY: writes are capped at LIMITS.fooPerOrg, so this cannot grow unbounded.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";

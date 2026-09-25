@@ -24,10 +24,10 @@ import {
   PL_TK_QUARANTINE_PREFIX,
   plTkAdapter,
   plTkBatchWindow,
-  plTkCrossSourceKey,
   plTkRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -722,29 +722,46 @@ describe("the fields a case page states", () => {
 
 // ── The same ruling in SAOS ──────────────────────────────
 
+/** The one key a Tribunal row with this docket, date and kind carries. */
+const tkKey = ({
+  caseNumber,
+  decisionDate,
+  decisionType,
+}: {
+  caseNumber: string;
+  decisionDate: string;
+  decisionType: string;
+}): string | undefined =>
+  plConstitutionalTribunalRulingKeys({
+    caseNumber,
+    court: "Trybunał Konstytucyjny",
+    decisionDate,
+    decisionType,
+  }).at(0);
+
 describe("the key a SAOS row and a portal row share", () => {
   test("docket spelling and the pre-1997 name of a judgment do not split it", () => {
     expect(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "U. 4/86",
         decisionDate: "1986-12-03",
         decisionType: "postanowienie",
       }),
     ).toBe(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "U 4/86",
         decisionDate: "1986-12-03",
         decisionType: "postanowienie",
       }),
     );
     expect(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "K 1/86",
         decisionDate: "1986-07-14",
         decisionType: "wyrok",
       }),
     ).toBe(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "K 1/86",
         decisionDate: "1986-07-14",
         decisionType: "orzeczenie",
@@ -753,21 +770,21 @@ describe("the key a SAOS row and a portal row share", () => {
   });
 
   test("another day or another kind of ruling in the same case is another key", () => {
-    const judgment = plTkCrossSourceKey({
+    const judgment = tkKey({
       caseNumber: "K 1/87",
       decisionDate: "1987-04-22",
       decisionType: "orzeczenie",
     });
 
     expect(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "K 1/87",
         decisionDate: "1987-04-01",
         decisionType: "postanowienie",
       }),
     ).not.toBe(judgment);
     expect(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "K 1/87",
         decisionDate: "1987-04-22",
         decisionType: "postanowienie",
@@ -781,7 +798,9 @@ describe("the key a SAOS row and a portal row share", () => {
       await caseFixture("pl-tk-case-k-2-26.html.gz"),
     );
 
-    expect(decision.metadata["crossSourceKey"]).toBe("k 2/26|2026-06-25|wyrok");
+    expect(decision.metadata["rulingKeys"]).toEqual([
+      "tk|k 2/26|2026-06-25|wyrok",
+    ]);
   });
 });
 
@@ -921,6 +940,11 @@ describe("the deciding court", () => {
       quarantineReason: "court-not-stated",
       courtAsPrinted: "Sąd Najwyższy",
     });
+    expect(
+      built.type === "unkeyable"
+        ? "unkeyable"
+        : built.decision.metadata["rulingKeys"],
+    ).toBeUndefined();
   });
 
   test("without a served text, the docket's register names it, or nothing does", () => {
@@ -1084,7 +1108,7 @@ describe("a redirect the fetch refuses to follow", () => {
 describe("the cross-source key and the shared docket grammar", () => {
   test("a docket the grammar does not read as the Tribunal's has no key", () => {
     expect(
-      plTkCrossSourceKey({
+      tkKey({
         caseNumber: "II CSK 1/20",
         decisionDate: "2020-01-01",
         decisionType: "wyrok",

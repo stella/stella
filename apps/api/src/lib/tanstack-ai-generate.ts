@@ -15,11 +15,13 @@ import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 
+import { getOutputTokenLimit } from "@stll/ai-catalog";
 import type {
   ModelRole,
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { classifyFailure } from "@stll/errors";
 
 import type {
   AIRequestServiceTier,
@@ -175,14 +177,19 @@ type ResolveTextModelOptions = Pick<
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
+// Classified as well as caused: the 502 is what the caller answers with, the
+// classification is what a failure sink records for it.
 const cancelledGenerationError = (): HandlerError =>
-  new HandlerError({
-    status: 502,
-    message: CANCELLED_GENERATION_MESSAGE,
-    cause: new AIGenerationCancelledError({
+  classifyFailure(
+    new HandlerError({
+      status: 502,
       message: CANCELLED_GENERATION_MESSAGE,
+      cause: new AIGenerationCancelledError({
+        message: CANCELLED_GENERATION_MESSAGE,
+      }),
     }),
-  });
+    "generation_cancelled",
+  );
 
 const isAbortRejection = ({
   error,
@@ -1167,6 +1174,41 @@ const anthropicThinkingReservation = (
     return panic("Enabled Anthropic thinking requires a numeric token budget");
   }
   return enabledThinking["budget_tokens"];
+};
+
+/**
+ * A chat turn's output allowance for one model call: the model's catalog
+ * output limit, less what an Anthropic thinking budget reserves inside the
+ * same `max_tokens`, so the request never asks for more than the model can
+ * emit (`mergeGenerationOptions` adds the reservation back). `undefined` for a
+ * model the catalog does not list, which leaves the allowance to the
+ * provider's default instead of a guessed cap that could cut replies short.
+ * A thinking budget at or above the limit leaves no request that fits it
+ * (Anthropic needs `max_tokens` above the budget), so the smallest valid
+ * request is sent and the misfit is logged; no offered model reaches it.
+ */
+export const chatTurnOutputTokens = (
+  model: ResolvedTanStackTextModel,
+): number | undefined => {
+  const limit = getOutputTokenLimit(model.modelId);
+  if (limit === undefined) {
+    return undefined;
+  }
+  const reservation =
+    model.provider === "anthropic"
+      ? anthropicThinkingReservation(model.modelOptions.thinking)
+      : 0;
+  const allowance = limit - reservation;
+  if (allowance > 0) {
+    return allowance;
+  }
+  logger.warn("tanstack_ai.output_allowance_clamped", {
+    "ai.model": model.modelId,
+    "ai.output_limit": limit,
+    "ai.provider": model.provider,
+    "ai.thinking_reservation": reservation,
+  });
+  return 1;
 };
 
 export const mergeGenerationOptions = ({

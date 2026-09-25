@@ -9,7 +9,7 @@ import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type {
@@ -102,6 +102,7 @@ export const fillPreviewLogic = async ({
       organizationId,
       userId,
       safeDb,
+      scopedDb,
       feature: "templates.fill_preview",
       documentLanguages: source.documentLanguages,
     }),
@@ -127,7 +128,7 @@ export const fillPreviewLogic = async ({
     return Result.err(new HandlerError({ status: 400, message: result.error }));
   }
 
-  const { paragraphs, charCount } = await extractText(result.buffer);
+  const { paragraphs, charCount } = await extractDocxDocument(result.buffer);
 
   return Result.ok({
     paragraphs,

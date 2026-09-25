@@ -214,7 +214,7 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/features/statutes/statute-sitemap.ts",
     );
     expect(configSource).toContain('name: "@/routes/-auth-context"');
-    expect(configSource).toContain('name: "@/lib/auth"');
+    expect(configSource).toContain('name: "@/lib/auth-client"');
     expect(configSource).toContain(
       "Public SEO endpoints must not import protected route code.",
     );
@@ -300,6 +300,21 @@ describe("custom oxlint guardrails", () => {
 
     expect(pluginSource).toContain(
       `export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =\n  /${policy.source}/${policy.flags};`,
+    );
+  });
+
+  test("the redacted-log-key rule pins the reviewed failure context keys", async () => {
+    // Same copy, same reason: the rule rejects a context key the failure
+    // owner would drop, so its list must be the owner's list.
+    const { FAILURE_CONTEXT_KEYS } =
+      await import("@/api/lib/observability/observe-failure");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-redacted-log-attribute-key.ts",
+    );
+    const listed = FAILURE_CONTEXT_KEYS.map((key) => `  "${key}",`).join("\n");
+
+    expect(pluginSource).toContain(
+      `export const FAILURE_CONTEXT_KEYS = [\n${listed}\n];`,
     );
   });
 

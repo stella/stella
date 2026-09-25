@@ -354,12 +354,6 @@ export const MODEL_RATES = {
     inputPerMTok: 7000,
     outputPerMTok: 30_000,
   },
-  // models.dev: amazon-bedrock:us.deepseek.r1-v1:0
-  "us.deepseek.r1-v1:0": {
-    kind: "flat",
-    inputPerMTok: 135_000,
-    outputPerMTok: 540_000,
-  },
   // models.dev: mistral:mistral-large-latest
   "mistral-large-latest": {
     kind: "flat",
@@ -413,5 +407,11 @@ export const MODEL_RATES = {
     inputPerMTok: 250_000,
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 125_000,
+  },
+  // models.dev: amazon-bedrock:us.deepseek.r1-v1:0
+  "us.deepseek.r1-v1:0": {
+    kind: "flat",
+    inputPerMTok: 135_000,
+    outputPerMTok: 540_000,
   },
 } as const satisfies Readonly<Record<string, ModelRate>>;

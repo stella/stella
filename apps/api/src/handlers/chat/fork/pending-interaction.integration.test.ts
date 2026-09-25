@@ -1,18 +1,21 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { UNFINISHED_APPROVED_CALL_ERROR } from "@/api/handlers/chat/chat-turn-settlement";
+import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
-import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { findUnownedPendingInteractions } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -35,6 +38,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+const openHarnesses: ChatHarness[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -47,6 +51,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Each harness restores what the previous one installed: undo in reverse.
+  for (const harness of openHarnesses.toReversed()) {
+    harness.close();
+  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -57,27 +65,27 @@ afterAll(async () => {
 
 describe("forking a thread at a pending approval", () => {
   test("the fork carries no answerable approval, and the approved tool runs once, on the source thread", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    openHarnesses.push(harness);
     const {
-      adapters,
       approveContext,
       executions,
       lastAssistant,
+      script,
       send,
       sendContext,
-    } = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    } = harness;
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
     seededThreadIds.push(threadId);
     const firstRunId = `run-${Bun.randomUUIDv7()}`;
 
-    adapters.push(
-      createScriptedTextAdapter([
-        {
-          arguments: approvalToolArguments("NDA"),
-          toolName: APPROVAL_TOOL_NAME,
-          type: "tool-call",
-        },
-      ]),
-    );
+    script(threadId, [
+      {
+        arguments: approvalToolArguments("NDA"),
+        toolName: APPROVAL_TOOL_NAME,
+        type: "tool-call",
+      },
+    ]);
     expect(
       await send(
         sendContext({
@@ -129,11 +137,9 @@ describe("forking a thread at a pending approval", () => {
     ).toEqual([]);
 
     // Approve on the source thread: the loop executes the tool, then answers.
-    adapters.push(
-      createScriptedTextAdapter([
-        { finishReason: "stop", text: "Deleted.", type: "text" },
-      ]),
-    );
+    script(threadId, [
+      { finishReason: "stop", text: "Deleted.", type: "text" },
+    ]);
     expect(
       await send(
         approveContext({
@@ -149,11 +155,9 @@ describe("forking a thread at a pending approval", () => {
 
     // The same approval, answered on the fork, is not a resumable interaction.
     const forkAnswer = await lastAssistant(forkThreadId);
-    adapters.push(
-      createScriptedTextAdapter([
-        { finishReason: "stop", text: "Deleted again.", type: "text" },
-      ]),
-    );
+    script(forkThreadId, [
+      { finishReason: "stop", text: "Deleted again.", type: "text" },
+    ]);
     const forkResult = await send(
       approveContext({
         call: pendingCall,
@@ -167,5 +171,121 @@ describe("forking a thread at a pending approval", () => {
       executions: ["NDA"],
       fork: "rejected",
     });
+  });
+});
+
+describe("forking a thread whose approved call lost its result", () => {
+  test("the fork holds the call as unfinished and never runs it", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    openHarnesses.push(harness);
+    const { executions, lastAssistant, script, send, sendContext } = harness;
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+
+    script(threadId, [
+      {
+        arguments: approvalToolArguments("NDA"),
+        toolName: APPROVAL_TOOL_NAME,
+        type: "tool-call",
+      },
+    ]);
+    expect(
+      await send(
+        sendContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Delete the NDA", type: "text" }],
+            role: "user",
+          },
+          runId: `run-${Bun.randomUUIDv7()}`,
+          threadId,
+        }),
+      ),
+    ).toEqual({ status: "streamed" });
+    const pending = await lastAssistant(threadId);
+    const pendingCall = pendingApprovalCallOf(pending.parts);
+
+    // The stored shape a run leaves when its process dies after the approved
+    // call ran and before the result was saved. No production path writes it
+    // on purpose, so it is written directly.
+    const [stored] = await testDb
+      .select({ content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, pending.id));
+    const content = stored?.content;
+    if (content === undefined) {
+      throw new Error("Expected stored message content");
+    }
+    const data: unknown[] = [...content.data];
+    const callIndex = data.findIndex(
+      (part) => isRecord(part) && part["id"] === pendingCall.id,
+    );
+    const storedCall = data[callIndex];
+    if (!isRecord(storedCall)) {
+      throw new Error("Expected the stored approval call");
+    }
+    data[callIndex] = {
+      ...storedCall,
+      approval: { ...pendingCall.approval, approved: true },
+      state: "approval-responded",
+    };
+    await testDb
+      .update(chatMessages)
+      .set({
+        content: asTestRaw<PersistedChatMessageContent>({ ...content, data }),
+      })
+      .where(eq(chatMessages.id, pending.id));
+
+    const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(forkThreadId);
+    const forked = await createForkThread({
+      indexChatThread: async () => undefined,
+    }).handler(
+      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+        body: { newThreadId: forkThreadId, upToMessageId: pending.id },
+        getWorkspaceAccess: async () => null,
+        memberRole: { role: "owner" },
+        params: { threadId },
+        query: {},
+        recordAuditEvent: async () => undefined,
+        request: new Request("http://localhost/v1/chat/threads/fork"),
+        safeDb,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+    expect(forked).toMatchObject({ threadId: forkThreadId });
+    const forkedAnswer = await lastAssistant(forkThreadId);
+    expect({
+      call: forkedAnswer.parts.find(
+        (part) => part.type === "tool-call" && part.id === pendingCall.id,
+      ),
+      outcome: forkedAnswer.metadata?.turnOutcome,
+    }).toMatchObject({
+      call: {
+        output: { error: UNFINISHED_APPROVED_CALL_ERROR },
+        state: "error",
+      },
+      // Nothing is left to answer, and no turn owns the fork's copy.
+      outcome: { reason: "superseded", type: "cancelled" },
+    });
+
+    script(forkThreadId, [
+      { finishReason: "stop", text: "Anything else?", type: "text" },
+    ]);
+    expect(
+      await send(
+        sendContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Thanks", type: "text" }],
+            role: "user",
+          },
+          runId: `run-${Bun.randomUUIDv7()}`,
+          threadId: forkThreadId,
+        }),
+      ),
+    ).toEqual({ status: "streamed" });
+    expect(executions).toEqual([]);
   });
 });

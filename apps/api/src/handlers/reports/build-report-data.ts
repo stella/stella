@@ -31,7 +31,7 @@ import {
 } from "@/api/db/schema";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-// eslint-disable-next-line no-restricted-imports -- brands field/entity ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications and review decisions
+// oxlint-disable-next-line no-restricted-imports -- brands field/entity ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications and review decisions
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
@@ -795,7 +795,7 @@ export const buildReportData = async ({
               index,
               index + JUSTIFICATION_FIELD_ID_BATCH,
             );
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
+            // db-await-in-loop: sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

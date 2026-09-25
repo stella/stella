@@ -94,7 +94,7 @@ const scopedDb: Parameters<typeof indexLegislationDocument>[1] = async (
 ) =>
   // SAFETY: pglite stands in for the transaction used by this projection;
   // the test exercises only the statements issued by the callback.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
 const searchReadDb: LegislationReadDb = async (callback) => {
@@ -109,7 +109,7 @@ const searchReadDb: LegislationReadDb = async (callback) => {
   });
   // SAFETY: the proxy preserves the PGlite DB and adapts only execute's result
   // shape to match the production driver used by this search boundary.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   return await callback(tx as unknown as LegislationReadTransaction);
 };
 

@@ -1,0 +1,16 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["bun-types", "chrome"]
+  },
+  "include": [
+    ".wxt/wxt.d.ts",
+    "e2e",
+    "playwright.config.ts",
+    "scripts",
+    "src",
+    "wxt.config.ts"
+  ],
+  "exclude": [".output", "node_modules"]
+}

@@ -6,14 +6,14 @@ import {
 /** Rejection-sampling to avoid modulo bias (256 % 31 = 8). */
 const generateCode = (): string => {
   const alphabetSize = VERIFICATION_CODE_ALPHABET.length;
-  // eslint-disable-next-line no-bitwise -- bit-shift builds the rejection-sampling mask
+  // oxlint-disable-next-line no-bitwise -- bit-shift builds the rejection-sampling mask
   const mask = (1 << Math.ceil(Math.log2(alphabetSize))) - 1;
   const result: string[] = [];
   while (result.length < VERIFICATION_CODE_LENGTH) {
     const bytes = new Uint8Array(VERIFICATION_CODE_LENGTH * 2);
     crypto.getRandomValues(bytes);
     for (const b of bytes) {
-      // eslint-disable-next-line no-bitwise -- mask random byte to the alphabet bit-width
+      // oxlint-disable-next-line no-bitwise -- mask random byte to the alphabet bit-width
       const idx = b & mask;
       if (idx < alphabetSize) {
         result.push(VERIFICATION_CODE_ALPHABET.at(idx) ?? "");

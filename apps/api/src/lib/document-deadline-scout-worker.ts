@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   DEADLINE_SCOUT_JOB_NAME,
   DEADLINE_SCOUT_QUEUE_NAME,
@@ -13,13 +14,15 @@ import { createBullMqConnection } from "@/api/lib/redis-client";
 
 const DEADLINE_SCOUT_WORKER_CONCURRENCY = 1;
 
-export const initDocumentDeadlineScoutWorker = () => {
+export const initDocumentDeadlineScoutWorker = ({
+  db,
+}: BullMqWorkerContext) => {
   const worker = new Worker<DocumentDeadlineScoutJobData>(
     DEADLINE_SCOUT_QUEUE_NAME,
     async ({ data }) => {
       const { runDocumentDeadlineScout } =
         await import("@/api/lib/scouts/document-deadlines");
-      await runDocumentDeadlineScout(data);
+      await runDocumentDeadlineScout({ db, sourceRunId: data.sourceRunId });
     },
     {
       connection: createBullMqConnection(),

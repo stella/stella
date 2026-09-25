@@ -18,10 +18,10 @@ import * as v from "valibot";
 export type CliConfig = {
   readonly version: 1;
   readonly defaultServerUrl?: string | undefined;
-  readonly oauthClients: Readonly<Record<string, RegisteredOAuthClient>>;
+  readonly oauthClients: Readonly<Record<string, StoredClientRegistration>>;
 };
 
-export type RegisteredOAuthClient = {
+export type StoredClientRegistration = {
   readonly clientId: string;
   readonly registeredAt: number;
   /** Missing only on config entries written before scope-aware registration. */
@@ -79,13 +79,13 @@ export const writeCliConfig = async (
 export const getRegisteredClient = async (
   configDir: string,
   serverUrl: string,
-): Promise<RegisteredOAuthClient | undefined> => {
+): Promise<StoredClientRegistration | undefined> => {
   const config = await readCliConfig(configDir);
   return config.oauthClients[serverUrl];
 };
 
 export const registeredClientSupportsScopes = (
-  client: RegisteredOAuthClient,
+  client: StoredClientRegistration,
   scopes: readonly string[],
 ): boolean => {
   const registeredScopes = client.registeredScopes;

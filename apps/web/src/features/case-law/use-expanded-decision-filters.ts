@@ -8,7 +8,7 @@ import {
 } from "@/features/case-law/queries/decisions";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 
 /**

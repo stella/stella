@@ -345,7 +345,7 @@ const buildLeafCommand = (
   // FLAGS generic cannot be spelled out; every entry is a valid stricli flag
   // parameter and the executor reads flags by name.
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
+    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
     builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
@@ -464,7 +464,7 @@ const buildCapabilityLeafCommand = (
     },
   };
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
+    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
     builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
@@ -554,7 +554,7 @@ const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
     },
   };
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
+    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
     builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };

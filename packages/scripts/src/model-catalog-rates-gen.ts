@@ -8,6 +8,7 @@ import {
   BYOK_MODEL_OPTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
+  MODEL_RATES,
   MODEL_RATE_UNITS_PER_USD,
   normalizeModelCatalogId,
   RETAINED_MODELS_DEV_RATE_ENTRIES,
@@ -76,7 +77,7 @@ const providerOptions = (
   provider: Exclude<BYOKProvider, "openrouter">,
 ): readonly string[] => BYOK_MODEL_OPTIONS[provider];
 
-const buildRateSources = (): RateSource[] => {
+const collectRateSources = (): RateSource[] => {
   const sources: RateSource[] = [];
   const seen = new Set<string>();
   const sourceAliases: Readonly<
@@ -148,6 +149,37 @@ const buildRateSources = (): RateSource[] => {
   if (missing.length > 0) {
     return panic(
       `offered models have no models.dev rate source: ${missing.join(", ")}`,
+    );
+  }
+  return sources;
+};
+
+/** Every model ID the generated rate table covers. */
+export const listModelRateTargetIds = (): ReadonlySet<string> =>
+  new Set(collectRateSources().map((source) => source.modelId));
+
+/**
+ * Rated model IDs that the rate targets no longer cover. A deployment
+ * override or a stored selection can still name a model after it leaves the
+ * picker, and instance dispatch refuses an unrated ID, so generation refuses
+ * to drop a rate until the model is retained.
+ */
+export const findDroppedRatedModelIds = (
+  ratedModelIds: Iterable<string>,
+  targetModelIds: ReadonlySet<string>,
+): string[] =>
+  [...ratedModelIds].filter((modelId) => !targetModelIds.has(modelId));
+
+const buildRateSources = (): RateSource[] => {
+  const sources = collectRateSources();
+  const dropped = findDroppedRatedModelIds(
+    Object.keys(MODEL_RATES),
+    new Set(sources.map((source) => source.modelId)),
+  );
+  if (dropped.length > 0) {
+    return panic(
+      `rated models are neither offered nor retained: ${dropped.join(", ")}; ` +
+        "add them to RETAINED_MODELS_DEV_RATE_ENTRIES",
     );
   }
   return sources;
@@ -422,7 +454,8 @@ export const buildModelRateRows = (
     };
   });
 
-const formatInteger = (value: number): string => {
+/** An integer as generated catalog source writes it: `65_536`, `4096`. */
+export const formatInteger = (value: number): string => {
   const digits = String(value);
   if (digits.length <= 4) {
     return digits;

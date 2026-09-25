@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -20,7 +22,11 @@ expect(selectorStart).toBeGreaterThan(-1);
 expect(selectorEnd).toBeGreaterThan(selectorStart);
 const selector = workflow.slice(selectorStart, selectorEnd);
 
-const imageSmokePlan = (files: readonly string[]) => {
+const runSelector = (
+  files: readonly string[],
+  outputs: readonly string[],
+  suiteDepth = "fast",
+) => {
   const process = Bun.spawnSync({
     cmd: [
       "bash",
@@ -28,16 +34,20 @@ const imageSmokePlan = (files: readonly string[]) => {
       "-c",
       `changed_files=("$@"); e2e_core_required=false
 ${selector}
-printf "%s\\n" "$api_image_smoke_required" "$web_image_smoke_required"`,
+printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-test",
       ...files,
     ],
+    env: { PATH: Bun.env["PATH"] ?? "", SUITE_DEPTH: suiteDepth },
     stdout: "pipe",
     stderr: "pipe",
   });
   expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
   return new TextDecoder().decode(process.stdout).trim().split("\n");
 };
+
+const imageSmokePlan = (files: readonly string[]) =>
+  runSelector(files, ["api_image_smoke_required", "web_image_smoke_required"]);
 
 test("every release requires both final image smokes regardless of other changed paths", () => {
   fc.assert(
@@ -82,6 +92,75 @@ test("unrelated paths do not schedule final image smokes", () => {
       ]);
     }),
     propertyConfig({ numRuns: 30 }),
+  );
+});
+
+test("everything the API image is built from requires the API image smoke", () => {
+  for (const file of [
+    "apps/api/src/server.ts",
+    "apps/collab/src/index.ts",
+    "apps/legal-atlas-runner/src/index.ts",
+    "packages/template-packs/src/catalogue.ts",
+    "patches/some-package@1.0.0.patch",
+    "apps/web/package.json",
+    "apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
+    "docker/postgres/init.sql",
+    ".gitmodules",
+    "bun.lock",
+    "bunfig.toml",
+    "package.json",
+    ".npmrc",
+    "turbo.json",
+    "scripts/retry.sh",
+  ]) {
+    expect(imageSmokePlan([file]).at(0), file).toBe("true");
+  }
+});
+
+test("paths outside the API image do not schedule its smoke", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/landing/src/pages/index.astro",
+    "apps/landing/public/fonts/CabinetGrotesk-Bold.otf",
+    "apps/desktop/src-tauri/src/main.rs",
+    "docker/postgres/README.md",
+    "scripts/ci-plan.test.ts",
+    ".github/workflows/deploy-staging.yml",
+  ]) {
+    expect(imageSmokePlan([file]), file).toEqual(["false", "false"]);
+  }
+  // Ordinary API source is covered by the API image alone.
+  expect(imageSmokePlan(["apps/api/src/server.ts"])).toEqual(["true", "false"]);
+});
+
+const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
+
+const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
+  v
+    .parse(
+      v.array(MatrixEntry),
+      JSON.parse(
+        runSelector(files, ["api_image_platforms"], suiteDepth).at(0) ?? "",
+      ),
+    )
+    .map(({ platform }) => platform)
+    .toSorted();
+
+test("a pull request builds the API image for arm64 unless it releases", () => {
+  fc.assert(
+    fc.property(fc.array(fc.uuid(), { maxLength: 4 }), (names) => {
+      const files = ["apps/api/src/server.ts", ...names.map((n) => `${n}.ts`)];
+      expect(apiImagePlatforms(files, "fast")).toEqual(["linux/arm64"]);
+      expect(apiImagePlatforms([...files, "VERSION"], "fast")).toEqual([
+        "linux/amd64",
+        "linux/arm64",
+      ]);
+      expect(apiImagePlatforms(files, "full")).toEqual([
+        "linux/amd64",
+        "linux/arm64",
+      ]);
+    }),
+    propertyConfig({ numRuns: 10 }),
   );
 });
 
@@ -169,6 +248,7 @@ const evaluateResult = ({
       EVENT: event,
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
+      FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       PATH: process.env["PATH"] ?? "",
       PLAN: JSON.stringify({
         ...plan,
@@ -316,42 +396,241 @@ test("only an unlabelled pull request skips heavy suites or passes a superseded 
   }
 });
 
-const imagePlatforms = (job: unknown) =>
-  v
-    .parse(
-      v.object({
-        strategy: v.object({
-          matrix: v.object({
-            include: v.array(v.object({ platform: v.string() })),
-          }),
-        }),
+const fastRequired = v.parse(
+  v.array(v.string()),
+  JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
+);
+
+test("a fast-depth run requires each fast-required job its plan selected", () => {
+  expect(fastRequired.length).toBeGreaterThan(0);
+  for (const job of fastRequired) {
+    const scope = jobScopes[job];
+    // A scope-less or depth-gated job would always skip at fast depth.
+    expect(typeof scope, job).toBe("string");
+    expect(heavyJobs, job).not.toContain(job);
+    if (typeof scope !== "string") {
+      continue;
+    }
+    const event = EVENT.pullRequest;
+    expect(evaluateResult({ event, results: { [job]: "skipped" } }), job).toBe(
+      1,
+    );
+    expect(
+      evaluateResult({ event, results: { [job]: "cancelled" } }),
+      job,
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        results: { [job]: "skipped" },
+        unplannedScopes: [scope],
       }),
       job,
-    )
-    .strategy.matrix.include.map(({ platform }) => platform)
-    .toSorted();
+    ).toBe(0);
+  }
+  // Any other planned job may still skip at fast depth.
+  for (const job of gatedJobs.filter((name) => !fastRequired.includes(name))) {
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { [job]: "skipped" },
+      }),
+      job,
+    ).toBe(0);
+  }
+});
+
+const MatrixJob = v.object({
+  strategy: v.object({
+    matrix: v.object({ include: v.array(MatrixEntry) }),
+  }),
+});
+
+const jobSteps = (job: unknown) =>
+  v.parse(
+    v.object({
+      steps: v.array(
+        v.object({
+          name: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    job,
+  ).steps;
 
 const smokeCommands = (job: unknown) =>
-  v
-    .parse(
-      v.object({
-        steps: v.array(v.object({ run: v.optional(v.string()) })),
-      }),
-      job,
-    )
-    .steps.flatMap(({ run }) =>
-      run?.includes("scripts/smoke-api-image.sh") ? [run] : [],
-    );
+  jobSteps(job).flatMap(({ run }) =>
+    (run ?? "")
+      .split("\n")
+      .filter((line) => line.includes("scripts/smoke-api-image.sh"))
+      .map((line) => line.replace(/^run: /u, "").trim()),
+  );
+
+const apiImageJob = ciJobs["api-image-smoke"];
 
 test("CI rehearses every released API platform with the shared release smoke contract", () => {
-  const releasePlatforms = imagePlatforms(releaseJobs["build"]);
+  const releasePlatforms = v
+    .parse(MatrixJob, releaseJobs["build"])
+    .strategy.matrix.include.map(({ runner, platform }) => ({
+      runner,
+      platform,
+    }))
+    .toSorted((a, b) => a.platform.localeCompare(b.platform));
   expect(releasePlatforms.length).toBeGreaterThan(0);
-  expect(imagePlatforms(ciJobs["api-image-smoke"])).toEqual(releasePlatforms);
-  const ciCommands = smokeCommands(ciJobs["api-image-smoke"]);
+  expect(
+    v.parse(
+      v.object({
+        strategy: v.object({ matrix: v.object({ include: v.string() }) }),
+      }),
+      apiImageJob,
+    ).strategy.matrix.include,
+  ).toBe(
+    ["$", "{{ fromJSON(needs.ci-plan.outputs.api_image_platforms) }}"].join(""),
+  );
+  const fullDepthPlatforms = v.parse(
+    v.array(MatrixEntry),
+    JSON.parse(
+      runSelector(["docs/x.md"], ["api_image_platforms"], "full").at(0) ?? "",
+    ),
+  );
+  // workflow_dispatch plans every scope without running the selector.
+  const dispatchPlatforms = /echo 'api_image_platforms=(\[.*\])'/u.exec(
+    workflow,
+  )?.[1];
+  for (const platforms of [
+    fullDepthPlatforms,
+    v.parse(v.array(MatrixEntry), JSON.parse(dispatchPlatforms ?? "")),
+  ]) {
+    expect(
+      platforms.toSorted((a, b) => a.platform.localeCompare(b.platform)),
+    ).toEqual(releasePlatforms);
+  }
+  const ciCommands = smokeCommands(apiImageJob);
   const releaseCommands = Object.values(releaseJobs).flatMap(smokeCommands);
   expect(ciCommands).toHaveLength(1);
   expect(releaseCommands).toHaveLength(1);
   for (const command of [...ciCommands, ...releaseCommands]) {
-    expect(command).toMatch(/^bash scripts\/smoke-api-image\.sh \S+\s*$/u);
+    expect(command).toMatch(
+      /^bash scripts\/smoke-api-image\.sh \S+(?: 2>&1 \| tee "\$RUNNER_TEMP\/[\w.-]+")?$/u,
+    );
   }
+});
+
+test("an API image step that tees its log keeps the command's exit status", () => {
+  const teed = jobSteps(apiImageJob).flatMap(({ run }) =>
+    run?.includes("| tee ") ? [run] : [],
+  );
+  expect(teed).toHaveLength(2);
+  for (const run of teed) {
+    expect(run.trimStart()).toStartWith("set -euo pipefail\n");
+  }
+});
+
+const annotateStep = jobSteps(apiImageJob).find(
+  ({ name }) => name === "Annotate image failure",
+);
+
+const annotate = (logs: { build?: string; smoke?: string }) => {
+  const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-annotate-"));
+  try {
+    if (logs.build !== undefined) {
+      writeFileSync(
+        nodePath.join(runnerTemp, "api-image-build.log"),
+        logs.build,
+      );
+    }
+    if (logs.smoke !== undefined) {
+      writeFileSync(
+        nodePath.join(runnerTemp, "api-image-smoke.log"),
+        logs.smoke,
+      );
+    }
+    const run = Bun.spawnSync({
+      cmd: ["bash", "-e", "-c", annotateStep?.run ?? "exit 1"],
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        PLATFORM: "linux/arm64",
+        RUNNER_TEMP: runnerTemp,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    return new TextDecoder().decode(run.stdout).trimEnd().split("\n");
+  } finally {
+    rmSync(runnerTemp, { force: true, recursive: true });
+  }
+};
+
+test("a failed API image run annotates the failing lines, escaped", () => {
+  expect(
+    annotate({
+      smoke: [
+        "PASS: fresh database migrations",
+        "FAIL: /app/backfill.js did not reach 100% of validation\r::warning::x",
+        "Cannot find module",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image smoke (linux/arm64)::FAIL: /app/backfill.js did not reach 100%25 of validation%0D::warning::x",
+  ]);
+  expect(
+    annotate({ smoke: "PASS: fresh database migrations\nno ready\n" }),
+  ).toEqual([
+    "::error title=API image smoke (linux/arm64)::Failed after: PASS: fresh database migrations",
+  ]);
+  expect(annotate({ smoke: `FAIL: ${"x".repeat(900)}` })).toEqual([
+    `::error title=API image smoke (linux/arm64)::FAIL: ${"x".repeat(494)}`,
+  ]);
+  expect(
+    annotate({
+      build: [
+        "#10 [builder 3/40] RUN bun install",
+        "#10 0.512 error: an earlier step that recovered",
+        "#10 DONE 1.3s",
+        "#45 [runtime-asset-smoke 2/2] RUN /tmp/image-smoke",
+        "#45 0.312 image-smoke ok: quickjs sandbox wasm",
+        "#45 0.402 Panic: no YARA rule files were compiled",
+        "#45 ERROR: process did not complete successfully: exit code: 1",
+        "ERROR: failed to solve: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image build (linux/arm64)::Panic: no YARA rule files were compiled",
+    "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
+  ]);
+  // Bun's uncaught-error report: the headline sits under a caret line.
+  expect(
+    annotate({
+      build: [
+        "#76 [runtime-asset-smoke 2/2] RUN /tmp/image-smoke",
+        '#76 0.106 1 | (function (opts) {"use strict";',
+        "#76 0.106               ^",
+        "#76 0.106 ENOENT: no such file or directory, open '/app/yara'",
+        '#76 0.106     path: "/app/yara",',
+        "#76 0.106       at /$bunfs/root/image-smoke:8478:51",
+        "#76 0.106 Bun v1.4.2 (Linux arm64)",
+        "#76 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image build (linux/arm64)::ENOENT: no such file or directory, open '/app/yara'",
+    "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
+  ]);
+  expect(
+    annotate({
+      build: [
+        "#20 [builder 9/40] RUN false",
+        "#20 0.100 last words",
+        "#20 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=API image build (linux/arm64)::last words",
+    "::error title=API image build (linux/arm64)::ERROR: process did not complete successfully: exit code: 1",
+  ]);
+  expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
+    "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
+  ]);
 });

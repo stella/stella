@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
   resourceRef,
   RESOURCE_TYPE,
@@ -67,6 +68,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
+  resolveBrowserClientCapability,
   validateToolCallParts,
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
@@ -78,6 +80,7 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import {
@@ -168,7 +171,7 @@ import {
   type ActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   assertUsageAvailableForHandler,
@@ -200,7 +203,6 @@ import {
 } from "@/api/lib/chat/ref-token";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
-import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -979,7 +981,9 @@ const prepareValidatedIncomingMessage = async ({
     // Resolve the org's web-search providers once (BYOK key first,
     // platform env key as fallback) and reuse for both the validation
     // and streaming tool sets.
-    const webSearchProviders = await loadWebSearchProviders(organizationId);
+    const webSearchProviders = await scopedDb(
+      async (tx) => await loadWebSearchProviders(tx, organizationId),
+    );
 
     if (isClientConnectionAborted()) {
       return Result.err(
@@ -1041,6 +1045,12 @@ const prepareValidatedIncomingMessage = async ({
         accessibleWorkspaceIds,
       }),
       activeFile: activeFileForTools,
+      // Validation admits persisted browser calls from any client; the
+      // streaming set below registers the tool only when this request's
+      // client reports a live extension.
+      browserClient: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      },
       editApplyMode,
       docxEditRepresentation,
       webSearchEnabled: validationThreadState.webSearchEnabled,
@@ -1439,12 +1449,10 @@ export const createSendMessage = (
           workspace.status,
         ]),
       );
-      /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
       const scope = yield* resolveChatScope({
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
-      /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;
@@ -1736,7 +1744,10 @@ export const createSendMessage = (
         }
 
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: latestMessagePlan.messages,
+          messages: settleHistoryForRun({
+            messages: latestMessagePlan.messages,
+            resumedMessageId: owningAssistantMessage?.id,
+          }),
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,
@@ -1917,6 +1928,7 @@ export const createSendMessage = (
             body.activeTemplate !== undefined,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
+          browserClient: resolveBrowserClientCapability(body.browserClient),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,

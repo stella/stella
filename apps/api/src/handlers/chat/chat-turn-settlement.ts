@@ -1,10 +1,31 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
-import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
+import type {
+  ChatMessage,
+  ChatPart,
+  ChatTurnOutcome,
+} from "@/api/handlers/chat/types";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 export type ToolCallState = ToolCallPart["state"];
 type OutcomeType = ChatTurnOutcome["type"];
+
+/**
+ * The parts these rules read. Every stored `ChatPart` is one; so is a tool
+ * call read back over the API, whose tool name the typed part union cannot
+ * know in advance.
+ */
+export type SettlementPart =
+  | ChatPart
+  | {
+      type: "tool-call";
+      id: string;
+      state: ToolCallState;
+      approval?: { approved?: boolean };
+    };
+
+type SettlementToolCall = Extract<SettlementPart, { type: "tool-call" }>;
 
 /**
  * Tool-call states a client can still answer from a reloaded thread: an
@@ -72,7 +93,7 @@ const SETTLED_TOOL_CALL_STATE = {
 
 /** A call is settled once its result or error is stored, or its approval was
  *  denied. */
-const isSettledToolCall = (part: ToolCallPart): boolean =>
+const isSettledToolCall = (part: SettlementToolCall): boolean =>
   SETTLED_TOOL_CALL_STATE[part.state] ||
   ("approval" in part && part.approval.approved === false);
 
@@ -83,7 +104,7 @@ export type UnsettledToolCall = {
 
 const findUnsettled = (
   policy: OpenCallPolicy,
-  parts: readonly ChatPart[],
+  parts: readonly SettlementPart[],
 ): UnsettledToolCall[] =>
   parts.flatMap((part) =>
     part.type === "tool-call" &&
@@ -102,8 +123,105 @@ export const findUnsettledToolCallsForOutcome = ({
   parts,
 }: {
   outcome: OutcomeType;
-  parts: readonly ChatPart[];
+  parts: readonly SettlementPart[];
 }): UnsettledToolCall[] => findUnsettled(OUTCOME_POLICY[outcome], parts);
+
+/** What the model and the user see for an approved call whose run ended
+ *  without storing its result. */
+export const UNFINISHED_APPROVED_CALL_ERROR =
+  "This approved action did not finish and its result was not saved. It may have taken effect; check before asking to run it again.";
+
+const hasStoredResult = (
+  call: ToolCallPart,
+  parts: readonly ChatPart[],
+): boolean =>
+  ("output" in call && call.output !== undefined) ||
+  parts.some(
+    (part) =>
+      part.type === "tool-result" &&
+      part.toolCallId === call.id &&
+      part.state !== "streaming",
+  );
+
+const isApprovedWithoutResult = (
+  part: ToolCallPart,
+  parts: readonly ChatPart[],
+): boolean =>
+  part.state === "approval-responded" &&
+  "approval" in part &&
+  part.approval.approved === true &&
+  !hasStoredResult(part, parts);
+
+/** The call as stored once its run ended: an error whose outcome is unknown.
+ *  Each tool types its own output, so the part is checked, not asserted. */
+const unfinishedCall = (part: ToolCallPart): ChatPart => {
+  const candidate: unknown = {
+    ...part,
+    output: { error: UNFINISHED_APPROVED_CALL_ERROR },
+    state: "error",
+  };
+  return isChatPart(candidate)
+    ? candidate
+    : panic("An unfinished tool call must remain a valid chat part");
+};
+
+/**
+ * Close the approved calls a turn left without a result once it ended some
+ * way other than waiting on the user. The run may have executed them, so they
+ * are stored as unfinished, with an unknown outcome. A turn waiting on the
+ * user keeps them: the engine holds an approved call back until every
+ * approval in its step is answered.
+ */
+export const settleOpenToolCallsForOutcome = ({
+  outcome,
+  parts,
+}: {
+  outcome: OutcomeType;
+  parts: readonly ChatPart[];
+}): ChatPart[] => {
+  if (OUTCOME_POLICY[outcome] === "client-answerable") {
+    return [...parts];
+  }
+  const error = UNFINISHED_APPROVED_CALL_ERROR;
+  return parts.flatMap((part): ChatPart[] =>
+    part.type === "tool-call" && isApprovedWithoutResult(part, parts)
+      ? [
+          unfinishedCall(part),
+          {
+            content: JSON.stringify({ error }),
+            error,
+            state: "error",
+            toolCallId: part.id,
+            type: "tool-result",
+          },
+        ]
+      : [part],
+  );
+};
+
+/**
+ * The history a run hands the engine. Only the message a continuation resumes
+ * may hold approved calls for this run to execute; an approved call without a
+ * result anywhere else belongs to a turn that already ended.
+ */
+export const settleHistoryForRun = ({
+  messages,
+  resumedMessageId,
+}: {
+  messages: readonly ChatMessage[];
+  resumedMessageId: string | undefined;
+}): ChatMessage[] =>
+  messages.map((message) =>
+    message.role !== "assistant" || message.id === resumedMessageId
+      ? message
+      : {
+          ...message,
+          parts: settleOpenToolCallsForOutcome({
+            outcome: "interrupted",
+            parts: message.parts,
+          }),
+        },
+  );
 
 export type DroppedParts = {
   droppedToolCallIds: string[];
@@ -120,8 +238,8 @@ export const findDroppedParts = ({
   continued,
   stored,
 }: {
-  continued: readonly ChatPart[];
-  stored: readonly ChatPart[];
+  continued: readonly SettlementPart[];
+  stored: readonly SettlementPart[];
 }): DroppedParts | null => {
   const storedToolCallIds = new Set(
     stored.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),

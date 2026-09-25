@@ -1,7 +1,6 @@
 import {
   EventType,
   maxIterations,
-  StreamProcessor,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
@@ -130,6 +129,10 @@ import type {
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
+  createStreamMessageCapture,
+  type ChatStreamProcessor,
+} from "@/api/lib/chat/stream-message-capture";
+import {
   streamChatChunks,
   toolCallEndInputOf,
   toolCallEndOutputOf,
@@ -148,6 +151,7 @@ import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/prov
 import { withSseHeartbeat } from "@/api/lib/sse";
 import {
   abortControllerFromSignal,
+  chatTurnOutputTokens,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
@@ -1196,7 +1200,7 @@ const runChatAttempt = async function* ({
     modelOptions: mergeGenerationOptions({
       caching,
       model,
-      maxOutputTokens: undefined,
+      maxOutputTokens: chatTurnOutputTokens(model),
       serviceTier: "standard",
       temperature: getTemperatureForRole(role),
     }),
@@ -1395,7 +1399,7 @@ type ProcessServerChatStreamProps = {
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
-  processor: StreamProcessor;
+  processor: ChatStreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
 };
 
@@ -1624,6 +1628,23 @@ export const processServerChatStream = async function* ({
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  // Whether the client has been told which message this turn writes.
+  let announcedAssistantMessage = false;
+  // A run that fails before its first chunk still writes the turn's message
+  // (see `createTerminalResponseMessage`). Name it before the error, or the
+  // client opens a placeholder under an id of its own beside the message the
+  // turn stored or continued.
+  const announceBeforeFailure = (): StreamChunk[] =>
+    announcedAssistantMessage
+      ? []
+      : [
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+            role: "assistant",
+            timestamp: Temporal.Now.instant().epochMilliseconds,
+          },
+        ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -1636,6 +1657,9 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (sourceChunk.type === EventType.TEXT_MESSAGE_START) {
+        announcedAssistantMessage = true;
+      }
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -1724,6 +1748,7 @@ export const processServerChatStream = async function* ({
           flushProcessor: true,
           outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
         });
+        yield* announceBeforeFailure();
         yield chunk;
         return;
       }
@@ -1803,6 +1828,7 @@ export const processServerChatStream = async function* ({
         outcome: { type: "failed", error: kind },
       });
     }
+    yield* announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,
       message: kind,
@@ -1811,15 +1837,16 @@ export const processServerChatStream = async function* ({
     };
   } finally {
     // Client-disconnect teardown: Bun's `ReadableStream.cancel()` fires when the
-    // socket drops, tanstack breaks its `for await` on the aborted controller,
-    // and that `.return()`s this generator mid-stream, so neither the
-    // natural-completion finish nor the `catch` ran. The metered provider call
-    // is decoupled from the socket, so the model kept producing and was metered;
-    // persist whatever content accumulated so a completed-or-partial answer is
-    // not silently lost on remount. Skipped when the stream already finished or
-    // failed, and a no-op when nothing accumulated (finalizeStream drops
-    // whitespace-only messages). Awaiting here completes even on teardown, and
-    // persistence uses the shared RLS pool, not a request-scoped handle.
+    // socket drops and aborts the run's controller. `chat()` hands that signal
+    // to the provider request, so the model call is cancelled with the socket;
+    // tanstack breaks its `for await`, and that `.return()`s this generator
+    // mid-stream, so neither the natural-completion finish nor the `catch` ran.
+    // Persist whatever content accumulated before the abort as an interrupted
+    // turn, so a partial answer is not silently lost on remount. Skipped when
+    // the stream already finished or failed, and a no-op when nothing
+    // accumulated (finalizeStream drops whitespace-only messages). Awaiting here
+    // completes even on teardown, and persistence uses the shared RLS pool, not
+    // a request-scoped handle.
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,
@@ -1843,39 +1870,33 @@ type ProcessTurnForPersistenceProps = Omit<
 /**
  * The one place a turn's stream becomes the assistant message `onFinish`
  * persists: the turn's message ids, the stream processor that accumulates the
- * message, and the capture of its final state. Every caller that persists a
- * turn, the round-trip test harness included, runs through this function, so
- * a change to what gets persisted cannot pass a test that wires its own copy.
+ * message, and the capture of its final state. Every turn that persists runs
+ * through this function inside `streamChat`, which the chat harness drives
+ * too, so a change to what gets persisted cannot pass a test that wires its
+ * own copy.
  */
-export const processTurnForPersistence = ({
+const processTurnForPersistence = ({
   initialMessages,
   owningAssistantMessageId,
   restorationPairs,
   ...stream
 }: ProcessTurnForPersistenceProps): AsyncIterable<PublicStreamChunk> => {
-  // Captured on an object property, not a bare `let`: `onStreamEnd` runs
-  // later, and type-aware lint narrows a closure-mutated local to its
-  // initializer.
-  const captured: { message: ChatMessage | null } = { message: null };
-  const processor = new StreamProcessor({
+  const { processor, message } = createStreamMessageCapture({
     initialMessages,
-    events: {
-      onStreamEnd: (message) => {
-        const convertedMessage = toChatMessage(message);
-        captured.message =
-          convertedMessage === null
-            ? null
-            : attachRestorationMetadata({
-                message: convertedMessage,
-                restorationPairs,
-              });
-      },
+    capture: (streamed) => {
+      const convertedMessage = toChatMessage(streamed);
+      return convertedMessage === null
+        ? null
+        : attachRestorationMetadata({
+            message: convertedMessage,
+            restorationPairs,
+          });
     },
   });
   return processServerChatStream({
     ...stream,
     existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-    getResponseMessage: () => captured.message,
+    getResponseMessage: message,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
     processor,
   });
@@ -1923,7 +1944,7 @@ const createTerminalResponseMessage = ({
   });
 };
 
-const finalizeResponseProcessor = (processor: StreamProcessor): void => {
+const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
   try {
     processor.finalizeStream();
   } catch (error) {

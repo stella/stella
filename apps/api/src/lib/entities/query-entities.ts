@@ -13,7 +13,11 @@ import {
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { EntityFind, OcrExportStatus } from "@stll/api-contract";
+import type {
+  AgendaItemWireFields,
+  EntityFind,
+  OcrExportStatus,
+} from "@stll/api-contract";
 import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 import type { ConditionNode } from "@stll/conditions";
 
@@ -62,10 +66,6 @@ import {
 import {
   AGENDA_ITEM_KIND,
   AGENDA_ITEM_SOURCE,
-} from "@/api/lib/entity-constants";
-import type {
-  AgendaItemKind,
-  AgendaItemSource,
 } from "@/api/lib/entity-constants";
 import {
   buildFilterConditions,
@@ -119,7 +119,7 @@ type CellMetadataResult = Omit<
  */
 export type { OcrExportStatus };
 
-export type QueryEntityResult = {
+export type QueryEntityResult = AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
   workspaceName: string;
@@ -143,26 +143,6 @@ export type QueryEntityResult = {
   status: string | null;
   priority: string | null;
   listItemType: string | null;
-  dueDate: string | null;
-  agendaKind: AgendaItemKind;
-  startAt: string | null;
-  endAt: string | null;
-  occurredAt: string | null;
-  remindAt: string | null;
-  allDay: boolean;
-  timeZone: string | null;
-  location: string | null;
-  onlineMeetingUrl: string | null;
-  availability: string | null;
-  sensitivity: string | null;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: AgendaItemSource;
-  externalSource: string | null;
-  externalId: string | null;
-  externalChangeKey: string | null;
-  externalICalUid: string | null;
   readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;

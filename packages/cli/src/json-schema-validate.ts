@@ -18,13 +18,13 @@ type ValidCompiledSchemaPattern = Extract<
 >;
 
 /** A validation outcome: valid, or the failing JSON path plus a message. */
-export type ValidationResult =
+export type SchemaValidationResult =
   | { valid: true }
   | { valid: false; path: string; message: string };
 
-const ok: ValidationResult = { valid: true };
+const ok: SchemaValidationResult = { valid: true };
 
-const fail = (path: string, message: string): ValidationResult => ({
+const fail = (path: string, message: string): SchemaValidationResult => ({
   valid: false,
   path: path === "" ? "(root)" : path,
   message,
@@ -297,7 +297,7 @@ const validateSchemaList = (
   branches: readonly unknown[],
   value: unknown,
   path: string,
-): ValidationResult => {
+): SchemaValidationResult => {
   if (keyword === "allOf") {
     for (const branch of branches) {
       if (!isPlainObject(branch)) {
@@ -339,7 +339,7 @@ const validateString = (
   schema: JsonSchema,
   value: string,
   path: string,
-): ValidationResult => {
+): SchemaValidationResult => {
   const codePointLength = Array.from(value).length;
   const minLength = schema["minLength"];
   if (typeof minLength === "number" && codePointLength < minLength) {
@@ -374,7 +374,7 @@ const validateRegExpString = (
   schema: JsonSchema,
   value: string,
   path: string,
-): ValidationResult => {
+): SchemaValidationResult => {
   const source = schema["source"];
   if (typeof source !== "string") {
     return fail(path, "RegExp schema is missing its source");
@@ -397,7 +397,7 @@ const validateNumber = (
   value: number,
   path: string,
   integer: boolean,
-): ValidationResult => {
+): SchemaValidationResult => {
   if (integer && !Number.isInteger(value)) {
     return fail(path, "expected an integer");
   }
@@ -416,7 +416,7 @@ const validateArray = (
   schema: JsonSchema,
   value: readonly unknown[],
   path: string,
-): ValidationResult => {
+): SchemaValidationResult => {
   const minItems = schema["minItems"];
   if (typeof minItems === "number" && value.length < minItems) {
     return fail(path, `array shorter than minItems ${minItems}`);
@@ -442,7 +442,7 @@ const validateObject = (
   value: Record<string, unknown>,
   path: string,
   allowUnknownProperties: boolean,
-): ValidationResult => {
+): SchemaValidationResult => {
   const properties = isPlainObject(schema["properties"])
     ? schema["properties"]
     : {};
@@ -541,7 +541,7 @@ const validateValue = (
   value: unknown,
   path: string,
   allowUnknownProperties = false,
-): ValidationResult => {
+): SchemaValidationResult => {
   if (
     Object.hasOwn(schema, "const") &&
     !jsonValuesEqual(schema["const"], value)
@@ -647,4 +647,4 @@ const validateValue = (
 export const validateAgainstSchema = (
   schema: JsonSchema,
   data: unknown,
-): ValidationResult => validateValue(schema, data, "");
+): SchemaValidationResult => validateValue(schema, data, "");

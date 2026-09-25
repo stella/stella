@@ -44,14 +44,14 @@ type QueryStringSafe = string & {
 const rawClause = (value: string): QueryStringSafe =>
   // SAFETY: caller asserts `value` is composed only of literal DSL syntax
   // and already brand-verified-safe fragments; see call site.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   value as QueryStringSafe;
 
 const escapeQueryStringPhrase = (value: string): QueryStringSafe => {
   const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
   // SAFETY: quotes and backslashes are escaped above, so this phrase cannot
   // break out of the surrounding `"..."` it is wrapped in by `fieldClause`.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return escaped as QueryStringSafe;
 };
 

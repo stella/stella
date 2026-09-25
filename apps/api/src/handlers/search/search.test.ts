@@ -65,7 +65,7 @@ const createWorkspaceLookupScopedDb =
       },
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findMany
+    // oxlint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findMany
     return await callback(tx as unknown as Transaction);
   };
 
@@ -93,20 +93,23 @@ describe("search handler workspace scoping", () => {
       scopedDb: unusedScopedDb,
     });
 
-    expect(searchMock).toHaveBeenCalledWith({
-      cursor: undefined,
-      limit: LIMITS.searchPageSizeDefault,
-      organizationId: "org_1",
-      userId: "user_1",
-      query: "closing memo",
-      types: [],
-      editedByUserIds: [],
-      mimeTypes: [],
-      updatedFrom: undefined,
-      updatedTo: undefined,
-      accessibleWorkspaceIds: ["ws_1", "ws_2"],
-      selectedWorkspaceIds: [],
-    });
+    expect(searchMock).toHaveBeenCalledWith(
+      {
+        cursor: undefined,
+        limit: LIMITS.searchPageSizeDefault,
+        organizationId: "org_1",
+        userId: "user_1",
+        query: "closing memo",
+        types: [],
+        editedByUserIds: [],
+        mimeTypes: [],
+        updatedFrom: undefined,
+        updatedTo: undefined,
+        accessibleWorkspaceIds: ["ws_1", "ws_2"],
+        selectedWorkspaceIds: [],
+      },
+      { scopedDb: unusedScopedDb },
+    );
   });
 
   test("returns canonical positive locator candidates for native previews", async () => {
@@ -190,6 +193,7 @@ describe("search handler workspace scoping", () => {
         query: "",
         types: ["document"],
       }),
+      { scopedDb: expect.any(Function) },
     );
   });
 
@@ -211,6 +215,7 @@ describe("search handler workspace scoping", () => {
 
       expect(searchMock).toHaveBeenCalledWith(
         expect.objectContaining({ query, ...values }),
+        { scopedDb: expect.any(Function) },
       );
     },
   );
@@ -248,6 +253,7 @@ describe("search handler workspace scoping", () => {
         organizationId: "org_1",
         query: "closing memo",
       }),
+      { scopedDb: expect.any(Function) },
     );
   });
 
@@ -281,6 +287,7 @@ describe("search handler workspace scoping", () => {
       expect.objectContaining({
         selectedWorkspaceIds: [workspaceId],
       }),
+      { scopedDb: expect.any(Function) },
     );
   });
 
@@ -329,6 +336,7 @@ describe("search handler workspace scoping", () => {
         updatedFrom: "2026-04-23T12:00:00.000Z",
         updatedTo: "2026-04-30T12:00:00.000Z",
       }),
+      { scopedDb: expect.any(Function) },
     );
   });
 });

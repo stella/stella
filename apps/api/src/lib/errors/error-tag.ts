@@ -28,20 +28,21 @@ const taggedErrorName = (error: unknown): string | undefined =>
  * caller fall back to the constructor identifier, which for such a class is
  * the more specific of the two.
  */
-const declaredErrorName = (error: Error): string | undefined => {
-  const name = safeReflectGet(error, "name");
-  return typeof name === "string" && name && name !== GENERIC_ERROR_NAME
+const declaredErrorName = (name: unknown): string | undefined =>
+  typeof name === "string" && name && name !== GENERIC_ERROR_NAME
     ? name
     : undefined;
-};
 
-const constructorIdentifier = (error: Error): string => {
+const constructorIdentifier = (constructorName: unknown): string =>
+  typeof constructorName === "string" && constructorName
+    ? constructorName
+    : GENERIC_ERROR_NAME;
+
+const constructorNameOf = (error: Error): unknown => {
   const constructorValue = safeReflectGet(error, "constructor");
-  if (typeof constructorValue !== "function") {
-    return GENERIC_ERROR_NAME;
-  }
-  const name = safeReflectGet(constructorValue, "name");
-  return typeof name === "string" && name ? name : GENERIC_ERROR_NAME;
+  return typeof constructorValue === "function"
+    ? safeReflectGet(constructorValue, "name")
+    : undefined;
 };
 
 const hasNumericSuffix = (value: string, prefix: string): boolean => {
@@ -77,22 +78,41 @@ const hasNumericSuffix = (value: string, prefix: string): boolean => {
  * suffix emitted by the bundler. This keeps caller-controlled values out of
  * telemetry and persisted error codes.
  */
-export const errorClassName = (error: Error): string => {
-  const taggedName = taggedErrorName(error);
+export const errorClassName = (error: Error): string =>
+  errorClassNameFrom({
+    taggedName: taggedErrorName(error),
+    name: safeReflectGet(error, "name"),
+    constructorName: constructorNameOf(error),
+  });
+
+type ErrorClassNameParts = {
+  taggedName: string | undefined;
+  name: unknown;
+  constructorName: unknown;
+};
+
+/**
+ * `errorClassName` over values already read off the error, for a reader that
+ * reads each property once so a changing getter cannot yield two answers.
+ */
+export const errorClassNameFrom = ({
+  taggedName,
+  name,
+  constructorName,
+}: ErrorClassNameParts): string => {
   if (taggedName !== undefined) {
     return taggedName;
   }
 
-  const declaredName = declaredErrorName(error);
-  const constructorName = constructorIdentifier(error);
+  const declaredName = declaredErrorName(name);
+  const identifier = constructorIdentifier(constructorName);
   if (
     declaredName !== undefined &&
-    (declaredName === constructorName ||
-      hasNumericSuffix(constructorName, declaredName))
+    (declaredName === identifier || hasNumericSuffix(identifier, declaredName))
   ) {
     return declaredName;
   }
-  return constructorName;
+  return identifier;
 };
 
 /**
@@ -108,8 +128,16 @@ export const errorTag = (error: unknown): string => {
   if (taggedName !== undefined) {
     return taggedName;
   }
-  if (error instanceof Error) {
+  if (isErrorInstance(error)) {
     return errorClassName(error);
   }
   return "UnknownError";
 };
+
+/**
+ * `instanceof Error` that answers false instead of throwing: the check reads
+ * the prototype chain, which a revoked Proxy refuses, and a failure sink must
+ * never throw over the value it was handed.
+ */
+export const isErrorInstance = (value: unknown): value is Error =>
+  Result.try(() => value instanceof Error).unwrapOr(false);

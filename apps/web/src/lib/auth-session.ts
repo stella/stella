@@ -1,6 +1,6 @@
 import { Temporal } from "@stll/time";
 
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 
 export const getFreshLinkedAccount = async () => {

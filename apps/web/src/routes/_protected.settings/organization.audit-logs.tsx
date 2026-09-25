@@ -224,7 +224,7 @@ function AuditLogsPage() {
                   className="text-muted-foreground text-xs font-medium"
                   htmlFor="action-select"
                 >
-                  {t("settings.organization.auditLogsAction")}
+                  {t("common.action")}
                 </label>
                 <Select
                   id="action-select"
@@ -323,9 +323,7 @@ function AuditLogsPage() {
                       {t("settings.organization.auditLogsTime")}
                     </TableHead>
                     <TableHead>{t("common.user")}</TableHead>
-                    <TableHead>
-                      {t("settings.organization.auditLogsAction")}
-                    </TableHead>
+                    <TableHead>{t("common.action")}</TableHead>
                     <TableHead>
                       {t("settings.organization.auditLogsResourceType")}
                     </TableHead>

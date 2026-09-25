@@ -264,7 +264,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         // Non-hijacked exec has no writable stdin; adapters branch on the
         // `writableStdin: false` capability and never call these. Kept sync
         // (they only wrap a resolved/rejected promise).
-        // eslint-disable-next-line promise-function-async
+        // oxlint-disable-next-line promise-function-async
         write: () =>
           Promise.reject(
             new DockerApiError({
@@ -272,7 +272,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
                 "bun-docker: exec stdin is not writable (writableStdin=false)",
             }),
           ),
-        // eslint-disable-next-line promise-function-async -- sync no-op; stdin unused when writableStdin=false
+        // oxlint-disable-next-line promise-function-async -- sync no-op; stdin unused when writableStdin=false
         end: () => Promise.resolve(),
       },
       wait: async () => {
@@ -304,7 +304,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
     process: sandboxProcess,
     git: createExecBackedGit(sandboxProcess, workdir),
     env: {
-      // eslint-disable-next-line promise-function-async -- sync env merge, returns a resolved promise
+      // oxlint-disable-next-line promise-function-async -- sync env merge, returns a resolved promise
       set: (vars) => {
         Object.assign(envVars, vars);
         return Promise.resolve();

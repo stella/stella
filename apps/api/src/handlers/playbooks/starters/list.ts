@@ -19,7 +19,7 @@ const config = {
 // to render a card and let the user pick one to instantiate.
 const listStarterPlaybooks = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* () {
     return Result.ok({
       items: STARTER_PLAYBOOKS.map((starter) => ({

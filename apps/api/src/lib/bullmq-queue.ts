@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { Queue } from "bullmq";
 import type { QueueOptions } from "bullmq";
 
+import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   createBullMqConnection,
@@ -44,11 +45,20 @@ type BullMqQueueHostedBy<Host extends BullMqWorkerHost> = {
 }[BullMqQueueName];
 
 /**
+ * What a host hands every worker it starts. The host owns the postgres-role
+ * connection and passes it down, so no queue module imports it; tests inject
+ * a structurally equivalent handle.
+ */
+export type BullMqWorkerContext = {
+  db: typeof rootDb;
+};
+
+/**
  * Starts a worker, or a group sharing one lifecycle, and reports the queues
  * it consumes. `queues` must come from the same constant handed to the BullMQ
  * `Worker`, so the host check below binds each queue to the code that drains it.
  */
-export type BullMqWorkerStarter = () => {
+export type BullMqWorkerStarter = (context: BullMqWorkerContext) => {
   queues: readonly BullMqQueueName[];
   close: () => Promise<void>;
 };
@@ -92,9 +102,10 @@ export const createBullMqWorkerHost = <
   const Starters extends readonly BullMqWorkerStarter[],
 >(
   host: Host,
+  context: BullMqWorkerContext,
   starters: Starters & BullMqHostCoverage<Host, Starters>,
 ): BullMqWorkerHostHandle => {
-  const running = starters.map((start) => start());
+  const running = starters.map((start) => start(context));
   return {
     close: async () => {
       await Promise.all(

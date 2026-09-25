@@ -12,7 +12,7 @@ import {
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
   checkNewAccountEmailAllowedForCreation,
@@ -292,7 +292,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
   });
 });
 
-// eslint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
 const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
 
 describe("withStellaTwoFactorSignInGate", () => {
@@ -914,7 +914,7 @@ describe("organization lifecycle hook wiring", () => {
     expect(hooks.afterCreateOrganization).toBeFunction();
     expect(hooks.afterUpdateOrganization).toBeFunction();
 
-    const identify = spyOn(getAnalytics(), "identifyOrganizationGroup");
+    const identify = spyOn(getServerAnalytics(), "identifyOrganizationGroup");
     try {
       const organizationId = orgId();
       await hooks.afterUpdateOrganization({

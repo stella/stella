@@ -64,7 +64,7 @@ const connectMcpConnector = createSafeRootHandler(
 
     if (connector.authType === "none") {
       const saved = yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — per-user MCP connection toggle; SOC 2 relevance lives at the connector-config layer (audited in create-connector / delete-connector).
           return tx
@@ -154,7 +154,7 @@ const connectMcpConnector = createSafeRootHandler(
     const state = createOAuthState();
 
     yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
         return tx.insert(mcpOAuthState).values({
@@ -325,7 +325,7 @@ const ensureOAuthClient = async ({
       : null;
 
     const insertedClient = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — Dynamic Client Registration metadata for the MCP authorization server; per-user connection state is the auditable surface.
         return tx

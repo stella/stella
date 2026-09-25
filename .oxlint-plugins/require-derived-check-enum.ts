@@ -35,7 +35,7 @@
 // Deliberate subsets (`status IN ('completed', 'cancelled')` inside a larger
 // state predicate) are the one legitimate hand-written list. Prefer a named
 // subset const derived from the full union; where that does not read cleanly,
-// suppress with `// eslint-disable-next-line` plus the reason.
+// suppress with `// oxlint-disable-next-line` plus the reason.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 

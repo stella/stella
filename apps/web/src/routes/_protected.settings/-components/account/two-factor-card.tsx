@@ -35,12 +35,12 @@ import { cn } from "@stll/ui/utils";
 import { SecretInput } from "@/components/secret-input";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorEnabledUser,
-} from "@/lib/auth";
-import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
+} from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";

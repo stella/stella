@@ -154,7 +154,7 @@ const describeChain = (node) => {
 };
 
 // The literal key of a computed member access, or null when it is dynamic.
-const staticComputedKey = (property) => {
+const staticComputedKey = (property): string | null => {
   const node = unwrapWrappers(property);
   if (node?.type === "Literal" && typeof node.value === "string") {
     return node.value;

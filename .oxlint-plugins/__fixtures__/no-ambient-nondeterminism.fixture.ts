@@ -454,7 +454,7 @@ export const chainedComputedEpoch = Date[chainedComputedDateMethod]();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: static template computed method names retain Date provenance
 export const templateComputedEpoch = Date[templateComputedDateMethod]();
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/dot-notation -- fixture: direct static template method names retain Date provenance
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/dot-notation -- fixture: direct static template method names retain Date provenance
 export const directTemplateComputedEpoch = Date[`now`]();
 
 export const conditionalAmbientClock = (monotonic: boolean) =>

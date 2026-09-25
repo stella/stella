@@ -15,7 +15,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 
 // @valibot/to-json-schema rejects regex flags, so v.regex literals
 // in this file deliberately omit the `u` flag.
-/* eslint-disable require-unicode-regexp -- @valibot/to-json-schema rejects regex flags */
+/* oxlint-disable require-unicode-regexp -- @valibot/to-json-schema rejects regex flags */
 const lawIdSchema = v.pipe(
   v.string(),
   v.regex(

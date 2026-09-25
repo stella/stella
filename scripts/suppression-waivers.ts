@@ -633,7 +633,7 @@ const SOURCE_FIXTURE_LINES = [
   "export const listExample = async () => {",
   "  // eslint-disable-next-line security-guards/no-unscoped-user-query -- audit rows are already org-scoped",
   "  const rows = await db.select().from(user);",
-  "  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- data-volume tier needs no ledger entry",
+  "  // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- data-volume tier needs no ledger entry",
   "  const more = await db.select().from(member);",
   "  return [...rows, ...more];",
   "};",
@@ -780,7 +780,11 @@ const runSelfTest = (): number => {
   expectError(
     "a waiver for a rule outside the security tier",
     inspect(
-      [permanentWaiver({ rule: "no-db-await-in-loop/no-db-await-in-loop" })],
+      [
+        permanentWaiver({
+          rule: "no-network-await-in-loop/no-network-await-in-loop",
+        }),
+      ],
       fixtureObservation([]),
     ),
     "is not a security-tier rule",

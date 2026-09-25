@@ -1,24 +1,18 @@
 import { Result } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  gte,
-  inArray,
-  isNotNull,
-  lte,
-  or,
-} from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNotNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { member, user } from "@/api/db/auth-schema";
 import {
   timeEntrySourceSchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
+import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
+import {
+  selectTimekeeperNames,
+  timekeeperIdsOf,
+} from "@/api/handlers/time-entries/timekeeper-names";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -36,11 +30,52 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+
+type TimeEntryRow = typeof timeEntries.$inferSelect;
+
+// Columns intentionally not sent to the client.
+const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // The route is already scoped to one workspace via params.workspaceId.
+  "workspaceId",
+  // Invoicing and split bookkeeping; the list reports billing through
+  // `status`, and a split entry reads as an ordinary entry.
+  "invoiceId",
+  "splitGroupId",
+] as const satisfies readonly (keyof TimeEntryRow)[];
+
+// The query below selects exactly `timeEntryReadColumns`, so its keys are the
+// columns this list projects.
+type TimeEntryListItem = typeof timeEntryReadColumns;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedTimeEntryListColumn = UnprojectedColumns<
+  TimeEntryRow,
+  TimeEntryListItem,
+  (typeof UNPROJECTED_TIME_ENTRY_LIST_COLUMNS)[number]
+>;
+type UnexpectedProjectedTimeEntryListColumn = UnbackedProjectionKeys<
+  TimeEntryRow,
+  TimeEntryListItem,
+  (typeof UNPROJECTED_TIME_ENTRY_LIST_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedTimeEntryListColumn extends never ? true : never;
+true satisfies UnexpectedProjectedTimeEntryListColumn extends never
+  ? true
+  : never;
 
 const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(
@@ -221,29 +256,7 @@ const readTimeEntries = createSafeHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            id: timeEntries.id,
-            userId: timeEntries.userId,
-            workItemId: timeEntries.workItemId,
-            dateWorked: timeEntries.dateWorked,
-            timezoneId: timeEntries.timezoneId,
-            durationMinutes: timeEntries.durationMinutes,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-            currency: timeEntries.currency,
-            narrative: timeEntries.narrative,
-            invoiceNarrative: timeEntries.invoiceNarrative,
-            billable: timeEntries.billable,
-            noCharge: timeEntries.noCharge,
-            status: timeEntries.status,
-            source: timeEntries.source,
-            taskCode: timeEntries.taskCode,
-            activityCode: timeEntries.activityCode,
-            timerStartedAt: timeEntries.timerStartedAt,
-            timerStoppedAt: timeEntries.timerStoppedAt,
-            createdAt: timeEntries.createdAt,
-            updatedAt: timeEntries.updatedAt,
-          })
+          .select(timeEntryReadColumns)
           .from(timeEntries)
           .where(and(...conditions))
           .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
@@ -259,27 +272,16 @@ const readTimeEntries = createSafeHandler(
     });
 
     // Batch-fetch user names
-    const userIds = new Set<string>();
-    for (const row of page.items) {
-      if (row.userId) {
-        userIds.add(row.userId);
-      }
-    }
-
+    const userIds = timekeeperIdsOf(page.items);
     const usersResult =
       userIds.size > 0
         ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ id: user.id, name: user.name })
-                .from(member)
-                .innerJoin(user, eq(member.userId, user.id))
-                .where(
-                  and(
-                    eq(member.organizationId, session.activeOrganizationId),
-                    inArray(member.userId, [...userIds]),
-                  ),
-                ),
+            safeDb(
+              async (tx) =>
+                await selectTimekeeperNames(tx, {
+                  organizationId: session.activeOrganizationId,
+                  userIds,
+                }),
             ),
           )
         : [];

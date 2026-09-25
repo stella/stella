@@ -12,7 +12,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
 const fieldAssignmentSchema = t.Object({
@@ -77,7 +77,7 @@ const updateKanbanPlacement = createSafeHandler(
           }
         }
 
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each assignment runs the full field upsert (validation, audit); the schema caps a move at two
+        // db-await-in-loop: each assignment runs the full field upsert (validation, audit); the schema caps a move at two
         const fieldResults = await Promise.all(
           body.fields.map(
             async (field) =>

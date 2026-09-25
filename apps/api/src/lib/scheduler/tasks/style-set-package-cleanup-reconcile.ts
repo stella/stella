@@ -8,14 +8,16 @@ export const RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK =
 
 /** Re-drive package deletions a style set row still records as owed. */
 export const reconcileStyleSetPackageCleanups: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
-  const { handedOff, scanned } =
-    await reconcilePendingStyleSetPackageCleanups();
+  const { handedOff, scanned } = await reconcilePendingStyleSetPackageCleanups({
+    db,
+  });
   logger.info("scheduler.style_set_package_cleanups_reconciled", {
     "styleSetPackageCleanups.enqueued": handedOff,
     "styleSetPackageCleanups.scanned": scanned,

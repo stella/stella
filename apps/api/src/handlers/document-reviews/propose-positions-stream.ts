@@ -123,7 +123,7 @@ const proposePositionsStream = createSafeHandler(
                 // wire: the position is pinned before its frame is written
                 // and the frame carries ids. One write per position, in
                 // stream order, because each is answered as it is decided.
-                // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- SAFETY: one write per streamed position, bounded by the proposal cap; the frame must carry row ids, so it cannot be written before its pin lands
+                // db-await-in-loop: SAFETY: one write per streamed position, bounded by the proposal cap; the frame must carry row ids, so it cannot be written before its pin lands
                 const pinned = await safeDb(
                   async (tx) =>
                     await pinProposedPositions(tx, {

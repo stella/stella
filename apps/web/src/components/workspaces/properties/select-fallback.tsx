@@ -10,10 +10,10 @@ import {
 } from "@stll/ui/select";
 
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
-import type { OptionColor } from "@/lib/api-contract";
-import type { WorkspacePropertyOption } from "@/lib/types";
+import type { PropertyOptionColor } from "@/lib/api-contract";
+import type { SelectPropertyOption } from "@/lib/types";
 
-const ColorIcon = ({ color }: { color: OptionColor | null }) => {
+const ColorIcon = ({ color }: { color: PropertyOptionColor | null }) => {
   if (!color) {
     return <SquareMinusIcon className="size-4" />;
   }
@@ -24,7 +24,7 @@ const ColorIcon = ({ color }: { color: OptionColor | null }) => {
 type SelectFallbackProps = {
   value: string | null;
   onValueChange: (value: string | null) => void;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
 };
 export const SelectFallback = ({
   value,

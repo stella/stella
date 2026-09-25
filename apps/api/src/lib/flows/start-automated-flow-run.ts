@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
+import type {
+  InsertAutomatedFlowRunWithinCapInput,
+  InsertAutomatedFlowRunWithinCapResult,
+} from "@/api/lib/flows/automated-run-cap";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
@@ -60,28 +65,38 @@ type StartAutomatedFlowRunDependencies = {
       }
     | undefined
   >;
-  resolveAuthorization: typeof resolveMemberAuthorization;
-  insertWithinCap: typeof insertAutomatedFlowRunWithinCap;
+  resolveAuthorization: typeof resolveCredentialMemberAuthorization;
+  insertWithinCap: (
+    input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
+  ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
   enqueueStep: typeof enqueueFlowStep;
 };
 
-const START_AUTOMATED_FLOW_RUN_DEPENDENCIES: StartAutomatedFlowRunDependencies =
-  {
-    findDefinition: async ({
-      definitionId,
-      organizationId,
-    }: FindFlowDefinitionArgs) =>
-      await rootDb.query.flowDefinitions.findFirst({
-        where: {
-          id: { eq: definitionId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true, name: true, steps: true, enabled: true },
-      }),
-    resolveAuthorization: resolveMemberAuthorization,
-    insertWithinCap: insertAutomatedFlowRunWithinCap,
-    enqueueStep: enqueueFlowStep,
-  };
+/**
+ * The production dependencies, reading and inserting through the caller's
+ * owner connection: the scheduler's for a schedule tick, the upload trigger's
+ * for a file upload.
+ */
+export const automatedFlowRunDependencies = (
+  database: Pick<typeof rootDb, "query" | "select" | "transaction">,
+): StartAutomatedFlowRunDependencies => ({
+  findDefinition: async ({
+    definitionId,
+    organizationId,
+  }: FindFlowDefinitionArgs) =>
+    await database.query.flowDefinitions.findFirst({
+      where: {
+        id: { eq: definitionId },
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true, name: true, steps: true, enabled: true },
+    }),
+  resolveAuthorization: async (lookup) =>
+    await resolveMemberAuthorization(lookup, database),
+  insertWithinCap: async (input) =>
+    await insertAutomatedFlowRunWithinCap({ ...input, database }),
+  enqueueStep: enqueueFlowStep,
+});
 
 export const startAutomatedFlowRun = async (
   {
@@ -99,7 +114,7 @@ export const startAutomatedFlowRun = async (
     resolveAuthorization,
     insertWithinCap,
     enqueueStep,
-  }: StartAutomatedFlowRunDependencies = START_AUTOMATED_FLOW_RUN_DEPENDENCIES,
+  }: StartAutomatedFlowRunDependencies,
 ): Promise<void> => {
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);

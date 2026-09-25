@@ -48,6 +48,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   hashContent,
@@ -1296,14 +1297,19 @@ export const buildPlDecision = ({
     : [];
   const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
     publisherIdentifiers;
-  // Only this court is also stored by a source of its own; see the key.
-  const rulingKeys = plSupremeCourtRulingKeys({
+  // The Supreme Court and the Constitutional Tribunal are also stored by
+  // sources of their own; each key names its court, and is empty for others.
+  const keyed = {
     caseNumber,
     identifiers: publisherIdentifiers,
     court: courtName,
     decisionDate,
     decisionType,
-  });
+  };
+  const rulingKeys = [
+    ...plSupremeCourtRulingKeys(keyed),
+    ...plConstitutionalTribunalRulingKeys(keyed),
+  ];
 
   const rawHash = hashContent(JSON.stringify(dumpItem));
   const detailHash =

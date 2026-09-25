@@ -68,7 +68,6 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -148,6 +147,7 @@ import {
   workspacesKeys,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
+import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright
@@ -1501,6 +1501,7 @@ const MatterActivityList = ({
 }: MatterActivityListProps) => {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
+  const queryClient = useQueryClient();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -1540,6 +1541,7 @@ const MatterActivityList = ({
         folderId: entityId,
         navigate,
         pathname,
+        queryClient,
         targetWorkspaceId: workspaceId,
       });
       return;

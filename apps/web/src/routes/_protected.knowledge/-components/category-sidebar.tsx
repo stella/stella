@@ -37,9 +37,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 
 // ── Types ────────────────────────────────────────────
 
@@ -53,6 +56,70 @@ export type CategoryOps = {
   create: (name: string) => Promise<CategoryEntity | null>;
   rename: (id: string, name: string) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
+};
+
+/** One category endpoint's answer: its data, or the error to report. */
+type CategoryApiResponse<Data> = {
+  data: Data | null;
+  error: ToAPIErrorProps | null;
+};
+
+type CategoryApiOptions = {
+  create: (name: string) => Promise<CategoryApiResponse<CategoryEntity>>;
+  rename: (id: string, name: string) => Promise<CategoryApiResponse<unknown>>;
+  remove: (id: string) => Promise<CategoryApiResponse<unknown>>;
+  /** Toast title when a create or rename fails. */
+  saveFailedTitle: string;
+  /** Toast title when a delete fails. */
+  deleteFailedTitle: string;
+};
+
+/** `CategoryOps` over one feature's category endpoints: a failed call toasts
+ *  the feature's own title and resolves to the op's failure value. */
+export const useCategoryOps = ({
+  create,
+  rename,
+  remove,
+  saveFailedTitle,
+  deleteFailedTitle,
+}: CategoryApiOptions): CategoryOps => {
+  const t = useTranslations();
+  const reportFailure = (title: string, error: ToAPIErrorProps) => {
+    stellaToast.add({
+      type: "error",
+      title,
+      description: userErrorMessage(error, t("common.unexpectedError")),
+    });
+  };
+
+  return {
+    create: async (name) => {
+      const response = await create(name);
+      if (response.error) {
+        reportFailure(saveFailedTitle, response.error);
+        return null;
+      }
+      return response.data === null
+        ? null
+        : { id: response.data.id, name: response.data.name };
+    },
+    rename: async (id, name) => {
+      const response = await rename(id, name);
+      if (response.error) {
+        reportFailure(saveFailedTitle, response.error);
+        return false;
+      }
+      return true;
+    },
+    remove: async (id) => {
+      const response = await remove(id);
+      if (response.error) {
+        reportFailure(deleteFailedTitle, response.error);
+        return false;
+      }
+      return true;
+    },
+  };
 };
 
 /** Granular gating, resolved by the caller. Kept separate (not one "canManage"

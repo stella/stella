@@ -13,6 +13,10 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import {
+  scanTemplateUpload,
+  templateUploadRejectionResponse,
+} from "@/api/lib/templates/scan-template-upload";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
@@ -117,7 +121,11 @@ export const fillHandler = async ({
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const scanned = await scanTemplateUpload(file);
+  if (Result.isError(scanned)) {
+    return templateUploadRejectionResponse(scanned.error);
+  }
+  const buffer = scanned.value;
   const sourceName = sanitizeFilename(file.name);
 
   const result = await fillTemplateDocx({
@@ -132,6 +140,7 @@ export const fillHandler = async ({
       organizationId,
       userId,
       safeDb,
+      scopedDb,
       feature: "templates.fill",
     }),
   });
@@ -165,7 +174,7 @@ export const fillHandler = async ({
       : "success";
 
   // Best-effort analytics; don't block the download.
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   scopedDb((tx) => {
     // audit: skip — anonymous template-fill analytics counter; the input
     // DOCX is supplied directly in the request body and is not persisted

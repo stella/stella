@@ -23,7 +23,7 @@ const parse = async (entries: [string, string | File][]) => {
     method: "POST",
     body: formData(entries),
   });
-  // eslint-disable-next-line typescript/no-deprecated -- the parser under test consumes exactly this form
+  // oxlint-disable-next-line typescript/no-deprecated -- the parser under test consumes exactly this form
   return parseMultipartForm(await request.formData());
 };
 

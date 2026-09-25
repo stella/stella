@@ -1,17 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import {
   createStatutePath,
   createStatuteRouteParams,
-  extractStatuteDocumentIdFromRouteParam,
-  normalizeStatuteVersionSegment,
   type StatuteRouteParams,
   toStatuteCountrySegment,
 } from "@stll/api-contract/statute-route";
-import { parsePlainDate } from "@stll/time";
 
 import {
   publicStatuteOptions,
@@ -22,7 +18,8 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
-import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
+import type { PublicStatuteSearch } from "@/features/statutes/statute-page-search";
+import { resolveStatuteRoute } from "@/features/statutes/statute-route-resolution";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicLawCanonicalUrl,
@@ -30,84 +27,6 @@ import {
   createStatuteJsonLd,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
-
-/**
- * A calendar day, not merely a date-shaped string: `2026-02-30` matches the
- * pattern and is not a day, and the reader must not ask the corpus for it.
- */
-const isCalendarDate = (value: string): boolean =>
-  parsePlainDate(value) !== null;
-
-const MAX_JUMP_LENGTH = 32;
-/** The API's own bound on a provision anchor. */
-const MAX_PROVISION_ANCHOR_LENGTH = 256;
-
-/**
- * `asOf` names the day whose law the reader wants. It is a lookup, not an
- * address: the loader resolves it to the consolidation that applied and sends
- * the reader to that consolidation's own URL, so one text has one indexable
- * address. Anything unparseable is dropped rather than rejected — a mistyped
- * link should still open the act.
- */
-export const publicStatuteSearchSchema = v.object({
-  asOf: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.transform((value) => (isCalendarDate(value) ? value : undefined)),
-    ),
-  ),
-  /**
-   * A provision designation to open at (`§ 2079`), as the statutes box sends
-   * it. Read by the outline's jump field; anything it cannot parse just
-   * narrows nothing.
-   */
-  jump: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.transform((value) =>
-        value.length > 0 && value.length <= MAX_JUMP_LENGTH ? value : undefined,
-      ),
-    ),
-  ),
-  /**
-   * Another consolidation to set beside the one on screen, named by the day
-   * its validity window opened. The reader then shows the two wordings side
-   * by side instead of the text.
-   */
-  compare: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.transform(
-        (value) => normalizeStatuteVersionSegment(value) ?? undefined,
-      ),
-    ),
-  ),
-  /** The provision heading anchor a comparison is narrowed to. */
-  provision: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.transform((value) =>
-        value.length > 0 && value.length <= MAX_PROVISION_ANCHOR_LENGTH
-          ? value
-          : undefined,
-      ),
-    ),
-  ),
-  /** Which provisions a whole-act comparison lists; changed ones by default. */
-  show: v.optional(
-    v.pipe(
-      v.string(),
-      v.transform((value) => (isStatuteCompareShow(value) ? value : undefined)),
-    ),
-  ),
-});
-
-type PublicStatuteSearch = v.InferOutput<typeof publicStatuteSearchSchema>;
 
 type PublicStatuteRouteParams = {
   country: string;
@@ -311,75 +230,38 @@ export const loadPublicStatuteRoute = async ({
   queryClient,
   search,
 }: LoadPublicStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
-  const country = toStatuteCountrySegment(params.country);
-  if (!isPublicStatuteCountry(country)) {
-    notFound({ throw: true });
-  }
-  const requestedDate =
-    normalizeStatuteVersionSegment(params.version) ?? search.asOf;
-  const readBySlug = async (slug: string, asOf: string | undefined) =>
-    await ensureRouteQueryData(
-      queryClient,
-      statuteBySlugOptions(
-        asOf === undefined ? { country, slug } : { country, slug, asOf },
-      ),
-    );
+  const resolution = await resolveStatuteRoute(
+    { ...params, asOf: search.asOf },
+    {
+      byId: async (documentId) =>
+        await ensureRouteQueryData(
+          queryClient,
+          publicStatuteOptions(documentId),
+        ),
+      bySlug: async (key) =>
+        await ensureRouteQueryData(queryClient, statuteBySlugOptions(key)),
+    },
+  );
 
-  // The id form addresses one consolidation of a Work the corpus holds no
-  // slug for. It names that text directly, so a date cannot narrow it; once
-  // the backfill mints a slug, the canonical address below moves the reader on.
-  const routeDocumentId = extractStatuteDocumentIdFromRouteParam(params.slug);
-  if (routeDocumentId !== null) {
-    const addressed = await ensureRouteQueryData(
-      queryClient,
-      publicStatuteOptions(routeDocumentId),
-    );
-
-    if (addressed === null) {
+  switch (resolution.type) {
+    case "unserved":
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
+    case "missing":
       return statuteNotFound();
-    }
-
-    return await settleStatuteRoute({
-      hash,
-      params,
-      queryClient,
-      search,
-      statute: addressed,
-      work: addressed,
-    });
+    case "found":
+      return await settleStatuteRoute({
+        hash,
+        params,
+        queryClient,
+        search,
+        statute: resolution.statute,
+        work: resolution.work,
+      });
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
   }
-
-  const addressed = await readBySlug(params.slug, requestedDate);
-  if (addressed !== null) {
-    return await settleStatuteRoute({
-      hash,
-      params,
-      queryClient,
-      search,
-      statute: addressed,
-      work: addressed,
-    });
-  }
-
-  if (requestedDate === undefined) {
-    return statuteNotFound();
-  }
-
-  // Nothing was in force on the requested day; the Work still has chrome to
-  // answer with, so it is read without one.
-  const work = await readBySlug(params.slug, undefined);
-  if (work === null) {
-    return statuteNotFound();
-  }
-
-  return await settleStatuteRoute({
-    hash,
-    params,
-    queryClient,
-    search,
-    statute: null,
-    work,
-  });
 };
 
 export const createPublicStatuteHead = ({

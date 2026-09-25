@@ -41,7 +41,7 @@ const userId = toSafeId<"user">("user-test");
 // `mcp-upstream/connections` module boundary, so `safeDb` is never touched.
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type FakeMcpClient = {
@@ -84,7 +84,7 @@ const createDeferred = <T>(): {
 // surface (resources, prompts, callTool, ...) is intentionally
 // unimplemented.
 const asMcpClient = (client: FakeMcpClient): MCPClient =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; MCPClient's full surface isn't exercised by loadConnectorTools
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; MCPClient's full surface isn't exercised by loadConnectorTools
   client as unknown as MCPClient;
 
 const passThroughTimeout = async (
@@ -249,5 +249,49 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
     // right away — the fix does not wait for the permanently-hung
     // `tools()` call to settle before closing the leaked client/sockets.
     expect(fakeClient.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("loadExternalMcpToolsForUser across connectors", () => {
+  test("discovers every connector at once and keeps the listing's order", async () => {
+    const first: LoadedMcpConnection = {
+      ...buildRow(),
+      connectorId: toSafeId<"mcpConnector">("connector-first"),
+      slug: "first",
+      userConnectionId: toSafeId<"mcpUserConnection">("connection-first"),
+    };
+    const second: LoadedMcpConnection = {
+      ...buildRow(),
+      connectorId: toSafeId<"mcpConnector">("connector-second"),
+      slug: "second",
+      userConnectionId: toSafeId<"mcpUserConnection">("connection-second"),
+    };
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue([first, second]);
+    // The first connector answers only once the second has started, so a
+    // discovery that waited for one connector before the next never settles.
+    const secondStarted = createDeferred<undefined>();
+    createMcpClientForConnectionMock.mockImplementation(
+      async ({ row }: { row: LoadedMcpConnection }) => {
+        if (row.slug === "first") {
+          await secondStarted.promise;
+        } else {
+          secondStarted.resolve(undefined);
+        }
+        return asMcpClient(buildFakeClient());
+      },
+    );
+
+    const loaded = await loadExternalMcpToolsForUserForTest({
+      nullUnionStrategy: "json-schema",
+      organizationId: orgId,
+      safeDb: stubSafeDb,
+      userId,
+    });
+
+    expect(loaded.connectors.map((connector) => connector.slug)).toEqual([
+      "first",
+      "second",
+    ]);
+    await loaded.close();
   });
 });

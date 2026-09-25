@@ -306,6 +306,7 @@ export const legislationSearchDocuments = p.pgTable(
       .on(table.retryAfter, table.documentId)
       .where(isNotNull(table.retryAfter)),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

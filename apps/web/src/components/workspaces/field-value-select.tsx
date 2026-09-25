@@ -9,7 +9,7 @@ import {
 } from "@stll/ui/select";
 
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
-import type { WorkspacePropertyOption } from "@/lib/types";
+import type { SelectPropertyOption } from "@/lib/types";
 
 type FieldValueSelectProps = (
   | {
@@ -23,7 +23,7 @@ type FieldValueSelectProps = (
       onChange: (value: string[]) => void;
     }
 ) & {
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   /** Open the dropdown as soon as it mounts (for click-to-edit cells). */
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -80,7 +80,7 @@ export const FieldValueSelect = ({
 
 type SelectValueContentProps = {
   value: string | string[] | null;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   type: "single-select" | "multi-select";
 };
 

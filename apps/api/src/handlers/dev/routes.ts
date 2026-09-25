@@ -24,7 +24,7 @@ import {
 } from "@/api/lib/dev-seed-session-store";
 import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/provider";
 
 import {
   type FirmKnowledgeJob,
@@ -351,7 +351,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     return { ok: true };
   })
   .post("/rebuild-search", async (ctx) => {
-    await getSearchProvider().rebuildIndex(ctx.session.activeOrganizationId);
+    await getSearchMaintenance().rebuildIndex(ctx.session.activeOrganizationId);
     await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
     return { ok: true };
   })

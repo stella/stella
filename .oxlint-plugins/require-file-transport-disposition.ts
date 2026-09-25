@@ -55,33 +55,33 @@ const satisfiesHandlerConfig = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "TSSatisfiesExpression") {
     return false;
   }
-  const annotation = node["typeAnnotation"];
+  const annotation = node.typeAnnotation;
   if (!isAstNode(annotation) || annotation.type !== "TSTypeReference") {
     return false;
   }
-  const typeName = annotation["typeName"];
+  const typeName = annotation.typeName;
   return (
     isAstNode(typeName) &&
     typeName.type === "Identifier" &&
-    typeof typeName["name"] === "string" &&
-    HANDLER_CONFIG_TYPES.has(typeName["name"])
+    typeof typeName.name === "string" &&
+    HANDLER_CONFIG_TYPES.has(typeName.name)
   );
 };
 
 const propertyValue = (objectExpression: unknown, name: string): unknown => {
   if (
     !isAstNode(objectExpression) ||
-    !Array.isArray(objectExpression["properties"])
+    !Array.isArray(objectExpression.properties)
   ) {
     return undefined;
   }
-  for (const property of objectExpression["properties"]) {
+  for (const property of objectExpression.properties) {
     if (
       isAstNode(property) &&
       property.type === "Property" &&
-      getPropertyName(property["key"]) === name
+      getPropertyName(property.key) === name
     ) {
-      return property["value"];
+      return property.value;
     }
   }
   return undefined;
@@ -104,7 +104,7 @@ const isInternalDisposition = (configObject: unknown): boolean => {
   }
   const type = unwrapExpression(propertyValue(mcp, "type"));
   return (
-    isAstNode(type) && type.type === "Literal" && type["value"] === "internal"
+    isAstNode(type) && type.type === "Literal" && type.value === "internal"
   );
 };
 
@@ -141,7 +141,7 @@ export default eslintCompatPlugin({
             if (binaryFactory !== null || !isAstNode(node)) {
               return;
             }
-            const calleeName = getCalleeName(node["callee"]);
+            const calleeName = getCalleeName(node.callee);
             if (
               calleeName !== null &&
               BINARY_SCHEMA_FACTORIES.has(calleeName)
@@ -153,7 +153,7 @@ export default eslintCompatPlugin({
             if (!satisfiesHandlerConfig(node) || !isAstNode(node)) {
               return;
             }
-            const expression = unwrapExpression(node["expression"]);
+            const expression = unwrapExpression(node.expression);
             if (
               expression?.type === "ObjectExpression" &&
               !hasProperty(expression, "transport") &&

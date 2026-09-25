@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "Prieiga prie svetainių išjungta. Suteikite ją vieną kartą, kad stella galėtų naudoti svetaines, prie kurių esate prisijungę."
+  },
+  "accessReady": {
+    "message": "Paruošta. stella gali naudoti atskirą kortelę, o jūsų prisijungimai lieka aktyvūs."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome nepavyko pakeisti prieigos prie svetainių."
+  },
+  "adoptTab": {
+    "message": "Naudoti šią kortelę su stella"
+  },
+  "adoptUnsupported": {
+    "message": "Su stella galima naudoti tik viešus HTTPS puslapius."
+  },
+  "adoptedTab": {
+    "message": "stella dabar gali skaityti $ORIGIN$ šioje kortelėje. Klauskite apie ją pokalbyje.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Tikrinama prieiga prie svetainių…"
+  },
+  "connectTab": {
+    "message": "Prijungti dabartinę stella kortelę"
+  },
+  "controllerReady": {
+    "message": "Prisijungta prie $ORIGIN$. Kiekvieną veiksmą vis tiek reikia patvirtinti stelloje.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Atjungti kortelę"
+  },
+  "extensionDescription": {
+    "message": "Gavusi leidimą leidžia stellai valdyti atskirą Chrome kortelę."
+  },
+  "extensionName": {
+    "message": "stella naršyklė"
+  },
+  "grantAccess": {
+    "message": "Leisti visas svetaines"
+  },
+  "revokeAccess": {
+    "message": "Pašalinti prieigą prie svetainių"
+  },
+  "unsupportedTab": {
+    "message": "Atverkite stella programos kortelę ir bandykite dar kartą."
+  }
+}

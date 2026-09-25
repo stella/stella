@@ -2,11 +2,38 @@
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
-export type { AgendaItemKind, AgendaItemSource } from "./agenda";
+export type {
+  AgendaItemKind,
+  AgendaItemSource,
+  AgendaItemWireFields,
+} from "./agenda";
 
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
+export {
+  BROWSER_CONTROL_ACTION,
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_KEYS,
+  BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+  BROWSER_EXTENSION_MESSAGE_SOURCE,
+  parseBrowserControlCommand,
+  parseBrowserControlResult,
+  parseBrowserExtensionRequest,
+  parseBrowserExtensionResponse,
+} from "./browser-control";
+export type {
+  BrowserClientCapability,
+  BrowserControlCommand,
+  BrowserControlErrorCode,
+  BrowserControlResult,
+  BrowserControlSnapshot,
+  BrowserExtensionRequest,
+  BrowserExtensionResponse,
+} from "./browser-control";
 export {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
@@ -703,7 +730,7 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS = {
     "unicode11utf8",
     "unicode20utf8",
     "utf-8",
-    // eslint-disable-next-line unicorn/text-encoding-identifier-case -- exact WHATWG legacy label
+    // oxlint-disable-next-line unicorn/text-encoding-identifier-case -- exact WHATWG legacy label
     "utf8",
     "x-unicode20utf8",
   ],

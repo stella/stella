@@ -268,7 +268,7 @@ const createContext = (
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   }) as unknown as Parameters<typeof endpoint.handler>[0];
 
 const createOrgAIConfig = (): OrgAIConfig => ({

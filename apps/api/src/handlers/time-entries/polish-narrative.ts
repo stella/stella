@@ -2,10 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveCaching } from "@/api/lib/ai-config";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -55,7 +52,15 @@ const config = {
 
 const polishTimeEntryNarrative = createSafeHandler(
   config,
-  async function* ({ body, request, safeDb, session, user, workspaceId }) {
+  async function* ({
+    body,
+    request,
+    safeDb,
+    scopedDb,
+    session,
+    user,
+    workspaceId,
+  }) {
     const narrative = body.narrative.trim();
     const instruction = body.instruction.trim();
     if (narrative.length === 0 || instruction.length === 0) {
@@ -68,10 +73,9 @@ const polishTimeEntryNarrative = createSafeHandler(
     }
 
     const organizationId = session.activeOrganizationId;
-    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
-      loadOrgAIConfig(organizationId),
-      loadPromptCachingPreference(organizationId),
-    ]);
+    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
+      async (tx) => await loadOrgAISettings(tx, organizationId),
+    );
 
     yield* requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,

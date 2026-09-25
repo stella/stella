@@ -10,6 +10,6 @@
  * The `[tag]` prefix names the canary; keep it stable — specs match on it.
  */
 export const emitDevCanaryError = (tag: string, message: string): void => {
-  // eslint-disable-next-line no-console -- dev-only canary emitter; the sole console.error whose entire purpose is to be caught by the e2e browserErrors fixture as a CI-failing signal
+  // oxlint-disable-next-line no-console -- dev-only canary emitter; the sole console.error whose entire purpose is to be caught by the e2e browserErrors fixture as a CI-failing signal
   console.error(`[${tag}] ${message}`);
 };

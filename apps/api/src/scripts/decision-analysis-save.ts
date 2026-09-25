@@ -31,8 +31,8 @@
 
 import { Result } from "better-result";
 
-import { createDbAnalysisStore } from "@/api/handlers/case-law/analysis/analysis-store-core";
 import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-update";
+import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";

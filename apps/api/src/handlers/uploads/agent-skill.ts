@@ -78,7 +78,7 @@ export type FinalizeAgentSkillProps = {
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
-// eslint-disable-next-line require-yield -- yields shape is provided by `installSkill`'s safeDb returns; nothing yields here directly
+// oxlint-disable-next-line require-yield -- yields shape is provided by `installSkill`'s safeDb returns; nothing yields here directly
 export const finalizeAgentSkill = async function* ({
   safeDb,
   recordAuditEvent,

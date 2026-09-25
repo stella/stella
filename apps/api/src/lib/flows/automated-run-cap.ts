@@ -2,7 +2,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
@@ -20,8 +20,8 @@ import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
  * serializes concurrent starts for the same definition, so the count sees every
  * committed sibling run before deciding whether to insert.
  *
- * Runs through `rootDb` (like the scheduler tasks and `processExtraction`): the
- * cap is org-wide per definition, so the count must span every workspace, which
+ * Runs on the caller's owner connection (the scheduler's, or the upload
+ * trigger's, like `processExtraction`): the cap is org-wide per definition, so the count must span every workspace, which
  * an RLS-scoped, single-workspace session could not see. The run's
  * `workspace_id` still comes from a server-validated trigger source.
  */
@@ -45,7 +45,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
   now?: Date;
-  database?: Pick<typeof rootDb, "transaction">;
+  database: Pick<typeof rootDb, "transaction">;
 };
 
 /**
@@ -62,7 +62,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
   definitionId,
   rows,
   now = new Date(),
-  database = rootDb,
+  database,
 }: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
   await database.transaction(async (tx) => {
     // Serialize concurrent automated starts for this definition. The xact lock

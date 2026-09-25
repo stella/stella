@@ -28,7 +28,7 @@
 // `t.Optional(t.UnionEnum(...))` and a destructured `Optional(UnionEnum(...))`
 // (`const { Optional, UnionEnum } = t`) are caught the same way.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 // Resolve a callee's leaf name whether it is namespaced (`t.Optional`,
 // a MemberExpression) or a bare/destructured `Optional` (an Identifier).
@@ -48,7 +48,16 @@ const memberName = (node) => {
   return null;
 };
 
-const namespacedCallee = (node, expectedName) => {
+// A non-computed `<namespace>.<expectedName>` member callee.
+type NamespacedCallee = {
+  object: ESTree.IdentifierReference;
+  property: ESTree.IdentifierName;
+};
+
+const namespacedCallee = (
+  node,
+  expectedName: string,
+): NamespacedCallee | null => {
   if (
     node?.type !== "MemberExpression" ||
     node.computed ||

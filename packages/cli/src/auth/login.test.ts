@@ -169,7 +169,7 @@ const makeProcess = (stdinLine?: string) => {
   const proc = { stdin, stdout };
   // SAFETY: `login` (via `buildIo`) only reads `stdin`/`stdout` off the process;
   // the PassThrough streams satisfy that structural slice.
-  // eslint-disable-next-line no-unsafe-type-assertion -- test double for the process slice login reads
+  // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice login reads
   return proc as unknown as NodeJS.Process;
 };
 

@@ -39,7 +39,7 @@ const attachmentEntries = (attachments: unknown): unknown[] => {
 };
 
 export const parseAttachments = (attachments?: unknown): PDFAttachment[] => {
-  // eslint-disable-next-line no-eq-null, eqeqeq -- getAttachments() returns null (v5.5) or undefined (older)
+  // oxlint-disable-next-line no-eq-null, eqeqeq -- getAttachments() returns null (v5.5) or undefined (older)
   if (attachments == null) {
     return [];
   }

@@ -379,7 +379,7 @@ export const selectDueReconciliationItems = async (
               caseLawReconciliationItems.status,
               RECONCILIATION_ITEM_STATUS.PARKED,
             ),
-            // eslint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are millisecond-precision JS Dates this module wrote and reads; a retry due within a microsecond of the cutoff simply comes due on the next turn
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are millisecond-precision JS Dates this module wrote and reads; a retry due within a microsecond of the cutoff simply comes due on the next turn
             lte(caseLawReconciliationItems.nextAttemptAt, now),
           ),
         )

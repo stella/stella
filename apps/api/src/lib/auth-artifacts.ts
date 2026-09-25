@@ -210,7 +210,7 @@ export const revokeOrganizationMemberAuthArtifacts = async (
   scope: MemberCredentialScope,
 ): Promise<void> => {
   for (const revoke of Object.values(MEMBER_CREDENTIAL_REVOCATION)) {
-    // eslint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one statement per credential kind, a fixed set sharing one transaction
+    // db-await-in-loop: a fixed registry of credential kinds, one statement per credential table, all in the caller's transaction
     await revoke(tx, scope);
   }
 };
@@ -267,4 +267,31 @@ export const revokeOAuthClientAuthArtifacts = async (
           : isNull(oauthRefreshToken.referenceId),
       ),
     );
+};
+
+/**
+ * Ends every web session a user holds, across all organizations. Account
+ * deletion only: the user row is soft-deleted, so the `session` cascade on
+ * `user` never fires and the rows have to go explicitly.
+ */
+export const revokeAllUserSessions = async (
+  tx: AuthArtifactTransaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await tx.delete(sessionTable).where(eq(sessionTable.userId, userId));
+};
+
+/**
+ * Revokes every OAuth access and refresh token a user holds, across all
+ * clients and organizations. Account deletion only; per-grant and
+ * per-membership revocation stay on the scoped helpers above.
+ */
+export const revokeAllUserOAuthTokens = async (
+  tx: AuthArtifactTransaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await tx.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, userId));
+  await tx
+    .delete(oauthRefreshToken)
+    .where(eq(oauthRefreshToken.userId, userId));
 };

@@ -55,7 +55,7 @@ const config = {
 
 const suggestPrompt = createSafeHandler(
   config,
-  // eslint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
+  // oxlint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({
     body,
     orgAIConfig,

@@ -27,7 +27,7 @@ import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
   WorkspaceField,
-  WorkspacePropertyOption,
+  SelectPropertyOption,
 } from "@/lib/types";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -140,7 +140,7 @@ type EditFieldDialogProps = {
   propertyId: string;
   entityId: string;
   entityKind: EntityKind;
-  options: WorkspacePropertyOption[];
+  options: SelectPropertyOption[];
   fieldContent: EditableFieldContent;
   className: string;
 };
@@ -285,9 +285,7 @@ export const EditFieldDialog = ({
                     <form.Field
                       children={(field) => (
                         <Field name={field.name}>
-                          <FieldLabel>
-                            {t("workspaces.fields.numberLabel")}
-                          </FieldLabel>
+                          <FieldLabel>{t("common.value")}</FieldLabel>
                           <Input
                             onBlur={field.handleBlur}
                             onChange={(e) =>

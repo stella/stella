@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  createOAuthState,
+  createAuthorizationState,
   createPkcePair,
   generateCodeChallenge,
 } from "./pkce.js";
@@ -54,12 +54,12 @@ describe("createPkcePair", () => {
   });
 });
 
-describe("createOAuthState", () => {
+describe("createAuthorizationState", () => {
   test("generates a fresh value on every call", () => {
-    expect(createOAuthState()).not.toBe(createOAuthState());
+    expect(createAuthorizationState()).not.toBe(createAuthorizationState());
   });
 
   test("uses a URL-safe charset (no query-string escaping needed)", () => {
-    expect(createOAuthState()).toMatch(/^[A-Za-z0-9\-_]+$/u);
+    expect(createAuthorizationState()).toMatch(/^[A-Za-z0-9\-_]+$/u);
   });
 });

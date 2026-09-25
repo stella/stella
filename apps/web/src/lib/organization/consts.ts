@@ -1,7 +1,7 @@
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { Role } from "@/lib/auth";
+import type { Role } from "@/lib/auth-client";
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 

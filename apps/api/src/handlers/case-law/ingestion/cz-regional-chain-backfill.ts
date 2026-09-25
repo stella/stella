@@ -307,6 +307,7 @@ export const runCzRegionalChainBackfill = async ({
       report.stoppedBecause = BACKFILL_STOP_REASON.BUDGET_SPENT;
       return Result.ok(report);
     }
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const page = await readPage({ after, limit: pageSize });
     if (page.length === 0) {
       return Result.ok(report);
@@ -316,6 +317,7 @@ export const runCzRegionalChainBackfill = async ({
         report.stoppedBecause = BACKFILL_STOP_REASON.BUDGET_SPENT;
         return Result.ok(report);
       }
+      // db-await-in-loop: each row is written after its own budgeted publisher request, through the decision pipeline under the source lease
       const applied = await Result.tryPromise(async () => await applyRow(row));
       if (Result.isError(applied)) {
         return applied;

@@ -7,7 +7,10 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./browser-control": "./src/browser-control.ts",
+    "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
+    "./json-schema-regex": "./src/json-schema-regex.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
@@ -57,6 +60,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/uuid-codec": "workspace:*",
+    "@valibot/to-json-schema": "^1.8.0",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

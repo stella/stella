@@ -12,7 +12,7 @@
 import { panic, Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
-import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -45,21 +45,6 @@ const RECONCILE_MAX_PAGES = 20;
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
-};
-
-/** A queued run as a requeue sweep reads it: its keyset cursor and the actor
- *  its job is rebuilt from. */
-export type QueuedRunCursorRow<TRun extends SafeIdType> = {
-  createdCursor: string;
-  id: SafeId<TRun>;
-  organizationId: SafeId<"organization">;
-  requestedBy: string | null;
-  workspaceId: SafeId<"workspace">;
-};
-
-export type ReconcileQueuedRunsResult = ReconcileScanResult & {
-  /** Runs whose requester's account is gone: counted, left to the janitor. */
-  unattributed: number;
 };
 
 /**
@@ -157,36 +142,54 @@ export const scanPendingRows = async <Row>({
   return { handedOff, scanned };
 };
 
-type RequeueQueuedRunsOptions<TRun extends SafeIdType, DataType> = {
+type QueuedRunRow = {
+  id: string;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type QueuedRunJob<DataType> = {
+  data: DataType;
+  name: string;
+  opts: { jobId: string };
+};
+
+type ReconcileQueuedRunsOptions<Row extends QueuedRunRow, DataType> = {
   queue: RequeueableQueue<DataType>;
-  readPage: (
-    cursor: QueuedRunCursorRow<TRun> | null,
-  ) => Promise<readonly QueuedRunCursorRow<TRun>[]>;
-  /** Rebuilds the run's job exactly as it was first enqueued. */
-  runJob: (args: {
+  /** Reads the next page of `queued` runs after `cursor`. */
+  readPage: (cursor: Row | null) => Promise<readonly Row[]>;
+  /** The job one run is enqueued as, under the run's own job id. */
+  runJob: (run: {
     organizationId: SafeId<"organization">;
-    runId: SafeId<TRun>;
+    runId: Row["id"];
     userId: SafeId<"user">;
     workspaceId: SafeId<"workspace">;
-  }) => { data: DataType; name: string; opts: { jobId: string } };
+  }) => QueuedRunJob<DataType>;
+};
+
+type ReconcileQueuedRunsResult = ReconcileScanResult & {
+  /** Runs whose requester is gone, so no job can carry their actor. */
+  unattributed: number;
 };
 
 /**
- * Walk a run table's `queued` rows and hand each one the queue no longer holds
- * back to it under its own job id. A row without a requester cannot rebuild
- * its job's actor: it is counted and left to the staleness janitor.
+ * Hands every `queued` run the queue no longer owns back to it, under the job
+ * id derived from the run, so a repeat is a no-op. A run whose `requested_by`
+ * was nulled has no actor to carry and is counted instead of requeued; a
+ * requeue that fails is captured and the walk moves on.
  */
-export const requeueQueuedRuns = async <TRun extends SafeIdType, DataType>({
+export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
   queue,
   readPage,
   runJob,
-}: RequeueQueuedRunsOptions<
-  TRun,
+}: ReconcileQueuedRunsOptions<
+  Row,
   DataType
 >): Promise<ReconcileQueuedRunsResult> => {
   let unattributed = 0;
 
-  const handle = async (run: QueuedRunCursorRow<TRun>): Promise<boolean> => {
+  const handle = async (run: Row): Promise<boolean> => {
     if (run.requestedBy === null) {
       unattributed += 1;
       return false;

@@ -34,10 +34,10 @@ const exportAuditLogs = createSafeRootHandler(
       return Result.err(new HandlerError({ status: 400, message: invalid }));
     }
 
-    const conditions = [
-      eq(auditLogs.organizationId, session.activeOrganizationId),
-      ...toAuditLogConditions(query),
-    ];
+    const conditions = toAuditLogConditions({
+      organizationId: session.activeOrganizationId,
+      filter: query,
+    });
 
     const exportResult = yield* Result.await(
       safeDb(async (tx) => {

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Lint the custom-oxlint plugin regression fixtures under
+# Check the local oxlint rules under `.oxlint-plugins`: lint the rule sources
+# and their tests, run the tests, and lint the regression fixtures under
 # `.oxlint-plugins/__fixtures__`. Each fixture relies on
 # `oxlint-disable-next-line` directives that go unused when the
 # associated custom rule regresses, so we run oxlint with
@@ -35,6 +36,27 @@ if grep -qE "Failed to load JS plugin|ERR_MODULE_NOT_FOUND" \
   echo "$plugin_load_output" >&2
   exit 1
 fi
+
+# The rule sources sit outside every Turbo workspace, so no workspace `lint`
+# reaches them. The fixtures are excluded: they violate rules on purpose and
+# are linted on their own below. The file list comes from git for the reason
+# `lint-root-scripts.sh` gives: a directory target can silently match nothing.
+plugin_sources=()
+while IFS= read -r file; do
+  plugin_sources+=("${file}")
+done < <(git ls-files '.oxlint-plugins/*.ts' \
+  ':(exclude).oxlint-plugins/__fixtures__/**')
+
+if [[ ${#plugin_sources[@]} -eq 0 ]]; then
+  echo "lint-oxlint-fixtures: no rule sources found; refusing to pass vacuously" >&2
+  exit 1
+fi
+
+bun --bun oxlint -c oxlint.config.ts \
+  --report-unused-disable-directives-severity=error \
+  --type-aware \
+  --type-check \
+  "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
 bun test ./scripts/oxlint-typebox-unsafe.test.ts

@@ -269,7 +269,7 @@ function RouteComponent() {
         setLoadingMore(false);
       }
     }
-    // eslint-disable-next-line react/memo-dependencies -- clauses.tsx bails out of the React Compiler (memoization baseline), so this manual closure must capture the current selectedCategory/searchQuery/t at call time; removing them would paginate the wrong category on a stale closure
+    // oxlint-disable-next-line react/memo-dependencies -- clauses.tsx bails out of the React Compiler (memoization baseline), so this manual closure must capture the current selectedCategory/searchQuery/t at call time; removing them would paginate the wrong category on a stale closure
   }, [currentNextCursor, selectedCategory, searchQuery, t]);
 
   // ── Refresh ────────────────────────────────────────

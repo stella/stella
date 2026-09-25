@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionIdentifiers,
@@ -11,12 +13,12 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
@@ -43,7 +45,7 @@ const sectionsToPlainText = (
 export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-  resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
+  resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
 ): Promise<Result<void, unknown>> => {
   const [decision] = await scopedDb((tx) =>
     tx
@@ -219,6 +221,7 @@ type SearchIndexBackfillResult = { found: number; indexed: number };
 export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
+  resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
 ): Promise<SearchIndexBackfillResult> => {
   // Find decisions that need (re)indexing. ASC order so the backlog
   // clears in insertion order, avoiding a "poison pill" where a
@@ -323,6 +326,7 @@ export const backfillSearchIndex = async (
           await indexDecision(
             brandPersistedCaseLawDecisionId(row.id),
             scopedDb,
+            resolveConfig,
           ),
         catch: (cause) => cause,
       })
@@ -342,14 +346,16 @@ export const backfillSearchIndex = async (
     return 0;
   };
 
+  // At most SEARCH_INDEX_CONCURRENCY tsvector upserts in flight, so the
+  // backfill never crowds out foreground queries on Postgres.
+  const results = await mapWithConcurrency({
+    items: rows,
+    limit: SEARCH_INDEX_CONCURRENCY,
+    operation: indexRow,
+  });
   let indexed = 0;
-  for (let i = 0; i < rows.length; i += SEARCH_INDEX_CONCURRENCY) {
-    const chunk = rows.slice(i, i + SEARCH_INDEX_CONCURRENCY);
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: each SEARCH_INDEX_CONCURRENCY chunk drains before the next so tsvector upserts don't overwhelm Postgres
-    const results = await Promise.all(chunk.map(indexRow));
-    for (const result of results) {
-      indexed += result;
-    }
+  for (const result of results) {
+    indexed += result;
   }
 
   return { found: rows.length, indexed };
@@ -364,7 +370,7 @@ export const removeDecisionFromIndex = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   await scopedDb((tx) => {
     // audit: skip — search index maintenance; rebuilds derived state
     return tx

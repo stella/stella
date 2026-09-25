@@ -34,7 +34,6 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { deriveBlockId } from "@stll/folio-core/server";
 
-import { rootDb } from "@/api/db/root";
 import {
   billingCodes,
   chatMessages,
@@ -72,6 +71,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   DEFAULT_DOCUMENT_TYPES,
   ensureDefaultDocumentTypes,
@@ -104,6 +104,8 @@ import {
   pickAuthor,
   seedId,
 } from "./seed-utils";
+
+const db = openMaintenanceDb({ readOnly: false });
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -405,6 +407,22 @@ const xmlEscape = (s: string): string =>
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
 
+// A package without a styles part leaves the default font to the consumer,
+// and word processors then fall back to Times New Roman. Name the seed's font
+// explicitly so every renderer shows the same document.
+const SEED_STYLES_CONTENT_TYPE =
+  '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>';
+const SEED_STYLES_RELATIONSHIP =
+  '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+const SEED_STYLES_XML =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  "<w:docDefaults><w:rPrDefault><w:rPr>" +
+  '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/>' +
+  '<w:sz w:val="22"/><w:szCs w:val="22"/>' +
+  "</w:rPr></w:rPrDefault></w:docDefaults>" +
+  "</w:styles>";
+
 export const createMockDocx = async (
   title: string,
   bodyText?: string,
@@ -414,12 +432,13 @@ export const createMockDocx = async (
 
   zip.file(
     "[Content_Types].xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      "</Types>",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
+      }</Types>`,
   );
 
   zip
@@ -458,9 +477,12 @@ export const createMockDocx = async (
     ?.folder("_rels")
     ?.file(
       "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
+          SEED_STYLES_RELATIONSHIP
+        }</Relationships>`,
     );
+  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -824,13 +846,14 @@ const createSupplierAgreementDocx = async (
 
   zip.file(
     "[Content_Types].xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
-      "</Types>",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${
+        SEED_STYLES_CONTENT_TYPE
+      }<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>` +
+      `</Types>`,
   );
 
   zip
@@ -940,11 +963,13 @@ const createSupplierAgreementDocx = async (
     ?.folder("_rels")
     ?.file(
       "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' +
-        "</Relationships>",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
+          SEED_STYLES_RELATIONSHIP
+        }</Relationships>`,
     );
+  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -5134,24 +5159,30 @@ const seedDdGeneralPlaybook = async (
   const definitionId = seedId("playbook-dd-general");
   // Same delete-then-insert as the Czech playbook: reruns pick up position
   // changes and materialized columns re-adopt by deterministic sourceId.
-  await rootDb
-    .delete(playbookDefinitions)
-    .where(eq(playbookDefinitions.id, definitionId));
-  await rootDb
-    .insert(playbookDefinitions)
-    .values({
-      id: definitionId,
-      organizationId,
-      name: "Due Diligence Review (General)",
-      description:
-        "Buyer-side red-flag review of target contracts; applies to every document type.",
-      scope: { perspective: "buyer" },
-      positions: {
-        version: 3,
-        items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
-      } satisfies PlaybookPositions,
-    })
-    .onConflictDoNothing();
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .delete(playbookDefinitions)
+        .where(eq(playbookDefinitions.id, definitionId)),
+  );
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .insert(playbookDefinitions)
+        .values({
+          id: definitionId,
+          organizationId,
+          name: "Due Diligence Review (General)",
+          description:
+            "Buyer-side red-flag review of target contracts; applies to every document type.",
+          scope: { perspective: "buyer" },
+          positions: {
+            version: 3,
+            items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
+          } satisfies PlaybookPositions,
+        })
+        .onConflictDoNothing(),
+  );
 };
 
 export const seedPlaybooks = async (
@@ -5169,242 +5200,248 @@ export const seedPlaybooks = async (
   // the previous seed materialized are orphaned, not dropped; the position
   // sourceIds are deterministic, so the next run re-adopts them by
   // playbook_source_id.
-  await rootDb
-    .delete(playbookDefinitions)
-    .where(eq(playbookDefinitions.id, definitionId));
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .delete(playbookDefinitions)
+        .where(eq(playbookDefinitions.id, definitionId)),
+  );
 
-  await rootDb
-    .insert(playbookDefinitions)
-    .values({
-      id: definitionId,
-      organizationId,
-      name: "Kontrola obchodní smlouvy (CZ)",
-      description:
-        "Standardní revize obchodních a akvizičních smluv podle českého práva.",
-      scope: {
-        documentTypeKey: SPA_DOCUMENT_TYPE_KEY,
-        perspective: "buyer",
-      },
-      positions: {
-        version: 3,
-        items: [
-          {
-            mode: "graded",
-            sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
-            issue: "Rozhodné právo",
-            severity: "high",
-            ask: {
-              mode: "manual",
-              question: "Jakým právním řádem se smlouva řídí?",
-              content: { version: 1, type: "text" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: {
-                  rules: [],
-                  ideal: {
-                    source: "inline",
-                    text: "Smlouva se řídí právním řádem České republiky.",
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .insert(playbookDefinitions)
+        .values({
+          id: definitionId,
+          organizationId,
+          name: "Kontrola obchodní smlouvy (CZ)",
+          description:
+            "Standardní revize obchodních a akvizičních smluv podle českého práva.",
+          scope: {
+            documentTypeKey: SPA_DOCUMENT_TYPE_KEY,
+            perspective: "buyer",
+          },
+          positions: {
+            version: 3,
+            items: [
+              {
+                mode: "graded",
+                sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
+                issue: "Rozhodné právo",
+                severity: "high",
+                ask: {
+                  mode: "manual",
+                  question: "Jakým právním řádem se smlouva řídí?",
+                  content: { version: 1, type: "text" },
+                },
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: {
+                      rules: [],
+                      ideal: {
+                        source: "inline",
+                        text: "Smlouva se řídí právním řádem České republiky.",
+                      },
+                    },
+                    fallback: {
+                      entries: [
+                        {
+                          id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
+                          text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+                        },
+                      ],
+                    },
+                    notAcceptable: { rules: [] },
                   },
                 },
-                fallback: {
-                  entries: [
-                    {
-                      id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
-                      text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
-                    },
-                  ],
-                },
-                notAcceptable: { rules: [] },
+                guidance:
+                  "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
+                enabled: true,
               },
-            },
-            guidance:
-              "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
-            enabled: true,
-          },
-          {
-            mode: "graded",
-            sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
-            issue: "Omezení odpovědnosti za škodu",
-            severity: "blocker",
-            ask: {
-              mode: "manual",
-              question:
-                "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
-              content: { version: 1, type: "text" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: {
-                  rules: [],
-                  ideal: {
-                    source: "inline",
-                    text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
+              {
+                mode: "graded",
+                sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
+                issue: "Omezení odpovědnosti za škodu",
+                severity: "blocker",
+                ask: {
+                  mode: "manual",
+                  question:
+                    "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
+                  content: { version: 1, type: "text" },
+                },
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: {
+                      rules: [],
+                      ideal: {
+                        source: "inline",
+                        text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
+                      },
+                    },
+                    fallback: {
+                      entries: [
+                        {
+                          id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
+                          text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+                        },
+                      ],
+                    },
+                    notAcceptable: { rules: [] },
                   },
                 },
-                fallback: {
-                  entries: [
-                    {
-                      id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
-                      text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
-                    },
-                  ],
+                guidance:
+                  "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
+                enabled: true,
+              },
+              {
+                mode: "graded",
+                sourceId: paymentTermsSourceId,
+                issue: "Splatnost faktur (dny)",
+                severity: "medium",
+                ask: {
+                  mode: "manual",
+                  question:
+                    "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
+                  content: { version: 1, type: "int" },
                 },
-                notAcceptable: { rules: [] },
-              },
-            },
-            guidance:
-              "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
-            enabled: true,
-          },
-          {
-            mode: "graded",
-            sourceId: paymentTermsSourceId,
-            issue: "Splatnost faktur (dny)",
-            severity: "medium",
-            ask: {
-              mode: "manual",
-              question:
-                "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
-              content: { version: 1, type: "int" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: { rules: [] },
-                fallback: { entries: [] },
-                notAcceptable: { rules: [] },
-              },
-            },
-            check: {
-              kind: "constraint",
-              condition: {
-                type: "group",
-                combinator: "and",
-                children: [
-                  {
-                    type: "compare",
-                    left: {
-                      type: "property",
-                      propertyId: paymentTermsSourceId,
-                    },
-                    op: "lte",
-                    right: { type: "literal", value: 30 },
-                  },
-                ],
-              },
-            },
-            guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
-            enabled: true,
-          },
-          {
-            mode: "graded",
-            sourceId: seedId("playbook-cz-pos-mlcenlivost"),
-            issue: "Mlčenlivost",
-            severity: "high",
-            ask: {
-              mode: "manual",
-              question:
-                "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
-              content: { version: 1, type: "text" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: { rules: [] },
-                fallback: { entries: [] },
-                notAcceptable: { rules: [] },
-              },
-            },
-            check: { kind: "presence", expectation: "required" },
-            guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
-            enabled: true,
-          },
-          {
-            mode: "graded",
-            sourceId: seedId("playbook-cz-pos-change-of-control"),
-            issue: "Změna ovládání (change of control)",
-            severity: "high",
-            ask: {
-              mode: "manual",
-              question:
-                "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
-              content: { version: 1, type: "text" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: { rules: [] },
-                fallback: { entries: [] },
-                notAcceptable: { rules: [] },
-              },
-            },
-            check: { kind: "presence", expectation: "restricted" },
-            guidance:
-              "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
-            enabled: true,
-          },
-          {
-            mode: "extract",
-            sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
-            issue: "Výpovědní doba",
-            ask: {
-              question: "Jaká je výpovědní doba pro ukončení smlouvy?",
-              content: { version: 1, type: "text" },
-            },
-            enabled: true,
-          },
-          {
-            mode: "extract",
-            sourceId: seedId("playbook-cz-pos-doba-trvani"),
-            issue: "Doba trvání a automatické prodloužení",
-            ask: {
-              question:
-                "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
-              content: { version: 1, type: "text" },
-            },
-            enabled: true,
-          },
-          {
-            mode: "graded",
-            sourceId: seedId("playbook-cz-pos-reseni-sporu"),
-            issue: "Řešení sporů",
-            severity: "medium",
-            ask: {
-              mode: "manual",
-              question:
-                "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
-              content: { version: 1, type: "text" },
-            },
-            standard: {
-              source: "tiers",
-              tiers: {
-                acceptable: {
-                  rules: [],
-                  ideal: {
-                    source: "inline",
-                    text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: { rules: [] },
+                    fallback: { entries: [] },
+                    notAcceptable: { rules: [] },
                   },
                 },
-                fallback: {
-                  entries: [
-                    {
-                      id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
-                      text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
-                    },
-                  ],
+                check: {
+                  kind: "constraint",
+                  condition: {
+                    type: "group",
+                    combinator: "and",
+                    children: [
+                      {
+                        type: "compare",
+                        left: {
+                          type: "property",
+                          propertyId: paymentTermsSourceId,
+                        },
+                        op: "lte",
+                        right: { type: "literal", value: 30 },
+                      },
+                    ],
+                  },
                 },
-                notAcceptable: { rules: [] },
+                guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
+                enabled: true,
               },
-            },
-            enabled: true,
-          },
-        ],
-      } satisfies PlaybookPositions,
-    })
-    .onConflictDoNothing();
+              {
+                mode: "graded",
+                sourceId: seedId("playbook-cz-pos-mlcenlivost"),
+                issue: "Mlčenlivost",
+                severity: "high",
+                ask: {
+                  mode: "manual",
+                  question:
+                    "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
+                  content: { version: 1, type: "text" },
+                },
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: { rules: [] },
+                    fallback: { entries: [] },
+                    notAcceptable: { rules: [] },
+                  },
+                },
+                check: { kind: "presence", expectation: "required" },
+                guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
+                enabled: true,
+              },
+              {
+                mode: "graded",
+                sourceId: seedId("playbook-cz-pos-change-of-control"),
+                issue: "Změna ovládání (change of control)",
+                severity: "high",
+                ask: {
+                  mode: "manual",
+                  question:
+                    "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
+                  content: { version: 1, type: "text" },
+                },
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: { rules: [] },
+                    fallback: { entries: [] },
+                    notAcceptable: { rules: [] },
+                  },
+                },
+                check: { kind: "presence", expectation: "restricted" },
+                guidance:
+                  "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
+                enabled: true,
+              },
+              {
+                mode: "extract",
+                sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
+                issue: "Výpovědní doba",
+                ask: {
+                  question: "Jaká je výpovědní doba pro ukončení smlouvy?",
+                  content: { version: 1, type: "text" },
+                },
+                enabled: true,
+              },
+              {
+                mode: "extract",
+                sourceId: seedId("playbook-cz-pos-doba-trvani"),
+                issue: "Doba trvání a automatické prodloužení",
+                ask: {
+                  question:
+                    "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
+                  content: { version: 1, type: "text" },
+                },
+                enabled: true,
+              },
+              {
+                mode: "graded",
+                sourceId: seedId("playbook-cz-pos-reseni-sporu"),
+                issue: "Řešení sporů",
+                severity: "medium",
+                ask: {
+                  mode: "manual",
+                  question:
+                    "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
+                  content: { version: 1, type: "text" },
+                },
+                standard: {
+                  source: "tiers",
+                  tiers: {
+                    acceptable: {
+                      rules: [],
+                      ideal: {
+                        source: "inline",
+                        text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
+                      },
+                    },
+                    fallback: {
+                      entries: [
+                        {
+                          id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
+                          text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+                        },
+                      ],
+                    },
+                    notAcceptable: { rules: [] },
+                  },
+                },
+                enabled: true,
+              },
+            ],
+          } satisfies PlaybookPositions,
+        })
+        .onConflictDoNothing(),
+  );
 
   await seedDdGeneralPlaybook(organizationId);
 
@@ -5453,56 +5490,86 @@ export async function seed(organizationId?: string, userId?: string) {
       ),
     ];
     if (allSeedWorkspaceIds.length > 0) {
-      await rootDb
-        .delete(chatMessages)
-        .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`);
-      await rootDb
-        .delete(chatThreads)
-        .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(chatMessages)
+            .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`),
+      );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(chatThreads)
+            .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`),
+      );
       // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
       // so dependencies must be removed before the workspace cascade.
-      await rootDb
-        .delete(propertyDependencies)
-        .where(
-          sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
-        );
-      await rootDb
-        .delete(workspaces)
-        .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(propertyDependencies)
+            .where(
+              sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
+            ),
+      );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(workspaces)
+            .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`),
+      );
     }
     if (allSeedContactIds.length === 0) {
       return;
     }
     // Include manually created workspaces that reference seed contacts, not
     // only workspaces whose IDs came from this script.
-    const clientWorkspaces = await rootDb.query.workspaces.findMany({
-      where: { clientId: { in: allSeedContactIds } },
-      columns: { id: true },
-    });
+    const clientWorkspaces = await db.transaction(
+      async (tx) =>
+        await tx.query.workspaces.findMany({
+          where: { clientId: { in: allSeedContactIds } },
+          columns: { id: true },
+        }),
+    );
     const clientWorkspaceIds = clientWorkspaces.map(
       (workspace) => workspace.id,
     );
     if (clientWorkspaceIds.length > 0) {
       // These relations use ON DELETE RESTRICT and can belong to manually
       // created workspaces that reference deterministic seed contacts.
-      await rootDb
-        .delete(chatMessages)
-        .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`);
-      await rootDb
-        .delete(chatThreads)
-        .where(sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`);
-      await rootDb
-        .delete(propertyDependencies)
-        .where(
-          sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
-        );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(chatMessages)
+            .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`),
+      );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(chatThreads)
+            .where(sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`),
+      );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .delete(propertyDependencies)
+            .where(
+              sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
+            ),
+      );
     }
-    await rootDb
-      .delete(workspaces)
-      .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`);
-    await rootDb
-      .delete(contacts)
-      .where(sql`${contacts.id} IN ${allSeedContactIds}`);
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .delete(workspaces)
+          .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`),
+    );
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .delete(contacts)
+          .where(sql`${contacts.id} IN ${allSeedContactIds}`),
+    );
   };
 
   if (process.env.NODE_ENV === "production") {
@@ -5524,65 +5591,75 @@ export async function seed(organizationId?: string, userId?: string) {
   console.log("Seeding development data...\n");
 
   const seedContacts = async () => {
+    const primaryUserId = USER_ID;
     // 1. Contacts (original orgs + people)
     const coreContacts = [...orgContacts, ...personContacts];
     for (const c of coreContacts) {
-      await rootDb
-        .insert(contacts)
-        .values({
-          id: c.id,
-          organizationId: ORG_ID,
-          type: c.type,
-          displayName: c.displayName,
-          prefix: "prefix" in c ? c.prefix : undefined,
-          firstName: "firstName" in c ? c.firstName : undefined,
-          lastName: "lastName" in c ? c.lastName : undefined,
-          suffix: "suffix" in c ? c.suffix : undefined,
-          organizationName:
-            "organizationName" in c ? c.organizationName : undefined,
-          notes: "notes" in c ? c.notes : undefined,
-          emails: "emails" in c ? c.emails : undefined,
-          phones: "phones" in c ? c.phones : undefined,
-          color: c.color,
-          registrationNumber:
-            "registrationNumber" in c ? c.registrationNumber : undefined,
-          taxId: "taxId" in c ? c.taxId : undefined,
-          bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
-          billingAddress: "billingAddress" in c ? c.billingAddress : undefined,
-          defaultHourlyRate:
-            "defaultHourlyRate" in c ? cents(c.defaultHourlyRate) : undefined,
-          currency: "currency" in c ? c.currency : undefined,
-          paymentTermDays:
-            "paymentTermDays" in c ? c.paymentTermDays : undefined,
-          originatingAttorneyId: USER_ID,
-          responsibleAttorneyId: USER_ID,
-          createdBy: USER_ID,
-        })
-        .onConflictDoNothing();
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(contacts)
+            .values({
+              id: c.id,
+              organizationId: ORG_ID,
+              type: c.type,
+              displayName: c.displayName,
+              prefix: "prefix" in c ? c.prefix : undefined,
+              firstName: "firstName" in c ? c.firstName : undefined,
+              lastName: "lastName" in c ? c.lastName : undefined,
+              suffix: "suffix" in c ? c.suffix : undefined,
+              organizationName:
+                "organizationName" in c ? c.organizationName : undefined,
+              notes: "notes" in c ? c.notes : undefined,
+              emails: "emails" in c ? c.emails : undefined,
+              phones: "phones" in c ? c.phones : undefined,
+              color: c.color,
+              registrationNumber:
+                "registrationNumber" in c ? c.registrationNumber : undefined,
+              taxId: "taxId" in c ? c.taxId : undefined,
+              bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
+              billingAddress:
+                "billingAddress" in c ? c.billingAddress : undefined,
+              defaultHourlyRate:
+                "defaultHourlyRate" in c
+                  ? cents(c.defaultHourlyRate)
+                  : undefined,
+              currency: "currency" in c ? c.currency : undefined,
+              paymentTermDays:
+                "paymentTermDays" in c ? c.paymentTermDays : undefined,
+              originatingAttorneyId: primaryUserId,
+              responsibleAttorneyId: primaryUserId,
+              createdBy: primaryUserId,
+            })
+            .onConflictDoNothing(),
+      );
     }
     // 1b. Additional org contacts for overview stress-testing
     for (const c of moreOrgContacts) {
-      await rootDb
-        .insert(contacts)
-        .values({
-          id: c.id,
-          organizationId: ORG_ID,
-          type: c.type,
-          displayName: c.displayName,
-          organizationName: c.organizationName,
-          registrationNumber: c.registrationNumber,
-          taxId: c.taxId,
-          billingAddress: c.billingAddress,
-          defaultHourlyRate: cents(c.defaultHourlyRate),
-          currency: c.currency,
-          paymentTermDays: c.paymentTermDays,
-          emails: c.emails,
-          color: c.color,
-          originatingAttorneyId: USER_ID,
-          responsibleAttorneyId: USER_ID,
-          createdBy: USER_ID,
-        })
-        .onConflictDoNothing();
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(contacts)
+            .values({
+              id: c.id,
+              organizationId: ORG_ID,
+              type: c.type,
+              displayName: c.displayName,
+              organizationName: c.organizationName,
+              registrationNumber: c.registrationNumber,
+              taxId: c.taxId,
+              billingAddress: c.billingAddress,
+              defaultHourlyRate: cents(c.defaultHourlyRate),
+              currency: c.currency,
+              paymentTermDays: c.paymentTermDays,
+              emails: c.emails,
+              color: c.color,
+              originatingAttorneyId: primaryUserId,
+              responsibleAttorneyId: primaryUserId,
+              createdBy: primaryUserId,
+            })
+            .onConflictDoNothing(),
+      );
     }
     const totalContacts = coreContacts.length + moreOrgContacts.length;
     console.log(
@@ -5600,17 +5677,20 @@ export async function seed(organizationId?: string, userId?: string) {
   const practiceJurisdictions: PracticeJurisdiction[] = [
     { countryCode: "CZ", isPrimary: true },
   ];
-  await rootDb
-    .insert(organizationSettings)
-    .values({
-      id: seedId("org-settings"),
-      organizationId: ORG_ID,
-      practiceJurisdictions,
-    })
-    .onConflictDoUpdate({
-      target: organizationSettings.organizationId,
-      set: { practiceJurisdictions },
-    });
+  await db.transaction(
+    async (tx) =>
+      await tx
+        .insert(organizationSettings)
+        .values({
+          id: seedId("org-settings"),
+          organizationId: ORG_ID,
+          practiceJurisdictions,
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: { practiceJurisdictions },
+        }),
+  );
   console.log("  Organization settings: practice jurisdiction CZ pinned");
 
   // 2. Workspaces. lastActivityAt is pinned (never defaultNow()) so the
@@ -5622,22 +5702,25 @@ export async function seed(organizationId?: string, userId?: string) {
   for (const [wsIndex, ws] of seedWorkspaces.entries()) {
     const lastActivityAt = workspaceLastActivityAt(ws.reference, wsIndex);
     workspaceActivityById.set(ws.id, lastActivityAt);
-    await rootDb
-      .insert(workspaces)
-      .values({
-        id: ws.id,
-        organizationId: ORG_ID,
-        name: ws.name,
-        reference: ws.reference,
-        clientId: ws.clientId,
-        billingReference:
-          "billingReference" in ws ? ws.billingReference : undefined,
-        lastActivityAt,
-      })
-      .onConflictDoUpdate({
-        target: workspaces.id,
-        set: { lastActivityAt },
-      });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(workspaces)
+          .values({
+            id: ws.id,
+            organizationId: ORG_ID,
+            name: ws.name,
+            reference: ws.reference,
+            clientId: ws.clientId,
+            billingReference:
+              "billingReference" in ws ? ws.billingReference : undefined,
+            lastActivityAt,
+          })
+          .onConflictDoUpdate({
+            target: workspaces.id,
+            set: { lastActivityAt },
+          }),
+    );
   }
   // 2b. Additional workspaces (overview stress-testing)
   let moreWsCount = 0;
@@ -5649,20 +5732,23 @@ export async function seed(organizationId?: string, userId?: string) {
       seedWorkspaces.length + moreWsCount,
     );
     workspaceActivityById.set(wsId, lastActivityAt);
-    await rootDb
-      .insert(workspaces)
-      .values({
-        id: wsId,
-        organizationId: ORG_ID,
-        name: mw.name,
-        reference: mw.reference,
-        clientId,
-        lastActivityAt,
-      })
-      .onConflictDoUpdate({
-        target: workspaces.id,
-        set: { lastActivityAt },
-      });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(workspaces)
+          .values({
+            id: wsId,
+            organizationId: ORG_ID,
+            name: mw.name,
+            reference: mw.reference,
+            clientId,
+            lastActivityAt,
+          })
+          .onConflictDoUpdate({
+            target: workspaces.id,
+            set: { lastActivityAt },
+          }),
+    );
 
     moreWsCount++;
   }
@@ -5673,82 +5759,88 @@ export async function seed(organizationId?: string, userId?: string) {
   const marketingAgentWorkspace = at(seedWorkspaces, 8);
   const marketingAgentThreadId = seedId("marketing-agent-thread");
   const marketingAgentCreatedAt = new Date("2026-07-16T09:30:00.000Z");
-  await rootDb.insert(chatThreads).values({
-    id: marketingAgentThreadId,
-    organizationId: ORG_ID,
-    userId: USER_ID,
-    workspaceId: marketingAgentWorkspace.id,
-    title: MARKETING_AGENT_THREAD_TITLE,
-    createdAt: marketingAgentCreatedAt,
-    updatedAt: marketingAgentCreatedAt,
-  });
-  await rootDb.insert(chatMessages).values([
-    {
-      id: seedId("marketing-agent-message-user"),
-      threadId: marketingAgentThreadId,
-      workspaceId: marketingAgentWorkspace.id,
-      userId: USER_ID,
-      role: "user",
-      content: {
-        version: 1,
-        data: [
-          {
-            type: "text",
-            text: "Compare the change-of-control clauses across this matter.",
+  await db.transaction(
+    async (tx) =>
+      await tx.insert(chatThreads).values({
+        id: marketingAgentThreadId,
+        organizationId: ORG_ID,
+        userId: USER_ID,
+        workspaceId: marketingAgentWorkspace.id,
+        title: MARKETING_AGENT_THREAD_TITLE,
+        createdAt: marketingAgentCreatedAt,
+        updatedAt: marketingAgentCreatedAt,
+      }),
+  );
+  await db.transaction(
+    async (tx) =>
+      await tx.insert(chatMessages).values([
+        {
+          id: seedId("marketing-agent-message-user"),
+          threadId: marketingAgentThreadId,
+          workspaceId: marketingAgentWorkspace.id,
+          userId: USER_ID,
+          role: "user",
+          content: {
+            version: 1,
+            data: [
+              {
+                type: "text",
+                text: "Compare the change-of-control clauses across this matter.",
+              },
+            ],
           },
-        ],
-      },
-      createdAt: marketingAgentCreatedAt,
-    },
-    {
-      id: seedId("marketing-agent-message-assistant"),
-      threadId: marketingAgentThreadId,
-      workspaceId: marketingAgentWorkspace.id,
-      userId: USER_ID,
-      role: "assistant",
-      content: {
-        version: 1,
-        data: [
-          {
-            type: "text",
-            text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
+          createdAt: marketingAgentCreatedAt,
+        },
+        {
+          id: seedId("marketing-agent-message-assistant"),
+          threadId: marketingAgentThreadId,
+          workspaceId: marketingAgentWorkspace.id,
+          userId: USER_ID,
+          role: "assistant",
+          content: {
+            version: 1,
+            data: [
+              {
+                type: "text",
+                text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
+              },
+              {
+                type: "data-stella-source-document",
+                data: {
+                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
+                  kind: "document",
+                  mimeType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  title: at(EXPORT_REVIEW_DOC_NAMES, 0),
+                  workspaceId: marketingAgentWorkspace.id,
+                },
+              },
+              {
+                type: "data-stella-source-document",
+                data: {
+                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
+                  kind: "document",
+                  mimeType: "application/pdf",
+                  title: at(EXPORT_REVIEW_DOC_NAMES, 4),
+                  workspaceId: marketingAgentWorkspace.id,
+                },
+              },
+              {
+                type: "data-stella-source-document",
+                data: {
+                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
+                  kind: "document",
+                  mimeType: "application/pdf",
+                  title: at(EXPORT_REVIEW_DOC_NAMES, 8),
+                  workspaceId: marketingAgentWorkspace.id,
+                },
+              },
+            ],
           },
-          {
-            type: "data-stella-source-document",
-            data: {
-              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
-              kind: "document",
-              mimeType:
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              title: at(EXPORT_REVIEW_DOC_NAMES, 0),
-              workspaceId: marketingAgentWorkspace.id,
-            },
-          },
-          {
-            type: "data-stella-source-document",
-            data: {
-              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
-              kind: "document",
-              mimeType: "application/pdf",
-              title: at(EXPORT_REVIEW_DOC_NAMES, 4),
-              workspaceId: marketingAgentWorkspace.id,
-            },
-          },
-          {
-            type: "data-stella-source-document",
-            data: {
-              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
-              kind: "document",
-              mimeType: "application/pdf",
-              title: at(EXPORT_REVIEW_DOC_NAMES, 8),
-              workspaceId: marketingAgentWorkspace.id,
-            },
-          },
-        ],
-      },
-      createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
-    },
-  ]);
+          createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
+        },
+      ]),
+  );
   console.log("  Marketing agent story: 1 thread, 2 messages");
 
   // 2c. Workspace members — add all seed users to every workspace
@@ -5758,14 +5850,17 @@ export async function seed(organizationId?: string, userId?: string) {
   ];
   for (const wsId of allWsIds) {
     for (const uid of seedUserIds) {
-      await rootDb
-        .insert(workspaceMembers)
-        .values({
-          id: seedId(`wm-${wsId}-${uid}`),
-          workspaceId: toWs(wsId),
-          userId: uid,
-        })
-        .onConflictDoNothing();
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(workspaceMembers)
+            .values({
+              id: seedId(`wm-${wsId}-${uid}`),
+              workspaceId: toWs(wsId),
+              userId: uid,
+            })
+            .onConflictDoNothing(),
+      );
     }
   }
   console.log(
@@ -5785,22 +5880,25 @@ export async function seed(organizationId?: string, userId?: string) {
     allProperties.push(...buildProperties(wsId, label));
   }
   for (const prop of allProperties) {
-    await rootDb
-      .insert(properties)
-      .values({
-        id: prop.id,
-        workspaceId: toWs(prop.workspaceId),
-        name: prop.name,
-        content: prop.content,
-        tool: prop.tool,
-        // Seed AI properties as stale so the workflow planner picks
-        // them up on first run; everything else is user-managed and
-        // fresh from creation.
-        status: prop.tool.type === "ai-model" ? "stale" : "fresh",
-        ...(prop.system !== undefined && { system: prop.system }),
-        ...(prop.kinds !== undefined && { kinds: prop.kinds }),
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(properties)
+          .values({
+            id: prop.id,
+            workspaceId: toWs(prop.workspaceId),
+            name: prop.name,
+            content: prop.content,
+            tool: prop.tool,
+            // Seed AI properties as stale so the workflow planner picks
+            // them up on first run; everything else is user-managed and
+            // fresh from creation.
+            status: prop.tool.type === "ai-model" ? "stale" : "fresh",
+            ...(prop.system !== undefined && { system: prop.system }),
+            ...(prop.kinds !== undefined && { kinds: prop.kinds }),
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
@@ -5820,9 +5918,12 @@ export async function seed(organizationId?: string, userId?: string) {
   // backfill migration's NOT EXISTS guard.
   const seededViewWorkspaceIds = new Set(
     (
-      await rootDb
-        .select({ workspaceId: workspaceViews.workspaceId })
-        .from(workspaceViews)
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .select({ workspaceId: workspaceViews.workspaceId })
+            .from(workspaceViews),
+      )
     ).map((row) => row.workspaceId),
   );
   const viewRows = fileProperties
@@ -5834,7 +5935,9 @@ export async function seed(organizationId?: string, userId?: string) {
       }),
     );
   if (viewRows.length > 0) {
-    await rootDb.insert(workspaceViews).values(viewRows);
+    await db.transaction(
+      async (tx) => await tx.insert(workspaceViews).values(viewRows),
+    );
   }
   console.log(
     `  Views: ${viewRows.length} (${fileProperties.length} workspaces × default set)`,
@@ -5870,65 +5973,86 @@ export async function seed(organizationId?: string, userId?: string) {
       indexInWorkspace,
       workspaceActivityAt,
     });
-    await rootDb
-      .insert(entities)
-      .values({
-        id: e.entityId,
-        workspaceId: toWs(e.workspaceId),
-        kind: e.kind,
-        parentId: e.parentId,
-        name: e.name,
-        createdBy: pickAuthor(seedUserIds, ei),
-        lastEditedBy: pickAuthor(seedUserIds, ei + 1),
-        createdAt,
-        updatedAt,
-      })
-      .onConflictDoUpdate({
-        target: entities.id,
-        set: {
-          name: e.name,
-          parentId: e.parentId ?? null,
-          createdAt,
-          updatedAt,
-        },
-      });
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(entities)
+          .values({
+            id: e.entityId,
+            workspaceId: toWs(e.workspaceId),
+            kind: e.kind,
+            parentId: e.parentId,
+            name: e.name,
+            createdBy: pickAuthor(seedUserIds, ei),
+            lastEditedBy: pickAuthor(seedUserIds, ei + 1),
+            createdAt,
+            updatedAt,
+          })
+          .onConflictDoUpdate({
+            target: entities.id,
+            set: {
+              name: e.name,
+              parentId: e.parentId ?? null,
+              createdAt,
+              updatedAt,
+            },
+          }),
+    );
 
     const isSupplierAgreement = e.name === SUPPLIER_AGREEMENT_DOC_NAME;
-    const versionInsert = rootDb.insert(entityVersions).values({
+    const versionValues = {
       id: e.versionId,
       workspaceId: toWs(e.workspaceId),
       entityId: e.entityId,
       ...(isSupplierAgreement
         ? { versionNumber: 2, label: "Negotiated draft" }
         : {}),
-    });
+    };
     if (isSupplierAgreement) {
-      await versionInsert.onConflictDoUpdate({
-        target: entityVersions.id,
-        set: { versionNumber: 2, label: "Negotiated draft" },
-      });
-      await rootDb
-        .insert(entityVersions)
-        .values({
-          id: supplierAgreementBaseVersionId(e.workspaceId),
-          workspaceId: toWs(e.workspaceId),
-          entityId: e.entityId,
-          versionNumber: 1,
-          label: "Initial draft",
-        })
-        .onConflictDoUpdate({
-          target: entityVersions.id,
-          set: { versionNumber: 1, label: "Initial draft" },
-        });
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(entityVersions)
+            .values(versionValues)
+            .onConflictDoUpdate({
+              target: entityVersions.id,
+              set: { versionNumber: 2, label: "Negotiated draft" },
+            }),
+      );
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(entityVersions)
+            .values({
+              id: supplierAgreementBaseVersionId(e.workspaceId),
+              workspaceId: toWs(e.workspaceId),
+              entityId: e.entityId,
+              versionNumber: 1,
+              label: "Initial draft",
+            })
+            .onConflictDoUpdate({
+              target: entityVersions.id,
+              set: { versionNumber: 1, label: "Initial draft" },
+            }),
+      );
     } else {
-      await versionInsert.onConflictDoNothing();
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(entityVersions)
+            .values(versionValues)
+            .onConflictDoNothing(),
+      );
     }
 
     // Link currentVersionId
-    await rootDb
-      .update(entities)
-      .set({ currentVersionId: e.versionId })
-      .where((await import("drizzle-orm")).eq(entities.id, e.entityId));
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .update(entities)
+          .set({ currentVersionId: e.versionId })
+          .where((await import("drizzle-orm")).eq(entities.id, e.entityId)),
+    );
   }
   console.log(
     `  Entities: ${allEntities.length} (${allEntities.length / seedWorkspaces.length}/workspace)`,
@@ -6035,19 +6159,22 @@ export async function seed(organizationId?: string, userId?: string) {
       } as const satisfies FieldContent;
 
       // ── File field ──
-      await rootDb
-        .insert(fields)
-        .values({
-          id: seedId(`${wsLabel}-field-file-${j}`),
-          workspaceId: toWs(entity.workspaceId),
-          propertyId: filePropertyId,
-          entityVersionId: entity.versionId,
-          content: fileContent,
-        })
-        .onConflictDoUpdate({
-          target: fields.id,
-          set: { content: fileContent },
-        });
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .insert(fields)
+            .values({
+              id: seedId(`${wsLabel}-field-file-${j}`),
+              workspaceId: toWs(entity.workspaceId),
+              propertyId: filePropertyId,
+              entityVersionId: entity.versionId,
+              content: fileContent,
+            })
+            .onConflictDoUpdate({
+              target: fields.id,
+              set: { content: fileContent },
+            }),
+      );
       fileCount++;
 
       if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
@@ -6073,19 +6200,22 @@ export async function seed(organizationId?: string, userId?: string) {
             .digest("hex"),
           pdfFileId: null,
         } as const satisfies FieldContent;
-        await rootDb
-          .insert(fields)
-          .values({
-            id: seedId<"field">(`${wsLabel}-supplier-agreement-base-field`),
-            workspaceId: toWs(wsId),
-            propertyId: filePropertyId,
-            entityVersionId: baseVersionId,
-            content: baseFileContent,
-          })
-          .onConflictDoUpdate({
-            target: fields.id,
-            set: { content: baseFileContent },
-          });
+        await db.transaction(
+          async (tx) =>
+            await tx
+              .insert(fields)
+              .values({
+                id: seedId<"field">(`${wsLabel}-supplier-agreement-base-field`),
+                workspaceId: toWs(wsId),
+                propertyId: filePropertyId,
+                entityVersionId: baseVersionId,
+                content: baseFileContent,
+              })
+              .onConflictDoUpdate({
+                target: fields.id,
+                set: { content: baseFileContent },
+              }),
+        );
         fileCount++;
       }
 
@@ -6095,37 +6225,43 @@ export async function seed(organizationId?: string, userId?: string) {
       // (workspaces may belong to an org created before
       // the seed ran, e.g. via manual signup).
       if (docText) {
-        const ws = await rootDb.query.workspaces.findFirst({
-          where: { id: { eq: toWs(wsId) } },
-          columns: { organizationId: true },
-        });
+        const ws = await db.transaction(
+          async (tx) =>
+            await tx.query.workspaces.findFirst({
+              where: { id: { eq: toWs(wsId) } },
+              columns: { organizationId: true },
+            }),
+        );
         const ecOrgId = ws?.organizationId ?? ORG_ID;
         const extractionEnvelope = {
           ciphertext: Buffer.from(docText, "utf-8"),
           iv: Buffer.alloc(IV_BYTES),
         };
 
-        await rootDb
-          .insert(extractedContent)
-          .values({
-            entityId: entity.entityId,
-            organizationId: ecOrgId,
-            workspaceId: toWs(entity.workspaceId),
-            ciphertext: extractionEnvelope.ciphertext,
-            iv: extractionEnvelope.iv,
-            charCount: docText.length,
-            language: null,
-            extractedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: extractedContent.entityId,
-            set: {
-              ciphertext: extractionEnvelope.ciphertext,
-              iv: extractionEnvelope.iv,
-              charCount: docText.length,
-              extractedAt: new Date(),
-            },
-          });
+        await db.transaction(
+          async (tx) =>
+            await tx
+              .insert(extractedContent)
+              .values({
+                entityId: entity.entityId,
+                organizationId: ecOrgId,
+                workspaceId: toWs(entity.workspaceId),
+                ciphertext: extractionEnvelope.ciphertext,
+                iv: extractionEnvelope.iv,
+                charCount: docText.length,
+                language: null,
+                extractedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: extractedContent.entityId,
+                set: {
+                  ciphertext: extractionEnvelope.ciphertext,
+                  iv: extractionEnvelope.iv,
+                  charCount: docText.length,
+                  extractedAt: new Date(),
+                },
+              }),
+        );
         extractedCount++;
       }
     }
@@ -6179,16 +6315,19 @@ export async function seed(organizationId?: string, userId?: string) {
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
   for (const f of allFields) {
-    await rootDb
-      .insert(fields)
-      .values({
-        id: f.id,
-        workspaceId: toWs(f.workspaceId),
-        propertyId: f.propertyId,
-        entityVersionId: f.entityVersionId,
-        content: f.content,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(fields)
+          .values({
+            id: f.id,
+            workspaceId: toWs(f.workspaceId),
+            propertyId: f.propertyId,
+            entityVersionId: f.entityVersionId,
+            content: f.content,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Fields: ${allFields.length}`);
 
@@ -6200,16 +6339,19 @@ export async function seed(organizationId?: string, userId?: string) {
     );
   }
   for (const justification of allJustifications) {
-    await rootDb
-      .insert(justifications)
-      .values({
-        id: justification.id,
-        workspaceId: toWs(justification.workspaceId),
-        fieldId: justification.fieldId,
-        content: justification.content,
-        fileFieldIds: justification.fileFieldIds,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(justifications)
+          .values({
+            id: justification.id,
+            workspaceId: toWs(justification.workspaceId),
+            fieldId: justification.fieldId,
+            content: justification.content,
+            fileFieldIds: justification.fileFieldIds,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Justifications: ${allJustifications.length}`);
 
@@ -6221,8 +6363,8 @@ export async function seed(organizationId?: string, userId?: string) {
   // Index-time SQL calls `unaccent(...)` and runtime headlines use
   // the `stella_unaccent` regconfig; without these the first
   // `upsertSearchDocument` aborts the whole seed.
-  await rootDb.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
-  await rootDb.execute(sql`
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await db.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -6236,7 +6378,7 @@ export async function seed(organizationId?: string, userId?: string) {
     END
     $$;
   `);
-  await rootDb.execute(sql`
+  await db.execute(sql`
     ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
       ALTER MAPPING FOR
         asciiword,
@@ -6247,11 +6389,11 @@ export async function seed(organizationId?: string, userId?: string) {
         hword_part
       WITH unaccent, simple
   `);
-  await rootDb.execute(sql`
+  await db.execute(sql`
     ALTER TABLE search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector
   `);
-  await rootDb.execute(sql`
+  await db.execute(sql`
     CREATE INDEX IF NOT EXISTS search_documents_tsv_idx
       ON search_documents USING gin (tsv)
   `);
@@ -6266,34 +6408,40 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 8. Workspace contacts (parties)
   for (const party of seedParties) {
-    await rootDb
-      .insert(workspaceContacts)
-      .values({
-        id: party.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(party.workspaceId),
-        contactId: party.contactId,
-        role: party.role,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(workspaceContacts)
+          .values({
+            id: party.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(party.workspaceId),
+            contactId: party.contactId,
+            role: party.role,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Parties: ${seedParties.length}`);
 
   // 9. Billing codes
   const billingCodeSeeds = buildBillingCodes();
   for (const bc of billingCodeSeeds) {
-    await rootDb
-      .insert(billingCodes)
-      .values({
-        id: bc.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(bc.workspaceId),
-        type: bc.type,
-        code: bc.code,
-        label: bc.label,
-        sortOrder: bc.sortOrder,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(billingCodes)
+          .values({
+            id: bc.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(bc.workspaceId),
+            type: bc.type,
+            code: bc.code,
+            label: bc.label,
+            sortOrder: bc.sortOrder,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Billing codes: ${billingCodeSeeds.length}`);
 
@@ -6303,30 +6451,36 @@ export async function seed(organizationId?: string, userId?: string) {
     userRates: seedUserRates,
   });
   for (const rt of rateTableSeeds) {
-    await rootDb
-      .insert(rateTables)
-      .values({
-        id: rt.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(rt.workspaceId),
-        name: rt.name,
-        currency: rt.currency,
-        isDefault: true,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(rateTables)
+          .values({
+            id: rt.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(rt.workspaceId),
+            name: rt.name,
+            currency: rt.currency,
+            isDefault: true,
+          })
+          .onConflictDoNothing(),
+    );
   }
   for (const re of rateEntrySeeds) {
-    await rootDb
-      .insert(rateEntries)
-      .values({
-        id: re.id,
-        workspaceId: toWs(re.workspaceId),
-        rateTableId: re.rateTableId,
-        userId: re.userId,
-        hourlyRate: cents(re.hourlyRate),
-        effectiveFrom: re.effectiveFrom,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(rateEntries)
+          .values({
+            id: re.id,
+            workspaceId: toWs(re.workspaceId),
+            rateTableId: re.rateTableId,
+            userId: re.userId,
+            hourlyRate: cents(re.hourlyRate),
+            effectiveFrom: re.effectiveFrom,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(
     `  Rate tables: ${rateTableSeeds.length}, entries: ${rateEntrySeeds.length}`,
@@ -6336,20 +6490,23 @@ export async function seed(organizationId?: string, userId?: string) {
   // that reference them)
   const invoiceSeeds = buildInvoices();
   for (const inv of invoiceSeeds) {
-    await rootDb
-      .insert(invoices)
-      .values({
-        id: inv.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(inv.workspaceId),
-        invoiceNumber: inv.invoiceNumber,
-        status: inv.status,
-        invoiceDate: inv.invoiceDate,
-        dueDate: inv.dueDate,
-        currency: inv.currency,
-        totalAmount: cents(inv.totalAmount),
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(invoices)
+          .values({
+            id: inv.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(inv.workspaceId),
+            invoiceNumber: inv.invoiceNumber,
+            status: inv.status,
+            invoiceDate: inv.invoiceDate,
+            dueDate: inv.dueDate,
+            currency: inv.currency,
+            totalAmount: cents(inv.totalAmount),
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Invoices: ${invoiceSeeds.length}`);
 
@@ -6361,51 +6518,57 @@ export async function seed(organizationId?: string, userId?: string) {
     seedUserRates,
   );
   for (const te of extTimeEntries) {
-    await rootDb
-      .insert(timeEntries)
-      .values({
-        id: te.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(te.workspaceId),
-        userId: te.userId,
-        workItemId: te.matterId,
-        dateWorked: te.dateWorked,
-        timezoneId: "Europe/Prague",
-        durationMinutes: te.durationMinutes,
-        billedMinutes: te.billedMinutes,
-        rateAtEntry: cents(te.rateAtEntry),
-        currency: te.currency,
-        narrative: te.narrative,
-        billable: te.billable,
-        status: te.status,
-        taskCode: te.taskCode,
-        activityCode: te.activityCode,
-        invoiceId: te.invoiceId,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(timeEntries)
+          .values({
+            id: te.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(te.workspaceId),
+            userId: te.userId,
+            workItemId: te.matterId,
+            dateWorked: te.dateWorked,
+            timezoneId: "Europe/Prague",
+            durationMinutes: te.durationMinutes,
+            billedMinutes: te.billedMinutes,
+            rateAtEntry: cents(te.rateAtEntry),
+            currency: te.currency,
+            narrative: te.narrative,
+            billable: te.billable,
+            status: te.status,
+            taskCode: te.taskCode,
+            activityCode: te.activityCode,
+            invoiceId: te.invoiceId,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Time entries: ${extTimeEntries.length}`);
 
   // 13. Expenses (~50)
   const expenseSeeds = buildExpenses(seedUserIds);
   for (const exp of expenseSeeds) {
-    await rootDb
-      .insert(expenses)
-      .values({
-        id: exp.id,
-        organizationId: ORG_ID,
-        workspaceId: toWs(exp.workspaceId),
-        userId: exp.userId,
-        matterId: exp.matterId,
-        dateIncurred: exp.dateIncurred,
-        amount: cents(exp.amount),
-        currency: exp.currency,
-        category: exp.category,
-        description: exp.description,
-        billable: exp.billable,
-        status: exp.status,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(expenses)
+          .values({
+            id: exp.id,
+            organizationId: ORG_ID,
+            workspaceId: toWs(exp.workspaceId),
+            userId: exp.userId,
+            matterId: exp.matterId,
+            dateIncurred: exp.dateIncurred,
+            amount: cents(exp.amount),
+            currency: exp.currency,
+            category: exp.category,
+            description: exp.description,
+            billable: exp.billable,
+            status: exp.status,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`  Expenses: ${expenseSeeds.length}`);
 
@@ -6417,16 +6580,21 @@ export async function seed(organizationId?: string, userId?: string) {
   // non-overwriting (onConflictDoNothing), so reruns must first drop the org's
   // default-keyed taxonomy rows to pick up label changes. Custom, non-default
   // document types (keys outside DEFAULT_DOCUMENT_TYPES) are left untouched.
-  await rootDb.delete(documentTypes).where(
-    and(
-      eq(documentTypes.organizationId, ORG_ID),
-      inArray(
-        documentTypes.key,
-        DEFAULT_DOCUMENT_TYPES.map((documentType) => documentType.key),
+  await db.transaction(
+    async (tx) =>
+      await tx.delete(documentTypes).where(
+        and(
+          eq(documentTypes.organizationId, ORG_ID),
+          inArray(
+            documentTypes.key,
+            DEFAULT_DOCUMENT_TYPES.map((documentType) => documentType.key),
+          ),
+        ),
       ),
-    ),
   );
-  await ensureDefaultDocumentTypes(ORG_ID, rootDb);
+  await db.transaction(
+    async (tx) => await ensureDefaultDocumentTypes(ORG_ID, tx),
+  );
   await seedPlaybooks(ORG_ID);
 
   // 16. Global case-law corpus for search and references. This pulls real prod
@@ -6477,34 +6645,37 @@ if (import.meta.main) {
       user: authUser,
     } = await import("@/api/db/auth-schema");
 
-    const activeSessions = await rootDb
-      .select({
-        userId: authSession.userId,
-        organizationId: authSession.activeOrganizationId,
-        userEmail: authUser.email,
-        organizationName: authOrganization.name,
-      })
-      .from(authSession)
-      .innerJoin(authUser, eq(authUser.id, authSession.userId))
-      .innerJoin(
-        authMember,
-        and(
-          eq(authMember.userId, authSession.userId),
-          eq(authMember.organizationId, authSession.activeOrganizationId),
-        ),
-      )
-      .innerJoin(
-        authOrganization,
-        eq(authOrganization.id, authSession.activeOrganizationId),
-      )
-      .where(
-        and(
-          isNotNull(authSession.activeOrganizationId),
-          gt(authSession.expiresAt, new Date()),
-        ),
-      )
-      .orderBy(desc(authSession.updatedAt))
-      .limit(1);
+    const activeSessions = await db.transaction(
+      async (tx) =>
+        await tx
+          .select({
+            userId: authSession.userId,
+            organizationId: authSession.activeOrganizationId,
+            userEmail: authUser.email,
+            organizationName: authOrganization.name,
+          })
+          .from(authSession)
+          .innerJoin(authUser, eq(authUser.id, authSession.userId))
+          .innerJoin(
+            authMember,
+            and(
+              eq(authMember.userId, authSession.userId),
+              eq(authMember.organizationId, authSession.activeOrganizationId),
+            ),
+          )
+          .innerJoin(
+            authOrganization,
+            eq(authOrganization.id, authSession.activeOrganizationId),
+          )
+          .where(
+            and(
+              isNotNull(authSession.activeOrganizationId),
+              gt(authSession.expiresAt, new Date()),
+            ),
+          )
+          .orderBy(desc(authSession.updatedAt))
+          .limit(1),
+    );
 
     const activeSession = activeSessions.at(0);
     if (activeSession?.organizationId) {
@@ -6515,11 +6686,14 @@ if (import.meta.main) {
       };
     }
 
-    const firstMember = await rootDb.query.member.findFirst({
-      columns: { userId: true, organizationId: true },
-      where: { role: "owner" },
-      orderBy: { createdAt: "desc" },
-    });
+    const firstMember = await db.transaction(
+      async (tx) =>
+        await tx.query.member.findFirst({
+          columns: { userId: true, organizationId: true },
+          where: { role: "owner" },
+          orderBy: { createdAt: "desc" },
+        }),
+    );
     if (!firstMember) {
       console.error("No users found. Sign in at least once before seeding.");
       process.exit(1);

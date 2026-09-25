@@ -217,7 +217,7 @@ const scanLocalHeaders = (
     const uncompressedSize = view.getUint32(offset + 22, true);
 
     // Bit 3: sizes live in a data descriptor after the file data.
-    // eslint-disable-next-line no-bitwise -- ZIP flag check
+    // oxlint-disable-next-line no-bitwise -- ZIP flag check
     if ((flags & 0x00_08) !== 0 && compressedSize === 0) {
       return [UNVERIFIABLE];
     }

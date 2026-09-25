@@ -19,6 +19,7 @@ export const RECONCILE_REPORT_EXPORTS_TASK =
  * same tick is about to close.
  */
 export const reconcileReportExports: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -26,10 +27,11 @@ export const reconcileReportExports: SchedulerTask = async ({
     panic("SchedulerAborted");
   }
   const recovered = await recoverStuckReportExports({
+    db,
     queue: getReportExportQueue(),
   });
   const { handedOff, scanned, unattributed, unrecoverable } =
-    await reconcileQueuedReportExports();
+    await reconcileQueuedReportExports({ db });
   logger.info("scheduler.report_exports_reconciled", {
     "reportExports.recovered": recovered,
     "reportExports.requeued": handedOff,

@@ -18,13 +18,11 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import {
-  type CourtWeightMap,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import {
   publishedCaseLawDecision,
   publishedCaseLawDecisionFor,
@@ -165,11 +163,11 @@ export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
   /**
-   * The court registry the chip beside each court name is drawn from. It lives
-   * on the root pool rather than the public reader's, so a harness holding
-   * only the reader supplies its own; the route takes the default.
+   * The court registry the chip beside each court name is drawn from. The
+   * default is the public corpus's cached registry, read beside the page's
+   * transaction rather than inside it; a harness supplies its own.
    */
-  readCourtWeights: () => Promise<CourtWeightMap> = loadCourtWeights,
+  readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
@@ -262,9 +260,8 @@ export const listDecisionsHandler = async (
       caseLawDb,
       languageGroupKeys,
     }),
-    // Bounded and degraded to no badge: the registry is on the root pool,
-    // which this read otherwise never touches, and a court chip is not worth
-    // failing a page of decisions over.
+    // Bounded and degraded to no badge: a court chip is not worth failing a
+    // page of decisions over.
     readCourtRegistry(readCourtWeights),
   ]);
 

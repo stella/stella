@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { reportExports, workspaces } from "@/api/db/schema";
 
 /** Bounds both one reconciliation query and the maximum outbound-email burst
@@ -14,8 +14,10 @@ export const REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT = 20;
  * matches this predicate and ordering; only routing identifiers leave this
  * narrow root helper, never report content or artifact metadata.
  */
-export const listPendingReportExportNotifications = async () => {
-  const rows = await rootDb
+export const listPendingReportExportNotifications = async (
+  db: Pick<typeof rootDb, "select" | "update">,
+) => {
+  const rows = await db
     .select({
       exportId: reportExports.id,
       organizationId: workspaces.organizationId,
@@ -38,7 +40,7 @@ export const listPendingReportExportNotifications = async () => {
   );
   let suppressed = 0;
   if (abandonedExportIds.length > 0) {
-    const suppressedRows = await rootDb
+    const suppressedRows = await db
       .update(reportExports)
       .set({ notificationStatus: "suppressed" })
       .where(

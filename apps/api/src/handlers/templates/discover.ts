@@ -10,6 +10,10 @@ import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import {
+  scanTemplateUpload,
+  templateUploadRejectionResponse,
+} from "@/api/lib/templates/scan-template-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const discoverBodySchema = t.Object({
@@ -31,7 +35,11 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const scanned = await scanTemplateUpload(file);
+  if (Result.isError(scanned)) {
+    return templateUploadRejectionResponse(scanned.error);
+  }
+  const buffer = scanned.value;
 
   const discovered = await discoverTemplate(buffer);
   const manifest = deriveManifest(discovered);

@@ -5,21 +5,19 @@
  */
 
 import { panic } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import {
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSearchDocuments,
   caseLawSources,
-  relations,
   schedulerJobs,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 import {
   BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
@@ -37,9 +35,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("case-law redaction tombstone backfill", () => {
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
     const suffix = Bun.randomUUIDv7();
     const schedulerJobId = `test.case-law-redaction-backfill.${suffix}`;
     const leaseToken = `test-lease-${suffix}`;
@@ -63,7 +59,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     };
 
-    afterAll(async () => {
+    cleanUp(async () => {
       await db
         .delete(schedulerJobs)
         .where(eq(schedulerJobs.id, schedulerJobId));

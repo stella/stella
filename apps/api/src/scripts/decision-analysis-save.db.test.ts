@@ -16,12 +16,12 @@ import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { AnalysisOutput } from "@/api/handlers/case-law/analysis/analysis-output";
-import { createDbAnalysisStore } from "@/api/handlers/case-law/analysis/analysis-store-core";
 import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-update";
 import type { AnalysisSubject } from "@/api/handlers/case-law/analysis/analysis-update";
-import { analysisSentinel } from "@/api/handlers/case-law/analysis/stored-analysis";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
+import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
+import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";

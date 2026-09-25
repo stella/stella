@@ -1,14 +1,13 @@
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   CategoryFormDialog as SharedCategoryFormDialog,
   CategorySidebar,
+  useCategoryOps,
 } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import type {
   CategoryEntity,
@@ -48,57 +47,26 @@ type TemplateCategorySidebarProps = {
 const useTemplateCategoryOps = (): CategoryOps => {
   const t = useTranslations();
 
-  return {
+  return useCategoryOps({
     create: async (name) => {
-      const response = await api["template-categories"].put({ name });
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.categorySaveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return null;
-      }
-      return { id: response.data.id, name: response.data.name };
+      const { data, error } = await api["template-categories"].put({ name });
+      return { data, error };
     },
     rename: async (id, name) => {
-      const response = await api["template-categories"]({
+      const { data, error } = await api["template-categories"]({
         categoryId: id,
       }).post({ name });
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.categorySaveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return false;
-      }
-      return true;
+      return { data, error };
     },
     remove: async (id) => {
-      const response = await api["template-categories"]({
+      const { data, error } = await api["template-categories"]({
         categoryId: id,
       }).delete();
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.categoryDeleteFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return false;
-      }
-      return true;
+      return { data, error };
     },
-  };
+    saveFailedTitle: t("templates.categorySaveFailed"),
+    deleteFailedTitle: t("templates.categoryDeleteFailed"),
+  });
 };
 
 export const useTemplateCategoryLabels = (): CategoryLabels => {

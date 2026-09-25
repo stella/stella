@@ -50,9 +50,9 @@ describe("sanitizeForPrompt", () => {
     const out: string = sanitizeForPrompt(
       untrustedText("a\u{0001}b\u{0002}c\td\ne"),
     );
-    // eslint-disable-next-line no-control-regex -- asserting control char was removed
+    // oxlint-disable-next-line no-control-regex -- asserting control char was removed
     expect(out).not.toMatch(/\u{0001}/u);
-    // eslint-disable-next-line no-control-regex -- asserting control char was removed
+    // oxlint-disable-next-line no-control-regex -- asserting control char was removed
     expect(out).not.toMatch(/\u{0002}/u);
     expect(out).toContain("\t");
     expect(out).toContain("\n");

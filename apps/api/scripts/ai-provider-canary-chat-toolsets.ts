@@ -3,6 +3,7 @@ import type { AnyClientTool } from "@tanstack/ai";
 import { panic } from "better-result";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   BUSINESS_REGISTRY_SLUGS,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_EDIT_APPLY_MODE,
@@ -155,6 +156,9 @@ const buildChatToolsForScenario = ({
   return getChatTools({
     activeFile,
     activeSkillContext,
+    // A live extension registers the client-executed browser tool, so its
+    // schema also runs through the provider matrix.
+    browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,

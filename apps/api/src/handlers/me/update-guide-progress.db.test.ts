@@ -14,7 +14,7 @@ import { user as authUser } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { createUpdateGuideProgressHandler } from "@/api/handlers/me/update-guide-progress";
 import { toSafeId } from "@/api/lib/branded-types";
-import { patchUserGuideProgress } from "@/api/lib/guide-progress";
+import { writeUserGuideProgress } from "@/api/lib/guide-progress";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -42,7 +42,7 @@ beforeAll(async () => {
     execute: executeRootQuery,
   });
   updateGuideProgress = createUpdateGuideProgressHandler(
-    async (input) => await patchUserGuideProgress({ ...input, db: database }),
+    async (input) => await writeUserGuideProgress(database, input),
   );
 
   await testDb.insert(authUser).values([

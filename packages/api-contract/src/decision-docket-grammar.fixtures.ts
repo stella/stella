@@ -101,6 +101,20 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       canonical: "XYZW9/999-9999/99-9/XY",
       variants: ["xyzw9/999-9999/99-9/xy", "XYZW9/999‑9999/99‑9/XY"],
     },
+    // A competition authority's decision number, spaced or not around its
+    // hyphens, with and without a division between code and ordinal.
+    {
+      canonical: "XYZ-999/2099",
+      variants: [" XYZ - 999/2099 ", "XYZ–999/2099"],
+    },
+    {
+      canonical: "XYZ-II-99/2099",
+      variants: ["XYZ - II - 99/2099"],
+    },
+    {
+      canonical: "XYZ-9-99/2099",
+      variants: ["XYZ‑9‑99/2099", "XYZ - 9 - 99/2099"],
+    },
   ],
   SVK: [
     {

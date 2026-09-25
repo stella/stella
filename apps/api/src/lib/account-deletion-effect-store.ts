@@ -1,7 +1,6 @@
 import { and, asc, eq, gte, lt, notExists, or, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
@@ -34,7 +33,7 @@ export type AccountDeletionEffectClaim = {
   s3Keys: string[];
 };
 
-type AccountDeletionEffectDb = Pick<
+export type AccountDeletionEffectDb = Pick<
   typeof rootDb,
   "select" | "selectDistinct" | "transaction"
 >;
@@ -156,7 +155,7 @@ const synchronizeParentProjection = async (
 
 export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
-  db: AccountDeletionEffectDb = rootDb,
+  db: AccountDeletionEffectDb,
 ): Promise<number> =>
   await db.transaction(async (tx) => {
     const existing = (
@@ -224,7 +223,7 @@ export const ensureAccountDeletionEffectChunks = async (
 
 export const claimNextAccountDeletionEffectChunk = async (
   requestId: SafeId<"accountDeletionRequest">,
-  db: AccountDeletionEffectDb = rootDb,
+  db: AccountDeletionEffectDb,
 ): Promise<AccountDeletionEffectClaim | null> =>
   await db.transaction(async (tx) => {
     const candidate = (
@@ -332,7 +331,7 @@ export const claimNextAccountDeletionEffectChunk = async (
 
 export const completeAccountDeletionEffectChunk = async (
   claim: AccountDeletionEffectClaim,
-  db: AccountDeletionEffectDb = rootDb,
+  db: AccountDeletionEffectDb,
 ): Promise<boolean> =>
   await db.transaction(async (tx) => {
     const settled = (
@@ -368,7 +367,7 @@ export const completeAccountDeletionEffectChunk = async (
 export const failAccountDeletionEffectChunk = async (
   claim: AccountDeletionEffectClaim,
   error: Error,
-  db: AccountDeletionEffectDb = rootDb,
+  db: AccountDeletionEffectDb,
 ): Promise<boolean> =>
   await db.transaction(async (tx) => {
     const retryDelayMs = getDestructiveEffectRetryDelayMs(claim.attemptCount);
@@ -401,7 +400,7 @@ export const failAccountDeletionEffectChunk = async (
   });
 
 export const listRecoverableAccountDeletionEffectRequestIds = async (
-  db: AccountDeletionEffectDb = rootDb,
+  db: AccountDeletionEffectDb,
 ): Promise<SafeId<"accountDeletionRequest">[]> => {
   const legacyRows = await db
     .select({ id: accountDeletionRequests.id })

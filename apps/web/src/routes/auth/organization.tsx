@@ -38,7 +38,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -278,7 +278,7 @@ const OrganizationList = ({
   }, [singleOrg, isSelectPending, selectOrg]);
 
   // Show skeleton while auto-selecting the single org
-  // eslint-disable-next-line react/refs -- one-time guard ref read during render only gates the initial skeleton (before the auto-select effect fires) and the error path; the re-render is driven by singleOrg/isSelectPending
+  // oxlint-disable-next-line react/refs -- one-time guard ref read during render only gates the initial skeleton (before the auto-select effect fires) and the error path; the re-render is driven by singleOrg/isSelectPending
   if (singleOrg && (isSelectPending || !autoSelected.current)) {
     return (
       <Frame className="w-full max-w-sm">

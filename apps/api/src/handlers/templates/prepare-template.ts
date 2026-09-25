@@ -17,7 +17,7 @@ import {
   applyFieldSuggestions,
   type FieldSuggestion,
 } from "@/api/lib/docx/apply-field-suggestions";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import {
   MAIN_DOCUMENT_PART_PATH,
   templateContentPartPaths,
@@ -44,7 +44,7 @@ export const prepareTemplateFromDocument = async ({
   buffer: Buffer;
   suggest: SuggestFields;
 }): Promise<PrepareTemplateResult> => {
-  const { paragraphs } = await extractText(buffer);
+  const { paragraphs } = await extractDocxDocument(buffer);
   const documentText = paragraphs.map((paragraph) => paragraph.text).join("\n");
 
   const suggestions = await suggest(documentText);
@@ -60,7 +60,7 @@ export const prepareTemplateFromDocument = async ({
 
   // Rewrite the body and every header/footer part, matching the parts the rest
   // of the pipeline covers through templateContentPartPaths. A literal the model read
-  // from a letterhead or footer (extractText concatenates headers, body, and
+  // from a letterhead or footer (extractDocxDocument concatenates headers, body, and
   // footers into the prompt) is then rewritten where it actually lives.
   const partNames = templateContentPartPaths(Object.keys(zip.files));
 

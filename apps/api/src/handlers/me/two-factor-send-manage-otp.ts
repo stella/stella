@@ -46,7 +46,7 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
     });
 
     if (env.isDev) {
-      // eslint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
+      // oxlint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: two-factor-manage)\x1b[0m\n`,
       );
@@ -56,7 +56,7 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
           emailResult.error instanceof Error
             ? emailResult.error.message
             : String(emailResult.error);
-        // eslint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
+        // oxlint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
         console.warn(`[DEV] Failed to send email via SMTP: ${message}`);
       }
     } else if (emailResult.isErr()) {

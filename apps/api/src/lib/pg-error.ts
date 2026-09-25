@@ -1,12 +1,20 @@
-// A SQLSTATE is exactly five characters from the class/subclass alphabet
-// (`0`-`9`, `A`-`Z`). Shape alone is not enough: five-letter Node system
-// codes (`EPIPE`, `EPERM`) fit it too, so the check also requires at least
-// one digit (every standard SQLSTATE contains one; Node codes are all
-// letters) and `sqlStateOf` skips nodes carrying `syscall`, which every Node
-// system error has and no Postgres driver error does.
-const PG_SQLSTATE_PATTERN = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
+import {
+  PG_CONNECTION_LIFECYCLE_SQL_STATES,
+  PG_DRIVER_ERROR,
+  pgIdentityFields,
+  shadowGradeFields,
+} from "@/api/lib/observability/failure";
+import {
+  MAX_EVIDENCE_DEPTH,
+  readEvidence,
+  sqlStateFrom,
+} from "@/api/lib/observability/failure-evidence";
 
-const MAX_CAUSE_DEPTH = 6;
+// The driver codes are owned by the failure grader, which reads them for every
+// sink; they are re-exported here for the retry and control-flow callers.
+export { PG_DRIVER_ERROR };
+
+const MAX_CAUSE_DEPTH = MAX_EVIDENCE_DEPTH;
 
 const readProperty = (value: object, key: string): unknown => {
   try {
@@ -21,25 +29,14 @@ const readNonEmptyString = (value: object, key: string): string | undefined => {
   return typeof raw === "string" && raw !== "" ? raw : undefined;
 };
 
-// Returns a node's SQLSTATE when it is shaped like a Postgres driver error.
-// Bun's `Bun.sql` puts the SQLSTATE in `errno` (`code` is a generic category
-// like "ERR_POSTGRES_SERVER_ERROR"); pg/PGlite put it in `code`. Prefer
-// `errno`, fall back to `code`, and require the SQLSTATE shape so
-// non-Postgres codes are ignored.
-const sqlStateOf = (node: object): string | undefined => {
-  if (readProperty(node, "syscall") !== undefined) {
-    return undefined;
-  }
-  const errno = readNonEmptyString(node, "errno");
-  if (errno !== undefined && PG_SQLSTATE_PATTERN.test(errno)) {
-    return errno;
-  }
-  const code = readNonEmptyString(node, "code");
-  if (code !== undefined && PG_SQLSTATE_PATTERN.test(code)) {
-    return code;
-  }
-  return undefined;
-};
+// The snapshot's SQLSTATE rule, so a code the observability fields can see is
+// one these predicates can match.
+const sqlStateOf = (node: object): string | undefined =>
+  sqlStateFrom({
+    syscall: readProperty(node, "syscall"),
+    errno: readProperty(node, "errno"),
+    code: readProperty(node, "code"),
+  });
 
 /**
  * Every node in `error`'s `.cause` chain, outermost first.
@@ -129,69 +126,13 @@ export const isPgConstraintError = (
       readNonEmptyString(node, "constraint") === constraint,
   );
 
-/**
- * Bun driver codes for a connection that is gone, as opposed to a query the
- * server rejected. The driver reports this category in `code`; a SQLSTATE,
- * when there is one, lives in `errno`, so these never collide with `PG_ERROR`.
- *
- * Retirement by the pool's own `idleTimeout` and `maxLifetime` bounds belongs
- * with the server-side closures: Bun retires a connection when the timer
- * expires whether or not a caller still holds it, so the interrupted work is
- * neither lost nor invalid, and the next attempt gets a fresh connection.
- *
- * `CONNECTION_FAILED` is the same story at the other end of the connection's
- * life: the driver documents it as accepted but closed before the handshake
- * completed, which is what a server that is still starting up looks like.
- * Which of these a given failure surfaces as is not stable across driver
- * versions, so callers must treat the set as one condition rather than
- * branching on a member.
- */
-export const PG_DRIVER_ERROR = {
-  CONNECTION_CLOSED: "ERR_POSTGRES_CONNECTION_CLOSED",
-  CONNECTION_FAILED: "ERR_POSTGRES_CONNECTION_FAILED",
-  CONNECTION_TIMEOUT: "ERR_POSTGRES_CONNECTION_TIMEOUT",
-  IDLE_TIMEOUT: "ERR_POSTGRES_IDLE_TIMEOUT",
-  LIFETIME_TIMEOUT: "ERR_POSTGRES_LIFETIME_TIMEOUT",
-} as const;
-
-/**
- * `ERR_POSTGRES_CONNECTION_REFUSED` is deliberately absent: the driver
- * documents it as nothing listening at the address, fails it immediately, and
- * does not retry. Treating it as transient would turn a wrong host or port
- * into a silent retry loop rather than a failure someone reads.
- */
-
 const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
   Object.values(PG_DRIVER_ERROR),
 );
 
-/**
- * SQLSTATEs Postgres answers with when the backend can speak the protocol but
- * will not serve the connection: it is still starting up or in recovery
- * (`57P03`), an operator shut it down (`57P01`), it is tearing down after
- * another backend crashed (`57P02`), or an idle-session timeout retired it
- * (`57P05`). The server refuses or terminates the connection rather than
- * rejecting the query, so the work never ran and is retryable as-is, exactly
- * like the driver codes above.
- *
- * These are the same conditions as `PG_DRIVER_ERROR`, seen from the other side
- * of a completed handshake. A restart surfaces as a driver code while the
- * socket dies before the startup packet is answered, and as one of these once
- * the backend is far enough along to reply, so neither set covers the
- * condition without the other.
- *
- * `57014` (`query_canceled`) and `57P04` (`database_dropped`) share the class
- * and are deliberately absent: the former reports a cancelled statement, and
- * the latter names a permanently unavailable database. Neither is repaired by
- * retrying the same work against a fresh connection. `57014` lives in
- * `PG_ERROR`.
- */
-const CONNECTION_LIFECYCLE_SQL_STATES: ReadonlySet<string> = new Set([
-  "57P01",
-  "57P02",
-  "57P03",
-  "57P05",
-]);
+const CONNECTION_LIFECYCLE_SQL_STATES: ReadonlySet<string> = new Set(
+  PG_CONNECTION_LIFECYCLE_SQL_STATES,
+);
 
 /**
  * True when `error`, or anything in its `.cause` chain, reports a connection
@@ -240,30 +181,6 @@ export const PG_ERROR = {
   PROGRAM_LIMIT_EXCEEDED: "54000",
 } as const;
 
-// Schema identifiers Postgres attaches to a server error. These name database
-// objects, never row data, so they are safe to ship to a log sink. `detail`,
-// `hint`, `where`, `internalQuery`, and `query` are deliberately excluded:
-// they can embed the offending row's column values.
-const PG_SAFE_STRING_FIELDS = [
-  { key: "error.cause.pg_severity", property: "severity" },
-  { key: "error.cause.pg_constraint", property: "constraint" },
-  { key: "error.cause.pg_table", property: "table" },
-  { key: "error.cause.pg_column", property: "column" },
-  { key: "error.cause.pg_schema", property: "schema" },
-  { key: "error.cause.pg_routine", property: "routine" },
-] as const;
-
-const readSafePgStringFields = (node: object): Record<string, string> => {
-  const fields: Record<string, string> = {};
-  for (const { key, property } of PG_SAFE_STRING_FIELDS) {
-    const value = readNonEmptyString(node, property);
-    if (value !== undefined) {
-      fields[key] = value;
-    }
-  }
-  return fields;
-};
-
 /**
  * Extract safe, structured fields from a Postgres driver error anywhere in an
  * error's `.cause` chain, for observability. A failed query wraps the driver
@@ -271,23 +188,13 @@ const readSafePgStringFields = (node: object): Record<string, string> => {
  * down and would otherwise never reach the log sink.
  *
  * Returns the SQLSTATE under `error.cause.pg_code` plus any present schema
- * identifiers (severity, constraint, table, column, schema, routine). Every
- * key is chosen to NOT match the logger's PII redaction regex, so the fields
- * survive `sanitizeLogAttributes`. Returns `{}` when no Postgres error is
- * found. Never throws: property access is fully guarded.
+ * identifiers (severity, constraint, table, column, schema, routine), read
+ * from the shared failure snapshot, and the grade that failure would get.
+ * Returns `{}` when no Postgres error is found. Never throws.
  */
 export const pgErrorFields = (error: unknown): Record<string, string> => {
-  const nodes = pgErrorNodes(error);
-  const outermost = nodes.at(0);
-  if (outermost === undefined) {
-    return {};
-  }
-
-  const fields: Record<string, string> = {
-    "error.cause.pg_code": outermost.sqlState,
-  };
-  for (const { node } of nodes) {
-    Object.assign(fields, readSafePgStringFields(node));
-  }
-  return fields;
+  const fields = pgIdentityFields(readEvidence(error));
+  return Object.keys(fields).length === 0
+    ? fields
+    : { ...fields, ...shadowGradeFields(error) };
 };

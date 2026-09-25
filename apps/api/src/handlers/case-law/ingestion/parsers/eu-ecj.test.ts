@@ -293,7 +293,7 @@ describe("parseEcjDecisionHtml", () => {
     let cursor = 0;
     for (const expected of oracle.headings) {
       const at = headings.findIndex(
-        // eslint-disable-next-line no-loop-func -- `cursor` is the walk's position; the closure reads it on the same iteration it is set
+        // oxlint-disable-next-line no-loop-func -- `cursor` is the walk's position; the closure reads it on the same iteration it is set
         (heading, index) => index >= cursor && heading.text === expected.text,
       );
       expect({ language, heading: expected.text, found: at !== -1 }).toEqual({

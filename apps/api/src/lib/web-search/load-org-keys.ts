@@ -3,12 +3,15 @@
  * into ready-to-use providers (org key first, platform env key as
  * fallback).
  *
- * Mirrors `ai-config-loader`: a single indexed `findFirst` on
- * `organization_id` via the root pool, with key material decrypted in
- * process. The cost is dominated by the in-VPC round-trip to RDS.
+ * Mirrors `ai-config-loader`: a single indexed select on `organization_id`
+ * through the handle the caller passes (a request's scoped transaction or a
+ * worker's database), with key material decrypted in process.
  */
 
-import { rootDb } from "@/api/db/root";
+import { eq } from "drizzle-orm";
+
+import { organizationSettings } from "@/api/db/schema";
+import type { OrgSettingsReader } from "@/api/lib/ai-config-loader";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import type {
@@ -61,31 +64,34 @@ export const resolveWebSearchKeysFromRow = async (
 };
 
 export const loadWebSearchKeys = async (
+  db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
 ): Promise<WebSearchKeys> => {
-  const row = await rootDb.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: {
-      webSearchApiKeyEncrypted: true,
-      webSearchApiKeyIv: true,
-      urlFetchApiKeyEncrypted: true,
-      urlFetchApiKeyIv: true,
-    },
-  });
+  const rows = await db
+    .select({
+      webSearchApiKeyEncrypted: organizationSettings.webSearchApiKeyEncrypted,
+      webSearchApiKeyIv: organizationSettings.webSearchApiKeyIv,
+      urlFetchApiKeyEncrypted: organizationSettings.urlFetchApiKeyEncrypted,
+      urlFetchApiKeyIv: organizationSettings.urlFetchApiKeyIv,
+    })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1);
 
-  return await resolveWebSearchKeysFromRow(organizationId, row);
+  return await resolveWebSearchKeysFromRow(organizationId, rows.at(0));
 };
 
 export const loadWebSearchProvidersForOrg = async (
+  db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
 ): Promise<ResolvedWebSearchProviders> =>
-  resolveWebSearchProvidersFromEnv(await loadWebSearchKeys(organizationId));
+  resolveWebSearchProvidersFromEnv(await loadWebSearchKeys(db, organizationId));
 
 /**
  * Resolve web-search providers from an `organizationSettings` row a
  * caller already fetched, instead of this module re-reading the row.
- * get-messages.ts uses this after widening its own scoped select to
- * include the web-search key columns.
+ * `handlers/chat/messages/list.ts` uses this after widening its own scoped
+ * select to include the web-search key columns.
  */
 export const resolveWebSearchProvidersFromOrgSettingsRow = async (
   organizationId: SafeId<"organization">,

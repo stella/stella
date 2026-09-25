@@ -117,6 +117,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/stores/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
+  "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
   "packages/auth-model/src/**/*.ts",
   "packages/calculations/src/**/*.ts",
@@ -289,6 +290,21 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/desktop/src/mainview" },
   { reason: "unreviewed", unit: "apps/desktop/src/shared" },
   { reason: "unreviewed", unit: "apps/desktop/src/telemetry" },
+  {
+    reason:
+      "Chrome extension worker and popup: chrome.* APIs fail by rejection and the injected page script cannot import better-result; the worker turns failures into protocol error codes at its message boundary. Enrol once chrome.* calls sit behind Result.tryPromise.",
+    unit: "apps/extension/src/entrypoints",
+  },
+  {
+    reason:
+      "Chrome extension popup: DOM lookups and chrome.* calls are the runtime boundary. Enrol together with apps/extension/src/entrypoints.",
+    unit: "apps/extension/src/entrypoints/popup",
+  },
+  {
+    reason:
+      "Chrome extension library: tab-executor is the boundary that maps chrome.* rejections to protocol error codes. Enrol once chrome.* calls sit behind Result.tryPromise.",
+    unit: "apps/extension/src/lib",
+  },
   { reason: "unreviewed", unit: "apps/landing/src" },
   { reason: "unreviewed", unit: "apps/landing/src/components" },
   { reason: "unreviewed", unit: "apps/landing/src/components/react" },

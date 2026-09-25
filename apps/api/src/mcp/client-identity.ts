@@ -1,6 +1,6 @@
-import { getAnalytics } from "@/api/lib/analytics/client";
-import type { McpSessionInitializedProperties } from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
+import type { McpSessionInitializedProperties } from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import type { McpSession } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -74,7 +74,7 @@ export const recordMcpSessionInitialized: RecordMcpSessionInitialized = ({
     mode,
   };
 
-  getAnalytics().capture({
+  getServerAnalytics().capture({
     distinctId: session.userId,
     event: SERVER_ANALYTICS_EVENTS.mcpSessionInitialized,
     groups: { organization: session.organizationId },

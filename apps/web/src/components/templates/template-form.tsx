@@ -1456,10 +1456,10 @@ export const TemplateForm = ({
     Record<string, string | null>
   >({});
   const touchedRef = useRef(touched);
-  // eslint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
+  // oxlint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
   touchedRef.current = touched;
   const valuesRef = useRef(values);
-  // eslint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
+  // oxlint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
   valuesRef.current = values;
 
   // Notify once with the merged initial snapshot, matching the on-change
@@ -2288,7 +2288,7 @@ export const TemplateForm = ({
                 {structureErrors.map((error, index) => (
                   <li
                     className="text-warning-foreground text-sm"
-                    // eslint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
+                    // oxlint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
                     key={`${error.paragraphIndex}-${error.directive}-${index}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">

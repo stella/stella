@@ -44,6 +44,35 @@ export const isStringLiteral = (
 // Resolve the static name of a Property or MemberExpression key:
 // Identifier.name or string-Literal.value. Returns null for computed keys
 // driven by a non-literal expression.
+// The static text of a string literal or a zero-expression template literal:
+// `` `jsonb` `` and `"jsonb"` spell the same value, so a backtick literal
+// matches too.
+export const staticStringValue = (node: unknown): string | null => {
+  if (isStringLiteral(node)) {
+    return node.value;
+  }
+  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
+    return null;
+  }
+  const expressions = node.expressions;
+  const quasis = node.quasis;
+  if (!Array.isArray(expressions) || expressions.length !== 0) {
+    return null;
+  }
+  if (!Array.isArray(quasis) || quasis.length !== 1) {
+    return null;
+  }
+  const quasi = quasis[0];
+  if (!isAstNode(quasi)) {
+    return null;
+  }
+  const value = quasi.value;
+  if (typeof value !== "object" || value === null || !("cooked" in value)) {
+    return null;
+  }
+  return typeof value.cooked === "string" ? value.cooked : null;
+};
+
 export const getPropertyName = (node: unknown): string | null => {
   if (isIdentifier(node)) {
     return node.name;
@@ -150,9 +179,9 @@ export const getImportLocalName = (specifier: unknown): string | null => {
 
 // --- Loop and async-boundary shape, shared by the await-in-loop rules -------
 //
-// `no-db-await-in-loop` and `no-network-await-in-loop` must agree on what
-// counts as per-iteration work, so the shape lives here once instead of in two
-// hand-kept copies.
+// `no-network-await-in-loop` and the type-aware `scripts/db-await-in-loop.ts`
+// must agree on what counts as per-iteration work; the script mirrors these
+// positions on the TypeScript AST.
 
 // Positions of a loop node that re-run on every iteration. A `for`
 // initializer and a `for-of` / `for-in` right-hand side are evaluated once, so
@@ -181,6 +210,111 @@ export const isPerIterationLoopPosition = (
   }
   const fields = PER_ITERATION_LOOP_FIELDS[loop.type];
   return fields?.some((field) => loop[field] === child) ?? false;
+};
+
+const FUNCTION_NODE_TYPES: ReadonlySet<string> = new Set([
+  "ArrowFunctionExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+]);
+
+// The statement a `break` or `continue` leaves: its labelled statement, or
+// else the nearest loop (or `switch`, for an unlabelled `break`). `null` for
+// any other node, and when the jump would have to cross a function boundary.
+export const abruptCompletionTarget = (node: AstNode): AstNode | null => {
+  if (node.type !== "BreakStatement" && node.type !== "ContinueStatement") {
+    return null;
+  }
+  const labelName = isIdentifier(node.label) ? node.label.name : null;
+  let current = isAstNode(node.parent) ? node.parent : null;
+  while (current !== null) {
+    if (
+      labelName !== null &&
+      current.type === "LabeledStatement" &&
+      isIdentifier(current.label, labelName)
+    ) {
+      return current;
+    }
+    if (
+      labelName === null &&
+      (LOOP_NODE_TYPES.has(current.type) ||
+        (node.type === "BreakStatement" && current.type === "SwitchStatement"))
+    ) {
+      return current;
+    }
+    if (FUNCTION_NODE_TYPES.has(current.type)) {
+      return null;
+    }
+    current = isAstNode(current.parent) ? current.parent : null;
+  }
+  return null;
+};
+
+const collectReturnArguments = (node: unknown, results: AstNode[]): void => {
+  if (!isAstNode(node)) {
+    return;
+  }
+  switch (node.type) {
+    case "BlockStatement": {
+      if (Array.isArray(node.body)) {
+        for (const statement of node.body) {
+          collectReturnArguments(statement, results);
+        }
+      }
+      return;
+    }
+    case "IfStatement": {
+      collectReturnArguments(node.consequent, results);
+      collectReturnArguments(node.alternate, results);
+      return;
+    }
+    case "SwitchStatement": {
+      if (Array.isArray(node.cases)) {
+        for (const switchCase of node.cases) {
+          if (isAstNode(switchCase) && Array.isArray(switchCase.consequent)) {
+            for (const statement of switchCase.consequent) {
+              collectReturnArguments(statement, results);
+            }
+          }
+        }
+      }
+      return;
+    }
+    case "TryStatement": {
+      collectReturnArguments(node.block, results);
+      if (isAstNode(node.handler)) {
+        collectReturnArguments(node.handler.body, results);
+      }
+      collectReturnArguments(node.finalizer, results);
+      return;
+    }
+    case "ForStatement":
+    case "ForInStatement":
+    case "ForOfStatement":
+    case "WhileStatement":
+    case "DoWhileStatement":
+    case "LabeledStatement": {
+      collectReturnArguments(node.body, results);
+      return;
+    }
+    case "ReturnStatement": {
+      if (isAstNode(node.argument)) {
+        results.push(node.argument);
+      }
+      return;
+    }
+    default:
+      return;
+  }
+};
+
+// The `argument` of every `return` reachable from `node` without crossing into
+// a nested function's body: a `return` inside a callback the function passes
+// on is not a return of the function itself.
+export const returnArguments = (node: unknown): AstNode[] => {
+  const results: AstNode[] = [];
+  collectReturnArguments(node, results);
+  return results;
 };
 
 const isResultTryPromiseArgument = (node: unknown): boolean => {

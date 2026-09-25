@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
+import { declareFailureClass } from "@stll/errors";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 
 export { FetchBoundaryError } from "@stll/errors";
@@ -175,11 +176,20 @@ export class DatabaseError extends TaggedError("DatabaseError")<{
   cause?: unknown;
 }> {}
 
+/**
+ * A row-level security denial. Answered as a client outcome, observed as a
+ * defect: RLS is the last isolation guard, so a request that reaches it is a
+ * fault in the query above it.
+ */
 export class DatabaseRlsError extends TaggedError("DatabaseRlsError")<{
   code?: string;
   message: string;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, "rls_denied");
+  }
+}
 
 export class Unreachable extends TaggedError("Unreachable")<{
   message: string;
@@ -396,14 +406,22 @@ export class ChatEmptyCompletionError extends TaggedError(
   "ChatEmptyCompletionError",
 )<{
   message: string;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, "chat_empty_completion");
+  }
+}
 
 /** Chat agent looped past the recovery budget. */
 export class ChatLoopDetectedError extends TaggedError(
   "ChatLoopDetectedError",
 )<{
   message: string;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, "chat_loop_detected");
+  }
+}
 
 /**
  * Terminal outcomes the chat stream raises itself when a model attempt yields
@@ -430,7 +448,11 @@ export class AIGenerationCancelledError extends TaggedError(
   "AIGenerationCancelledError",
 )<{
   message: string;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, "generation_cancelled");
+  }
+}
 
 /** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
 export class SandboxError extends TaggedError("SandboxError")<{

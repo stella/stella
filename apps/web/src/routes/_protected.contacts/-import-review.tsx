@@ -595,7 +595,7 @@ export const ImportCandidateCard = ({
                 onChange={(event) =>
                   setCustomField(index, { value: event.target.value })
                 }
-                placeholder={t("contacts.customFields.valuePlaceholder")}
+                placeholder={t("common.value")}
                 value={field.value}
               />
             </Field>

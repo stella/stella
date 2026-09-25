@@ -11,28 +11,33 @@
 
 import { count, desc, gte, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 
 const ONE_HOUR_AGO = new Date(Date.now() - 60 * 60 * 1000);
 const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-const sources = await rootDb
-  .select({
-    id: caseLawSources.id,
-    adapterKey: caseLawSources.adapterKey,
-    name: caseLawSources.name,
-    syncCursor: caseLawSources.syncCursor,
-    lastSyncAt: caseLawSources.lastSyncAt,
-    enabled: caseLawSources.enabled,
-  })
-  .from(caseLawSources)
-  .orderBy(caseLawSources.adapterKey);
+const { rootDb: db } = await openCaseLawReadOnlySession();
+
+const sources = await db.transaction(
+  async (tx) =>
+    await tx
+      .select({
+        id: caseLawSources.id,
+        adapterKey: caseLawSources.adapterKey,
+        name: caseLawSources.name,
+        syncCursor: caseLawSources.syncCursor,
+        lastSyncAt: caseLawSources.lastSyncAt,
+        enabled: caseLawSources.enabled,
+      })
+      .from(caseLawSources)
+      .orderBy(caseLawSources.adapterKey),
+);
 
 if (sources.length === 0) {
   console.log("No sources configured.");
@@ -44,54 +49,69 @@ console.log("\n=== Case Law Ingestion Status ===\n");
 // Each figure is one grouped query over every source, not one per source.
 const totalBySource = new Map(
   (
-    await rootDb
-      .select({ sourceId: caseLawDecisions.sourceId, total: count() })
-      .from(caseLawDecisions)
-      .groupBy(caseLawDecisions.sourceId)
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .select({ sourceId: caseLawDecisions.sourceId, total: count() })
+          .from(caseLawDecisions)
+          .groupBy(caseLawDecisions.sourceId),
+    )
   ).map((row) => [row.sourceId, row.total]),
 );
 
 const insertedBySource = new Map(
   (
-    await rootDb
-      .select({
-        sourceId: caseLawIngestionEvents.sourceId,
-        lastHour: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}) FILTER (WHERE ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}), 0)`,
-        lastDay: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
-      })
-      .from(caseLawIngestionEvents)
-      .where(gte(caseLawIngestionEvents.finishedAt, ONE_DAY_AGO))
-      .groupBy(caseLawIngestionEvents.sourceId)
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .select({
+            sourceId: caseLawIngestionEvents.sourceId,
+            lastHour: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}) FILTER (WHERE ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}), 0)`,
+            lastDay: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+          })
+          .from(caseLawIngestionEvents)
+          .where(gte(caseLawIngestionEvents.finishedAt, ONE_DAY_AGO))
+          .groupBy(caseLawIngestionEvents.sourceId),
+    )
   ).map((row) => [row.sourceId, row]),
 );
 
 const failureCountBySource = new Map(
   (
-    await rootDb
-      .select({ sourceId: caseLawIngestionFailures.sourceId, total: count() })
-      .from(caseLawIngestionFailures)
-      .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
-      .groupBy(caseLawIngestionFailures.sourceId)
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .select({
+            sourceId: caseLawIngestionFailures.sourceId,
+            total: count(),
+          })
+          .from(caseLawIngestionFailures)
+          .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
+          .groupBy(caseLawIngestionFailures.sourceId),
+    )
   ).map((row) => [row.sourceId, row.total]),
 );
 
 const lastEventBySource = new Map(
   (
-    await rootDb
-      .selectDistinctOn([caseLawIngestionEvents.sourceId], {
-        sourceId: caseLawIngestionEvents.sourceId,
-        status: caseLawIngestionEvents.status,
-        inserted: caseLawIngestionEvents.inserted,
-        skipped: caseLawIngestionEvents.skipped,
-        durationMs: caseLawIngestionEvents.durationMs,
-        finishedAt: caseLawIngestionEvents.finishedAt,
-        errorMessage: caseLawIngestionEvents.errorMessage,
-      })
-      .from(caseLawIngestionEvents)
-      .orderBy(
-        caseLawIngestionEvents.sourceId,
-        desc(caseLawIngestionEvents.finishedAt),
-      )
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .selectDistinctOn([caseLawIngestionEvents.sourceId], {
+            sourceId: caseLawIngestionEvents.sourceId,
+            status: caseLawIngestionEvents.status,
+            inserted: caseLawIngestionEvents.inserted,
+            skipped: caseLawIngestionEvents.skipped,
+            durationMs: caseLawIngestionEvents.durationMs,
+            finishedAt: caseLawIngestionEvents.finishedAt,
+            errorMessage: caseLawIngestionEvents.errorMessage,
+          })
+          .from(caseLawIngestionEvents)
+          .orderBy(
+            caseLawIngestionEvents.sourceId,
+            desc(caseLawIngestionEvents.finishedAt),
+          ),
+    )
   ).map((row) => [row.sourceId, row]),
 );
 
@@ -100,19 +120,22 @@ const topFailuresBySource = new Map<
   (typeof caseLawIngestionFailures.$inferSelect)["sourceId"],
   { errorType: string; count: number }[]
 >();
-const failureTypeCounts = await rootDb
-  .select({
-    sourceId: caseLawIngestionFailures.sourceId,
-    errorType: caseLawIngestionFailures.errorType,
-    count: count(),
-  })
-  .from(caseLawIngestionFailures)
-  .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
-  .groupBy(
-    caseLawIngestionFailures.sourceId,
-    caseLawIngestionFailures.errorType,
-  )
-  .orderBy(caseLawIngestionFailures.sourceId, desc(count()));
+const failureTypeCounts = await db.transaction(
+  async (tx) =>
+    await tx
+      .select({
+        sourceId: caseLawIngestionFailures.sourceId,
+        errorType: caseLawIngestionFailures.errorType,
+        count: count(),
+      })
+      .from(caseLawIngestionFailures)
+      .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO))
+      .groupBy(
+        caseLawIngestionFailures.sourceId,
+        caseLawIngestionFailures.errorType,
+      )
+      .orderBy(caseLawIngestionFailures.sourceId, desc(count())),
+);
 for (const row of failureTypeCounts) {
   const top = topFailuresBySource.get(row.sourceId) ?? [];
   if (top.length < TOP_FAILURE_TYPES) {
@@ -161,18 +184,22 @@ for (const source of sources) {
 }
 
 // Summary
-const [totalDecisions] = await rootDb
-  .select({ total: count() })
-  .from(caseLawDecisions);
+const [totalDecisions] = await db.transaction(
+  async (tx) => await tx.select({ total: count() }).from(caseLawDecisions),
+);
 
-const [totalEvents] = await rootDb
-  .select({ total: count() })
-  .from(caseLawIngestionEvents);
+const [totalEvents] = await db.transaction(
+  async (tx) =>
+    await tx.select({ total: count() }).from(caseLawIngestionEvents),
+);
 
-const [totalFailures] = await rootDb
-  .select({ total: count() })
-  .from(caseLawIngestionFailures)
-  .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO));
+const [totalFailures] = await db.transaction(
+  async (tx) =>
+    await tx
+      .select({ total: count() })
+      .from(caseLawIngestionFailures)
+      .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO)),
+);
 
 console.log("--- Summary ---");
 console.log(

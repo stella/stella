@@ -25,10 +25,10 @@ import * as v from "valibot";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
@@ -116,7 +116,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
     // and matches the prod schema by construction.
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
     fixtures.push(raw as CaseLawFixture);
   }
   fixtures.sort((a, b) =>
@@ -125,7 +125,9 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
   return fixtures;
 };
 
-const ensureSearchPreviewConfig = async () => {
+const ensureSearchPreviewConfig = async (
+  rootDb: CaseLawWriteHandles["rootDb"],
+) => {
   await rootDb.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
   await rootDb.execute(sql`
     DO $$
@@ -154,18 +156,12 @@ const ensureSearchPreviewConfig = async () => {
   `);
 };
 
-export async function seedCaseLaw() {
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to run: NODE_ENV must not be 'production'.");
-  }
-
-  // Index + slug writes target the global `case_law_*` tables, which only
-  // the `stella_ingestion` role may write under RLS. The decision rows below
-  // go in via `rootDb` (table owner), but `indexDecision` and the slug
-  // backfill run their writes through this ingestion-scoped handle.
-  const ingestionDb = createIngestionDb(rlsDb);
-
-  await ensureSearchPreviewConfig();
+// Index + slug writes target the global `case_law_*` tables, which only
+// the `stella_ingestion` role may write under RLS. The decision rows below
+// go in via the lane's `rootDb` (table owner), but `indexDecision` and the
+// slug backfill run their writes through its ingestion-scoped handle.
+const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
+  await ensureSearchPreviewConfig(rootDb);
 
   const fixtures = await loadFixtures();
   console.log(`Found ${fixtures.length} fixtures.`);
@@ -176,27 +172,33 @@ export async function seedCaseLaw() {
   for (const { source, decisions } of fixtures) {
     const adapterKey = source.adapter_key;
 
-    const findSourceId = () =>
-      rootDb.query.caseLawSources.findFirst({
-        where: { adapterKey: { eq: adapterKey } },
-        columns: { id: true },
-      });
+    const findSourceId = async () =>
+      await rootDb.transaction(
+        async (tx) =>
+          await tx.query.caseLawSources.findFirst({
+            where: { adapterKey: { eq: adapterKey } },
+            columns: { id: true },
+          }),
+      );
 
     const existingSource = await findSourceId();
     let sourceId = existingSource?.id;
     if (!sourceId) {
-      const inserted = await rootDb
-        .insert(caseLawSources)
-        .values({
-          id: sourceIdFor(adapterKey),
-          adapterKey,
-          name: source.name,
-          enabled: source.enabled,
-          lastSyncAt: new Date(),
-          config: source.config ?? {},
-        })
-        .onConflictDoNothing()
-        .returning({ id: caseLawSources.id });
+      const inserted = await rootDb.transaction(
+        async (tx) =>
+          await tx
+            .insert(caseLawSources)
+            .values({
+              id: sourceIdFor(adapterKey),
+              adapterKey,
+              name: source.name,
+              enabled: source.enabled,
+              lastSyncAt: new Date(),
+              config: source.config ?? {},
+            })
+            .onConflictDoNothing()
+            .returning({ id: caseLawSources.id }),
+      );
 
       // If the insert raced with another writer (e.g. ingestion),
       // it returns no rows and the actual source id is whatever
@@ -214,41 +216,44 @@ export async function seedCaseLaw() {
       const fulltext =
         d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
 
-      const result = await rootDb
-        .insert(caseLawDecisions)
-        .values({
-          id,
-          sourceId,
-          caseNumber: d.case_number,
-          slug: d.slug,
-          ecli: d.ecli,
-          court: d.court,
-          country: d.country,
-          language: d.language,
-          languageGroupKey: d.language_group_key,
-          // Fixtures are verbatim rows, some of them older than the write-path
-          // guard; the same guard runs here so the table's bounds CHECK sees
-          // what the ingest would have stored.
-          decisionDate:
-            d.decision_date === null
-              ? null
-              : canonicalDecisionDate(d.decision_date),
-          decisionType: d.decision_type,
-          fulltext,
-          sections: d.sections,
-          documentAst: d.document_ast,
-          analysis: d.analysis,
-          parserVersion: d.parser_version ?? 0,
-          sourceRaw: d.source_raw,
-          sourceRawS3Key: d.source_raw_s3_key,
-          sourceRawContentType: d.source_raw_content_type,
-          sourceUrl: d.source_url,
-          documentUrl: d.document_url,
-          metadata: d.metadata ?? {},
-          sourceHash: d.source_hash,
-        })
-        .onConflictDoNothing()
-        .returning({ id: caseLawDecisions.id });
+      const result = await rootDb.transaction(
+        async (tx) =>
+          await tx
+            .insert(caseLawDecisions)
+            .values({
+              id,
+              sourceId,
+              caseNumber: d.case_number,
+              slug: d.slug,
+              ecli: d.ecli,
+              court: d.court,
+              country: d.country,
+              language: d.language,
+              languageGroupKey: d.language_group_key,
+              // Fixtures are verbatim rows, some of them older than the
+              // write-path guard; the same guard runs here so the table's
+              // bounds CHECK sees what the ingest would have stored.
+              decisionDate:
+                d.decision_date === null
+                  ? null
+                  : canonicalDecisionDate(d.decision_date),
+              decisionType: d.decision_type,
+              fulltext,
+              sections: d.sections,
+              documentAst: d.document_ast,
+              analysis: d.analysis,
+              parserVersion: d.parser_version ?? 0,
+              sourceRaw: d.source_raw,
+              sourceRawS3Key: d.source_raw_s3_key,
+              sourceRawContentType: d.source_raw_content_type,
+              sourceUrl: d.source_url,
+              documentUrl: d.document_url,
+              metadata: d.metadata ?? {},
+              sourceHash: d.source_hash,
+            })
+            .onConflictDoNothing()
+            .returning({ id: caseLawDecisions.id }),
+      );
 
       // On conflict the insert returns no rows and the existing row
       // id is whatever the prior writer chose, not our deterministic
@@ -256,17 +261,20 @@ export async function seedCaseLaw() {
       // the actual row.
       let decisionId = result.at(0)?.id;
       if (!decisionId) {
-        const existing = await rootDb
-          .select({ id: caseLawDecisions.id })
-          .from(caseLawDecisions)
-          .where(
-            and(
-              eq(caseLawDecisions.sourceId, sourceId),
-              eq(caseLawDecisions.caseNumber, d.case_number),
-              eq(caseLawDecisions.language, d.language),
-            ),
-          )
-          .limit(1);
+        const existing = await rootDb.transaction(
+          async (tx) =>
+            await tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(
+                and(
+                  eq(caseLawDecisions.sourceId, sourceId),
+                  eq(caseLawDecisions.caseNumber, d.case_number),
+                  eq(caseLawDecisions.language, d.language),
+                ),
+              )
+              .limit(1),
+        );
         decisionId = existing.at(0)?.id;
       }
       if (!decisionId) {
@@ -318,6 +326,21 @@ export async function seedCaseLaw() {
   );
 
   console.log("Done. Case law data seeded successfully.");
+};
+
+export async function seedCaseLaw() {
+  if (process.env.NODE_ENV === "production") {
+    panic("Refusing to run: NODE_ENV must not be 'production'.");
+  }
+
+  // The dev seed route runs this inside the API process, so the lane is
+  // released here rather than left to the process exit.
+  const lane = await enterCaseLawMaintenanceLane();
+  try {
+    await seedFixtures(lane);
+  } finally {
+    await lane.release();
+  }
 }
 
 if (import.meta.main) {

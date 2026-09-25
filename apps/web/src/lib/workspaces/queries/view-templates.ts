@@ -39,7 +39,7 @@ export const viewTemplatesOptions = ({
   key,
   context,
 }: ViewTemplatesOptionsInput) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- workspaceId is a path param to satisfy the workspace-access auth macro; the backend returns a per-user-per-organization list, so it must not be part of the cache identity.
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- workspaceId is a path param to satisfy the workspace-access auth macro; the backend returns a per-user-per-organization list, so it must not be part of the cache identity.
   queryOptions({
     queryKey: viewTemplateKeys.all(key),
     queryFn: async ({ signal }): Promise<WorkspaceViewTemplate[]> => {

@@ -1,10 +1,8 @@
 import { sql } from "drizzle-orm";
 
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  type CourtWeightEntry,
-  loadCourtWeightsForCountry,
-} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
+import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -133,7 +131,7 @@ export const courtDocketSizes = ({
 
 type SelectShelfCourtsOptions = {
   counts: readonly CourtCount[];
-  /** Sorted by tier descending, the order `loadCourtWeights` guarantees. */
+  /** Sorted by tier descending, the order the court-weight cache guarantees. */
   entries: readonly CourtWeightEntry[];
   limit: number;
 };
@@ -186,7 +184,7 @@ export const selectShelfCourts = ({
 export const loadShelfCourtEntries = async (
   country: string,
 ): Promise<readonly CourtWeightEntry[]> => {
-  const entries = await loadCourtWeightsForCountry(country);
+  const entries = await loadPublicCourtWeightsForCountry(country);
   if (entries.length === 0) {
     logger.warn("case_law.latest_decisions.court_weights_unseeded", {
       country,

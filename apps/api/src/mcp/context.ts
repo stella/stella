@@ -37,15 +37,13 @@ import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overvie
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
-import type {
-  loadOrgAIConfig,
-  loadOrgSettingsForAuth,
-} from "@/api/lib/ai-config-loader";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -67,7 +65,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
-import type { getSearchProvider } from "@/api/lib/search/provider";
+import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
   recordTemplateFill,
@@ -115,8 +113,14 @@ export type McpOperationDatabaseScope = {
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   testDependencies?: {
-    loadOrgSettingsForAuth?: typeof loadOrgSettingsForAuth;
-    loadOrgAIConfig?: typeof loadOrgAIConfig;
+    /** Replaces the scoped `organization_settings` read, transaction included. */
+    loadOrgSettingsForAuth?: (
+      organizationId: SafeId<"organization">,
+    ) => Promise<OrgSettingsForAuth>;
+    /** Replaces the scoped AI-config read, transaction included. */
+    loadOrgAIConfig?: (
+      organizationId: SafeId<"organization">,
+    ) => Promise<OrgAIConfig | null>;
     configureTemplateFields?: typeof configureTemplateFields;
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
@@ -144,7 +148,7 @@ export type McpRequestContext = {
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;
     readWorkspaceMembersHandler?: typeof readWorkspaceMembersHandler;
-    getSearchProvider?: typeof getSearchProvider;
+    getSearchReader?: typeof getSearchReader;
     describeStoredTemplate?: typeof describeStoredTemplate;
     executeRegistryLookup?: typeof executeRegistryLookup;
     searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;
@@ -330,7 +334,7 @@ export const resolveMcpSessionContext = async (
     userId,
   });
 
-  const authorization = await resolveMemberAuthorization({
+  const authorization = await resolveCredentialMemberAuthorization({
     organizationId,
     userId,
   });

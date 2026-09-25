@@ -1,6 +1,4 @@
 import type {
-  AgendaItemKind,
-  AgendaItemSource,
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMentionCategory,
@@ -41,7 +39,7 @@ type PropertiesResponse =
 // silently drifting.
 export type WorkspacePropertyWire = PropertiesResponse[number];
 export type PropertyContent = PropertiesResponse[number]["content"];
-export type OptionColor = Extract<
+export type PropertyOptionColor = Extract<
   PropertyContent,
   { type: "multi-select" | "single-select" }
 >["options"][number]["color"];
@@ -50,8 +48,6 @@ export type UpsertFieldContent =
 export type BoundingBox =
   WebApiRoutes["workspaces"][":workspaceId"]["bounding-boxes"]["post"]["response"][200]["boxes"][number];
 export type {
-  AgendaItemKind,
-  AgendaItemSource,
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,

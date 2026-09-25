@@ -8,13 +8,17 @@ import {
   failAccountDeletionEffectChunk,
   listRecoverableAccountDeletionEffectRequestIds,
 } from "@/api/lib/account-deletion-effect-store";
-import { captureError } from "@/api/lib/analytics/capture";
+import type {
+  AccountDeletionEffectClaim,
+  AccountDeletionEffectDb,
+} from "@/api/lib/account-deletion-effect-store";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
-import { detached } from "@/api/lib/detached";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -33,20 +37,34 @@ type AccountDeletionCleanupJobData = {
 };
 
 type AccountDeletionCleanupRequestDeps = {
-  claimChunk: typeof claimNextAccountDeletionEffectChunk;
-  completeChunk: typeof completeAccountDeletionEffectChunk;
+  claimChunk: (
+    requestId: SafeId<"accountDeletionRequest">,
+  ) => Promise<AccountDeletionEffectClaim | null>;
+  completeChunk: (claim: AccountDeletionEffectClaim) => Promise<boolean>;
   deleteS3Keys: typeof deleteS3Keys;
-  ensureChunks: typeof ensureAccountDeletionEffectChunks;
-  failChunk: typeof failAccountDeletionEffectChunk;
+  ensureChunks: (
+    requestId: SafeId<"accountDeletionRequest">,
+  ) => Promise<number>;
+  failChunk: (
+    claim: AccountDeletionEffectClaim,
+    error: Error,
+  ) => Promise<boolean>;
 };
 
-const defaultCleanupRequestDeps: AccountDeletionCleanupRequestDeps = {
-  claimChunk: claimNextAccountDeletionEffectChunk,
-  completeChunk: completeAccountDeletionEffectChunk,
+/** The effect store bound to the caller's connection. */
+export const createAccountDeletionCleanupRequestDeps = (
+  db: AccountDeletionEffectDb,
+): AccountDeletionCleanupRequestDeps => ({
+  claimChunk: async (requestId) =>
+    await claimNextAccountDeletionEffectChunk(requestId, db),
+  completeChunk: async (claim) =>
+    await completeAccountDeletionEffectChunk(claim, db),
   deleteS3Keys,
-  ensureChunks: ensureAccountDeletionEffectChunks,
-  failChunk: failAccountDeletionEffectChunk,
-};
+  ensureChunks: async (requestId) =>
+    await ensureAccountDeletionEffectChunks(requestId, db),
+  failChunk: async (claim, error) =>
+    await failAccountDeletionEffectChunk(claim, error, db),
+});
 
 const getQueue = createLazyBullMqQueue<AccountDeletionCleanupJobData>({
   name: QUEUE_NAME,
@@ -115,7 +133,7 @@ const drainAccountDeletionEffects = async ({
 
 export const processAccountDeletionCleanupRequest = async (
   requestId: SafeId<"accountDeletionRequest">,
-  deps: AccountDeletionCleanupRequestDeps = defaultCleanupRequestDeps,
+  deps: AccountDeletionCleanupRequestDeps,
 ): Promise<void> => {
   await deps.ensureChunks(requestId);
   await drainAccountDeletionEffects({
@@ -125,23 +143,30 @@ export const processAccountDeletionCleanupRequest = async (
   });
 };
 
-export const enqueuePendingAccountDeletionCleanupRequests =
-  async (): Promise<number> => {
-    const requestIds = await listRecoverableAccountDeletionEffectRequestIds();
+export const enqueuePendingAccountDeletionCleanupRequests = async (
+  db: AccountDeletionEffectDb,
+): Promise<number> => {
+  const requestIds = await listRecoverableAccountDeletionEffectRequestIds(db);
 
-    await Promise.all(
-      requestIds.map(async (id) => await enqueueAccountDeletionCleanup(id)),
-    );
-    return requestIds.length;
-  };
+  await Promise.all(
+    requestIds.map(async (id) => await enqueueAccountDeletionCleanup(id)),
+  );
+  return requestIds.length;
+};
 
-export const initAccountDeletionCleanupWorker = () => {
+export const initAccountDeletionCleanupWorker = ({
+  db,
+}: BullMqWorkerContext) => {
   const workerConnection = createBullMqConnection();
+  const cleanupRequestDeps = createAccountDeletionCleanupRequestDeps(db);
 
   const worker = new Worker<AccountDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processAccountDeletionCleanupRequest(job.data.requestId);
+      await processAccountDeletionCleanupRequest(
+        job.data.requestId,
+        cleanupRequestDeps,
+      );
     },
     {
       connection: workerConnection,
@@ -166,7 +191,7 @@ export const initAccountDeletionCleanupWorker = () => {
     detached(
       (async () => {
         try {
-          const count = await enqueuePendingAccountDeletionCleanupRequests();
+          const count = await enqueuePendingAccountDeletionCleanupRequests(db);
           if (count === 0) {
             return;
           }

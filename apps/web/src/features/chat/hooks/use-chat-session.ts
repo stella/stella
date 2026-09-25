@@ -83,6 +83,7 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import {
   isChatMessageStartError,
   sendThreadChatMessage,
@@ -110,7 +111,7 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -278,6 +279,7 @@ export const useChatSession = ({
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
+  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
@@ -550,11 +552,11 @@ export const useChatSession = ({
     setOlderCursor(initialOlderCursor);
     setIsLoadingOlder(false);
     setLoadOlderError(false);
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: mirrors the re-seed synchronously so an older-page response resolving in the commit→effect window is discarded by the stale-response guard
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: mirrors the re-seed synchronously so an older-page response resolving in the commit→effect window is discarded by the stale-response guard
     olderCursorRef.current = initialOlderCursor;
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: see above, closes the commit→effect race window for the stale-response guard
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: see above, closes the commit→effect race window for the stale-response guard
     isLoadingOlderRef.current = false;
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
 
@@ -889,7 +891,7 @@ export const useChatSession = ({
       // owns the rewritten parts array.
       const truncated = messages
         .slice(0, targetIndex + 1)
-        // eslint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
+        // oxlint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
         .map((message) => {
           if (message.role !== "assistant") {
             return message;

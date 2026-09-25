@@ -4,8 +4,7 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   entities,
@@ -30,6 +29,11 @@ import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  flowRunCompletedNotification,
+  resolveActorUserId,
+} from "@/api/lib/flows/flow-run-actor";
+import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import {
   broadcastFlowRunUpdate,
   type FlowRunUpdatePayload,
@@ -57,20 +61,13 @@ import type {
 } from "@/api/lib/flows/flow-types";
 import {
   createNotificationsInTransaction,
-  fanOutNotifications,
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
-import type {
-  NewNotification,
-  NotificationPing,
-} from "@/api/lib/notifications";
+import type { NotificationPing } from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedFlowRunId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
@@ -122,8 +119,8 @@ export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
   {
+    database,
     generateTextForRole = generateTanStackTextForRole,
-    database = rootDb,
     makeScopedDb = createRootScopedDb,
     makeSafeDb = createRootSafeDb,
     enqueueStep = enqueueFlowStep,
@@ -132,9 +129,10 @@ export const executeFlowStep = async (
     loadAIConfig = loadOrgAIConfig,
     taskFeatures = deployedTaskFeatures(),
   }: {
+    /** The worker's connection, for the run, step and scope reads. */
+    database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
     generateTextForRole?: typeof generateTanStackTextForRole | undefined;
-    database?: Pick<typeof rootDb, "query"> | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;
     makeSafeDb?: typeof createRootSafeDb | undefined;
     enqueueStep?: typeof enqueueFlowStep | undefined;
@@ -143,7 +141,7 @@ export const executeFlowStep = async (
     loadAIConfig?: typeof loadOrgAIConfig | undefined;
     /** Which task features the deployment enables; tests pin it. */
     taskFeatures?: TaskDeploymentFeatures | undefined;
-  } = {},
+  },
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId, database);
@@ -347,33 +345,6 @@ const resolveRunScope = async (
   };
 };
 
-/**
- * The user credited as the run's actor (document `createdBy`, audit rows). A
- * manual run carries the launcher's id; an automated run falls back to the
- * definition author. Returns `null` for an automated run whose author was
- * deleted mid-flight — the trigger already refuses to start such a run, so this
- * only happens if the author is removed after the run begins; callers fail the
- * run cleanly rather than panicking.
- */
-const resolveActorUserId = async (
-  run: Pick<LoadedRun, "definitionId" | "triggerSource">,
-  database: Pick<typeof rootDb, "query">,
-): Promise<SafeId<"user"> | null> => {
-  if (run.triggerSource.type === "manual") {
-    return brandPersistedUserId(run.triggerSource.userId);
-  }
-  if (run.definitionId) {
-    const definition = await database.query.flowDefinitions.findFirst({
-      where: { id: { eq: run.definitionId } },
-      columns: { createdByUserId: true },
-    });
-    if (definition?.createdByUserId) {
-      return brandPersistedUserId(definition.createdByUserId);
-    }
-  }
-  return null;
-};
-
 // ── Step executors ──────────────────────────────────────
 
 type RunAiStepArgs = {
@@ -417,7 +388,9 @@ const runAiStep = async ({
     documents,
   });
 
-  const orgAIConfig = await loadAIConfig(organizationId);
+  const orgAIConfig = await scopedDb(
+    async (tx) => await loadAIConfig(tx, organizationId),
+  );
   // Every step settles against the organization's usage as it runs; the
   // initiator pre-flighted the whole run's estimate under the same action
   // type before enqueueing it.
@@ -864,38 +837,6 @@ const completeStepAndAdvance = async ({
   }
 };
 
-type FlowRunCompletedNotificationArgs = {
-  actorUserId: SafeId<"user">;
-  flowName: string;
-  organizationId: SafeId<"organization">;
-  runId: SafeId<"flowRun">;
-  workspaceId: SafeId<"workspace">;
-};
-
-/**
- * The "your run finished" pointer, shared by both paths that can make a run
- * terminal: the last step completing on the worker, and a reviewer approving a
- * final review gate. One definition so the two cannot drift, and one
- * run-derived idempotency key so whichever path gets there first wins and the
- * other is a no-op.
- */
-const flowRunCompletedNotification = ({
-  actorUserId,
-  flowName,
-  organizationId,
-  runId,
-  workspaceId,
-}: FlowRunCompletedNotificationArgs): NewNotification => ({
-  kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
-  metadata: { flowName },
-  entityType: "flow_run",
-  entityId: runId,
-  workspaceId,
-  organizationId,
-  userId: actorUserId,
-  idempotencyKey: `flow-run-completed:${runId}`,
-});
-
 /**
  * Raise the task a review gate hands its reviewer. A manual run's launcher is
  * a member of the matter; the author of an automated definition need not be
@@ -1094,19 +1035,30 @@ const errorMessage = (error: unknown): string =>
 
 /**
  * Flip a run (and its current step) to `failed` after the worker exhausts its
- * retries. Reads the run unscoped to recover its workspace/org, then writes
- * through the RLS-scoped handle. A no-op if the run is already terminal.
+ * retries. Reads the run on the worker's connection to recover its
+ * workspace/org, then writes through the RLS-scoped handle. A no-op if the run
+ * is already terminal.
  */
 export const failFlowRunFromWorker = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   error: unknown,
+  {
+    database,
+    makeScopedDb = createRootScopedDb,
+    broadcastUpdate = broadcastFlowRunUpdate,
+  }: {
+    /** The worker's connection: the run and scope reads, and the write when the run has no actor left. */
+    database: Pick<typeof rootDb, "query" | "transaction">;
+    makeScopedDb?: typeof createRootScopedDb | undefined;
+    broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
+  },
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
-  const run = await loadRun(runId, rootDb);
+  const run = await loadRun(runId, database);
   if (!run || isTerminalFlowRunStatus(run.status)) {
     return;
   }
-  const scope = await resolveRunScope(run, rootDb);
+  const scope = await resolveRunScope(run, database);
   const message = errorMessage(error);
   const now = new Date();
 
@@ -1146,17 +1098,17 @@ export const failFlowRunFromWorker = async (
   };
 
   // A null actor (automated run whose author was deleted) has no RLS-scoped
-  // handle to write through; fall back to `rootDb` so the run still finalizes
-  // instead of being stranded non-terminal.
+  // handle to write through; write on the worker's own connection so the run
+  // still finalizes instead of being stranded non-terminal.
   const { payload, pings } =
     scope.actorUserId === null
-      ? await rootDb.transaction(writeFailure)
-      : await createRootScopedDb({
+      ? await database.transaction(writeFailure)
+      : await makeScopedDb({
           organizationId: scope.organizationId,
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
-  broadcastFlowRunUpdate(run.workspaceId, payload);
+  broadcastUpdate(run.workspaceId, payload);
   pingNotificationRecipients(pings);
 };
 
@@ -1211,16 +1163,15 @@ export const resolveFlowReviewGate = async (
   {
     broadcastUpdate = broadcastFlowRunUpdate,
     enqueueStep = enqueueFlowStep,
-    database = rootDb,
+    notifyRunCompleted = notifyFlowRunActorOfCompletion,
   }: {
     broadcastUpdate?: typeof broadcastFlowRunUpdate;
     enqueueStep?: typeof enqueueFlowStep;
     /**
-     * Owner connection used only to address the completion pointer: the run's
-     * actor is usually not the reviewer, so neither resolving them nor writing
-     * their row fits the caller's scope.
+     * Files the completion pointer for the run's actor, who is usually not the
+     * reviewer: a cross-user operation the caller's scope cannot perform.
      */
-    database?: Pick<typeof rootDb, "query" | "select" | "transaction">;
+    notifyRunCompleted?: typeof notifyFlowRunActorOfCompletion;
   } = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
@@ -1370,28 +1321,18 @@ export const resolveFlowReviewGate = async (
     // written under the reviewer's own scope; the run-derived key makes it a
     // no-op if `completeStepAndAdvance` also reaches it.
     if (resolution.kind === "finish") {
-      const actorUserId = yield* Result.await(
-        Result.tryPromise(async () => await resolveActorUserId(run, database)),
+      yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await notifyRunCompleted({
+              run,
+              flowName: run.definitionSnapshot.name,
+              organizationId,
+              runId,
+              workspaceId,
+            }),
+        ),
       );
-      if (actorUserId !== null) {
-        yield* Result.await(
-          Result.tryPromise(
-            async () =>
-              await fanOutNotifications(
-                [
-                  flowRunCompletedNotification({
-                    actorUserId,
-                    flowName: run.definitionSnapshot.name,
-                    organizationId,
-                    runId,
-                    workspaceId,
-                  }),
-                ],
-                database,
-              ),
-          ),
-        );
-      }
     }
 
     if (resolution.kind === "advance") {
@@ -1487,7 +1428,7 @@ export const cancelFlowRun = async ({
           if (step.reviewTaskEntityId === null) {
             continue;
           }
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each review task takes its own work-obligation row lock inside the transaction
+          // db-await-in-loop: each review task takes its own work-obligation row lock inside the transaction
           await settleReviewTask({
             tx,
             taskEntityId: step.reviewTaskEntityId,

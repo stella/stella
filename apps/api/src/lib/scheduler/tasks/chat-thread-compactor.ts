@@ -62,7 +62,7 @@ export const compactChatThreads: SchedulerTask = async ({
       return;
     }
 
-    const outcome = await compactThread({ signal, thread });
+    const outcome = await compactThread({ db, signal, thread });
     if (Result.isError(outcome)) {
       failed += 1;
       captureError(outcome.error, {
@@ -189,11 +189,13 @@ export const settlementForOutcome = (
 };
 
 type CompactThreadOptions = {
+  db: SchedulerDb;
   signal: AbortSignal;
   thread: QueuedCompactionThread;
 };
 
 const compactThread = async ({
+  db,
   signal,
   thread,
 }: CompactThreadOptions): ReturnType<typeof runChatThreadCompaction> => {
@@ -203,7 +205,7 @@ const compactThread = async ({
   // settled, leaving the rest of the claimed batch leased until expiry and
   // letting the same poison thread abort the batch again on every run.
   const configResult = await Result.tryPromise({
-    try: async () => await loadOrgAIConfig(thread.organizationId),
+    try: async () => await loadOrgAIConfig(db, thread.organizationId),
     catch: (cause) =>
       new ChatCompactionError({
         cause,

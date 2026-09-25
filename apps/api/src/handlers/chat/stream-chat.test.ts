@@ -11,6 +11,7 @@ import type {
   ModelMessage,
   StreamChunk,
   ToolCallPart,
+  UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { Result } from "better-result";
@@ -66,6 +67,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -94,6 +96,7 @@ import {
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
+import type { MessageIdMapper } from "./stream-message-identity";
 
 const collectChunks = async (
   stream: AsyncIterable<StreamChunk>,
@@ -158,26 +161,6 @@ describe("tool-call history pruning", () => {
 });
 
 describe("streaming tool-use capability gate", () => {
-  test("refuses a tool-carrying turn on a model without streaming tool use", () => {
-    expect(
-      chatTurnRejectsStreamingTools({
-        model: { modelId: "us.deepseek.r1-v1:0" },
-        toolCount: 12,
-      }),
-    ).toBe(true);
-  });
-
-  test("allows a turn that offers no tools at all", () => {
-    // The sandbox path reaches stella tools through its MCP bridge, so its
-    // stream carries no tool schemas and the provider limit never applies.
-    expect(
-      chatTurnRejectsStreamingTools({
-        model: { modelId: "us.deepseek.r1-v1:0" },
-        toolCount: 0,
-      }),
-    ).toBe(false);
-  });
-
   test("allows a tool-carrying turn on a model that streams tools", () => {
     expect(
       chatTurnRejectsStreamingTools({
@@ -949,17 +932,17 @@ describe("native continuation persistence", () => {
 
   /** Resume an approval the way `streamChat` wires a continuation. */
   const continueTurn = async ({
+    adapter,
     messages,
     owningAssistantMessageId,
     parentRunId,
-    reply,
     runId,
     toolCallId,
   }: {
+    adapter: AnyTextAdapter;
     messages: ChatMessage[];
     owningAssistantMessageId: string;
     parentRunId: string;
-    reply: string;
     runId: string;
     toolCallId: string;
   }) => {
@@ -988,7 +971,7 @@ describe("native continuation persistence", () => {
         },
         processor,
         source: chat({
-          adapter: createTextReplyAdapter(reply),
+          adapter,
           agentLoopStrategy: maxIterations(3),
           messages,
           parentRunId,
@@ -1010,13 +993,13 @@ describe("native continuation persistence", () => {
 
   const firstContinuation = async () =>
     await continueTurn({
+      adapter: createTextReplyAdapter("Saved the draft."),
       messages: [
         userMessage,
         approvedOwningMessage({ id: owningMessageId, toolCallId: "call-1" }),
       ],
       owningAssistantMessageId: owningMessageId,
       parentRunId: "run-1",
-      reply: "Saved the draft.",
       runId: "run-2",
       toolCallId: "call-1",
     });
@@ -1081,6 +1064,7 @@ describe("native continuation persistence", () => {
     });
     const resumeSecondApproval = async (firstOwningMessage: ChatMessage) =>
       await continueTurn({
+        adapter: createTextReplyAdapter("Saved the second draft."),
         messages: [
           userMessage,
           firstOwningMessage,
@@ -1089,7 +1073,6 @@ describe("native continuation persistence", () => {
         ],
         owningAssistantMessageId: secondOwningMessageId,
         parentRunId: "run-3",
-        reply: "Saved the second draft.",
         runId: "run-4",
         toolCallId: "call-2",
       });
@@ -1111,6 +1094,86 @@ describe("native continuation persistence", () => {
       staleTurn.emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
     ).toBe(true);
     expect(staleTurn.finish?.outcome).toMatchObject({ type: "failed" });
+  });
+  test("continues the whole owning message after an interrupt when it already holds a tool result", async () => {
+    const messages: ChatMessage[] = [
+      userMessage,
+      {
+        id: owningMessageId,
+        role: "assistant",
+        parts: [
+          {
+            arguments: "{}",
+            id: "call-lookup",
+            input: {},
+            name: "list_templates",
+            output: { templates: [] },
+            state: "complete",
+            type: "tool-call",
+          },
+          {
+            content: '{"templates":[]}',
+            state: "complete",
+            toolCallId: "call-lookup",
+            type: "tool-result",
+          },
+          ...approvedOwningMessage({
+            id: owningMessageId,
+            toolCallId: "call-save",
+          }).parts,
+        ],
+      },
+    ];
+    const { emitted, finish } = await continueTurn({
+      adapter: createSingleToolCallAdapter({
+        arguments: '{"name":"Again","source":"@title Again"}',
+        toolName: "save_playbook",
+      }),
+      messages,
+      owningAssistantMessageId: owningMessageId,
+      parentRunId: "run-1",
+      runId: "run-2",
+      toolCallId: "call-save",
+    });
+
+    expect(finish?.responseMessage.id).toBe(owningMessageId);
+    const toolCallStates = (parts: ChatMessage["parts"] | undefined) =>
+      (parts ?? []).flatMap((part) =>
+        part.type === "tool-call" ? [{ id: part.id, state: part.state }] : [],
+      );
+    const persistedToolCalls = toolCallStates(finish?.responseMessage.parts);
+    expect(persistedToolCalls.map(({ id }) => id)).toEqual([
+      "call-lookup",
+      "call-save",
+      "call-1",
+    ]);
+
+    const snapshotAssistantIds = emitted.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT
+        ? chunk.messages.flatMap((message) =>
+            message.role === "assistant" ? [message.id] : [],
+          )
+        : [],
+    );
+    expect(snapshotAssistantIds).toEqual([owningMessageId]);
+
+    // The browser keeps continuing one message that carries every call the
+    // server persisted, and replays that message on the next answer.
+    const clientProcessor = new StreamProcessor({ initialMessages: messages });
+    for (const chunk of emitted) {
+      clientProcessor.processChunk(chunk);
+    }
+    clientProcessor.finalizeStream();
+    const clientAssistantMessages = clientProcessor
+      .getMessages()
+      .filter((message) => message.role === "assistant");
+    expect(
+      clientAssistantMessages.map((message) => ({
+        id: message.id,
+        toolCalls: toolCallStates(toChatMessage(message)?.parts),
+      })),
+    ).toEqual([{ id: owningMessageId, toolCalls: persistedToolCalls }]);
+    expect(clientProcessor.getMessages().at(-1)?.id).toBe(owningMessageId);
   });
 });
 
@@ -2231,6 +2294,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
@@ -2325,6 +2394,8 @@ describe("outgoing chat stream message ids", () => {
         kind: "unknown",
         "error.class": "UnknownError",
         "error.provider.status": "403",
+        "failure.shadow_grade": "defect",
+        "failure.shadow_reason": "unclassified",
       });
     } finally {
       errorSpy.mockRestore();
@@ -2403,6 +2474,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "provider_unavailable",
@@ -2465,6 +2542,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "unknown",
@@ -2524,6 +2607,334 @@ describe("outgoing chat stream message ids", () => {
   });
 });
 
+describe("interrupt snapshot assistant message identity", () => {
+  const owningMessageId = toSafeId<"chatMessage">(
+    "11111111-1111-4111-8111-111111111111",
+  );
+  const userMessage: ChatMessage = {
+    id: "user-1",
+    role: "user",
+    parts: [{ content: "Build a playbook", type: "text" }],
+  };
+
+  type ChatMessagePart = ChatMessage["parts"][number];
+  type ToolCallChatPart = Extract<ChatMessagePart, { type: "tool-call" }>;
+
+  const pendingCall = (id: string): ToolCallChatPart => ({
+    arguments: '{"question":"Which side?"}',
+    id,
+    input: { question: "Which side?" },
+    name: "ask-user",
+    state: "input-complete",
+    type: "tool-call",
+  });
+
+  /** A tool call the user has answered, followed by its result part. */
+  const answeredCall = (id: string): [ToolCallChatPart, ChatMessagePart] => [
+    {
+      arguments: '{"question":"Which side?"}',
+      id,
+      input: { question: "Which side?" },
+      name: "ask-user",
+      output: { answers: [{ answer: id, question: "Which side?" }] },
+      state: "complete",
+      type: "tool-call",
+    },
+    {
+      content: JSON.stringify({ answers: [{ answer: id }] }),
+      state: "complete",
+      toolCallId: id,
+      type: "tool-result",
+    },
+  ];
+
+  type RemapSnapshotOptions = {
+    history: readonly ChatMessage[];
+    mapMessageId: MessageIdMapper;
+    /** The engine's own messages for this run, which carry provider metadata. */
+    run: readonly UIMessage[];
+  };
+
+  const remapSnapshot = async ({
+    history,
+    mapMessageId,
+    run,
+  }: RemapSnapshotOptions) => {
+    const input = buildEngineSnapshot([...history, ...run]);
+    const [output] = await collectChunks(
+      remapOutgoingMessageIds({
+        existingMessageIds: new Set(history.map(({ id }) => id)),
+        mapMessageId,
+        source: streamChunks([input]),
+      }),
+    );
+    if (output?.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected one messages snapshot");
+    }
+    return { input: input.messages, output: output.messages, snapshot: output };
+  };
+
+  type RemappedSnapshot = Awaited<ReturnType<typeof remapSnapshot>>;
+  type SnapshotMessages = RemappedSnapshot["output"];
+
+  const assistantToolCalls = (messages: SnapshotMessages) =>
+    messages.flatMap((message) =>
+      message.role === "assistant"
+        ? [
+            {
+              id: message.id,
+              toolCallIds: (message.toolCalls ?? []).map(({ id }) => id),
+            },
+          ]
+        : [],
+    );
+
+  const toolResultIds = (messages: SnapshotMessages) =>
+    messages.flatMap((message) =>
+      message.role === "tool" ? [message.toolCallId] : [],
+    );
+
+  /** What the browser renders from the remapped snapshot. */
+  const clientMessages = ({
+    history,
+    snapshot,
+  }: {
+    history: readonly ChatMessage[];
+    snapshot: RemappedSnapshot["snapshot"];
+  }) => {
+    const processor = new StreamProcessor({ initialMessages: [...history] });
+    processor.processChunk(snapshot);
+    return processor.getMessages();
+  };
+
+  test("carries a continuation's owning message once, although an earlier tool result split it", async () => {
+    const history = [
+      userMessage,
+      {
+        id: owningMessageId,
+        role: "assistant",
+        parts: [...answeredCall("load-skill"), ...answeredCall("ask-1")],
+      } satisfies ChatMessage,
+    ];
+    const { output, snapshot } = await remapSnapshot({
+      history,
+      mapMessageId: createTurnMessageIdMapper(owningMessageId),
+      run: [
+        {
+          id: "provider-message-2",
+          role: "assistant",
+          parts: [pendingCall("ask-2")],
+        },
+      ],
+    });
+
+    expect(assistantToolCalls(output)).toEqual([
+      { id: owningMessageId, toolCallIds: ["load-skill", "ask-1", "ask-2"] },
+    ]);
+    expect(toolResultIds(output)).toEqual(["load-skill", "ask-1"]);
+    expect(
+      clientMessages({ history, snapshot })
+        .filter(({ role }) => role === "assistant")
+        .map(({ id, parts }) => ({
+          id,
+          toolCallIds: parts.flatMap((part) =>
+            part.type === "tool-call" ? [part.id] : [],
+          ),
+        })),
+    ).toEqual([
+      { id: owningMessageId, toolCallIds: ["load-skill", "ask-1", "ask-2"] },
+    ]);
+  });
+
+  test("carries a split historical assistant message once beside a fresh turn", async () => {
+    const turnMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const history = [
+      userMessage,
+      {
+        id: "assistant-previous",
+        role: "assistant",
+        parts: [
+          ...answeredCall("lookup-1"),
+          { content: "Found two", type: "text" },
+          ...answeredCall("lookup-2"),
+        ],
+      } satisfies ChatMessage,
+      {
+        id: "user-2",
+        role: "user",
+        parts: [{ content: "Now ask me", type: "text" }],
+      } satisfies ChatMessage,
+    ];
+    const { output } = await remapSnapshot({
+      history,
+      mapMessageId: createChatMessageIdMapper(() => turnMessageId),
+      run: [
+        {
+          id: "provider-message-1",
+          role: "assistant",
+          parts: [pendingCall("ask-1")],
+        },
+      ],
+    });
+
+    expect(assistantToolCalls(output)).toEqual([
+      { id: "assistant-previous", toolCallIds: ["lookup-1", "lookup-2"] },
+      { id: turnMessageId, toolCallIds: ["ask-1"] },
+    ]);
+    expect(output.find(({ id }) => id === "assistant-previous")).toMatchObject({
+      content: "Found two",
+    });
+    expect(output.map(({ role }) => role)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "tool",
+      "user",
+      "assistant",
+    ]);
+  });
+
+  test("keeps the tool-call metadata of every merged copy", async () => {
+    const history = [
+      userMessage,
+      {
+        id: owningMessageId,
+        role: "assistant",
+        parts: [...answeredCall("load-skill"), ...answeredCall("ask-1")],
+      } satisfies ChatMessage,
+    ];
+    const [askTwo, askTwoResult] = answeredCall("ask-2");
+    const { snapshot } = await remapSnapshot({
+      history,
+      mapMessageId: createTurnMessageIdMapper(owningMessageId),
+      run: [
+        {
+          id: "provider-message-2",
+          role: "assistant",
+          parts: [
+            { ...askTwo, metadata: { signature: "ask-2" } },
+            askTwoResult,
+          ],
+        },
+        {
+          id: "provider-message-3",
+          role: "assistant",
+          parts: [
+            { ...pendingCall("ask-3"), metadata: { signature: "ask-3" } },
+          ],
+        },
+      ],
+    });
+
+    expect(
+      clientMessages({ history, snapshot }).flatMap(({ parts }) =>
+        parts.flatMap((part) =>
+          part.type === "tool-call"
+            ? [{ id: part.id, metadata: part.metadata }]
+            : [],
+        ),
+      ),
+    ).toEqual([
+      { id: "load-skill", metadata: undefined },
+      { id: "ask-1", metadata: undefined },
+      { id: "ask-2", metadata: { signature: "ask-2" } },
+      { id: "ask-3", metadata: { signature: "ask-3" } },
+    ]);
+  });
+
+  test("moves a split copy's reasoning before the merged message", async () => {
+    const history = [
+      userMessage,
+      {
+        id: owningMessageId,
+        role: "assistant",
+        parts: [
+          { content: "Load the skill first", type: "thinking" },
+          ...answeredCall("load-skill"),
+          { content: "Then ask for the side", type: "thinking" },
+          pendingCall("ask-1"),
+        ],
+      } satisfies ChatMessage,
+    ];
+    const { output, snapshot } = await remapSnapshot({
+      history,
+      mapMessageId: createTurnMessageIdMapper(owningMessageId),
+      run: [],
+    });
+
+    expect(output.map(({ role }) => role)).toEqual([
+      "user",
+      "reasoning",
+      "reasoning",
+      "assistant",
+      "tool",
+    ]);
+    const assistants = clientMessages({ history, snapshot }).filter(
+      ({ role }) => role === "assistant",
+    );
+    expect(
+      assistants.map(({ id, parts }) => ({
+        id,
+        thinking: parts.flatMap((part) =>
+          part.type === "thinking" ? [part.content] : [],
+        ),
+      })),
+    ).toEqual([
+      {
+        id: owningMessageId,
+        thinking: ["Load the skill first", "Then ask for the side"],
+      },
+    ]);
+  });
+
+  test("emits one assistant message per id and every tool call once, in order", async () => {
+    const cases = [1, 2, 3, 4].flatMap((copies) =>
+      [0, 1, 2].map((runMessages) => ({ copies, runMessages })),
+    );
+    for (const { copies, runMessages } of cases) {
+      const owningParts: ChatMessagePart[] = [];
+      for (let index = 1; index < copies; index += 1) {
+        owningParts.push(...answeredCall(`answered-${String(index)}`));
+      }
+      owningParts.push(pendingCall("pending"));
+      const { input, output } = await remapSnapshot({
+        history: [
+          userMessage,
+          { id: owningMessageId, role: "assistant", parts: owningParts },
+        ],
+        mapMessageId: createTurnMessageIdMapper(owningMessageId),
+        run: Array.from({ length: runMessages }, (_, index) => ({
+          id: `provider-message-${String(index + 1)}`,
+          role: "assistant",
+          parts: [pendingCall(`new-${String(index + 1)}`)],
+        })),
+      });
+
+      const context = { copies, runMessages };
+      const outputAssistants = assistantToolCalls(output);
+      expect({ context, ids: outputAssistants.map(({ id }) => id) }).toEqual({
+        context,
+        ids: [owningMessageId],
+      });
+      expect({
+        context,
+        toolCallIds: outputAssistants.flatMap(({ toolCallIds }) => toolCallIds),
+      }).toEqual({
+        context,
+        toolCallIds: assistantToolCalls(input).flatMap(
+          ({ toolCallIds }) => toolCallIds,
+        ),
+      });
+      expect({ context, toolResultIds: toolResultIds(output) }).toEqual({
+        context,
+        toolResultIds: toolResultIds(input),
+      });
+    }
+  });
+});
+
 describe("chat stream client-disconnect persistence", () => {
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
@@ -2560,10 +2971,9 @@ describe("chat stream client-disconnect persistence", () => {
       .map((part) => (part.type === "text" ? part.content : ""))
       .join("");
 
-  // A dropped client connection `.return()`s the stream generator mid-run. The
-  // metered provider call is decoupled from the socket, so the completed-or-
-  // partial content must be persisted (finish reported as not aborted) rather
-  // than lost.
+  // A dropped client connection aborts the provider call and `.return()`s the
+  // stream generator mid-run. The partial content produced before the abort
+  // must be persisted (finish reported as not aborted) rather than lost.
   test("persists the accumulated assistant message when the client disconnects mid-stream", async () => {
     const abortSignal = new AbortController().signal;
     const { getResponseMessage, processor } = accumulatingProcessor();

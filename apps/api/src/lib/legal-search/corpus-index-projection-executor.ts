@@ -899,6 +899,7 @@ const processPreparedStream = async ({
     // attempt, and an unavailable payload retries forever instead of reaching
     // `blocked`. So drain on the same granularity the reads run at.
     if (pendingFailures.length >= payloadReadConcurrency) {
+      // db-await-in-loop: one batched classification per drain, at the read concurrency (see above)
       await classifyPendingFailures();
     }
 
@@ -923,7 +924,9 @@ const processPreparedStream = async ({
       break;
     }
     if (advanced.flush.length > 0) {
+      // db-await-in-loop: one batched classification before each append
       await classifyPendingFailures();
+      // db-await-in-loop: one ordered append per flushed capful, under the cycle's leases
       const requestStatus = await processPreparedRequests({
         runInTransaction,
         client,

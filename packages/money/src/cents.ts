@@ -14,6 +14,10 @@ export type CentsAmount = number & {
   readonly [__cents]: "CentsAmount";
 };
 
+/** The brand is nominal: every safe integer is a valid minor-unit amount. */
+export const isMinorUnitAmount = (value: number): value is CentsAmount =>
+  Number.isSafeInteger(value);
+
 /**
  * Construct a CentsAmount from a value already known to be in minor
  * units. Use at boundaries where the input is validated as an integer
@@ -27,15 +31,12 @@ export type CentsAmount = number & {
  * condition, like a fractional one, so it panics the same way.
  */
 export const cents = (value: number): CentsAmount => {
-  if (!Number.isSafeInteger(value)) {
+  if (!isMinorUnitAmount(value)) {
     return panic(
       `cents(${value}): money values must be safe integer minor units`,
     );
   }
-  // SAFETY: validated to be an integer; brand is nominal so the
-  // assertion is sound at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return value as CentsAmount;
+  return value;
 };
 
 /**
@@ -46,5 +47,5 @@ export const cents = (value: number): CentsAmount => {
  */
 export const unsafeCents = (value: number): CentsAmount =>
   // SAFETY: documented escape hatch; caller asserts value is already a valid minor-unit integer.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   value as CentsAmount;

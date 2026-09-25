@@ -566,14 +566,14 @@ const createBedrockTextAdapter = (
     name: adapter.name,
     model: adapter.model,
     "~types": adapter["~types"],
-    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    // oxlint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
     chatStream: (options) => {
-      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- widens TanStack's erroneous `never` Bedrock method parameter through an explicit structural adapter
+      // oxlint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- widens TanStack's erroneous `never` Bedrock method parameter through an explicit structural adapter
       return Reflect.apply(adapter.chatStream, adapter, [options]);
     },
-    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    // oxlint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
     structuredOutput: async (options) => {
-      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+      // oxlint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
       return await Reflect.apply(adapter.structuredOutput, adapter, [options]);
     },
     // Structured output is a forced tool call, and Converse refuses a
@@ -585,18 +585,18 @@ const createBedrockTextAdapter = (
     // still sees a complete run, with the object in one delta.
     ...(supportsStreamingToolUse(adapter.model)
       ? {
-          // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+          // oxlint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
           structuredOutputStream: (options) => {
-            // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+            // oxlint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
             return Reflect.apply(adapter.structuredOutputStream, adapter, [
               options,
             ]);
           },
         }
       : {}),
-    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    // oxlint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
     supportsCombinedToolsAndSchema: (options) => {
-      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+      // oxlint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
       return Reflect.apply(adapter.supportsCombinedToolsAndSchema, adapter, [
         options,
       ]);

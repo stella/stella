@@ -10,10 +10,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { resolveCaching } from "@/api/lib/ai-config";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -310,6 +307,7 @@ const extractCandidates = async (
   const transcriptResult = await Result.tryPromise({
     try: async () =>
       await loadCompactionTranscript({
+        db,
         threadId: compaction.threadId,
         firstSummarizedMessageId: compaction.firstSummarizedMessageId,
         lastSummarizedMessageId: compaction.sourceMessageId,
@@ -334,10 +332,10 @@ const extractCandidates = async (
       // Configuration loading is part of the per-compaction failure boundary:
       // a bad tenant config must rotate behind untouched work instead of
       // aborting the global scheduler batch.
-      const [orgAIConfig, promptCachingEnabled] = await Promise.all([
-        loadOrgAIConfig(compaction.threadOrganizationId),
-        loadPromptCachingPreference(compaction.threadOrganizationId),
-      ]);
+      const { orgAIConfig, promptCachingEnabled } = await loadOrgAISettings(
+        db,
+        compaction.threadOrganizationId,
+      );
 
       analytics = createTanStackAIAnalyticsCallbacks({
         feature: "memory.extractor",

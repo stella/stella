@@ -164,7 +164,7 @@ export const FilterChips = ({
             <AdvancedFilterChip
               facetContext={facetContext}
               fields={fields}
-              // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
+              // oxlint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
               key={index}
               node={node}
               onChange={(next) => replaceAt(index, next)}
@@ -178,7 +178,7 @@ export const FilterChips = ({
           <FilterChip
             facetContext={facetContext}
             fields={fields}
-            // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
+            // oxlint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
             key={index}
             node={node}
             onChange={(next) => replaceAt(index, next)}

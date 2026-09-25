@@ -27,7 +27,7 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { useWorkspaceSSE } from "@/lib/sse";
+import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -51,7 +51,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     // Handles unmatched child routes (e.g. doubled
     // /workspaces/$id/workspaces/$id from stale router state).
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
+      // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
       console.trace(
         "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
         globalThis.location.href,

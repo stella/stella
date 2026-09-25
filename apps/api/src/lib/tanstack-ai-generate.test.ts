@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   BYOK_MODEL_OPTIONS,
+  getOutputTokenLimit,
   MODEL_ROLES,
   REASONING_EFFORTS,
 } from "@stll/ai-catalog";
@@ -13,8 +14,11 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
+  chatTurnOutputTokens,
   generateTanStackObjectForRole,
   generateTanStackTextForRole,
   mergeGenerationOptions,
@@ -614,7 +618,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-opus-4-8",
       modelOptions: {},
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -642,7 +646,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-sonnet-4-6",
       modelOptions: { thinking: { type: "adaptive" } },
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -673,7 +677,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -690,6 +694,101 @@ describe("TanStack AI structured output generation", () => {
     });
   });
 
+  test("keeps a chat turn's whole Anthropic request within the model's output limit", () => {
+    // SAFETY: the helpers read only provider/modelOptions/modelId.
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "claude-haiku-4-5-20251001",
+      modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
+      provider: "anthropic",
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: chatTurnOutputTokens(model),
+      model,
+      serviceTier: "standard",
+      temperature: undefined,
+    });
+
+    const limit = getOutputTokenLimit(model.modelId) ?? 0;
+    // The fixture must reach the fault: a listed model whose limit exceeds
+    // the thinking budget, so the reservation is taken out of it.
+    expect(limit).toBeGreaterThan(10_000);
+    expect(chatTurnOutputTokens(model)).toBe(limit - 10_000);
+    expect(options).toMatchObject({ max_tokens: limit });
+  });
+
+  test("leaves a model the catalog does not list to the provider's output default", () => {
+    // SAFETY: the helpers read only provider/modelOptions/modelId.
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "a-deployment-override-no-catalog-lists",
+      modelOptions: {},
+      provider: "openai",
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: chatTurnOutputTokens(model),
+      model,
+      serviceTier: "standard",
+      temperature: undefined,
+    });
+
+    expect(chatTurnOutputTokens(model)).toBeUndefined();
+    expect(options).not.toHaveProperty("max_output_tokens");
+    expect(logs.at("WARN")).toEqual([]);
+  });
+
+  test("clamps and reports a thinking budget that leaves no room for the reply", () => {
+    // SAFETY: the helpers read only provider/modelOptions/modelId.
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "claude-haiku-4-5-20251001",
+      modelOptions: {
+        thinking: { type: "enabled", budget_tokens: 1_000_000 },
+      },
+      provider: "anthropic",
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    } as ResolvedTanStackTextModel;
+    const limit = getOutputTokenLimit(model.modelId);
+    // The fixture must reach the fault: the budget exceeds the model's limit.
+    expect(limit).toBeLessThan(1_000_000);
+
+    const allowance = chatTurnOutputTokens(model);
+    expect(allowance).toBe(1);
+    // No request of this budget fits the limit: Anthropic needs `max_tokens`
+    // above the budget, so the smallest it accepts is sent, and reported.
+    expect(
+      mergeGenerationOptions({
+        caching: noCaching,
+        maxOutputTokens: allowance,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      }),
+    ).toMatchObject({ max_tokens: 1_000_001 });
+    expect(
+      logs.at("WARN").map((record) => ({
+        message: record.message,
+        limit: record.attributes?.["ai.output_limit"],
+        reservation: record.attributes?.["ai.thinking_reservation"],
+      })),
+    ).toEqual([
+      {
+        message: "tanstack_ai.output_allowance_clamped",
+        limit,
+        reservation: 1_000_000,
+      },
+    ]);
+  });
+
   test("enables OpenAI prompt caching without sending a model-specific retention value", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
@@ -699,7 +798,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gpt-5.5",
       modelOptions: {},
       provider: "openai",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -735,7 +834,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "google/gemini-3.5-flash",
       modelOptions: { temperature: 0 },
       provider: "openrouter",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -771,7 +870,7 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gemini-3.1-pro-preview",
       modelOptions: { temperature: 0 },
       provider: "google",
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1268,6 +1367,17 @@ describe("TanStack AI text generation", () => {
     // The 502 is what the caller answers with; the cause is what keeps a
     // failure sink from grading a caller-requested cancellation as a defect.
     expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+    // The failure owner reads the helper's own classification of the 502.
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({
+      reason: "generation_cancelled",
+      grade: "anticipated",
+      rule: "brand",
+    });
   });
 
   test("classifies an abort rejection from a cancelled run as anticipated", async () => {
@@ -1523,7 +1633,7 @@ describe("Anthropic extended-thinking budgets", () => {
             modelId,
             modelOptions,
             provider: "anthropic",
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
           } as ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {
@@ -1553,6 +1663,44 @@ describe("Anthropic extended-thinking budgets", () => {
         }
       }
     }
+  });
+
+  test("keeps every offered model's whole chat request within its output limit", () => {
+    for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
+      for (const role of MODEL_ROLES) {
+        for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
+          // SAFETY: the helpers read only provider/modelOptions/modelId.
+          const model = {
+            adapter: {},
+            keySource: "byok",
+            modelId,
+            modelOptions: tanStackModelOptionsForRole({
+              modelId,
+              organizationId: null,
+              provider: "anthropic",
+              reasoningEffort,
+              role,
+            }),
+            provider: "anthropic",
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+          } as ResolvedTanStackTextModel;
+
+          const merged: Record<string, unknown> = {
+            ...mergeGenerationOptions({
+              caching: noCaching,
+              maxOutputTokens: chatTurnOutputTokens(model),
+              model,
+              serviceTier: "standard",
+              temperature: undefined,
+            }),
+          };
+
+          expect(merged["max_tokens"]).toBe(getOutputTokenLimit(modelId));
+        }
+      }
+    }
+    // No offered model reaches the clamp: every budget leaves room.
+    expect(logs.at("WARN")).toEqual([]);
   });
 });
 

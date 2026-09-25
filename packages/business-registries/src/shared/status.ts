@@ -21,6 +21,8 @@ export const mapEntityStatus = <TInternal extends string>(
   internal: string,
   mapping: Record<TInternal, EntityStatus>,
 ): EntityStatus =>
-  (mapping as Record<string, EntityStatus | undefined>)[internal] ?? {
+  Object.entries<EntityStatus>(mapping).find(
+    ([code]) => code === internal,
+  )?.[1] ?? {
     type: "unknown",
   };

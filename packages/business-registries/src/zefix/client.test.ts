@@ -9,7 +9,7 @@ const FIXTURE = new URL("__fixtures__/search-swiss-re.json", import.meta.url);
 const readFixture = async (): Promise<ZefixSearchResponse> => {
   const value: unknown = await Bun.file(FIXTURE).json();
   // SAFETY: the captured response is checked by the client shape guard.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as ZefixSearchResponse;
 };
 

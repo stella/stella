@@ -1,10 +1,11 @@
 import { Worker } from "bullmq";
 import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -47,7 +48,7 @@ const ORPHAN_SCAN_BATCH_SIZE = 1000;
  * (mirrors `initWorkflowWorker`). The worker owns a dedicated blocking Redis
  * connection.
  */
-export const initFlowRunWorker = () => {
+export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<FlowStepJobData>(
@@ -62,7 +63,7 @@ export const initFlowRunWorker = () => {
         );
       }, FLOW_STEP_JOB_TIMEOUT_MS);
       try {
-        await executeFlowStep(job.data, controller.signal);
+        await executeFlowStep(job.data, controller.signal, { database: db });
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
         controller.signal.throwIfAborted();
@@ -98,12 +99,14 @@ export const initFlowRunWorker = () => {
       return;
     }
 
-    failFlowRunFromWorker(job.data, error).catch((finalizeError: unknown) => {
-      captureError(finalizeError, {
-        runId: job.data.runId,
-        stepIndex: String(job.data.stepIndex),
-      });
-    });
+    failFlowRunFromWorker(job.data, error, { database: db }).catch(
+      (finalizeError: unknown) => {
+        captureError(finalizeError, {
+          runId: job.data.runId,
+          stepIndex: String(job.data.stepIndex),
+        });
+      },
+    );
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
@@ -123,7 +126,7 @@ export const initFlowRunWorker = () => {
   // ground on a cadence, but only past a stall window. This call is kept
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
-  reconcileOrphanedFlowRuns().catch((error: unknown) => {
+  reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
     captureError(error);
     logger.error("flow.reconcile_failed", errorSystemFields(error));
   });
@@ -155,14 +158,8 @@ type ReconcileOrphanedFlowRunsOptions = {
 
 type ReconcileOrphanedFlowRunsDependencies = {
   database: Pick<typeof rootDb, "select">;
-  enqueueStep: typeof enqueueFlowStep;
+  enqueueStep?: typeof enqueueFlowStep;
 };
-
-const RECONCILE_ORPHANED_FLOW_RUNS_DEPENDENCIES: ReconcileOrphanedFlowRunsDependencies =
-  {
-    database: rootDb,
-    enqueueStep: enqueueFlowStep,
-  };
 
 // Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
 // current step. Re-adding the step does not change the row's status, so a plain
@@ -175,11 +172,11 @@ export const reconcileOrphanedFlowRuns = async (
     batchSize = ORPHAN_SCAN_BATCH_SIZE,
     stalledBefore,
     signal,
-  }: ReconcileOrphanedFlowRunsOptions = {},
+  }: ReconcileOrphanedFlowRunsOptions,
   {
     database,
-    enqueueStep,
-  }: ReconcileOrphanedFlowRunsDependencies = RECONCILE_ORPHANED_FLOW_RUNS_DEPENDENCIES,
+    enqueueStep = enqueueFlowStep,
+  }: ReconcileOrphanedFlowRunsDependencies,
 ): Promise<void> => {
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
@@ -188,6 +185,7 @@ export const reconcileOrphanedFlowRuns = async (
     if (signal?.aborted === true) {
       break;
     }
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const batch = await database
       .select({
         id: flowRuns.id,

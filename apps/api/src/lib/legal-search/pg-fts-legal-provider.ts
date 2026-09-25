@@ -1,19 +1,27 @@
 import { Result } from "better-result";
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import {
+  caseLawPublicReadDb,
+  type CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   courtTierSqlFromMap,
-  loadCourtWeights,
+  type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import {
+  loadPublicCourtWeights,
+  loadPublicFtsSearchConfigs,
+} from "@/api/lib/case-law/public-case-law-config";
 import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
-import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
+import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
@@ -27,6 +35,10 @@ import type {
   LegalSearchResult,
 } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  definePublicLawSharedQuery,
+  PUBLIC_LAW_SHARED_QUERY,
+} from "@/api/lib/public-law-shared-query";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -48,13 +60,40 @@ const toNullableString = (x: unknown): string | null =>
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
-const searchResult = async (
-  query: LegalSearchQuery,
-  parsedCursor: ReturnType<typeof decodeCursor>,
-): Promise<LegalSearchResult> => {
+type ProviderSearchFacet = "court" | "country" | "language";
+
+type ProviderSearchPlanOptions = {
+  configs: readonly FtsSearchConfig[];
+  courtWeights: CourtWeightMap;
+  parsedCursor: ReturnType<typeof decodeCursor>;
+  query: LegalSearchQuery;
+};
+
+/** The statements one search runs: a page of hits and each facet. */
+type ProviderSearchPlan = {
+  hits: SQL;
+  facets: Record<ProviderSearchFacet, SQL>;
+};
+
+export const PROVIDER_SEARCH_FACETS = [
+  "court",
+  "country",
+  "language",
+] as const satisfies readonly ProviderSearchFacet[];
+
+/**
+ * Every statement a search runs, built once. Exported so the reader-role
+ * suite executes these exact statements under SET ROLE.
+ */
+export const providerSearchPlan = ({
+  configs,
+  courtWeights,
+  parsedCursor,
+  query,
+}: ProviderSearchPlanOptions): ProviderSearchPlan => {
   const limit = query.limit;
   const ftsSearch = buildPgFtsSearchSql({
-    configs: await loadFtsSearchConfigs(),
+    configs,
     query: query.query,
     refs: {
       language: sql`sd.language`,
@@ -92,7 +131,7 @@ const searchResult = async (
       courtTierSqlFromMap({
         countryColumn: "d.country",
         courtColumn: "d.court",
-        map: await loadCourtWeights(),
+        map: courtWeights,
       }),
     ),
     lexicalRank: ftsSearch.rank,
@@ -180,15 +219,58 @@ const searchResult = async (
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
-  const emptyRows: Promise<RawRows> = Promise.resolve([]);
+  return {
+    hits: hitsQuery,
+    facets: {
+      court: facetQuery("court", "court"),
+      country: facetQuery("country", "country"),
+      language: facetQuery("language", "language"),
+    },
+  };
+};
+
+export const readProviderSearchHits = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawProviderSearchHits,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    plan: ProviderSearchPlan,
+  ): Promise<RawRows> => await tx.execute(plan.hits),
+);
+
+export const readProviderSearchFacet = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawProviderSearchFacet,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    plan: ProviderSearchPlan,
+    facet: ProviderSearchFacet,
+  ): Promise<RawRows> => await tx.execute(plan.facets[facet]),
+);
+
+const searchResult = async (
+  query: LegalSearchQuery,
+  parsedCursor: ReturnType<typeof decodeCursor>,
+): Promise<LegalSearchResult> => {
+  const limit = query.limit;
+  const configs = await loadPublicFtsSearchConfigs();
+  const plan = providerSearchPlan({
+    configs,
+    courtWeights: await loadPublicCourtWeights(),
+    parsedCursor,
+    query,
+  });
+
   // Facets don't change between pages; skip them on cursor requests.
-  const [hitsRaw, courtRaw, countryRaw, languageRaw] = await Promise.all([
-    rootDb.execute(hitsQuery),
-    parsedCursor ? emptyRows : rootDb.execute(facetQuery("court", "court")),
-    parsedCursor ? emptyRows : rootDb.execute(facetQuery("country", "country")),
+  const facetRows = async (facet: ProviderSearchFacet): Promise<RawRows> =>
     parsedCursor
-      ? emptyRows
-      : rootDb.execute(facetQuery("language", "language")),
+      ? []
+      : await caseLawPublicReadDb(
+          async (tx) => await readProviderSearchFacet(tx, plan, facet),
+        );
+  const [hitsRaw, courtRaw, countryRaw, languageRaw] = await Promise.all([
+    caseLawPublicReadDb(async (tx) => await readProviderSearchHits(tx, plan)),
+    facetRows("court"),
+    facetRows("country"),
+    facetRows("language"),
   ]);
 
   const hitsResult: RawRows = hitsRaw;

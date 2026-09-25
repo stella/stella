@@ -5,6 +5,8 @@
 // separates each case description from a disabled-test case, because a
 // comment directly above a `.skip` counts as its reason.
 
+import * as bun from "bun";
+import { SQL, SQL as PgClient } from "bun";
 import * as bt from "bun:test";
 import {
   describe,
@@ -15,6 +17,7 @@ import {
   xit,
   xtest,
 } from "bun:test";
+import { drizzle } from "drizzle-orm/bun-sql";
 
 declare const local: { only: (title: string, fn: () => void) => void };
 declare const flag: string | undefined;
@@ -140,3 +143,35 @@ describe("second block", () => {
 
 // oxlint-disable-next-line bun-test-hygiene/no-identical-title
 describe("first block", noop);
+
+// --- no-unmanaged-database-client ---
+
+declare const databaseUrl: string;
+declare const openedClient: SQL;
+
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _bunClient = new SQL({ url: databaseUrl, max: 1 });
+// aliased, namespace member, and the runtime global
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _aliasedClient = new PgClient(databaseUrl);
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _namespaceClient = new bun.SQL(databaseUrl);
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _globalClient = new Bun.SQL(databaseUrl);
+// drizzle opening its own client from a URL or a `connection` option
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _urlDatabase = drizzle(databaseUrl);
+// oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client
+const _connectionDatabase = drizzle({ connection: databaseUrl });
+// drizzle wrapping a client opened elsewhere
+// expect-clean: bun-test-hygiene/no-unmanaged-database-client
+const _wrappedDatabase = drizzle({ client: openedClient });
+// a driver error class reached through the client export
+// expect-clean: bun-test-hygiene/no-unmanaged-database-client
+const _driverError = new SQL.PostgresError("terminating connection", {
+  code: "ERR_POSTGRES_SERVER_ERROR",
+  errno: "57P01",
+  detail: "",
+  hint: "",
+  severity: "FATAL",
+});

@@ -1,14 +1,25 @@
+import { Result } from "better-result";
+
+import { createDetached } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { getAnalytics } from "@/api/lib/analytics/client";
-import type { ExceptionProperties } from "@/api/lib/analytics/types";
-import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
+import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import {
-  errorFingerprint,
   errorTag,
-  logDevError,
+  logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
+import type { FailureGrading } from "@/api/lib/observability/failure";
+import { identityFields } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  observeShadow,
+  reportEmitFailure,
+  SHADOW_SINKS,
+  shadowFields,
+} from "@/api/lib/observability/failure-shadow";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 /**
@@ -35,11 +46,47 @@ type CaptureErrorOptions = {
   distinctId?: string | undefined;
   organizationId?: string | undefined;
   sessionId?: string | undefined;
+  request?: Request | undefined;
+  /**
+   * Set when the caller already observed and counted this failure; its grade
+   * is undefined only if grading itself failed.
+   */
+  observed?: { readonly grading: FailureGrading | undefined } | undefined;
 };
 
 type CaptureRequestErrorOptions = {
   context?: ErrorTelemetryContext | undefined;
   request: Request;
+};
+
+// Keys the capture owns: the analytics envelope, the error identity and the
+// failure grade. A caller's context carrying one is dropped and counted, so a
+// context value can neither regroup an issue nor dodge suppression.
+const RESERVED_CONTEXT_KEY = /^(?:\$|error\.|failure\.)/u;
+const RESERVED_CONTEXT_NAMES: ReadonlySet<string> = new Set([
+  "message",
+  "severity",
+  "suppressed_repeats",
+]);
+
+type AcceptedCaptureContext = {
+  readonly context: ErrorTelemetryContext;
+  readonly rejected: number;
+};
+
+const acceptCaptureContext = (
+  context: ErrorTelemetryContext | undefined,
+): AcceptedCaptureContext => {
+  const accepted: ErrorTelemetryContext = {};
+  let rejected = 0;
+  for (const [key, value] of Object.entries(context ?? {})) {
+    if (RESERVED_CONTEXT_KEY.test(key) || RESERVED_CONTEXT_NAMES.has(key)) {
+      rejected += 1;
+      continue;
+    }
+    accepted[key] = value;
+  }
+  return { context: accepted, rejected };
 };
 
 const SERVER_DISTINCT_ID = "server";
@@ -168,11 +215,23 @@ const captureErrorWithOptions = (
   options: CaptureErrorOptions,
 ) => {
   const tag = errorTag(error);
-  const fingerprint = errorFingerprint(error);
+  const fingerprint = identityFields(readEvidence(error));
+  const grading =
+    options.observed === undefined
+      ? observeShadow({
+          error,
+          sink: SHADOW_SINKS.capture,
+          channel: "capture",
+          request: options.request,
+        })
+      : options.observed.grading;
+  const { context, rejected } = acceptCaptureContext(options.context);
   // PostHog ingestion drops `$exception` events that lack `$exception_list`,
   // so the entry is required even though we deliberately keep it empty —
   // the redaction contract above forbids shipping the message or stack.
+  // The caller's context goes first: every key after it is owned here.
   const properties: ExceptionProperties = {
+    ...context,
     // PostHog groups issues from `$exception_list` content; with the message
     // and stack redacted, every event of one error class collapses into a
     // single issue and first-seen automations never fire for new defects.
@@ -199,17 +258,18 @@ const captureErrorWithOptions = (
     // carry no client data, so they make the exception actionable in
     // the dashboard without violating it.
     ...fingerprint,
-    ...options.context,
     ...safeErrorTelemetryFields(error),
     ...(options.organizationId
       ? { organization_id: options.organizationId }
       : {}),
     ...(options.sessionId ? { session_id: options.sessionId } : {}),
+    ...shadowFields(grading),
+    ...(rejected > 0 ? { "failure.ctx_rejected": String(rejected) } : {}),
   };
 
   // Before the throttle: dev sinks are local and unmetered, and a developer
   // reproducing a tight failure loop needs every occurrence.
-  logDevError(error, properties);
+  logServerDevError(error, properties);
 
   const suppressed = admitCapture(
     captureWindowKey(properties),
@@ -219,17 +279,24 @@ const captureErrorWithOptions = (
     return;
   }
 
-  getAnalytics().capture({
-    distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
-    event: SERVER_ANALYTICS_EVENTS.exception,
-    ...(options.organizationId
-      ? { groups: { organization: options.organizationId } }
-      : {}),
-    properties:
-      suppressed > 0
-        ? { ...properties, suppressed_repeats: String(suppressed) }
-        : properties,
+  // A failing analytics client must not turn into a failure of whatever
+  // answer the caller is about to give.
+  const sent = Result.try(() => {
+    getServerAnalytics().capture({
+      distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
+      event: SERVER_ANALYTICS_EVENTS.exception,
+      ...(options.organizationId
+        ? { groups: { organization: options.organizationId } }
+        : {}),
+      properties:
+        suppressed > 0
+          ? { ...properties, suppressed_repeats: String(suppressed) }
+          : properties,
+    });
   });
+  if (Result.isError(sent)) {
+    reportEmitFailure("capture", sent.error);
+  }
 };
 
 export const captureError = (
@@ -239,15 +306,58 @@ export const captureError = (
   captureErrorWithOptions(error, { context });
 };
 
+const requestCaptureOptions = (request: Request) => {
+  const reqCtx = getRequestContext(request);
+  return {
+    request,
+    distinctId: reqCtx?.posthogDistinctId,
+    organizationId: reqCtx?.organizationId,
+    sessionId: reqCtx?.sessionId,
+  };
+};
+
 export const captureRequestError = (
   error: unknown,
   { context, request }: CaptureRequestErrorOptions,
 ) => {
-  const reqCtx = getRequestContext(request);
   captureErrorWithOptions(error, {
     context,
-    distinctId: reqCtx?.posthogDistinctId,
-    organizationId: reqCtx?.organizationId,
-    sessionId: reqCtx?.sessionId,
+    ...requestCaptureOptions(request),
   });
 };
+
+type CaptureObservedErrorOptions = {
+  context?: ErrorTelemetryContext | undefined;
+  request?: Request | undefined;
+  observation: FailureGrading | undefined;
+};
+
+/**
+ * Capture a failure its caller has already graded and counted, so the capture
+ * neither grades it a second time nor counts it twice.
+ */
+export const captureObservedError = (
+  error: unknown,
+  { context, request, observation }: CaptureObservedErrorOptions,
+) => {
+  captureErrorWithOptions(error, {
+    context,
+    ...(request === undefined ? {} : requestCaptureOptions(request)),
+    observed: { grading: observation },
+  });
+};
+
+/**
+ * Run a promise as fire-and-forget work, routing any rejection to
+ * `captureError` instead of letting it surface as an unhandled rejection. Use
+ * this only for genuinely detached work (best-effort cache warming, cleanup,
+ * telemetry). When a caller needs the result or must react to failure, `await`
+ * the promise or propagate it instead.
+ *
+ * `context` is a short, stable label identifying the call site (for example
+ * `"account-cleanup.reconcile"`). Keep it a fixed string; never interpolate
+ * identifiers, so it stays a safe correlation tag in telemetry.
+ */
+export const detached = createDetached((error, context) => {
+  captureError(error, { detached: context });
+});

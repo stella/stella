@@ -216,6 +216,8 @@ test("a wedged walk reports which database error wedged it", async () => {
     "error.cause.pg_code": "42501",
     "error.cause.pg_table": "case_law_citations",
     "error.cause.pg_column": "cited_court_hint",
+    "failure.shadow_grade": "defect",
+    "failure.shadow_reason": "unclassified",
   });
 });
 

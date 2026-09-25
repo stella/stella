@@ -9,7 +9,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -240,7 +240,7 @@ type DiffSourcesProps = {
 };
 
 const extractDocxText = async (buffer: ArrayBuffer): Promise<string> => {
-  const extracted = await extractText(new Uint8Array(buffer));
+  const extracted = await extractDocxDocument(new Uint8Array(buffer));
   return extracted.paragraphs.map((p) => p.text).join("\n");
 };
 

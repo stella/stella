@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "Website access is off. Grant it once to let stella use your signed-in sites."
+  },
+  "accessReady": {
+    "message": "Ready. stella can use a dedicated tab while you stay signed in to websites."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome could not update website access."
+  },
+  "adoptTab": {
+    "message": "Use this tab with stella"
+  },
+  "adoptUnsupported": {
+    "message": "Only public HTTPS pages can be used with stella."
+  },
+  "adoptedTab": {
+    "message": "stella can now read $ORIGIN$ in this tab. Ask about it in chat.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Checking website access…"
+  },
+  "connectTab": {
+    "message": "Connect current stella tab"
+  },
+  "controllerReady": {
+    "message": "Connected to $ORIGIN$. Each action still needs approval in stella.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Disconnect tab"
+  },
+  "extensionDescription": {
+    "message": "Lets stella operate a dedicated Chrome tab after you grant site access."
+  },
+  "extensionName": {
+    "message": "Stella browser"
+  },
+  "grantAccess": {
+    "message": "Allow all websites"
+  },
+  "revokeAccess": {
+    "message": "Remove website access"
+  },
+  "unsupportedTab": {
+    "message": "Open a stella app tab, then try again."
+  }
+}

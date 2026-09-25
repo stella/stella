@@ -39,10 +39,16 @@ export type NumericFunctionName = (typeof NUMERIC_FUNCTION_NAMES)[number];
 const isNumericFunctionName = (name: string): name is NumericFunctionName =>
   NUMERIC_FUNCTION_NAMES.some((candidate) => candidate === name);
 
+const OPERATORS = ["+", "-", "*", "/", "%"] as const;
+type Operator = (typeof OPERATORS)[number];
+
+const isOperator = (value: string): value is Operator =>
+  OPERATORS.some((candidate) => candidate === value);
+
 type Tok =
   | { t: "num"; v: number }
   | { t: "id"; v: string }
-  | { t: "op"; v: "+" | "-" | "*" | "/" | "%" }
+  | { t: "op"; v: Operator }
   | { t: "lp" }
   | { t: "rp" }
   | { t: "comma" };
@@ -83,10 +89,8 @@ const tokenize = (expression: string): Tok[] => {
       tokens.push({ t: "rp" });
     } else if (punct === ",") {
       tokens.push({ t: "comma" });
-    } else if (punct !== undefined) {
-      // SAFETY: the punct group only matches one of + - * / %.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tokens.push({ t: "op", v: punct as "+" | "-" | "*" | "/" | "%" });
+    } else if (punct !== undefined && isOperator(punct)) {
+      tokens.push({ t: "op", v: punct });
     }
   }
   return tokens;

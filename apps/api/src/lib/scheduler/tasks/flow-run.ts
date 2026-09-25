@@ -3,7 +3,10 @@ import * as v from "valibot";
 
 import { schedulerJobs } from "@/api/db/schema";
 import { shouldRunScheduledFlowNow } from "@/api/lib/flows/flow-trigger-logic";
-import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
+import {
+  automatedFlowRunDependencies,
+  startAutomatedFlowRun,
+} from "@/api/lib/flows/start-automated-flow-run";
 import {
   brandPersistedFlowDefinitionId,
   brandPersistedOrganizationId,
@@ -107,13 +110,16 @@ export const runScheduledFlow: SchedulerTask = async ({
     return;
   }
 
-  await startAutomatedFlowRun({
-    definitionId,
-    organizationId,
-    workspaceId,
-    createdByUserId: definition.createdByUserId,
-    triggerSource: { type: "schedule" },
-    inputEntityIds: [],
-    logContext: { definitionId, workspaceId, trigger: "schedule" },
-  });
+  await startAutomatedFlowRun(
+    {
+      definitionId,
+      organizationId,
+      workspaceId,
+      createdByUserId: definition.createdByUserId,
+      triggerSource: { type: "schedule" },
+      inputEntityIds: [],
+      logContext: { definitionId, workspaceId, trigger: "schedule" },
+    },
+    automatedFlowRunDependencies(db),
+  );
 };

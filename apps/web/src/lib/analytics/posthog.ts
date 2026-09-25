@@ -3,6 +3,8 @@ import { isTaggedError, panic } from "better-result";
 import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
+import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+
 import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
@@ -18,14 +20,10 @@ import type {
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
-import { logDevError } from "@/lib/errors/utils";
+import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   Object.values(WEB_ANALYTICS_EVENTS).some((value) => value === event);
-
-// PostHog group type for organization-level analytics; must match the
-// server-side capture wrapper's group key.
-const ORGANIZATION_GROUP_TYPE = "organization";
 
 // Browser-noise patterns we drop client-side before they hit
 // PostHog ingest. PostHog has no built-in `ignoreErrors` analogue
@@ -761,7 +759,10 @@ export const createPostHogAnalytics = ({
         // Same person, possibly a fresh active organization (SPA org
         // switch): rebind the group so later events attribute to the
         // current organization instead of the one bound at identify.
-        posthog.group(ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
+        posthog.group(
+          POSTHOG_ORGANIZATION_GROUP_TYPE,
+          user.activeOrganizationId,
+        );
         return;
       }
 
@@ -776,7 +777,7 @@ export const createPostHogAnalytics = ({
       posthog.identify(user.id);
       // Group properties (name, practice jurisdictions) are set server-side
       // via groupIdentify; the browser only attaches the opaque key.
-      posthog.group(ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
+      posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
     reset: ({ onlyIfIdentified } = {}) => {
       if (onlyIfIdentified && !posthog._isIdentified()) {

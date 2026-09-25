@@ -146,7 +146,7 @@ const finalizeUpload = createSafeHandler(
     const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
     const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
     const claimedRows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — claim FSM state transition on
         // pending_uploads; ephemeral bookkeeping. The audit row for
@@ -208,7 +208,7 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — expiry transition on pending_uploads;
           // the upload never became a durable entity.
@@ -267,7 +267,7 @@ const finalizeUpload = createSafeHandler(
       const error = finalizeResult.error;
       const terminalStatus = error.status === 500 ? "failed" : "rejected";
       const failedRows = yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — terminal-state write on pending_uploads,
           // no domain entity to attribute.

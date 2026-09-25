@@ -4,7 +4,7 @@
 // complaining, but it also throws the rejection away: an async failure
 // becomes an unhandled-rejection event instead of structured telemetry.
 // Route fire-and-forget work through the `detached(promise, context)` helper
-// (`@/lib/detached` on the web, `@/api/lib/detached` on the API) so every
+// (`@/lib/detached` on the web, `@/api/lib/analytics/capture` on the API) so every
 // rejection reaches the shared error-capture channel with a stable context
 // tag.
 //

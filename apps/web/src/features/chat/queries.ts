@@ -576,7 +576,7 @@ export const fileChatThreadOptions = ({
   key,
   hasDocxEditSurface,
 }: FileChatThreadOptionsArgs) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- `hasDocxEditSurface` deliberately excluded from this query's key: the file-thread identity it resolves is the same regardless of docx-vs-pdf, it only steers which sibling `chatThreadOptions` cache key the queryFn seeds below.
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- `hasDocxEditSurface` deliberately excluded from this query's key: the file-thread identity it resolves is the same regardless of docx-vs-pdf, it only steers which sibling `chatThreadOptions` cache key the queryFn seeds below.
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,

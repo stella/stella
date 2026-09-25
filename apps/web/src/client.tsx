@@ -43,7 +43,7 @@ const hydrate = async () => {
           if (error instanceof CancelledError) {
             return;
           }
-          // eslint-disable-next-line no-console -- top-level hydration error boundary, no logger in scope
+          // oxlint-disable-next-line no-console -- top-level hydration error boundary, no logger in scope
           console.error(error);
         },
       },

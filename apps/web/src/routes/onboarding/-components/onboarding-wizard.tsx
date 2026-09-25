@@ -33,7 +33,7 @@ import {
 import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -168,7 +168,7 @@ export const OnboardingWizard = () => {
     if (step !== "catalogue") {
       return;
     }
-    // eslint-disable-next-line react/set-state-in-effect -- commit-safe parent-owned reconciliation; the functional update rechecks current selections so stale renders cannot overwrite user edits
+    // oxlint-disable-next-line react/set-state-in-effect -- commit-safe parent-owned reconciliation; the functional update rechecks current selections so stale renders cannot overwrite user edits
     setData((currentData) => {
       const practiceCountryCodes = new Set(
         currentData.practiceJurisdictions.map((jurisdiction) =>
@@ -204,7 +204,7 @@ export const OnboardingWizard = () => {
     if (jurisdictionSuggestionApplied || !suggestedCountryCode) {
       return;
     }
-    // eslint-disable-next-line react/set-state-in-effect -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
+    // oxlint-disable-next-line react/set-state-in-effect -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
     setJurisdictionSuggestionApplied(true);
     setData((currentData) => {
       if (currentData.practiceJurisdictions.length > 0) {

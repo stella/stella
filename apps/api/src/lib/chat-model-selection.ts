@@ -40,12 +40,12 @@ import {
 
 const CHAT_MODEL_ROLE: ModelRole = "chat";
 
-export type ChatModelSelection = {
+export type BYOKChatModelSelection = {
   provider: BYOKProvider;
   modelId: string;
 };
 
-export type ChatModelOption = ChatModelSelection & {
+export type BYOKChatModelOption = BYOKChatModelSelection & {
   defaultReasoningEffort: ReasoningEffort | null;
   displayName: string;
   iconProvider: BYOKProvider;
@@ -64,7 +64,7 @@ const isBYOKProviderValue = (value: string): value is BYOKProvider =>
 export const encodeChatModelSelection = ({
   provider,
   modelId,
-}: ChatModelSelection): string => `${provider}::${modelId}`;
+}: BYOKChatModelSelection): string => `${provider}::${modelId}`;
 
 /**
  * Strict decode for the persisted thread-level override. Unlike the
@@ -76,7 +76,7 @@ export const encodeChatModelSelection = ({
  */
 export const decodeChatModelSelection = (
   value: string,
-): ChatModelSelection | null => {
+): BYOKChatModelSelection | null => {
   const [providerRaw, ...modelParts] = value.split("::");
   const modelId = modelParts.join("::");
   if (!providerRaw || !modelId || !isBYOKProviderValue(providerRaw)) {
@@ -95,7 +95,7 @@ export const isChatModelSelectionAvailable = ({
   provider,
   modelId,
   orgAIConfig,
-}: ChatModelSelection & { orgAIConfig: OrgAIConfig | null }): boolean => {
+}: BYOKChatModelSelection & { orgAIConfig: OrgAIConfig | null }): boolean => {
   if (
     !isAllowedBYOKModelForRole({ provider, modelId, role: CHAT_MODEL_ROLE })
   ) {
@@ -111,7 +111,7 @@ export const isChatModelSelectionAvailable = ({
 
 const chatModelOptionsForProvider = (
   provider: BYOKProvider,
-): ChatModelOption[] =>
+): BYOKChatModelOption[] =>
   BYOK_MODEL_OPTIONS[provider].map((modelId) => {
     const metadata = getModelDisplayMetadata(modelId);
     if (metadata === null) {
@@ -144,7 +144,7 @@ const CHAT_REASONING_EFFORT_EXPOSURE = {
 export const getChatModelReasoningEfforts = ({
   provider,
   modelId,
-}: ChatModelSelection): readonly ReasoningEffort[] | null =>
+}: BYOKChatModelSelection): readonly ReasoningEffort[] | null =>
   CHAT_REASONING_EFFORT_EXPOSURE[provider] === "exposed"
     ? getModelReasoningEfforts(modelId)
     : null;
@@ -153,7 +153,7 @@ export const isChatModelReasoningEffortAvailable = ({
   provider,
   modelId,
   reasoningEffort,
-}: ChatModelSelection & { reasoningEffort: ReasoningEffort }): boolean =>
+}: BYOKChatModelSelection & { reasoningEffort: ReasoningEffort }): boolean =>
   getChatModelReasoningEfforts({ provider, modelId })?.includes(
     reasoningEffort,
   ) ?? false;
@@ -209,7 +209,7 @@ const hasResolvableModelForRole = ({
  */
 export const getConfiguredChatModelOptions = (
   orgAIConfig: OrgAIConfig | null,
-): ChatModelOption[] =>
+): BYOKChatModelOption[] =>
   configuredChatProviders(orgAIConfig).flatMap(chatModelOptionsForProvider);
 
 /**

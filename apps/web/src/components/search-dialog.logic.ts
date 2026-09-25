@@ -1,4 +1,5 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
 import type { SearchScope } from "@/components/search-scope";
 import type {
@@ -9,7 +10,9 @@ import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
+import { getFirstSearchHighlightText } from "@/lib/search.logic";
 
+type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 type EntityGlobalSearchHit = Extract<GlobalSearchHit, { entityId: string }>;
 
@@ -144,28 +147,27 @@ export const resolveEntityDocumentRoute = async ({
   };
 };
 
-export const getEntityWorkspaceRoute = ({
-  workspaceId,
-}: Pick<EntityGlobalSearchHit, "workspaceId">): EntityNavigationRoute => ({
-  to: "/workspaces/$workspaceId/$viewId",
-  params: { workspaceId, viewId: "all" },
-});
-
-type EntityLocationRoute = {
-  to: "/workspaces/$workspaceId/$viewId";
-  params: { workspaceId: string; viewId: "all" };
-  search?: { folder: string };
-};
+/** Where an entity lives in its matter: a row of the file tree (with the
+ *  folder to scope into when the matter has no tree), or, for tasks, which
+ *  the tree does not list at any depth, just the matter. */
+export type EntityLocation =
+  | {
+      type: "tree";
+      workspaceId: string;
+      entityId: string;
+      fallbackFolderId: string | null;
+    }
+  | { type: "matter"; workspaceId: string };
 
 /**
  * Cmd/Ctrl-activating a result opens the matter location containing the hit
- * — scoped into its parent folder when it has one — instead of the hit
- * itself. Only entity-backed hits have a containing location; every other
- * hit type returns null and keeps its normal open behavior.
+ * instead of the hit itself. Only entity-backed hits have a containing
+ * location; every other hit type returns null and keeps its normal open
+ * behavior.
  */
-export const getEntityLocationRoute = (
+export const getEntityLocation = (
   hit: GlobalSearchHit,
-): EntityLocationRoute | null => {
+): EntityLocation | null => {
   if (
     hit.type === "contact" ||
     hit.type === "case-law" ||
@@ -175,33 +177,48 @@ export const getEntityLocationRoute = (
     return null;
   }
 
-  return {
-    to: "/workspaces/$workspaceId/$viewId",
-    params: { workspaceId: hit.workspaceId, viewId: "all" },
-    ...(hit.parentId === null ? {} : { search: { folder: hit.parentId } }),
-  };
+  return getEntityHitLocation(hit);
 };
+
+export const getEntityHitLocation = (
+  hit: Pick<
+    EntityGlobalSearchHit,
+    "entityId" | "parentId" | "type" | "workspaceId"
+  >,
+): EntityLocation =>
+  // A task's parent is another task, so neither has a tree row.
+  hit.type === "task"
+    ? { type: "matter", workspaceId: hit.workspaceId }
+    : {
+        type: "tree",
+        workspaceId: hit.workspaceId,
+        entityId: hit.entityId,
+        fallbackFolderId: hit.parentId,
+      };
+
+/** A recent file's location: its tree row. Recent entries do not persist a
+ *  containing folder, so a matter without a tree opens at its root. */
+export const getRecentFileLocation = ({
+  entityId,
+  workspaceId,
+}: Pick<RecentFile, "entityId" | "workspaceId">): EntityLocation => ({
+  type: "tree",
+  workspaceId,
+  entityId,
+  fallbackFolderId: null,
+});
 
 export const getRecentFileRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
 }: Pick<RecentFile, "entityId" | "workspaceId"> & {
-  fileFieldId: string | null;
-}): EntityNavigationRoute => {
-  if (fileFieldId === null) {
-    return {
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
-    };
-  }
-
-  return {
-    to: "/workspaces/$workspaceId/$viewId/document",
-    params: { workspaceId, viewId: "all" },
-    search: { entity: entityId, field: fileFieldId },
-  };
-};
+  fileFieldId: string;
+}): EntityNavigationRoute => ({
+  to: "/workspaces/$workspaceId/$viewId/document",
+  params: { workspaceId, viewId: "all" },
+  search: { entity: entityId, field: fileFieldId },
+});
 
 type DialogCloseActionState =
   | { status: "idle" }
@@ -273,6 +290,55 @@ export const getRecentFilePreviewDateVisibility = (
 
 export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>
   chatThreadRoute({ threadId: hit.threadId, workspaceId: hit.workspaceId });
+
+type CaseLawHitSearch = { q?: string };
+
+type CaseLawHitRoute =
+  | {
+      to: "/law/$country/cases/$court/$slug";
+      params: { country: string; court: string; slug: string };
+      search: CaseLawHitSearch;
+    }
+  | {
+      to: "/law/$country/cases/$court/$language/$slug";
+      params: {
+        country: string;
+        court: string;
+        language: string;
+        slug: string;
+      };
+      search: CaseLawHitSearch;
+    };
+
+/** The decision's canonical public route, opened on the hit's first match. */
+export const getCaseLawHitRoute = (
+  hit: CaseLawGlobalSearchHit,
+): CaseLawHitRoute => {
+  const { country, court, language, slug } = createCaseLawDecisionRouteParams({
+    caseNumber: hit.caseNumber,
+    country: hit.country,
+    court: hit.court,
+    decisionId: hit.decisionId,
+    language: hit.language,
+    languageAlternates: hit.languageAlternates,
+    slug: hit.slug,
+  });
+  const search: CaseLawHitSearch = hit.headline
+    ? { q: getFirstSearchHighlightText(hit.headline, "") }
+    : {};
+
+  return language === undefined
+    ? {
+        to: "/law/$country/cases/$court/$slug",
+        params: { country, court, slug },
+        search,
+      }
+    : {
+        to: "/law/$country/cases/$court/$language/$slug",
+        params: { country, court, language, slug },
+        search,
+      };
+};
 
 /**
  * Chat message content travels as composer HTML; a raw search query must be

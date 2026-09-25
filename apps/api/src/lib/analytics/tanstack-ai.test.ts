@@ -12,8 +12,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { SERVER_ANALYTICS_EVENTS } from "./types";
-import type { Analytics } from "./types";
+import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
+import type { ServerAnalytics } from "./server-analytics";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -114,7 +114,7 @@ const createMiddlewareContext = ({
   // plain context fields above, never the capability machinery.
   // SAFETY: stub registry; `CapabilityRegistry` is not publicly constructible
   // and the hooks never touch `capabilities`/`get`/`getOptional`/`provide`.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   capabilities: {} as unknown as ChatMiddlewareContext["capabilities"],
   get: () => {
     throw new Error("capability access is not exercised in these tests");
@@ -127,8 +127,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("captures completion events from TanStack middleware hooks", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -218,8 +218,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("groups events by the analytics organization without usage metering", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -296,7 +296,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       }),
     };
     const { safeDb } = createScopedDbMock(tx);
-    const analytics: Analytics = {
+    const analytics: ServerAnalytics = {
       capture: () => undefined,
       flush: async () => undefined,
       identifyOrganizationGroup: () => undefined,
@@ -524,8 +524,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       }),
     };
     const { safeDb } = createScopedDbMock(tx);
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -620,7 +620,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       }),
     };
     const { safeDb } = createScopedDbMock(tx);
-    const analytics: Analytics = {
+    const analytics: ServerAnalytics = {
       capture: () => undefined,
       flush: async () => undefined,
       identifyOrganizationGroup: () => undefined,
@@ -661,8 +661,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("deduplicates TanStack middleware and catch-path errors", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -710,8 +710,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const originalRequirePersonalAIKey = env.REQUIRE_PERSONAL_AI_KEY;
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -1010,8 +1010,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("captures one generation per model call and sums the run's usage", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -1088,8 +1088,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("keeps concurrent runs on one callbacks instance apart", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -1179,8 +1179,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   test("an interrupted run still reports its generation", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const events: Parameters<Analytics["capture"]>[0][] = [];
-    const analytics: Analytics = {
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const analytics: ServerAnalytics = {
       capture: (event) => {
         events.push(event);
       },
@@ -1380,6 +1380,40 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(attributes).not.toHaveProperty("error.provider.status");
     } finally {
       errorSpy.mockRestore();
+    }
+  });
+
+  test("grades an anticipated provider failure by the kind it was named", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const error = Object.assign(new Error("rate limited"), {
+      statusCode: 429,
+    });
+
+    const warnSpy = spyOn(logger, "warn");
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "search.refine",
+        traceId: "trace_shadow_grade",
+      }).captureError(error);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.error_kind": "quota_exhausted",
+          "failure.shadow_grade": "transient",
+          "failure.shadow_reason": "quota_exhausted",
+        }),
+      );
+    } finally {
+      warnSpy.mockRestore();
     }
   });
 });

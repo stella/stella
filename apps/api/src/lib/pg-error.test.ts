@@ -223,6 +223,8 @@ describe("pgErrorFields", () => {
       "error.cause.pg_column": "email",
       "error.cause.pg_schema": "public",
       "error.cause.pg_routine": "_bt_check_unique",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
     });
   });
 
@@ -246,6 +248,8 @@ describe("pgErrorFields", () => {
       "error.cause.pg_constraint": "users_email_key",
       "error.cause.pg_table": "users",
       "error.cause.pg_column": "email",
+      "failure.shadow_grade": "defect",
+      "failure.shadow_reason": "unclassified",
     });
   });
 
@@ -440,6 +444,7 @@ describe("isTransientPgConnectionError", () => {
         close: () => {},
       },
     });
+    // oxlint-disable-next-line bun-test-hygiene/no-unmanaged-database-client -- dials the local stub server above, never the test database, and is ended below
     const sql = new SQL({
       url: `postgres://user:pass@127.0.0.1:${server.port}/db`,
       max: 1,

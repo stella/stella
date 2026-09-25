@@ -23,7 +23,7 @@ export const asTestExecutable = <TInput, TOutput>(
   // SAFETY: callers structurally narrow to the optional execute
   // callable shape, which matches the TanStack tool contract for the
   // fields under test.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   slot as TestExecutable<TInput, TOutput> | undefined;
 
 /**
@@ -38,7 +38,7 @@ export const readTestJson = async <T>(resp: Response): Promise<T> =>
   // SAFETY: callers spell out the expected shape per-test; the
   // assertions immediately after the parse fail loudly if the body
   // doesn't match.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   (await resp.json()) as T;
 
 /**
@@ -55,7 +55,7 @@ export const asChatPart = (part: object): ChatMessage["parts"][number] =>
   // SAFETY: each call site spells out the variant's discriminator
   // (type, state) explicitly; the helper widens that literal back to
   // the canonical persisted-part union.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   part as unknown as ChatMessage["parts"][number];
 
 type TestFetchMock =
@@ -76,7 +76,7 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
   // SAFETY: production code calls the mock with the URL it would
   // pass to real `fetch`; the test asserts on that exact input.
   // Absent fetch overloads are not exercised at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   fn as unknown as typeof fetch;
 
 /**
@@ -91,7 +91,7 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
 // matches by construction. This helper centralises the assertion
 // in one place per test file. The single-use type parameter is
 // the helper's whole API surface.
-// eslint-disable-next-line typescript/no-unnecessary-type-parameters
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
 export const asTestRaw = <T>(raw: unknown): T =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- centralised test-only raw cast; the helper IS the cast
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- centralised test-only raw cast; the helper IS the cast
   raw as T;

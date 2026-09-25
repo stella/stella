@@ -24,13 +24,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
-import { analysisStore } from "./analysis-store";
 import {
   graphFingerprintOf,
   readCitationGraphFacts,

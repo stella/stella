@@ -1,10 +1,8 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -15,6 +13,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { getPgErrorCode } from "@/api/lib/pg-error";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 type JsonbStorageRow = {
   storageType: string;
@@ -80,9 +79,7 @@ if (!databaseUrl || !runPostgresTests) {
 } else {
   describe("case-law ingestion JSONB persistence", () => {
     const adapterKey = `jsonb-regression-cz-ns-${Bun.randomUUIDv7()}`;
-    const db = drizzle(databaseUrl, {
-      relations: { ...relations, ...authRelationsPart },
-    });
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(tx));
     let sourceId: SafeId<"caseLawSource">;
@@ -104,7 +101,7 @@ if (!databaseUrl || !runPostgresTests) {
       sourceId = source.id;
     });
 
-    afterAll(async () => {
+    cleanUp(async () => {
       if (!sourceId) {
         return;
       }

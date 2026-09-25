@@ -195,7 +195,7 @@ export const AddEntityMenu = ({
       </Button>
     );
     return (
-      // eslint-disable-next-line react/no-clone-element -- cloneElement attaches the click handler onto the caller-supplied `render` trigger element without knowing its concrete type.
+      // oxlint-disable-next-line react/no-clone-element -- cloneElement attaches the click handler onto the caller-supplied `render` trigger element without knowing its concrete type.
       React.cloneElement(trigger, { onClick: handleUploadClick })
     );
   }

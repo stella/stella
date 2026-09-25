@@ -158,6 +158,12 @@ type AssistantSnapshotMessage = Extract<SnapshotMessage, { role: "assistant" }>;
  * their tool messages keep anchoring by `toolCallId`. In a continuation that
  * message is the owning one the snapshot already carries from history, so
  * the run's messages fold into it rather than beside it.
+ *
+ * TanStack also splits every assistant message it replays at each tool
+ * result, and every copy keeps the message's id. The client keeps one message
+ * per id, so the snapshot carries exactly one assistant message per id, at
+ * the position of that id's first copy; each copy's reasoning moves ahead of
+ * it, where the client attaches reasoning to the next assistant message.
  */
 const mergeSnapshotAssistantMessages = ({
   existingMessageIds,
@@ -170,54 +176,125 @@ const mergeSnapshotAssistantMessages = ({
   messages: readonly SnapshotMessage[];
   snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
 }): SnapshotMessage[] => {
-  const isNewAssistant = (
-    message: SnapshotMessage,
-  ): message is AssistantSnapshotMessage =>
-    message.role === "assistant" && !existingMessageIds.has(message.id);
-  const newAssistantMessages = messages.filter(isNewAssistant);
-  const first = newAssistantMessages.at(0);
-  if (first === undefined) {
-    return [...messages];
+  const groupId = (message: AssistantSnapshotMessage): string => {
+    if (existingMessageIds.has(message.id)) {
+      return message.id;
+    }
+    const mergedId = mapMessageId(message.id);
+    snapshotMessageIds.set(message.id, mergedId);
+    return mergedId;
+  };
+  const groups = new Map<string, AssistantSnapshotGroup>();
+  const groupsByFirstCopy = new Map<SnapshotMessage, AssistantSnapshotGroup>();
+  const order: SnapshotMessage[] = [];
+  let reasoning: SnapshotMessage[] = [];
+  for (const message of messages) {
+    if (message.role === "reasoning") {
+      reasoning.push(message);
+      continue;
+    }
+    if (message.role !== "assistant") {
+      order.push(...reasoning, message);
+      reasoning = [];
+      continue;
+    }
+    const id = groupId(message);
+    const group = groups.get(id);
+    if (group === undefined) {
+      const created: AssistantSnapshotGroup = {
+        copies: [message],
+        id,
+        reasoning,
+      };
+      groups.set(id, created);
+      groupsByFirstCopy.set(message, created);
+      order.push(message);
+    } else {
+      group.copies.push(message);
+      group.reasoning.push(...reasoning);
+    }
+    reasoning = [];
   }
-  const mergedId = mapMessageId(first.id);
-  const owning = messages.find(
-    (message): message is AssistantSnapshotMessage =>
-      message.role === "assistant" && message.id === mergedId,
-  );
-  const base = owning ?? first;
+  order.push(...reasoning);
+  const result: SnapshotMessage[] = [];
+  for (const message of order) {
+    const group = groupsByFirstCopy.get(message);
+    if (group === undefined) {
+      result.push(message);
+      continue;
+    }
+    result.push(...group.reasoning, mergeCopies(group));
+  }
+  return result;
+};
+
+type AssistantSnapshotGroup = {
+  copies: [AssistantSnapshotMessage, ...AssistantSnapshotMessage[]];
+  id: string;
+  reasoning: SnapshotMessage[];
+};
+
+/**
+ * Joins the copies' text and tool calls in document order. Identity comes
+ * from the first copy, but TanStack keeps per-call provider metadata on each
+ * copy's `metadata.tanstack.toolCallMetadata`, so that map is unioned.
+ */
+const mergeCopies = ({
+  copies,
+  id,
+}: AssistantSnapshotGroup): AssistantSnapshotMessage => {
   const contents: string[] = [];
   const toolCalls: NonNullable<AssistantSnapshotMessage["toolCalls"]> = [];
-  for (const message of owning === undefined
-    ? newAssistantMessages
-    : [owning, ...newAssistantMessages]) {
-    if (message !== owning) {
-      snapshotMessageIds.set(message.id, mergedId);
+  const toolCallMetadata: Record<string, unknown> = {};
+  for (const copy of copies) {
+    if (typeof copy.content === "string" && copy.content.length > 0) {
+      contents.push(copy.content);
     }
-    if (typeof message.content === "string" && message.content.length > 0) {
-      contents.push(message.content);
+    if (copy.toolCalls !== undefined) {
+      toolCalls.push(...copy.toolCalls);
     }
-    if (message.toolCalls !== undefined) {
-      toolCalls.push(...message.toolCalls);
-    }
+    Object.assign(toolCallMetadata, readToolCallMetadata(copy));
   }
-  const { content: _content, toolCalls: _toolCalls, ...identity } = base;
-  const merged: SnapshotMessage = {
+  const { content: _content, toolCalls: _toolCalls, ...identity } = copies[0];
+  const metadata = withToolCallMetadata({
+    metadata: "metadata" in identity ? identity.metadata : undefined,
+    toolCallMetadata,
+  });
+  return {
     ...identity,
-    id: mergedId,
+    id,
+    ...(metadata === undefined ? {} : { metadata }),
     ...(contents.length === 0 ? {} : { content: contents.join("\n\n") }),
     ...(toolCalls.length === 0 ? {} : { toolCalls }),
   };
-  const result: SnapshotMessage[] = [];
-  for (const message of messages) {
-    if (message === base) {
-      result.push(merged);
-      continue;
-    }
-    if (!isNewAssistant(message)) {
-      result.push(message);
-    }
+};
+
+const readToolCallMetadata = (
+  message: AssistantSnapshotMessage,
+): Record<string, unknown> | undefined => {
+  if (!("metadata" in message) || !isRecord(message.metadata)) {
+    return undefined;
   }
-  return result;
+  const tanstack = message.metadata["tanstack"];
+  if (!isRecord(tanstack) || !isRecord(tanstack["toolCallMetadata"])) {
+    return undefined;
+  }
+  return tanstack["toolCallMetadata"];
+};
+
+const withToolCallMetadata = ({
+  metadata,
+  toolCallMetadata,
+}: {
+  metadata: unknown;
+  toolCallMetadata: Record<string, unknown>;
+}): unknown => {
+  if (Object.keys(toolCallMetadata).length === 0) {
+    return metadata;
+  }
+  const base = isRecord(metadata) ? metadata : {};
+  const tanstack = isRecord(base["tanstack"]) ? base["tanstack"] : {};
+  return { ...base, tanstack: { ...tanstack, toolCallMetadata } };
 };
 
 const remapChunkMessageId = ({

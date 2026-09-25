@@ -30,7 +30,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { transformUnknownError } from "@/lib/errors/utils";
+import { transformUnknownError } from "@/lib/errors/client";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 // Bounded wait so a mid-load, flag-gated, or removed anchor never blocks the

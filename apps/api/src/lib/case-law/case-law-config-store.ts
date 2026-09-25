@@ -7,19 +7,9 @@ type CourtWeightRow = typeof caseLawCourtWeights.$inferInsert;
 type FtsConfigRow = typeof caseLawFtsConfigs.$inferInsert;
 
 /**
- * The whole registry, unordered on purpose. `loadCourtWeights` puts every list
- * a lookup walks into `compareCourtWeightPrecedence` order, and that order is
- * total — tier, then country, then pattern, over rows unique in
- * `(country, pattern)` — so the rank a court resolves to does not depend on
- * the order these rows arrive in. Ordering here as well would buy nothing and
- * cost a `require-query-limit` suppression for a read that wants every row.
+ * The search-configuration writes: the seed script's, on the service's own
+ * connection. Reads live in `case-law-config-read.ts`.
  */
-export const readCourtWeightRows = async () =>
-  await rootDb.select().from(caseLawCourtWeights);
-
-export const readFtsConfigRows = async () =>
-  await rootDb.select().from(caseLawFtsConfigs);
-
 export const upsertCourtWeightRows = async (rows: CourtWeightRow[]) =>
   await rootDb
     .insert(caseLawCourtWeights)

@@ -114,6 +114,7 @@ const readCandidatePage = async (after: CandidateCursor | undefined) =>
   });
 
 while (printed < limit) {
+  // db-await-in-loop: keyset page per iteration; the page is the batch
   const rows = await readCandidatePage(cursor);
   if (rows.length === 0) {
     break;

@@ -36,7 +36,7 @@
 //   fetchWithTimeout(url, { timeoutMs: 10_000 })
 //   raw fetch() in *.test.* files
 //
-// Escape hatch: `// eslint-disable-next-line require-fetch-timeout/require-fetch-timeout`
+// Escape hatch: `// oxlint-disable-next-line require-fetch-timeout/require-fetch-timeout`
 // with a `// SAFETY:` comment explaining why the call cannot hang
 // (e.g. local file:/data: URL, object URL, in-process Bun.serve handler,
 // or a call site that manages its own independent abort/timeout

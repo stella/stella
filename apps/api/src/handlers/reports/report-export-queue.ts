@@ -38,6 +38,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -90,7 +91,7 @@ export const toExportErrorMessage = (cause: unknown): string => {
   return "Report export failed";
 };
 
-export const initReportExportWorker = () => {
+export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<ReportExportJobData>(
@@ -131,7 +132,9 @@ export const initReportExportWorker = () => {
   );
 
   const runNotificationReconcile = async (): Promise<void> => {
-    const { actors, suppressed } = await listPendingReportExportNotifications();
+    const { actors, suppressed } =
+      await listPendingReportExportNotifications(db);
+    // db-await-in-loop: one claim-and-notify transaction per pending actor; the pending read caps actors at REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT
     const results = await Promise.all(
       actors.map(
         async (actorKey) =>
@@ -380,7 +383,9 @@ const runExport = async ({
   // Deterministic export: skip loading the org AI config entirely; fillReport
   // builds no generators and runs no usage preflight when aiNarrative is off.
   const orgAIConfig = aiNarrative
-    ? await loadOrgAIConfig(actor.organizationId)
+    ? await actor.scopedDb(
+        async (tx) => await loadOrgAIConfig(tx, actor.organizationId),
+      )
     : null;
   const filled = await fillReport({
     actor,

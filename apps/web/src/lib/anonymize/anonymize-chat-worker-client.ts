@@ -1,6 +1,6 @@
 import { getAnalytics } from "@/lib/analytics/provider";
 
-// eslint-disable-next-line import/default -- Vite ?worker&url import returns the emitted worker script URL as default export
+// oxlint-disable-next-line import/default -- Vite ?worker&url import returns the emitted worker script URL as default export
 import anonymizeChatWorkerUrl from "../../workers/anonymize-chat-worker?worker&url";
 import { createAnonymizeChatWorkerClient } from "./anonymize-chat-worker-client.logic";
 
@@ -59,7 +59,7 @@ const client = createAnonymizeChatWorkerClient({
   maxPendingRequests: MAX_PENDING_ANONYMIZE_REQUESTS,
 });
 
-// eslint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
+// oxlint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
 export const anonymizeChatTextInWorker = ({
   text,
   workspaceId,

@@ -16,6 +16,7 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+import { operatorFlags } from "@/api/scripts/operator-flags";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
@@ -76,41 +77,7 @@ const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
   --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).`;
 
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return undefined;
-  }
-  const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    console.error(`--${name} requires a value`);
-    console.error(USAGE);
-    process.exit(1);
-  }
-  return value;
-};
-
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const DECIMAL_INTEGER = /^\d+$/u;
-
-const positiveInteger = (
-  raw: string | undefined,
-  fallback: number,
-  name: string,
-): number => {
-  if (raw === undefined) {
-    return fallback;
-  }
-  const parsed = DECIMAL_INTEGER.test(raw)
-    ? Number.parseInt(raw, 10)
-    : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    console.error(`--${name} must be a positive integer, got: ${raw}`);
-    process.exit(1);
-  }
-  return parsed;
-};
+const { flagValue, hasFlag, positiveInteger } = operatorFlags(USAGE);
 
 const apply = hasFlag("apply");
 const limitFlag = flagValue("limit");
@@ -292,13 +259,13 @@ try {
       for (const result of results) {
         counts.variantsFetched += 1;
         await sourceLease.beforeDatabaseMark();
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- lease-guarded counter: every write needs its own monotonic observation order
+        // db-await-in-loop: lease-guarded counter: every write needs its own monotonic observation order
         const observationOrder = await allocateSourceObservationOrder({
           leaseToken: sourceLease.leaseToken,
           scopedDb: ingestionDb,
           sourceId: source.id,
         });
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-decision ingest pipeline, ordered by the observation number allocated just above
+        // db-await-in-loop: per-decision ingest pipeline, ordered by the observation number allocated just above
         const processed = await processDecision({
           input: result,
           sourceId: source.id,

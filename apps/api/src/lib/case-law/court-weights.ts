@@ -1,12 +1,14 @@
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 /**
  * Court weight loader with in-memory cache: the seeded per-jurisdiction rank
- * table, compiled once a minute.
+ * table, compiled once a minute. The cache is per source; the public corpus
+ * and the local one each own an instance (`public-case-law-config.ts`,
+ * `local-case-law-config.ts`).
  */
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
+import type { CourtWeightRow } from "@/api/lib/case-law/case-law-config-read";
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
 import { logger } from "@/api/lib/observability/logger";
@@ -51,7 +53,7 @@ const compareCode = (a: string, b: string): number => {
  * one jurisdiction, so without a tie-break the tier a decision got would
  * depend on row order, and a cache refresh could silently re-rank it. Applied
  * to every list a lookup walks, it makes the read's own order irrelevant,
- * which is why `readCourtWeightRows` does not sort.
+ * which is why `readCourtWeightRowsQuery` does not sort.
  */
 export const compareCourtWeightPrecedence = (
   a: CourtWeightEntry,
@@ -65,11 +67,9 @@ export const compareCourtWeightPrecedence = (
 
 const CACHE_TTL_MS = 60_000;
 
-let cached: { map: CourtWeightMap; expiresAt: number } | null = null;
+type CourtWeightRows = readonly CourtWeightRow[];
 
-type CourtWeightRows = Awaited<ReturnType<typeof readCourtWeightRows>>;
-
-type LoadCourtWeightsOptions = {
+export type LoadCourtWeightsOptions = {
   /**
    * Performs the registry read, given the production one to wrap. Called only
    * when the cache misses, so a caller that times its Postgres work records
@@ -85,11 +85,10 @@ const untimedRead = async (
 
 /**
  * The registry is a few dozen rows, so a read this slow is a degraded
- * database rather than a big answer. It runs on the root pool, where a
- * connection the server reaped without an RST never settles the query
- * promise, and a search request awaiting it would hang rather than fail.
- * Bounded, the request fails while the 60 s cache keeps a healthy database
- * to at most one read a minute.
+ * database rather than a big answer. A pooled connection the server reaped
+ * without an RST never settles the query promise, and a search request
+ * awaiting it would hang rather than fail. Bounded, the request fails while
+ * the 60 s cache keeps a healthy database to at most one read a minute.
  */
 const READ_TIMEOUT_MS = 5000;
 
@@ -101,16 +100,7 @@ const boundedRead = async (
     timeoutMs: READ_TIMEOUT_MS,
   });
 
-/** Load court weights from the database, caching for 60 s. */
-export const loadCourtWeights = async ({
-  onRead = untimedRead,
-}: LoadCourtWeightsOptions = {}): Promise<CourtWeightMap> => {
-  if (cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt) {
-    return cached.map;
-  }
-
-  const rows = await onRead(async () => await boundedRead(readCourtWeightRows));
-
+const compileCourtWeightRows = (rows: CourtWeightRows): CourtWeightMap => {
   if (rows.length === 0) {
     // The seed migration inserts the rows, so an empty table is a database
     // that was not migrated. Every court then weighs the default; this line
@@ -137,17 +127,109 @@ export const loadCourtWeights = async ({
   for (const entries of map.values()) {
     entries.sort(compareCourtWeightPrecedence);
   }
-
-  cached = {
-    map,
-    expiresAt: Temporal.Now.instant().epochMilliseconds + CACHE_TTL_MS,
-  };
   return map;
 };
 
-/** Invalidate the cache (e.g. after seeding). */
-export const invalidateCourtWeightsCache = (): void => {
-  cached = null;
+type CourtWeightRead = () => Promise<CourtWeightRows>;
+
+/** One source's registry, compiled and cached for 60 s. */
+export type CourtWeightCache = {
+  /** The registry, read through the source's own connection on a miss. */
+  load: (options?: LoadCourtWeightsOptions) => Promise<CourtWeightMap>;
+  /**
+   * The registry for a caller that already holds a connection to the source:
+   * a miss runs `read` on it rather than asking the source's pool for a
+   * second one. A caller holding a transaction on a small pool must use this;
+   * waiting for another connection there can wait on itself.
+   */
+  loadWithin: (
+    read: CourtWeightRead,
+    options?: LoadCourtWeightsOptions,
+  ) => Promise<CourtWeightMap>;
+  /** One country's entries, in the order `load` guarantees. */
+  loadForCountry: (country: string) => Promise<CourtWeightEntry[]>;
+  /** Drop the cached registry (e.g. after seeding). */
+  invalidate: () => void;
+};
+
+/**
+ * A registry cache over one source's rows. The source decides which database
+ * the registry comes from; the cache keeps it to one read a minute and never
+ * answers from another source's rows.
+ *
+ * Concurrent misses share one read. A caller holding no connection may wait
+ * on any read in flight. A caller holding one waits only on a read that
+ * already has its connection (another holder's), never on one still queued
+ * for the pool.
+ */
+export const createCourtWeightCache = (
+  readRows: CourtWeightRead,
+): CourtWeightCache => {
+  let cached: { map: CourtWeightMap; expiresAt: number } | null = null;
+  let pending: {
+    promise: Promise<CourtWeightMap>;
+    holdsConnection: boolean;
+    token: symbol;
+  } | null = null;
+
+  const fresh = (): CourtWeightMap | null =>
+    cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt
+      ? cached.map
+      : null;
+
+  const readAndCache = async (
+    read: CourtWeightRead,
+    onRead: NonNullable<LoadCourtWeightsOptions["onRead"]>,
+  ): Promise<CourtWeightMap> => {
+    const map = compileCourtWeightRows(
+      await onRead(async () => await boundedRead(read)),
+    );
+    cached = {
+      map,
+      expiresAt: Temporal.Now.instant().epochMilliseconds + CACHE_TTL_MS,
+    };
+    return map;
+  };
+
+  const startRead = async (
+    read: CourtWeightRead,
+    onRead: NonNullable<LoadCourtWeightsOptions["onRead"]>,
+    holdsConnection: boolean,
+  ): Promise<CourtWeightMap> => {
+    const token = Symbol("court-weight-read");
+    const promise = readAndCache(read, onRead).finally(() => {
+      if (pending?.token === token) {
+        pending = null;
+      }
+    });
+    pending = { promise, holdsConnection, token };
+    return await promise;
+  };
+
+  const load = async ({
+    onRead = untimedRead,
+  }: LoadCourtWeightsOptions = {}): Promise<CourtWeightMap> =>
+    fresh() ?? (await (pending?.promise ?? startRead(readRows, onRead, false)));
+
+  const loadWithin = async (
+    read: CourtWeightRead,
+    { onRead = untimedRead }: LoadCourtWeightsOptions = {},
+  ): Promise<CourtWeightMap> =>
+    fresh() ??
+    (await (pending?.holdsConnection === true
+      ? pending.promise
+      : startRead(read, onRead, true)));
+
+  return {
+    load,
+    loadWithin,
+    loadForCountry: async (country) =>
+      arrayOrEmpty((await load()).get(country)),
+    invalidate: () => {
+      cached = null;
+      pending = null;
+    },
+  };
 };
 
 // -- Lookup --------------------------------------------------------------
@@ -250,22 +332,11 @@ export const courtTierSqlFromMap = ({
     )`;
 };
 
-/**
- * Load weights for a single country.
- */
-export const loadCourtWeightsForCountry = async (
-  country: string,
-): Promise<CourtWeightEntry[]> => {
-  const map = await loadCourtWeights();
-  const entries = map.get(country);
-  return arrayOrEmpty(entries);
-};
-
 // -- SQL entries -----------------------------------------------------------
 
 /**
- * Per-map-instance cache of the flattened, sorted entries. `loadCourtWeights`
- * only ever mutates `cached.map` by swapping in a brand-new `Map` on refresh
+ * Per-map-instance cache of the flattened, sorted entries. A court-weight
+ * cache only ever replaces its map by swapping in a brand-new `Map` on refresh
  * (never mutating an existing instance in place), so keying on the map
  * instance gives free invalidation: once the 60 s TTL rotates in a new map,
  * this WeakMap simply misses and recomputes, and the old entry is GC'd along

@@ -11,7 +11,7 @@ import { contentDir } from "@stll/ui/use-content-dir";
 
 import { SearchHitIcon } from "@/components/search-dialog-results";
 import {
-  getEntityLocationRoute,
+  getEntityLocation,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
 } from "@/components/search-dialog.logic";
@@ -233,7 +233,7 @@ const SearchPreviewContent = ({
   const opensLocation =
     locationModifierHeld &&
     location !== null &&
-    getEntityLocationRoute(hit) !== null;
+    getEntityLocation(hit) !== null;
   const previewDate =
     dateVisibility === "show" ? getSearchPreviewDate(hit) : null;
   const formattedPreviewDate = previewDate

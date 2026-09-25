@@ -34,7 +34,7 @@ import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   documentTextForAiFields,
-  extractText,
+  extractDocxDocument,
 } from "@/api/lib/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
@@ -861,7 +861,7 @@ type FilledTemplateWithText = Exclude<
 const withExtractedText = async (
   filled: FilledDocx,
 ): Promise<FilledTemplateWithText> => {
-  const { paragraphs } = await extractText(filled.buffer);
+  const { paragraphs } = await extractDocxDocument(filled.buffer);
   return {
     templateName: filled.templateName,
     fileName: filled.fileName,
@@ -947,7 +947,7 @@ export const fillStoredTemplate = async (
     return filled;
   }
 
-  const { paragraphs } = await extractText(filled.buffer);
+  const { paragraphs } = await extractDocxDocument(filled.buffer);
 
   return {
     text: paragraphs

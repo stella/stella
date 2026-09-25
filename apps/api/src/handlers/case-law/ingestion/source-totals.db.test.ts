@@ -39,7 +39,7 @@ let db: ReturnType<typeof connect>;
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the helper expects.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 beforeAll(async () => {
@@ -220,7 +220,7 @@ test("the database refuses an origin outside the declared set", async () => {
       reportedTotalAsOf: new Date("2026-08-11T09:00:00.000Z"),
       // SAFETY: the point of this test is the value the union forbids, so
       // the cast is what lets the constraint be the thing under test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- exercising the database's own guard against an unlisted origin
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- exercising the database's own guard against an unlisted origin
       reportedTotalOrigin: "guessed" as SourceTotalOrigin,
     })
     .where(eq(caseLawSources.adapterKey, adapterKey))
@@ -458,7 +458,7 @@ const ingestionScopedDb: ScopedDb = async (callback) =>
   await db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     // SAFETY: pglite's transaction stands in for the one the helper expects.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite transaction is the test's transaction
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite transaction is the test's transaction
     return await callback(tx as unknown as Transaction);
   });
 

@@ -40,8 +40,8 @@ import {
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
-import { getAnalytics } from "@/api/lib/analytics/client";
+import { captureError, detached } from "@/api/lib/analytics/capture";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
@@ -68,7 +68,6 @@ import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
-import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -775,7 +774,7 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // eslint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
+        // oxlint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
           if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
             return;
@@ -851,7 +850,7 @@ const createAuth = () => {
   ) satisfies BetterAuthPlugin;
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
-    analytics: getAnalytics(),
+    analytics: getServerAnalytics(),
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
@@ -1108,7 +1107,7 @@ const createAuth = () => {
               }
 
               if (env.isDev) {
-                // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+                // oxlint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
                 console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
                 stashDevOtp(email, otp);
                 return;
@@ -1232,7 +1231,7 @@ const createAuth = () => {
         async sendInvitationEmail(data, request) {
           const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
           if (env.isDev) {
-            // eslint-disable-next-line no-console -- dev-only invitation-link echo for local testing
+            // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
             console.log(
               `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
             );
@@ -1521,11 +1520,14 @@ const getSessionAndMemberAuthorization = async (
   const memberAuthorizationResult =
     session && user && activeOrganizationId
       ? await Result.tryPromise(async () => {
-          const authorization = await resolveMemberAuthorization({
-            userId: toSafeId<"user">(user.id),
-            organizationId: toSafeId<"organization">(activeOrganizationId),
-            workspaceId,
-          });
+          const authorization = await resolveMemberAuthorization(
+            {
+              userId: toSafeId<"user">(user.id),
+              organizationId: toSafeId<"organization">(activeOrganizationId),
+              workspaceId,
+            },
+            rootDb,
+          );
 
           if (!authorization || !isMemberRole(authorization.role)) {
             return null;
@@ -1612,7 +1614,7 @@ const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
-  db: MemberAuthorizationDb = rootDb,
+  db: MemberAuthorizationDb,
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
@@ -1687,6 +1689,17 @@ export const resolveMemberAuthorization = async (
 };
 
 /**
+ * {@link resolveMemberAuthorization} for credential boundaries (an MCP
+ * session, a machine key, a registry key) that resolve an identity before
+ * any request scope exists. Reads through the same connection as the session
+ * resolve in this module.
+ */
+export const resolveCredentialMemberAuthorization = async (
+  lookup: MemberAuthorizationLookup,
+): Promise<MemberAuthorization | null> =>
+  await resolveMemberAuthorization(lookup, rootDb);
+
+/**
  * Whether the caller still belongs to the organization their session is
  * scoped to. A session with no active organization answers `true`: an account
  * still in onboarding belongs to none yet. Session handlers receive only
@@ -1707,10 +1720,13 @@ export const isActiveOrganizationMember = async ({
   if (activeOrganizationId === undefined) {
     return true;
   }
-  const authorization = await resolveMemberAuthorization({
-    organizationId: brandPersistedOrganizationId(activeOrganizationId),
-    userId,
-  });
+  const authorization = await resolveMemberAuthorization(
+    {
+      organizationId: brandPersistedOrganizationId(activeOrganizationId),
+      userId,
+    },
+    rootDb,
+  );
   return authorization !== null;
 };
 
@@ -1725,7 +1741,7 @@ export const resolveUserRealtimeAuthorization = async (
     organizationId,
     userId,
   }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
-  db: MemberAuthorizationDb = rootDb,
+  db: MemberAuthorizationDb,
 ): Promise<boolean> =>
   (await resolveMemberAuthorization({ organizationId, userId }, db)) !== null;
 
@@ -1743,7 +1759,7 @@ type WorkspaceRealtimeAudienceLookup = {
  */
 export const resolveWorkspaceRealtimeAudience = async (
   { userIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
-  db: MemberAuthorizationDb = rootDb,
+  db: MemberAuthorizationDb,
 ) => {
   const uniqueUserIds = [...new Set(userIds)];
   if (uniqueUserIds.length === 0) {
@@ -1783,6 +1799,18 @@ export const resolveWorkspaceRealtimeAudience = async (
     .limit(LIMITS.organizationMembersCount);
 
   return new Set(rows.map((row) => brandPersistedUserId(row.userId)));
+};
+
+/**
+ * The event stream's connection authorizers, both on the owner connection for
+ * the reasons given on each resolver.
+ */
+export const realtimeAuthorizers = {
+  user: async (
+    lookup: Parameters<typeof resolveUserRealtimeAuthorization>[0],
+  ) => await resolveUserRealtimeAuthorization(lookup, rootDb),
+  workspace: async (lookup: WorkspaceRealtimeAudienceLookup) =>
+    await resolveWorkspaceRealtimeAudience(lookup, rootDb),
 };
 
 /**
@@ -1859,7 +1887,12 @@ const resolveValidateAuth = async (
     organizationId: activeOrganizationId,
   });
 
-  const orgSettings = await loadOrgSettingsForAuth(activeOrganizationId);
+  // Read before the request scope exists, at the same boundary as the
+  // membership lookup above, so it goes through the same connection.
+  const orgSettings = await loadOrgSettingsForAuth(
+    rootDb,
+    activeOrganizationId,
+  );
   const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
@@ -1939,11 +1972,14 @@ const resolveValidateAuth = async (
         ? accessibleWorkspacesPromise.then(
             (items) => items.find((item) => item.id === workspaceId) ?? null,
           )
-        : resolveMemberAuthorization({
-            organizationId: activeOrganizationId,
-            userId,
-            workspaceId,
-          }).then((targetAuthorization) => {
+        : resolveMemberAuthorization(
+            {
+              organizationId: activeOrganizationId,
+              userId,
+              workspaceId,
+            },
+            rootDb,
+          ).then((targetAuthorization) => {
             if (targetAuthorization?.workspace?.id !== workspaceId) {
               return null;
             }

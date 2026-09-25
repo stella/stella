@@ -7,6 +7,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { suggestTemplateFieldsOrEmpty } from "@/api/lib/templates/suggest-template-fields";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -77,11 +78,12 @@ const prepareTemplate = createSafeRootHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
+    const buffer = yield* Result.await(scanTemplateUpload(file));
+
     const prepared = yield* Result.await(
       Result.tryPromise({
-        try: async () => {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          return await prepareTemplateFromDocument({
+        try: async () =>
+          await prepareTemplateFromDocument({
             buffer,
             // suggestTemplateFieldsOrEmpty degrades a call failure (BYOK
             // misconfiguration, provider outage, timeout) to the documented
@@ -94,8 +96,7 @@ const prepareTemplate = createSafeRootHandler(
                 organizationId,
                 aiAnalytics,
               }),
-          });
-        },
+          }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);
           return new HandlerError({

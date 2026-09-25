@@ -11,6 +11,7 @@ import {
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
@@ -18,6 +19,7 @@ import {
   parseResourceRef,
   resourceRef,
   RESOURCE_TYPE,
+  type BrowserClientCapability,
   type ChatEditApplyMode,
   type ChatRunMode,
   type DocxEditRepresentation,
@@ -192,6 +194,27 @@ export const activeExternalSchema = activeContextSchema({
   url: t.String(),
 });
 
+// Any version parses so a tab running an older or newer web build can still
+// chat; `resolveBrowserClientCapability` decides whether the tool registers.
+// `t.Integer` would also admit numeric strings, so this is a whole number.
+const browserClientSchema = t.Object(
+  {
+    protocolVersion: t.Number({ minimum: 1, multipleOf: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * The browser tool is offered only to a client speaking this server's
+ * extension protocol; another version chats without it.
+ */
+export const resolveBrowserClientCapability = (
+  browserClient: Static<typeof browserClientSchema> | undefined,
+): BrowserClientCapability | undefined =>
+  browserClient?.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
+    ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
+    : undefined;
+
 export const activeSkillSchema = activeContextSchema({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
@@ -259,6 +282,7 @@ const sendMessageCommonProperties = {
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
   activeStatute: t.Optional(activeStatuteSchema),
+  browserClient: t.Optional(browserClientSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which

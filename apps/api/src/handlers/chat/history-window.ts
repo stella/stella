@@ -233,9 +233,10 @@ export const loadChatMessagePrefixOnTx = async ({
         }),
       ),
     )
-    // SAFETY: bounded by the prefix [start..target] of one thread; a fork
-    // copies history up to it, so every row is needed.
-    // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the copied prefix up to the target row; see SAFETY above
+    // SAFETY: one thread's rows at or before one of its messages. A fork
+    // copies all of them, so a page limit would silently truncate the
+    // forked history; there is no smaller correct result.
+    // oxlint-disable-next-line require-query-limit/require-query-limit -- a fork copies every row up to the target, so a limit would truncate it; see SAFETY above
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
   return prefix.length === 0 ? null : prefix;
 };
@@ -294,9 +295,10 @@ export const resolveTruncationTarget = async ({
           }),
         ),
       )
-      // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a
-      // replay discards after the target, which the caller deletes.
-      // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the replayed-away tail after the target row; see SAFETY above
+      // SAFETY: ids only, of one thread's rows after one of its messages. A
+      // replay deletes every one of them, so a page limit would leave later
+      // turns behind; there is no smaller correct result.
+      // oxlint-disable-next-line require-query-limit/require-query-limit -- a replay deletes every row after the target, so a limit would leave some behind; see SAFETY above
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
     return {

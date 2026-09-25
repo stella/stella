@@ -30,16 +30,14 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import {
-  type CourtWeightMap,
-  loadCourtWeights,
-} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   readDecisionTextMetadata,
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
+import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
@@ -95,9 +93,9 @@ export const readDecisionQuerySchema = t.Object({
 type ReadDecisionOptions = {
   citationsCursor?: string | null | undefined;
   /**
-   * The court registry the chip beside the court's name is drawn from. It
-   * lives on the root pool rather than the reader's, so a caller holding only
-   * the reader supplies its own; every other caller takes the default.
+   * The court registry the chip beside the court's name is drawn from. The
+   * default reads the public corpus's registry on the subject's own
+   * transaction; a harness supplies a registry of its own.
    */
   readCourtWeights?: (() => Promise<CourtWeightMap>) | undefined;
   /**
@@ -300,9 +298,13 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
-    readCourtWeights = loadCourtWeights,
+    readCourtWeights,
     subject: { id: decisionId, resolution, tx },
   }: ReadDecisionOptions) => {
+    // Inside the gated transaction: a cold registry reads on it rather than
+    // asking the reader's pool for a second connection.
+    const readRegistry =
+      readCourtWeights ?? (async () => await loadPublicCourtWeightsWithin(tx));
     const citationCursors = decodeDecisionCitationCursor(citationsCursor);
     if (citationCursors === null) {
       return status(400, { message: "Invalid cursor" });
@@ -371,11 +373,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsFromPage,
       citationsToPage,
     ] = await Promise.all([
-      // Bounded and degraded to no badge. This read runs inside the gated
-      // transaction, holding a reader connection, and the registry lives on
-      // the root pool: an unreachable root pool must cost the decision its
-      // chip, not the reader its decision.
-      readCourtRegistry(readCourtWeights),
+      // Bounded and degraded to no badge: a slow registry read must cost the
+      // decision its chip, not the reader its decision.
+      readCourtRegistry(readRegistry),
       listPublicDecisionLanguageAlternates({
         tx,
         languageGroupKey: decision.languageGroupKey,

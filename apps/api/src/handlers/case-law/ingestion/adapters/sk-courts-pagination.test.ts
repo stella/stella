@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 /**
  * What the crawl asks obcan.justice.sk for, given the cursor it persisted.
  *

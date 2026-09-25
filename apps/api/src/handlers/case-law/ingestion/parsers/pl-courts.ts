@@ -62,6 +62,7 @@ type ParsePlDecisionOutput = {
 };
 
 const POLISH_DECISION_TITLE_MAP = {
+  decyzja: "DECYZJA",
   wyrok: "WYROK",
   postanowienie: "POSTANOWIENIE",
   uchwała: "UCHWAŁA",
@@ -69,6 +70,7 @@ const POLISH_DECISION_TITLE_MAP = {
   zarządzenie: "ZARZĄDZENIE",
 } as const;
 const POLISH_DECISION_TITLE_KEYS = [
+  "decyzja",
   "wyrok",
   "postanowienie",
   "uchwała",
@@ -76,8 +78,12 @@ const POLISH_DECISION_TITLE_KEYS = [
   "zarządzenie",
 ] as const;
 
+// An authority's decision is titled from its type alone: a court document
+// printing "DECYZJA" on a line of its own (quoting one) stays text.
 const DECISION_TITLES: ReadonlySet<string> = new Set(
-  Object.values(POLISH_DECISION_TITLE_MAP),
+  Object.values(POLISH_DECISION_TITLE_MAP).filter(
+    (title) => title !== POLISH_DECISION_TITLE_MAP.decyzja,
+  ),
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
 const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
