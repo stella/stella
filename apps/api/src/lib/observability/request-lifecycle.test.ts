@@ -271,7 +271,9 @@ const CASES: readonly LifecycleCase[] = [
   },
 ];
 
-const failureView = (record: LogRecord) => {
+type FailureView = [string, string, Record<string, unknown>];
+
+const failureView = (record: LogRecord): FailureView => {
   const attributes = record.attributes ?? {};
   return [
     record.message,
@@ -281,7 +283,7 @@ const failureView = (record: LogRecord) => {
       "failure.reason": attributes["failure.reason"],
       "failure.shadow": attributes["failure.shadow"],
     },
-  ] as const;
+  ];
 };
 
 describe("the request lifecycle", () => {
@@ -314,7 +316,7 @@ describe("the request lifecycle", () => {
       expect(response.status).toBe(lifecycle.status);
       expect(await response.text()).toBe(lifecycle.body);
       expect(logs.records.map(failureView)).toEqual(
-        lifecycle.records.map(([message, severity, fields]) => [
+        lifecycle.records.map(([message, severity, fields]): FailureView => [
           message,
           severity,
           fields,
@@ -326,7 +328,7 @@ describe("the request lifecycle", () => {
           .map((line) => JSON.parse(line))
           .filter((record) => "RequestTransientFailures" in record)
           .map((record) => record.reason),
-      ).toEqual(lifecycle.metricReasons);
+      ).toEqual([...lifecycle.metricReasons]);
       for (const record of logs.records) {
         expect(record.attributes?.["observability.unowned"]).toBeUndefined();
       }
