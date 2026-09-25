@@ -20,7 +20,7 @@ import {
   upsertContactSearchDocument,
   upsertWorkspaceSearchDocument,
 } from "@/api/lib/search/index-global";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/provider";
 
 /**
  * The one path by which an entity, contact, or matter search projection is
@@ -103,7 +103,7 @@ const defaultRepairDeps: SearchProjectionRepairDeps = {
   repair: {
     contact: repairContactProjection,
     entity: async (sourceId) =>
-      await getSearchProvider().indexEntity(toSafeId<"entity">(sourceId)),
+      await getSearchMaintenance().indexEntity(toSafeId<"entity">(sourceId)),
     workspace: async (sourceId) =>
       await upsertWorkspaceSearchDocument(toSafeId<"workspace">(sourceId)),
   },

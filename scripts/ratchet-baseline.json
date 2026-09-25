@@ -226,7 +226,7 @@
     }
   },
   "direct-root-connection-imports": {
-    "count": 52,
+    "count": 51,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -270,7 +270,6 @@
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/search/index-global.ts": 1,
       "apps/api/src/lib/search/pg-fts-provider.ts": 1,
-      "apps/api/src/lib/search/preview.ts": 1,
       "apps/api/src/lib/search/process-extraction.ts": 1,
       "apps/api/src/lib/search/projection-repair-queue.ts": 1,
       "apps/api/src/lib/selfhost-auth.ts": 1,

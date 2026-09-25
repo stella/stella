@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import type { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -16,7 +16,7 @@ import type {
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -33,16 +33,22 @@ const frenchId = createSafeId<"caseLawDecision">();
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let caseLawDb: CaseLawPublicReadDb;
-let database: Pick<typeof rootDb, "execute">;
+let scopedDb: ScopedDb;
 
 beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    // The root handle returns rows; PGlite wraps them in a result.
-    database = asTestRaw<Pick<typeof rootDb, "execute">>({
-      execute: async (query: SQL) => (await db.execute(query)).rows,
-    });
+    // Tenant search runs as the request role; public case law is readable
+    // under it without any workspace in scope.
+    scopedDb = executeRowsScopedDb(
+      createScopedDb(
+        markRlsDatabase(db),
+        [],
+        toSafeId<"organization">("org_1"),
+        toSafeId<"user">("user_1"),
+      ),
+    );
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -127,7 +133,7 @@ const searchCaseLaw = async () =>
       limit: 10,
     },
     {
-      database,
+      scopedDb,
       readLanguageAlternates: async (languageGroupKeys) =>
         await readPublicDecisionLanguageAlternatesByGroup({
           caseLawDb,

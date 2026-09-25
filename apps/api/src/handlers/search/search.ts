@@ -166,20 +166,23 @@ export const searchHandler = async ({
 
   const types = body.types.length > 0 ? body.types : body.kinds;
 
-  const result = await search({
-    query: body.query,
-    organizationId,
-    userId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds: resolved.ids,
-    types,
-    editedByUserIds: body.editedByUserIds,
-    mimeTypes: body.mimeTypes,
-    updatedFrom: body.updatedFrom,
-    updatedTo: body.updatedTo,
-    cursor: body.cursor,
-    limit: body.limit ?? LIMITS.searchPageSizeDefault,
-  });
+  const result = await search(
+    {
+      query: body.query,
+      organizationId,
+      userId,
+      accessibleWorkspaceIds,
+      selectedWorkspaceIds: resolved.ids,
+      types,
+      editedByUserIds: body.editedByUserIds,
+      mimeTypes: body.mimeTypes,
+      updatedFrom: body.updatedFrom,
+      updatedTo: body.updatedTo,
+      cursor: body.cursor,
+      limit: body.limit ?? LIMITS.searchPageSizeDefault,
+    },
+    { scopedDb },
+  );
 
   return {
     ...result,

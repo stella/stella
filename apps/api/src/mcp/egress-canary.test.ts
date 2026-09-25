@@ -4,7 +4,6 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -250,8 +249,7 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
-      getSearchProvider: () =>
-        asTestRaw({ ...pgFtsProvider, search: searchProviderSearchMock }),
+      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so
       // both corpora answer an empty page here.

@@ -814,19 +814,22 @@ const loadSummaryContexts = async ({
     return [];
   }
 
-  const searchResult = await search({
-    query: filters.query,
-    organizationId,
-    userId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
-    types,
-    editedByUserIds: filters.editedByUserIds,
-    mimeTypes: filters.mimeTypes,
-    updatedFrom: filters.updatedFrom,
-    updatedTo: filters.updatedTo,
-    limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
-  });
+  const searchResult = await search(
+    {
+      query: filters.query,
+      organizationId,
+      userId,
+      accessibleWorkspaceIds,
+      selectedWorkspaceIds,
+      types,
+      editedByUserIds: filters.editedByUserIds,
+      mimeTypes: filters.mimeTypes,
+      updatedFrom: filters.updatedFrom,
+      updatedTo: filters.updatedTo,
+      limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+    },
+    { scopedDb },
+  );
 
   return await buildSearchResultContexts({
     hits: searchResult.hits,

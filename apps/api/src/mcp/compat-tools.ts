@@ -12,7 +12,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { getSearchReader } from "@/api/lib/search/provider";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -397,8 +397,8 @@ const searchMatterKnowledge = async ({
   query: string;
 }): Promise<MatterSearchPage> => {
   const page = await (
-    context.testDependencies?.getSearchProvider ?? getSearchProvider
-  )().search({
+    context.testDependencies?.getSearchReader ?? getSearchReader
+  )(context.scopedDb).search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
