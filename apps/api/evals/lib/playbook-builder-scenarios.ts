@@ -49,6 +49,7 @@ export const BUILDER_SURFACES = ["mcp", "chat"] as const;
 export type BuilderSurface = (typeof BUILDER_SURFACES)[number];
 
 export const EXECUTE_TYPESCRIPT = "execute_typescript";
+export const SAVE_PLAYBOOK = "save_playbook";
 export const DISCOVER_TOOLS = "discover_tools";
 
 export type AskedQuestion = {
@@ -328,7 +329,7 @@ const indexOfFirst = (
   return index === -1 ? Number.POSITIVE_INFINITY : index;
 };
 
-const isSave = ({ name }: BuilderEvent) => name === "save_playbook";
+const isSave = ({ name }: BuilderEvent) => name === SAVE_PLAYBOOK;
 
 /** Positions a save call carries; the skill saves one per call. */
 const positionCount = (input: unknown): number => {
@@ -545,10 +546,22 @@ const stallDefects = ({
 };
 
 /**
+ * A script that names `save_playbook`: the save is a direct tool call, and a
+ * run that reaches for it inside the sandbox reads the resulting
+ * `is not defined` as the tool being unavailable and stops.
+ */
+const savesInsideScripts = (events: readonly BuilderEvent[]): string[] =>
+  events
+    .filter(({ name }) => name === EXECUTE_TYPESCRIPT)
+    .filter(({ input }) => stringArg(input, "code")?.includes(SAVE_PLAYBOOK))
+    .map(() => `called ${SAVE_PLAYBOOK} inside a script`);
+
+/**
  * Defects every scenario shares: one playbook, enough positions, no resends,
- * no matter read or script refused, no work handed to subagents, no search
- * for starter playbooks, side options that each name one role, and on the
- * chat surface no read written before its signature was discovered.
+ * no matter read or script refused, no save written inside a script, no work
+ * handed to subagents, no search for starter playbooks, side options that
+ * each name one role, and on the chat surface no read written before its
+ * signature was discovered.
  */
 const commonDefects = ({
   documentedReads,
@@ -568,6 +581,7 @@ const commonDefects = ({
   if (surface === "chat") {
     defects.push(...readsBeforeDiscovery({ documentedReads, events }));
   }
+  defects.push(...savesInsideScripts(events));
   const spawned = events.filter(
     ({ name }) => name === SPAWN_SUBAGENTS_TOOL_NAME,
   ).length;

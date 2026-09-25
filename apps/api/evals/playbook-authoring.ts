@@ -102,6 +102,7 @@ import {
   DISCOVER_TOOLS,
   EXECUTE_TYPESCRIPT,
   MATTER_TOOL_NAMES,
+  SAVE_PLAYBOOK,
   answerMatterTool,
   isMatterToolName,
   scoreScenario,
@@ -146,7 +147,6 @@ const EVAL_SANDBOX_KEY = "playbook-authoring-eval";
 const TIERS = ["contract", "behavior"] as const;
 type Tier = (typeof TIERS)[number];
 
-const SAVE_PLAYBOOK = "save_playbook";
 const LIST_PLAYBOOKS = "list_playbooks";
 const TOOL_NAMES = [LIST_PLAYBOOKS, SAVE_PLAYBOOK] as const;
 
