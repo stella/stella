@@ -115,6 +115,37 @@ const isLetter = (char: string): boolean => LETTER.test(char);
 const isControlOrReplacement = (cp: number): boolean =>
   cp === REPLACEMENT_CHARACTER || (cp >= C1_FIRST && cp <= C1_LAST);
 
+/**
+ * Scripts a word's letters can be told apart by. A letter in none of them
+ * counts as a script of its own.
+ */
+const SCRIPTS = [
+  /\p{Script=Latin}/u,
+  /\p{Script=Greek}/u,
+  /\p{Script=Cyrillic}/u,
+  /\p{Script=Arabic}/u,
+  /\p{Script=Hebrew}/u,
+  /\p{Script=Armenian}/u,
+  /\p{Script=Georgian}/u,
+];
+
+/**
+ * Whether every letter of a word is in one script: a word does not change
+ * script in its middle, and a decoder reading the wrong table often makes it
+ * (Slovak "KÚŽP" in windows-1252 is the UTF-8 bytes of Arabic "ڎ").
+ */
+const writtenInOneScript = (word: string): boolean => {
+  const scripts = new Set<number>();
+  for (const char of word) {
+    if (!isLetter(char) || /\p{M}/u.test(char)) {
+      continue;
+    }
+    const script = SCRIPTS.findIndex((pattern) => pattern.test(char));
+    scripts.add(script);
+  }
+  return scripts.size <= 1;
+};
+
 const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
   const chars = Array.from(word.normalize("NFC"));
   let nativeLetter = false;
@@ -157,7 +188,13 @@ const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
       return "misfit";
     }
   }
-  return nativeLetter ? "native" : "neutral";
+  if (!nativeLetter) {
+    return "neutral";
+  }
+  // Every letter is the language's, but not every letter is one script's:
+  // Bulgarian "Latvieрu" is Latvian "Latviešu" read through windows-1251,
+  // and both alphabets allow each of its letters.
+  return writtenInOneScript(word) ? "native" : "misfit";
 };
 
 type UndoneWord = { text: string; failed: boolean };
@@ -452,37 +489,6 @@ const signatureSpans = (
     }
   }
   return { occurrences, samples };
-};
-
-/**
- * Scripts a word's letters can be told apart by. A letter in none of them
- * counts as a script of its own.
- */
-const SCRIPTS = [
-  /\p{Script=Latin}/u,
-  /\p{Script=Greek}/u,
-  /\p{Script=Cyrillic}/u,
-  /\p{Script=Arabic}/u,
-  /\p{Script=Hebrew}/u,
-  /\p{Script=Armenian}/u,
-  /\p{Script=Georgian}/u,
-];
-
-/**
- * Whether every letter of a word is in one script. Two capitals written in
- * windows-1252 can happen to be a valid UTF-8 sequence (Slovak "KÚŽP" is
- * bytes DA 8E, Arabic "ڎ"), and a word does not change script in its middle.
- */
-const writtenInOneScript = (word: string): boolean => {
-  const scripts = new Set<number>();
-  for (const char of word) {
-    if (!isLetter(char) || /\p{M}/u.test(char)) {
-      continue;
-    }
-    const script = SCRIPTS.findIndex((pattern) => pattern.test(char));
-    scripts.add(script);
-  }
-  return scripts.size <= 1;
 };
 
 const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (

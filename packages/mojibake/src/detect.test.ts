@@ -160,6 +160,17 @@ describe("text that reads correctly", () => {
     ["sk", `${UDHR_ARTICLE_1.sk} Rozhodnutie KÚŽP a stanovisko KÚŽP.`],
   ] as const;
 
+  test("Latin words in a Cyrillic text are not read back into Cyrillic", () => {
+    // A court's language menu, printed into every language version: each
+    // language's name in its own letters, which windows-1251 read as
+    // windows-1257 would turn into Bulgarian-looking "Latvieрu".
+    const menu = "lvLatviešu ltLietuvių skSlovenčina plPolski huMagyar";
+    // A page stored in place of the decision carries no Bulgarian word for
+    // the pair to break, so only the mixed script tells.
+    const text = [menu, menu, menu].join("\n");
+    expect(checkTextEncoding(text, "bg")).toEqual({ status: "clean" });
+  });
+
   test.each(LEGITIMATE)("%s is clean", (language, text) => {
     expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
   });
