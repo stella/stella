@@ -1,7 +1,6 @@
 export { BLUEPRINT_IDS, BLUEPRINTS, getBlueprint } from "./blueprints";
 export type { Blueprint, BlueprintId } from "./blueprints";
 export {
-  getSkillResourceKind,
   isAllowedResourcePath,
   listSkillMetadata,
   listSkillResources,
@@ -10,9 +9,6 @@ export {
   parseSkillFile,
   readSkillResource,
 } from "./loader";
-export type {
-  SkillMetadata,
-  SkillResource,
-  SkillResourceKind,
-  StellaSkill,
-} from "./loader";
+export type { SkillMetadata, SkillResource, StellaSkill } from "./loader";
+export { getSkillResourceKind } from "./resource-kinds";
+export type { SkillResourceKind } from "./resource-kinds";

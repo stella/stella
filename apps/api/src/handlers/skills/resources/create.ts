@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+
 import { agentSkillResources } from "@/api/db/schema";
-import type { AgentSkillResourceKind } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
 import {
   RESOURCE_PATH_PATTERN,
@@ -22,16 +23,7 @@ const createSkillResourceParamsSchema = t.Object({
 const createSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: 512 }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
-  kind: t.Optional(
-    t.Union([
-      t.Literal("asset"),
-      t.Literal("knowledge"),
-      t.Literal("prompt"),
-      t.Literal("reference"),
-      t.Literal("script"),
-      t.Literal("template"),
-    ]),
-  ),
+  kind: t.Optional(t.UnionEnum(SKILL_RESOURCE_KINDS)),
 });
 
 const config = {
@@ -78,7 +70,7 @@ const createSkillResource = createSafeRootHandler(
       }),
     );
 
-    const kind: AgentSkillResourceKind = body.kind ?? inferResourceKind(path);
+    const kind = body.kind ?? inferResourceKind(path);
     const sizeBytes = new TextEncoder().encode(body.content).byteLength;
 
     const inserted = yield* Result.await(

@@ -39670,8 +39670,25 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "content",
                   },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "asset",
+                      "knowledge",
+                      "prompt",
+                      "reference",
+                      "script",
+                      "template",
+                    ],
+                    repeatable: false,
+                    flag: "--kind",
+                    prop: "kind",
+                    required: false,
+                    part: "body",
+                    partPath: "kind",
+                  },
                 ],
-                inputOnly: ["body.kind"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 inputSchema: {
@@ -39692,31 +39709,15 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         kind: {
-                          anyOf: [
-                            {
-                              const: "asset",
-                              type: "string",
-                            },
-                            {
-                              const: "knowledge",
-                              type: "string",
-                            },
-                            {
-                              const: "prompt",
-                              type: "string",
-                            },
-                            {
-                              const: "reference",
-                              type: "string",
-                            },
-                            {
-                              const: "script",
-                              type: "string",
-                            },
-                            {
-                              const: "template",
-                              type: "string",
-                            },
+                          default: "asset",
+                          type: "string",
+                          enum: [
+                            "asset",
+                            "knowledge",
+                            "prompt",
+                            "reference",
+                            "script",
+                            "template",
                           ],
                         },
                       },

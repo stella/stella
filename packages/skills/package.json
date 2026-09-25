@@ -17,6 +17,10 @@
     "./package-limits": {
       "types": "./src/package-limits.ts",
       "import": "./src/package-limits.ts"
+    },
+    "./resource-kinds": {
+      "types": "./src/resource-kinds.ts",
+      "import": "./src/resource-kinds.ts"
     }
   },
   "scripts": {

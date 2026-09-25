@@ -3,8 +3,8 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- A skill's scope decides who may read and write it, so the database refuses a
 -- scope, origin, or resource kind the application does not define. The value
--- lists are AGENT_SKILL_SCOPES, AGENT_SKILL_ORIGINS, and
--- AGENT_SKILL_RESOURCE_KINDS; every writer has only ever stored those values.
+-- lists are AGENT_SKILL_SCOPES, AGENT_SKILL_ORIGINS, and SKILL_RESOURCE_KINDS
+-- (@stll/skills/resource-kinds); every writer has only ever stored those values.
 
 ALTER TABLE "agent_skills"
   ADD CONSTRAINT "agent_skills_scope_check"

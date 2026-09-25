@@ -66,7 +66,7 @@ export const githubSkillFetchHeaders = ({
 
 export type ParsedSkillResource = {
   content: string;
-  kind: PersistedSkillResourceKind;
+  kind: SkillResourceKind;
   path: string;
   sizeBytes: number;
 };
@@ -136,8 +136,6 @@ export type SkillPackageDiscovery = {
   repositoryUrl: string | null;
   skills: DiscoveredSkillPackage[];
 };
-
-type PersistedSkillResourceKind = Exclude<SkillResourceKind, "other">;
 
 export type SkillFile = {
   content: string;
@@ -610,7 +608,7 @@ const collectResources = ({
       });
     }
 
-    const kind = persistedSkillResourceKind(normalizedPath);
+    const kind = getSkillResourceKind(normalizedPath);
     if (!kind) {
       continue;
     }
@@ -726,26 +724,6 @@ const assertFrontmatterMetadata = (
         message: "Skill metadata value is too large",
       });
     }
-  }
-};
-
-const persistedSkillResourceKind = (
-  path: string,
-): PersistedSkillResourceKind | null => {
-  const kind = getSkillResourceKind(path);
-  switch (kind) {
-    case "asset":
-    case "knowledge":
-    case "prompt":
-    case "reference":
-    case "script":
-    case "template":
-      return kind;
-    case "other":
-    case null:
-      return null;
-    default:
-      return null;
   }
 };
 

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { getSkillResourceKind } from "./resource-kinds";
+import type { SkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 export type SkillMetadata = {
@@ -10,15 +12,6 @@ export type SkillMetadata = {
   name: string;
   version: string | null;
 };
-
-export type SkillResourceKind =
-  | "asset"
-  | "knowledge"
-  | "other"
-  | "prompt"
-  | "reference"
-  | "script"
-  | "template";
 
 export type SkillResource = {
   path: string;
@@ -253,33 +246,6 @@ export const normalizeResourcePath = (resourcePath: string): string => {
 export const isAllowedResourcePath = (resourcePath: string): boolean =>
   getSkillResourceKind(resourcePath) !== null &&
   hasAllowedResourceExtension(resourcePath);
-
-export const getSkillResourceKind = (
-  resourcePath: string,
-): SkillResourceKind | null => {
-  const root = resourcePath.split("/").at(0);
-  if (!root) {
-    return null;
-  }
-
-  switch (root) {
-    case "assets":
-      return "asset";
-    case "knowledge":
-      return "knowledge";
-    case "prompts":
-      return "prompt";
-    case "reference":
-    case "references":
-      return "reference";
-    case "scripts":
-      return "script";
-    case "templates":
-      return "template";
-    default:
-      return null;
-  }
-};
 
 const hasAllowedResourceExtension = (resourcePath: string): boolean =>
   RESOURCE_EXTENSIONS.some((extension) => resourcePath.endsWith(extension));

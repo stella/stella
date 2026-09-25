@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { getSkillResourceKind, parseSkillFile } from "./loader";
+import { parseSkillFile } from "./loader";
+import { getSkillResourceKind } from "./resource-kinds";
 
 describe("Stella skill loader", () => {
   test("parses standard Agent Skills metadata fields", () => {

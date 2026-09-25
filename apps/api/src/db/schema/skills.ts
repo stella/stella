@@ -1,3 +1,5 @@
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
@@ -13,12 +15,7 @@ import {
   user,
   timestamptz,
 } from "./common";
-import {
-  AGENT_SKILL_ORIGINS,
-  AGENT_SKILL_RESOURCE_KINDS,
-  AGENT_SKILL_SCOPES,
-} from "./files-views";
-import type { AgentSkillResourceKind } from "./files-views";
+import { AGENT_SKILL_ORIGINS, AGENT_SKILL_SCOPES } from "./files-views";
 
 const sqlValueList = (values: readonly string[]) =>
   sql.join(
@@ -114,10 +111,7 @@ export const agentSkillResources = p.pgTable(
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
     path: p.varchar({ length: 512 }).notNull(),
-    kind: p
-      .text("kind", { enum: AGENT_SKILL_RESOURCE_KINDS })
-      .notNull()
-      .$type<AgentSkillResourceKind>(),
+    kind: p.text("kind", { enum: SKILL_RESOURCE_KINDS }).notNull(),
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -125,7 +119,7 @@ export const agentSkillResources = p.pgTable(
   (table) => [
     p.check(
       "agent_skill_resources_kind_check",
-      sql`${table.kind} IN (${sqlValueList(AGENT_SKILL_RESOURCE_KINDS)})`,
+      sql`${table.kind} IN (${sqlValueList(SKILL_RESOURCE_KINDS)})`,
     ),
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")

@@ -17,7 +17,6 @@ import type {
   ParsedSkillResource,
 } from "@/api/lib/skills/skill-package";
 
-type PersistedSkillResourceKind = ParsedSkillResource["kind"];
 
 export const toParsedBundledSkillResources = (
   resourceFiles: readonly LoadedCatalogueResource[],
@@ -52,7 +51,7 @@ export const toParsedBundledSkillResources = (
       );
     }
 
-    const kind = persistedSkillResourceKind(normalizedPath);
+    const kind = getSkillResourceKind(normalizedPath);
     if (kind === null) {
       return Result.err(
         new HandlerError({
@@ -233,25 +232,5 @@ const assertFrontmatterMetadata = (
         message: "Bundled skill metadata value is too large",
       });
     }
-  }
-};
-
-const persistedSkillResourceKind = (
-  path: string,
-): PersistedSkillResourceKind | null => {
-  const kind = getSkillResourceKind(path);
-  switch (kind) {
-    case "asset":
-    case "knowledge":
-    case "prompt":
-    case "reference":
-    case "script":
-    case "template":
-      return kind;
-    case "other":
-    case null:
-      return null;
-    default:
-      return null;
   }
 };
