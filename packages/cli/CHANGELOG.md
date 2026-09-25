@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 2.0.1
+
+### Patch Changes
+
+- [#3779](https://github.com/stella/stella/pull/3779) [`93707c1`](https://github.com/stella/stella/commit/93707c1ad9ae2b3695ce1a3b757aa586cb2f3730) Thanks [@jan-kubica](https://github.com/jan-kubica)! - New list capabilities: `lists.verifications.list` lists a document's verifications, newest first, with claim counts per verdict state; `lists.verifications.latest.list` reads the latest verification of up to 200 document files at once.
+
+- [#3776](https://github.com/stella/stella/pull/3776) [`54fcb49`](https://github.com/stella/stella/commit/54fcb49c85b75b9ce9735e10870a982aee53094d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - New list capabilities: `lists.items.fact-details.update` sets a fact item's date, evidence kind, medium, confidence, interpretation note and scoring hold; `lists.verifications.create` starts checking a document against a list's facts; `lists.verifications.get` reads the claims found and their verdicts; `lists.verifications.claim-reviews.create` and `lists.verifications.claim-reviews.bulk.create` record reviewer decisions on those claims.
+
+- [#3855](https://github.com/stella/stella/pull/3855) [`87d7e83`](https://github.com/stella/stella/commit/87d7e83e147338c5450be4e3db0904873c862d16) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Narrow values with type guards instead of type assertions, and give internal CLI helpers names that describe what they hold. `mapEntityStatus` now reads only the codes its mapping declares, so an inherited object key maps to `unknown`.
+
 ## 2.0.0
 
 ### Major Changes
