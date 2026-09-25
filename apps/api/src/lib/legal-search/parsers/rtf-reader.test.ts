@@ -96,6 +96,18 @@ describe("code pages", () => {
     ).toEqual(["Győr".replace("ő", "õ")]);
   });
 
+  test("a font's `\\fcharsetN` outranks the document's ansicpg for its bytes", () => {
+    // Word on a Western-European machine: `\ansicpg1252`, and the Hungarian
+    // text in a Central-European font. Read against the document's page,
+    // every "ő" and "ű" in the collection printed as "õ" and "û".
+    const fonts = String.raw`{\fonttbl{\f0\froman\fcharset238 Times New Roman CE;}{\f1\fswiss\fcharset0 Arial;}}`;
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff0${fonts}\pard Gy\'f5r b\'fbn\par \f1 Gy\'f5r\par {\f0 Gy\'f5r} Gy\'f5r\par }`,
+      ),
+    ).toEqual(["Győr bűn", "Gyõr", "Győr Gyõr"]);
+  });
+
   test("a code page outside the map is reported, not guessed at", () => {
     const document = readRtf(
       bytesOf(String.raw`{\rtf1\ansi\ansicpg99999 a\par }`),

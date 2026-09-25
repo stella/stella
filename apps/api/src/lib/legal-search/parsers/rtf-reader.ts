@@ -12,7 +12,7 @@
  *
  * Scope is the court dialect, not the RTF specification: groups, control words
  * with an optional numeric parameter, `\'xx` bytes against the document's
- * `\ansicpgN` code page, `\uN?` escapes, `\par`/`\pard`, `\line`, `\tab`, the
+ * `\ansicpgN` code page (or the current font's `\fcharsetN`), `\uN?` escapes, `\par`/`\pard`, `\line`, `\tab`, the
  * character state (`\b`, `\i`, `\ul`, `\cfN`), alignment, `\trowd`/`\cell`/
  * `\row` tables, and `\footnote`. Header tables (`\fonttbl`, `\colortbl`,
  * `\stylesheet`, `\info`) and every `\*` destination are skipped, because they
@@ -66,6 +66,24 @@ type CodePageLabel = (typeof ANSI_CODE_PAGES)[number][1];
 const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(ANSI_CODE_PAGES);
 
 const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
+
+/**
+ * The code page a font's `\fcharsetN` selects. A font's charset outranks the
+ * document's `\ansicpgN` for the `\'xx` bytes written in it: Word on a
+ * Western-European machine writes `\ansicpg1252` and a Hungarian text in a
+ * `\fcharset238` font, whose byte F5 is "ő", not the "õ" of windows-1252.
+ * `0` (ANSI) and `1` (default) defer to the document; `2` (symbol) has no
+ * code page and does too.
+ */
+const FONT_CHARSET_CODE_PAGES = new Map<number, number>([
+  [77, 10_000],
+  [161, 1253],
+  [162, 1254],
+  [186, 1257],
+  [204, 1251],
+  [238, 1250],
+  [255, 437],
+]);
 
 /**
  * Control words the dialect states and this reader answers for. Every other
@@ -258,6 +276,8 @@ type CharacterState = {
   italic: boolean;
   underline: boolean;
   colorIndex: number;
+  /** `\fN`, or undefined for the document's `\deffN`. */
+  font: number | undefined;
 };
 
 type ParagraphState = {
@@ -272,6 +292,8 @@ type GroupState = {
   destination: Destination;
   /** Replacement characters that follow each `\uN`, as `\ucN` last set it. */
   unicodeFallbackCount: number;
+  /** Inside `\fonttbl`, where `\fN` defines a font rather than selects one. */
+  fontTable: boolean;
 };
 
 /** A note being collected, and the paragraphs written into it so far. */
@@ -287,6 +309,7 @@ const initialCharacterState = (): CharacterState => ({
   italic: false,
   underline: false,
   colorIndex: 0,
+  font: undefined,
 });
 
 const initialParagraphState = (): ParagraphState => ({
@@ -299,6 +322,7 @@ const copyGroupState = (state: GroupState): GroupState => ({
   paragraph: { ...state.paragraph },
   destination: state.destination,
   unicodeFallbackCount: state.unicodeFallbackCount,
+  fontTable: state.fontTable,
 });
 
 /**
@@ -531,6 +555,20 @@ const readRtfInto = (
     paragraph: initialParagraphState(),
     destination: { type: "body" },
     unicodeFallbackCount: 1,
+    fontTable: false,
+  };
+  /** Each font's code page, from its `\fcharsetN`, where it states one. */
+  const fontCodePages = new Map<number, CodePageLabel>();
+  let definingFont: number | undefined;
+  let defaultFont: number | undefined;
+
+  /** What the `\'xx` bytes written now are read against. */
+  const currentLabel = (): CodePageLabel => {
+    const font = state.character.font ?? defaultFont;
+    return (
+      (font === undefined ? undefined : fontCodePages.get(font)) ??
+      codePageLabel
+    );
   };
   /**
    * One frame per open group. `heldParagraph` is the body paragraph a
@@ -558,12 +596,12 @@ const readRtfInto = (
    * the sentence.
    */
   const appendText = (text: string): void => {
-    pending.text += decodeBytes(pending.bytes, codePageLabel) + text;
+    pending.text += decodeBytes(pending.bytes, currentLabel()) + text;
     pending.bytes = [];
   };
 
   const flushRun = (): void => {
-    const text = pending.text + decodeBytes(pending.bytes, codePageLabel);
+    const text = pending.text + decodeBytes(pending.bytes, currentLabel());
     pending = { bytes: [], text: "" };
     // A skipped destination is the writer's metadata: its text is not the
     // document's, and keeping it would print a colour table into the decision.
@@ -700,6 +738,48 @@ const readRtfInto = (
   };
 
   /**
+   * Apply a font word: which font the bytes that follow are written in, and,
+   * inside the font table, which code page each font declares. Returns
+   * whether the word was one.
+   */
+  const applyFontWord = (
+    word: string,
+    parameter: number | undefined,
+  ): boolean => {
+    switch (word) {
+      case "deff":
+        defaultFont = parameter;
+        return true;
+      case "f":
+        if (state.fontTable) {
+          definingFont = parameter;
+          return true;
+        }
+        // Bytes read so far were written in the font before this one.
+        appendText("");
+        state.character.font = parameter;
+        return true;
+      case "fcharset": {
+        const codePage =
+          parameter === undefined
+            ? undefined
+            : FONT_CHARSET_CODE_PAGES.get(parameter);
+        const label = codePageOf(codePage);
+        if (
+          state.fontTable &&
+          definingFont !== undefined &&
+          label !== undefined
+        ) {
+          fontCodePages.set(definingFont, label);
+        }
+        return true;
+      }
+      default:
+        return false;
+    }
+  };
+
+  /**
    * Apply one control word.
    *
    * Its own function rather than a branch of the scanner: the dialect is
@@ -728,8 +808,16 @@ const readRtfInto = (
       colors.push({ auto: true });
     }
 
+    if (word === "fonttbl") {
+      state.fontTable = true;
+    }
+
     if (SKIPPED_DESTINATIONS.has(word)) {
       enterDestination({ type: "skipped" });
+      return;
+    }
+
+    if (applyFontWord(word, parameter)) {
       return;
     }
 
