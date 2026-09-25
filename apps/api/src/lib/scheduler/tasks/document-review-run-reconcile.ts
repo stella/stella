@@ -8,6 +8,7 @@ export const RECONCILE_DOCUMENT_REVIEW_RUNS_TASK =
 
 /** Re-drive review runs the queue is not holding a job for anymore. */
 export const reconcileDocumentReviewRuns: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -15,7 +16,7 @@ export const reconcileDocumentReviewRuns: SchedulerTask = async ({
     panic("SchedulerAborted");
   }
   const { handedOff, scanned, unattributed } =
-    await reconcileQueuedDocumentReviewRuns();
+    await reconcileQueuedDocumentReviewRuns({ db });
   logger.info("scheduler.document_review_runs_reconciled", {
     "documentReviewRuns.requeued": handedOff,
     "documentReviewRuns.scanned": scanned,

@@ -11,7 +11,9 @@ const MAX_DISPATCHED_RUNS_PER_TICK = 10_000;
 const DISPATCH_CONTINUATION_DELAY_MS = 60_000;
 
 type DispatchDocumentOcrBatchesOptions = {
-  dispatch?: typeof dispatchQueuedDocumentProcessingRuns;
+  dispatch: (options: {
+    limit: number;
+  }) => ReturnType<typeof dispatchQueuedDocumentProcessingRuns>;
   signal: AbortSignal;
 };
 
@@ -43,7 +45,7 @@ export const nextDocumentOcrDispatchAt = ({
 };
 
 export const dispatchDocumentOcrBatches = async ({
-  dispatch = dispatchQueuedDocumentProcessingRuns,
+  dispatch,
   signal,
 }: DispatchDocumentOcrBatchesOptions): Promise<DispatchDocumentOcrBatchesResult> => {
   let dispatched = 0;
@@ -82,12 +84,17 @@ export const dispatchDocumentOcrBatches = async ({
 
 /** Release durable OCR requests in bounded batches at the configured cadence. */
 export const dispatchDocumentOcr: SchedulerTask = async ({
+  db,
   logger,
   scheduleContinuation,
   signal,
 }) => {
   const { dispatched, reachedLimit, retryAt } =
-    await dispatchDocumentOcrBatches({ signal });
+    await dispatchDocumentOcrBatches({
+      dispatch: async ({ limit }) =>
+        await dispatchQueuedDocumentProcessingRuns({ database: db, limit }),
+      signal,
+    });
 
   logger.info("scheduler.document_ocr_dispatched", {
     "documentProcessing.runs": dispatched,

@@ -7,8 +7,8 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
+  createWorkerReconciliationPhases,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
-  DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   handleDocumentProcessingReconcilePhaseFailure,
   indexDocumentProjectionAtJobBoundary,
   readRepairScanCursor,
@@ -57,6 +57,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const queueSource = await Bun.file(
   new URL("document-processing-queue.ts", import.meta.url),
@@ -64,6 +65,10 @@ const queueSource = await Bun.file(
 const enqueueSource = await Bun.file(
   new URL("document-processing-enqueue.ts", import.meta.url),
 ).text();
+
+// Phase names and order only; no phase is run, so no connection is needed.
+const DOCUMENT_PROCESSING_RECONCILIATION_PHASES =
+  createWorkerReconciliationPhases(asTestRaw({}));
 
 const fileContent = {
   type: "file",

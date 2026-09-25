@@ -21,8 +21,7 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
@@ -41,6 +40,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -222,7 +222,9 @@ export const enqueueDocumentReviewRuns = async (
  * claim that set `started_at`, a `queued` row from its creation, because a
  * queued job survives a restart and may simply be backlogged.
  */
-export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
+export const reconcileStuckDocumentReviewRuns = async (
+  db: Pick<typeof rootDb, "update">,
+): Promise<number> => {
   // Both cutoffs read the clock directly rather than deriving from an injected
   // `now`: a moving staleness boundary does not care about sub-millisecond
   // drift, and a literal clock read is what makes these comparisons provably
@@ -239,7 +241,7 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
   // audit: skip — janitor bookkeeping on already-audited run rows; flips
   // abandoned runs to failed so the read endpoint surfaces them instead of
   // polling a stuck row forever.
-  const recovered = await rootDb
+  const recovered = await db
     .update(documentReviewRuns)
     .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
     .where(
@@ -279,7 +281,7 @@ type QueuedReviewRunRow = {
 };
 
 type ReconcileQueuedDocumentReviewRunsOptions = {
-  db?: Pick<typeof rootDb, "select">;
+  db: Pick<typeof rootDb, "select">;
   queue?: RequeueableQueue<DocumentReviewRunJobDataV2>;
 };
 
@@ -313,9 +315,9 @@ type ReconcileQueuedDocumentReviewRunsResult = ReconcileScanResult & {
  * DAG and were never handed to this queue.
  */
 export const reconcileQueuedDocumentReviewRuns = async ({
-  db = rootDb,
+  db,
   queue = getQueue(),
-}: ReconcileQueuedDocumentReviewRunsOptions = {}): Promise<ReconcileQueuedDocumentReviewRunsResult> => {
+}: ReconcileQueuedDocumentReviewRunsOptions): Promise<ReconcileQueuedDocumentReviewRunsResult> => {
   let unattributed = 0;
 
   const after = (cursor: QueuedReviewRunRow | null) => {
@@ -379,14 +381,14 @@ export const reconcileQueuedDocumentReviewRuns = async ({
   return { ...scan, unattributed };
 };
 
-export const initDocumentReviewRunWorker = () => {
+export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
   const worker = new Worker<DocumentReviewRunWorkerJobData>(
     QUEUE_NAME,
     async (job) => {
       if (job.data.contractVersion !== QUEUE_CONTRACT_VERSION) {
         panic("Document review v2 queue received a non-v2 job");
       }
-      await processDocumentReviewRunJob(job.data);
+      await processDocumentReviewRunJob(db, job.data);
     },
     {
       connection: createBullMqConnection(),
@@ -424,7 +426,7 @@ export const initDocumentReviewRunWorker = () => {
   );
 
   const runReconcile = async (): Promise<void> => {
-    const recovered = await reconcileStuckDocumentReviewRuns();
+    const recovered = await reconcileStuckDocumentReviewRuns(db);
     if (recovered > 0) {
       logger.warn("document_review_run.recovered_stuck", {
         count: String(recovered),
@@ -552,6 +554,7 @@ export const recordDocumentReviewRunModel = async ({
 };
 
 const processDocumentReviewRunJob = async (
+  db: Pick<typeof rootDb, "select">,
   data: DocumentReviewRunJobDataV1,
 ): Promise<void> => {
   const actor = brandActor(data);
@@ -563,7 +566,7 @@ const processDocumentReviewRunJob = async (
   }
 
   const outcome = await Result.tryPromise({
-    try: async () => await executeRun(actor, claimed),
+    try: async () => await executeRun(db, actor, claimed),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
@@ -688,6 +691,7 @@ type PassDeps = {
  * identical whether this returned or threw.
  */
 const executeRun = async (
+  db: Pick<typeof rootDb, "select">,
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<DocumentReviewRunErrorCode | null> => {
@@ -792,6 +796,7 @@ const executeRun = async (
 
   const gradingOutcome = await runGradingPass({
     actor,
+    db,
     deps,
     plan,
     run,
@@ -828,6 +833,7 @@ const executeRun = async (
  */
 const runGradingPass = async ({
   actor,
+  db,
   deps,
   plan,
   run,
@@ -835,6 +841,7 @@ const runGradingPass = async ({
   targetFile,
 }: {
   actor: RunActor;
+  db: Pick<typeof rootDb, "select">;
   deps: PassDeps;
   plan: ReviewRunPlan;
   run: ClaimedRun;
@@ -849,7 +856,7 @@ const runGradingPass = async ({
   // The words behind every pinned passage, read with service access: the
   // author proved they could read these rows when the run was created.
   const passageTextById = await readReferencePassageTexts(
-    rootDb,
+    db,
     referencePassageIds(positions),
   );
   const clauseSnapshots = await actor.scopedDb(

@@ -16,7 +16,7 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   bilingualTranslationRows,
@@ -47,6 +47,7 @@ import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
@@ -134,7 +135,9 @@ export const enqueueBilingualRun = async (
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
-export const reconcileStuckBilingualRuns = async (): Promise<number> => {
+export const reconcileStuckBilingualRuns = async (
+  db: Pick<typeof rootDb, "update">,
+): Promise<number> => {
   const runningCutoff = new Date(
     Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
   );
@@ -142,7 +145,7 @@ export const reconcileStuckBilingualRuns = async (): Promise<number> => {
     Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
   );
   // audit: skip — janitor bookkeeping on already-audited run rows.
-  const recovered = await rootDb
+  const recovered = await db
     .update(bilingualTranslationRuns)
     .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
     .where(
@@ -176,7 +179,7 @@ type QueuedBilingualRunRow = {
 };
 
 type ReconcileQueuedBilingualRunsOptions = {
-  db?: Pick<typeof rootDb, "select">;
+  db: Pick<typeof rootDb, "select">;
   queue?: RequeueableQueue<BilingualRunJobData>;
 };
 
@@ -205,9 +208,9 @@ type ReconcileQueuedBilingualRunsResult = ReconcileScanResult & {
  * never reach the orphan behind it.
  */
 export const reconcileQueuedBilingualRuns = async ({
-  db = rootDb,
+  db,
   queue = getQueue(),
-}: ReconcileQueuedBilingualRunsOptions = {}): Promise<ReconcileQueuedBilingualRunsResult> => {
+}: ReconcileQueuedBilingualRunsOptions): Promise<ReconcileQueuedBilingualRunsResult> => {
   let unattributed = 0;
 
   const after = (cursor: QueuedBilingualRunRow | null) => {
@@ -268,7 +271,7 @@ export const reconcileQueuedBilingualRuns = async ({
   return { ...scan, unattributed };
 };
 
-export const initBilingualRunWorker = () => {
+export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
   const worker = new Worker<BilingualRunJobData>(
     QUEUE_NAME,
     async (job) => {
@@ -306,7 +309,7 @@ export const initBilingualRunWorker = () => {
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
     run: async () => {
-      const recovered = await reconcileStuckBilingualRuns();
+      const recovered = await reconcileStuckBilingualRuns(db);
       if (recovered > 0) {
         logger.warn("bilingual_run.recovered_stuck", {
           count: String(recovered),

@@ -8,6 +8,7 @@ export const RECONCILE_BILINGUAL_RUNS_TASK =
 
 /** Re-drive bilingual runs the queue is not holding a job for anymore. */
 export const reconcileBilingualRuns: SchedulerTask = async ({
+  db,
   logger,
   signal,
 }) => {
@@ -15,7 +16,7 @@ export const reconcileBilingualRuns: SchedulerTask = async ({
     panic("SchedulerAborted");
   }
   const { handedOff, scanned, unattributed } =
-    await reconcileQueuedBilingualRuns();
+    await reconcileQueuedBilingualRuns({ db });
   logger.info("scheduler.bilingual_runs_reconciled", {
     "bilingualRuns.requeued": handedOff,
     "bilingualRuns.scanned": scanned,

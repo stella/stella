@@ -1,3 +1,4 @@
+import { rootDb } from "@/api/db/root";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import { detached } from "@/api/lib/detached";
@@ -16,8 +17,10 @@ import { refreshS3 } from "@/api/lib/s3";
 const IDLE_CHECK_INTERVAL_MS = 60_000;
 
 await refreshS3();
+// The host owns the root connection and hands it to its worker.
 const documentProcessingWorkers = createBullMqWorkerHost(
   "document-processing-worker",
+  { db: rootDb },
   [initDocumentProcessingWorker],
 );
 
