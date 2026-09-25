@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Atļaut šajā sarunā",
       "allowOnce": "Atļaut vienreiz",
+      "allowed": "Atļauts",
       "alwaysAllow": "Vienmēr atļaut",
       "browser": {
         "actions": {

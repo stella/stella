@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Luba selles vestluses",
       "allowOnce": "Luba üks kord",
+      "allowed": "Lubatud",
       "alwaysAllow": "Luba alati",
       "browser": {
         "actions": {

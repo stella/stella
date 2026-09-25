@@ -183,8 +183,8 @@
       "behaviour": "With the tool allowed for the conversation, the approval card answers itself when it appears.",
       "status": "active",
       "file": "../web/src/components/chat/tool-approval-card.tsx",
-      "search": "          shouldRespond: isBlocked || shouldAutoApprove,",
-      "replace": "          shouldRespond: isBlocked,",
+      "search": "          shouldRespond: !responded && (isBlocked || shouldAutoApprove),",
+      "replace": "          shouldRespond: !responded && isBlocked,",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "conversation-grant shows what the server stored, live and in a second tab"

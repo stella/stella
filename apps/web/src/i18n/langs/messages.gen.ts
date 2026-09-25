@@ -908,6 +908,7 @@ type Messages = {
     "approval": {
       "allowInConversation": "Allow in this conversation";
       "allowOnce": "Allow once";
+      "allowed": "Allowed";
       "alwaysAllow": "Always allow";
       "browser": {
         "actions": {

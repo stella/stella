@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Zezwól w tej rozmowie",
       "allowOnce": "Zezwól raz",
+      "allowed": "Zezwolono",
       "alwaysAllow": "Zawsze zezwalaj",
       "browser": {
         "actions": {

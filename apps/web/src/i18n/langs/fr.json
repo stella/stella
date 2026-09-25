@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Autoriser dans cette conversation",
       "allowOnce": "Autoriser une fois",
+      "allowed": "Autorisé",
       "alwaysAllow": "Toujours autoriser",
       "browser": {
         "actions": {

@@ -8,7 +8,7 @@ import type {
   RunAgentInputContext,
   UIMessage,
 } from "@tanstack/ai-client";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -457,46 +457,80 @@ export const createChatRuntime = ({
     }
   };
 
+  /**
+   * Each approval's answer, by approval id. An approval is answered once: a
+   * second answer to it (a click racing its card's automatic answer) joins
+   * the first instead of resolving the interrupt again. A failed answer is
+   * not kept, so it does not stand in for a later answer to the same id.
+   */
+  const approvalAnswers = new Map<string, Promise<void>>();
+
+  const answerToolApproval = async (
+    response: { approved: boolean; id: string },
+    options: ChatSendMessageOptions | undefined,
+  ) => {
+    await withBody(options, async () => {
+      const interrupt = client
+        .getInterrupts()
+        .find(
+          (candidate) =>
+            (candidate.kind === "tool-approval" &&
+              candidate.toolCallId === response.id) ||
+            (candidate.kind === "generic" &&
+              (candidate.interruptId === response.id ||
+                candidate.id === response.id)),
+        );
+      if (interrupt?.kind === "tool-approval") {
+        await resolveNativeInterrupt(() => {
+          if (response.approved) {
+            interrupt.resolveInterrupt(true);
+          } else {
+            interrupt.resolveInterrupt(false);
+          }
+        });
+        return;
+      }
+      if (interrupt?.kind === "generic") {
+        // Stella's server tool catalog is dynamic, so the browser has no
+        // runtime tool definitions with which to specialize the binding.
+        // TanStack therefore exposes the native descriptor as a generic
+        // bound interrupt; its response schema is the strict authority.
+        await resolveNativeInterrupt(() => {
+          interrupt.resolveInterrupt({ approved: response.approved });
+        });
+        return;
+      }
+
+      // Transitional reload path for turns persisted before native AG-UI
+      // interrupt descriptors were available. New live turns always resolve
+      // through the bound interrupt above.
+      await client.addToolApprovalResponse(response);
+    });
+  };
+
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
     resolveToolApproval: async (response, options) => {
-      await withBody(options, async () => {
-        const interrupt = client
-          .getInterrupts()
-          .find(
-            (candidate) =>
-              (candidate.kind === "tool-approval" &&
-                candidate.toolCallId === response.id) ||
-              (candidate.kind === "generic" &&
-                (candidate.interruptId === response.id ||
-                  candidate.id === response.id)),
-          );
-        if (interrupt?.kind === "tool-approval") {
-          await resolveNativeInterrupt(() => {
-            if (response.approved) {
-              interrupt.resolveInterrupt(true);
-            } else {
-              interrupt.resolveInterrupt(false);
-            }
-          });
-          return;
-        }
-        if (interrupt?.kind === "generic") {
-          // Stella's server tool catalog is dynamic, so the browser has no
-          // runtime tool definitions with which to specialize the binding.
-          // TanStack therefore exposes the native descriptor as a generic
-          // bound interrupt; its response schema is the strict authority.
-          await resolveNativeInterrupt(() => {
-            interrupt.resolveInterrupt({ approved: response.approved });
-          });
-          return;
-        }
-
-        // Transitional reload path for turns persisted before native AG-UI
-        // interrupt descriptors were available. New live turns always resolve
-        // through the bound interrupt above.
-        await client.addToolApprovalResponse(response);
-      });
+      const pending = approvalAnswers.get(response.id);
+      if (pending !== undefined) {
+        await pending;
+        return;
+      }
+      const answer = Result.tryPromise(
+        async () => await answerToolApproval(response, options),
+      );
+      approvalAnswers.set(
+        response.id,
+        answer.then(() => undefined),
+      );
+      const outcome = await answer;
+      if (Result.isError(outcome)) {
+        approvalAnswers.delete(response.id);
+        // The failed continuation is the turn's error, shown like any other.
+        // Its card stays answered; the thread reloads from the server, and
+        // the next message settles the turn.
+        captureRuntimeError(outcome.error.cause);
+      }
     },
     addToolResult: async (result, options) => {
       await enqueueToolResult(async () => {

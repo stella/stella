@@ -1050,7 +1050,13 @@ const isCanonicalBuiltInToolCall = (
   if (!isChatToolName(value.name)) {
     return false;
   }
-  if (value.state === "awaiting-input" || value.state === "input-streaming") {
+  // A call can end before its input is complete: still streaming it, or
+  // stopped while it streamed, which settles it as an error with no input.
+  if (
+    value.state === "awaiting-input" ||
+    value.state === "input-streaming" ||
+    value.state === INTERRUPTED_TOOL_CALL_STATE
+  ) {
     return (
       !("input" in value) ||
       value.input === undefined ||
@@ -1077,7 +1083,8 @@ const isCanonicalChatUIMessage = (
 /**
  * Prove the runtime-to-UI contract without parsing tool arguments again.
  * Completed built-in calls must already carry their canonical parsed input;
- * only protocol-partial calls may omit it.
+ * only protocol-partial calls, and calls that ended before their input did,
+ * may omit it.
  */
 export const projectCanonicalChatUIMessages = (
   messages: readonly PersistedChatMessage[],

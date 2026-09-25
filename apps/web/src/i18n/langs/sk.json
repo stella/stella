@@ -905,6 +905,7 @@
     "approval": {
       "allowInConversation": "Povoliť v tejto konverzácii",
       "allowOnce": "Povoliť raz",
+      "allowed": "Povolené",
       "alwaysAllow": "Vždy povoliť",
       "browser": {
         "actions": {
