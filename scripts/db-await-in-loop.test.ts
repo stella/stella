@@ -73,7 +73,8 @@ export class Store {
 `,
   "cases.ts": `
 import { Queue } from "bullmq";
-import { inArray, sql } from "drizzle-orm";
+import { inArray, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { items, rootDb, rootDb as primary, type Transaction } from "./db/root";
 import { scopedDb, type ScopedDb, type TransactionBase } from "./db/scoped";
 import { countWith, pure, readOne, saveFar, saveOne, saveVia, Store, writeOne, writeWith } from "./helpers";
@@ -295,6 +296,34 @@ export const wrapped = async (maintenance: MaintenanceDb) => {
   for (const id of ids) {
     await maintenance.execute(String(id)); // expect: query
     await writeWith({ maintenance }); // expect: handle
+  }
+};
+
+type RevocationWriter = {
+  delete: (table: PgTable) => {
+    where: (condition: SQL | undefined) => PromiseLike<unknown>;
+  };
+};
+type StatementRunner = { execute: (query: SQL) => Promise<unknown> };
+type KeyValueCache = {
+  delete: (key: string) => Promise<boolean>;
+  execute: (command: string, ...args: string[]) => Promise<unknown>;
+};
+export const structural = async (
+  rows: (typeof items.$inferInsert)[],
+  writer: RevocationWriter,
+  runner: StatementRunner,
+  cache: KeyValueCache,
+  revoke: (target: RevocationWriter, id: number) => Promise<void>,
+) => {
+  for (const id of ids) {
+    await writer.delete(items).where(undefined); // expect: query
+    await runner.execute(sql\`select \${id}\`); // expect: query
+    await revoke(writer, id); // expect: handle
+    await cache.delete(String(id));
+    await cache.execute("GET", String(id));
+    await writeWith({ cache });
+    await writeWith(rows);
   }
 };
 

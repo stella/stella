@@ -210,6 +210,7 @@ export const revokeOrganizationMemberAuthArtifacts = async (
   scope: MemberCredentialScope,
 ): Promise<void> => {
   for (const revoke of Object.values(MEMBER_CREDENTIAL_REVOCATION)) {
+    // db-await-in-loop: a fixed registry of credential kinds, one statement per credential table, all in the caller's transaction
     await revoke(tx, scope);
   }
 };

@@ -16,15 +16,19 @@
 //     `insert`, `update`, `delete`, `execute`, `transaction`, `query`, ...)
 //     declared by a Drizzle database or transaction class, or by one of the
 //     handle modules below; a `Pick` or partial interface derived from those
-//     keeps the declarations and so counts too. A Drizzle relational query
-//     builder (`tx.query.users`) is a handle as well, and so is any wrapper
-//     whose `transaction` member is a runner.
+//     keeps the declarations and so counts too. A structural adapter whose
+//     database-named member takes a Drizzle-declared argument (`PgTable`,
+//     `SQL`, `SQLWrapper`, `PgUpdateSetSource`, ...) counts by that argument.
+//     A Drizzle relational query builder (`tx.query.users`) is a handle as
+//     well, and so is any wrapper whose `transaction` member is a runner.
 //   - A RUNNER is a callable with a callback parameter whose first parameter
 //     is a handle: `scopedDb`, `safeDb`, the ingestion and public-reader
 //     boundaries, `db.transaction`. Invoking it opens one transaction.
 //   - An EXECUTED QUERY is an awaited value whose `then` is Drizzle's (a
 //     fluent select/insert/update/delete, a relational query, a raw
-//     `execute`), a `.execute()`/`.then()` on one, or a runner invocation.
+//     `execute`), a `.execute()`/`.then()` on one, a runner invocation, or an
+//     awaited thenable at the end of a chain that starts at a handle's
+//     database member (a structural adapter's own builders).
 //     Building a query without executing it is not a round trip.
 //
 // A site is flagged when, inside a loop position that re-runs per iteration
@@ -112,6 +116,10 @@ const HANDLE_MEMBER_NAMES = [
   "$count",
   "refreshMaterializedView",
 ] as const;
+
+const HANDLE_MEMBER_NAME_SET: ReadonlySet<string> = new Set(
+  HANDLE_MEMBER_NAMES,
+);
 
 // Handle members that run a statement when called, as opposed to starting a
 // builder whose execution is decided by what happens to it next.
@@ -809,6 +817,41 @@ export const scanDbAwaitInLoop = ({
     );
   };
 
+  // A type Drizzle declares (`PgTable`, `SQL`, `SQLWrapper`,
+  // `PgUpdateSetSource`, ...), through a union or a type parameter's
+  // constraint.
+  const isDrizzleDeclaredType = (type: ts.Type): boolean => {
+    const resolved = resolveConstraint(type);
+    if (resolved.isUnion() || resolved.isIntersection()) {
+      return resolved.types.some(isDrizzleDeclaredType);
+    }
+    return [resolved.getSymbol(), resolved.aliasSymbol].some((symbol) =>
+      (symbol?.declarations ?? []).some(isDrizzleDeclaration),
+    );
+  };
+
+  // A member that takes a Drizzle table, statement or update payload is a
+  // database operation wherever in this program it is declared: a structural
+  // adapter over the driver (`delete: (table: PgTable) => ...`,
+  // `execute: (query: SQL) => ...`) is a handle by what it accepts. Library
+  // members are not adapters: `Array.prototype.with` over Drizzle row types
+  // takes a Drizzle-declared value and writes nothing.
+  const takesDrizzleArgument = (type: ts.Type): boolean => {
+    const resolved = checker.getNonNullableType(type);
+    const parts = resolved.isUnion() ? resolved.types : [resolved];
+    return parts.some((part) =>
+      checker
+        .getSignaturesOfType(part, ts.SignatureKind.Call)
+        .some((signature) =>
+          signature
+            .getParameters()
+            .some((parameter) =>
+              isDrizzleDeclaredType(checker.getTypeOfSymbol(parameter)),
+            ),
+        ),
+    );
+  };
+
   const hasHandleCapability = (type: ts.Type): boolean =>
     memoized(handleMemo, type, () => {
       const resolved = resolveConstraint(type);
@@ -822,11 +865,17 @@ export const scanDbAwaitInLoop = ({
         return true;
       }
       if (
-        HANDLE_MEMBER_NAMES.some((name) =>
-          (checker.getPropertyOfType(resolved, name)?.declarations ?? []).some(
-            isHandleMemberDeclaration,
-          ),
-        )
+        HANDLE_MEMBER_NAMES.some((name) => {
+          const member = checker.getPropertyOfType(resolved, name);
+          return (
+            member !== undefined &&
+            ((member.declarations ?? []).some(isHandleMemberDeclaration) ||
+              ((member.declarations ?? []).some((declaration) =>
+                isProgramSource(declaration.getSourceFile()),
+              ) &&
+                takesDrizzleArgument(checker.getTypeOfSymbol(member))))
+          );
+        })
       ) {
         return true;
       }
@@ -888,6 +937,40 @@ export const scanDbAwaitInLoop = ({
 
   const typeOf = (node: ts.Node): ts.Type => checker.getTypeAtLocation(node);
 
+  const isThenable = (type: ts.Type): boolean => {
+    const resolved = resolveConstraint(type);
+    const parts = resolved.isUnion() ? resolved.types : [resolved];
+    return parts.some(
+      (part) =>
+        !isAnyLike(part) &&
+        checker.getPropertyOfType(part, "then") !== undefined,
+    );
+  };
+
+  // Does this call's chain start at a database member of a handle
+  // (`writer.delete(table).where(...)`)? A structural adapter's builders are
+  // not Drizzle's, so awaiting the thenable at the chain's end is the
+  // evidence that it runs.
+  const chainStartsAtHandleMember = (call: ts.CallExpression): boolean => {
+    let current: ts.Expression = unwrap(call.expression);
+    for (;;) {
+      if (ts.isPropertyAccessExpression(current)) {
+        const member = current.name.text;
+        if (
+          HANDLE_MEMBER_NAME_SET.has(member) &&
+          hasHandleCapability(typeOf(current.expression))
+        ) {
+          return true;
+        }
+        current = unwrap(current.expression);
+      } else if (ts.isCallExpression(current)) {
+        current = unwrap(current.expression);
+      } else {
+        return false;
+      }
+    }
+  };
+
   // A call that runs a statement: a runner invocation, an executing handle
   // member (`tx.execute(...)`, `db.transaction(...)`), `.execute()`/`.then()`
   // on a query, or a query value in an executed position.
@@ -913,7 +996,14 @@ export const scanDbAwaitInLoop = ({
         return true;
       }
     }
-    return executed && isExecutableQuery(typeOf(call));
+    if (!executed) {
+      return false;
+    }
+    const type = typeOf(call);
+    return (
+      isExecutableQuery(type) ||
+      (isThenable(type) && chainStartsAtHandleMember(call))
+    );
   };
 
   const isHandleValue = (expression: ts.Expression): boolean => {

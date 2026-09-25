@@ -1090,7 +1090,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1123,6 +1123,7 @@
       "apps/api/src/handlers/search/ai.ts": 2,
       "apps/api/src/handlers/views/table/export.ts": 1,
       "apps/api/src/lib/account-deletion-steps.ts": 1,
+      "apps/api/src/lib/auth-artifacts.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
