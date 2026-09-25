@@ -788,6 +788,33 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
+  test(
+    "accepts an approval of the call the model asks for after a denial",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval"] }]],
+          "Delete the NDA",
+        ).run(model, real);
+        await new ResolveCards(
+          ["deny"],
+          [[{ ...STEP, calls: ["approval"], text: true }]],
+        ).run(model, real);
+        // The fixture must reach the fault: a card for the model's next call
+        // sits on the message that holds the denial.
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
+        expect(real.ledger.effects).toHaveLength(1);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
   const failsBeforeAnswering: [
     string,
     FailureShape,
