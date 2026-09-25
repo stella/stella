@@ -825,6 +825,14 @@ const PERMALINK_PLACEMENT_CLASS = {
 } as const satisfies Record<PermalinkPlacement, string>;
 
 /**
+ * Reader chrome on a block (its permalink, a provision's actions) stays out
+ * of the text until the reader points at or focuses the block. A device that
+ * cannot hover shows it always, since there would be no way to reveal it.
+ */
+export const READER_BLOCK_CHROME_REVEAL_CLASS =
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+
+/**
  * A block's own address, as a link the reader can take with them.
  *
  * A plain click copies the link and writes the hash with `replaceState`: the
@@ -857,7 +865,8 @@ const BlockPermalink = ({
     <a
       aria-label={t("common.copyLink")}
       className={cn(
-        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100",
+        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
+        READER_BLOCK_CHROME_REVEAL_CLASS,
         PERMALINK_PLACEMENT_CLASS[placement],
       )}
       data-reader-chrome=""
