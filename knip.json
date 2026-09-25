@@ -124,6 +124,7 @@
     "packages/mojibake": {
       "entry": [
         "src/charsets.ts",
+        "src/declared-charset.ts",
         "src/detect.ts",
         "src/**/*.test.ts",
         "scripts/*.ts"

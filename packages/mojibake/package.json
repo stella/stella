@@ -11,6 +11,10 @@
       "types": "./src/charsets.ts",
       "import": "./src/charsets.ts"
     },
+    "./declared-charset": {
+      "types": "./src/declared-charset.ts",
+      "import": "./src/declared-charset.ts"
+    },
     "./detect": {
       "types": "./src/detect.ts",
       "import": "./src/detect.ts"
