@@ -1,26 +1,6 @@
 {
   "waivers": [
     {
-      "id": "SW-0001",
-      "kind": "permanent",
-      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "revokeAuthCredentialsAndInvitations",
-      "count": 1,
-      "reason": "Account deletion must revoke Better Auth session artifacts.",
-      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
-    },
-    {
-      "id": "SW-0002",
-      "kind": "permanent",
-      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
-      "file": "apps/api/src/lib/account-deletion-steps.ts",
-      "symbol": "revokeOAuthTokensAndGrants",
-      "count": 2,
-      "reason": "Account deletion must revoke Better Auth OAuth access and refresh tokens; both deletes are the revocation, so neither can route through the helper the rule points at.",
-      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
-    },
-    {
       "id": "SW-0003",
       "kind": "permanent",
       "rule": "mcp-security/no-direct-oauth-client-join",

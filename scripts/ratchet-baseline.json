@@ -986,10 +986,8 @@
     "files": {}
   },
   "auth-lifecycle-no-direct-auth-artifact-delete-suppressions": {
-    "count": 3,
-    "files": {
-      "apps/api/src/lib/account-deletion-steps.ts": 3
-    }
+    "count": 0,
+    "files": {}
   },
   "no-unowned-file-version-write-suppressions": {
     "count": 0,
