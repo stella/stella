@@ -1130,7 +1130,14 @@ export const BlockRenderer = ({
                 </span>
                 <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-base @lg/provision:justify-self-start">
                   {provision.accessory}
-                  {headingPermalink}
+                  {/* Zero-width, as on a plain heading: the glyph is invisible
+                      until hover, and stacked under the designation it would
+                      otherwise pull the centred actions off the axis. */}
+                  {headingPermalink !== null && (
+                    <span className="inline-block w-0 whitespace-nowrap">
+                      {headingPermalink}
+                    </span>
+                  )}
                 </span>
               </span>
             </span>
