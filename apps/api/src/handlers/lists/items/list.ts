@@ -6,6 +6,7 @@ import {
   entities,
   fields,
   legalListColumns,
+  legalListFactDetails,
   legalListItems,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -39,7 +40,9 @@ const config = {
     "List one list's items in list order with cursor pagination. Each item " +
     "carries its name, item type, task status, priority, due date, section, " +
     "position, description, and review status, plus the values it holds for " +
-    "the properties the list binds as columns.",
+    "the properties the list binds as columns. A fact item also carries its " +
+    "evidential detail (date and precision, evidence kind, medium, " +
+    "confidence, interpretation note, scoring), null until it is set.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },
@@ -115,6 +118,15 @@ const readListItems = createSafeHandler(
               reviewStatus: legalListItems.reviewStatus,
               createdAt: legalListItems.createdAt,
               updatedAt: legalListItems.updatedAt,
+              factDetails: {
+                occurredOn: legalListFactDetails.occurredOn,
+                occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
+                evidenceKind: legalListFactDetails.evidenceKind,
+                medium: legalListFactDetails.medium,
+                confidence: legalListFactDetails.confidence,
+                interpretationNote: legalListFactDetails.interpretationNote,
+                scoring: legalListFactDetails.scoring,
+              },
             })
             .from(legalListItems)
             .innerJoin(
@@ -123,6 +135,15 @@ const readListItems = createSafeHandler(
                 eq(entities.id, legalListItems.entityId),
                 eq(entities.workspaceId, workspaceId),
                 eq(entities.kind, "task"),
+              ),
+            )
+            // At most one detail row per item (keyed by the item), so the
+            // join never multiplies the page.
+            .leftJoin(
+              legalListFactDetails,
+              and(
+                eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+                eq(legalListFactDetails.workspaceId, workspaceId),
               ),
             )
             .where(and(...conditions))

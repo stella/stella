@@ -653,7 +653,7 @@ function ListHeading({
       aria-busy={isRefreshing}
       className="flex flex-wrap items-baseline gap-x-3 text-xs tabular-nums transition-opacity duration-200 aria-busy:opacity-56"
     >
-      <span>{t("caseLaw.pagination.page", { page: String(page) })}</span>
+      <span>{t("common.page", { page: String(page) })}</span>
       {intent.type === "act" && intent.label !== null && (
         <span>{t("statutes.resolvedAlias", { label: intent.label })}</span>
       )}

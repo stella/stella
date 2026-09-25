@@ -19,6 +19,7 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
 import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
+import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 
 const v1 = v.literal(1);
 
@@ -130,6 +131,16 @@ const timelineLayoutSchema = v.strictObject({
   showTable: v.boolean(),
 });
 
+/** Verification of the matter's documents against one legal list's facts.
+ *  `listId` is null until a list is picked. */
+const avtLayoutSchema = v.strictObject({
+  type: v.literal("avt"),
+  ...versionedBaseLayoutSchema,
+  listId: v.nullable(
+    v.pipe(v.string(), v.uuid(), v.transform(brandPersistedLegalListId)),
+  ),
+});
+
 const layoutSchemas = [
   overviewLayoutSchema,
   tableLayoutSchema,
@@ -137,6 +148,7 @@ const layoutSchemas = [
   kanbanLayoutSchema,
   calendarLayoutSchema,
   timelineLayoutSchema,
+  avtLayoutSchema,
 ] as const;
 
 export const viewLayoutSchema = v.variant("type", layoutSchemas);
@@ -343,6 +355,14 @@ const tViewLayoutDefinition = t.Union([
       ]),
       groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
       showTable: t.Boolean(),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("avt"),
+      ...tVersionedBaseLayoutSchema,
+      listId: t.Union([tSafeId("legalList"), t.Null()]),
     },
     strictObjectOptions,
   ),

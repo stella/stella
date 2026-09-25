@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Fakt hinzufügen",
-      "addUnavailable": "In dieser Testumgebung nicht verfügbar – das Hinzufügen eines Fakts erfordert eine noch nicht angebundene Persistenz.",
-      "confirmedByReviewer": "Durch Prüfer bestätigt",
+      "addInterpretationNote": "Notiz zur Auslegung hinzufügen",
       "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
-      "editFact": "Fakt bearbeiten",
-      "editOrRetype": "Bearbeiten / neu eingeben",
+      "editInterpretationNote": "Notiz zur Auslegung bearbeiten",
+      "empty": "Markieren Sie Einträge dieser Liste als Fakten, mit denen Dokumente abgeglichen werden.",
       "extractionAndReview": "Extraktion und Prüfung",
       "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
-      "factText": "Text des Ankerfakts",
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
       "heldForReview": "Zur Prüfung zurückgestellt",
-      "importSource": "Quelle importieren",
-      "importUnavailable": "In dieser Testumgebung nicht verfügbar – das Importieren einer Quelle erfordert eine noch nicht angebundene Datenaufnahme und Speicherung.",
-      "interpretation": "Auslegung",
+      "holdOutOfScoring": "Aus der Bewertung ausschließen",
+      "includeInScoring": "In die Bewertung einbeziehen",
+      "interpretationNote": "Notiz zur Auslegung",
+      "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",
       "interpretiveConfidence": "Auslegungssicherheit",
+      "openList": "Liste öffnen",
       "record": "Ankerfaktenbestand",
-      "sourceAndProvenance": "Quelle und Herkunft",
-      "timePeriod": "Zeitraum",
+      "setConfidence": "Sicherheit festlegen",
       "title": "Ankerfakten"
     },
     "claimDetail": {
       "escalatedReview": "An das Belegteam eskaliert – hier kann kein Ergebnis bestätigt oder beanstandet werden, bis der zugrunde liegende Widerspruch geklärt ist.",
-      "factId": "Fakt {id}",
       "flagDispute": "Beanstandung markieren",
       "humanReview": "Menschliche Prüfung",
       "interpretationCaveat": "Ein beitragender Fakt ist mit einem wesentlichen Auslegungsvorbehalt versehen – unsicher ist die Bedeutung des Belegs, nicht das Medium, aus dem er stammt.",
       "notVerifiable": {
-        "pending": "In diesem Build ist kein Live-Modell angebunden – Ergebnis: <strong>Keine Abdeckung, Prüfung ausstehend</strong>.",
         "reopen": "Erneut öffnen → mit Bestand abgleichen",
-        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus."
+        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus.",
+        "reopenedPending": "Als überprüfbare Behauptung erneut geöffnet. Sie wird als <strong>Keine Abdeckung</strong> angezeigt, bis das Dokument erneut geprüft wird."
       },
       "note": {
         "add": "Notiz / Korrektur hinzufügen",
         "heading": "Ihre Notiz · {savedAt}",
+        "headingUndated": "Ihre Notiz",
         "placeholder": "Erfassen Sie eine Korrektur oder Erklärung. Beim Speichern wird die Notiz nur dieser Behauptung zugeordnet – das Ergebnis und der Ankerfaktenbestand bleiben unverändert.",
         "saveCorrection": "Korrektur speichern"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
       "overrideVerdict": "Ergebnis ändern",
       "recordConflict": {
-        "dateDecides": "Warum das Datum über das Ergebnis entscheidet",
         "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
-        "escalated": "Lokal zur Nachverfolgung durch das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis eine maßgebliche Quelle ausgewählt ist.",
+        "escalatedNotice": "Für das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis ein maßgeblicher Eintrag ausgewählt ist.",
         "flagForEvidenceTeam": "Für das Belegteam markieren",
-        "governingPreview": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab. Beide Testeinträge bleiben unverändert.",
-        "governingPreviewWithVerdict": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab – Ergebnis: <strong>{verdict}</strong>. Beide Testeinträge bleiben unverändert.",
-        "oppositeSides": "Die beiden Daten liegen auf <emphasis>entgegengesetzten Seiten</emphasis> des maßgeblichen Ereignisses. Welcher Eintrag gilt, entscheidet das Ergebnis – die Klärung des Widerspruchs legt das Ergebnis daher unmittelbar fest.",
+        "governed": "<strong>{value}</strong> ist maßgeblich: Die Behauptung wird anhand dieses Eintrags beurteilt. Der andere Eintrag bleibt erhalten.",
         "reconcile": "Bestand abgleichen",
-        "resultAsAt": "Zum <strong>{date}</strong> {note}",
         "title": "Widersprüchliche Belege im Bestand",
-        "treatAsGoverning": "{id} als maßgeblich behandeln"
+        "treatAsGoverningRecord": "Als maßgeblich behandeln"
       },
       "relation": {
         "conflicts": "Widerspricht",
@@ -196,7 +190,6 @@
       },
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
-      "revisedLater": "In einer späteren Erklärung geändert",
       "score": {
         "anchorFactsDisagree": "Ankerfakten widersprechen sich",
         "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
         "verdictWithheld": "Ergebnis zurückgehalten"
       },
-      "timeline": {
-        "asAt": "Zum <strong>{date}</strong>",
-        "asAtDate": "Stichtag",
-        "preview": "Vorschau der Behauptung im Abgleich mit dem Testbestand <emphasis>zu</emphasis> einem gewählten Datum. Vorschauergebnis: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
       "whyScore": "Begründung der Bewertung – Ankerfakten"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Auslegungssicherheit – wie eindeutig die Bedeutung dieses Belegs ist. Unabhängig vom Quellenmedium (Handschrift, Scan usw.)."
     },
     "confirm": {
+      "acknowledge": "Zur Kenntnis nehmen",
       "recordConflict": "Lösung bestätigen",
       "supported": "Bestätigen – bereit",
       "verdict": "Ergebnis bestätigen"
-    },
-    "devHarness": {
-      "localSessionNotice": "Nur lokale Sitzung – nichts wird gespeichert. Jede Prüfung, Notiz und Bearbeitung eines Ankerfakts bleibt in diesem Browser-Tab und geht beim Neuladen verloren.",
-      "title": "Tool zur Ankerprüfung – Testumgebung",
-      "verifyDocument": "Dokument prüfen"
     },
     "disposition": {
       "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
@@ -250,6 +235,15 @@
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
       "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat."
     },
+    "documents": {
+      "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
+      "empty": "Laden Sie ein Dokument in diese Akte hoch, um es zu prüfen.",
+      "notVerified": "Noch nicht geprüft",
+      "otherList": "Gegen eine andere Liste geprüft",
+      "sizeConfirmTitle": "Dieses Dokument prüfen?",
+      "statusLoadFailed": "Der Prüfstatus dieser Dokumente konnte nicht geladen werden.",
+      "verifyAgain": "Erneut prüfen"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Beanstandet · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}} · {decidedAt}",
+      "undo": "Entscheidung rückgängig machen"
+    },
+    "runs": {
+      "back": "Alle Dokumente",
+      "errors": {
+        "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
+        "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
+        "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",
+        "gradingFailed": "Die Behauptungen konnten nicht mit den Fakten der Liste abgeglichen werden.",
+        "internal": "Die Prüfung ist unerwartet fehlgeschlagen.",
+        "noText": "Aus diesem Dokument konnte kein Text gelesen werden.",
+        "pinContentChanged": "Das Dokument hat sich nach Beginn der Prüfung geändert. Prüfen Sie es erneut.",
+        "pinUnresolved": "Die Dokumentversion, für die diese Prüfung gestartet wurde, ist nicht mehr auffindbar.",
+        "unsupportedFormat": "Es können nur DOCX-Dateien, PDFs und Dateien mit einer PDF-Fassung geprüft werden."
+      },
+      "evidencePinned": "Geprüft anhand von {count, plural, one {# Fakt} other {# Fakten}}, wie sie am {checkedAt} vorlagen. Spätere Änderungen an der Liste wirken sich nicht auf diese Prüfung aus.",
+      "failedTitle": "Prüfung fehlgeschlagen",
+      "inProgress": "Die Behauptungen des Dokuments werden mit den Fakten der Liste abgeglichen …",
+      "loadFailed": "Diese Prüfung konnte nicht geladen werden.",
+      "noClaims": "In diesem Dokument wurden keine Behauptungen gefunden.",
+      "startFailed": "Die Prüfung konnte nicht gestartet werden",
+      "status": {
+        "running": "Wird geprüft"
+      }
+    },
+    "save": {
+      "failed": "Nicht gespeichert",
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
+      "saved": "Gespeichert",
+      "saving": "Wird gespeichert …"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
       "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
       "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
-      "claimStatus": " ({state}{contested, select, true {, strittig} other {}}{superseded, select, true {, überholt} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, strittig} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
         "claims": "Behauptungen",
-        "needsJudgement": "Entscheidung erforderlich"
+        "needsJudgement": "Entscheidung erforderlich",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Liste auswählen",
+      "evidenceList": "Fakten aus",
+      "noLists": "Diese Akte hat keine Listen.",
+      "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
-      "page": "Seite {page}",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
     "sources": "Quellen:",
-    "spawnSubagents": {
-      "failed": "Fehlgeschlagen"
-    },
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "suggestTitle": "Titel vorschlagen",
@@ -1438,6 +1469,7 @@
     "documentReference": "Aktenzeichen des Dokuments",
     "documentTitle": "Dokumenttitel",
     "documentation": "Dokumentation",
+    "documents": "Dokumente",
     "done": "Fertig",
     "doubleClickToRename": "Zum Umbenennen doppelklicken",
     "download": "Herunterladen",
@@ -1477,6 +1509,8 @@
       "inline": "Im Text",
       "title": "Nachricht speichern"
     },
+    "fact": "Tatsache",
+    "failed": "Fehlgeschlagen",
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Zurück zur Bearbeitung",
     "hideDetails": "Details ausblenden",
     "hideSecretValue": "Geheimen Wert ausblenden",
+    "high": "Hoch",
     "history": "Verlauf",
     "import": "Importieren",
     "invite": "Einladen",
@@ -1538,8 +1573,10 @@
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
+    "low": "Niedrig",
     "matter": "Akte",
     "matters": "Akten",
+    "medium": "Mittel",
     "members": "Mitglieder",
     "metadata": "Metadaten",
     "moveDown": "Nach unten",
@@ -1548,6 +1585,7 @@
     "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
+    "nextMatch": "Nächster Treffer",
     "noFileChosen": "Keine Datei ausgewählt",
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
@@ -1559,14 +1597,17 @@
     "or": "Oder",
     "organization": "Organisation",
     "organizationName": "Organisationsname",
+    "page": "Seite {page}",
     "pin": "Anheften",
     "playbooks": "Playbooks",
     "preparing": "Wird vorbereitet…",
     "preview": "Vorschau",
     "previous": "Zurück",
+    "previousMatch": "Vorheriger Treffer",
     "print": "Drucken",
     "profile": "Profil",
     "properties": "Eigenschaften",
+    "queued": "Eingereiht",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
     "refresh": "Aktualisieren",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
     "value": "Wert",
+    "verified": "Verifiziert",
     "verify": "Bestätigen",
     "version": "Version",
     "versionLabel": "Version {version}",
@@ -1907,9 +1949,6 @@
     "reject": "Ablehnen",
     "rejectAll": "Alle ablehnen",
     "revert": "Zurücksetzen",
-    "severityHigh": "Hoch",
-    "severityLow": "Niedrig",
-    "severityMedium": "Mittel",
     "severityUnspecified": "Nicht angegeben",
     "skipped": "Konnte nicht angewendet werden: {reason}",
     "staleResolution": "Dieser Vorschlag wurde bereits an anderer Stelle bearbeitet.",
@@ -2414,10 +2453,8 @@
       "findText": "Suchtext",
       "matchCase": "Groß-/Kleinschreibung",
       "matchCounter": "{current} / {total}",
-      "next": "Nächster Treffer",
       "nextShortcut": "Nächster Treffer (Enter)",
       "noResults": "Keine Ergebnisse",
-      "previous": "Vorheriger Treffer",
       "previousShortcut": "Vorheriger Treffer (Shift+Enter)",
       "replaceAll": "Alle ersetzen",
       "replaceCurrent": "Aktuellen Treffer ersetzen",
@@ -3013,9 +3050,6 @@
       "reviewing": "Prüfung läuft…",
       "reviewingHint": "Bei großen Dokumenten kann dies einige Minuten dauern.",
       "run": "Prüfung starten",
-      "runStatus": {
-        "queued": "Eingereiht"
-      },
       "saveAsPlaybook": "Als Playbook speichern",
       "saveAsPlaybookFailed": "Diese Prüfung konnte nicht als Playbook gespeichert werden",
       "savedAsPlaybook": "Als Playbook gespeichert",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "z. B. Das Zahlungsziel darf 30 Tage nicht überschreiten",
       "saveFailed": "Playbook konnte nicht gespeichert werden",
       "severity": {
-        "blocker": "Kritisch",
-        "high": "Hoch",
-        "low": "Niedrig",
-        "medium": "Mittel"
+        "blocker": "Kritisch"
       },
       "severityLabel": "Schweregrad",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Noch nichts im Gedächtnis.",
     "kinds": {
       "decision": "Entscheidung",
-      "fact": "Tatsache",
       "instruction": "Anweisung",
       "preference": "Präferenz",
       "relationship": "Beziehung"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Beta-Funktionen",
+      "betaAvt": "AVT-Dokumentprüfung",
+      "betaAvtDescription": "Die Dokumente einer Akte Aussage für Aussage mit den Fakten einer Liste abgleichen",
       "betaCaseLawDescription": "Öffentliche Rechtsprechungssuche und -ansicht in der Seitenleiste anzeigen",
       "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
       "betaInbox": "Posteingang und Benachrichtigungen",
@@ -5078,7 +5110,6 @@
         "title": "Word-Vorlagenverknüpfungen entfernen?",
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
-      "defaultPropertyName": "Dokumente",
       "desktopEdit": {
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Eigenschaft löschen",
       "deletePropertyConfirmDescription": "Möchten Sie die Eigenschaft \"{propertyName}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
       "dependencyLimit": "Höchstens {max} Eingaben pro Spalte",
-      "documentsLabel": "Dokumente",
       "editColumn": "Spalte bearbeiten",
       "editConditions": "Bedingungen bearbeiten",
       "editConditionsDescription": "Legen Sie Bedingungen fest, wann diese Eigenschaft generiert werden soll.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Kennzeichnet einen Schlüsselwert.",
         "needsReview": "Zu prüfen",
         "needsReviewDescription": "Erfordert manuelle Prüfung.",
-        "verified": "Verifiziert",
         "verifiedDescription": "Manuell bestätigt."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# Element} other {# Elemente}}",
       "hideColumn": "Spalte ausblenden",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalender",
         "grid": "Raster",
         "kanban": "Kanban",

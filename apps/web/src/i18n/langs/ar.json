@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "إضافة واقعة",
-      "addUnavailable": "غير متاح في بيئة الاختبار هذه؛ فإضافة واقعة تتطلب تخزينًا دائمًا لم يُربط بعد.",
-      "confirmedByReviewer": "أكّدها المراجع",
+      "addInterpretationNote": "إضافة ملاحظة تفسيرية",
       "description": "أدلة قاطعة، مثل رسائل البريد الإلكتروني والرسائل والسجلات المصرفية والوقائع المتفق عليها، تُستخرج إلى سجل الوقائع المرجعية الذي تُراجع الادعاءات بالرجوع إليه. راجع الوقائع أو حرّرها أو أضفها يدويًا.",
-      "editFact": "تحرير الواقعة",
-      "editOrRetype": "التحرير أو إعادة الكتابة",
+      "editInterpretationNote": "تحرير الملاحظة التفسيرية",
+      "empty": "ضع علامة على عناصر هذه القائمة بصفتها وقائع تُفحص المستندات في ضوئها.",
       "extractionAndReview": "الاستخراج والمراجعة",
       "factCount": "{count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتان} few {# وقائع} many {# واقعة} other {# واقعة}}",
-      "factText": "نص الواقعة المرجعية",
       "heldDescription": "هذه المقتطفات <strong>غير مؤكدة المعنى بالفعل</strong>؛ فالمحتوى مؤقت أو غير مؤكد، وليس مجرد محتوى مكتوب بخط اليد. وتُستبعد من التقييم إلى أن يؤكدها المراجع أو يحررها أو يعيد كتابتها. ولا يُحال أي مصدر مقروء للمراجعة لمجرد وسيطه.",
       "heldForReview": "محجوزة للمراجعة",
-      "importSource": "استيراد مصدر",
-      "importUnavailable": "غير متاح في بيئة الاختبار هذه؛ فاستيراد مصدر يتطلب استقبال البيانات وتخزينها، وهما غير مربوطين بعد.",
-      "interpretation": "التفسير",
+      "holdOutOfScoring": "الاستبعاد من التقييم",
+      "includeInScoring": "الإدراج في التقييم",
+      "interpretationNote": "ملاحظة تفسيرية",
+      "interpretationNotePlaceholder": "إذا كان معنى هذا الدليل محل خلاف، فاذكر وجه الخلاف. واتركه فارغًا إن لم يكن كذلك.",
       "interpretiveConfidence": "الثقة في التفسير",
+      "openList": "فتح القائمة",
       "record": "سجل الوقائع المرجعية",
-      "sourceAndProvenance": "المصدر والمنشأ",
-      "timePeriod": "الفترة الزمنية",
+      "setConfidence": "تحديد مستوى الثقة",
       "title": "الوقائع المرجعية"
     },
     "claimDetail": {
       "escalatedReview": "أُحيل إلى فريق الأدلة؛ لا توجد هنا نتيجة يمكن تأكيدها أو الاعتراض عليها حتى يُحل التعارض الأساسي.",
-      "factId": "الواقعة {id}",
       "flagDispute": "وضع علامة نزاع",
       "humanReview": "مراجعة بشرية",
       "interpretationCaveat": "تنطوي إحدى الوقائع المساهمة على تحفظ جوهري بشأن التفسير؛ فموضع عدم اليقين هو معنى الدليل، لا الوسيط الذي ورد فيه.",
       "notVerifiable": {
-        "pending": "لا يوجد نموذج مباشر مربوط في هذا الإصدار؛ النتيجة هي <strong>لا تغطية، بانتظار الفحص</strong>.",
         "reopen": "إعادة الفتح ← الفحص بالرجوع إلى السجل",
-        "reopenExplanation": "<strong>مستبعد لعدم قابليته للتحقق.</strong> إذا كان هذا الادعاء قابلًا للفحص فعلًا، فأعد فتحه؛ يحتفظ AVT بإعادة تصنيفك ولا يجري سوى فحص السجل الذي تخطاه."
+        "reopenExplanation": "<strong>مستبعد لعدم قابليته للتحقق.</strong> إذا كان هذا الادعاء قابلًا للفحص فعلًا، فأعد فتحه؛ يحتفظ AVT بإعادة تصنيفك ولا يجري سوى فحص السجل الذي تخطاه.",
+        "reopenedPending": "أُعيد فتحه بصفته ادعاءً قابلًا للفحص. يظهر بصفته <strong>لا تغطية</strong> إلى أن يُعاد التحقق من المستند."
       },
       "note": {
         "add": "إضافة ملاحظة أو تصحيح",
         "heading": "ملاحظتك · {savedAt}",
+        "headingUndated": "ملاحظتك",
         "placeholder": "سجّل تصحيحًا أو تفسيرًا. يؤدي الحفظ إلى ربط الملاحظة بهذا الادعاء وحده؛ ولا يغيّر النتيجة أو سجل الوقائع المرجعية.",
         "saveCorrection": "حفظ التصحيح"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "سجّل المراجع نتيجة مختلفة. يظهر أدناه تحليل الأداة نفسه دون تغيير.",
       "overrideVerdict": "استبدال النتيجة",
       "recordConflict": {
-        "dateDecides": "لماذا يحدد التاريخ النتيجة",
         "description": "تتناول واقعتان مرجعيتان المسألة نفسها، <strong>{subject}</strong>، لكنهما تختلفان. وكلتاهما من مصادر <strong>عالية الثقة</strong>، لذا فالمشكلة ليست في الموثوقية؛ بل إن السجل نفسه متعارض داخليًا. يحجب AVT النتيجة بدلًا من تقييم الادعاء، لأن ترجيح أحد السجلين على الآخر قرار ينبغي لك اتخاذه وتسجيله، وليس قرارًا تتخذه الأداة ضمنيًا.",
-        "escalated": "وُضعت علامة محلية للمتابعة من فريق الأدلة. يظل تعارض السجل مفتوحًا ومحتسبًا حتى يُختار المصدر الحاكم.",
+        "escalatedNotice": "أُشير إليه لفريق الأدلة. يظل تعارض السجل مفتوحًا ومحتسبًا حتى يُختار السجل الحاكم.",
         "flagForEvidenceTeam": "الإحالة إلى فريق الأدلة",
-        "governingPreview": "تتعامل هذه المعاينة المحلية مع <strong>{factId}</strong> بصفته الحاكم، وتقيّم الادعاء مقابل <strong>{value}</strong>. ويظل كلا سجلي الاختبار دون تغيير.",
-        "governingPreviewWithVerdict": "تتعامل هذه المعاينة المحلية مع <strong>{factId}</strong> بصفته الحاكم، وتقيّم الادعاء مقابل <strong>{value}</strong>؛ لتخلص إلى <strong>{verdict}</strong>. ويظل كلا سجلي الاختبار دون تغيير.",
-        "oppositeSides": "يقع التاريخان على <emphasis>جانبين متقابلين</emphasis> من الحدث الفاصل. ويحدد السجل الحاكم النتيجة، ولذلك يؤدي حل التعارض هنا مباشرة إلى تحديدها.",
+        "governed": "<strong>{value}</strong> هو الحاكم: يُقيَّم الادعاء بالرجوع إلى هذا السجل. ويبقى السجل الآخر مسجَّلًا.",
         "reconcile": "تسوية السجل",
-        "resultAsAt": "اعتبارًا من <strong>{date}</strong>، {note}",
         "title": "أدلة متعارضة في السجل",
-        "treatAsGoverning": "اعتبار {id} حاكمًا"
+        "treatAsGoverningRecord": "اعتباره حاكمًا"
       },
       "relation": {
         "conflicts": "يتعارض مع",
@@ -196,7 +190,6 @@
       },
       "reopened": "أُعيد فتحه، والفحص معلّق",
       "reopenedTooltip": "أعاد المراجع تصنيف هذا على أنه واقعة قابلة للفحص؛ ولا يزال فحص السجل المباشر معلقًا.",
-      "revisedLater": "عُدّل في إفادة لاحقة",
       "score": {
         "anchorFactsDisagree": "الوقائع المرجعية متعارضة",
         "conflictCount": "{count, plural, zero {لا تعارضات} one {تعارض واحد} two {تعارضان} few {# تعارضات} many {# تعارضًا} other {# تعارض}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, zero {لا أدلة داعمة} one {دليل داعم واحد} two {دليلان داعمان} few {# أدلة داعمة} many {# دليلًا داعمًا} other {# دليل داعم}}",
         "verdictWithheld": "حُجبت النتيجة"
       },
-      "timeline": {
-        "asAt": "اعتبارًا من <strong>{date}</strong>",
-        "asAtDate": "التاريخ المرجعي",
-        "preview": "عاين الادعاء مقابل سجل الاختبار <emphasis>كما كان في</emphasis> تاريخ تختاره. نتيجة المعاينة: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, zero {لا مصادر} one {مصدر واحد} two {مصدران} few {# مصادر} many {# مصدرًا} other {# مصدر}}",
       "whyScore": "سبب هذه الدرجة: الوقائع المرجعية"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "الثقة في التفسير هي مدى وضوح معنى الدليل. وهي مستقلة عن وسيط المصدر، مثل الكتابة اليدوية أو المسح الضوئي."
     },
     "confirm": {
+      "acknowledge": "فهمت",
       "recordConflict": "تأكيد الحل",
       "supported": "تأكيد: جاهز",
       "verdict": "تأكيد النتيجة"
-    },
-    "devHarness": {
-      "localSessionNotice": "جلسة محلية فقط؛ لا يُحفظ أي شيء هنا. تظل كل مراجعة وملاحظة وتعديل على الوقائع المرجعية في علامة تبويب المتصفح هذه وتُفقد عند التحديث.",
-      "title": "بيئة اختبار أداة التحقق بالوقائع المرجعية",
-      "verifyDocument": "التحقق من المستند"
     },
     "disposition": {
       "contested": "النتيجة واضحة، لكن تفسير إحدى الوقائع المساهمة محل نزاع؛ لذا تستحق مراجعتك قبل الاعتماد.",
@@ -250,6 +235,15 @@
       "supported": "يؤكد السجل هذا الادعاء. ويؤكد اعتمادك أن الأداة قرأته قراءة صحيحة؛ لا حاجة إلى قرار تقديري.",
       "tension": "لا يدعم السجل هذا الادعاء إلا جزئيًا. وازن بين الوقائع الداعمة والمتعارضة أعلاه قبل اعتماد النتيجة."
     },
+    "documents": {
+      "claimSummary": "متعارض: {contradicted} · متعارض جزئيًا: {tension} · تعارض في السجل: {conflicts}",
+      "empty": "ارفع مستندًا إلى هذا الملف القانوني للتحقق منه.",
+      "notVerified": "لم يُتحقق منه بعد",
+      "otherList": "جرى التحقق منه بالرجوع إلى قائمة أخرى",
+      "sizeConfirmTitle": "هل تريد التحقق من هذا المستند؟",
+      "statusLoadFailed": "تعذّر تحميل حالة التحقق من هذه المستندات.",
+      "verifyAgain": "إعادة التحقق"
+    },
     "guidance": {
       "escalate": "إحالة",
       "manualJudgement": "قرار بشري",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, zero {لا مطابقات} one {مطابقة واحدة} two {مطابقتان} few {# مطابقات} many {# مطابقة} other {# مطابقة}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "متنازع عليه · {decidedAt}",
+      "reviewed": "{origin, select, bulk {قُبل باعتباره روتينيًا} other {روجع}} · {decidedAt}",
+      "undo": "التراجع عن القرار"
+    },
+    "runs": {
+      "back": "جميع المستندات",
+      "errors": {
+        "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للتحقق من المستندات. تحقق من إعدادات الذكاء الاصطناعي للمؤسسة.",
+        "enqueueFailed": "تعذّر بدء التحقق. حاول مرة أخرى.",
+        "extractionFailed": "تعذّر استخراج الادعاءات الواردة في هذا المستند.",
+        "gradingFailed": "تعذّر فحص الادعاءات بالرجوع إلى وقائع القائمة.",
+        "internal": "فشل التحقق بشكل غير متوقع.",
+        "noText": "تعذّرت قراءة أي نص من هذا المستند.",
+        "pinContentChanged": "تغيّر المستند بعد بدء التحقق. أعد التحقق منه.",
+        "pinUnresolved": "لم يعد بالإمكان العثور على إصدار المستند الذي بدأ عنده هذا التحقق.",
+        "unsupportedFormat": "لا يمكن التحقق إلا من ملفات DOCX وملفات PDF والملفات التي لها نسخة بصيغة PDF."
+      },
+      "evidencePinned": "جرى التحقق بناءً على {count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتان} few {# وقائع} many {# واقعة} other {# واقعة}} كما كانت عليه في {checkedAt}. التعديلات اللاحقة على القائمة لا تغيّر هذا التحقق.",
+      "failedTitle": "فشل التحقق",
+      "inProgress": "جارٍ فحص ادعاءات المستند بالرجوع إلى وقائع القائمة…",
+      "loadFailed": "تعذّر تحميل هذا التحقق.",
+      "noClaims": "لم يُعثر على أي ادعاءات في هذا المستند.",
+      "startFailed": "تعذّر بدء التحقق",
+      "status": {
+        "running": "جارٍ التحقق"
+      }
+    },
+    "save": {
+      "failed": "لم يُحفظ",
+      "failedTitle": "لم يُحفظ تغييرك",
+      "saved": "تم الحفظ",
+      "saving": "جارٍ الحفظ…"
     },
     "sourceMediumTooltip": "وسيط المصدر وصف محايد، ولا يخفض الثقة من تلقاء نفسه.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "{count, plural, zero {قبول الادعاءات الروتينية} one {قبول ادعاء روتيني واحد} two {قبول ادعاءين روتينيين} few {قبول # ادعاءات روتينية} many {قبول # ادعاءً روتينيًا} other {قبول # ادعاء روتيني}}",
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
-      "claimStatus": " ({state}{contested, select, true {، محل نزاع} other {}}{superseded, select, true {، استُبدل} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
         "claims": "الادعاءات",
-        "needsJudgement": "تحتاج إلى قرار"
+        "needsJudgement": "تحتاج إلى قرار",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "اختيار قائمة",
+      "evidenceList": "الوقائع من",
+      "noLists": "لا توجد قوائم في هذا الملف القانوني.",
+      "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
-      "page": "الصفحة {page}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
-    "spawnSubagents": {
-      "failed": "فشل"
-    },
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "suggestTitle": "اقتراح عنوان",
@@ -1438,6 +1469,7 @@
     "documentReference": "مرجع المستند",
     "documentTitle": "عنوان المستند",
     "documentation": "التوثيق",
+    "documents": "المستندات",
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
@@ -1477,6 +1509,8 @@
       "inline": "مضمّنة",
       "title": "حفظ الرسالة"
     },
+    "fact": "حقيقة",
+    "failed": "فشل",
     "filter": "تصفية",
     "filters": "عوامل التصفية",
     "find": "بحث",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "العودة إلى التعديل",
     "hideDetails": "إخفاء التفاصيل",
     "hideSecretValue": "إخفاء القيمة السرية",
+    "high": "عالية",
     "history": "السجل",
     "import": "استيراد",
     "invite": "دعوة",
@@ -1538,8 +1573,10 @@
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
+    "low": "منخفضة",
     "matter": "ملف قانوني",
     "matters": "الملفات القانونية",
+    "medium": "متوسطة",
     "members": "الأعضاء",
     "metadata": "البيانات الوصفية",
     "moveDown": "نقل لأسفل",
@@ -1548,6 +1585,7 @@
     "newMatter": "ملف قانوني جديد",
     "newRow": "صف جديد",
     "next": "التالي",
+    "nextMatch": "النتيجة التالية",
     "noFileChosen": "لم يتم اختيار أي ملف",
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
@@ -1559,14 +1597,17 @@
     "or": "أو",
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
+    "page": "الصفحة {page}",
     "pin": "تثبيت",
     "playbooks": "أدلّة المراجعة",
     "preparing": "جارٍ التحضير…",
     "preview": "معاينة",
     "previous": "السابق",
+    "previousMatch": "النتيجة السابقة",
     "print": "طباعة",
     "profile": "الملف الشخصي",
     "properties": "الخصائص",
+    "queued": "قيد الانتظار",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
     "value": "القيمة",
+    "verified": "تم التحقق منه",
     "verify": "تحقّق",
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
@@ -1907,9 +1949,6 @@
     "reject": "رفض",
     "rejectAll": "رفض الكل",
     "revert": "تراجع",
-    "severityHigh": "عالية",
-    "severityLow": "منخفضة",
-    "severityMedium": "متوسطة",
     "severityUnspecified": "غير محدّدة",
     "skipped": "تعذّر التطبيق: {reason}",
     "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر.",
@@ -2414,10 +2453,8 @@
       "findText": "البحث عن نص",
       "matchCase": "مطابقة حالة الأحرف",
       "matchCounter": "{current} / {total}",
-      "next": "النتيجة التالية",
       "nextShortcut": "النتيجة التالية (Enter)",
       "noResults": "لا توجد نتائج",
-      "previous": "النتيجة السابقة",
       "previousShortcut": "النتيجة السابقة (Shift+Enter)",
       "replaceAll": "استبدال الكل",
       "replaceCurrent": "استبدال النتيجة الحالية",
@@ -3013,9 +3050,6 @@
       "reviewing": "المراجعة قيد التنفيذ…",
       "reviewingHint": "قد يستغرق ذلك بضع دقائق للمستندات الكبيرة.",
       "run": "بدء المراجعة",
-      "runStatus": {
-        "queued": "قيد الانتظار"
-      },
       "saveAsPlaybook": "حفظ كدليل مراجعة",
       "saveAsPlaybookFailed": "تعذّر حفظ هذه المراجعة كدليل مراجعة",
       "savedAsPlaybook": "تم الحفظ كدليل مراجعة",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "مثال: ألا تتجاوز مهلة السداد 30 يومًا",
       "saveFailed": "فشل حفظ دليل المراجعة",
       "severity": {
-        "blocker": "حاسمة",
-        "high": "عالية",
-        "low": "منخفضة",
-        "medium": "متوسطة"
+        "blocker": "حاسمة"
       },
       "severityLabel": "الخطورة",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",
-      "fact": "حقيقة",
       "instruction": "تعليمات",
       "preference": "تفضيل",
       "relationship": "علاقة"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "ميزات تجريبية",
+      "betaAvt": "التحقق من المستندات (AVT)",
+      "betaAvtDescription": "تحقق من مستندات الملف القانوني ادعاءً تلو الآخر مقابل وقائع قائمة",
       "betaCaseLawDescription": "إظهار البحث العام في الاجتهاد القضائي والقارئ في الشريط الجانبي",
       "betaDescription": "جرّب ميزات لا تزال قيد التطوير",
       "betaInbox": "صندوق الوارد والإشعارات",
@@ -5078,7 +5110,6 @@
         "title": "هل تريد إزالة روابط قوالب Word؟",
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
-      "defaultPropertyName": "المستندات",
       "desktopEdit": {
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "حذف الخاصية",
       "deletePropertyConfirmDescription": "هل أنت متأكد من رغبتك في حذف الخاصية «{propertyName}»؟ لا يمكن التراجع عن هذا الإجراء.",
       "dependencyLimit": "حتى {max} مدخلاً لكل عمود",
-      "documentsLabel": "المستندات",
       "editColumn": "تعديل العمود",
       "editConditions": "تعديل الشروط",
       "editConditionsDescription": "حدِّد الشروط التي يتم عندها إنشاء هذه الخاصية.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "يشير إلى قيمة أساسية.",
         "needsReview": "يحتاج إلى مراجعة",
         "needsReviewDescription": "يتطلب مراجعة يدوية.",
-        "verified": "تم التحقق منه",
         "verifiedDescription": "تم تأكيده يدويًا."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
       "hideColumn": "إخفاء العمود",
       "layouts": {
+        "avt": "AVT",
         "calendar": "تقويم",
         "grid": "شبكة",
         "kanban": "كانبان",

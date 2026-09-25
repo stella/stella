@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Añadir hecho",
-      "addUnavailable": "No disponible en este entorno de prueba: añadir un hecho requiere una persistencia que aún no está conectada.",
-      "confirmedByReviewer": "Confirmado por el revisor",
+      "addInterpretationNote": "Añadir nota de interpretación",
       "description": "Las pruebas sólidas (correos, mensajes, registros bancarios y hechos acordados) se extraen al registro de hechos de referencia con el que se contrastan las afirmaciones. Revise, edite o añada hechos manualmente.",
-      "editFact": "Editar hecho",
-      "editOrRetype": "Editar / volver a escribir",
+      "editInterpretationNote": "Editar nota de interpretación",
+      "empty": "Marque elementos de esta lista como hechos con los que contrastar los documentos.",
       "extractionAndReview": "Extracción y revisión",
       "factCount": "{count, plural, one {# hecho} other {# hechos}}",
-      "factText": "Texto del hecho de referencia",
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
       "heldForReview": "Pendiente de revisión",
-      "importSource": "Importar fuente",
-      "importUnavailable": "No disponible en este entorno de prueba: importar una fuente requiere una ingesta y un almacenamiento que aún no están conectados.",
-      "interpretation": "Interpretación",
+      "holdOutOfScoring": "Excluir de la puntuación",
+      "includeInScoring": "Incluir en la puntuación",
+      "interpretationNote": "Nota de interpretación",
+      "interpretationNotePlaceholder": "Si el significado de esta prueba es cuestionado, explique cómo. Déjelo en blanco si no lo es.",
       "interpretiveConfidence": "Confianza interpretativa",
+      "openList": "Abrir lista",
       "record": "Registro de hechos de referencia",
-      "sourceAndProvenance": "Fuente y procedencia",
-      "timePeriod": "Periodo",
+      "setConfidence": "Establecer confianza",
       "title": "Hechos de referencia"
     },
     "claimDetail": {
       "escalatedReview": "Remitido al equipo de pruebas: no hay un resultado que confirmar o impugnar hasta que se resuelva el conflicto subyacente.",
-      "factId": "Hecho {id}",
       "flagDispute": "Marcar discrepancia",
       "humanReview": "Revisión humana",
       "interpretationCaveat": "Un hecho relacionado contiene una salvedad interpretativa sustancial: lo incierto es el significado de la prueba, no el formato del que procede.",
       "notVerifiable": {
-        "pending": "No hay ningún modelo en vivo conectado en esta versión: el resultado es <strong>Sin cobertura, comprobación pendiente</strong>.",
         "reopen": "Reabrir → contrastar con el registro",
-        "reopenExplanation": "<strong>Reservada como no verificable.</strong> Si la afirmación puede comprobarse, vuelva a abrirla: AVT conserva la reclasificación y ejecuta únicamente la comprobación del registro que se omitió."
+        "reopenExplanation": "<strong>Reservada como no verificable.</strong> Si la afirmación puede comprobarse, vuelva a abrirla: AVT conserva la reclasificación y ejecuta únicamente la comprobación del registro que se omitió.",
+        "reopenedPending": "Reabierta como afirmación comprobable. Se muestra como <strong>Sin cobertura</strong> hasta que el documento se vuelva a verificar."
       },
       "note": {
         "add": "Añadir nota / corrección",
         "heading": "Su nota · {savedAt}",
+        "headingUndated": "Su nota",
         "placeholder": "Anote una corrección o explicación. Al guardar, la nota se vincula solo a esta afirmación; no cambia el resultado ni el registro de hechos de referencia.",
         "saveCorrection": "Guardar corrección"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Un revisor ha registrado un resultado diferente. El análisis inferior es el del sistema y no se ha modificado.",
       "overrideVerdict": "Cambiar resultado",
       "recordConflict": {
-        "dateDecides": "Por qué la fecha determina el resultado",
         "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
-        "escalated": "Marcado localmente para que el equipo de pruebas haga seguimiento. El conflicto del registro permanece abierto y se contabiliza hasta que se seleccione una fuente prevalente.",
+        "escalatedNotice": "Marcado para el equipo de pruebas. El conflicto del registro permanece abierto y se contabiliza hasta que se elija un registro prevalente.",
         "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
-        "governingPreview": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>. Ambos registros de prueba permanecen sin cambios.",
-        "governingPreviewWithVerdict": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>, con el resultado <strong>{verdict}</strong>. Ambos registros de prueba permanecen sin cambios.",
-        "oppositeSides": "Las dos fechas están en <emphasis>lados opuestos</emphasis> del hecho determinante. El registro que prevalezca decide el resultado; resolver aquí el conflicto fija directamente el resultado.",
+        "governed": "<strong>{value}</strong> prevalece: la afirmación se valora frente a este registro. El otro registro permanece archivado.",
         "reconcile": "Conciliar el registro",
-        "resultAsAt": "A <strong>{date}</strong>, {note}",
         "title": "Pruebas contradictorias en el registro",
-        "treatAsGoverning": "Considerar prevalente {id}"
+        "treatAsGoverningRecord": "Considerar prevalente"
       },
       "relation": {
         "conflicts": "Contradice",
@@ -196,7 +190,6 @@
       },
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
-      "revisedLater": "Modificada en una declaración posterior",
       "score": {
         "anchorFactsDisagree": "Los hechos de referencia discrepan",
         "conflictCount": "{count, plural, one {# conflicto} other {# conflictos}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# respaldo} other {# respaldos}}",
         "verdictWithheld": "Resultado retenido"
       },
-      "timeline": {
-        "asAt": "A <strong>{date}</strong>",
-        "asAtDate": "Fecha de referencia",
-        "preview": "Previsualice la afirmación frente al registro de prueba <emphasis>a</emphasis> una fecha determinada. Resultado preliminar: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# fuente} other {# fuentes}}",
       "whyScore": "Motivo de esta puntuación: hechos de referencia"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Confianza interpretativa: hasta qué punto es inequívoco el significado de esta prueba. Es independiente del formato de la fuente (manuscrito, escaneo, etc.)."
     },
     "confirm": {
+      "acknowledge": "Entendido",
       "recordConflict": "Confirmar resolución",
       "supported": "Confirmar: listo",
       "verdict": "Confirmar resultado"
-    },
-    "devHarness": {
-      "localSessionNotice": "Solo sesión local: nada se guarda. Todas las revisiones, notas y modificaciones de hechos de referencia permanecen en esta pestaña y se pierden al actualizarla.",
-      "title": "Herramienta de verificación de referencia: entorno de desarrollo",
-      "verifyDocument": "Verificar documento"
     },
     "disposition": {
       "contested": "El resultado es claro, pero se cuestiona la interpretación de un hecho relacionado; conviene revisarlo antes de aprobar.",
@@ -250,6 +235,15 @@
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
       "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado."
     },
+    "documents": {
+      "claimSummary": "Contradicha: {contradicted} · En tensión: {tension} · Conflicto del registro: {conflicts}",
+      "empty": "Suba un documento a este asunto para verificarlo.",
+      "notVerified": "Aún no verificado",
+      "otherList": "Verificado con otra lista",
+      "sizeConfirmTitle": "¿Verificar este documento?",
+      "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
+      "verifyAgain": "Volver a verificar"
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# coincidencia} other {# coincidencias}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Impugnada · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Aceptada como rutinaria} other {Revisada}} · {decidedAt}",
+      "undo": "Deshacer decisión"
+    },
+    "runs": {
+      "back": "Todos los documentos",
+      "errors": {
+        "aiUnavailable": "No hay ningún modelo de IA disponible para verificar documentos. Revise la configuración de IA de la organización.",
+        "enqueueFailed": "No se pudo iniciar la verificación. Inténtelo de nuevo.",
+        "extractionFailed": "No se pudieron extraer las afirmaciones de este documento.",
+        "gradingFailed": "No se pudieron contrastar las afirmaciones con los hechos de la lista.",
+        "internal": "La verificación falló de forma inesperada.",
+        "noText": "No se pudo leer ningún texto de este documento.",
+        "pinContentChanged": "El documento cambió después de iniciar la verificación. Vuelva a verificarlo.",
+        "pinUnresolved": "Ya no se puede encontrar la versión del documento con la que se inició esta verificación.",
+        "unsupportedFormat": "Solo se pueden verificar archivos DOCX, PDF y archivos con una versión en PDF."
+      },
+      "evidencePinned": "Verificado con {count, plural, one {# hecho} other {# hechos}} tal y como constaban el {checkedAt}. Las ediciones posteriores de la lista no modifican esta verificación.",
+      "failedTitle": "Error en la verificación",
+      "inProgress": "Contrastando las afirmaciones del documento con los hechos de la lista…",
+      "loadFailed": "No se pudo cargar esta verificación.",
+      "noClaims": "No se encontraron afirmaciones en este documento.",
+      "startFailed": "No se pudo iniciar la verificación",
+      "status": {
+        "running": "Verificando"
+      }
+    },
+    "save": {
+      "failed": "No guardado",
+      "failedTitle": "No se guardó su cambio",
+      "saved": "Guardado",
+      "saving": "Guardando…"
     },
     "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "Aceptar {count, plural, one {# afirmación rutinaria} other {# afirmaciones rutinarias}}",
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
-      "claimStatus": " ({state}{contested, select, true {, cuestionada} other {}}{superseded, select, true {, sustituida} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
         "claims": "Afirmaciones",
-        "needsJudgement": "Requieren valoración"
+        "needsJudgement": "Requieren valoración",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Elegir una lista",
+      "evidenceList": "Hechos de",
+      "noLists": "Este asunto no tiene listas.",
+      "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
-      "page": "Página {page}",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
       "perPage": "Por página"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",
-    "spawnSubagents": {
-      "failed": "Falló"
-    },
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "suggestTitle": "Sugerir un título",
@@ -1438,6 +1469,7 @@
     "documentReference": "Referencia del documento",
     "documentTitle": "Título del documento",
     "documentation": "Documentación",
+    "documents": "Documentos",
     "done": "Hecho",
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
@@ -1477,6 +1509,8 @@
       "inline": "En línea",
       "title": "Guardar mensaje"
     },
+    "fact": "Hecho",
+    "failed": "Falló",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Buscar",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Volver a editar",
     "hideDetails": "Ocultar detalles",
     "hideSecretValue": "Ocultar valor secreto",
+    "high": "Alta",
     "history": "Historial",
     "import": "Importar",
     "invite": "Invitar",
@@ -1538,8 +1573,10 @@
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
+    "low": "Baja",
     "matter": "Asunto",
     "matters": "Asuntos",
+    "medium": "Media",
     "members": "Miembros",
     "metadata": "Metadatos",
     "moveDown": "Mover abajo",
@@ -1548,6 +1585,7 @@
     "newMatter": "Nuevo asunto",
     "newRow": "Nueva fila",
     "next": "Siguiente",
+    "nextMatch": "Siguiente coincidencia",
     "noFileChosen": "Ningún archivo seleccionado",
     "noResults": "Sin resultados",
     "noVersions": "Sin historial de versiones",
@@ -1559,14 +1597,17 @@
     "or": "O",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
+    "page": "Página {page}",
     "pin": "Fijar",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",
     "preview": "Vista previa",
     "previous": "Anterior",
+    "previousMatch": "Coincidencia anterior",
     "print": "Imprimir",
     "profile": "Perfil",
     "properties": "Propiedades",
+    "queued": "En cola",
     "reconnecting": "Reconectando…",
     "reference": "Referencia",
     "refresh": "Actualizar",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "mi-organizacion",
     "user": "Usuario",
     "value": "Valor",
+    "verified": "Verificado",
     "verify": "Verificar",
     "version": "Versión",
     "versionLabel": "Versión {version}",
@@ -1907,9 +1949,6 @@
     "reject": "Rechazar",
     "rejectAll": "Rechazar todo",
     "revert": "Revertir",
-    "severityHigh": "Alta",
-    "severityLow": "Baja",
-    "severityMedium": "Media",
     "severityUnspecified": "Sin especificar",
     "skipped": "No se pudo aplicar: {reason}",
     "staleResolution": "Esta sugerencia ya se resolvió en otro lugar.",
@@ -2414,10 +2453,8 @@
       "findText": "Texto a buscar",
       "matchCase": "Coincidir mayúsculas",
       "matchCounter": "{current} / {total}",
-      "next": "Siguiente coincidencia",
       "nextShortcut": "Siguiente coincidencia (Enter)",
       "noResults": "Sin resultados",
-      "previous": "Coincidencia anterior",
       "previousShortcut": "Coincidencia anterior (Shift+Enter)",
       "replaceAll": "Reemplazar todo",
       "replaceCurrent": "Reemplazar coincidencia actual",
@@ -3013,9 +3050,6 @@
       "reviewing": "Revisión en curso…",
       "reviewingHint": "Esto puede tardar unos minutos con documentos grandes.",
       "run": "Iniciar revisión",
-      "runStatus": {
-        "queued": "En cola"
-      },
       "saveAsPlaybook": "Guardar como playbook",
       "saveAsPlaybookFailed": "No se pudo guardar esta revisión como playbook",
       "savedAsPlaybook": "Guardado como playbook",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "p. ej. El plazo de pago no debe superar los 30 días",
       "saveFailed": "No se pudo guardar el playbook",
       "severity": {
-        "blocker": "Bloqueante",
-        "high": "Alta",
-        "low": "Baja",
-        "medium": "Media"
+        "blocker": "Bloqueante"
       },
       "severityLabel": "Gravedad",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Aún no hay nada en la memoria.",
     "kinds": {
       "decision": "Decisión",
-      "fact": "Hecho",
       "instruction": "Instrucción",
       "preference": "Preferencia",
       "relationship": "Relación"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Funciones beta",
+      "betaAvt": "Verificación de documentos AVT",
+      "betaAvtDescription": "Comprobar los documentos de un asunto, afirmación por afirmación, frente a los hechos de una lista",
       "betaCaseLawDescription": "Mostrar la búsqueda y el lector de jurisprudencia pública en la barra lateral",
       "betaDescription": "Prueba funciones que aún están en desarrollo",
       "betaInbox": "Bandeja de entrada y notificaciones",
@@ -5078,7 +5110,6 @@
         "title": "¿Quitar los enlaces a plantillas de Word?",
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
-      "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Eliminar propiedad",
       "deletePropertyConfirmDescription": "¿Está seguro de que desea eliminar la propiedad \"{propertyName}\"? Esta acción no se puede deshacer.",
       "dependencyLimit": "Como máximo {max} entradas por columna",
-      "documentsLabel": "Documentos",
       "editColumn": "Editar columna",
       "editConditions": "Editar condiciones",
       "editConditionsDescription": "Establezca las condiciones para generar esta propiedad.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Marca un valor clave.",
         "needsReview": "Revisar",
         "needsReviewDescription": "Requiere revisión manual.",
-        "verified": "Verificado",
         "verifiedDescription": "Confirmado manualmente."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# elemento} other {# elementos}}",
       "hideColumn": "Ocultar columna",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Calendario",
         "grid": "Cuadrícula",
         "kanban": "Kanban",

@@ -11,12 +11,17 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   parseStoredViewLayout,
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
+import {
+  avtLayoutErrorDetail,
+  rejectAvtLayout,
+} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -83,6 +88,17 @@ const createView = createSafeHandler(
             status: 400,
             message: "Views limit reached",
           });
+        }
+
+        const avtRejection = await rejectAvtLayout({
+          tx,
+          workspaceId,
+          layout,
+          legalListsEnabled: legalListsDeployed(),
+        });
+        if (avtRejection !== null) {
+          // Nothing is written yet, so returning commits no partial view.
+          return { type: "rejected" as const, rejection: avtRejection };
         }
 
         const resolvedTemplateProperties = await resolveTemplateProperties({
@@ -153,6 +169,7 @@ const createView = createSafeHandler(
         });
 
         return {
+          type: "created" as const,
           view: {
             version: 1 as const,
             id: inserted.id,
@@ -164,6 +181,11 @@ const createView = createSafeHandler(
         };
       }),
     );
+    if (txResult.type === "rejected") {
+      return Result.err(
+        new HandlerError(avtLayoutErrorDetail(txResult.rejection)),
+      );
+    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,

@@ -2967,7 +2967,7 @@ const HISTORY_RUN_DATE_FORMAT = {
 // so it reads out of the same words rather than a second set that would drift
 // from them one locale at a time.
 const RUN_STATUS_LABEL_KEYS = {
-  queued: "inspector.review.runStatus.queued",
+  queued: "common.queued",
   running: "flows.status.running",
   completed: "flows.status.completed",
   failed: "flows.status.failed",
@@ -4628,9 +4628,9 @@ const findingCaption = (
 /** Severity as a word, so the meta slot reads without a legend. Total over the
  *  vocabulary: a new severity must say how it reads rather than render blank. */
 const SEVERITY_LABEL_KEY = {
-  high: "docxReview.severityHigh",
-  medium: "docxReview.severityMedium",
-  low: "docxReview.severityLow",
+  high: "common.high",
+  medium: "common.medium",
+  low: "common.low",
   unspecified: "docxReview.severityUnspecified",
 } as const satisfies Record<ReviewSeverityKey, TranslationKey>;
 

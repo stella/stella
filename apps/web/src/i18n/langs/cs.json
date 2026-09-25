@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Přidat fakt",
-      "addUnavailable": "V tomto testovacím prostředí není k dispozici — přidání faktu vyžaduje dosud nezapojené trvalé úložiště.",
-      "confirmedByReviewer": "Potvrzeno kontrolující osobou",
+      "addInterpretationNote": "Přidat poznámku k výkladu",
       "description": "Přímé důkazy — e-maily, zprávy, bankovní záznamy, nesporné skutečnosti — zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
-      "editFact": "Upravit fakt",
-      "editOrRetype": "Upravit / přepsat",
+      "editInterpretationNote": "Upravit poznámku k výkladu",
+      "empty": "Označte položky tohoto seznamu jako fakta, proti nimž se budou kontrolovat dokumenty.",
       "extractionAndReview": "Extrakce a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} other {# faktů}}",
-      "factText": "Text referenčního faktu",
       "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong> — jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
       "heldForReview": "Pozastaveno ke kontrole",
-      "importSource": "Importovat zdroj",
-      "importUnavailable": "V tomto testovacím prostředí není k dispozici — import zdroje vyžaduje dosud nezapojené zpracování a úložiště.",
-      "interpretation": "Výklad",
+      "holdOutOfScoring": "Vyloučit z hodnocení",
+      "includeInScoring": "Zahrnout do hodnocení",
+      "interpretationNote": "Poznámka k výkladu",
+      "interpretationNotePlaceholder": "Pokud je význam tohoto důkazu sporný, popište jak. Pokud sporný není, nechte pole prázdné.",
       "interpretiveConfidence": "Jistota výkladu",
+      "openList": "Otevřít seznam",
       "record": "Soubor referenčních faktů",
-      "sourceAndProvenance": "Zdroj a původ",
-      "timePeriod": "Časové období",
+      "setConfidence": "Nastavit jistotu",
       "title": "Referenční fakta"
     },
     "claimDetail": {
       "escalatedReview": "Předáno týmu pro důkazy — dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
-      "factId": "Fakt {id}",
       "flagDispute": "Označit rozpor",
       "humanReview": "Lidská kontrola",
       "interpretationCaveat": "Jedno z použitých fakt nese závažnou výkladovou výhradu — nejistý je význam důkazu, nikoli médium, z něhož pochází.",
       "notVerifiable": {
-        "pending": "V této verzi není zapojen žádný živý model — výsledek je <strong>Bez pokrytí, čeká na kontrolu</strong>.",
         "reopen": "Znovu otevřít → porovnat se záznamy",
-        "reopenExplanation": "<strong>Odloženo jako neověřitelné.</strong> Pokud lze toto tvrzení ve skutečnosti ověřit, znovu je otevřete: AVT zachová vaši změnu klasifikace a provede pouze dříve přeskočené porovnání se záznamy."
+        "reopenExplanation": "<strong>Odloženo jako neověřitelné.</strong> Pokud lze toto tvrzení ve skutečnosti ověřit, znovu je otevřete: AVT zachová vaši změnu klasifikace a provede pouze dříve přeskočené porovnání se záznamy.",
+        "reopenedPending": "Znovu otevřeno jako ověřitelné tvrzení. Dokud dokument nebude znovu ověřen, zobrazuje se jako <strong>Bez pokrytí</strong>."
       },
       "note": {
         "add": "Přidat poznámku / opravu",
         "heading": "Vaše poznámka · {savedAt}",
+        "headingUndated": "Vaše poznámka",
         "placeholder": "Zaznamenejte opravu nebo vysvětlení. Uložená poznámka se vztahuje pouze k tomuto tvrzení — nemění závěr ani soubor referenčních faktů.",
         "saveCorrection": "Uložit opravu"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Kontrolující osoba zaznamenala jiný závěr. Níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideVerdict": "Změnit závěr",
       "recordConflict": {
-        "dateDecides": "Proč o závěru rozhoduje datum",
         "description": "Dva referenční fakty se týkají stejné otázky — <strong>{subject}</strong> — ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání — nástroj ji nesmí provést bez upozornění.",
-        "escalated": "Místně označeno k prověření týmem pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující zdroj.",
+        "escalatedNotice": "Označeno pro tým pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující záznam.",
         "flagForEvidenceTeam": "Označit pro tým pro důkazy",
-        "governingPreview": "Tento místní náhled považuje <strong>{factId}</strong> za rozhodující a posuzuje tvrzení podle hodnoty <strong>{value}</strong>. Oba testovací záznamy zůstávají beze změny.",
-        "governingPreviewWithVerdict": "Tento místní náhled považuje <strong>{factId}</strong> za rozhodující a posuzuje tvrzení podle hodnoty <strong>{value}</strong> — výsledkem je <strong>{verdict}</strong>. Oba testovací záznamy zůstávají beze změny.",
-        "oppositeSides": "Tato dvě data leží na <emphasis>opačných stranách</emphasis> rozhodné události. Výsledek určí záznam, který bude rozhodující — vyřešení rozporu zde proto přímo stanoví závěr.",
+        "governed": "<strong>{value}</strong> je rozhodující: tvrzení se posuzuje podle tohoto záznamu. Druhý záznam zůstává evidován.",
         "reconcile": "Vyřešit rozpor v záznamech",
-        "resultAsAt": "Ke dni <strong>{date}</strong> {note}",
         "title": "Rozporné důkazy v záznamech",
-        "treatAsGoverning": "Považovat {id} za rozhodující"
+        "treatAsGoverningRecord": "Považovat za rozhodující"
       },
       "relation": {
         "conflicts": "Odporuje",
@@ -196,7 +190,6 @@
       },
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
-      "revisedLater": "Později upraveno v dalším prohlášení",
       "score": {
         "anchorFactsDisagree": "Referenční fakta si odporují",
         "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} other {# rozporů}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# podpůrný fakt} few {# podpůrné fakty} other {# podpůrných faktů}}",
         "verdictWithheld": "Závěr nevydán"
       },
-      "timeline": {
-        "asAt": "Ke dni <strong>{date}</strong>",
-        "asAtDate": "Rozhodné datum",
-        "preview": "Náhled porovnává tvrzení s testovacími záznamy <emphasis>ke</emphasis> zvolenému dni. Předběžný závěr: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
       "whyScore": "Odůvodnění hodnocení — referenční fakta"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Jistota výkladu — nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
     },
     "confirm": {
+      "acknowledge": "Vzít na vědomí",
       "recordConflict": "Potvrdit řešení",
       "supported": "Potvrdit — připraveno",
       "verdict": "Potvrdit závěr"
-    },
-    "devHarness": {
-      "localSessionNotice": "Pouze místní relace — nic se neukládá. Všechny kontroly, poznámky a úpravy referenčních faktů existují jen na této kartě prohlížeče a po obnovení stránky se ztratí.",
-      "title": "Nástroj pro ověřování podle referenčních faktů — testovací prostředí",
-      "verifyDocument": "Ověřit dokument"
     },
     "disposition": {
       "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný — před schválením si zaslouží vaši pozornost.",
@@ -250,6 +235,15 @@
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně — není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta."
     },
+    "documents": {
+      "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",
+      "empty": "Nahrajte do tohoto spisu dokument, který chcete ověřit.",
+      "notVerified": "Zatím neověřeno",
+      "otherList": "Zkontrolováno podle jiného seznamu",
+      "sizeConfirmTitle": "Ověřit tento dokument?",
+      "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
+      "verifyAgain": "Ověřit znovu"
+    },
     "guidance": {
       "escalate": "Předat dál",
       "manualJudgement": "Vyžaduje úsudek",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Zpochybněno · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}} · {decidedAt}",
+      "undo": "Vrátit rozhodnutí"
+    },
+    "runs": {
+      "back": "Všechny dokumenty",
+      "errors": {
+        "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",
+        "enqueueFailed": "Ověření se nepodařilo spustit. Zkuste to znovu.",
+        "extractionFailed": "Tvrzení v tomto dokumentu se nepodařilo extrahovat.",
+        "gradingFailed": "Tvrzení se nepodařilo porovnat s fakty ze seznamu.",
+        "internal": "Ověření neočekávaně selhalo.",
+        "noText": "Z tohoto dokumentu se nepodařilo přečíst žádný text.",
+        "pinContentChanged": "Dokument se po zahájení ověření změnil. Ověřte jej znovu.",
+        "pinUnresolved": "Verzi dokumentu, u které bylo toto ověření zahájeno, se již nedaří najít.",
+        "unsupportedFormat": "Ověřit lze pouze soubory DOCX, PDF a soubory s vygenerovanou verzí PDF."
+      },
+      "evidencePinned": "Ověřeno vůči {count, plural, one {# faktu} few {# faktům} many {# faktům} other {# faktům}} ve stavu ke dni {checkedAt}. Pozdější úpravy seznamu toto ověření nemění.",
+      "failedTitle": "Ověření se nezdařilo",
+      "inProgress": "Porovnávání tvrzení dokumentu s fakty seznamu…",
+      "loadFailed": "Toto ověření se nepodařilo načíst.",
+      "noClaims": "V tomto dokumentu nebyla nalezena žádná tvrzení.",
+      "startFailed": "Ověření se nepodařilo spustit",
+      "status": {
+        "running": "Ověřování"
+      }
+    },
+    "save": {
+      "failed": "Neuloženo",
+      "failedTitle": "Vaše změna nebyla uložena",
+      "saved": "Uloženo",
+      "saving": "Ukládání…"
     },
     "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "Přijmout {count, plural, one {# rutinní tvrzení} few {# rutinní tvrzení} other {# rutinních tvrzení}}",
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
-      "claimStatus": " ({state}{contested, select, true {, sporné} other {}}{superseded, select, true {, nahrazené} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
         "claims": "Tvrzení",
-        "needsJudgement": "Vyžaduje úsudek"
+        "needsJudgement": "Vyžaduje úsudek",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Vybrat seznam",
+      "evidenceList": "Fakta ze seznamu",
+      "noLists": "Tento spis nemá žádné seznamy.",
+      "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Přejít na stránku {page}",
       "label": "Stránky výsledků",
-      "page": "Stránka {page}",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",
-    "spawnSubagents": {
-      "failed": "Selhalo"
-    },
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
     "suggestTitle": "Navrhnout název",
@@ -1438,6 +1469,7 @@
     "documentReference": "Referenční číslo dokumentu",
     "documentTitle": "Název dokumentu",
     "documentation": "Dokumentace",
+    "documents": "Dokumenty",
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikem přejmenujete",
     "download": "Stáhnout",
@@ -1477,6 +1509,8 @@
       "inline": "V textu",
       "title": "Uložit zprávu"
     },
+    "fact": "Fakt",
+    "failed": "Selhalo",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Najít",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Zpět k úpravám",
     "hideDetails": "Skrýt podrobnosti",
     "hideSecretValue": "Skrýt tajnou hodnotu",
+    "high": "Vysoká",
     "history": "Historie",
     "import": "Importovat",
     "invite": "Pozvat",
@@ -1538,8 +1573,10 @@
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
+    "low": "Nízká",
     "matter": "Spis",
     "matters": "Spisy",
+    "medium": "Střední",
     "members": "Členové",
     "metadata": "Metadata",
     "moveDown": "Posunout dolů",
@@ -1548,6 +1585,7 @@
     "newMatter": "Nový spis",
     "newRow": "Nový řádek",
     "next": "Pokračovat",
+    "nextMatch": "Další výskyt",
     "noFileChosen": "Žádný soubor nebyl vybrán",
     "noResults": "Žádné výsledky",
     "noVersions": "Žádná historie verzí",
@@ -1559,14 +1597,17 @@
     "or": "Nebo",
     "organization": "Organizace",
     "organizationName": "Název organizace",
+    "page": "Stránka {page}",
     "pin": "Připnout",
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
     "previous": "Předchozí",
+    "previousMatch": "Předchozí výskyt",
     "print": "Tisknout",
     "profile": "Profil",
     "properties": "Vlastnosti",
+    "queued": "Ve frontě",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "value": "Hodnota",
+    "verified": "Ověřeno",
     "verify": "Ověřit",
     "version": "Verze",
     "versionLabel": "Verze {version}",
@@ -1907,9 +1949,6 @@
     "reject": "Odmítnout",
     "rejectAll": "Odmítnout vše",
     "revert": "Vrátit zpět",
-    "severityHigh": "Vysoká",
-    "severityLow": "Nízká",
-    "severityMedium": "Střední",
     "severityUnspecified": "Bez závažnosti",
     "skipped": "Nelze použít: {reason}",
     "staleResolution": "Tento návrh byl již vyřešen jinde.",
@@ -2414,10 +2453,8 @@
       "findText": "Hledaný text",
       "matchCase": "Rozlišovat velikost",
       "matchCounter": "{current} / {total}",
-      "next": "Další výskyt",
       "nextShortcut": "Další výskyt (Enter)",
       "noResults": "Žádné výsledky",
-      "previous": "Předchozí výskyt",
       "previousShortcut": "Předchozí výskyt (Shift+Enter)",
       "replaceAll": "Nahradit vše",
       "replaceCurrent": "Nahradit aktuální výskyt",
@@ -3013,9 +3050,6 @@
       "reviewing": "Probíhá kontrola…",
       "reviewingHint": "U rozsáhlých dokumentů může kontrola trvat až několik minut.",
       "run": "Spustit kontrolu",
-      "runStatus": {
-        "queued": "Ve frontě"
-      },
       "saveAsPlaybook": "Uložit jako playbook",
       "saveAsPlaybookFailed": "Kontrolu se nepodařilo uložit jako playbook",
       "savedAsPlaybook": "Uloženo jako playbook",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "např. Splatnost faktur nesmí přesáhnout 30 dnů",
       "saveFailed": "Playbook se nepodařilo uložit",
       "severity": {
-        "blocker": "Blokující",
-        "high": "Vysoká",
-        "low": "Nízká",
-        "medium": "Střední"
+        "blocker": "Blokující"
       },
       "severityLabel": "Závažnost",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Zatím žádná paměť.",
     "kinds": {
       "decision": "Rozhodnutí",
-      "fact": "Fakt",
       "instruction": "Pokyn",
       "preference": "Preference",
       "relationship": "Vztah"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Beta funkce",
+      "betaAvt": "Ověřování dokumentů AVT",
+      "betaAvtDescription": "Kontrolujte dokumenty spisu tvrzení po tvrzení proti faktům ze seznamu",
       "betaCaseLawDescription": "Zobrazit veřejné vyhledávání a čtečku judikatury v postranním panelu",
       "betaDescription": "Vyzkoušejte funkce, které jsou stále ve vývoji",
       "betaInbox": "Doručené a oznámení",
@@ -5078,7 +5110,6 @@
         "title": "Odebrat odkazy na vzory Wordu?",
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
-      "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Smazat sloupec",
       "deletePropertyConfirmDescription": "Opravdu chcete smazat sloupec \"{propertyName}\"? Tuto akci nelze vrátit.",
       "dependencyLimit": "Nejvýše {max} vstupů na sloupec",
-      "documentsLabel": "Dokumenty",
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Zvýrazňuje klíčovou hodnotu.",
         "needsReview": "Zkontrolovat",
         "needsReviewDescription": "Vyžaduje ruční kontrolu.",
-        "verified": "Ověřeno",
         "verifiedDescription": "Ručně potvrzeno."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
       "hideColumn": "Skrýt sloupec",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalendář",
         "grid": "Mřížka",
         "kanban": "Kanban",

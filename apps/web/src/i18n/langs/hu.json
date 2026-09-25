@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Tény hozzáadása",
-      "addUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy tény hozzáadásához még nincs bekötve a tartós tárolás.",
-      "confirmedByReviewer": "Ellenőr által megerősítve",
+      "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
       "description": "Közvetlen bizonyítékok — e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények — olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
-      "editFact": "Tény szerkesztése",
-      "editOrRetype": "Szerkesztés / újragépelés",
+      "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
+      "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
       "extractionAndReview": "Kinyerés és ellenőrzés",
       "factCount": "{count, plural, one {# tény} other {# tény}}",
-      "factText": "A referenciatény szövege",
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
-      "importSource": "Forrás importálása",
-      "importUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy forrás importálásához még nincs bekötve az adatbevitel és a tárolás.",
-      "interpretation": "Értelmezés",
+      "holdOutOfScoring": "Kihagyás a pontozásból",
+      "includeInScoring": "Bevonás a pontozásba",
+      "interpretationNote": "Értelmezési megjegyzés",
+      "interpretationNotePlaceholder": "Ha e bizonyíték jelentése vitatott, írja le, miben. Ha nem, hagyja üresen.",
       "interpretiveConfidence": "Értelmezési bizonyosság",
+      "openList": "Lista megnyitása",
       "record": "Referenciatény-nyilvántartás",
-      "sourceAndProvenance": "Forrás és eredet",
-      "timePeriod": "Időszak",
+      "setConfidence": "Bizonyosság beállítása",
       "title": "Referenciatények"
     },
     "claimDetail": {
       "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak — az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
-      "factId": "{id}. tény",
       "flagDispute": "Vita megjelölése",
       "humanReview": "Emberi ellenőrzés",
       "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik — a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
       "notVerifiable": {
-        "pending": "Ebben a verzióban nincs bekötve működő modell — az eredmény: <strong>Nincs lefedettség, ellenőrzésre vár</strong>.",
         "reopen": "Újranyitás → összevetés a nyilvántartással",
-        "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le."
+        "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le.",
+        "reopenedPending": "Ellenőrizhető állításként újranyitva. Addig <strong>Nincs lefedettség</strong> jelöléssel jelenik meg, amíg az irat ismételt ellenőrzése meg nem történik."
       },
       "note": {
         "add": "Megjegyzés / javítás hozzáadása",
         "heading": "Saját megjegyzés · {savedAt}",
+        "headingUndated": "Saját megjegyzés",
         "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést — nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
         "saveCorrection": "Javítás mentése"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
-        "dateDecides": "Miért a dátum dönti el a következtetést",
         "description": "Két referenciatény ugyanarra a kérdésre vonatkozik — <strong>{subject}</strong> —, de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli — az eszköz nem dönthet erről észrevétlenül.",
-        "escalated": "Helyben megjelölve a bizonyítékkezelő csapat általi nyomon követésre. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó forrás.",
+        "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
-        "governingPreview": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást. Mindkét tesztadat változatlan marad.",
-        "governingPreviewWithVerdict": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást — a következtetés: <strong>{verdict}</strong>. Mindkét tesztadat változatlan marad.",
-        "oppositeSides": "A két dátum a határesemény <emphasis>ellentétes oldalára</emphasis> esik. Az eredményt az dönti el, melyik nyilvántartás az irányadó — az ellentmondás itteni feloldása ezért közvetlenül meghatározza a következtetést.",
+        "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
         "reconcile": "Nyilvántartási ellentmondás feloldása",
-        "resultAsAt": "<strong>{date}</strong> napján: {note}",
         "title": "Ellentmondó bizonyítékok a nyilvántartásban",
-        "treatAsGoverning": "A(z) {id} legyen irányadó"
+        "treatAsGoverningRecord": "Legyen irányadó"
       },
       "relation": {
         "conflicts": "Ellentmond",
@@ -196,7 +190,6 @@
       },
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
-      "revisedLater": "Egy későbbi nyilatkozatban módosítva",
       "score": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
         "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
         "verdictWithheld": "Következtetés visszatartva"
       },
-      "timeline": {
-        "asAt": "<strong>{date}</strong> napján",
-        "asAtDate": "Vonatkozási dátum",
-        "preview": "Az állítás összevetése a tesztadatokkal egy kiválasztott időpontra <emphasis>vonatkozóan</emphasis>. Előzetes következtetés: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
       "whyScore": "A pontszám indoka — referenciatények"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Értelmezési bizonyosság — mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
     },
     "confirm": {
+      "acknowledge": "Tudomásul veszem",
       "recordConflict": "Feloldás megerősítése",
       "supported": "Megerősítés — kész",
       "verdict": "Következtetés megerősítése"
-    },
-    "devHarness": {
-      "localSessionNotice": "Csak helyi munkamenet — semmi nem kerül mentésre. Minden ellenőrzés, megjegyzés és referenciatény-módosítás csak ezen a böngészőlapon él, és frissítéskor elveszik.",
-      "title": "Referenciatény-ellenőrző eszköz — tesztkörnyezet",
-      "verifyDocument": "Irat ellenőrzése"
     },
     "disposition": {
       "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott — jóváhagyás előtt érdemes átnézni.",
@@ -250,6 +235,15 @@
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte — nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
     },
+    "documents": {
+      "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
+      "empty": "Töltsön fel egy iratot ehhez az ügyhöz, hogy ellenőrizhesse.",
+      "notVerified": "Még nincs ellenőrizve",
+      "otherList": "Másik listához viszonyítva ellenőrizve",
+      "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
+      "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
+      "verifyAgain": "Ismételt ellenőrzés"
+    },
     "guidance": {
       "escalate": "Továbbítás",
       "manualJudgement": "Emberi mérlegelés",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Vitatott · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}} · {decidedAt}",
+      "undo": "Döntés visszavonása"
+    },
+    "runs": {
+      "back": "Összes irat",
+      "errors": {
+        "aiUnavailable": "Nem érhető el AI-modell az iratok ellenőrzéséhez. Ellenőrizze a szervezet AI-beállításait.",
+        "enqueueFailed": "Az ellenőrzést nem sikerült elindítani. Próbálja újra.",
+        "extractionFailed": "Ennek az iratnak az állításait nem sikerült kinyerni.",
+        "gradingFailed": "Az állításokat nem sikerült összevetni a lista tényeivel.",
+        "internal": "Az ellenőrzés váratlanul meghiúsult.",
+        "noText": "Ebből az iratból nem sikerült szöveget kiolvasni.",
+        "pinContentChanged": "Az irat az ellenőrzés kezdete után megváltozott. Ellenőrizze újra.",
+        "pinUnresolved": "Az az iratverzió, amelyen ez az ellenőrzés elindult, már nem található.",
+        "unsupportedFormat": "Csak DOCX-fájlok, PDF-ek és PDF-verzióval rendelkező fájlok ellenőrizhetők."
+      },
+      "evidencePinned": "Ellenőrizve {count, plural, one {# tény} other {# tény}} alapján, ahogyan azok {checkedAt} napon álltak. A lista későbbi módosításai nem változtatják meg ezt az ellenőrzést.",
+      "failedTitle": "Az ellenőrzés sikertelen",
+      "inProgress": "Az irat állításainak összevetése a lista tényeivel…",
+      "loadFailed": "Ezt az ellenőrzést nem sikerült betölteni.",
+      "noClaims": "Ebben az iratban nem található állítás.",
+      "startFailed": "Az ellenőrzést nem sikerült elindítani",
+      "status": {
+        "running": "Ellenőrzés folyamatban"
+      }
+    },
+    "save": {
+      "failed": "Nincs mentve",
+      "failedTitle": "A módosítás mentése sikertelen volt",
+      "saved": "Mentve",
+      "saving": "Mentés…"
     },
     "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
-      "claimStatus": " ({state}{contested, select, true {, vitatott} other {}}{superseded, select, true {, felváltott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
         "claims": "Állítások",
-        "needsJudgement": "Mérlegelést igényel"
+        "needsJudgement": "Mérlegelést igényel",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Lista kiválasztása",
+      "evidenceList": "Tények forrása",
+      "noLists": "Ehhez az ügyhöz nem tartozik lista.",
+      "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
-      "page": "{page}. oldal",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
-    "spawnSubagents": {
-      "failed": "Sikertelen"
-    },
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "suggestTitle": "Cím javaslata",
@@ -1438,6 +1469,7 @@
     "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",
+    "documents": "Dokumentumok",
     "done": "Kész",
     "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
@@ -1477,6 +1509,8 @@
       "inline": "Szövegközi",
       "title": "Üzenet mentése"
     },
+    "fact": "Tény",
+    "failed": "Sikertelen",
     "filter": "Szűrő",
     "filters": "Szűrők",
     "find": "Keresés",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Vissza a szerkesztéshez",
     "hideDetails": "Részletek elrejtése",
     "hideSecretValue": "Titkos érték elrejtése",
+    "high": "Magas",
     "history": "Előzmények",
     "import": "Importálás",
     "invite": "Meghívás",
@@ -1538,8 +1573,10 @@
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
+    "low": "Alacsony",
     "matter": "Ügy",
     "matters": "Ügyek",
+    "medium": "Közepes",
     "members": "Tagok",
     "metadata": "Metaadatok",
     "moveDown": "Mozgatás le",
@@ -1548,6 +1585,7 @@
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
+    "nextMatch": "Következő találat",
     "noFileChosen": "Nincs kiválasztott fájl",
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
@@ -1559,14 +1597,17 @@
     "or": "Vagy",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
+    "page": "{page}. oldal",
     "pin": "Rögzítés",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
     "previous": "Előző",
+    "previousMatch": "Előző találat",
     "print": "Nyomtatás",
     "profile": "Profil",
     "properties": "Tulajdonságok",
+    "queued": "Sorba állítva",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
     "value": "Érték",
+    "verified": "Ellenőrizve",
     "verify": "Ellenőrzés",
     "version": "Verzió",
     "versionLabel": "{version}. verzió",
@@ -1907,9 +1949,6 @@
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",
     "revert": "Visszaállítás",
-    "severityHigh": "Magas",
-    "severityLow": "Alacsony",
-    "severityMedium": "Közepes",
     "severityUnspecified": "Nincs megadva",
     "skipped": "Nem sikerült alkalmazni: {reason}",
     "staleResolution": "Ezt a javaslatot már máshol elbírálták.",
@@ -2414,10 +2453,8 @@
       "findText": "Keresett szöveg",
       "matchCase": "Kis- és nagybetű megkülönböztetése",
       "matchCounter": "{current} / {total}",
-      "next": "Következő találat",
       "nextShortcut": "Következő találat (Enter)",
       "noResults": "Nincs találat",
-      "previous": "Előző találat",
       "previousShortcut": "Előző találat (Shift+Enter)",
       "replaceAll": "Összes cseréje",
       "replaceCurrent": "Jelenlegi találat cseréje",
@@ -3013,9 +3050,6 @@
       "reviewing": "Ellenőrzés folyamatban…",
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",
       "run": "Ellenőrzés indítása",
-      "runStatus": {
-        "queued": "Sorba állítva"
-      },
       "saveAsPlaybook": "Mentés playbookként",
       "saveAsPlaybookFailed": "Ezt az ellenőrzést nem sikerült playbookként menteni",
       "savedAsPlaybook": "Playbookként mentve",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "pl. A fizetési határidő nem haladhatja meg a 30 napot",
       "saveFailed": "A playbook mentése nem sikerült",
       "severity": {
-        "blocker": "Blokkoló",
-        "high": "Magas",
-        "low": "Alacsony",
-        "medium": "Közepes"
+        "blocker": "Blokkoló"
       },
       "severityLabel": "Súlyosság",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",
-      "fact": "Tény",
       "instruction": "Utasítás",
       "preference": "Preferencia",
       "relationship": "Kapcsolat"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Béta funkciók",
+      "betaAvt": "AVT iratellenőrzés",
+      "betaAvtDescription": "Az ügy iratainak ellenőrzése állításonként egy lista tényeivel szemben",
       "betaCaseLawDescription": "A nyilvános ítélkezési gyakorlat keresőjének és olvasójának megjelenítése az oldalsávban",
       "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "betaInbox": "Beérkezett üzenetek és értesítések",
@@ -5078,7 +5110,6 @@
         "title": "Eltávolítja a Word-sablonok hivatkozásait?",
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
-      "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",
         "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Tulajdonság törlése",
       "deletePropertyConfirmDescription": "Biztosan törölni szeretné a(z) \"{propertyName}\" tulajdonságot? Ez a művelet nem vonható vissza.",
       "dependencyLimit": "Oszloponként legfeljebb {max} bemenet",
-      "documentsLabel": "Dokumentumok",
       "editColumn": "Oszlop szerkesztése",
       "editConditions": "Feltételek szerkesztése",
       "editConditionsDescription": "Adja meg a feltételeket, amelyek mellett ez a tulajdonság generálódjon.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Kulcsértéket jelöl.",
         "needsReview": "Ellenőrizendő",
         "needsReviewDescription": "Kézi ellenőrzést igényel.",
-        "verified": "Ellenőrizve",
         "verifiedDescription": "Kézzel megerősítve."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# elem} other {# elem}}",
       "hideColumn": "Oszlop elrejtése",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Naptár",
         "grid": "Rács",
         "kanban": "Kanban",

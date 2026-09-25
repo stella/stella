@@ -72,6 +72,7 @@ import {
 } from "@/api/lib/search/projection-repair-queue";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -201,7 +202,7 @@ const remapLayout = (
     };
   }
 
-  return base;
+  return portableLayout(base);
 };
 
 const collectFileCopies = (content: FieldContent): FileCopy[] => {

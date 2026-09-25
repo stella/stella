@@ -1,6 +1,6 @@
 import type { WorkspaceView } from "@/lib/types";
 import type { TableColumnLayout } from "@/lib/workspaces/column-layout";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 
 type UseViewColumnLayoutInput = {
   workspaceId: string;

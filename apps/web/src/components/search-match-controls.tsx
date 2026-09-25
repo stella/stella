@@ -33,21 +33,21 @@ export const SearchMatchControls = ({
           : t("common.noResults")}
       </span>
       <Button
-        aria-label={t("folio.findReplace.previous")}
+        aria-label={t("common.previousMatch")}
         disabled={!hasMatches}
         onClick={onPrevious}
         size="icon-xs"
-        title={t("folio.findReplace.previous")}
+        title={t("common.previousMatch")}
         variant="ghost"
       >
         <ChevronUpIcon className="size-3.5" />
       </Button>
       <Button
-        aria-label={t("folio.findReplace.next")}
+        aria-label={t("common.nextMatch")}
         disabled={!hasMatches}
         onClick={onNext}
         size="icon-xs"
-        title={t("folio.findReplace.next")}
+        title={t("common.nextMatch")}
         variant="ghost"
       >
         <ChevronDownIcon className="size-3.5" />

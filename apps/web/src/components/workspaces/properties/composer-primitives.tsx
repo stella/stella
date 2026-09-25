@@ -177,7 +177,7 @@ export const ReadingFromRow = ({
       {fileChips.map((chip) => (
         <ReadingChip
           key={chip.id}
-          label={chip.name || t("workspaces.properties.documentsLabel")}
+          label={chip.name || t("common.documents")}
           onRemove={() => onRemoveFile(chip.id)}
         />
       ))}

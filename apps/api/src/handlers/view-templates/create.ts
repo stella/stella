@@ -20,6 +20,7 @@ import {
   cleanStalePropertyIds,
   hasDuplicateSorts,
   hasMultipleKindFilters,
+  portableLayout,
 } from "@/api/lib/views/utils";
 
 const createViewTemplateBodySchema = t.Object(
@@ -53,7 +54,7 @@ const createViewTemplate = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const layout = parseViewLayout(body.layout);
+    const layout = portableLayout(parseViewLayout(body.layout));
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(

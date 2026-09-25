@@ -61,7 +61,7 @@ export const REVIEW_FLAG_PRESENTATION = {
     icon: CheckCircle2Icon,
     color: "var(--option-emerald)",
     background: "var(--option-emerald-bg)",
-    labelKey: "workspaces.table.flags.verified",
+    labelKey: "common.verified",
   },
 } as const satisfies Record<ReviewFlag, ReviewFlagPresentation>;
 

@@ -150,7 +150,7 @@ const SubtaskStatus = ({ callStatus, status }: SubtaskStatusProps) => {
   if (status === "failed") {
     return (
       <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
-        {t("chat.spawnSubagents.failed")}
+        {t("common.failed")}
       </span>
     );
   }
@@ -186,7 +186,7 @@ const CallStatusIndicator = ({ status }: CallStatusIndicatorProps) => {
     case SPAWN_SUBAGENTS_CALL_STATUS.failed:
       return (
         <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs ms-auto flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
-          {t("chat.spawnSubagents.failed")}
+          {t("common.failed")}
         </span>
       );
     case SPAWN_SUBAGENTS_CALL_STATUS.awaitingApproval:

@@ -12,9 +12,9 @@ import type { TableColumnSizingLayout } from "@/components/workspaces/table/use-
 import { omitUtilityColumnSizing } from "@/components/workspaces/table/use-table-state.logic";
 import type { WorkspaceView } from "@/lib/types";
 import type { TableColumnLayout } from "@/lib/workspaces/column-layout";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const EMPTY_ROW_SELECTION = {};
 

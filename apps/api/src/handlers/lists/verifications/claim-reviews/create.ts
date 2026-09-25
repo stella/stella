@@ -30,8 +30,8 @@ import {
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
 
-const literals = <T extends string>(values: readonly T[]) =>
-  t.Union(values.map((value) => t.Literal(value)));
+// `t.UnionEnum` over the const tuples keeps the literal unions in the
+// inferred body type, which the web client reads its types from.
 
 /** Events are stored as sent and never rewritten, so a key the schema does
  *  not name is refused rather than kept. */
@@ -41,14 +41,14 @@ const eventSchema = t.Union([
   t.Object(
     {
       kind: t.Literal("status"),
-      status: t.Nullable(literals(CLAIM_REVIEW_STATUSES)),
+      status: t.Nullable(t.UnionEnum(CLAIM_REVIEW_STATUSES)),
     },
     STRICT,
   ),
   t.Object(
     {
       kind: t.Literal("override"),
-      state: t.Nullable(literals(CLAIM_OVERRIDE_STATES)),
+      state: t.Nullable(t.UnionEnum(CLAIM_OVERRIDE_STATES)),
     },
     STRICT,
   ),

@@ -38,6 +38,8 @@ export const LIMITS = {
   legalListGenerationCandidateSourcesMax: 10,
   legalListGenerationRunsPageSizeDefault: 20,
   legalListGenerationRunsPageSizeMax: 100,
+  legalListVerificationRunsPageSizeDefault: 20,
+  legalListVerificationRunsPageSizeMax: 50,
   legalListActivityPageSizeDefault: 50,
   legalListActivityPageSizeMax: 200,
   workspacesCount: WORKSPACES_PER_ORGANIZATION_MAX,

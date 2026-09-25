@@ -15,6 +15,8 @@ const folder2 = toSafeId<"entity">("folder_2");
 const folder3 = toSafeId<"entity">("folder_3");
 const entity1 = toSafeId<"entity">("entity_1");
 const entity2 = toSafeId<"entity">("entity_2");
+const field1 = toSafeId<"field">("field_1");
+const field2 = toSafeId<"field">("field_2");
 
 const createContext = ({
   query,
@@ -69,13 +71,14 @@ describe("organizer entity lists", () => {
     expect(result.limit).toBe(2);
   });
 
-  test("files return a cursor page with only organizer fields", async () => {
+  test("files return a cursor page with the file field of each document", async () => {
     const result = await listFiles.handler(
       createFilesContext({
         query: { limit: 1 },
         rows: [
           {
             entityId: entity1,
+            fieldId: field1,
             name: "Document",
             parentId: null,
             createdAt,
@@ -94,6 +97,7 @@ describe("organizer entity lists", () => {
           },
           {
             entityId: entity2,
+            fieldId: field2,
             name: "Notes",
             parentId: null,
             createdAt,
@@ -122,6 +126,7 @@ describe("organizer entity lists", () => {
     expect(result.items).toEqual([
       {
         entityId: entity1,
+        fieldId: field1,
         name: "Document",
         parentId: null,
         fileName: "Document.pdf",

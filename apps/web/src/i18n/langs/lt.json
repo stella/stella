@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Pridėti faktą",
-      "addUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: faktui pridėti reikia dar neprijungto nuolatinio saugojimo.",
-      "confirmedByReviewer": "Patvirtino tikrintojas",
+      "addInterpretationNote": "Pridėti aiškinimo pastabą",
       "description": "Patikimi įrodymai, pavyzdžiui, el. laiškai, žinutės, banko įrašai ir sutarti faktai, išskirti į atraminių faktų registrą, su kuriuo tikrinami teiginiai. Peržiūrėkite, redaguokite arba pridėkite faktų rankiniu būdu.",
-      "editFact": "Redaguoti faktą",
-      "editOrRetype": "Redaguoti arba įvesti iš naujo",
+      "editInterpretationNote": "Redaguoti aiškinimo pastabą",
+      "empty": "Pažymėkite šio sąrašo elementus kaip faktus, pagal kuriuos bus tikrinami dokumentai.",
       "extractionAndReview": "Išskyrimas ir peržiūra",
       "factCount": "{count, plural, one {# faktas} few {# faktai} many {# faktų} other {# fakto}}",
-      "factText": "Atraminio fakto tekstas",
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
       "heldForReview": "Sulaikyta peržiūrai",
-      "importSource": "Importuoti šaltinį",
-      "importUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: šaltiniui importuoti reikia dar neprijungto duomenų gavimo ir saugojimo.",
-      "interpretation": "Aiškinimas",
+      "holdOutOfScoring": "Neįtraukti į vertinimą",
+      "includeInScoring": "Įtraukti į vertinimą",
+      "interpretationNote": "Aiškinimo pastaba",
+      "interpretationNotePlaceholder": "Jei šio įrodymo reikšmė yra ginčijama, aprašykite, kaip. Jei ne, palikite lauką tuščią.",
       "interpretiveConfidence": "Aiškinimo patikimumas",
+      "openList": "Atverti sąrašą",
       "record": "Atraminių faktų registras",
-      "sourceAndProvenance": "Šaltinis ir kilmė",
-      "timePeriod": "Laikotarpis",
+      "setConfidence": "Nustatyti patikimumą",
       "title": "Atraminiai faktai"
     },
     "claimDetail": {
       "escalatedReview": "Perduota įrodymų grupei: kol neišspręstas pagrindinis prieštaravimas, čia nėra išvados, kurią būtų galima patvirtinti ar ginčyti.",
-      "factId": "Faktas {id}",
       "flagDispute": "Pažymėti ginčą",
       "humanReview": "Žmogaus peržiūra",
       "interpretationCaveat": "Dėl vieno iš susijusių faktų yra esminė aiškinimo išlyga: neaiški įrodymo reikšmė, o ne jo laikmena.",
       "notVerifiable": {
-        "pending": "Šioje versijoje neprijungtas tiesioginis modelis: rezultatas yra <strong>Nėra aprėpties, laukiama patikros</strong>.",
         "reopen": "Atverti iš naujo → tikrinti pagal registrą",
-        "reopenExplanation": "<strong>Atidėta kaip nepatikrinama.</strong> Jei šį teiginį iš tiesų galima patikrinti, atverkite jį iš naujo: AVT išsaugos jūsų perklasifikavimą ir atliks tik anksčiau praleistą patikrą pagal registrą."
+        "reopenExplanation": "<strong>Atidėta kaip nepatikrinama.</strong> Jei šį teiginį iš tiesų galima patikrinti, atverkite jį iš naujo: AVT išsaugos jūsų perklasifikavimą ir atliks tik anksčiau praleistą patikrą pagal registrą.",
+        "reopenedPending": "Atverta iš naujo kaip patikrinamas teiginys. Kol dokumentas nebus patikrintas iš naujo, jis rodomas kaip <strong>Nėra aprėpties</strong>."
       },
       "note": {
         "add": "Pridėti pastabą arba pataisą",
         "heading": "Jūsų pastaba · {savedAt}",
+        "headingUndated": "Jūsų pastaba",
         "placeholder": "Įrašykite pataisą arba paaiškinimą. Išsaugojus pastaba susiejama tik su šiuo teiginiu; išvada ir atraminių faktų registras nesikeičia.",
         "saveCorrection": "Išsaugoti pataisą"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Tikrintojas įrašė kitą išvadą. Toliau rodoma nepakeista paties įrankio analizė.",
       "overrideVerdict": "Pakeisti išvadą",
       "recordConflict": {
-        "dateDecides": "Kodėl data lemia išvadą",
         "description": "Du atraminiai faktai susiję su tuo pačiu dalyku, <strong>{subject}</strong>, tačiau vienas kitam prieštarauja. Abu yra <strong>didelio patikimumo</strong> šaltiniai, todėl tai nėra patikimumo problema: pats registras yra vidujai prieštaringas. AVT nepateikia išvados ir nevertina teiginio, nes pasirinkti vieną įrašą vietoj kito turite jūs ir šį pasirinkimą turite užfiksuoti; įrankis neturėtų to daryti neatsiklausęs.",
-        "escalated": "Pažymėta vietoje tolesnei įrodymų grupės peržiūrai. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis šaltinis.",
+        "escalatedNotice": "Pažymėta įrodymų grupei. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis įrašas.",
         "flagForEvidenceTeam": "Perduoti įrodymų grupei",
-        "governingPreview": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
-        "governingPreviewWithVerdict": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>; gaunama išvada <strong>{verdict}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
-        "oppositeSides": "Šios dvi datos yra <emphasis>skirtingose ribinio įvykio pusėse</emphasis>. Rezultatą lemia tai, kuris įrašas laikomas vadovaujamuoju, todėl čia išsprendus prieštaravimą tiesiogiai nustatoma išvada.",
+        "governed": "<strong>{value}</strong> yra vadovaujamasis: teiginys vertinamas pagal šį įrašą. Kitas įrašas lieka registre.",
         "reconcile": "Suderinti registrą",
-        "resultAsAt": "<strong>{date}</strong> dieną {note}",
         "title": "Prieštaringi įrodymai registre",
-        "treatAsGoverning": "Laikyti {id} vadovaujamuoju"
+        "treatAsGoverningRecord": "Laikyti vadovaujamuoju"
       },
       "relation": {
         "conflicts": "Prieštarauja",
@@ -196,7 +190,6 @@
       },
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
-      "revisedLater": "Pakeista vėlesniame pareiškime",
       "score": {
         "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
         "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
         "verdictWithheld": "Išvada nepateikta"
       },
-      "timeline": {
-        "asAt": "<strong>{date}</strong> dieną",
-        "asAtDate": "Vertinimo data",
-        "preview": "Peržiūrėkite teiginį pagal pavyzdinį registrą pasirinktos datos <emphasis>būklei</emphasis>. Peržiūros išvada: <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
       "whyScore": "Balų pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Aiškinimo patikimumas rodo, kiek vienareikšmė yra įrodymo prasmė. Jis nepriklauso nuo šaltinio laikmenos, pavyzdžiui, rašysenos ar nuskaitymo."
     },
     "confirm": {
+      "acknowledge": "Supratau",
       "recordConflict": "Patvirtinti sprendimą",
       "supported": "Patvirtinti: paruošta",
       "verdict": "Patvirtinti išvadą"
-    },
-    "devHarness": {
-      "localSessionNotice": "Tik vietinė sesija: niekas neišsaugoma. Visos peržiūros, pastabos ir atraminių faktų pakeitimai laikomi šiame naršyklės skirtuke ir prarandami jį atnaujinus.",
-      "title": "Atraminių faktų tikrinimo įrankio bandymo aplinka",
-      "verifyDocument": "Tikrinti dokumentą"
     },
     "disposition": {
       "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
@@ -250,6 +235,15 @@
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
       "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus."
     },
+    "documents": {
+      "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",
+      "empty": "Įkelkite į šią bylą dokumentą, kad jį patikrintumėte.",
+      "notVerified": "Dar nepatikrinta",
+      "otherList": "Patikrinta pagal kitą sąrašą",
+      "sizeConfirmTitle": "Patikrinti šį dokumentą?",
+      "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
+      "verifyAgain": "Tikrinti iš naujo"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Užginčyta · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}} · {decidedAt}",
+      "undo": "Anuliuoti sprendimą"
+    },
+    "runs": {
+      "back": "Visi dokumentai",
+      "errors": {
+        "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
+        "enqueueFailed": "Nepavyko pradėti tikrinimo. Bandykite dar kartą.",
+        "extractionFailed": "Nepavyko išskirti šiame dokumente esančių teiginių.",
+        "gradingFailed": "Nepavyko patikrinti teiginių pagal sąrašo faktus.",
+        "internal": "Tikrinimas netikėtai nepavyko.",
+        "noText": "Iš šio dokumento nepavyko nuskaityti teksto.",
+        "pinContentChanged": "Dokumentas pasikeitė pradėjus tikrinimą. Patikrinkite jį iš naujo.",
+        "pinUnresolved": "Dokumento versijos, su kuria buvo pradėtas šis tikrinimas, daugiau rasti nepavyksta.",
+        "unsupportedFormat": "Tikrinti galima tik DOCX, PDF failus ir failus, turinčius PDF versiją."
+      },
+      "evidencePinned": "Patikrinta pagal {count, plural, one {# faktą} few {# faktus} many {# faktų} other {# fakto}}, buvusius tokius, kokie buvo {checkedAt}. Vėlesni sąrašo pakeitimai šio tikrinimo nekeičia.",
+      "failedTitle": "Tikrinimas nepavyko",
+      "inProgress": "Tikrinami dokumento teiginiai pagal sąrašo faktus…",
+      "loadFailed": "Nepavyko įkelti šio tikrinimo.",
+      "noClaims": "Šiame dokumente teiginių nerasta.",
+      "startFailed": "Nepavyko pradėti tikrinimo",
+      "status": {
+        "running": "Tikrinama"
+      }
+    },
+    "save": {
+      "failed": "Neišsaugota",
+      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas",
+      "saved": "Išsaugota",
+      "saving": "Išsaugoma…"
     },
     "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "{count, plural, one {Priimti # įprastą teiginį} few {Priimti # įprastus teiginius} many {Priimti # įprastų teiginių} other {Priimti # įprasto teiginio}}",
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
-      "claimStatus": " ({state}{contested, select, true {, ginčijama} other {}}{superseded, select, true {, pakeista} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
         "claims": "Teiginiai",
-        "needsJudgement": "Reikia sprendimo"
+        "needsJudgement": "Reikia sprendimo",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Pasirinkti sąrašą",
+      "evidenceList": "Faktai iš",
+      "noLists": "Šioje byloje nėra sąrašų.",
+      "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
-      "page": "{page} psl.",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",
-    "spawnSubagents": {
-      "failed": "Nepavyko"
-    },
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "suggestTitle": "Pasiūlyti pavadinimą",
@@ -1438,6 +1469,7 @@
     "documentReference": "Dokumento nuorodos numeris",
     "documentTitle": "Dokumento pavadinimas",
     "documentation": "Dokumentacija",
+    "documents": "Dokumentai",
     "done": "Atlikta",
     "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
@@ -1477,6 +1509,8 @@
       "inline": "Tekste",
       "title": "Išsaugoti žinutę"
     },
+    "fact": "Faktas",
+    "failed": "Nepavyko",
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Grįžti į redagavimą",
     "hideDetails": "Slėpti detales",
     "hideSecretValue": "Slėpti slaptą reikšmę",
+    "high": "Aukšta",
     "history": "Istorija",
     "import": "Importuoti",
     "invite": "Pakviesti",
@@ -1538,8 +1573,10 @@
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
+    "low": "Žema",
     "matter": "Byla",
     "matters": "Bylos",
+    "medium": "Vidutinė",
     "members": "Nariai",
     "metadata": "Metaduomenys",
     "moveDown": "Perkelti žemyn",
@@ -1548,6 +1585,7 @@
     "newMatter": "Nauja byla",
     "newRow": "Nauja eilutė",
     "next": "Toliau",
+    "nextMatch": "Kitas atitikmuo",
     "noFileChosen": "Failas nepasirinktas",
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
@@ -1559,14 +1597,17 @@
     "or": "Arba",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
+    "page": "{page} psl.",
     "pin": "Prisegti",
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
     "previous": "Ankstesnis",
+    "previousMatch": "Ankstesnis atitikmuo",
     "print": "Spausdinti",
     "profile": "Profilis",
     "properties": "Savybės",
+    "queued": "Eilėje",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "value": "Reikšmė",
+    "verified": "Patvirtinta",
     "verify": "Patvirtinti",
     "version": "Versija",
     "versionLabel": "{version} versija",
@@ -1907,9 +1949,6 @@
     "reject": "Atmesti",
     "rejectAll": "Atmesti visus",
     "revert": "Atstatyti",
-    "severityHigh": "Aukšta",
-    "severityLow": "Žema",
-    "severityMedium": "Vidutinė",
     "severityUnspecified": "Nenurodyta",
     "skipped": "Nepavyko pritaikyti: {reason}",
     "staleResolution": "Šis pasiūlymas jau išspręstas kitur.",
@@ -2414,10 +2453,8 @@
       "findText": "Ieškomas tekstas",
       "matchCase": "Skirti didžiąsias ir mažąsias raides",
       "matchCounter": "{current} / {total}",
-      "next": "Kitas atitikmuo",
       "nextShortcut": "Kitas atitikmuo (Enter)",
       "noResults": "Rezultatų nėra",
-      "previous": "Ankstesnis atitikmuo",
       "previousShortcut": "Ankstesnis atitikmuo (Shift+Enter)",
       "replaceAll": "Pakeisti viską",
       "replaceCurrent": "Pakeisti dabartinį atitikmenį",
@@ -3013,9 +3050,6 @@
       "reviewing": "Peržiūra vykdoma…",
       "reviewingHint": "Didelių dokumentų peržiūra gali užtrukti kelias minutes.",
       "run": "Pradėti peržiūrą",
-      "runStatus": {
-        "queued": "Eilėje"
-      },
       "saveAsPlaybook": "Išsaugoti kaip peržiūros vadovą",
       "saveAsPlaybookFailed": "Nepavyko išsaugoti šios peržiūros kaip peržiūros vadovo",
       "savedAsPlaybook": "Išsaugota kaip peržiūros vadovas",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "pvz. Mokėjimo terminas negali viršyti 30 dienų",
       "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
       "severity": {
-        "blocker": "Blokuojanti",
-        "high": "Aukšta",
-        "low": "Žema",
-        "medium": "Vidutinė"
+        "blocker": "Blokuojanti"
       },
       "severityLabel": "Svarba",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Atmintyje kol kas nieko nėra.",
     "kinds": {
       "decision": "Sprendimas",
-      "fact": "Faktas",
       "instruction": "Nurodymas",
       "preference": "Pageidavimas",
       "relationship": "Ryšys"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Beta funkcijos",
+      "betaAvt": "AVT dokumentų tikrinimas",
+      "betaAvtDescription": "Tikrinti bylos dokumentus teiginys po teiginio pagal sąrašo faktus",
       "betaCaseLawDescription": "Rodyti viešą teismų praktikos paiešką ir skaityklę šoninėje juostoje",
       "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "betaInbox": "Gautieji ir pranešimai",
@@ -5078,7 +5110,6 @@
         "title": "Pašalinti „Word“ šablonų saitus?",
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
-      "defaultPropertyName": "Dokumentai",
       "desktopEdit": {
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Ištrinti savybę",
       "deletePropertyConfirmDescription": "Ar tikrai norite ištrinti savybę \"{propertyName}\"? Šio veiksmo negalima atšaukti.",
       "dependencyLimit": "Iki {max} įvesčių viename stulpelyje",
-      "documentsLabel": "Dokumentai",
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",
       "editConditionsDescription": "Nustatykite sąlygas, kada ši savybė turi būti generuojama.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Pažymi esminę reikšmę.",
         "needsReview": "Reikia peržiūros",
         "needsReviewDescription": "Reikia rankinės peržiūros.",
-        "verified": "Patvirtinta",
         "verifiedDescription": "Patvirtinta rankiniu būdu."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Kalendorius",
         "grid": "Tinklelis",
         "kanban": "Kanban",

@@ -14,6 +14,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -27,12 +28,12 @@ type MemoryRowProps = {
 };
 
 const MEMORY_KIND_KEYS = {
-  preference: "kinds.preference",
-  instruction: "kinds.instruction",
-  fact: "kinds.fact",
-  decision: "kinds.decision",
-  relationship: "kinds.relationship",
-} as const satisfies Record<MemoryListItem["kind"], string>;
+  preference: "memory.kinds.preference",
+  instruction: "memory.kinds.instruction",
+  fact: "common.fact",
+  decision: "memory.kinds.decision",
+  relationship: "memory.kinds.relationship",
+} as const satisfies Record<MemoryListItem["kind"], TranslationKey>;
 
 const MEMORY_SOURCE_KEYS = {
   user: "sources.user",
@@ -46,6 +47,7 @@ export const MemoryRow = ({
   memory,
 }: MemoryRowProps) => {
   const t = useTranslations("memory");
+  const tRoot = useTranslations();
   const commonT = useTranslations("common");
   const tErrors = useTranslations("errors");
   const format = useFormatter();
@@ -92,7 +94,7 @@ export const MemoryRow = ({
     <div className="bg-card flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
         <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
-          {t(MEMORY_KIND_KEYS[memory.kind])}
+          {tRoot(MEMORY_KIND_KEYS[memory.kind])}
         </span>
         <MemoryActions
           canManage={canManage}

@@ -381,7 +381,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
         {counter}
       </span>
       <Button
-        aria-label={t("folio.findReplace.previous")}
+        aria-label={t("common.previousMatch")}
         disabled={matchCount === 0}
         onClick={previousMatch}
         size="icon-xs"
@@ -391,7 +391,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
         <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
       </Button>
       <Button
-        aria-label={t("folio.findReplace.next")}
+        aria-label={t("common.nextMatch")}
         disabled={matchCount === 0}
         onClick={nextMatch}
         size="icon-xs"

@@ -78,6 +78,7 @@ import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
 } from "@/lib/workspaces/mutations/use-create-file-entities";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
   isGradableProperty,
   isPlaybookVerdictProperty,
@@ -96,7 +97,6 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 type KanbanViewProps = {
   view: WorkspaceView;

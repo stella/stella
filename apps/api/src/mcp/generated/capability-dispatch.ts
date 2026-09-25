@@ -524,6 +524,13 @@ export const CAPABILITY_DISPATCH = {
   "lists.verifications.get": {
     load: async () => await import("@/api/handlers/lists/verifications/get"),
   },
+  "lists.verifications.latest.list": {
+    load: async () =>
+      await import("@/api/handlers/lists/verifications/latest/list"),
+  },
+  "lists.verifications.list": {
+    load: async () => await import("@/api/handlers/lists/verifications/list"),
+  },
   "matters.anonymization-allowlist.create": {
     load: async () =>
       await import("@/api/handlers/workspaces/anonymization-allowlist/create"),

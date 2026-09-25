@@ -22,6 +22,7 @@ import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/wo
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   visibleEntityFieldIds,
@@ -40,7 +41,6 @@ import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
 import { useViewTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-table-state";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const loadTableDevtoolsGate = async () => {
   const tableDevtoolsModule =

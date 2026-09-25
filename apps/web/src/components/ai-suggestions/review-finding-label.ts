@@ -117,7 +117,7 @@ export const findingLabelMessage = (
  */
 const SEVERITY_WORD_KEYS = {
   blocker: "knowledge.playbooks.severity.blocker",
-  high: "knowledge.playbooks.severity.high",
+  high: "common.high",
   medium: null,
   low: null,
 } as const satisfies Record<ReviewSeverity, TranslationKey | null>;

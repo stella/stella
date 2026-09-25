@@ -139,40 +139,38 @@ type Messages = {
   };
   "avt": {
     "anchorFacts": {
-      "addFact": "Add fact";
-      "addUnavailable": "Not available in this harness — adding a fact needs persistence that is not wired up yet.";
-      "confirmedByReviewer": "Confirmed by reviewer";
+      "addInterpretationNote": "Add interpretation note";
       "description": "Hard evidence — emails, messages, bank records, agreed facts — extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.";
-      "editFact": "Edit fact";
-      "editOrRetype": "Edit / retype";
+      "editInterpretationNote": "Edit interpretation note";
+      "empty": "Mark items of this list as facts to check documents against them.";
       "extractionAndReview": "Extraction & review";
       "factCount": "{count, plural, one {# fact} other {# facts}}";
-      "factText": "Anchor fact text";
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
-      "importSource": "Import source";
-      "importUnavailable": "Not available in this harness — importing a source needs ingestion and storage that are not wired up yet.";
-      "interpretation": "Interpretation";
+      "holdOutOfScoring": "Hold out of scoring";
+      "includeInScoring": "Include in scoring";
+      "interpretationNote": "Interpretation note";
+      "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
       "interpretiveConfidence": "Interpretive confidence";
+      "openList": "Open list";
       "record": "Anchor-fact record";
-      "sourceAndProvenance": "Source & provenance";
-      "timePeriod": "Time period";
+      "setConfidence": "Set confidence";
       "title": "Anchor facts";
     };
     "claimDetail": {
       "escalatedReview": "Escalated to the evidence team — no verdict to confirm or dispute here until the underlying conflict is resolved.";
-      "factId": "Fact {id}";
       "flagDispute": "Flag dispute";
       "humanReview": "Human review";
       "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat — what the evidence means, not the medium it came in, is what is uncertain.";
       "notVerifiable": {
-        "pending": "No live model wired up in this build — landed on <strong>No coverage, pending check</strong>.";
         "reopen": "Re-open → check against record";
         "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.";
+        "reopenedPending": "Re-opened as a checkable claim. It shows as <strong>No coverage</strong> until the document is verified again.";
       };
       "note": {
         "add": "Add note / correction";
         "heading": "Your note · {savedAt}";
+        "headingUndated": "Your note";
         "placeholder": "Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record.";
         "saveCorrection": "Save correction";
       };
@@ -181,17 +179,13 @@ type Messages = {
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.";
       "overrideVerdict": "Override verdict";
       "recordConflict": {
-        "dateDecides": "Why the date decides the verdict";
         "description": "Two anchor facts speak to the same point — <strong>{subject}</strong> — but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record — not one the tool should make silently.";
-        "escalated": "Marked locally for evidence-team follow-up. The record conflict remains open and counted until a governing source is selected.";
+        "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.";
         "flagForEvidenceTeam": "Flag for evidence team";
-        "governingPreview": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong>. Both fixture records remain unchanged.";
-        "governingPreviewWithVerdict": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong> — landing on <strong>{verdict}</strong>. Both fixture records remain unchanged.";
-        "oppositeSides": "The two dates fall on <emphasis>opposite sides</emphasis> of the boundary event. Whichever record governs decides the outcome — so resolving the conflict here directly sets the verdict.";
+        "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.";
         "reconcile": "Reconcile the record";
-        "resultAsAt": "As at <strong>{date}</strong>, the {note}";
         "title": "Conflicting evidence in the record";
-        "treatAsGoverning": "Treat {id} as governing";
+        "treatAsGoverningRecord": "Treat as governing";
       };
       "relation": {
         "conflicts": "Conflicts";
@@ -199,7 +193,6 @@ type Messages = {
       };
       "reopened": "Re-opened, check pending";
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.";
-      "revisedLater": "Revised in a later statement";
       "score": {
         "anchorFactsDisagree": "Anchor facts disagree";
         "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}";
@@ -209,11 +202,7 @@ type Messages = {
         "supportCount": "{count, plural, one {# support} other {# supports}}";
         "verdictWithheld": "Verdict withheld";
       };
-      "timeline": {
-        "asAt": "As at <strong>{date}</strong>";
-        "asAtDate": "As-at date";
-        "preview": "Preview the claim against the fixture record <emphasis>as at</emphasis> a chosen date. Preview verdict: <strong>{verdict}</strong>.";
-      };
+      "sourceCount": "{count, plural, one {# source} other {# sources}}";
       "whyScore": "Why this score — anchor facts";
     };
     "claimTypes": {
@@ -235,14 +224,10 @@ type Messages = {
       "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.).";
     };
     "confirm": {
+      "acknowledge": "Mark as noted";
       "recordConflict": "Confirm resolution";
       "supported": "Confirm — ready";
       "verdict": "Confirm verdict";
-    };
-    "devHarness": {
-      "localSessionNotice": "Local session only — nothing here is saved. Every review, note, and anchor-fact edit lives in this browser tab and is lost on refresh.";
-      "title": "Anchor Verification Tool — dev harness";
-      "verifyDocument": "Verify document";
     };
     "disposition": {
       "contested": "The verdict is clean, but a contributing fact's interpretation is contested — worth your eyes before sign-off.";
@@ -253,6 +238,15 @@ type Messages = {
       "supported": "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.";
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.";
     };
+    "documents": {
+      "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}";
+      "empty": "Upload a document to this matter to verify it.";
+      "notVerified": "Not verified yet";
+      "otherList": "Checked against another list";
+      "sizeConfirmTitle": "Verify this document?";
+      "statusLoadFailed": "The verification status of these documents could not be loaded.";
+      "verifyAgain": "Verify again";
+    };
     "guidance": {
       "escalate": "Escalate";
       "manualJudgement": "Manual judgement";
@@ -262,6 +256,40 @@ type Messages = {
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}";
       "position": "{current}/{total}";
+    };
+    "review": {
+      "disputed": "Disputed · {decidedAt}";
+      "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}";
+      "undo": "Undo decision";
+    };
+    "runs": {
+      "back": "All documents";
+      "errors": {
+        "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.";
+        "enqueueFailed": "The verification could not be started. Try again.";
+        "extractionFailed": "The claims in this document could not be extracted.";
+        "gradingFailed": "The claims could not be checked against the list's facts.";
+        "internal": "The verification failed unexpectedly.";
+        "noText": "No text could be read from this document.";
+        "pinContentChanged": "The document changed after the verification started. Verify it again.";
+        "pinUnresolved": "The document version this verification was started on can no longer be found.";
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be verified.";
+      };
+      "evidencePinned": "Checked against {count, plural, one {# fact} other {# facts}} as they stood on {checkedAt}. Later edits to the list do not change this verification.";
+      "failedTitle": "Verification failed";
+      "inProgress": "Checking the document's claims against the list's facts…";
+      "loadFailed": "This verification could not be loaded.";
+      "noClaims": "No claims were found in this document.";
+      "startFailed": "Could not start the verification";
+      "status": {
+        "running": "Verifying";
+      };
+    };
+    "save": {
+      "failed": "Not saved";
+      "failedTitle": "Your change was not saved";
+      "saved": "Saved";
+      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -294,13 +322,20 @@ type Messages = {
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}";
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}";
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}";
-      "claimStatus": " ({state}{contested, select, true {, contested} other {}}{superseded, select, true {, superseded} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
       "selectClaim": "Select a claim to inspect the record.";
       "showQueue": "Show queue";
       "stats": {
         "claims": "Claims";
         "needsJudgement": "Needs judgement";
+        "progress": "{settled}/{total}";
       };
+    };
+    "view": {
+      "chooseList": "Choose a list";
+      "evidenceList": "Facts from";
+      "noLists": "This matter has no lists";
+      "pickList": "Choose the list whose facts this matter's documents are checked against.";
     };
   };
   "bilingual": {
@@ -689,7 +724,6 @@ type Messages = {
     "pagination": {
       "goToPage": "Go to page {page}";
       "label": "Result pages";
-      "page": "Page {page}";
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
@@ -1108,9 +1142,6 @@ type Messages = {
     "sourcePlaceholder": "Chat about {title}";
     "sourcePlaceholderAction": "Chat about";
     "sources": "Sources:";
-    "spawnSubagents": {
-      "failed": "Failed";
-    };
     "stopResponse": "Stop";
     "stopped": "Stopped";
     "suggestTitle": "Suggest a title";
@@ -1441,6 +1472,7 @@ type Messages = {
     "documentReference": "Document reference";
     "documentTitle": "Document title";
     "documentation": "Documentation";
+    "documents": "Documents";
     "done": "Done";
     "doubleClickToRename": "Double-click to rename";
     "download": "Download";
@@ -1480,6 +1512,8 @@ type Messages = {
       "inline": "Inline";
       "title": "Save message";
     };
+    "fact": "Fact";
+    "failed": "Failed";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -1488,6 +1522,7 @@ type Messages = {
     "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
     "hideSecretValue": "Hide secret value";
+    "high": "High";
     "history": "History";
     "import": "Import";
     "invite": "Invite";
@@ -1541,8 +1576,10 @@ type Messages = {
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
+    "low": "Low";
     "matter": "Matter";
     "matters": "Matters";
+    "medium": "Medium";
     "members": "Members";
     "metadata": "Metadata";
     "moveDown": "Move down";
@@ -1551,6 +1588,7 @@ type Messages = {
     "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
+    "nextMatch": "Next match";
     "noFileChosen": "No file selected";
     "noResults": "No results";
     "noVersions": "No version history";
@@ -1562,14 +1600,17 @@ type Messages = {
     "or": "Or";
     "organization": "Organization";
     "organizationName": "Organization name";
+    "page": "Page {page}";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";
     "preview": "Preview";
     "previous": "Previous";
+    "previousMatch": "Previous match";
     "print": "Print";
     "profile": "Profile";
     "properties": "Properties";
+    "queued": "Queued";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1639,6 +1680,7 @@ type Messages = {
     "urlIdentifierPlaceholder": "my-organization";
     "user": "User";
     "value": "Value";
+    "verified": "Verified";
     "verify": "Verify";
     "version": "Version";
     "versionLabel": "Version {version}";
@@ -1910,9 +1952,6 @@ type Messages = {
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
-    "severityHigh": "High";
-    "severityLow": "Low";
-    "severityMedium": "Medium";
     "severityUnspecified": "Unspecified";
     "skipped": "Could not apply: {reason}";
     "staleResolution": "This suggestion was already resolved elsewhere.";
@@ -2417,10 +2456,8 @@ type Messages = {
       "findText": "Find text";
       "matchCase": "Match case";
       "matchCounter": "{current} / {total}";
-      "next": "Next match";
       "nextShortcut": "Next match (Enter)";
       "noResults": "No results";
-      "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
       "replaceAll": "Replace all";
       "replaceCurrent": "Replace current match";
@@ -3016,9 +3053,6 @@ type Messages = {
       "reviewing": "Review in progress…";
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
-      "runStatus": {
-        "queued": "Queued";
-      };
       "saveAsPlaybook": "Save as playbook";
       "saveAsPlaybookFailed": "Could not save this review as a playbook";
       "savedAsPlaybook": "Saved as a playbook";
@@ -3323,9 +3357,6 @@ type Messages = {
       "saveFailed": "Failed to save playbook";
       "severity": {
         "blocker": "Blocker";
-        "high": "High";
-        "low": "Low";
-        "medium": "Medium";
       };
       "severityLabel": "Severity";
       "starters": {
@@ -3511,7 +3542,6 @@ type Messages = {
     "empty": "No memory yet.";
     "kinds": {
       "decision": "Decision";
-      "fact": "Fact";
       "instruction": "Instruction";
       "preference": "Preference";
       "relationship": "Relationship";
@@ -4027,6 +4057,8 @@ type Messages = {
   "settings": {
     "account": {
       "beta": "Beta Features";
+      "betaAvt": "AVT document verification";
+      "betaAvtDescription": "Check a matter's documents claim by claim against the facts of a list";
       "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
       "betaDescription": "Try features that are still in development";
       "betaInbox": "Inbox & notifications";
@@ -5081,7 +5113,6 @@ type Messages = {
         "title": "Remove Word template links?";
         "unknownLocation": "Template location: an address stella cannot verify";
       };
-      "defaultPropertyName": "Documents";
       "desktopEdit": {
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
@@ -5548,7 +5579,6 @@ type Messages = {
       "deleteProperty": "Delete property";
       "deletePropertyConfirmDescription": "Are you sure you want to delete the \"{propertyName}\" property? This action cannot be undone.";
       "dependencyLimit": "Up to {max} inputs per column";
-      "documentsLabel": "Documents";
       "editColumn": "Edit column";
       "editConditions": "Edit conditions";
       "editConditionsDescription": "Set conditions for when this property should be generated.";
@@ -5648,7 +5678,6 @@ type Messages = {
         "importantDescription": "Marks a key value.";
         "needsReview": "Needs review";
         "needsReviewDescription": "Requires manual review.";
-        "verified": "Verified";
         "verifiedDescription": "Manually confirmed.";
       };
       "lock": {
@@ -5717,6 +5746,7 @@ type Messages = {
       "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
       "layouts": {
+        "avt": "AVT";
         "calendar": "Calendar";
         "grid": "Grid";
         "kanban": "Kanban";

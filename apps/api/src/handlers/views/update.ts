@@ -11,6 +11,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import {
@@ -18,6 +19,10 @@ import {
   parseViewLayout,
   tUpdateViewBodySchema,
 } from "@/api/lib/views-schema";
+import {
+  avtLayoutErrorDetail,
+  rejectAvtLayout,
+} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -108,9 +113,19 @@ const updateView = createSafeHandler(
       return Result.ok({});
     }
 
-    yield* Result.await(
+    const avtRejection = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         if (parsedLayout !== undefined) {
+          const rejection = await rejectAvtLayout({
+            tx,
+            workspaceId,
+            layout: parsedLayout,
+            legalListsEnabled: legalListsDeployed(),
+          });
+          if (rejection !== null) {
+            return rejection;
+          }
+
           const resolvedTemplateProperties = await resolveTemplateProperties({
             tx,
             workspaceId,
@@ -161,8 +176,12 @@ const updateView = createSafeHandler(
           resourceId: viewId,
           changes,
         });
+        return null;
       }),
     );
+    if (avtRejection !== null) {
+      return Result.err(new HandlerError(avtLayoutErrorDetail(avtRejection)));
+    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,

@@ -14462,7 +14462,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "files-list"],
                 capabilityId: "entities.files.list",
                 description:
-                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
+                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
                 access: "read",
                 flags: [
                   {
@@ -18074,6 +18074,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                               },
                             },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
                           ],
                         },
                       },
@@ -19822,6 +19873,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },
@@ -26888,6 +26990,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "medium",
                   },
                   {
+                    kind: "enum",
+                    enum: ["high", "medium", "low"],
+                    repeatable: false,
+                    flag: "--confidence",
+                    prop: "confidence",
+                    required: true,
+                    part: "body",
+                    partPath: "confidence",
+                  },
+                  {
                     kind: "nullable-string",
                     repeatable: false,
                     flag: "--interpretation-note",
@@ -26896,12 +27008,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "interpretationNote",
                   },
+                  {
+                    kind: "enum",
+                    enum: ["included", "held"],
+                    repeatable: false,
+                    flag: "--scoring",
+                    prop: "scoring",
+                    required: true,
+                    part: "body",
+                    partPath: "scoring",
+                  },
                 ],
-                inputOnly: [
-                  "body.occurredOn",
-                  "body.confidence",
-                  "body.scoring",
-                ],
+                inputOnly: ["body.occurredOn"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -26948,20 +27066,9 @@ export const generatedRouteMap: RouteNode = {
                                   type: "string",
                                 },
                                 precision: {
-                                  anyOf: [
-                                    {
-                                      const: "day",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "month",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "year",
-                                      type: "string",
-                                    },
-                                  ],
+                                  default: "day",
+                                  type: "string",
+                                  enum: ["day", "month", "year"],
                                 },
                               },
                             },
@@ -26997,20 +27104,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         confidence: {
-                          anyOf: [
-                            {
-                              const: "high",
-                              type: "string",
-                            },
-                            {
-                              const: "medium",
-                              type: "string",
-                            },
-                            {
-                              const: "low",
-                              type: "string",
-                            },
-                          ],
+                          default: "high",
+                          type: "string",
+                          enum: ["high", "medium", "low"],
                         },
                         interpretationNote: {
                           nullable: true,
@@ -27026,16 +27122,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         scoring: {
-                          anyOf: [
-                            {
-                              const: "included",
-                              type: "string",
-                            },
-                            {
-                              const: "held",
-                              type: "string",
-                            },
-                          ],
+                          default: "included",
+                          type: "string",
+                          enum: ["included", "held"],
                         },
                       },
                     },
@@ -27058,7 +27147,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
                 description:
-                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns.",
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set.",
                 access: "read",
                 flags: [
                   {
@@ -28209,16 +28298,9 @@ export const generatedRouteMap: RouteNode = {
                                   nullable: true,
                                   anyOf: [
                                     {
-                                      anyOf: [
-                                        {
-                                          const: "reviewed",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "disputed",
-                                          type: "string",
-                                        },
-                                      ],
+                                      default: "reviewed",
+                                      type: "string",
+                                      enum: ["reviewed", "disputed"],
                                     },
                                     {
                                       type: "null",
@@ -28240,27 +28322,14 @@ export const generatedRouteMap: RouteNode = {
                                   nullable: true,
                                   anyOf: [
                                     {
-                                      anyOf: [
-                                        {
-                                          const: "supported",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "tension",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "contradicted",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "nocover",
-                                          type: "string",
-                                        },
-                                        {
-                                          const: "notverifiable",
-                                          type: "string",
-                                        },
+                                      default: "supported",
+                                      type: "string",
+                                      enum: [
+                                        "supported",
+                                        "tension",
+                                        "contradicted",
+                                        "nocover",
+                                        "notverifiable",
                                       ],
                                     },
                                     {
@@ -28526,6 +28595,178 @@ export const generatedRouteMap: RouteNode = {
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-latest-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "lists",
+                  "verifications-latest-list",
+                ],
+                capabilityId: "lists.verifications.latest.list",
+                description:
+                  "Read the latest list verification of each named document file (entity id and file field id), in one call: its status, failure code, the list it checked against, when it started and finished, and claim counts per verdict state. A file never verified is absent from the answer. Earlier runs are in lists.verifications.list.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: ["body.documents"],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["documents"],
+                      properties: {
+                        documents: {
+                          minItems: 1,
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            additionalProperties: false,
+                            type: "object",
+                            required: ["entityId", "fileFieldId"],
+                            properties: {
+                              entityId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              fileFieldId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "verifications-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "lists", "verifications-list"],
+                capabilityId: "lists.verifications.list",
+                description:
+                  "List the list verifications of one document, newest first with cursor pagination: each run's status, failure code, the list it checked against, when it was started and finished, and how many claims landed in each verdict state. Read one run in full with lists.verifications.get.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "query",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-field-id",
+                    prop: "fileFieldId",
+                    required: true,
+                    part: "query",
+                    partPath: "fileFieldId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      required: ["entityId", "fileFieldId"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fileFieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 50,
+                          type: "integer",
                         },
                       },
                     },
@@ -48569,6 +48810,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                               },
                             },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
                           ],
                         },
                       },
@@ -49197,7 +49489,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
                 description:
-                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, or timeline), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, timeline, or avt: document verification against a list's facts, where legal lists are enabled), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
@@ -49227,6 +49519,7 @@ export const generatedRouteMap: RouteNode = {
                       "kanban",
                       "calendar",
                       "timeline",
+                      "avt",
                     ],
                     repeatable: false,
                     flag: "--target-type",
@@ -49258,6 +49551,7 @@ export const generatedRouteMap: RouteNode = {
                             "kanban",
                             "calendar",
                             "timeline",
+                            "avt",
                           ],
                         },
                       },
@@ -49661,6 +49955,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },
@@ -51000,6 +51345,57 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 showTable: {
                                   type: "boolean",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "listId",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "avt",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                listId: {
+                                  anyOf: [
+                                    {
+                                      minLength: 36,
+                                      maxLength: 36,
+                                      pattern:
+                                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
                                 },
                               },
                             },

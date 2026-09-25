@@ -85,6 +85,7 @@ import {
   useMoveEntity,
   useRenameEntity,
 } from "@/lib/workspaces/mutations/entities";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
   filesystemEntitiesOptions,
   visibleEntityFieldIds,
@@ -112,7 +113,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;

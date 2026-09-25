@@ -136,40 +136,38 @@
   },
   "avt": {
     "anchorFacts": {
-      "addFact": "Ajouter un fait",
-      "addUnavailable": "Indisponible dans ce banc d’essai — l’ajout d’un fait nécessite une persistance qui n’est pas encore câblée.",
-      "confirmedByReviewer": "Confirmé par le relecteur",
+      "addInterpretationNote": "Ajouter une note d’interprétation",
       "description": "Preuves tangibles — courriels, messages, relevés bancaires, faits convenus — extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
-      "editFact": "Modifier le fait",
-      "editOrRetype": "Modifier / requalifier",
+      "editInterpretationNote": "Modifier la note d’interprétation",
+      "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
       "extractionAndReview": "Extraction et relecture",
       "factCount": "{count, plural, one {# fait} other {# faits}}",
-      "factText": "Texte du fait d’ancrage",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
-      "importSource": "Importer une source",
-      "importUnavailable": "Indisponible dans ce banc d’essai — l’import d’une source nécessite une ingestion et un stockage qui ne sont pas encore câblés.",
-      "interpretation": "Interprétation",
+      "holdOutOfScoring": "Exclure de la notation",
+      "includeInScoring": "Inclure dans la notation",
+      "interpretationNote": "Note d’interprétation",
+      "interpretationNotePlaceholder": "Si le sens de cette preuve est contesté, précisez comment. Laissez vide sinon.",
       "interpretiveConfidence": "Confiance interprétative",
+      "openList": "Ouvrir la liste",
       "record": "Dossier de faits d’ancrage",
-      "sourceAndProvenance": "Source et provenance",
-      "timePeriod": "Période",
+      "setConfidence": "Définir la confiance",
       "title": "Faits d’ancrage"
     },
     "claimDetail": {
       "escalatedReview": "Transmis à l’équipe chargée des preuves — aucun verdict à confirmer ou à contester ici tant que le conflit sous-jacent n’est pas résolu.",
-      "factId": "Fait {id}",
       "flagDispute": "Signaler un désaccord",
       "humanReview": "Relecture humaine",
       "interpretationCaveat": "Un fait contributif comporte une réserve d’interprétation de fond — c’est le sens de la preuve qui est incertain, et non le support par lequel elle est arrivée.",
       "notVerifiable": {
-        "pending": "Aucun modèle en direct n’est câblé dans cette version — résultat : <strong>Sans couverture, vérification en attente</strong>.",
         "reopen": "Rouvrir → vérifier par rapport au dossier",
-        "reopenExplanation": "<strong>Écartée comme non vérifiable.</strong> S’il s’agit en réalité d’une affirmation vérifiable, rouvrez-la : AVT conserve votre requalification et n’exécute que la vérification du dossier qu’il avait sautée."
+        "reopenExplanation": "<strong>Écartée comme non vérifiable.</strong> S’il s’agit en réalité d’une affirmation vérifiable, rouvrez-la : AVT conserve votre requalification et n’exécute que la vérification du dossier qu’il avait sautée.",
+        "reopenedPending": "Rouverte en tant qu’affirmation vérifiable. Elle s’affiche comme <strong>Sans couverture</strong> tant que le document n’est pas revérifié."
       },
       "note": {
         "add": "Ajouter une note / correction",
         "heading": "Votre note · {savedAt}",
+        "headingUndated": "Votre note",
         "placeholder": "Consignez une correction ou une explication. L’enregistrement rattache la note à cette seule affirmation — il ne modifie ni le verdict ni le dossier de faits d’ancrage.",
         "saveCorrection": "Enregistrer la correction"
       },
@@ -178,17 +176,13 @@
       "overrideTooltip": "Un relecteur a consigné un verdict différent. L’analyse ci-dessous est celle de l’outil, inchangée.",
       "overrideVerdict": "Remplacer le verdict",
       "recordConflict": {
-        "dateDecides": "Pourquoi la date décide du verdict",
         "description": "Deux faits d’ancrage portent sur le même point — <strong>{subject}</strong> — mais se contredisent. Les deux sources sont à <strong>confiance élevée</strong> ; ce n’est donc pas un problème de fiabilité : le dossier lui-même est incohérent. AVT s’abstient de rendre un verdict plutôt que de noter l’affirmation, car choisir un enregistrement plutôt que l’autre est un jugement qu’il vous revient de prendre et de consigner — pas une décision que l’outil devrait prendre en silence.",
-        "escalated": "Marqué localement pour suivi par l’équipe chargée des preuves. Le conflit de dossier reste ouvert et comptabilisé tant qu’une source faisant foi n’est pas sélectionnée.",
+        "escalatedNotice": "Signalé à l’équipe chargée des preuves. Le conflit de dossier reste ouvert et comptabilisé tant qu’un enregistrement faisant foi n’est pas choisi.",
         "flagForEvidenceTeam": "Signaler à l’équipe chargée des preuves",
-        "governingPreview": "Cet aperçu local considère <strong>{factId}</strong> comme faisant foi et évalue l’affirmation par rapport à <strong>{value}</strong>. Les deux enregistrements de test restent inchangés.",
-        "governingPreviewWithVerdict": "Cet aperçu local considère <strong>{factId}</strong> comme faisant foi et évalue l’affirmation par rapport à <strong>{value}</strong> — résultat : <strong>{verdict}</strong>. Les deux enregistrements de test restent inchangés.",
-        "oppositeSides": "Les deux dates se situent <emphasis>de part et d’autre</emphasis> de l’événement charnière. L’enregistrement qui fait foi décide de l’issue — résoudre le conflit ici fixe donc directement le verdict.",
+        "governed": "<strong>{value}</strong> fait foi : l’affirmation est jugée par rapport à cet enregistrement. L’autre enregistrement reste consigné.",
         "reconcile": "Réconcilier le dossier",
-        "resultAsAt": "Au <strong>{date}</strong>, {note}",
         "title": "Preuves contradictoires dans le dossier",
-        "treatAsGoverning": "Considérer {id} comme faisant foi"
+        "treatAsGoverningRecord": "Considérer comme faisant foi"
       },
       "relation": {
         "conflicts": "Contredit",
@@ -196,7 +190,6 @@
       },
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
-      "revisedLater": "Révisée dans une déclaration ultérieure",
       "score": {
         "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
         "conflictCount": "{count, plural, one {# contradiction} other {# contradictions}}",
@@ -206,11 +199,7 @@
         "supportCount": "{count, plural, one {# soutien} other {# soutiens}}",
         "verdictWithheld": "Verdict suspendu"
       },
-      "timeline": {
-        "asAt": "Au <strong>{date}</strong>",
-        "asAtDate": "Date de référence",
-        "preview": "Prévisualisez l’affirmation par rapport au dossier de test <emphasis>à</emphasis> une date choisie. Verdict prévisualisé : <strong>{verdict}</strong>."
-      },
+      "sourceCount": "{count, plural, one {# source} other {# sources}}",
       "whyScore": "Pourquoi ce score — faits d’ancrage"
     },
     "claimTypes": {
@@ -232,14 +221,10 @@
       "tooltip": "Confiance interprétative — à quel point le sens de cette preuve est dénué d’ambiguïté. Indépendante du support de la source (manuscrit, scan, etc.)."
     },
     "confirm": {
+      "acknowledge": "J’ai compris",
       "recordConflict": "Confirmer la résolution",
       "supported": "Confirmer — prête",
       "verdict": "Confirmer le verdict"
-    },
-    "devHarness": {
-      "localSessionNotice": "Session locale uniquement — rien n’est enregistré ici. Chaque relecture, note et modification de fait d’ancrage ne vit que dans cet onglet et disparaît au rechargement.",
-      "title": "Outil de vérification par faits d’ancrage — banc d’essai de développement",
-      "verifyDocument": "Vérifier le document"
     },
     "disposition": {
       "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée — un coup d’œil s’impose avant validation.",
@@ -250,6 +235,15 @@
       "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue — aucun jugement à rendre.",
       "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu."
     },
+    "documents": {
+      "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",
+      "empty": "Téléversez un document dans ce dossier pour le vérifier.",
+      "notVerified": "Pas encore vérifié",
+      "otherList": "Vérifié par rapport à une autre liste",
+      "sizeConfirmTitle": "Vérifier ce document ?",
+      "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
+      "verifyAgain": "Vérifier à nouveau"
+    },
     "guidance": {
       "escalate": "Faire remonter",
       "manualJudgement": "Jugement manuel",
@@ -259,6 +253,40 @@
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances}}",
       "position": "{current}/{total}"
+    },
+    "review": {
+      "disputed": "Désaccord signalé · {decidedAt}",
+      "reviewed": "{origin, select, bulk {Acceptée de routine} other {Examinée}} · {decidedAt}",
+      "undo": "Annuler la décision"
+    },
+    "runs": {
+      "back": "Tous les documents",
+      "errors": {
+        "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",
+        "enqueueFailed": "La vérification n’a pas pu être lancée. Réessayez.",
+        "extractionFailed": "Les affirmations de ce document n’ont pas pu être extraites.",
+        "gradingFailed": "Les affirmations n’ont pas pu être confrontées aux faits de la liste.",
+        "internal": "La vérification a échoué de manière inattendue.",
+        "noText": "Aucun texte n’a pu être extrait de ce document.",
+        "pinContentChanged": "Le document a changé après le début de la vérification. Vérifiez-le à nouveau.",
+        "pinUnresolved": "La version du document sur laquelle cette vérification avait démarré est introuvable.",
+        "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être vérifiés."
+      },
+      "evidencePinned": "Vérifié par rapport à {count, plural, one {# fait} other {# faits}} tels qu’ils se présentaient le {checkedAt}. Les modifications ultérieures de la liste ne changent pas cette vérification.",
+      "failedTitle": "Échec de la vérification",
+      "inProgress": "Confrontation des affirmations du document aux faits de la liste…",
+      "loadFailed": "Cette vérification n’a pas pu être chargée.",
+      "noClaims": "Aucune affirmation n’a été trouvée dans ce document.",
+      "startFailed": "Impossible de lancer la vérification",
+      "status": {
+        "running": "Vérification en cours"
+      }
+    },
+    "save": {
+      "failed": "Non enregistré",
+      "failedTitle": "Votre modification n’a pas été enregistrée",
+      "saved": "Enregistré",
+      "saving": "Enregistrement…"
     },
     "sourceMediumTooltip": "Support de la source — un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
     "states": {
@@ -291,13 +319,20 @@
       "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine}}",
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
-      "claimStatus": " ({state}{contested, select, true {, contestée} other {}}{superseded, select, true {, remplacée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
         "claims": "Affirmations",
-        "needsJudgement": "Jugement requis"
+        "needsJudgement": "Jugement requis",
+        "progress": "{settled}/{total}"
       }
+    },
+    "view": {
+      "chooseList": "Choisir une liste",
+      "evidenceList": "Faits de",
+      "noLists": "Ce dossier n’a aucune liste.",
+      "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
     }
   },
   "bilingual": {
@@ -686,7 +721,6 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
-      "page": "Page n° {page}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page"
@@ -1105,9 +1139,6 @@
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
-    "spawnSubagents": {
-      "failed": "Échec"
-    },
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "suggestTitle": "Suggérer un titre",
@@ -1438,6 +1469,7 @@
     "documentReference": "Référence du document",
     "documentTitle": "Titre du document",
     "documentation": "Documentation",
+    "documents": "Documents",
     "done": "Terminé",
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
@@ -1477,6 +1509,8 @@
       "inline": "Dans le texte",
       "title": "Enregistrer le message"
     },
+    "fact": "Fait",
+    "failed": "Échec",
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
@@ -1485,6 +1519,7 @@
     "goBackToEditing": "Revenir à l’édition",
     "hideDetails": "Masquer les détails",
     "hideSecretValue": "Masquer la valeur secrète",
+    "high": "Élevée",
     "history": "Historique",
     "import": "Importer",
     "invite": "Inviter",
@@ -1538,8 +1573,10 @@
     "loadMore": "Charger plus",
     "loading": "Chargement",
     "logTime": "Saisir le temps",
+    "low": "Faible",
     "matter": "Dossier",
     "matters": "Dossiers",
+    "medium": "Moyenne",
     "members": "Membres",
     "metadata": "Métadonnées",
     "moveDown": "Descendre",
@@ -1548,6 +1585,7 @@
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
+    "nextMatch": "Occurrence suivante",
     "noFileChosen": "Aucun fichier sélectionné",
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
@@ -1559,14 +1597,17 @@
     "or": "Ou",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
+    "page": "Page n° {page}",
     "pin": "Épingler",
     "playbooks": "Playbooks",
     "preparing": "Préparation…",
     "preview": "Aperçu",
     "previous": "Précédent",
+    "previousMatch": "Occurrence précédente",
     "print": "Imprimer",
     "profile": "Profil",
     "properties": "Propriétés",
+    "queued": "En file d'attente",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -1636,6 +1677,7 @@
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "value": "Valeur",
+    "verified": "Vérifié",
     "verify": "Vérifier",
     "version": "Version",
     "versionLabel": "Version {version}",
@@ -1907,9 +1949,6 @@
     "reject": "Rejeter",
     "rejectAll": "Tout rejeter",
     "revert": "Rétablir",
-    "severityHigh": "Élevée",
-    "severityLow": "Faible",
-    "severityMedium": "Moyenne",
     "severityUnspecified": "Non précisée",
     "skipped": "Impossible d’appliquer : {reason}",
     "staleResolution": "Cette suggestion a déjà été traitée ailleurs.",
@@ -2414,10 +2453,8 @@
       "findText": "Texte à rechercher",
       "matchCase": "Respecter la casse",
       "matchCounter": "{current} / {total}",
-      "next": "Occurrence suivante",
       "nextShortcut": "Occurrence suivante (Entrée)",
       "noResults": "Aucun résultat",
-      "previous": "Occurrence précédente",
       "previousShortcut": "Occurrence précédente (Maj+Entrée)",
       "replaceAll": "Tout remplacer",
       "replaceCurrent": "Remplacer l’occurrence actuelle",
@@ -3013,9 +3050,6 @@
       "reviewing": "Révision en cours…",
       "reviewingHint": "Cela peut prendre quelques minutes pour les documents volumineux.",
       "run": "Lancer la révision",
-      "runStatus": {
-        "queued": "En file d'attente"
-      },
       "saveAsPlaybook": "Enregistrer comme playbook",
       "saveAsPlaybookFailed": "Impossible d'enregistrer cette révision comme playbook",
       "savedAsPlaybook": "Enregistré comme playbook",
@@ -3319,10 +3353,7 @@
       "rulePlaceholder": "ex. Le délai de paiement ne doit pas dépasser 30 jours",
       "saveFailed": "Échec de l'enregistrement du playbook",
       "severity": {
-        "blocker": "Bloquant",
-        "high": "Élevée",
-        "low": "Faible",
-        "medium": "Moyenne"
+        "blocker": "Bloquant"
       },
       "severityLabel": "Gravité",
       "starters": {
@@ -3508,7 +3539,6 @@
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",
-      "fact": "Fait",
       "instruction": "Instruction",
       "preference": "Préférence",
       "relationship": "Relation"
@@ -4024,6 +4054,8 @@
   "settings": {
     "account": {
       "beta": "Fonctionnalités bêta",
+      "betaAvt": "Vérification de documents AVT",
+      "betaAvtDescription": "Vérifier les documents d’un dossier, affirmation par affirmation, au regard des faits d’une liste",
       "betaCaseLawDescription": "Afficher la recherche et le lecteur de jurisprudence publique dans la barre latérale",
       "betaDescription": "Essayez des fonctionnalités encore en développement",
       "betaInbox": "Boîte de réception et notifications",
@@ -5078,7 +5110,6 @@
         "title": "Supprimer les liens vers des modèles Word ?",
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
-      "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
@@ -5545,7 +5576,6 @@
       "deleteProperty": "Supprimer la propriété",
       "deletePropertyConfirmDescription": "Voulez-vous vraiment supprimer la propriété « {propertyName} » ? Cette action est irréversible.",
       "dependencyLimit": "Au plus {max} entrées par colonne",
-      "documentsLabel": "Documents",
       "editColumn": "Modifier la colonne",
       "editConditions": "Modifier les conditions",
       "editConditionsDescription": "Définissez les conditions de génération de cette propriété.",
@@ -5645,7 +5675,6 @@
         "importantDescription": "Signale une valeur clé.",
         "needsReview": "À vérifier",
         "needsReviewDescription": "Nécessite une vérification manuelle.",
-        "verified": "Vérifié",
         "verifiedDescription": "Confirmé manuellement."
       },
       "lock": {
@@ -5714,6 +5743,7 @@
       "groupItemCount": "{count, plural, one {# élément} other {# éléments}}",
       "hideColumn": "Masquer la colonne",
       "layouts": {
+        "avt": "AVT",
         "calendar": "Calendrier",
         "grid": "Grille",
         "kanban": "Kanban",

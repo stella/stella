@@ -44,7 +44,7 @@ export const toISODate = (v: string | null | undefined): string =>
 
 export const ITEM_TYPE_TRANSLATION_KEYS = {
   event: "common.itemTypeValues.event",
-  fact: "memory.kinds.fact",
+  fact: "common.fact",
   issue: "knowledge.playbooks.issueLabel",
   requirement: "common.itemTypeValues.requirement",
   task: "search.kinds.task",

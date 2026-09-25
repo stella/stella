@@ -64,9 +64,9 @@ true satisfies MissingPositionSeverity extends never ? true : never;
 
 const SEVERITY_LABEL_KEYS = {
   blocker: "knowledge.playbooks.severity.blocker",
-  high: "knowledge.playbooks.severity.high",
-  medium: "knowledge.playbooks.severity.medium",
-  low: "knowledge.playbooks.severity.low",
+  high: "common.high",
+  medium: "common.medium",
+  low: "common.low",
 } as const satisfies Record<PositionSeverity, TranslationKey>;
 
 /** The playbook's severity vocabulary on the product's shared review scale.

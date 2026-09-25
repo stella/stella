@@ -94,6 +94,9 @@ const PreviewCanvas = ({ kind, workspaceId }: PreviewCanvasProps) => {
   if (kind === "template") {
     return <TemplatePreview />;
   }
+  if (kind === "avt") {
+    return <AvtPreview />;
+  }
   return <TimelinePreview />;
 };
 
@@ -325,6 +328,25 @@ const TimelinePreview = () => (
     <div className="bg-primary/50 h-2.5 w-1/2 rounded-full" />
     <div className="bg-muted-foreground/30 ms-[30%] h-2.5 w-2/5 rounded-full" />
     <div className="bg-muted-foreground/20 ms-[55%] h-2.5 w-1/3 rounded-full" />
+  </div>
+);
+
+// Prose lines whose claims carry verdict underlines.
+const AvtPreview = () => (
+  <div className="flex h-full flex-col justify-center gap-2.5 px-1">
+    <div className="flex items-center gap-1.5">
+      <div className="bg-muted h-1.5 w-1/4 rounded-full" />
+      <div className="border-success h-2.5 w-2/5 border-b-2" />
+      <div className="bg-muted h-1.5 flex-1 rounded-full" />
+    </div>
+    <div className="flex items-center gap-1.5">
+      <div className="border-destructive h-2.5 w-1/3 border-b-2" />
+      <div className="bg-muted h-1.5 flex-1 rounded-full" />
+    </div>
+    <div className="flex items-center gap-1.5">
+      <div className="bg-muted h-1.5 w-1/5 rounded-full" />
+      <div className="border-warning h-2.5 w-1/2 border-b-2" />
+    </div>
   </div>
 );
 

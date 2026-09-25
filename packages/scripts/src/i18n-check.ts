@@ -276,6 +276,7 @@ const ALLOWED_IDENTICAL = new Set<string>([
   "S3",
   "DeepL",
   "stella",
+  "AVT",
   "GitHub",
   "Google",
   "Microsoft",

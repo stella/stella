@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import {
   CalendarIcon,
+  FileCheckIcon,
   FolderTreeIcon,
   GanttChartIcon,
   KanbanIcon,
@@ -38,14 +39,16 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
+import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
+import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
+import { EMPTY_AVT_LAYOUT } from "@/lib/workspaces/view-layout";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { useDeleteViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
-import { useCreateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const layoutIcons = {
   overview: LayoutDashboardIcon,
@@ -54,6 +57,7 @@ const layoutIcons = {
   kanban: KanbanIcon,
   calendar: CalendarIcon,
   timeline: GanttChartIcon,
+  avt: FileCheckIcon,
 } as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 type TemplatePickerDialogProps = {
@@ -90,7 +94,10 @@ export const TemplatePickerDialog = ({
   const visibleTemplates = templates?.filter(
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
-  const hasTemplates = (visibleTemplates?.length ?? 0) > 0;
+  // AVT has no saved template to start from, so the preview offers its own.
+  const offersAvt = useAvtPreviewEnabled() && !disallowedLayoutTypes.has("avt");
+  const hasSavedTemplates = (visibleTemplates?.length ?? 0) > 0;
+  const hasTemplates = hasSavedTemplates || offersAvt;
 
   const createView = useCreateView(workspaceId);
   const deleteTemplate = useDeleteViewTemplate();
@@ -115,6 +122,29 @@ export const TemplatePickerDialog = ({
           if (hasAITemplateProperty) {
             detached(startWorkflow(), "template-picker-dialog.start-workflow");
           }
+        },
+        onError: () => {
+          stellaToast.add({
+            title: t("errors.failedToCreateView"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleCreateAvt = () => {
+    const newId = crypto.randomUUID();
+    createView.mutate(
+      {
+        id: newId,
+        name: t("workspaces.views.layouts.avt"),
+        layout: EMPTY_AVT_LAYOUT,
+      },
+      {
+        onSuccess: () => {
+          onCreated(newId);
+          onOpenChange(false);
         },
         onError: () => {
           stellaToast.add({
@@ -168,15 +198,26 @@ export const TemplatePickerDialog = ({
         <DialogPanel>
           <div className="flex items-stretch">
             <div className="min-w-0 flex-1">
-              <TemplateList
-                canDeleteTemplate={canDeleteTemplate}
-                isMutating={createView.isPending || deleteTemplate.isPending}
-                isPending={isPending}
-                onDelete={handleDelete}
-                onPreview={setPreviewLayout}
-                onUse={handleUse}
-                templates={visibleTemplates}
-              />
+              {offersAvt && (
+                <BuiltInTemplateRow
+                  icon={layoutIcons.avt}
+                  isPending={createView.isPending}
+                  name={t("workspaces.views.layouts.avt")}
+                  onPreview={() => setPreviewLayout("avt")}
+                  onUse={handleCreateAvt}
+                />
+              )}
+              {(!offersAvt || isPending || hasSavedTemplates) && (
+                <TemplateList
+                  canDeleteTemplate={canDeleteTemplate}
+                  isMutating={createView.isPending || deleteTemplate.isPending}
+                  isPending={isPending}
+                  onDelete={handleDelete}
+                  onPreview={setPreviewLayout}
+                  onUse={handleUse}
+                  templates={visibleTemplates}
+                />
+              )}
             </div>
             {hasTemplates && (
               <div className="ms-3 hidden border-s ps-1 sm:block">
@@ -306,6 +347,48 @@ const TemplateRow = ({
         {t("workspaces.views.templates.use")}
       </Button>
     </li>
+  );
+};
+
+type BuiltInTemplateRowProps = {
+  icon: React.ElementType;
+  name: string;
+  isPending: boolean;
+  onUse: () => void;
+  onPreview: () => void;
+};
+
+const BuiltInTemplateRow = ({
+  icon: Icon,
+  name,
+  isPending,
+  onUse,
+  onPreview,
+}: BuiltInTemplateRowProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded p-2">
+      <Icon className="text-muted-foreground size-4 shrink-0" />
+      <button
+        className="min-w-0 flex-1 truncate text-start text-sm"
+        disabled={isPending}
+        onClick={onUse}
+        onFocus={onPreview}
+        onMouseEnter={onPreview}
+        type="button"
+      >
+        {name}
+      </button>
+      <Button
+        disabled={isPending}
+        onClick={onUse}
+        size="xs"
+        variant="secondary"
+      >
+        {t("workspaces.views.templates.use")}
+      </Button>
+    </div>
   );
 };
 
