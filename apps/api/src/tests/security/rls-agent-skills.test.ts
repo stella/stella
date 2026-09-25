@@ -191,6 +191,88 @@ describe("agent skill policy migrations", () => {
   });
 });
 
+// Postgres's check_violation SQLSTATE; no production path branches on it.
+const CHECK_VIOLATION = "23514";
+
+const DOMAIN_CHECKS = [
+  { table: "agent_skills", constraint: "agent_skills_scope_check" },
+  { table: "agent_skills", constraint: "agent_skills_origin_check" },
+  {
+    table: "agent_skill_resources",
+    constraint: "agent_skill_resources_kind_check",
+  },
+] as const;
+
+const readDomainChecks = async () =>
+  await testDb.execute<{ name: string; definition: string }>(sql`
+    SELECT
+      conname AS name,
+      pg_catalog.pg_get_constraintdef(oid) AS definition
+    FROM pg_catalog.pg_constraint
+    WHERE contype = 'c'
+      AND conname IN (${sql.join(
+        DOMAIN_CHECKS.map(({ constraint }) => sql`${constraint}`),
+        sql`, `,
+      )})
+    ORDER BY conname
+  `);
+
+describe("agent skill domain values", () => {
+  // The scope decides who may read and write a skill, so the database refuses
+  // a value the application does not know rather than trusting every writer.
+  test("an unknown scope, origin, or resource kind is refused", async () => {
+    const skillId = await insertSkill({
+      organizationId: ids.orgA,
+      scope: "team",
+      slug: `domain-${Bun.randomUUIDv7()}`,
+      userId: ids.userAdmin,
+    });
+    const resourceId = await insertResource({
+      organizationId: ids.orgA,
+      path: "references/kind.md",
+      skillId,
+    });
+
+    const errors = [
+      await tryCatch(async () => {
+        await testDb.execute(
+          sql`UPDATE agent_skills SET scope = 'shared' WHERE id = ${skillId}`,
+        );
+      }),
+      await tryCatch(async () => {
+        await testDb.execute(
+          sql`UPDATE agent_skills SET origin = 'mirror' WHERE id = ${skillId}`,
+        );
+      }),
+      await tryCatch(async () => {
+        await testDb.execute(
+          sql`UPDATE agent_skill_resources SET kind = 'binary' WHERE id = ${resourceId}`,
+        );
+      }),
+    ];
+
+    expect(errors.map((error) => isPgError(error, CHECK_VIOLATION))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  test("the migration adds the checks the schema declares", async () => {
+    const fromSchema = await readDomainChecks();
+    for (const { table, constraint } of DOMAIN_CHECKS) {
+      await testDb.execute(
+        sql.raw(`ALTER TABLE "${table}" DROP CONSTRAINT "${constraint}"`),
+      );
+    }
+    await applyMigration("20260925100200_agent_skill_domain_checks");
+    const migrated = await readDomainChecks();
+
+    expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);
+    expect(migrated.rows).toEqual(fromSchema.rows);
+  });
+});
+
 describe("agent skill revision RLS", () => {
   test("a viewer may lock a revision but never update it", async () => {
     const skillId = await insertSkill({

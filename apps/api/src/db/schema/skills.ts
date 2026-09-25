@@ -20,6 +20,12 @@ import {
 } from "./files-views";
 import type { AgentSkillResourceKind } from "./files-views";
 
+const sqlValueList = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  );
+
 export const agentSkills = p.pgTable(
   "agent_skills",
   {
@@ -61,6 +67,17 @@ export const agentSkills = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The scope decides who may read and write the row (see
+    // `agentSkillPolicies`), so the database refuses values the code does not
+    // know.
+    p.check(
+      "agent_skills_scope_check",
+      sql`${table.scope} IN (${sqlValueList(AGENT_SKILL_SCOPES)})`,
+    ),
+    p.check(
+      "agent_skills_origin_check",
+      sql`${table.origin} IN (${sqlValueList(AGENT_SKILL_ORIGINS)})`,
+    ),
     p
       .uniqueIndex("agent_skills_org_team_slug_uidx")
       .on(table.organizationId, table.slug)
@@ -110,6 +127,10 @@ export const agentSkillResources = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "agent_skill_resources_kind_check",
+      sql`${table.kind} IN (${sqlValueList(AGENT_SKILL_RESOURCE_KINDS)})`,
+    ),
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),
@@ -168,9 +189,8 @@ export const AGENT_SKILL_PROPOSAL_STATUSES = [
 export type AgentSkillProposalStatus =
   (typeof AGENT_SKILL_PROPOSAL_STATUSES)[number];
 
-const AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
-  AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
-  sql`, `,
+const AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sqlValueList(
+  AGENT_SKILL_PROPOSAL_STATUSES,
 );
 
 /** Terminal statuses: reached once, by a reviewer, and never left. */
@@ -179,9 +199,8 @@ export const DECIDED_AGENT_SKILL_PROPOSAL_STATUSES = [
   "rejected",
 ] as const satisfies readonly AgentSkillProposalStatus[];
 
-const DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
-  DECIDED_AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
-  sql`, `,
+const DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sqlValueList(
+  DECIDED_AGENT_SKILL_PROPOSAL_STATUSES,
 );
 
 /**
