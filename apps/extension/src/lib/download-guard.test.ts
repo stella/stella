@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   downloadAction,
+  downloadNoticeMessage,
   downloadOwner,
   holdDownloadForJudgement,
   judgeDownload,
@@ -285,5 +286,37 @@ describe("a download of uncertain origin", () => {
     });
 
     expect(events).toEqual([]);
+  });
+});
+
+describe("download notices", () => {
+  test("name kept files whenever there are any, alone or beside stopped ones", () => {
+    expect(downloadNoticeMessage({ kept: 0, stopped: 0 })).toBe(null);
+    expect(downloadNoticeMessage({ kept: 0, stopped: 3 })).toEqual({
+      name: "downloadStopped",
+      substitutions: ["3"],
+    });
+    expect(downloadNoticeMessage({ kept: 1, stopped: 0 })).toEqual({
+      name: "downloadKept",
+      substitutions: ["1"],
+    });
+    expect(downloadNoticeMessage({ kept: 2, stopped: 1 })).toEqual({
+      name: "downloadsStoppedAndKept",
+      substitutions: ["1", "2"],
+    });
+  });
+
+  test("a download with no origin that finished before its cancel is noted as kept", async () => {
+    const { events, releaseFrames } = installFakeChrome({ state: "complete" });
+    await refreshContainedDownloadScope();
+    releaseFrames();
+    await judgeDownload({
+      ...savedByControlledPage(50),
+      finalUrl: "data:text/plain,notes",
+      state: "in_progress",
+      url: "data:text/plain,notes",
+    });
+
+    expect(events).toEqual(["cancel:50", "badge:1", "title:downloadKept"]);
   });
 });

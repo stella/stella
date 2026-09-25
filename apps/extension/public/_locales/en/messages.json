@@ -40,10 +40,31 @@
     "message": "Disconnect tab"
   },
   "downloadKept": {
-    "message": "A download finished while stella controlled a tab and was kept. Check where it came from before opening it."
+    "message": "Downloads that finished while stella controlled a tab and were kept: $COUNT$. Check where they came from before opening them.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella stopped a download while it controlled a tab."
+    "message": "Downloads stella stopped while it controlled a tab: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "While stella controlled a tab: downloads stopped: $STOPPED$. Downloads that finished and were kept (check where they came from before opening them): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Lets stella operate a dedicated Chrome tab after you grant site access."

@@ -40,10 +40,31 @@
     "message": "Déconnecter l’onglet"
   },
   "downloadKept": {
-    "message": "Un téléchargement s’est terminé pendant que stella contrôlait un onglet et a été conservé. Vérifiez sa provenance avant de l’ouvrir."
+    "message": "Téléchargements terminés pendant que stella contrôlait un onglet et conservés : $COUNT$. Vérifiez leur provenance avant de les ouvrir.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella a arrêté un téléchargement pendant qu’il contrôlait un onglet."
+    "message": "Téléchargements arrêtés par stella pendant qu’il contrôlait un onglet : $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Pendant que stella contrôlait un onglet : téléchargements arrêtés : $STOPPED$. Téléchargements terminés et conservés (vérifiez leur provenance avant de les ouvrir) : $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Permet à stella de contrôler un onglet Chrome dédié après votre autorisation."

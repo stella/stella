@@ -758,39 +758,34 @@ describe("navigating when the page's identity is unclear", () => {
     expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
   });
 
-  test("chat may open a page from Chrome's error page", async () => {
-    const { emit, handlers, probe } = installFakeChrome();
-    emit(CONTROLLED_TAB_ID, { url: "https://printer.local/admin" });
-    probe.frames.set(CONTROLLED_TAB_ID, {
-      documentId: "document-error",
-      errorOccurred: true,
-    });
-    // Error pages refuse scripts.
-    handlers["locate"] = () => {
-      throw new TypeError("Frame with ID 0 is showing error page");
-    };
-    handlers["snapshot"] = () => [
-      { frameId: 0, result: frameSnapshot("Home") },
-    ];
+  test("an error page, or what looks like one, is no way around it", async () => {
+    // Chrome shows its error page, or the user moved on to a readable page
+    // whose later navigation failed while scripts are refused for another
+    // reason: nothing tells these apart, so both are refused.
+    for (const reason of [
+      "Frame with ID 0 is showing error page",
+      "Cannot access contents of the page.",
+    ]) {
+      const { emit, handlers, log, probe } = installFakeChrome();
+      emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
+      probe.frames.set(CONTROLLED_TAB_ID, {
+        documentId: "document-elsewhere",
+        errorOccurred: true,
+      });
+      handlers["locate"] = () => {
+        throw new TypeError(reason);
+      };
 
-    expect(
-      await run({ action: "open", url: PAGE_URL }, { observedTab }),
-    ).toMatchObject({ status: "success" });
-  });
-
-  test("a failed navigation that left a readable page is no error page", async () => {
-    const { emit, log, probe } = installFakeChrome();
-    // The user moved on, and a later navigation of theirs was aborted; the
-    // page they moved to still shows and runs scripts.
-    emit(CONTROLLED_TAB_ID, { url: "https://example.com/elsewhere" });
-    probe.frames.set(CONTROLLED_TAB_ID, {
-      documentId: "document-elsewhere",
-      errorOccurred: true,
-    });
-
-    expect(
-      await run({ action: "open", url: PAGE_URL }, { observedTab }),
-    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
-    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+      const refused = await run(
+        { action: "open", url: PAGE_URL },
+        { observedTab },
+      );
+      expect(refused).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+      });
+      // The model is told how the user gets the tab going again.
+      expect(JSON.stringify(refused)).toContain("ask the user");
+      expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+    }
   });
 });

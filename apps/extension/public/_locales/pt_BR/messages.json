@@ -40,10 +40,31 @@
     "message": "Desconectar guia"
   },
   "downloadKept": {
-    "message": "Um download terminou enquanto o stella controlava uma aba e foi mantido. Verifique a origem antes de abri-lo."
+    "message": "Downloads concluídos enquanto o stella controlava uma aba e mantidos: $COUNT$. Verifique a origem antes de abri-los.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "O stella interrompeu um download enquanto controlava uma aba."
+    "message": "Downloads que o stella interrompeu enquanto controlava uma aba: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Enquanto o stella controlava uma aba: downloads interrompidos: $STOPPED$. Downloads concluídos e mantidos (verifique a origem antes de abri-los): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Permite que a stella controle uma guia dedicada do Chrome após sua autorização."

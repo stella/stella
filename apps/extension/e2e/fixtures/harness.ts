@@ -316,6 +316,34 @@ export const createCommandSender = (stella: Page, controllerId: string) => {
   };
 };
 
+/**
+ * Opens `url` in a new controlled tab. The extension creates that tab
+ * itself, so route interception attaches only after its first navigation,
+ * which then fails on DNS; chat may not navigate away from an error page, so
+ * the user loads the page by hand and chat reads it, the recovery the
+ * extension asks for.
+ */
+export const openInNewControlledTab = async (
+  { context }: { context: BrowserContext },
+  send: (command: BrowserControlCommand) => Promise<BrowserControlResult>,
+  url: string,
+) => {
+  const opened = await send({ action: "open", url });
+  if (opened.status === "success") {
+    return opened.snapshot;
+  }
+  const tab = context
+    .pages()
+    .find(
+      (candidate) => new URL(candidate.url()).origin === new URL(url).origin,
+    );
+  if (!tab) {
+    return panic(`No controlled tab at ${url}`);
+  }
+  await tab.goto(url);
+  return successful(await send({ action: "snapshot" }));
+};
+
 export const successful = (result: BrowserControlResult) => {
   expect(result.status, JSON.stringify(result)).toBe("success");
   if (result.status !== "success") {

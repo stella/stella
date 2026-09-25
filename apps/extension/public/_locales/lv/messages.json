@@ -40,10 +40,31 @@
     "message": "Atvienot cilni"
   },
   "downloadKept": {
-    "message": "Lejupielāde pabeidzās, kamēr stella vadīja cilni, un tika saglabāta. Pirms atvēršanas pārbaudiet, no kurienes tā ir."
+    "message": "Lejupielādes, kas pabeidzās, kamēr stella vadīja cilni, un tika saglabātas: $COUNT$. Pirms atvēršanas pārbaudiet, no kurienes tās ir.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella apturēja lejupielādi, kamēr vadīja cilni."
+    "message": "Lejupielādes, ko stella apturēja, vadot cilni: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Kamēr stella vadīja cilni: apturētās lejupielādes: $STOPPED$. Pabeigtās un saglabātās lejupielādes (pirms atvēršanas pārbaudiet, no kurienes tās ir): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Pēc atļaujas saņemšanas ļauj stellai vadīt atsevišķu Chrome cilni."

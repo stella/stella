@@ -40,10 +40,31 @@
     "message": "Odpojiť kartu"
   },
   "downloadKept": {
-    "message": "Počas ovládania karty stellou sa dokončilo sťahovanie a zostalo uložené. Pred otvorením overte, odkiaľ pochádza."
+    "message": "Sťahovania dokončené počas ovládania karty stellou a ponechané: $COUNT$. Pred otvorením overte, odkiaľ pochádzajú.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella zastavila sťahovanie, kým ovládala kartu."
+    "message": "Sťahovania zastavené stellou počas ovládania karty: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Počas ovládania karty stellou: zastavené sťahovania: $STOPPED$. Dokončené a ponechané sťahovania (pred otvorením overte, odkiaľ pochádzajú): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Po udelení prístupu umožní stelle ovládať vyhradenú kartu Chromu."

@@ -1515,51 +1515,42 @@ type ExecuteBrowserCommandOptions = {
 };
 
 /** The tab's top document now; see `TopDocument`. */
-/**
- * The tab's top document now, as Chrome's navigation records have it; null
- * when Chrome cannot say. A failed last navigation counts as Chrome's error
- * page only when the frame also refuses scripts, as error pages do.
- */
+/** The tab's top document now, as Chrome's navigation records have it; null when Chrome cannot say. */
 const readTopDocument = async (
   tabId: number,
 ): Promise<LiveTopDocument | null> => {
   const frame = await chrome.webNavigation
     .getFrame({ frameId: TOP_FRAME_ID, tabId })
     .catch(() => null);
-  if (frame === null) {
-    return null;
-  }
-  const scriptable = frame.errorOccurred
-    ? await runPageOperation(
-        { frameIds: [TOP_FRAME_ID], tabId },
-        { kind: "locate" },
-      ).then(
-        (results) => results.at(0)?.result !== undefined,
-        () => false,
-      )
-    : true;
-  return {
-    documentId: frame.documentId,
-    errorPage: frame.errorOccurred && !scriptable,
-    url: frame.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
-  };
+  return frame === null
+    ? null
+    : {
+        documentId: frame.documentId,
+        url: frame.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+      };
 };
 
 const budgetExceeded = (message: string): BrowserControlResult =>
   browserControlError(BROWSER_CONTROL_ERROR_CODE.budgetExceeded, message);
 
+const IDENTITY_REFUSALS = {
+  "page-unconfirmed": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    "stella cannot confirm the tab still shows the page it last read, so it will not navigate away from it. Take a snapshot and try again. If the page cannot be read, for example an error page, ask the user to open a page in that tab themselves or to hand over another tab from the extension popup.",
+  ),
+  "stale-snapshot": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    "The page changed after this browser action was proposed. Take a new snapshot before acting.",
+  ),
+  "tab-changed": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.tabChanged,
+    "The controlled tab changed since stella last read it. Take a snapshot of the current tab before navigating or acting.",
+  ),
+} as const satisfies Record<string, BrowserControlResult>;
+
 const identityRefusal = (
-  status: "stale-snapshot" | "tab-changed",
-): BrowserControlResult =>
-  status === "tab-changed"
-    ? browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.tabChanged,
-        "The controlled tab changed since stella last read it. Take a snapshot of the current tab before navigating or acting.",
-      )
-    : browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
-        "The page changed after this browser action was proposed. Take a new snapshot before acting.",
-      );
+  status: keyof typeof IDENTITY_REFUSALS,
+): BrowserControlResult => IDENTITY_REFUSALS[status];
 
 export const executeBrowserCommand = async (
   controllerId: string,

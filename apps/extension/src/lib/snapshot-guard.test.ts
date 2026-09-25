@@ -115,15 +115,15 @@ describe("browser command identity", () => {
         checkCommandIdentity({
           command,
           controlledTab,
-          navigation: { live: { ...settled, errorPage: false }, settled },
+          navigation: { live: settled, settled },
           observedTab,
           snapshot,
         }),
       ).toEqual({ documentId: null, status: "ok" });
       for (const live of [
         // The user followed a link, or reloaded the same page.
-        { documentId: "document-next", errorPage: false, url: `${URL_A}next` },
-        { documentId: "document-reloaded", errorPage: false, url: URL_A },
+        { documentId: "document-next", url: `${URL_A}next` },
+        { documentId: "document-reloaded", url: URL_A },
       ]) {
         expect(
           checkCommandIdentity({
@@ -133,7 +133,7 @@ describe("browser command identity", () => {
             observedTab,
             snapshot,
           }),
-        ).toEqual({ status: "stale-snapshot" });
+        ).toEqual({ status: "page-unconfirmed" });
       }
     }
   });
@@ -145,7 +145,7 @@ describe("browser command identity", () => {
       { live: null, settled },
       // Chat has read nothing in this tab.
       {
-        live: { documentId: "document-top", errorPage: false, url: URL_A },
+        live: { documentId: "document-top", url: URL_A },
         settled: null,
       },
     ]) {
@@ -157,40 +157,23 @@ describe("browser command identity", () => {
           observedTab,
           snapshot,
         }),
-      ).toEqual({ status: "stale-snapshot" });
+      ).toEqual({ status: "page-unconfirmed" });
     }
   });
 
-  test("chat may leave Chrome's error page, and only that", () => {
-    const settled = { documentId: "document-top", url: URL_A };
+  test("an error page is no exception", () => {
     expect(
       checkCommandIdentity({
         command: { action: "open", url: URL_A },
         controlledTab,
         navigation: {
-          live: {
-            documentId: "document-error",
-            errorPage: true,
-            url: "https://printer.local/",
-          },
-          settled: null,
+          live: { documentId: "document-error", url: "https://printer.local/" },
+          settled: { documentId: "document-top", url: URL_A },
         },
         observedTab,
         snapshot,
       }),
-    ).toEqual({ documentId: null, status: "ok" });
-    expect(
-      checkCommandIdentity({
-        command: { action: "open", url: URL_A },
-        controlledTab,
-        navigation: {
-          live: { documentId: "document-next", errorPage: false, url: URL_A },
-          settled,
-        },
-        observedTab,
-        snapshot,
-      }),
-    ).toEqual({ status: "stale-snapshot" });
+    ).toEqual({ status: "page-unconfirmed" });
   });
 
   test("going back needs a snapshot of the page it leaves", () => {
