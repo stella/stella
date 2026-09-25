@@ -20,7 +20,7 @@ describe("findUnusedKeys", () => {
         'const tSkills = useTranslations("knowledge.agentSkills");',
         'tSkills("importTitle");',
       ].join("\n"),
-      "const heading = t(`chat.skills.scope.${scope}`);",
+      `const heading = t(\`chat.skills.scope.\${scope}\`);`,
       'export const KEYS = { new: "chat.newChat" } as const;',
     ];
 
@@ -42,7 +42,7 @@ describe("findUnusedKeys", () => {
     const sources = [
       [
         'const tScope = useTranslations("chat.skills");',
-        "tScope(`scope.${value}`);",
+        `tScope(\`scope.\${value}\`);`,
       ].join("\n"),
     ];
 

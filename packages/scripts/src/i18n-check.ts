@@ -644,7 +644,10 @@ if (import.meta.main) {
     for (const dir of usageDirs) {
       for (const file of new Bun.Glob("**/*.{ts,tsx}").scanSync(dir)) {
         const filePath = path.resolve(dir, file);
-        if (filePath.startsWith(langsPath) || file.endsWith(".gen.ts")) {
+        if (
+          filePath.startsWith(`${langsPath}${path.sep}`) ||
+          file.endsWith(".gen.ts")
+        ) {
           continue;
         }
         sources.push(await Bun.file(filePath).text());
