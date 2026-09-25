@@ -2657,10 +2657,11 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "no-db-await-in-loop-suppressions",
     description:
-      "`// db-await-in-loop:` and `// db-await-in-loop-disable:` directives, repo-wide (data-volume: per-row database round-trips inside a loop, N+1, found by scripts/db-await-in-loop.ts)",
+      "`// db-await-in-loop:` and `// db-await-in-loop-disable:` directives, repo-wide (data-volume: per-row database round-trips inside a loop, N+1, found by scripts/db-await-in-loop.ts); gated per file",
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countDbAwaitInLoopSuppressions,
+    perFile: true,
   },
   {
     scope: "file",
@@ -4288,6 +4289,21 @@ const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
   }
   if (!PER_FILE_METRIC_IDS.has("direct-failure-sinks")) {
     failures.push("direct-failure-sinks is not gated per file");
+  }
+  // A new database-await directive in one file cannot hide behind a removal in
+  // another: the metric's own registered gate must reject the transfer.
+  const dbAwaitDirectives = RATCHET_METRICS.find(
+    ({ id }) => id === "no-db-await-in-loop-suppressions",
+  );
+  if (
+    dbAwaitDirectives?.scope !== "file" ||
+    diffMetric(dbAwaitDirectives.id, moved, baseline, {
+      perFile: dbAwaitDirectives.perFile,
+    }).status !== "regressed"
+  ) {
+    failures.push(
+      "no-db-await-in-loop-suppressions let one file's removal fund another's new directive",
+    );
   }
   return failures;
 };
