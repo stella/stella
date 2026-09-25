@@ -64,6 +64,7 @@ import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
 import { getToolDetailPayload, toolDetailTabId } from "./tool-detail";
+import { useCatalogueRemoval } from "./use-catalogue-removal";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
@@ -701,16 +702,14 @@ const CatalogueEntryRow = ({
   const t = useTranslations();
   const install = useInstallEntry(organizationId);
   const uninstall = useUninstallEntry(entry, organizationId);
+  const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
+    entry,
+    onRemove: () => uninstall.mutate(),
+  });
 
   const effectivelyInstalled = isEffectivelyInstalled(entry);
   const installable =
     !effectivelyInstalled && entry.installState !== "unavailable";
-  const canRemove =
-    effectivelyInstalled &&
-    !entry.isLocked &&
-    (entry.kind === "native-tool" ||
-      (entry.kind === "mcp" && entry.installedConnectorSlug !== null) ||
-      (entry.kind === "skill" && entry.installedSkillId !== null));
 
   const onInstall = () => {
     install.mutate(entry, {
@@ -758,13 +757,13 @@ const CatalogueEntryRow = ({
         {t("common.add")}
       </Button>
     );
-  } else if (canRemove) {
+  } else if (removal !== "none") {
     actions = (
       <Button
         disabled={uninstall.isPending}
         onClick={(e) => {
           e.stopPropagation();
-          uninstall.mutate();
+          requestRemoval();
         }}
         size="xs"
         type="button"
@@ -797,12 +796,15 @@ const CatalogueEntryRow = ({
   }
 
   return (
-    <CatalogueRow
-      actions={actions}
-      contextActions={contextActions}
-      display={toRowDisplay(entry)}
-      focused={focused}
-      onFocus={onFocus}
-    />
+    <>
+      <CatalogueRow
+        actions={actions}
+        contextActions={contextActions}
+        display={toRowDisplay(entry)}
+        focused={focused}
+        onFocus={onFocus}
+      />
+      {confirmDialog}
+    </>
   );
 };
