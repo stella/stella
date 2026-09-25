@@ -301,6 +301,49 @@ Instructions.`,
     expect(Result.isError(result)).toBe(true);
   });
 
+  const parseFrontmatter = async (frontmatter: string) =>
+    await parseUpload(
+      new File([`---\n${frontmatter}\n---\n\nInstructions.`], "SKILL.md", {
+        type: "text/markdown",
+      }),
+    );
+
+  test("accepts only names the Agent Skills specification allows", async () => {
+    const accepted = ["a", "pdf-processing", "v2-review", "x".repeat(64)];
+    const refused = [
+      "-leading",
+      "trailing-",
+      "double--hyphen",
+      "Upper",
+      "x".repeat(65),
+    ];
+
+    for (const name of accepted) {
+      const result = await parseFrontmatter(
+        `name: ${name}\ndescription: Valid.`,
+      );
+      expect({ name, ok: Result.isOk(result) }).toEqual({ name, ok: true });
+    }
+    for (const name of refused) {
+      const result = await parseFrontmatter(
+        `name: ${name}\ndescription: Valid.`,
+      );
+      expect({ name, ok: Result.isOk(result) }).toEqual({ name, ok: false });
+    }
+  });
+
+  test("accepts compatibility up to the Agent Skills specification limit of 500 characters", async () => {
+    const atLimit = await parseFrontmatter(
+      `name: compatible\ndescription: Valid.\ncompatibility: ${"c".repeat(500)}`,
+    );
+    const overLimit = await parseFrontmatter(
+      `name: compatible\ndescription: Valid.\ncompatibility: ${"c".repeat(501)}`,
+    );
+
+    expect(Result.isOk(atLimit)).toBe(true);
+    expect(Result.isError(overLimit)).toBe(true);
+  });
+
   test("accepts a description at the Agent Skills specification limit of 1024 characters", async () => {
     const description = "x".repeat(1024);
     const result = await parseUpload(

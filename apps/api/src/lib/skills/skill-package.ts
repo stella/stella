@@ -529,7 +529,7 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
     throw new HandlerError({
       status: 400,
       message:
-        "Skill name must use lowercase letters, digits, and hyphens only",
+        "Skill name must use lowercase letters and digits, joined by single hyphens",
     });
   }
   assertFrontmatterLimits(parsed.metadata);

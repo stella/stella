@@ -17,7 +17,6 @@ import type {
   ParsedSkillResource,
 } from "@/api/lib/skills/skill-package";
 
-
 export const toParsedBundledSkillResources = (
   resourceFiles: readonly LoadedCatalogueResource[],
 ): Result<ParsedSkillResource[], HandlerError> => {
@@ -161,7 +160,7 @@ const assertBundledSkillMetadata = ({
     throw new HandlerError({
       status: 500,
       message:
-        "Bundled skill name must use lowercase letters, digits, and hyphens only",
+        "Bundled skill name must use lowercase letters and digits, joined by single hyphens",
     });
   }
   if (metadata.name !== expectedSlug) {
