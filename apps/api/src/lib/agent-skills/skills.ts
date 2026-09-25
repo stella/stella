@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
@@ -298,29 +298,43 @@ export type LoadedChatSkill = {
  * (deleted, disabled, or renamed since), which callers report as not found.
  */
 export const loadAvailableChatSkill = async ({
-  activeSkillId,
-  organizationId,
-  safeDb,
   skillName,
-  userId,
+  ...context
 }: ChatSkillContext & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
   skillName: string;
-}): Promise<Result<LoadedChatSkill | null, SafeDbError>> => {
-  const rowResult = await findInstalledSkill({
+}): Promise<Result<LoadedChatSkill | null, SafeDbError>> =>
+  (await loadAvailableChatSkills({ ...context, skillNames: [skillName] })).map(
+    (loaded) => loaded.get(skillName) ?? null,
+  );
+
+/**
+ * `loadAvailableChatSkill` for several names in two queries. A name missing
+ * from the result is not available to the caller.
+ */
+export const loadAvailableChatSkills = async ({
+  activeSkillId,
+  organizationId,
+  safeDb,
+  skillNames,
+  userId,
+}: ChatSkillContext & {
+  activeSkillId?: SafeId<"agentSkill"> | undefined;
+  skillNames: readonly string[];
+}): Promise<Result<Map<string, LoadedChatSkill>, SafeDbError>> => {
+  const rowsResult = await findInstalledSkills({
     activeSkillId,
     organizationId,
     safeDb,
-    skillName,
+    skillNames,
     userId,
   });
-  if (Result.isError(rowResult)) {
-    return Result.err(rowResult.error);
+  if (Result.isError(rowsResult)) {
+    return Result.err(rowsResult.error);
   }
-
-  const row = rowResult.value;
-  if (!row) {
-    return Result.ok(null);
+  const rows = [...rowsResult.value.values()];
+  if (rows.length === 0) {
+    return Result.ok(new Map());
   }
 
   const resources = await safeDb((tx) =>
@@ -328,28 +342,44 @@ export const loadAvailableChatSkill = async ({
       .select({
         kind: agentSkillResources.kind,
         path: agentSkillResources.path,
+        skillId: agentSkillResources.skillId,
       })
       .from(agentSkillResources)
-      .where(eq(agentSkillResources.skillId, row.id))
+      .where(
+        inArray(
+          agentSkillResources.skillId,
+          rows.map(({ id }) => id),
+        ),
+      )
       .orderBy(agentSkillResources.path)
-      .limit(LIMITS.agentSkillResourcesPerSkill),
+      .limit(LIMITS.agentSkillResourcesPerSkill * rows.length),
   );
   if (Result.isError(resources)) {
     return Result.err(resources.error);
   }
 
-  return Result.ok({
-    body: row.body,
-    compatibility: row.compatibility,
-    description: row.description,
-    id: row.id,
-    license: row.license,
-    metadata: row.metadata,
-    name: row.slug,
-    origin: row.origin,
-    resources: resources.value,
-    version: row.version,
-  });
+  return Result.ok(
+    new Map(
+      rows.map((row) => [
+        row.slug,
+        {
+          body: row.body,
+          compatibility: row.compatibility,
+          description: row.description,
+          id: row.id,
+          license: row.license,
+          metadata: row.metadata,
+          name: row.slug,
+          origin: row.origin,
+          resources: resources.value
+            .filter(({ skillId }) => skillId === row.id)
+            .slice(0, LIMITS.agentSkillResourcesPerSkill)
+            .map(({ kind, path }) => ({ kind, path })),
+          version: row.version,
+        },
+      ]),
+    ),
+  );
 };
 
 export const SKILL_RESOURCE_READ_STATUS = {
@@ -384,18 +414,18 @@ export const readAvailableChatSkillResource = async ({
   path: string;
   skillName: string;
 }): Promise<Result<AvailableChatSkillResourceRead, SafeDbError>> => {
-  const rowResult = await findInstalledSkill({
+  const rowResult = await findInstalledSkills({
     activeSkillId,
     organizationId,
     safeDb,
-    skillName,
+    skillNames: [skillName],
     userId,
   });
   if (Result.isError(rowResult)) {
     return Result.err(rowResult.error);
   }
 
-  const row = rowResult.value;
+  const row = rowResult.value.get(skillName);
   if (!row) {
     return Result.ok({ status: SKILL_RESOURCE_READ_STATUS.skillNotFound });
   }
@@ -436,16 +466,20 @@ export const readAvailableChatSkillResource = async ({
   });
 };
 
-const findInstalledSkill = async ({
+/** The row each name resolves to for the caller, keyed by slug. */
+const findInstalledSkills = async ({
   activeSkillId,
   organizationId,
   safeDb,
-  skillName,
+  skillNames,
   userId,
 }: ChatSkillContext & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
-  skillName: string;
+  skillNames: readonly string[];
 }) => {
+  if (skillNames.length === 0) {
+    return Result.ok(new Map<string, InstalledSkillRow>());
+  }
   const enabledOrActive =
     activeSkillId === undefined
       ? eq(agentSkills.enabled, true)
@@ -470,7 +504,7 @@ const findInstalledSkill = async ({
         and(
           eq(agentSkills.organizationId, organizationId),
           enabledOrActive,
-          eq(agentSkills.slug, skillName),
+          inArray(agentSkills.slug, [...skillNames]),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
         ),
       )
@@ -480,18 +514,33 @@ const findInstalledSkill = async ({
     return Result.err(rows.error);
   }
 
-  return Result.ok(
-    rows.value
-      .toSorted(
-        (a, b) =>
-          activeSkillPriority(a.id, activeSkillId) -
-            activeSkillPriority(b.id, activeSkillId) ||
-          scopePriority(a.scope) - scopePriority(b.scope) ||
-          // oxlint-disable-next-line require-cached-collator/require-cached-collator -- id tiebreak for deterministic ordering, not display text
-          a.id.localeCompare(b.id),
-      )
-      .at(0) ?? null,
-  );
+  const bySlug = new Map<string, InstalledSkillRow>();
+  for (const row of rows.value.toSorted(
+    (a, b) =>
+      activeSkillPriority(a.id, activeSkillId) -
+        activeSkillPriority(b.id, activeSkillId) ||
+      scopePriority(a.scope) - scopePriority(b.scope) ||
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- id tiebreak for deterministic ordering, not display text
+      a.id.localeCompare(b.id),
+  )) {
+    if (!bySlug.has(row.slug)) {
+      bySlug.set(row.slug, row);
+    }
+  }
+  return Result.ok(bySlug);
+};
+
+type InstalledSkillRow = {
+  body: string;
+  compatibility: string | null;
+  description: string;
+  id: SafeId<"agentSkill">;
+  license: string | null;
+  metadata: Record<string, string>;
+  origin: AgentSkillOrigin;
+  scope: "team" | "private";
+  slug: string;
+  version: string | null;
 };
 
 type InstalledSkillMetadataRow = {

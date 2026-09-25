@@ -9,7 +9,7 @@ import {
   SKILL_READ_SURFACE,
 } from "@/api/lib/agent-skills/skill-read-audit";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
-import { loadAvailableChatSkill } from "@/api/lib/agent-skills/skills";
+import { loadAvailableChatSkills } from "@/api/lib/agent-skills/skills";
 import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,7 +30,7 @@ export type RequestedSkills = {
   unavailable: string[];
 };
 
-type ResolveRequestedSkillsOptions = {
+export type ResolveRequestedSkillsOptions = {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
   /** The skills the caller may use in this turn (the chat catalog). */
   catalog: readonly SkillMetadata[];
@@ -64,30 +64,26 @@ export const resolveRequestedSkills = async ({
   const toLoad = availableSlugs.slice(0, REQUESTED_SKILLS_PRELOAD_MAX);
   const unavailable = referenced.filter((slug) => !available.has(slug));
 
-  const loadResults = await Promise.all(
-    toLoad.map(async (skillName) => ({
-      result: await loadAvailableChatSkill({
-        activeSkillId,
-        organizationId,
-        safeDb,
-        skillName,
-        userId,
-      }),
-      skillName,
-    })),
-  );
+  const loadResult = await loadAvailableChatSkills({
+    activeSkillId,
+    organizationId,
+    safeDb,
+    skillNames: toLoad,
+    userId,
+  });
+  if (Result.isError(loadResult)) {
+    return Result.err(loadResult.error);
+  }
 
   const loaded: LoadedChatSkill[] = [];
-  for (const { result, skillName } of loadResults) {
-    if (Result.isError(result)) {
-      return Result.err(result.error);
-    }
-    if (result.value === null) {
+  for (const skillName of toLoad) {
+    const skill = loadResult.value.get(skillName);
+    if (skill === undefined) {
       // Disabled or deleted after the catalog was read.
       unavailable.push(skillName);
       continue;
     }
-    loaded.push(result.value);
+    loaded.push(skill);
   }
 
   if (loaded.length > 0) {

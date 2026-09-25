@@ -24,7 +24,6 @@ import {
 } from "@/api/handlers/chat/active-file-model-source";
 import {
   chatMessageFromPersisted,
-  chatPartText,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
@@ -42,7 +41,6 @@ import {
   appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
-  buildRequestedSkillsSection,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
@@ -99,6 +97,7 @@ import {
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
+import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
 import {
   compactMessagesForContext,
   markChatCompactionDue,
@@ -168,7 +167,6 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
-import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
@@ -2030,32 +2028,22 @@ export const createSendMessage = (
           body.sendMode === CHAT_SEND_MODE.anonymized
             ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
             : chatContext.systemSafe;
-        // Skills the user picked explicitly are loaded for the whole turn,
-        // continuations included, so the pick never depends on the model.
-        const latestUserMessage = chatContext.hydratedMessages.findLast(
-          (message) => message.role === "user",
-        );
-        const requestedSkills = await resolveRequestedSkills({
-          activeSkillId: chatContext.activeSkillContext?.id,
+        const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
+          activeSkillContext: chatContext.activeSkillContext,
           catalog: chatContext.skillMetadata,
-          messageText: (latestUserMessage?.parts ?? [])
-            .map((part) => chatPartText(part) ?? "")
-            .join("\n"),
+          messages: chatContext.hydratedMessages,
           organizationId: session.activeOrganizationId,
           recordAuditEvent: recordReadAuditEvent,
           safeDb,
           userId: user.id,
         });
-        if (Result.isError(requestedSkills)) {
+        if (Result.isError(requestedSkillsPrompt)) {
           await lifecycle.failCurrentTurn("internal", true);
-          return Result.err(requestedSkills.error);
+          return Result.err(requestedSkillsPrompt.error);
         }
         const systemUntrusted = extendChatUntrustedPromptSuffix(
           chatContext.systemUntrusted,
-          [
-            externalMcpSystemHint,
-            buildRequestedSkillsSection(requestedSkills.value),
-          ],
+          [externalMcpSystemHint, requestedSkillsPrompt.value],
         );
 
         // A normal chat hands loaded clients to the stream. Agent runs leave
