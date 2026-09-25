@@ -420,6 +420,8 @@ type GetChatToolsProps = {
   skillMetadata?: readonly SkillMetadata[] | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
+  /** Records reads that run without an approval, such as `load-skill`. */
+  recordReadAuditEvent?: AuditRecorder | undefined;
   /**
    * Execution-time matter provenance for durable memories created during this
    * turn. The resolver must include the initial prompt/thread scope and refs
@@ -629,6 +631,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     skillMetadata,
     activeSkillContext,
     recordAuditEvent,
+    recordReadAuditEvent,
     resolveMemorySourceWorkspaceIds,
     workspaceStatusById,
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -687,6 +690,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     purpose,
     recordAuditEvent,
+    recordReadAuditEvent,
     safeDb,
     skills: skillMetadata ?? [],
     userId,

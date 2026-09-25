@@ -366,7 +366,10 @@ export type AvailableChatSkillResourceRead =
       origin: AgentSkillOrigin;
       skillId: SafeId<"agentSkill">;
     }
-  | { status: typeof SKILL_RESOURCE_READ_STATUS.resourceNotFound }
+  | {
+      status: typeof SKILL_RESOURCE_READ_STATUS.resourceNotFound;
+      skillId: SafeId<"agentSkill">;
+    }
   | { status: typeof SKILL_RESOURCE_READ_STATUS.skillNotFound };
 
 export const readAvailableChatSkillResource = async ({
@@ -418,7 +421,10 @@ export const readAvailableChatSkillResource = async ({
 
   const resource = resources.value.at(0);
   if (!resource) {
-    return Result.ok({ status: SKILL_RESOURCE_READ_STATUS.resourceNotFound });
+    return Result.ok({
+      status: SKILL_RESOURCE_READ_STATUS.resourceNotFound,
+      skillId: row.id,
+    });
   }
 
   return Result.ok({

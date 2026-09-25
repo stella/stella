@@ -18,6 +18,12 @@ import {
   readAvailableChatSkillResource,
   SKILL_RESOURCE_READ_STATUS,
 } from "@/api/lib/agent-skills/skills";
+import {
+  recordSkillReadAudit,
+  SKILL_READ_OUTCOME,
+  SKILL_READ_SURFACE,
+} from "@/api/lib/agent-skills/skill-read-audit";
+import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,6 +50,12 @@ type CreateSkillToolsProps = {
    */
   purpose?: ChatToolSetPurpose | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
+  /**
+   * Records skill reads. Separate from `recordAuditEvent`, which is bound to
+   * approved mutations; `load-skill` and `read-skill-resource` run without an
+   * approval.
+   */
+  recordReadAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
   skills: readonly SkillMetadata[];
   userId: SafeId<"user">;
@@ -54,10 +66,26 @@ export const createSkillTools = ({
   organizationId,
   purpose = CHAT_TOOL_SET_PURPOSE.run,
   recordAuditEvent,
+  recordReadAuditEvent,
   safeDb,
   skills,
   userId,
 }: CreateSkillToolsProps) => {
+  const auditRead = async (read: {
+    outcome: SkillReadOutcome;
+    path: string | null;
+    skillId: SafeId<"agentSkill">;
+    slug: string;
+  }) => {
+    if (recordReadAuditEvent === undefined) {
+      return;
+    }
+    await recordSkillReadAudit({
+      reads: [{ ...read, surface: SKILL_READ_SURFACE.chat }],
+      recordAuditEvent: recordReadAuditEvent,
+      safeDb,
+    });
+  };
   const availableSkillIds = new Set(skills.map((skill) => skill.name));
   const activeSkillId = activeSkillContext?.id;
   const activeEditableSkillContext =
@@ -118,6 +146,12 @@ export const createSkillTools = ({
       if (skill === null) {
         throw unavailableSkillError(skillName);
       }
+      await auditRead({
+        outcome: SKILL_READ_OUTCOME.success,
+        path: null,
+        skillId: skill.id,
+        slug: skill.name,
+      });
       return {
         name: skill.name,
         version: skill.version,
@@ -172,11 +206,23 @@ export const createSkillTools = ({
         case SKILL_RESOURCE_READ_STATUS.skillNotFound:
           throw unavailableSkillError(skillName);
         case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
+          await auditRead({
+            outcome: SKILL_READ_OUTCOME.error,
+            path,
+            skillId: read.skillId,
+            slug: skillName,
+          });
           throw new ChatToolError({
             kind: "not-found",
             message: "Unknown or unavailable skill resource path.",
           });
         case SKILL_RESOURCE_READ_STATUS.found:
+          await auditRead({
+            outcome: SKILL_READ_OUTCOME.success,
+            path,
+            skillId: read.skillId,
+            slug: skillName,
+          });
           return {
             skillName,
             path,

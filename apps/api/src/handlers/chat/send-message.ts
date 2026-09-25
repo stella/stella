@@ -1898,6 +1898,24 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
+        // Reads the assistant makes without an approval, such as a skill
+        // loaded by `load-skill`.
+        const recordReadAuditEvent = createAuditRecorder({
+          execution: {
+            performer: {
+              type: "agent",
+              id: "stella-assistant",
+              name: "Stella AI",
+            },
+            trigger: {
+              type: "user_dispatch",
+              userId: user.id,
+              source: "chat",
+              sourceId: body.threadId,
+            },
+            runId: parsedMessage.message.id,
+          },
+        });
         const chatTools = getChatTools({
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -1961,6 +1979,7 @@ export const createSendMessage = (
             },
             ...(workspaceId === null ? {} : { workspaceId }),
           }),
+          recordReadAuditEvent,
           resolveMemorySourceWorkspaceIds: () =>
             resolveMemorySourceWorkspaceIds({
               accessibleWorkspaceIds: accessibleSet,

@@ -4,8 +4,9 @@ import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -156,5 +157,89 @@ describe("skill catalog tools", () => {
         tool: tools["load-skill"],
       }),
     );
+  });
+
+  test("audit each skill read by id, slug, and path, without the content", async () => {
+    const slug = `audited-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    const tools = createSkillTools({
+      organizationId: ids.orgA,
+      recordReadAuditEvent: createAuditRecorder({
+        organizationId: ids.orgA,
+        request: new Request("http://localhost/v1/chat/send"),
+        server: null,
+        userId: ids.userA2,
+        workspaceId: null,
+      }),
+      safeDb,
+      skills: [
+        { description: "Skill tools test skill", name: slug, version: null },
+      ],
+      userId: ids.userA2,
+    });
+
+    const loaded = await executeTool({
+      input: { skillName: slug },
+      tool: tools["load-skill"],
+    });
+    expect(Result.isOk(loaded)).toBe(true);
+    const read = await executeTool({
+      input: { path: "knowledge/checklist.md", skillName: slug },
+      tool: tools["read-skill-resource"],
+    });
+    expect(Result.isOk(read)).toBe(true);
+    expectNotFound(
+      await executeTool({
+        input: { path: "knowledge/absent.md", skillName: slug },
+        tool: tools["read-skill-resource"],
+      }),
+    );
+
+    const rows = await testDb
+      .select({
+        action: auditLogs.action,
+        metadata: auditLogs.metadata,
+        resourceType: auditLogs.resourceType,
+      })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, skillId));
+    const reads = rows.map(({ action, metadata, resourceType }) => ({
+      action,
+      outcome: metadata?.["outcome"],
+      path: metadata?.["path"],
+      resourceType,
+      slug: metadata?.["slug"],
+      surface: metadata?.["surface"],
+    }));
+    expect(reads).toEqual(
+      expect.arrayContaining([
+        {
+          action: "access",
+          outcome: "success",
+          path: null,
+          resourceType: "agent_skill",
+          slug,
+          surface: "chat",
+        },
+        {
+          action: "access",
+          outcome: "success",
+          path: "knowledge/checklist.md",
+          resourceType: "agent_skill",
+          slug,
+          surface: "chat",
+        },
+        {
+          action: "access",
+          outcome: "error",
+          path: "knowledge/absent.md",
+          resourceType: "agent_skill",
+          slug,
+          surface: "chat",
+        },
+      ]),
+    );
+    expect(reads).toHaveLength(3);
+    expect(JSON.stringify(rows)).not.toContain("Follow the test methodology.");
   });
 });

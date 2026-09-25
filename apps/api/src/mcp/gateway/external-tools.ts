@@ -235,41 +235,6 @@ export const callGatewayExternalMcpTool = async ({
   }
 };
 
-export const recordSkillGatewayToolAudit = async ({
-  context,
-  durationMs,
-  outcome,
-  skillId,
-  toolName,
-}: {
-  context: McpRequestContext;
-  durationMs: number;
-  outcome: "error" | "success";
-  skillId: string;
-  toolName: string;
-}) => {
-  const recordAuditEvent = context.recordAuditEvent;
-
-  const result = await context.safeDb(
-    async (tx) =>
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.EXECUTE,
-        resourceType: AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL,
-        resourceId: skillId,
-        workspaceId: null,
-        metadata: {
-          durationMs,
-          outcome,
-          toolKind: "skill",
-          toolName,
-        },
-      }),
-  );
-  if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-skill-audit" });
-  }
-};
-
 const recordGatewayToolAudit = async ({
   context,
   durationMs,

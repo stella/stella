@@ -16,14 +16,14 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const callGatewayExternalMcpToolMock = mock();
 const gatewayLoadErrorResultMock = mock();
 const readSkillToolMock = mock();
-const recordSkillGatewayToolAuditMock = mock(async () => undefined);
+const recordSkillReadAuditMock = mock(async () => undefined);
 const resolveSkillToolMock = mock();
 
 const dependencies = {
   callGatewayExternalMcpTool: callGatewayExternalMcpToolMock,
   gatewayLoadErrorResult: gatewayLoadErrorResultMock,
   readSkillTool: readSkillToolMock,
-  recordSkillGatewayToolAudit: recordSkillGatewayToolAuditMock,
+  recordSkillReadAudit: recordSkillReadAuditMock,
   resolveSkillTool: resolveSkillToolMock,
 };
 
@@ -56,8 +56,8 @@ describe("dispatchGatewayToolCall", () => {
     callGatewayExternalMcpToolMock.mockReset();
     gatewayLoadErrorResultMock.mockReset();
     gatewayLoadErrorResultMock.mockReturnValue(null);
-    recordSkillGatewayToolAuditMock.mockReset();
-    recordSkillGatewayToolAuditMock.mockResolvedValue(undefined);
+    recordSkillReadAuditMock.mockReset();
+    recordSkillReadAuditMock.mockResolvedValue(undefined);
     resolveSkillToolMock.mockReset();
     readSkillToolMock.mockReset();
   });
@@ -138,7 +138,7 @@ describe("dispatchGatewayToolCall", () => {
         hint: "Call tools/list for the tools available to this session.",
       },
     });
-    expect(recordSkillGatewayToolAuditMock).not.toHaveBeenCalled();
+    expect(recordSkillReadAuditMock).not.toHaveBeenCalled();
   });
 
   test("dispatches a resolved skill body and records a success audit event", async () => {
@@ -173,14 +173,18 @@ describe("dispatchGatewayToolCall", () => {
       },
     });
 
-    expect(recordSkillGatewayToolAuditMock).toHaveBeenCalledTimes(1);
-    expect(recordSkillGatewayToolAuditMock).toHaveBeenCalledWith(
+    expect(recordSkillReadAuditMock).toHaveBeenCalledTimes(1);
+    expect(recordSkillReadAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        context,
-        outcome: "success",
-        skillId: resolvedSkill.id,
-        toolName: "skill__alpha",
-        durationMs: expect.any(Number),
+        reads: [
+          {
+            outcome: "success",
+            path: null,
+            skillId: resolvedSkill.id,
+            slug: "alpha",
+            surface: "mcp",
+          },
+        ],
       }),
     );
   });
@@ -208,7 +212,7 @@ describe("dispatchGatewayToolCall", () => {
 
     expect(gatewayLoadErrorResultMock).toHaveBeenCalledWith(loadFault);
     expect(result).toEqual({ type: "internal", result: sentinel });
-    expect(recordSkillGatewayToolAuditMock).not.toHaveBeenCalled();
+    expect(recordSkillReadAuditMock).not.toHaveBeenCalled();
   });
 
   test("rethrows a resolve fault that gatewayLoadErrorResult does not recognize as a load fault", async () => {

@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -83,7 +84,13 @@ const createRecordingContext = (userId: SafeId<"user">) => {
     grantedScopes: [],
     memberRole: "owner",
     organizationId: ids.orgA,
-    recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
+    recordAuditEvent: createAuditRecorder({
+      organizationId: ids.orgA,
+      request: new Request("http://localhost/mcp"),
+      server: null,
+      userId,
+      workspaceId: null,
+    }),
     safeDb,
     userId,
   });
@@ -182,5 +189,59 @@ describe("MCP skill tools against the database", () => {
     const parsed: unknown =
       item?.type === "text" ? JSON.parse(item.text) : undefined;
     expect(parsed).toMatchObject({ error: { code: "not_found" } });
+  });
+
+  test("audits each skill read with its outcome, the same event chat records", async () => {
+    const slug = `audited-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill({
+      body: "Audited instructions.",
+      slug,
+      userId: ids.userA1,
+    });
+    const { context } = createRecordingContext(ids.userA1);
+    const toolName = `skill__${slug}`;
+
+    await handleMcpToolCall({ args: {}, context, toolName });
+    await handleMcpToolCall({
+      args: { resource: "knowledge/absent.md" },
+      context,
+      toolName,
+    });
+
+    const rows = await testDb
+      .select({
+        action: auditLogs.action,
+        metadata: auditLogs.metadata,
+        resourceType: auditLogs.resourceType,
+      })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, skillId));
+    expect(
+      rows.map(({ action, metadata, resourceType }) => ({
+        action,
+        outcome: metadata?.["outcome"],
+        path: metadata?.["path"],
+        resourceType,
+        surface: metadata?.["surface"],
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          action: "access",
+          outcome: "success",
+          path: null,
+          resourceType: "agent_skill",
+          surface: "mcp",
+        },
+        {
+          action: "access",
+          outcome: "error",
+          path: "knowledge/absent.md",
+          resourceType: "agent_skill",
+          surface: "mcp",
+        },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
   });
 });

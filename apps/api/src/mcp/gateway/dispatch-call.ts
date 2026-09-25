@@ -1,8 +1,12 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import * as v from "valibot";
 
-import { Temporal } from "@stll/time";
-
+import {
+  recordSkillReadAudit,
+  SKILL_READ_OUTCOME,
+  SKILL_READ_SURFACE,
+} from "@/api/lib/agent-skills/skill-read-audit";
+import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -17,14 +21,16 @@ import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
-  recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
 import {
   readSkillTool,
   resolveSkillTool,
   SKILL_TOOL_READ_TYPE,
 } from "@/api/mcp/gateway/skills";
-import type { SkillToolRead } from "@/api/mcp/gateway/skills";
+import type {
+  ResolvedSkillTool,
+  SkillToolRead,
+} from "@/api/mcp/gateway/skills";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import {
   structuredErrorResult,
@@ -36,7 +42,7 @@ export type GatewayDispatchDependencies = {
   callGatewayExternalMcpTool: typeof callGatewayExternalMcpTool;
   gatewayLoadErrorResult: typeof gatewayLoadErrorResult;
   readSkillTool: typeof readSkillTool;
-  recordSkillGatewayToolAudit: typeof recordSkillGatewayToolAudit;
+  recordSkillReadAudit: typeof recordSkillReadAudit;
   resolveSkillTool: typeof resolveSkillTool;
 };
 
@@ -44,7 +50,7 @@ const defaultDependencies: GatewayDispatchDependencies = {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
   readSkillTool,
-  recordSkillGatewayToolAudit,
+  recordSkillReadAudit,
   resolveSkillTool,
 };
 
@@ -96,36 +102,53 @@ export const dispatchGatewayToolCall = async ({
     return { type: "internal", result: validationErrorResult(input.issues) };
   }
 
-  const startedAt = Temporal.Now.instant().epochMilliseconds;
+  let resolved: ResolvedSkillTool | null;
+  try {
+    resolved = await dependencies.resolveSkillTool({ context, toolName });
+  } catch (error) {
+    return loadFaultResult({ dependencies, error });
+  }
+  if (resolved === null) {
+    return { type: "internal", result: unknownToolResult(toolName) };
+  }
+
+  const skill = resolved;
+  const resourcePath = input.output.resource ?? null;
+  const auditRead = async (outcome: SkillReadOutcome) =>
+    await dependencies.recordSkillReadAudit({
+      reads: [
+        {
+          outcome,
+          path: resourcePath,
+          skillId: skill.id,
+          slug: skill.name,
+          surface: SKILL_READ_SURFACE.mcp,
+        },
+      ],
+      recordAuditEvent: context.recordAuditEvent,
+      safeDb: context.safeDb,
+    });
+
   let read: SkillToolRead | null;
   try {
-    const resolved = await dependencies.resolveSkillTool({
+    read = await dependencies.readSkillTool({
       context,
-      toolName,
+      resourcePath: input.output.resource,
+      skill,
     });
-    read =
-      resolved === null
-        ? null
-        : await dependencies.readSkillTool({
-            context,
-            resourcePath: input.output.resource,
-            skill: resolved,
-          });
   } catch (error) {
-    // A load fault means we cannot tell whether the skill exists: answer with a
-    // retryable error, never a definitive `unknown_tool`.
-    const loadError = dependencies.gatewayLoadErrorResult(error);
-    if (loadError) {
-      return { type: "internal", result: loadError };
-    }
-    throw error;
+    await auditRead(SKILL_READ_OUTCOME.error);
+    return loadFaultResult({ dependencies, error });
   }
   if (read === null) {
+    // Disabled or deleted between resolution and this read.
+    await auditRead(SKILL_READ_OUTCOME.error);
     return { type: "internal", result: unknownToolResult(toolName) };
   }
 
   switch (read.type) {
     case SKILL_TOOL_READ_TYPE.resourceNotFound:
+      await auditRead(SKILL_READ_OUTCOME.error);
       return {
         type: "internal",
         result: structuredErrorResult({
@@ -135,13 +158,7 @@ export const dispatchGatewayToolCall = async ({
         }),
       };
     case SKILL_TOOL_READ_TYPE.skill:
-      await dependencies.recordSkillGatewayToolAudit({
-        context,
-        durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
-        outcome: "success",
-        skillId: read.skill.id,
-        toolName,
-      });
+      await auditRead(SKILL_READ_OUTCOME.success);
       // Bound to the family's shared output contract at compile time; dispatch
       // validates the served value against the same Valibot source at runtime.
       return {
@@ -160,13 +177,7 @@ export const dispatchGatewayToolCall = async ({
         } satisfies SkillToolOutput),
       };
     case SKILL_TOOL_READ_TYPE.resource:
-      await dependencies.recordSkillGatewayToolAudit({
-        context,
-        durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
-        outcome: "success",
-        skillId: read.skill.id,
-        toolName,
-      });
+      await auditRead(SKILL_READ_OUTCOME.success);
       return {
         type: "internal",
         result: toolDataResult({
@@ -181,4 +192,22 @@ export const dispatchGatewayToolCall = async ({
     default:
       return read satisfies never;
   }
+};
+
+/**
+ * A load fault means we cannot tell whether the skill exists: answer with a
+ * retryable error, never a definitive `unknown_tool`.
+ */
+const loadFaultResult = ({
+  dependencies,
+  error,
+}: {
+  dependencies: GatewayDispatchDependencies;
+  error: unknown;
+}): GatewayDispatchResult => {
+  const loadError = dependencies.gatewayLoadErrorResult(error);
+  if (loadError) {
+    return { type: "internal", result: loadError };
+  }
+  throw error;
 };
