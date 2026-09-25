@@ -1132,7 +1132,7 @@ const createBehaviorTools = ({
     return {
       answers: questions.map((question) => ({
         question: question.question,
-        answer: scenario.answer(question),
+        answer: scenario.answer(question, events),
       })),
     };
   });
@@ -1202,6 +1202,7 @@ const runScenario = async ({
   });
   let error: string | null = null;
   let finalText = "";
+  const replies: string[] = [];
   let latencyMs = 0;
   let tokens = 0;
   for (const message of [scenario.brief, ...scenario.followUps]) {
@@ -1218,6 +1219,7 @@ const runScenario = async ({
       onChunk: (chunk) => conversation.processChunk(chunk),
     });
     finalText = turn.finalText;
+    replies.push(turn.finalText);
     latencyMs += turn.latencyMs;
     tokens += turn.usage?.totalTokens ?? 0;
     if (turn.error !== null) {
@@ -1230,6 +1232,7 @@ const runScenario = async ({
     surface,
     documentedReads: new Set(skill.documentedChatReads),
     events,
+    replies,
     playbooks,
   });
   // What the tool stored must be what the HTTP route would have accepted.
