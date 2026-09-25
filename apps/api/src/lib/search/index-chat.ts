@@ -332,6 +332,7 @@ const rollUpThreadText = async ({
           AND (created_at, id) > (select created_at, id from chat_messages where id = ${cursor})`
       : sql`thread_id = ${threadId}`;
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const page = await database.execute<ChatSearchMessageRow>(sql`
       SELECT id, role, content, created_at::text AS "createdAtToken"
       FROM chat_messages
@@ -344,6 +345,7 @@ const rollUpThreadText = async ({
       break;
     }
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched projection write per keyset page
     await upsertChatMessageSearchDocuments({
       database,
       messages: page,
@@ -442,7 +444,7 @@ export const backfillChatThreadSearchIndex = async ({
     if (signal?.aborted) {
       return total;
     }
-    // oxlint-disable-next-line require-search-scope/require-search-scope -- tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller
+    // oxlint-disable-next-line require-search-scope/require-search-scope, no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller
     const batch = await database.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t
@@ -478,6 +480,7 @@ export const backfillChatThreadSearchIndex = async ({
         return total;
       }
       try {
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one projection transaction per thread; the keyset page bounds each batch and a failed thread is logged and skipped
         await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
         captureError(error, {

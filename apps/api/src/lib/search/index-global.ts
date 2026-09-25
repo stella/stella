@@ -1875,6 +1875,7 @@ export const upsertWorkspaceSearchDocuments = async (
           if (!workspaceId) {
             return;
           }
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- a fixed pool of WORKSPACE_REINDEX_CONCURRENCY workers, one projection transaction per matter
           await upsertWorkspaceSearchDocument(workspaceId, database);
         }
       })(),
@@ -1937,6 +1938,7 @@ const rebuildSupplementalSearchDocuments = async (
   let hasMoreContacts = true;
 
   while (hasMoreContacts) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await database
       .select({ id: contacts.id })
       .from(contacts)
@@ -1952,6 +1954,7 @@ const rebuildSupplementalSearchDocuments = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const contact of batch) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one projection transaction per contact, bounded by the keyset page
       await upsertContactSearchDocument(contact.id, database);
     }
 
@@ -1963,6 +1966,7 @@ const rebuildSupplementalSearchDocuments = async (
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await database
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -1978,6 +1982,7 @@ const rebuildSupplementalSearchDocuments = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const workspace of batch) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one projection transaction per matter, bounded by the keyset page
       await upsertWorkspaceSearchDocument(workspace.id, database);
     }
 
