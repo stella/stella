@@ -229,6 +229,7 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      await db.$client.close();
     });
 
     test("a metadata-only refresh leaves the stored document alone", async () => {

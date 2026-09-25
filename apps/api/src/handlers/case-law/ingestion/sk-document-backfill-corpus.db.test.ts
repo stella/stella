@@ -233,6 +233,7 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      await db.$client.close();
     });
 
     test("moves the row's keys and hash onto the real document", async () => {

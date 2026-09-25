@@ -363,6 +363,7 @@ if (!databaseUrl || !runPostgresTests) {
       for (const sourceId of createdSourceIds) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
+      await db.$client.close();
     });
 
     const createSource = async (
