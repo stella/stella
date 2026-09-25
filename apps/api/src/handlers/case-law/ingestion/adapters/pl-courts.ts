@@ -1324,6 +1324,12 @@ const fetchDetailForItem = async (
   }
 };
 
+/** A judgment text the structured parser could not read. */
+const documentParseFailed = failureSink({
+  event: "case_law.ingestion.document_parse_failed",
+  expected: [],
+});
+
 type BuildPlDecisionOptions = {
   /** The item exactly as the publisher listed it. */
   listingItem: SaosItem;
@@ -1439,8 +1445,18 @@ export const buildPlDecision = ({
 
       documentAst = parserResult.documentAst;
       fulltext = parserResult.fulltext;
-    } catch {
-      // Parser failure must not block ingestion.
+    } catch (error) {
+      // A parse failure does not block ingestion: the stripped text stands
+      // in for the document and the raw payload is kept for a re-parse.
+      // Reported, so a parser that starts failing across the source is told
+      // apart from decisions that carry unstructured text.
+      observeFailure(error, {
+        sink: documentParseFailed,
+        ctx: {
+          adapterKey: ADAPTER_KEYS.PL_COURTS,
+          documentId: String(saosId ?? caseNumber),
+        },
+      });
     }
   }
 
