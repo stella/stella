@@ -179,7 +179,28 @@ export const downloadNoticeMessage = ({
  * and was kept, and shows the count on the toolbar icon until the popup
  * opens. The icon's tooltip names what happened.
  */
-const noteDownload = async (outcome: keyof DownloadNotices): Promise<void> => {
+// Recording and taking notices read, change and write the same stored
+// value; the worker applies them one at a time, in the order they arrive,
+// so no update overwrites another.
+let noticeTail: Promise<unknown> = Promise.resolve();
+
+const serializeNotices = async <T>(task: () => Promise<T>): Promise<T> => {
+  const next = noticeTail.then(task, task);
+  noticeTail = next.catch(() => undefined);
+  return await next;
+};
+
+export const recordDownloadNotice = async (
+  outcome: keyof DownloadNotices,
+): Promise<void> => {
+  await serializeNotices(async () => {
+    await applyDownloadNotice(outcome);
+  });
+};
+
+const applyDownloadNotice = async (
+  outcome: keyof DownloadNotices,
+): Promise<void> => {
   const previous = await readNotices();
   const next = { ...previous, [outcome]: previous[outcome] + 1 };
   await chrome.storage.session.set({
@@ -227,7 +248,7 @@ const keepFinishedDownload = async (downloadId: number): Promise<void> => {
     return;
   }
   kept.add(downloadId);
-  await noteDownload("kept");
+  await recordDownloadNotice("kept");
 };
 
 const runJudgement = async (
@@ -247,7 +268,7 @@ const runJudgement = async (
     const [after] = await chrome.downloads.search({ id: download.id });
     await (after?.state === "complete"
       ? keepFinishedDownload(download.id)
-      : noteDownload("stopped"));
+      : recordDownloadNotice("stopped"));
     return;
   }
   const scope = scopeNow ?? (await readScope());
@@ -273,7 +294,7 @@ const runJudgement = async (
   const [after] = await chrome.downloads.search({ id: download.id });
   await (after?.state === "complete"
     ? keepFinishedDownload(download.id)
-    : noteDownload("stopped"));
+    : recordDownloadNotice("stopped"));
 };
 
 /**
@@ -337,11 +358,16 @@ export const holdDownloadForJudgement = (
   return true;
 };
 
-/** Returns the download notices and clears them once the user has seen them. */
-export const takeDownloadNotices = async (): Promise<DownloadNotices> => {
-  const notices = await readNotices();
-  await chrome.storage.session.remove(BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY);
-  await chrome.action.setBadgeText({ text: "" });
-  await chrome.action.setTitle({ title: "" });
-  return notices;
-};
+/**
+ * Returns the download notices and clears them once the user has seen them.
+ * Runs in the worker, in turn with recording, so a notice recorded while
+ * the popup opens is either shown now or kept for next time.
+ */
+export const takeDownloadNotices = async (): Promise<DownloadNotices> =>
+  await serializeNotices(async () => {
+    const notices = await readNotices();
+    await chrome.storage.session.remove(BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY);
+    await chrome.action.setBadgeText({ text: "" });
+    await chrome.action.setTitle({ title: "" });
+    return notices;
+  });

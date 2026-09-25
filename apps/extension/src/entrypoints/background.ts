@@ -28,6 +28,7 @@ import {
   holdDownloadForJudgement,
   judgeDownload,
   refreshContainedDownloadScope,
+  takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
 import {
@@ -315,6 +316,8 @@ const handlePopupRequest = async (
         await disconnectBrowserController();
         return { status: "done" };
       });
+    case "take-download-notices":
+      return { ...(await takeDownloadNotices()), status: "download-notices" };
     default:
       request satisfies never;
       return panic("Unhandled popup request");
