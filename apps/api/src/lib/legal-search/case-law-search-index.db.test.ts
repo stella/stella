@@ -47,7 +47,7 @@ const resolveConfig: Parameters<typeof indexDecision>[2] = async () => ({
 const scopedDb: Parameters<typeof indexDecision>[1] = async (callback) =>
   // SAFETY: pglite stands in for the transaction used by this projection;
   // the test exercises only the statements issued by the callback.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
 const sourceId = createSafeId<"caseLawSource">();

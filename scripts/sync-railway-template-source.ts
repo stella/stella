@@ -207,7 +207,7 @@ const graphql = async <TData>(
 
   // SAFETY: Railway GraphQL validates the response shape for the query; callers
   // provide the matching data type for the query document they pass here.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const payload = (await response.json()) as GraphqlResponse<TData>;
   if (payload.errors && payload.errors.length > 0) {
     throw new RailwayTemplateSyncError(

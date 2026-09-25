@@ -292,7 +292,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
   });
 });
 
-// eslint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
 const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
 
 describe("withStellaTwoFactorSignInGate", () => {

@@ -85,7 +85,7 @@ const tokenize = (expression: string): Tok[] => {
       tokens.push({ t: "comma" });
     } else if (punct !== undefined) {
       // SAFETY: the punct group only matches one of + - * / %.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       tokens.push({ t: "op", v: punct as "+" | "-" | "*" | "/" | "%" });
     }
   }

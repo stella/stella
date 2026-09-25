@@ -87,7 +87,7 @@ const toExecutionSuccess = <T>(
   logs: [...logs],
 });
 
-// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- T is imposed by the third-party IsolateDriver.execute<T> contract; runtime validation is JSON-shape only
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- T is imposed by the third-party IsolateDriver.execute<T> contract; runtime validation is JSON-shape only
 const validateSandboxOutput = <T>(value: unknown): T => {
   if (!isJsonValue<T>(value)) {
     throw new SandboxError({
@@ -98,7 +98,7 @@ const validateSandboxOutput = <T>(value: unknown): T => {
   return value;
 };
 
-// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- carries the IsolateDriver's erased result type after JSON validation
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- carries the IsolateDriver's erased result type after JSON validation
 const isJsonValue = <T>(value: unknown): value is T => {
   if (
     value === null ||
@@ -125,14 +125,14 @@ const isJsonValue = <T>(value: unknown): value is T => {
   return Object.values(value).every(isJsonValue);
 };
 
-// eslint-disable-next-line typescript/promise-function-async -- IsolateContext.dispose must return a promise, but a per-call isolate has nothing to tear down; `async` would only trip require-await
+// oxlint-disable-next-line typescript/promise-function-async -- IsolateContext.dispose must return a promise, but a per-call isolate has nothing to tear down; `async` would only trip require-await
 const disposeIsolate = (): Promise<void> => Promise.resolve();
 
 export const createStellaIsolateDriver = ({
   concurrencyKey,
   limits,
 }: CreateStellaIsolateDriverProps): IsolateDriver => ({
-  // eslint-disable-next-line typescript/promise-function-async -- returns a resolved context synchronously (a fresh isolate is created per execute() call, so there is no async setup); `async` would only trip require-await
+  // oxlint-disable-next-line typescript/promise-function-async -- returns a resolved context synchronously (a fresh isolate is created per execute() call, so there is no async setup); `async` would only trip require-await
   createContext: (config: IsolateConfig): Promise<IsolateContext> => {
     const registry = buildRegistryFromBindings(config.bindings);
     const aliasPrelude = buildBindingAliasPrelude(config.bindings);

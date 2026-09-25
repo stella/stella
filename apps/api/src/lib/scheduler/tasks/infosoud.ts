@@ -36,7 +36,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
     total += trackedCases.length;
 
     for (const trackedCase of trackedCases) {
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
       if (signal.aborted) {
         break;
       }
@@ -52,7 +52,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           lookupResult.hearings.udalosti,
         );
 
-        // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip while the external lookup is in flight.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip while the external lookup is in flight.
         if (signal.aborted) {
           break;
         }
@@ -111,7 +111,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
 
         synced += 1;
       } catch (error: unknown) {
-        // eslint-disable-next-line typescript/no-unnecessary-condition -- Avoid marking an intentionally aborted task as a failed tracked case.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- Avoid marking an intentionally aborted task as a failed tracked case.
         if (signal.aborted) {
           break;
         }

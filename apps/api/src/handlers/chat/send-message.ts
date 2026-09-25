@@ -1439,12 +1439,12 @@ export const createSendMessage = (
           workspace.status,
         ]),
       );
-      /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
+      /* oxlint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
       const scope = yield* resolveChatScope({
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
-      /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
+      /* oxlint-enable no-body-ownership-ids/no-body-ownership-ids */
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;

@@ -22,7 +22,7 @@ const deleteMcpConnection = createSafeRootHandler(
   config,
   async function* ({ params: requestParams, safeDb, session, user }) {
     const deleted = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — per-user MCP connection removal; the connector itself is SOC 2-audited at create-connector / delete-connector.
         return tx

@@ -53,7 +53,7 @@ export const loadDemoEngine = async (): Promise<DemoEngine> => {
     { loadCityDictionary },
     anonymizeRuntime,
   ] = await Promise.all([
-    // eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
+    // oxlint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
     import("buffer"),
     import("@stll/anonymize-chat"),
     import("@stll/anonymize-data"),
@@ -67,7 +67,7 @@ export const loadDemoEngine = async (): Promise<DemoEngine> => {
   // is hit at runtime. Node itself would provide this for free — a worker in a
   // real browser needs the polyfill installed before the pipeline actually
   // runs, which this is: the modules above only read it once `run` is called.
-  // eslint-disable-next-line typescript/no-unnecessary-condition -- ambient lib types claim globalThis.Buffer always exists; a real browser/worker genuinely may not have it, which is exactly the runtime gap this line covers
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- ambient lib types claim globalThis.Buffer always exists; a real browser/worker genuinely may not have it, which is exactly the runtime gap this line covers
   globalThis.Buffer ??= Buffer;
 
   const [names, cityResults] = await Promise.all([

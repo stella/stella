@@ -357,7 +357,7 @@ export const templateDocxBufferOptions = (
   templateId: string,
   presignedUrl: string,
 ) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl rotates; intentionally keyed on the stable template id so the cache survives URL refresh (see comment above).
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl rotates; intentionally keyed on the stable template id so the cache survives URL refresh (see comment above).
   queryOptions({
     queryKey: knowledgeKeys.templates.docxBuffer(organizationId, templateId),
     queryFn: async ({ signal }) => {
@@ -411,7 +411,7 @@ export const templateFillDiscoverOptions = ({
   key,
   context,
 }: TemplateFillDiscoverOptionsInput) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl/fileName are runtime-only context; keyed on the stable template id so a URL rotation does not evict this cache and force a re-download + re-discover.
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl/fileName are runtime-only context; keyed on the stable template id so a URL rotation does not evict this cache and force a re-download + re-discover.
   queryOptions({
     queryKey: knowledgeKeys.templates.fillDiscover(
       key.organizationId,

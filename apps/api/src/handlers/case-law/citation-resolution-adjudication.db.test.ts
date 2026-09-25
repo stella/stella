@@ -92,7 +92,7 @@ const hintNoneCitation = createSafeId<"caseLawCitation">();
 
 // The pglite handle stands in for a transaction, matching the pattern the
 // other case-law database tests use for their fakes.
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const asTx = () => db as unknown as Transaction;
 
 const scopedDb = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>

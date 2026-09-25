@@ -859,7 +859,7 @@ const STRIP_TAGS = [
   "math",
 ];
 
-// eslint-disable-next-line no-script-url -- listing the schemes we strip from untrusted HTML
+// oxlint-disable-next-line no-script-url -- listing the schemes we strip from untrusted HTML
 const ACTIVE_URL_SCHEMES = ["javascript:", "vbscript:"];
 const URL_ATTRIBUTES = new Set([
   "href",

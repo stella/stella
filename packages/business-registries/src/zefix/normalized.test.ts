@@ -6,7 +6,7 @@ import { parseFirm, parseSearchEntry } from "./parse.js";
 import type { ZefixSearchResponse } from "./types.js";
 
 // SAFETY: captured official fixture is consumed by the defensive parser.
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const raw = fixture as unknown as ZefixSearchResponse;
 
 describe("Zefix normalized projection", () => {

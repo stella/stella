@@ -15,12 +15,12 @@ import type {
   CompaniesHouseRawSearchResponse,
 } from "./types.js";
 
-/* eslint-disable typescript-eslint/no-unsafe-type-assertion -- captured official fixtures */
+/* oxlint-disable typescript-eslint/no-unsafe-type-assertion -- captured official fixtures */
 const companyRaw = companyFixture as unknown as CompaniesHouseRawCompanyProfile;
 const officersRaw =
   officersFixture as unknown as CompaniesHouseRawOfficersResponse;
 const searchRaw = searchFixture as unknown as CompaniesHouseRawSearchResponse;
-/* eslint-enable typescript-eslint/no-unsafe-type-assertion */
+/* oxlint-enable typescript-eslint/no-unsafe-type-assertion */
 
 describe("Companies House normalized projection", () => {
   test("distinguishes separately loaded officers from unsupported fields", () => {

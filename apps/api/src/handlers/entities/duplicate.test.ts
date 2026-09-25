@@ -231,7 +231,7 @@ const createContext = ({
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   } as Parameters<typeof duplicateEntity.handler>[0];
 };
 

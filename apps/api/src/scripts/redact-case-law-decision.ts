@@ -8,7 +8,7 @@ import { panic, Result } from "better-result";
  *   bun run src/scripts/redact-case-law-decision.ts <decisionId>
  */
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
-// eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
+// oxlint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
 import { toSafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";

@@ -271,7 +271,7 @@ const savingOf = (body: unknown, refCount: number): number =>
 export const compactSchemaDefs = (
   inputSchema: CapabilityInputSchemaParts,
 ): CompactionResult => {
-  // eslint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- NOT a deep clone: the JSON projection is the point. `structuredClone` would carry through TypeBox's metadata and values JSON drops, so what gets compacted would stop matching what gets written.
   const document: CapabilityInputSchemaParts = JSON.parse(
     JSON.stringify(inputSchema),
   );

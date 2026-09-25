@@ -65,7 +65,7 @@ const createWorkspaceLookupScopedDb =
       },
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findMany
+    // oxlint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findMany
     return await callback(tx as unknown as Transaction);
   };
 

@@ -550,11 +550,11 @@ export const useChatSession = ({
     setOlderCursor(initialOlderCursor);
     setIsLoadingOlder(false);
     setLoadOlderError(false);
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: mirrors the re-seed synchronously so an older-page response resolving in the commit→effect window is discarded by the stale-response guard
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: mirrors the re-seed synchronously so an older-page response resolving in the commit→effect window is discarded by the stale-response guard
     olderCursorRef.current = initialOlderCursor;
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: see above, closes the commit→effect race window for the stale-response guard
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: see above, closes the commit→effect race window for the stale-response guard
     isLoadingOlderRef.current = false;
-    // eslint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
+    // oxlint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
 
@@ -889,7 +889,7 @@ export const useChatSession = ({
       // owns the rewritten parts array.
       const truncated = messages
         .slice(0, targetIndex + 1)
-        // eslint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
+        // oxlint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
         .map((message) => {
           if (message.role !== "assistant") {
             return message;

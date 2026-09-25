@@ -84,9 +84,9 @@ export const useInspectorFind = ({
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
     );
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(allHighlightName);
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
@@ -174,9 +174,9 @@ export const useInspectorFind = ({
       enabled: isEnabled,
       findQuery: queryInput,
     }: FindInputs) => {
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(allHighlightName);
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(activeHighlightName);
 
       const root = contentRef.current;
@@ -214,19 +214,19 @@ export const useInspectorFind = ({
         return undefined;
       }
 
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
       const activeRange = ranges.at(safeActiveIndex);
       if (activeRange) {
-        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
         scrollRangeIntoView(activeRange);
       }
 
       return () => {
-        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.delete(allHighlightName);
-        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.delete(activeHighlightName);
       };
     },

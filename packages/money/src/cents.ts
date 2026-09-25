@@ -34,7 +34,7 @@ export const cents = (value: number): CentsAmount => {
   }
   // SAFETY: validated to be an integer; brand is nominal so the
   // assertion is sound at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as CentsAmount;
 };
 
@@ -46,5 +46,5 @@ export const cents = (value: number): CentsAmount => {
  */
 export const unsafeCents = (value: number): CentsAmount =>
   // SAFETY: documented escape hatch; caller asserts value is already a valid minor-unit integer.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   value as CentsAmount;

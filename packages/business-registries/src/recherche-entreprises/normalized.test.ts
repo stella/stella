@@ -6,7 +6,7 @@ import { parseCompany, parseSearchEntry } from "./parse.js";
 import type { RechercheEntreprisesSearchResponse } from "./types.js";
 
 // SAFETY: captured official fixture is consumed by the defensive parser.
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const raw = fixture as unknown as RechercheEntreprisesSearchResponse;
 
 describe("French registry normalized projection", () => {

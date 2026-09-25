@@ -53,7 +53,7 @@ const generatedSkillsBody =
     ? `\n${skillEntries.map(formatSkillEntry).join(",\n")}\n`
     : "";
 
-const output = `// eslint-disable-next-line typescript-eslint/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
+const output = `// oxlint-disable-next-line typescript-eslint/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
 ${importBlock}\

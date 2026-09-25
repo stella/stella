@@ -34,7 +34,7 @@ const stubScopedDb = (
   };
   // SAFETY: test double — exposes only the surface list_templates touches.
   return (async (run: (t: typeof tx) => unknown) =>
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     await run(tx)) as unknown as ScopedDb;
 };
 
@@ -44,7 +44,7 @@ const stubScopedDb = (
 // SAFETY: test double — never called because no AI generation runs here.
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 describe("createTemplateTools", () => {
@@ -91,7 +91,7 @@ describe("createTemplateTools", () => {
       userId,
     });
     // SAFETY: invoke the tool's execute directly with a stub call context.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const execute = tools[LIST_TEMPLATES_TOOL_NAME].execute as unknown as (
       input: unknown,
       options: unknown,

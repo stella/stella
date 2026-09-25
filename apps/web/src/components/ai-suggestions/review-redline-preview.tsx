@@ -74,7 +74,7 @@ export const RedlinePreview = ({
     runs.map((run, index) => (
       <span
         className={className}
-        // eslint-disable-next-line react/no-array-index-key -- runs is a read-only preview recomputed fresh from the AI suggestion on every render (whole-list replace); spans are non-interactive with no per-item state.
+        // oxlint-disable-next-line react/no-array-index-key -- runs is a read-only preview recomputed fresh from the AI suggestion on every render (whole-list replace); spans are non-interactive with no per-item state.
         key={`${index}-${run.text}`}
         style={previewRunStyle(run, compact)}
       >

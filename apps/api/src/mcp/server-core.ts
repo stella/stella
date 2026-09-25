@@ -635,7 +635,7 @@ export const createMcpHttpRequestHandler = ({
 
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the chat tool generics used elsewhere.
-    // eslint-disable-next-line typescript-eslint/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
+    // oxlint-disable-next-line typescript-eslint/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
     const server = new Server(
       { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
       {

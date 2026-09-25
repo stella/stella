@@ -19,7 +19,7 @@
  * are not statically known.
  */
 
-/* eslint-disable react/no-react-children, react/no-clone-element -- children-walking/slot primitive; the React.Children traversal IS the component's API */
+/* oxlint-disable react/no-react-children, react/no-clone-element -- children-walking/slot primitive; the React.Children traversal IS the component's API */
 
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 

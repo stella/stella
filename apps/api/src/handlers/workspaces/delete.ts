@@ -25,7 +25,7 @@ export type DeleteWorkspaceHandlerProps = {
 
 // Shared matter-delete logic reused by HTTP and MCP. The inner command repeats
 // authorization in the transaction that owns the privileged teardown.
-// eslint-disable-next-line require-yield -- generator keeps the shared handler Result contract
+// oxlint-disable-next-line require-yield -- generator keeps the shared handler Result contract
 export const deleteWorkspaceHandler = async function* (
   props: DeleteWorkspaceHandlerProps,
 ) {

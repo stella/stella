@@ -22,14 +22,14 @@ const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
 const semanticUpdatedAtToken =
   // SAFETY: tests fabricate the branded token the token select normally
   // renders as `COALESCE(updated_at, created_at)::text`.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   "2026-04-30 08:00:00.000123" as TimestampCasToken;
 const extractedAt = new Date("2026-04-30T08:01:00.000Z");
 const extractedAtToken =
   // SAFETY: tests fabricate the branded token the token select normally
   // renders as `extracted_content.extracted_at::text`. The microsecond tail
   // is the point: a JS Date carrying the same instant loses it.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   "2026-04-30 08:01:00.000982" as TimestampCasToken;
 // The token select chain: rootDb.select({...}).from(...).where(...).limit(1)
 const selectLimitMock = mock(async (_limit: number) => [

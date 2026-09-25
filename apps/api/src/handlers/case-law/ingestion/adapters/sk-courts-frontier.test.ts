@@ -1,4 +1,4 @@
-/* eslint-disable typescript-eslint/promise-function-async -- the fetch stub answers with Promise.resolve, matching the mock's own signature */
+/* oxlint-disable typescript-eslint/promise-function-async -- the fetch stub answers with Promise.resolve, matching the mock's own signature */
 /**
  * What the steady-state crawl costs obcan.justice.sk once it is caught up.
  *

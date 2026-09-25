@@ -11,7 +11,7 @@ const readFixture = async (name: string): Promise<ViesRawResponse> => {
   // API and committed alongside the tests; runtime validation would
   // only catch drift between the upstream payload and the committed
   // JSON, which the assertions below cover.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as ViesRawResponse;
 };
 

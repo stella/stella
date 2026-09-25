@@ -734,12 +734,12 @@ function RouteComponentInner({
   // older version (leave alone). Ref-assign during render is the
   // sanctioned latest-value pattern; the write is idempotent.
   if (activeFileField !== undefined) {
-    /* eslint-disable react/refs -- sanctioned latest-value ref mirror: idempotent write consumed only by the version-switch effect below, never during render */
+    /* oxlint-disable react/refs -- sanctioned latest-value ref mirror: idempotent write consumed only by the version-switch effect below, never during render */
     currentFileFieldIdsByPropertyRef.current.set(
       activeFileField.propertyId,
       activeFileField.id,
     );
-    /* eslint-enable react/refs */
+    /* oxlint-enable react/refs */
   }
   const activeVersionFile =
     versionData?.versions.find((version) => version.file?.fieldId === fieldId)

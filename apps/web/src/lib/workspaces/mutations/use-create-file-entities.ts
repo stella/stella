@@ -194,7 +194,7 @@ const abortUpload = async (
     // SAFETY: best-effort abort; the bucket lifecycle rule and daily
     // prune already reclaim the tmp object and row within 24h, so a
     // failed abort here is not fatal and has no user-facing outcome.
-    // eslint-disable-next-line require-eden-error-check/require-eden-error-check
+    // oxlint-disable-next-line require-eden-error-check/require-eden-error-check
     await api
       .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({
         uploadId,

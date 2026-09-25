@@ -826,7 +826,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                             return (
                               <div
                                 className="flex size-6 items-center justify-center sm:size-7"
-                                // eslint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
                                 key={dayIdx}
                               >
                                 {cell}
@@ -837,7 +837,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           return (
                             <div
                               className="flex size-6 items-center justify-center sm:size-7"
-                              // eslint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                              // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
                               key={dayIdx}
                             >
                               <Popover>

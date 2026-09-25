@@ -67,7 +67,7 @@ const createContext = (
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
   } as Parameters<typeof cloneBuiltinReportTemplate.handler>[0];
 };
 

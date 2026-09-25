@@ -46,7 +46,7 @@ import {
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
-// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
+// oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,

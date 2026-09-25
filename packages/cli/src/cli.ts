@@ -83,7 +83,7 @@ const resolvePreamble = async (
 // libraries, not an actual runtime risk. Passing the real `process` (rather
 // than a constructed stand-in) matters: stricli sets `context.process.exitCode`
 // on it directly, and that must land on the process that is actually exiting.
-// eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
+// oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
 const stricliProcess = process as unknown as StricliProcess & typeof process;
 
 const main = async (): Promise<void> => {

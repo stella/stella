@@ -9,7 +9,7 @@ const readFixture = async (): Promise<OrsrRawExtractResponse> => {
     new URL("__fixtures__/extract-eset.json", import.meta.url),
   ).json();
   // SAFETY: captured registry fixture is consumed by the defensive parser.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
   return value as OrsrRawExtractResponse;
 };
 

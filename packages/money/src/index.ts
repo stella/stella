@@ -94,7 +94,7 @@ export const currencyCents = <C extends string>(
   }
   // SAFETY: cents() validates the minor-unit integer; the currency brand
   // is nominal and carried only at the type level.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return cents(amount) as CurrencyCents<C>;
 };
 
@@ -152,7 +152,7 @@ export const addCents = <A extends string, B extends A = A>(
   // runtime, same as CentsAmount itself); the result is just a + b with
   // A's brand reattached, which is sound because the parameter types
   // already proved both operands share currency A.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   cents((a as CurrencyCents<A>) + (b as CurrencyCents<B>)) as CurrencyCents<A>;
 
 /**

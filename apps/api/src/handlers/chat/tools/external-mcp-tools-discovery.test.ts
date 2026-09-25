@@ -41,7 +41,7 @@ const userId = toSafeId<"user">("user-test");
 // `mcp-upstream/connections` module boundary, so `safeDb` is never touched.
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type FakeMcpClient = {
@@ -84,7 +84,7 @@ const createDeferred = <T>(): {
 // surface (resources, prompts, callTool, ...) is intentionally
 // unimplemented.
 const asMcpClient = (client: FakeMcpClient): MCPClient =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test double; MCPClient's full surface isn't exercised by loadConnectorTools
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; MCPClient's full surface isn't exercised by loadConnectorTools
   client as unknown as MCPClient;
 
 const passThroughTimeout = async (

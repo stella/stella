@@ -695,7 +695,7 @@ const selectStaleShortSlices = async (
             lt(caseLawCoverageSlices.collected, caseLawCoverageSlices.reported),
             // A short row whose later walk failed belongs to the retry arm.
             isNull(caseLawCoverageSlices.walkError),
-            // eslint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- staleness cutoff derived from the clock, not a cursor boundary: a slice landing within a microsecond of it is walked one turn earlier or later, which the widening tip cadence already tolerates
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- staleness cutoff derived from the clock, not a cursor boundary: a slice landing within a microsecond of it is walked one turn earlier or later, which the widening tip cadence already tolerates
             lt(caseLawCoverageSlices.checkedAt, staleBefore),
             heldSlices.length === 0
               ? undefined

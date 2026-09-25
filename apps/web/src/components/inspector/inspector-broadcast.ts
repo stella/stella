@@ -146,14 +146,14 @@ const inspectorScopeOwnership = new WeakMap<
   string
 >();
 
-/* eslint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
+/* oxlint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
 const postInspectorBroadcastMessage = (
   channel: BroadcastChannel,
   message: InspectorBroadcastMessage,
 ) => {
   channel.postMessage(message);
 };
-/* eslint-enable unicorn/require-post-message-target-origin */
+/* oxlint-enable unicorn/require-post-message-target-origin */
 
 const compareInspectorBroadcastClocks = (
   left: InspectorBroadcastClock,

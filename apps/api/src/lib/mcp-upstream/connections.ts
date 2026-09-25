@@ -398,7 +398,7 @@ export const refreshCachedMcpToolsForConnection = async ({
       safeDb,
       userId,
     });
-    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     const updated = await safeDb((tx) => {
       // audit: skip — derived MCP tool-cache metadata, not a user-facing state change
       return tx
@@ -726,7 +726,7 @@ const resolveAuthorizationToken = async ({
       })
     : null;
 
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   const persistResult = await safeDb((tx) => {
     // audit: skip — OAuth token refresh metadata for an existing MCP connection
     return tx
@@ -820,7 +820,7 @@ const markNeedsReauth = async ({
   connectionId: SafeId<"mcpUserConnection">;
   safeDb: SafeDb;
 }) => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   const result = await safeDb((tx) => {
     // audit: skip — derived MCP connection reauth status from failed token validation
     return tx
