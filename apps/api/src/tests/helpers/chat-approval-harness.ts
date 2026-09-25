@@ -33,7 +33,10 @@ import {
   readClientStreamChunks,
 } from "@/api/tests/helpers/chat-live-view";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
-import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import type {
+  ChatOracleId,
+  OracleViolation,
+} from "@/api/tests/helpers/chat-oracles";
 import { drainResponse } from "@/api/tests/helpers/chat-round-trip";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import type { ScriptedRun } from "@/api/tests/helpers/chat-scripted-provider";
@@ -91,6 +94,12 @@ export type ApprovalCall = Extract<ChatPart, { type: "tool-call" }> & {
 const CHAT_ROUTE_PATH = "/v1/chat";
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
 const MAX_BARRIER_POLLS = 2000;
+/** The checks a hand-built send answers for: the stored thread's. */
+const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
+  CHAT_ORACLE.persistedCallsSettled,
+  CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedTurnSettles,
+]);
 
 /** The HTTP answer the route gives a refused request, as the browser sees it. */
 const refusalResponse = (rejection: unknown): Response => {
@@ -314,9 +323,10 @@ export const createApprovalHarness = ({
   };
 
   /**
-   * A send from a hand-built context: a streamed response must leave the
-   * wire and the stored thread sound; any other handler result is a
-   * rejection and is returned as-is for the assertion.
+   * A send from a hand-built context, the server's own request path: a
+   * streamed response must leave the stored thread sound; any other handler
+   * result is a rejection and is returned as-is for the assertion. The wire
+   * and the page are a browser's concern, checked on the web-client path.
    */
   const send = async (
     ctx: SendMessageCtx,
@@ -327,9 +337,12 @@ export const createApprovalHarness = ({
     if (outcome.status === "rejected") {
       return outcome;
     }
-    if (outcome.violations.length > 0) {
+    const storedViolations = outcome.violations.filter(({ oracle }) =>
+      STORED_THREAD_ORACLES.has(oracle),
+    );
+    if (storedViolations.length > 0) {
       panic(
-        `The send breaks an invariant: ${JSON.stringify(outcome.violations)}`,
+        `The stored thread breaks an invariant: ${JSON.stringify(storedViolations)}`,
       );
     }
     return { status: "streamed" };

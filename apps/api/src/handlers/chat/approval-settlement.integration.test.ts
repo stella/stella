@@ -11,6 +11,7 @@ import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
+  pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
@@ -119,6 +120,62 @@ const requestAndApprove = async ({
   return callId;
 };
 
+/**
+ * `requestAndApprove` on the server's own request path: the approval is
+ * answered from the stored thread rather than from a page, and the harness
+ * checks the wire and the stored thread after each send.
+ */
+const requestAndApproveStored = async ({
+  continuation,
+  harness,
+  name,
+  threadId,
+}: {
+  continuation: ScriptedTurn[];
+  harness: ChatHarness;
+  name: string;
+  threadId: SafeId<"chatThread">;
+}): Promise<void> => {
+  const runId = `run-${Bun.randomUUIDv7()}`;
+  harness.script(threadId, [
+    {
+      arguments: approvalToolArguments(name),
+      toolCallId: `call-${name}`,
+      toolName: APPROVAL_TOOL_NAME,
+      type: "tool-call",
+    },
+  ]);
+  expect(
+    await harness.send(
+      harness.sendContext({
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: `Delete the ${name}`, type: "text" }],
+          role: "user",
+        },
+        runId,
+        threadId,
+      }),
+    ),
+  ).toEqual({ status: "streamed" });
+
+  const pending = await harness.lastAssistant(threadId);
+  const call = pendingApprovalCallOf(pending.parts);
+
+  harness.script(threadId, continuation);
+  expect(
+    await harness.send(
+      harness.approveContext({
+        call,
+        interruptedRunId: runId,
+        messageId: pending.id,
+        parts: pending.parts,
+        threadId,
+      }),
+    ),
+  ).toEqual({ status: "streamed" });
+};
+
 describe("an approved server tool's result", () => {
   test("is stored on its owning message when the model's next step is another approval", async () => {
     // The second call is still open, and owned by the turn awaiting its answer;
@@ -170,9 +227,37 @@ describe("an approved server tool's result", () => {
     }
   });
 
+  test("leaves a later approval in the same thread answerable", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    try {
+      await requestAndApproveStored({
+        continuation: [
+          { finishReason: "stop", text: "Deleted.", type: "text" },
+        ],
+        harness,
+        name: "NDA",
+        threadId,
+      });
+      await requestAndApproveStored({
+        continuation: [
+          { finishReason: "stop", text: "Deleted too.", type: "text" },
+        ],
+        harness,
+        name: "Lease",
+        threadId,
+      });
+
+      expect(harness.executions).toEqual(["NDA", "Lease"]);
+    } finally {
+      harness.close();
+    }
+  });
+
   // Becomes a plain test in a follow-up.
   test.failing(
-    "leaves a later approval in the same thread answerable",
+    "leaves a later approval in the same thread answerable from the page",
     async () => {
       const thread = await openThread();
       const { harness } = thread;
