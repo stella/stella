@@ -80,14 +80,24 @@ import { panic } from "better-result";
 /**
  * Which Slovak suffix table to run.
  *
- * - `faithful` reproduces upstream exactly.
- * - `extended` additionally strips a bare final `u`, the accusative and
- *   dative singular ending that dominates legal paradigms. Upstream strips
- *   `ú` but leaves bare `u`, so `súdu` and `zmluvu` never reach the stem of
- *   `súd` and `zmluva`. The variant is off by default until corpus
- *   evaluation confirms the recall gain outweighs the conflation risk; it is
- *   a deliberate divergence from upstream, not a bug fix. `slovak.test.ts`
- *   pins its full cost against upstream's own vectors.
+ * - `faithful` reproduces upstream exactly, and is kept as the reference the
+ *   divergence below is measured against.
+ * - `extended` is what the corpus stems with. Upstream leaves three gaps in
+ *   the paradigms legal text is made of, each of which splits one noun over
+ *   several stems, so a query in one case misses a decision written in
+ *   another:
+ *   - a bare final `u`, the genitive, dative and accusative singular ending
+ *     (`škodu`, `pomeru`, `súdu`). Upstream strips `ú` but not `u`, where
+ *     Czech Snowball strips both.
+ *   - the genitive plural `-ov` of a one-syllable stem (`súdov`): upstream's
+ *     possessive pass needs six characters, so only longer words lose it.
+ *   - the `i` of the soft neuter and feminine paradigms (`rozhodnutie`,
+ *     `rozhodnutiam`, `rozhodnutiach` against `rozhodnutí`, `rozhodnutím`):
+ *     upstream has no `-iam`/`-iach` ending, and keeps the `i` wherever the
+ *     ending after it is stripped but drops it where it is the ending.
+ *     Dropping a stem-final `i` after the case pass gives the whole paradigm
+ *     the stem Czech Snowball gives `rozhodnutí`.
+ *   `slovak.test.ts` pins the full cost against upstream's own vectors.
  */
 type SlovakStemmerVariant = "faithful" | "extended";
 
@@ -191,6 +201,27 @@ const palatalize = (chars: string[], length: number): number => {
   return length - 1;
 };
 
+/**
+ * The endings `extended` reads before upstream's tables, or null when none
+ * applies. `-iach` and `-iam` keep their `i` for the soft-stem pass.
+ */
+const removeExtendedCase = (chars: string[], length: number): number | null => {
+  if (length > 6 && endsWith(chars, length, "iach")) {
+    return length - 3;
+  }
+  if (length > 5 && endsWith(chars, length, "iam")) {
+    return length - 2;
+  }
+  // Upstream hands `palatalize` the stem without the `í`, and it strips one
+  // more character: `rozhodnutím` -> `rozhodnu`, a letter short of
+  // `rozhodnutí`. Passing the `í`, as `-om` passes its `o`, strips the
+  // ending alone.
+  if (length > 4 && endsWith(chars, length, "ím")) {
+    return palatalize(chars, length - 1);
+  }
+  return null;
+};
+
 const removeCase = (
   chars: string[],
   length: number,
@@ -202,6 +233,12 @@ const removeCase = (
 
   if (length > 6 && endsWith(chars, length, "aťom")) {
     return palatalize(chars, length - 3);
+  }
+
+  const extended =
+    variant === "extended" ? removeExtendedCase(chars, length) : null;
+  if (extended !== null) {
+    return extended;
   }
 
   if (length > 5) {
@@ -276,14 +313,36 @@ const removeCase = (
   return length;
 };
 
-const removePossessives = (chars: string[], length: number): number => {
-  if (length > 5) {
-    if (endsWith(chars, length, "ov")) {
-      return length - 2;
-    }
-    if (endsWith(chars, length, "in")) {
-      return palatalize(chars, length - 1);
-    }
+/**
+ * The soft-stem pass: a stem the case pass left ending in `i` loses it, so
+ * `rozhodnutia` (`rozhodnuti`) meets `rozhodnutí` (`rozhodnut`). Five
+ * characters or more, so no stem ends shorter than four.
+ */
+const removeSoftStemVowel = (
+  chars: readonly string[],
+  length: number,
+): number =>
+  length > 4 && at(chars, length - 1) === "i" ? length - 1 : length;
+
+/** Upstream's possessive pass needs six characters; `súdov` has five. */
+const MIN_POSSESSIVE_OV_LENGTH = {
+  faithful: 6,
+  extended: 5,
+} as const satisfies Record<SlovakStemmerVariant, number>;
+
+const removePossessives = (
+  chars: string[],
+  length: number,
+  variant: SlovakStemmerVariant,
+): number => {
+  if (
+    length >= MIN_POSSESSIVE_OV_LENGTH[variant] &&
+    endsWith(chars, length, "ov")
+  ) {
+    return length - 2;
+  }
+  if (length > 5 && endsWith(chars, length, "in")) {
+    return palatalize(chars, length - 1);
   }
 
   return length;
@@ -305,13 +364,17 @@ const stemSlovakVariant = (
   const chars = term.split("");
   let length = chars.length;
   length = removeCase(chars, length, variant);
-  length = removePossessives(chars, length);
+  if (variant === "extended") {
+    length = removeSoftStemVowel(chars, length);
+  }
+  length = removePossessives(chars, length, variant);
   length = removePrefixes(chars, length);
   return chars.slice(0, length).join("");
 };
 
 /**
- * Stem a Slovak term, reproducing upstream exactly.
+ * Stem a Slovak term: upstream plus the paradigm gaps listed at
+ * {@link SlovakStemmerVariant}.
  *
  * Preconditions, both of which {@link stemLegalTerm} applies for you:
  * the term must be NFC and lowercase. The suffix tables are written with
@@ -320,14 +383,11 @@ const stemSlovakVariant = (
  * unstemmed, and a folded term loses the endings this exists to strip.
  */
 export const stemSlovak = (term: string): string =>
-  stemSlovakVariant(term, "faithful");
+  stemSlovakVariant(term, "extended");
 
 /**
- * Stem a Slovak term, additionally stripping a bare final `u`.
- *
- * Same NFC and lowercase preconditions as {@link stemSlovak}. Not wired into
- * {@link stemLegalTerm}; see {@link SlovakStemmerVariant} for why it ships
- * off by default.
+ * Stem a Slovak term exactly as upstream does, the reference `slovak.test.ts`
+ * measures {@link stemSlovak}'s divergence against. Same preconditions.
  */
-export const stemSlovakExtended = (term: string): string =>
-  stemSlovakVariant(term, "extended");
+export const stemSlovakUpstream = (term: string): string =>
+  stemSlovakVariant(term, "faithful");

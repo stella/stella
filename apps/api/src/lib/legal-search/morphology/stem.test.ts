@@ -105,6 +105,8 @@ const PARADIGMS = {
     ["umowy", "umow"],
     ["sądu", "sąd"],
     ["skargi", "skarg"],
+    // Slovak strips the bare `-u` above too; this ending it does not.
+    ["sądów", "sąd"],
   ],
   pt: [
     ["sentenças", "sentenc"],
