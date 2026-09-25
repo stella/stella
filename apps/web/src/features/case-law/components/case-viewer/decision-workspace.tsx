@@ -127,6 +127,9 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
+/** The notes column's resize handle, which a column-wide click must skip. */
+const READER_ASIDE_RESIZE_SLOT = "reader-aside-resize";
+
 /** The notes margin's mutually exclusive source filter. */
 type NotesFilter = "all" | "ai" | "mine";
 
@@ -348,12 +351,16 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
+  // The visitor's account gate, while there is no analysis to show them.
+  const visitorOffer =
+    props.aiMode === "gated" && analysisState.status === "idle"
+      ? props.onRequestAnalysis
+      : undefined;
+
   // A visitor sees the shape the notes would take, where they would sit,
   // until there is an analysis to show instead.
   const exampleMarginItems: AnalysisMarginItem[] =
-    props.aiMode === "gated" &&
-    props.onRequestAnalysis !== undefined &&
-    analysisState.status === "idle"
+    visitorOffer !== undefined
       ? exampleNoteAnchors({
           anchorIds: visibleDecisionBlocks(ast).map((block) => block.anchorId),
           seed: decisionId,
@@ -518,7 +525,32 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
-                <aside className="relative flex flex-col max-lg:hidden">
+                {/* Before a visitor has an account, the whole notes column is
+                    the offer: a click anywhere in it asks for the account. The
+                    prompt's own button is the keyboard path to the same gate. */}
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pointer shortcut only; the sticky prompt's button is the keyboard path */}
+                <aside
+                  className={cn(
+                    "relative flex flex-col max-lg:hidden",
+                    visitorOffer !== undefined && "cursor-pointer",
+                  )}
+                  onClick={
+                    visitorOffer === undefined
+                      ? undefined
+                      : (event) => {
+                          // A resize is not a request for the offer.
+                          if (
+                            event.target instanceof Element &&
+                            event.target.closest(
+                              `[data-slot="${READER_ASIDE_RESIZE_SLOT}"]`,
+                            ) !== null
+                          ) {
+                            return;
+                          }
+                          visitorOffer();
+                        }
+                  }
+                >
                   {completeAnalysis !== null && showAiNotes && (
                     <AnalysisLayers analysis={completeAnalysis} />
                   )}
@@ -579,6 +611,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
                   <div
                     className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                    data-slot={READER_ASIDE_RESIZE_SLOT}
                     onPointerDown={(event) => {
                       event.preventDefault();
                       isDragging.current = true;
@@ -718,14 +751,23 @@ const GatedAnalysisInvitation = ({
   return (
     <div
       aria-label={t("caseLaw.notesFilter.ai")}
-      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+      // Pinned while the example notes scroll past beneath it.
+      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 sticky top-4 z-20 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
       data-slot="gated-analysis-invitation"
       role="region"
     >
       <p className="text-foreground-strong-muted text-xs leading-snug">
         {t("caseLaw.analysis.invitation")}
       </p>
-      <Button onClick={onRequest} size="sm" variant="muted">
+      <Button
+        onClick={(event) => {
+          // The column around it asks for the account too; ask once.
+          event.stopPropagation();
+          onRequest();
+        }}
+        size="sm"
+        variant="muted"
+      >
         <SparklesIcon className="size-3" />
         {t("caseLaw.analysis.generate")}
       </Button>
