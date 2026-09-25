@@ -58,6 +58,10 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
+  rebaseSkillMetadataDraft,
+  skillMetadataDraft,
+} from "./skill-metadata-draft.logic";
+import {
   FILENAME_PATTERN,
   reserveKnowledgePath,
 } from "./skill-resource-path.logic";
@@ -68,19 +72,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // not user-facing copy: resource paths only allow lowercase ASCII, so a
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
-
-// A skill is invoked in chat via /its-command; suggest the skill's name as that
-// command by default (lowercase, hyphenated) so the field reads as /skill-name.
-// Diacritics are decomposed and stripped first so a name like "Česká dovednost"
-// suggests "ceska-dovednost" rather than dropping the accented letters.
-const slugifyCommand = (name: string): string =>
-  name
-    .normalize("NFD")
-    .replaceAll(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replace(/^-/u, "")
-    .replace(/-$/u, "");
 
 const UPLOAD_MAX_BYTES_TEXT = 100_000;
 const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
@@ -155,9 +146,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   );
   const [enabled, setEnabled] = useState(detail.data?.enabled ?? false);
   const [command, setCommand] = useState(() =>
-    detail.data
-      ? (detail.data.command ?? slugifyCommand(detail.data.name))
-      : "",
+    detail.data ? skillMetadataDraft(detail.data).command : "",
   );
   const [commandError, setCommandError] = useState<string | null>(null);
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
@@ -186,17 +175,24 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     });
   };
   const [lastDetailData, setLastDetailData] = useState(detail.data);
-  // A new server snapshot replaces the editable draft, including after save.
-  // Comparing the query object's identity preserves dirty edits between
-  // refetches while applying a changed snapshot before children render.
+  // A new server snapshot (a save refetches one) is applied before children
+  // render: fields the user has not edited follow it, unsaved edits in the
+  // others survive. The command defaults to the slugified name, so it reads as
+  // /skill-name until the user edits or clears it; it persists on blur.
   if (detail.data && detail.data !== lastDetailData) {
     setLastDetailData(detail.data);
-    setName(detail.data.name);
-    setDescription(detail.data.description);
-    setEnabled(detail.data.enabled);
-    // Default the command to the skill's name (slugified) so it's written under
-    // the / by default; the user can edit or clear it. Persisted on blur.
-    setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
+    const rebased =
+      lastDetailData === undefined
+        ? skillMetadataDraft(detail.data)
+        : rebaseSkillMetadataDraft({
+            draft: { command, description, enabled, name },
+            next: detail.data,
+            previous: lastDetailData,
+          });
+    setName(rebased.name);
+    setDescription(rebased.description);
+    setEnabled(rebased.enabled);
+    setCommand(rebased.command);
   }
 
   const resources: SkillResource[] = detail.data ? detail.data.resources : [];
