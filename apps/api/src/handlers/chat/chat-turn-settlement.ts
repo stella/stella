@@ -7,6 +7,22 @@ export type ToolCallState = ToolCallPart["state"];
 type OutcomeType = ChatTurnOutcome["type"];
 
 /**
+ * The parts these rules read. Every stored `ChatPart` is one; so is a tool
+ * call read back over the API, whose tool name the typed part union cannot
+ * know in advance.
+ */
+export type SettlementPart =
+  | ChatPart
+  | {
+      type: "tool-call";
+      id: string;
+      state: ToolCallState;
+      approval?: { approved?: boolean };
+    };
+
+type SettlementToolCall = Extract<SettlementPart, { type: "tool-call" }>;
+
+/**
  * Tool-call states a client can still answer from a reloaded thread: an
  * approval prompt, or a client-executed call whose input is complete and whose
  * result the client posts back.
@@ -72,7 +88,7 @@ const SETTLED_TOOL_CALL_STATE = {
 
 /** A call is settled once its result or error is stored, or its approval was
  *  denied. */
-const isSettledToolCall = (part: ToolCallPart): boolean =>
+const isSettledToolCall = (part: SettlementToolCall): boolean =>
   SETTLED_TOOL_CALL_STATE[part.state] ||
   ("approval" in part && part.approval.approved === false);
 
@@ -83,7 +99,7 @@ export type UnsettledToolCall = {
 
 const findUnsettled = (
   policy: OpenCallPolicy,
-  parts: readonly ChatPart[],
+  parts: readonly SettlementPart[],
 ): UnsettledToolCall[] =>
   parts.flatMap((part) =>
     part.type === "tool-call" &&
@@ -102,7 +118,7 @@ export const findUnsettledToolCallsForOutcome = ({
   parts,
 }: {
   outcome: OutcomeType;
-  parts: readonly ChatPart[];
+  parts: readonly SettlementPart[];
 }): UnsettledToolCall[] => findUnsettled(OUTCOME_POLICY[outcome], parts);
 
 export type DroppedParts = {
@@ -120,8 +136,8 @@ export const findDroppedParts = ({
   continued,
   stored,
 }: {
-  continued: readonly ChatPart[];
-  stored: readonly ChatPart[];
+  continued: readonly SettlementPart[];
+  stored: readonly SettlementPart[];
 }): DroppedParts | null => {
   const storedToolCallIds = new Set(
     stored.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),

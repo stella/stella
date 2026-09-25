@@ -9,6 +9,7 @@ import {
   evaluateHttpCheck,
   isExpectedChatBusinessResponse,
   isServerError,
+  parseAIJourneyMode,
   readStreamPrefix,
   streamPrefixHasError,
   streamPrefixHasMeaningfulFrame,
@@ -182,16 +183,16 @@ describe("evaluateChatStreamContentType", () => {
 });
 
 describe("streamPrefixHasError", () => {
-  test("detects an AI SDK error frame in the SSE prefix", () => {
+  test("detects a run error frame in the SSE prefix", () => {
     expect(
-      streamPrefixHasError('data: {"type":"error","errorText":"boom"}\n\n'),
+      streamPrefixHasError('data: {"type":"RUN_ERROR","message":"boom"}\n\n'),
     ).toBe(true);
   });
 
   test("does not flag a healthy text stream", () => {
     expect(
       streamPrefixHasError(
-        'data: {"type":"start"}\n\ndata: {"type":"text-delta","delta":"hi"}\n\n',
+        'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
       ),
     ).toBe(false);
   });
@@ -199,20 +200,28 @@ describe("streamPrefixHasError", () => {
 
 describe("streamPrefixHasMeaningfulFrame", () => {
   test("ignores opening frames and accepts assistant progress or finish", () => {
-    expect(streamPrefixHasMeaningfulFrame('data: {"type":"start"}\n\n')).toBe(
-      false,
-    );
     expect(
-      streamPrefixHasMeaningfulFrame('data: {"type":"text-start"}\n\n'),
+      streamPrefixHasMeaningfulFrame('data: {"type":"RUN_STARTED"}\n\n'),
+    ).toBe(false);
+    expect(
+      streamPrefixHasMeaningfulFrame('data: {"type":"TEXT_MESSAGE_START"}\n\n'),
     ).toBe(false);
     expect(
       streamPrefixHasMeaningfulFrame(
-        'data: {"type":"text-delta","delta":"hi"}\n\n',
+        'data: {"type":"TEXT_MESSAGE_CONTENT","delta":""}\n\n',
+      ),
+    ).toBe(false);
+    expect(
+      streamPrefixHasMeaningfulFrame(
+        'data: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
       ),
     ).toBe(true);
-    expect(streamPrefixHasMeaningfulFrame('data: {"type":"finish"}\n\n')).toBe(
-      true,
-    );
+    expect(
+      streamPrefixHasMeaningfulFrame('data: {"type":"TOOL_CALL_START"}\n\n'),
+    ).toBe(true);
+    expect(
+      streamPrefixHasMeaningfulFrame('data: {"type":"RUN_FINISHED"}\n\n'),
+    ).toBe(true);
   });
 });
 
@@ -221,15 +230,15 @@ describe("evaluateChatStreamPrefix", () => {
     expect(evaluateChatStreamPrefix("").ok).toBe(false);
     expect(evaluateChatStreamPrefix("\n\n").ok).toBe(false);
     expect(evaluateChatStreamPrefix(": keepalive\n\n").ok).toBe(false);
-    expect(evaluateChatStreamPrefix('data: {"type":"start"}\n\n').ok).toBe(
-      false,
-    );
+    expect(
+      evaluateChatStreamPrefix('data: {"type":"RUN_STARTED"}\n\n').ok,
+    ).toBe(false);
     expect(
       evaluateChatStreamPrefix(
-        'data: {"type":"start"}\n\ndata: {"type":"text-delta","delta":"hi"}\n\n',
+        'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
       ).ok,
     ).toBe(true);
-    expect(evaluateChatStreamPrefix('data: {"type":"error"}\n\n').ok).toBe(
+    expect(evaluateChatStreamPrefix('data: {"type":"RUN_ERROR"}\n\n').ok).toBe(
       false,
     );
   });
@@ -241,10 +250,16 @@ describe("readStreamPrefix", () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({
         start: (controller) => {
-          controller.enqueue(encoder.encode('data: {"type":"start"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"text-start"}\n\n'));
           controller.enqueue(
-            encoder.encode('data: {"type":"text-delta","delta":"hi"}\n\n'),
+            encoder.encode('data: {"type":"RUN_STARTED"}\n\n'),
+          );
+          controller.enqueue(
+            encoder.encode('data: {"type":"TEXT_MESSAGE_START"}\n\n'),
+          );
+          controller.enqueue(
+            encoder.encode(
+              'data: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
+            ),
           );
         },
       }),
@@ -252,7 +267,7 @@ describe("readStreamPrefix", () => {
 
     const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
     expect(prefix).toBe(
-      'data: {"type":"start"}\n\ndata: {"type":"text-start"}\n\ndata: {"type":"text-delta","delta":"hi"}\n\n',
+      'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"TEXT_MESSAGE_START"}\n\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
     );
   });
 
@@ -261,10 +276,12 @@ describe("readStreamPrefix", () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({
         start: (controller) => {
-          controller.enqueue(encoder.encode('data: {"type":"start"}\n\n'));
+          controller.enqueue(
+            encoder.encode('data: {"type":"RUN_STARTED"}\n\n'),
+          );
           controller.enqueue(
             encoder.encode(
-              'data: {"type":"error","errorText":"provider failed"}\n\n',
+              'data: {"type":"RUN_ERROR","message":"provider failed"}\n\n',
             ),
           );
         },
@@ -272,7 +289,7 @@ describe("readStreamPrefix", () => {
     );
 
     const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
-    expect(prefix).toContain('"type":"error"');
+    expect(prefix).toContain('"type":"RUN_ERROR"');
     expect(evaluateChatStreamPrefix(prefix).ok).toBe(false);
   });
 
@@ -345,5 +362,18 @@ describe("buildChatSmokeBody", () => {
     const second = buildChatSmokeBody();
     expect(first.threadId).not.toBe(second.threadId);
     expect(first.runId).not.toBe(second.runId);
+  });
+});
+
+describe("parseAIJourneyMode", () => {
+  test("runs everything unless a half is named", () => {
+    expect(parseAIJourneyMode(undefined)).toBe("all");
+    expect(parseAIJourneyMode("")).toBe("all");
+    expect(parseAIJourneyMode("skip")).toBe("skip");
+    expect(parseAIJourneyMode("only")).toBe("only");
+  });
+
+  test("rejects an unknown mode instead of running the wrong half", () => {
+    expect(() => parseAIJourneyMode("Only")).toThrow("SMOKE_AI_JOURNEY");
   });
 });
