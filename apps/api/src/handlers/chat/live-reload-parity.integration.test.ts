@@ -481,15 +481,9 @@ const resolveOnFirstTab = async (
   continuations: readonly RunShape[],
 ) => {
   const batch = decideBatch(real.ledger, decisions);
-  // The scripted model answers a denial in text.
-  const denied = batch.some(({ decision }) => decision === "deny");
   real.harness.script(
     real.threadId,
-    ...planRequests(
-      real.ledger,
-      denied ? [TEXT_ANSWER, ...continuations] : continuations,
-      real.nextId,
-    ),
+    ...planRequests(real.ledger, continuations, real.nextId),
   );
   await answerBatch(real.client, batch);
   await approveCardsOnScreen(real);
@@ -769,6 +763,31 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
+  test(
+    "keeps a denied call denied when the model then asks for another approval",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval"] }]],
+          "Delete the NDA",
+        ).run(model, real);
+        await new ResolveCards(
+          ["deny"],
+          [[{ ...STEP, calls: ["approval"], text: true }]],
+        ).run(model, real);
+        // The fixture must reach the fault: the denied call and the new request
+        // share one message, which the next snapshot carries.
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
   const failsBeforeAnswering: [
     string,
     FailureShape,
@@ -783,6 +802,13 @@ describe("a conversation's live view", () => {
       "report-error",
       [[{ ...STEP, calls: ["ask-user"] }]],
       "approve",
+    ],
+    ["a denial", "fail", [[{ ...STEP, calls: ["approval"] }]], "deny"],
+    [
+      "a denial",
+      "report-error",
+      [[{ ...STEP, calls: ["approval"] }]],
+      "deny",
     ],
   ];
 

@@ -65,10 +65,14 @@ import {
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
+  findDeniedApprovals,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "@/api/handlers/chat/stream-message-identity";
-import type { MessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import type {
+  DeniedApproval,
+  MessageIdMapper,
+} from "@/api/handlers/chat/stream-message-identity";
 import {
   createTanStackTerminalHooks,
   tanStackStreamEventLifecycle,
@@ -1394,6 +1398,8 @@ type ProcessServerChatStreamProps = {
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
   deadlineSignal: AbortSignal;
+  /** Calls the history denied (see `findDeniedApprovals`). */
+  deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
   existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
@@ -1563,6 +1569,7 @@ const restoreInterruptedToolCallInputs = (
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
+  deniedApprovals,
   existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
@@ -1650,6 +1657,7 @@ export const processServerChatStream = async function* ({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
+        deniedApprovals,
         existingMessageIds,
         mapMessageId,
         source,
@@ -1858,7 +1866,11 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
+  | "deniedApprovals"
+  | "existingMessageIds"
+  | "getResponseMessage"
+  | "mapMessageId"
+  | "processor"
 > & {
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
@@ -1895,6 +1907,7 @@ const processTurnForPersistence = ({
   });
   return processServerChatStream({
     ...stream,
+    deniedApprovals: findDeniedApprovals(initialMessages),
     existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
