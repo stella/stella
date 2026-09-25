@@ -1492,6 +1492,8 @@ const FAILURE_SINK_MODULES = {
   logger: "apps/api/src/lib/observability/logger",
   pgError: "apps/api/src/lib/pg-error",
   aiError: "apps/api/src/lib/ai-error",
+  documentProcessingFields:
+    "apps/api/src/lib/document-processing-failure-fields",
 } as const;
 
 const TERMINAL_CAPTURE_EXPORTS: ReadonlySet<string> = new Set([
@@ -1515,6 +1517,10 @@ const FOLDED_HELPER_EXPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
   [FAILURE_SINK_MODULES.errorTag]: new Set(["errorClassName", "errorTag"]),
   [FAILURE_SINK_MODULES.pgError]: new Set(["pgErrorFields"]),
   [FAILURE_SINK_MODULES.aiError]: new Set(["providerStatusFields"]),
+  // Wrappers composing the helpers above count as the helpers they wrap.
+  [FAILURE_SINK_MODULES.documentProcessingFields]: new Set([
+    "documentProcessingFailureFields",
+  ]),
 };
 
 const FAILURE_LOGGER_METHODS: ReadonlySet<string> = new Set([
@@ -4097,6 +4103,7 @@ const FAILURE_SINK_FIXTURE_LINES = [
   "  captureRequestError,",
   '} from "@/api/lib/analytics/capture";',
   'import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";',
+  'import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";',
   'import { failureSink } from "@/api/lib/observability/failure";',
   'import { logger } from "@/api/lib/observability/logger";',
   'import { observeFailure } from "@/api/lib/observability/observe-failure";',
@@ -4117,6 +4124,8 @@ const FAILURE_SINK_FIXTURE_LINES = [
   '  logger.error("worker.failed", attributes);',
   // A spread helper, a literal error key, and the request record.
   '  logger.warn("worker.retry", { ...errorSystemFields(error) });',
+  // A wrapper composing the helpers is the helpers.
+  '  logger.warn("document.failed", documentProcessingFailureFields(error));',
   '  logger.error("worker.failed", { "error.code": "X" });',
   '  logger.request({ message: "request.failed", errorType: errorTag(error) });',
   // Computed and destructured logger access.
@@ -4145,7 +4154,7 @@ const SELF_TEST_RUNNER_FAILURE_SINKS = [
   'logError("[daemon] retrying");',
   "",
 ].join("\n");
-const EXPECTED_DIRECT_FAILURE_SINKS = 14;
+const EXPECTED_DIRECT_FAILURE_SINKS = 15;
 const EXPECTED_ANALYTICS_CALLBACK_SEAMS = 2;
 const EXPECTED_FAILURE_SINK_EXPECTATIONS = 1;
 const EXPECTED_FAILURE_LEGACY_OUTPUT_PINS = 1;

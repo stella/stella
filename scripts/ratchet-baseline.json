@@ -1383,7 +1383,7 @@
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 539,
+    "count": 542,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1504,7 +1504,7 @@
       "apps/api/src/lib/chat/ref-registry.ts": 1,
       "apps/api/src/lib/delete-account.ts": 4,
       "apps/api/src/lib/document-deadline-scout-worker.ts": 2,
-      "apps/api/src/lib/document-processing-queue.ts": 13,
+      "apps/api/src/lib/document-processing-queue.ts": 16,
       "apps/api/src/lib/document-processing-readiness.ts": 5,
       "apps/api/src/lib/document-review/run-queue.ts": 6,
       "apps/api/src/lib/document-translation/run-queue.ts": 18,
