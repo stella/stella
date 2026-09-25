@@ -1,6 +1,4 @@
 import type {
-  AgendaItemKind,
-  AgendaItemSource,
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMentionCategory,
@@ -50,8 +48,6 @@ export type UpsertFieldContent =
 export type BoundingBox =
   WebApiRoutes["workspaces"][":workspaceId"]["bounding-boxes"]["post"]["response"][200]["boxes"][number];
 export type {
-  AgendaItemKind,
-  AgendaItemSource,
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,

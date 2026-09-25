@@ -360,6 +360,37 @@ const toRoman = (n: number): string => {
 };
 
 /**
+ * One leaf paragraph or <div> as a chunk, its heading cues read from the
+ * inline style: centring, font size, a mostly-bold run and letter spacing.
+ * `null` when the block has no text.
+ */
+const styledBlockChunk = (
+  $: cheerio.CheerioAPI,
+  $el: cheerio.Cheerio<AnyNode>,
+): PChunk | null => {
+  const style = $el.attr("style") ?? "";
+  const inlines = normalizeNssInlines(walkInlines($, $el));
+  const plainText = inlinesToPlainText(inlines).trim();
+  if (!plainText) {
+    return null;
+  }
+
+  const boldText = $el.find("span[style*='font-weight:bold']").text().trim();
+  return {
+    inlines,
+    plainText,
+    centered: style.includes("text-align:center"),
+    bold: boldText.length > 0 && boldText.length >= plainText.length * 0.7,
+    letterSpacing:
+      style.includes("letter-spacing") ||
+      $el.find("span[style*='letter-spacing']").length > 0,
+    fontSize: parseFontSize(style),
+    listItemIndex: null,
+    footnote: footnoteOf($el),
+  };
+};
+
+/**
  * Extract content chunks from the HTML body.
  * Handles <p> elements, <ol type="I"><li> ruling items, and
  * <ul><li> bullet lists (Aspose renders enumerations in the
@@ -400,33 +431,10 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
         return;
       }
 
-      const style = $el.attr("style") ?? "";
-      const inlines = normalizeNssInlines(walkInlines($, $el));
-      const plainText = inlinesToPlainText(inlines).trim();
-      if (!plainText) {
-        return;
+      const chunk = styledBlockChunk($, $el);
+      if (chunk !== null) {
+        chunks.push(chunk);
       }
-
-      const centered = style.includes("text-align:center");
-      const fontSize = parseFontSize(style);
-      const boldSpans = $el.find("span[style*='font-weight:bold']");
-      const boldText = boldSpans.text().trim();
-      const bold =
-        boldText.length > 0 && boldText.length >= plainText.length * 0.7;
-      const letterSpacing =
-        style.includes("letter-spacing") ||
-        $el.find("span[style*='letter-spacing']").length > 0;
-
-      chunks.push({
-        inlines,
-        plainText,
-        centered,
-        bold,
-        letterSpacing,
-        fontSize,
-        listItemIndex: null,
-        footnote: footnoteOf($el),
-      });
       return;
     }
 
@@ -510,36 +518,10 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     }
 
     // Regular <p>
-    const style = $el.attr("style") ?? "";
-    const inlines = normalizeNssInlines(walkInlines($, $el));
-    const plainText = inlinesToPlainText(inlines).trim();
-
-    if (!plainText) {
-      return;
+    const chunk = styledBlockChunk($, $el);
+    if (chunk !== null) {
+      chunks.push(chunk);
     }
-
-    const centered = style.includes("text-align:center");
-    const fontSize = parseFontSize(style);
-
-    const boldSpans = $el.find("span[style*='font-weight:bold']");
-    const boldText = boldSpans.text().trim();
-    const bold =
-      boldText.length > 0 && boldText.length >= plainText.length * 0.7;
-
-    const letterSpacing =
-      style.includes("letter-spacing") ||
-      $el.find("span[style*='letter-spacing']").length > 0;
-
-    chunks.push({
-      inlines,
-      plainText,
-      centered,
-      bold,
-      letterSpacing,
-      fontSize,
-      listItemIndex: null,
-      footnote: footnoteOf($el),
-    });
   });
 
   return chunks;

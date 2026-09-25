@@ -65,7 +65,7 @@ const attributeNamed = (element: unknown, name: string): AstNode | null => {
   );
 };
 
-const staticStringValue = (value: unknown): string | null => {
+const jsxAttributeString = (value: unknown): string | null => {
   if (!isAstNode(value)) {
     return null;
   }
@@ -73,7 +73,7 @@ const staticStringValue = (value: unknown): string | null => {
     return typeof value.value === "string" ? value.value : null;
   }
   if (value.type === "JSXExpressionContainer") {
-    return staticStringValue(value.expression);
+    return jsxAttributeString(value.expression);
   }
   return null;
 };
@@ -84,7 +84,7 @@ const leadingPaddedClassName = (element: unknown): AstNode | null => {
   if (className === null) {
     return null;
   }
-  const classes = staticStringValue(className.value);
+  const classes = jsxAttributeString(className.value);
   if (classes === null) {
     return null;
   }
@@ -209,7 +209,7 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              staticStringValue(attributeNamed(node, "type")?.value) !==
+              jsxAttributeString(attributeNamed(node, "type")?.value) !==
               "search"
             ) {
               return;

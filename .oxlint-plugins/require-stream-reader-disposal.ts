@@ -12,6 +12,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree, Ranged } from "@oxlint/plugins";
 
 import {
+  abruptCompletionTarget,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -233,35 +234,6 @@ const callWithinExpressionStatement = (
   };
 
   return containsUnconditionalCall(statement.expression);
-};
-
-const abruptCompletionTarget = (node: AstNode): AstNode | null => {
-  if (node.type !== "BreakStatement" && node.type !== "ContinueStatement") {
-    return null;
-  }
-  const labelName = isIdentifier(node.label) ? node.label.name : null;
-  let current = isAstNode(node.parent) ? node.parent : null;
-  while (current !== null) {
-    if (
-      labelName !== null &&
-      current.type === "LabeledStatement" &&
-      isIdentifier(current.label, labelName)
-    ) {
-      return current;
-    }
-    if (
-      labelName === null &&
-      (LOOP_TYPES.has(current.type) ||
-        (node.type === "BreakStatement" && current.type === "SwitchStatement"))
-    ) {
-      return current;
-    }
-    if (FUNCTION_TYPES.has(current.type)) {
-      return null;
-    }
-    current = isAstNode(current.parent) ? current.parent : null;
-  }
-  return null;
 };
 
 const nearestLoopWithin = (

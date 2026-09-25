@@ -41411,6 +41411,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -41423,6 +41424,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -41435,6 +41437,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -41447,6 +41450,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -42262,6 +42266,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -42274,6 +42279,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -42286,6 +42292,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {
@@ -42298,6 +42305,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               format: "date-time",
+                              maxLength: 64,
                               type: "string",
                             },
                             {

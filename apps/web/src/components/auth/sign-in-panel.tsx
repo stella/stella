@@ -321,6 +321,61 @@ export const SignInPanel = ({
   );
 };
 
+/** The slice of a form field a single text input binds to. */
+type TextFieldBinding = {
+  handleBlur: () => void;
+  handleChange: (value: string) => void;
+  name: string;
+  state: { value: string };
+};
+
+const EmailCredentialField = ({
+  autoFocus,
+  field,
+}: {
+  autoFocus: boolean;
+  field: TextFieldBinding;
+}) => {
+  const t = useTranslations();
+  return (
+    <Field name={field.name}>
+      <Input
+        autoComplete="email"
+        autoFocus={autoFocus}
+        onBlur={field.handleBlur}
+        onChange={(e) => field.handleChange(e.target.value)}
+        placeholder={t("auth.emailPlaceholder")}
+        size="lg"
+        type="email"
+        value={field.state.value}
+      />
+      <FieldError />
+    </Field>
+  );
+};
+
+const SecretCredentialField = ({
+  autoComplete,
+  field,
+  placeholder,
+}: {
+  autoComplete: "current-password" | "new-password" | "one-time-code";
+  field: TextFieldBinding;
+  placeholder: string;
+}) => (
+  <Field name={field.name}>
+    <SecretInput
+      autoComplete={autoComplete}
+      onBlur={field.handleBlur}
+      onChange={(e) => field.handleChange(e.target.value)}
+      placeholder={placeholder}
+      size="lg"
+      value={field.state.value}
+    />
+    <FieldError />
+  </Field>
+);
+
 const PasswordSignInForm = ({
   hasSocialProviders,
   redirectTo,
@@ -389,34 +444,16 @@ const PasswordSignInForm = ({
     >
       <form.Field name="email">
         {(field) => (
-          <Field name={field.name}>
-            <Input
-              autoComplete="email"
-              autoFocus={!hasSocialProviders}
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
-              placeholder={t("auth.emailPlaceholder")}
-              size="lg"
-              type="email"
-              value={field.state.value}
-            />
-            <FieldError />
-          </Field>
+          <EmailCredentialField autoFocus={!hasSocialProviders} field={field} />
         )}
       </form.Field>
       <form.Field name="password">
         {(field) => (
-          <Field name={field.name}>
-            <SecretInput
-              autoComplete="current-password"
-              onBlur={field.handleBlur}
-              onChange={(e) => field.handleChange(e.target.value)}
-              placeholder={t("auth.password")}
-              size="lg"
-              value={field.state.value}
-            />
-            <FieldError />
-          </Field>
+          <SecretCredentialField
+            autoComplete="current-password"
+            field={field}
+            placeholder={t("auth.password")}
+          />
         )}
       </form.Field>
       <form.Subscribe
@@ -508,49 +545,28 @@ const BootstrapSignUpForm = ({
       >
         <form.Field name="email">
           {(field) => (
-            <Field name={field.name}>
-              <Input
-                autoComplete="email"
-                autoFocus={!hasSocialProviders}
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder={t("auth.emailPlaceholder")}
-                size="lg"
-                type="email"
-                value={field.state.value}
-              />
-              <FieldError />
-            </Field>
+            <EmailCredentialField
+              autoFocus={!hasSocialProviders}
+              field={field}
+            />
           )}
         </form.Field>
         <form.Field name="password">
           {(field) => (
-            <Field name={field.name}>
-              <SecretInput
-                autoComplete="new-password"
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder={t("auth.password")}
-                size="lg"
-                value={field.state.value}
-              />
-              <FieldError />
-            </Field>
+            <SecretCredentialField
+              autoComplete="new-password"
+              field={field}
+              placeholder={t("auth.password")}
+            />
           )}
         </form.Field>
         <form.Field name="bootstrapToken">
           {(field) => (
-            <Field name={field.name}>
-              <SecretInput
-                autoComplete="one-time-code"
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder={t("auth.bootstrapToken")}
-                size="lg"
-                value={field.state.value}
-              />
-              <FieldError />
-            </Field>
+            <SecretCredentialField
+              autoComplete="one-time-code"
+              field={field}
+              placeholder={t("auth.bootstrapToken")}
+            />
           )}
         </form.Field>
         <form.Subscribe

@@ -19,7 +19,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { isAstNode, jsxName } from "./utils.ts";
 
-const staticStringValue = (value: unknown): string | null => {
+const jsxAttributeString = (value: unknown): string | null => {
   if (!isAstNode(value)) {
     return null;
   }
@@ -27,7 +27,7 @@ const staticStringValue = (value: unknown): string | null => {
     return typeof value.value === "string" ? value.value : null;
   }
   if (value.type === "JSXExpressionContainer") {
-    return staticStringValue(value.expression);
+    return jsxAttributeString(value.expression);
   }
   return null;
 };
@@ -64,7 +64,7 @@ export default eslintCompatPlugin({
               ) {
                 continue;
               }
-              if (staticStringValue(attribute.value) === "file") {
+              if (jsxAttributeString(attribute.value) === "file") {
                 context.report({ node: attribute, messageId: "rawFileInput" });
               }
             }

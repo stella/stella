@@ -2,7 +2,7 @@
 // WebApiContract in apps/api/src/eden-contract.ts. Do not edit.
 // Regenerate: bun --filter @stll/api gen:web-api-types
 import type { toolApprovalCapability as __symbol0 } from "../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.js";
-import type { ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
+import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
@@ -26572,7 +26572,7 @@ export type WebRoutes = {
                     customFields: Array<{
                       entityId: T9a509045a7;
                       propertyId: T80d841ed63;
-                      content: T533797319a;
+                      content: T491b5c09bf;
                     }>;
                   }>;
                   nextCursor: T432e07d100;
@@ -28547,7 +28547,7 @@ export type WebRoutes = {
                       fields: Array<{
                         id: T1c7a854487;
                         propertyId: T80d841ed63;
-                        content: T533797319a;
+                        content: T491b5c09bf;
                       }>;
                     };
                     400: Tc642053948;
@@ -28891,7 +28891,7 @@ export type WebRoutes = {
                   fields: Array<{
                     id: T1c7a854487;
                     propertyId: T80d841ed63;
-                    content: T533797319a;
+                    content: T491b5c09bf;
                   }>;
                 };
                 400: Tc642053948;
@@ -32532,6 +32532,8 @@ type T48e3c0ff63 = {
   type: "kanban";
 };
 
+type T491b5c09bf = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
+
 type T49a4b60f9b = {
   ok: true;
   result: stll_folio_agents_FolioAgentApplyOperationsSummary;
@@ -32701,8 +32703,6 @@ type T527969c00a = {
 type T52d277c57b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "styleSet";
 };
-
-type T533797319a = T614d75882e | T24df5d72b3 | T1db05d7243 | T775e6ec31b | T2f09c082c1 | T827d04be89 | T452ddcb649 | T54bf6fc207 | Tdd30a41adc | Tc6e8f2c363 | Tdc8456b76d | Tc4b9125369;
 
 type T533ec86c6c = {
   readonly input: T51cad8ef60;
@@ -36532,7 +36532,7 @@ type Te35800633c = {
   readonly error: "Not Found";
 };
 
-type Te3ba023acf = {
+type Te3ba023acf = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
   workspaceName: string;
@@ -36550,26 +36550,6 @@ type Te3ba023acf = {
   status: T432e07d100;
   priority: T432e07d100;
   listItemType: T432e07d100;
-  dueDate: T432e07d100;
-  agendaKind: ("task" | "event" | "deadline" | "meeting" | "hearing");
-  startAt: T432e07d100;
-  endAt: T432e07d100;
-  occurredAt: T432e07d100;
-  remindAt: T432e07d100;
-  allDay: T1bdf39f14a;
-  timeZone: T432e07d100;
-  location: T432e07d100;
-  onlineMeetingUrl: T432e07d100;
-  availability: T432e07d100;
-  sensitivity: T432e07d100;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: ("email" | "manual" | "calendar" | "infosoud" | "import" | "api");
-  externalSource: T432e07d100;
-  externalId: T432e07d100;
-  externalChangeKey: T432e07d100;
-  externalICalUid: T432e07d100;
   readOnly: T1bdf39f14a;
   sortOrder: T432e07d100;
   activeEditBy: (null | {
@@ -36581,7 +36561,7 @@ type Te3ba023acf = {
     id: string;
     propertyId: string;
     entityId: string;
-    content: T533797319a;
+    content: T491b5c09bf;
     ocrExportStatus?: "text" | "unavailable" | "text-and-pdf";
   }>;
   cellMetadata: Array<{

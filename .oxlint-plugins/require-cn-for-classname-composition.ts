@@ -2418,15 +2418,18 @@ export default eslintCompatPlugin({
           return staticClassValue(initializer, visitedVariables);
         };
 
-        const writeContextInside = (
+        // The branch context of a write between `identifier` and the first
+        // ancestor `reachedBoundary` accepts: `null` when the walk leaves the
+        // tree or crosses a nested function before reaching it.
+        const writeContextUntil = (
           identifier: unknown,
-          callback: ESTree.ArrowFunctionExpression | ESTree.Function,
+          reachedBoundary: (current: unknown, parent: unknown) => boolean,
         ): "conditional" | "unconditional" | null => {
           let current = identifier;
           let conditional = false;
           while (isAstNode(current)) {
             const parent = current.parent;
-            if (parent === callback.body) {
+            if (reachedBoundary(current, parent)) {
               return conditional ? "conditional" : "unconditional";
             }
             if (!isAstNode(parent)) {
@@ -2469,6 +2472,15 @@ export default eslintCompatPlugin({
           }
           return null;
         };
+
+        const writeContextInside = (
+          identifier: unknown,
+          callback: ESTree.ArrowFunctionExpression | ESTree.Function,
+        ): "conditional" | "unconditional" | null =>
+          writeContextUntil(
+            identifier,
+            (_current, parent) => parent === callback.body,
+          );
 
         const writtenValues = (
           value: unknown,
@@ -2518,57 +2530,13 @@ export default eslintCompatPlugin({
         const writeContextInVariableScope = (
           identifier: unknown,
           variable: Variable,
-        ): "conditional" | "unconditional" | null => {
-          let current = identifier;
-          let conditional = false;
-          while (isAstNode(current)) {
-            const parent = current.parent;
-            if (
+        ): "conditional" | "unconditional" | null =>
+          writeContextUntil(
+            identifier,
+            (current, parent) =>
               Object.is(current, variable.scope.block) ||
-              Object.is(parent, variable.scope.block)
-            ) {
-              return conditional ? "conditional" : "unconditional";
-            }
-            if (!isAstNode(parent)) {
-              return null;
-            }
-            if (isUnreachableCatchBody(current, parent)) {
-              return null;
-            }
-            if (
-              (parent.type === "IfStatement" && current !== parent.test) ||
-              (parent.type === "ConditionalExpression" &&
-                current !== parent.test) ||
-              parent.type === "SwitchCase" ||
-              (parent.type === "LogicalExpression" &&
-                current === parent.right) ||
-              (parent.type === "CatchClause" && current === parent.body) ||
-              (parent.type === "TryStatement" &&
-                current === parent.block &&
-                isAstNode(parent.handler) &&
-                !isImmediateSafeCaughtTryAssignment(
-                  identifier,
-                  parent.block,
-                )) ||
-              parent.type === "ForStatement" ||
-              parent.type === "ForInStatement" ||
-              parent.type === "ForOfStatement" ||
-              parent.type === "WhileStatement" ||
-              parent.type === "DoWhileStatement"
-            ) {
-              conditional = true;
-            }
-            if (
-              parent.type === "ArrowFunctionExpression" ||
-              parent.type === "FunctionExpression" ||
-              parent.type === "FunctionDeclaration"
-            ) {
-              return null;
-            }
-            current = parent;
-          }
-          return null;
-        };
+              Object.is(parent, variable.scope.block),
+          );
 
         const mutableLocalValues = (
           identifier: unknown,
