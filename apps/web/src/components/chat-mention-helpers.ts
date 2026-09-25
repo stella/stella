@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/core";
+import { Result } from "better-result";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -68,6 +69,38 @@ export const getMentionViewScope = (layout: ViewLayout | null | undefined) => {
     return { filters: [], sorts: [] };
   }
   return { filters: layout.filters, sorts: layout.sorts };
+};
+
+/**
+ * Settles the promise a debounced mention search hands back to the picker.
+ * `claim` returns false when a newer search has replaced this one; that
+ * search owns the picker now, so this one settles nothing. A failed search
+ * rejects, which lets the picker tell a failed search from one with no
+ * matches.
+ */
+export const settleLatestMentionSearch = async <T>({
+  search,
+  claim,
+  resolve,
+  reject,
+}: {
+  search: () => Promise<T>;
+  claim: () => boolean;
+  resolve: (items: T) => void;
+  reject: (error: unknown) => void;
+}): Promise<void> => {
+  const result = await Result.tryPromise({
+    try: search,
+    catch: (cause) => cause,
+  });
+  if (!claim()) {
+    return;
+  }
+  if (Result.isError(result)) {
+    reject(result.error);
+    return;
+  }
+  resolve(result.value);
 };
 
 export const buildEntityMentionOption = ({

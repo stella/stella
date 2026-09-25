@@ -6,6 +6,7 @@ import {
   buildEntityMentionOption,
   buildWorkspaceMentionOptions,
   getMentionViewScope,
+  settleLatestMentionSearch,
 } from "@/components/chat-mention-helpers";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -187,5 +188,67 @@ describe("getMentionViewScope", () => {
       filters: [],
       sorts: [],
     });
+  });
+});
+
+describe("settleLatestMentionSearch", () => {
+  const recordSettlement = () => {
+    const settled: { resolved: string[][]; rejected: unknown[] } = {
+      resolved: [],
+      rejected: [],
+    };
+    return {
+      settled,
+      resolve: (items: string[]) => {
+        settled.resolved.push(items);
+      },
+      reject: (error: unknown) => {
+        settled.rejected.push(error);
+      },
+    };
+  };
+
+  test("resolves the items of the current search", async () => {
+    const { settled, resolve, reject } = recordSettlement();
+
+    await settleLatestMentionSearch({
+      search: async () => ["Alpha"],
+      claim: () => true,
+      resolve,
+      reject,
+    });
+
+    expect(settled).toEqual({ resolved: [["Alpha"]], rejected: [] });
+  });
+
+  test("rejects a current search that fails", async () => {
+    const { settled, resolve, reject } = recordSettlement();
+    const failure = new TypeError("Failed to fetch");
+
+    await settleLatestMentionSearch({
+      search: async () => {
+        throw failure;
+      },
+      claim: () => true,
+      resolve,
+      reject,
+    });
+
+    expect(settled).toEqual({ resolved: [], rejected: [failure] });
+  });
+
+  test("leaves a search replaced by a newer one unsettled", async () => {
+    const { settled, resolve, reject } = recordSettlement();
+
+    await settleLatestMentionSearch({
+      search: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      claim: () => false,
+      resolve,
+      reject,
+    });
+
+    expect(settled).toEqual({ resolved: [], rejected: [] });
   });
 });
