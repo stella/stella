@@ -38,6 +38,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -90,7 +91,7 @@ export const toExportErrorMessage = (cause: unknown): string => {
   return "Report export failed";
 };
 
-export const initReportExportWorker = () => {
+export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<ReportExportJobData>(
@@ -131,7 +132,8 @@ export const initReportExportWorker = () => {
   );
 
   const runNotificationReconcile = async (): Promise<void> => {
-    const { actors, suppressed } = await listPendingReportExportNotifications();
+    const { actors, suppressed } =
+      await listPendingReportExportNotifications(db);
     const results = await Promise.all(
       actors.map(
         async (actorKey) =>

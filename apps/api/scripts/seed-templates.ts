@@ -21,7 +21,6 @@ import JSZip from "jszip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
-import { rootDb } from "@/api/db/root";
 import {
   clauseCategories,
   clauses,
@@ -34,6 +33,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
@@ -2347,21 +2347,25 @@ export async function seedTemplates(
 ): Promise<void> {
   const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
   const scopedSeedId = (label: string) => seedId(`${ORG_ID}:${label}`);
+  const db = openMaintenanceDb({ readOnly: false });
 
   console.log("  Templates & clauses:");
 
   // ── 1. Clause categories ────────────────────────────
   for (const cat of CLAUSE_CATS) {
-    await rootDb
-      .insert(clauseCategories)
-      .values({
-        id: scopedSeedId(cat.label),
-        organizationId: ORG_ID,
-        name: cat.name,
-        description: cat.description,
-        sortOrder: cat.sortOrder,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(clauseCategories)
+          .values({
+            id: scopedSeedId(cat.label),
+            organizationId: ORG_ID,
+            name: cat.name,
+            description: cat.description,
+            sortOrder: cat.sortOrder,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`    Clause categories: ${CLAUSE_CATS.length}`);
 
@@ -2371,47 +2375,56 @@ export async function seedTemplates(
     const clauseId = scopedSeedId(c.label);
     const versionId = scopedSeedId(`${c.label}-v1`);
 
-    await rootDb
-      .insert(clauses)
-      .values({
-        id: clauseId,
-        organizationId: ORG_ID,
-        categoryId: scopedSeedId(c.catLabel),
-        title: c.title,
-        description: c.description,
-        usageNotes: c.usageNotes,
-        language: "en",
-        body: c.body,
-        currentVersion: 1,
-        createdBy: pickAuthor(authorIds, i),
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(clauses)
+          .values({
+            id: clauseId,
+            organizationId: ORG_ID,
+            categoryId: scopedSeedId(c.catLabel),
+            title: c.title,
+            description: c.description,
+            usageNotes: c.usageNotes,
+            language: "en",
+            body: c.body,
+            currentVersion: 1,
+            createdBy: pickAuthor(authorIds, i),
+          })
+          .onConflictDoNothing(),
+    );
 
-    await rootDb
-      .insert(clauseVersions)
-      .values({
-        id: versionId,
-        organizationId: ORG_ID,
-        clauseId,
-        version: 1,
-        body: c.body,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(clauseVersions)
+          .values({
+            id: versionId,
+            organizationId: ORG_ID,
+            clauseId,
+            version: 1,
+            body: c.body,
+          })
+          .onConflictDoNothing(),
+    );
 
     // 3. Clause variants
     if (c.variants) {
       for (const [vi, v] of c.variants.entries()) {
-        await rootDb
-          .insert(clauseVariants)
-          .values({
-            id: scopedSeedId(`${c.label}-var-${vi}`),
-            organizationId: ORG_ID,
-            clauseId,
-            label: v.label,
-            body: v.body,
-            sortOrder: vi,
-          })
-          .onConflictDoNothing();
+        await db.transaction(
+          async (tx) =>
+            await tx
+              .insert(clauseVariants)
+              .values({
+                id: scopedSeedId(`${c.label}-var-${vi}`),
+                organizationId: ORG_ID,
+                clauseId,
+                label: v.label,
+                body: v.body,
+                sortOrder: vi,
+              })
+              .onConflictDoNothing(),
+        );
         variantCount++;
       }
     }
@@ -2420,16 +2433,19 @@ export async function seedTemplates(
 
   // ── 4. Template categories ──────────────────────────
   for (const cat of TEMPLATE_CATS) {
-    await rootDb
-      .insert(templateCategories)
-      .values({
-        id: scopedSeedId(cat.label),
-        organizationId: ORG_ID,
-        name: cat.name,
-        description: cat.description,
-        sortOrder: cat.sortOrder,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(templateCategories)
+          .values({
+            id: scopedSeedId(cat.label),
+            organizationId: ORG_ID,
+            name: cat.name,
+            description: cat.description,
+            sortOrder: cat.sortOrder,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`    Template categories: ${TEMPLATE_CATS.length}`);
 
@@ -2480,22 +2496,25 @@ export async function seedTemplates(
     });
 
     // Insert template
-    await rootDb
-      .insert(templates)
-      .values({
-        id: templateId,
-        organizationId: ORG_ID,
-        categoryId: scopedSeedId(t.catLabel),
-        name: t.name,
-        fileName: t.fileName,
-        s3Key,
-        sizeBytes,
-        manifest,
-        fieldCount: t.fields.length,
-        currentVersion: 1,
-        createdBy: pickAuthor(authorIds, i),
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(templates)
+          .values({
+            id: templateId,
+            organizationId: ORG_ID,
+            categoryId: scopedSeedId(t.catLabel),
+            name: t.name,
+            fileName: t.fileName,
+            s3Key,
+            sizeBytes,
+            manifest,
+            fieldCount: t.fields.length,
+            currentVersion: 1,
+            createdBy: pickAuthor(authorIds, i),
+          })
+          .onConflictDoNothing(),
+    );
 
     // Insert version v1
     const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
@@ -2504,19 +2523,22 @@ export async function seedTemplates(
       key: versionS3Key,
     });
 
-    await rootDb
-      .insert(templateVersions)
-      .values({
-        id: versionId,
-        organizationId: ORG_ID,
-        templateId,
-        version: 1,
-        s3Key: versionS3Key,
-        manifest,
-        fieldCount: t.fields.length,
-        createdBy: pickAuthor(authorIds, i),
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(templateVersions)
+          .values({
+            id: versionId,
+            organizationId: ORG_ID,
+            templateId,
+            version: 1,
+            s3Key: versionS3Key,
+            manifest,
+            fieldCount: t.fields.length,
+            createdBy: pickAuthor(authorIds, i),
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`    Templates: ${TEMPLATES.length} (DOCX + S3)`);
 
@@ -2539,18 +2561,21 @@ export async function seedTemplates(
       }
     }
 
-    await rootDb
-      .insert(templateClauses)
-      .values({
-        id: scopedSeedId(`link-${link.templateLabel}-${link.slotName}`),
-        organizationId: ORG_ID,
-        templateId,
-        clauseId,
-        clauseVariantId,
-        slotName: link.slotName,
-        sortOrder: link.sortOrder,
-      })
-      .onConflictDoNothing();
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(templateClauses)
+          .values({
+            id: scopedSeedId(`link-${link.templateLabel}-${link.slotName}`),
+            organizationId: ORG_ID,
+            templateId,
+            clauseId,
+            clauseVariantId,
+            slotName: link.slotName,
+            sortOrder: link.sortOrder,
+          })
+          .onConflictDoNothing(),
+    );
   }
   console.log(`    Template-clause links: ${TEMPLATE_CLAUSE_LINKS.length}`);
 }

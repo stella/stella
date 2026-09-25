@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -16,6 +16,7 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const requestAutomaticDocumentOcr = async ({
+  db,
   entityId,
   entityVersionId,
   fieldId,
@@ -25,6 +26,8 @@ export const requestAutomaticDocumentOcr = async ({
   sourceSha256Hex,
   workspaceId,
 }: {
+  /** The extraction pipeline's owner connection. */
+  db: Pick<typeof rootDb, "transaction">;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -34,7 +37,7 @@ export const requestAutomaticDocumentOcr = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const settings = await tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: { documentProcessingMode: true },

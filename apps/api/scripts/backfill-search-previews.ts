@@ -10,12 +10,14 @@
 
 import { sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { backfillChatThreadSearchIndex } from "@/api/lib/search/index-chat";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 
 const ORGANIZATION_BATCH_SIZE = 100;
+
+const db = openMaintenanceDb({ readOnly: false });
 
 type OrganizationRow = {
   id: string;
@@ -28,7 +30,7 @@ const main = async (): Promise<void> => {
   for (;;) {
     const organizationRows: Iterable<OrganizationRow> =
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-      await rootDb.execute<OrganizationRow>(sql`
+      await db.execute<OrganizationRow>(sql`
         SELECT id
         FROM organization
         ${organizationCursor ? sql`WHERE id > ${organizationCursor}` : sql``}

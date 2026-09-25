@@ -449,16 +449,25 @@ export const executeNativeExtraction = async ({
 export type ExecuteNativeExtractionDependencies = {
   extractText: typeof extractFileTextResult;
   persistProjection: typeof persistNativeExtractionProjection;
-  requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
-  restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
+  requestAutomaticOcr: (
+    input: Omit<Parameters<typeof requestAutomaticDocumentOcr>[0], "db">,
+  ) => Promise<void>;
+  restoreManualOcr: (
+    input: Omit<
+      Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0],
+      "db"
+    >,
+  ) => Promise<void>;
 };
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
     extractText: extractFileTextResult,
     persistProjection: persistNativeExtractionProjection,
-    requestAutomaticOcr: requestAutomaticDocumentOcr,
-    restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
+    requestAutomaticOcr: async (input) =>
+      await requestAutomaticDocumentOcr({ ...input, db: rootDb }),
+    restoreManualOcr: async (input) =>
+      await restoreManualOcrRunAfterProjectionLoss({ ...input, db: rootDb }),
   };
 
 /**

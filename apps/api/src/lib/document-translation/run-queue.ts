@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   documentTranslationRuns,
@@ -49,6 +49,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { decryptContent } from "@/api/lib/content-encryption";
@@ -1285,70 +1286,73 @@ type ReconcileDocumentTranslationRunsResult = {
   handedOff: number;
 };
 
-export const reconcileDocumentTranslationRuns =
-  async (): Promise<ReconcileDocumentTranslationRunsResult> => {
-    const runningCutoff = new Date(
-      Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
-    );
-    const cancelled = await rootDb
-      .update(documentTranslationRuns)
-      .set({ status: "cancelled", errorCode: null, finishedAt: new Date() })
-      .where(
-        and(
-          inArray(documentTranslationRuns.status, [
-            ...DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
-          ]),
-          isNull(documentTranslationRuns.requestedBy),
-        ),
-      )
-      .returning({ id: documentTranslationRuns.id });
-    const queued = await rootDb
-      .select({
-        id: documentTranslationRuns.id,
-        organizationId: documentTranslationRuns.organizationId,
-        requestedBy: documentTranslationRuns.requestedBy,
-        workspaceId: documentTranslationRuns.workspaceId,
-      })
-      .from(documentTranslationRuns)
-      .where(eq(documentTranslationRuns.status, "queued"))
-      .orderBy(
-        asc(documentTranslationRuns.createdAt),
-        asc(documentTranslationRuns.id),
-      )
-      .limit(RECONCILE_BATCH_MAX);
-    const handedOff = await enqueueDocumentTranslationRuns(
-      queued.flatMap((run) =>
-        run.requestedBy === null
-          ? []
-          : [
-              {
-                runId: run.id,
-                organizationId: run.organizationId,
-                workspaceId: run.workspaceId,
-                userId: brandPersistedUserId(run.requestedBy),
-              },
-            ],
+export const reconcileDocumentTranslationRuns = async (
+  db: Pick<typeof rootDb, "select" | "update">,
+): Promise<ReconcileDocumentTranslationRunsResult> => {
+  const runningCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
+  );
+  const cancelled = await db
+    .update(documentTranslationRuns)
+    .set({ status: "cancelled", errorCode: null, finishedAt: new Date() })
+    .where(
+      and(
+        inArray(documentTranslationRuns.status, [
+          ...DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES,
+        ]),
+        isNull(documentTranslationRuns.requestedBy),
       ),
-    );
-    const recovered = await rootDb
-      .update(documentTranslationRuns)
-      .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
-      .where(
-        and(
-          inArray(documentTranslationRuns.status, [
-            "preparing",
-            "translating",
-            "assembling",
-            "validating",
-          ]),
-          lt(documentTranslationRuns.startedAt, runningCutoff),
-        ),
-      )
-      .returning({ id: documentTranslationRuns.id });
-    return { cancelled: cancelled.length, failed: recovered.length, handedOff };
-  };
+    )
+    .returning({ id: documentTranslationRuns.id });
+  const queued = await db
+    .select({
+      id: documentTranslationRuns.id,
+      organizationId: documentTranslationRuns.organizationId,
+      requestedBy: documentTranslationRuns.requestedBy,
+      workspaceId: documentTranslationRuns.workspaceId,
+    })
+    .from(documentTranslationRuns)
+    .where(eq(documentTranslationRuns.status, "queued"))
+    .orderBy(
+      asc(documentTranslationRuns.createdAt),
+      asc(documentTranslationRuns.id),
+    )
+    .limit(RECONCILE_BATCH_MAX);
+  const handedOff = await enqueueDocumentTranslationRuns(
+    queued.flatMap((run) =>
+      run.requestedBy === null
+        ? []
+        : [
+            {
+              runId: run.id,
+              organizationId: run.organizationId,
+              workspaceId: run.workspaceId,
+              userId: brandPersistedUserId(run.requestedBy),
+            },
+          ],
+    ),
+  );
+  const recovered = await db
+    .update(documentTranslationRuns)
+    .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
+    .where(
+      and(
+        inArray(documentTranslationRuns.status, [
+          "preparing",
+          "translating",
+          "assembling",
+          "validating",
+        ]),
+        lt(documentTranslationRuns.startedAt, runningCutoff),
+      ),
+    )
+    .returning({ id: documentTranslationRuns.id });
+  return { cancelled: cancelled.length, failed: recovered.length, handedOff };
+};
 
-export const initDocumentTranslationRunWorker = () => {
+export const initDocumentTranslationRunWorker = ({
+  db,
+}: BullMqWorkerContext) => {
   const worker = new Worker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
     async (job) => await processRunJob(job.data),
@@ -1371,7 +1375,7 @@ export const initDocumentTranslationRunWorker = () => {
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
     run: async () => {
-      const result = await reconcileDocumentTranslationRuns();
+      const result = await reconcileDocumentTranslationRuns(db);
       if (result.cancelled > 0 || result.failed > 0 || result.handedOff > 0) {
         logger.info("document_translation.reconciled", {
           cancelled: String(result.cancelled),

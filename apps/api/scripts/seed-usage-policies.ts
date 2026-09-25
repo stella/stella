@@ -9,7 +9,6 @@
 import { and, eq, notInArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import { rootDb } from "@/api/db/root";
 import {
   USAGE_POLICY_BILLING_INTERVALS,
   USAGE_POLICY_KINDS,
@@ -18,6 +17,7 @@ import {
   usagePolicies,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { MAX_CATALOG_ROWS } from "@/api/lib/usage/policy-catalog";
 
 // PostgreSQL int4 ceiling: values beyond it would fail at write time
@@ -95,10 +95,11 @@ const seed = async (): Promise<void> => {
     return;
   }
 
+  const db = openMaintenanceDb({ readOnly: false });
   // One transaction for upserts + retirement: a mid-run failure (e.g.
   // two seeds colliding on the unique hosted-provider reference) must
   // not leave the catalog as a partial mix of new and stale entries.
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     for (const seedPolicy of seeds) {
       // Upsert by policyKey so edits to the config (display name, units,
       // or a newly created hostedPolicyRef) propagate to the existing row

@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/signals";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -55,16 +55,20 @@ class DocumentDeadlineScoutError extends TaggedError(
   cause: unknown;
 }> {}
 
+type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update">;
+
 export type RunDocumentDeadlineScoutArgs = {
+  db: DeadlineScoutDb;
   sourceRunId: SafeId<"documentProcessingRun">;
 };
 
 type ClaimedRun = typeof documentProcessingRuns.$inferSelect;
 
 const claimRun = async (
+  db: DeadlineScoutDb,
   sourceRunId: SafeId<"documentProcessingRun">,
 ): Promise<ClaimedRun | null> => {
-  const claimed = await rootDb
+  const claimed = await db
     .update(documentProcessingRuns)
     .set({
       deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
@@ -85,9 +89,10 @@ const claimRun = async (
 };
 
 const resolveActorUserId = async (
+  db: DeadlineScoutDb,
   run: ClaimedRun,
 ): Promise<SafeId<"user"> | null> => {
-  const candidates = await rootDb
+  const candidates = await db
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)
     .innerJoin(
@@ -143,8 +148,8 @@ const currentSourceWhere = (run: ClaimedRun) =>
     eq(workspaces.status, "active"),
   );
 
-const loadCurrentSource = async (run: ClaimedRun) => {
-  const rows = await rootDb
+const loadCurrentSource = async (db: DeadlineScoutDb, run: ClaimedRun) => {
+  const rows = await db
     .select({
       ciphertext: extractedContent.ciphertext,
       entityName: entities.name,
@@ -171,15 +176,17 @@ const loadCurrentSource = async (run: ClaimedRun) => {
 };
 
 const settleRun = async ({
+  db,
   errorCode,
   run,
   status,
 }: {
+  db: DeadlineScoutDb;
   errorCode: string | null;
   run: ClaimedRun;
   status: "pending" | "succeeded" | "failed" | "cancelled";
 }): Promise<void> => {
-  await rootDb
+  await db
     .update(documentProcessingRuns)
     .set({
       deadlineScoutClaimedAt: null,
@@ -200,16 +207,18 @@ const settleRun = async ({
  * PostgreSQL owns claiming and retry state; a BullMQ job is only a wake-up.
  */
 export const runDocumentDeadlineScout = async ({
+  db,
   sourceRunId,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
-  const run = await claimRun(sourceRunId);
+  const run = await claimRun(db, sourceRunId);
   if (!run) {
     return;
   }
 
-  const actorUserId = await resolveActorUserId(run);
+  const actorUserId = await resolveActorUserId(db, run);
   if (!actorUserId) {
     await settleRun({
+      db,
       errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
       run,
       status: "failed",
@@ -235,7 +244,7 @@ export const runDocumentDeadlineScout = async ({
         organizationId: run.organizationId,
         scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
         observe: async () => {
-          const source = await loadCurrentSource(run);
+          const source = await loadCurrentSource(db, run);
           if (!source) {
             return [];
           }
@@ -366,6 +375,7 @@ export const runDocumentDeadlineScout = async ({
 
   if (Result.isError(observed)) {
     await settleRun({
+      db,
       errorCode: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
       run,
       status:
@@ -381,6 +391,7 @@ export const runDocumentDeadlineScout = async ({
   }
 
   await settleRun({
+    db,
     errorCode: observed.value.observationAccepted
       ? null
       : DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,

@@ -11,7 +11,7 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { reportExports, workspaces } from "@/api/db/schema";
 import type { ReportExportFormat } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -100,7 +100,7 @@ type QueuedReportExportRow = {
 };
 
 type ReconcileQueuedReportExportsOptions = {
-  db?: Pick<typeof rootDb, "select" | "update">;
+  db: Pick<typeof rootDb, "select" | "update">;
   queue?: RequeueableQueue<ReportExportJobData>;
 };
 
@@ -151,9 +151,9 @@ type ReconcileQueuedReportExportsResult = ReconcileScanResult & {
  * different export than the one asked for.
  */
 export const reconcileQueuedReportExports = async ({
-  db = rootDb,
+  db,
   queue = getReportExportQueue(),
-}: ReconcileQueuedReportExportsOptions = {}): Promise<ReconcileQueuedReportExportsResult> => {
+}: ReconcileQueuedReportExportsOptions): Promise<ReconcileQueuedReportExportsResult> => {
   let unattributed = 0;
   let unrecoverable = 0;
 
