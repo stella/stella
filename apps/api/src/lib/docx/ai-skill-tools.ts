@@ -14,9 +14,11 @@
  * can adopt the same `maybeSkillTools` seam later without changing this module.
  */
 
-import type { SafeDb } from "@/api/db/safe-db";
+import { Result } from "better-result";
+
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
+import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
@@ -37,26 +39,33 @@ export type SkillToolsContext = {
 /**
  * Returns the `load-skill` + `read-skill-resource` tool set when `prompt`
  * references at least one skill, otherwise `undefined` so the caller keeps its
- * existing no-tools behaviour. `ctx` is omitted at boundaries that cannot wire
- * the skill identity yet; in that case skill refs stay inert (no tools).
+ * existing no-tools behaviour. The catalog is the one chat serves: the
+ * caller's enabled team and private skills, private first on a slug
+ * collision. `ctx` is omitted at boundaries that cannot wire the skill
+ * identity; in that case skill refs stay inert (no tools).
  */
-export const maybeSkillTools = (
+export const maybeSkillTools = async (
   prompt: string,
   ctx: SkillToolsContext | undefined,
-): ChatToolMap | undefined => {
+): Promise<Result<ChatToolMap | undefined, SafeDbError>> => {
   if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
-    return undefined;
+    return Result.ok(undefined);
   }
-  const skills = getChatSkillMetadata();
-  if (skills.length === 0) {
-    return undefined;
+  const skills = await listAvailableChatSkillMetadata(ctx);
+  if (Result.isError(skills)) {
+    return Result.err(skills.error);
   }
-  return createSkillTools({
-    organizationId: ctx.organizationId,
-    safeDb: ctx.safeDb,
-    skills,
-    userId: ctx.userId,
-  });
+  if (skills.value.length === 0) {
+    return Result.ok(undefined);
+  }
+  return Result.ok(
+    createSkillTools({
+      organizationId: ctx.organizationId,
+      safeDb: ctx.safeDb,
+      skills: skills.value,
+      userId: ctx.userId,
+    }),
+  );
 };
 
 /**
