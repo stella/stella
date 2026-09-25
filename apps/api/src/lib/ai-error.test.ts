@@ -376,6 +376,13 @@ describe("isAnticipatedAIFailure", () => {
   });
 });
 
+// A provider status that never met the AI boundary is unclassified: the
+// record helpers grade in shadow, with no sink and no boundary decision.
+const UNCLASSIFIED_SHADOW = {
+  "failure.shadow_grade": "defect",
+  "failure.shadow_reason": "unclassified",
+} as const;
+
 describe("providerStatusFields", () => {
   test("reads a numeric top-level code from an OpenRouter raw event", () => {
     const rawEvent = {
@@ -388,6 +395,7 @@ describe("providerStatusFields", () => {
     expect(classifyAIError(rawEvent)).toBe("unknown");
     expect(providerStatusFields(rawEvent)).toEqual({
       "error.provider.status": "400",
+      ...UNCLASSIFIED_SHADOW,
     });
   });
 
@@ -423,6 +431,7 @@ describe("providerStatusFields", () => {
     expect(classifyAIError(error)).toBe("unknown");
     expect(providerStatusFields(error)).toEqual({
       "error.provider.status": "403",
+      ...UNCLASSIFIED_SHADOW,
     });
   });
 
@@ -438,6 +447,7 @@ describe("providerStatusFields", () => {
     expect(classifyAIError(wrapped)).toBe("unknown");
     expect(providerStatusFields(wrapped)).toEqual({
       "error.provider.status": "403",
+      ...UNCLASSIFIED_SHADOW,
     });
   });
 
@@ -478,6 +488,7 @@ describe("providerStatusFields", () => {
     ] as const) {
       expect(providerStatusFields(error)).toEqual({
         "error.provider.status": status,
+        ...UNCLASSIFIED_SHADOW,
       });
     }
   });
@@ -656,6 +667,7 @@ describe("AWS SDK service exceptions", () => {
       });
       expect(providerStatusFields(error)).toEqual({
         "error.provider.status": String(error.$metadata.httpStatusCode),
+        ...UNCLASSIFIED_SHADOW,
       });
     }
   });
@@ -692,10 +704,12 @@ describe("AWS SDK service exceptions", () => {
     expect(classifyAIError(denied)).toBe("unknown");
     expect(providerStatusFields(denied)).toEqual({
       "error.provider.status": "403",
+      ...UNCLASSIFIED_SHADOW,
     });
     expect(classifyAIError(invalid)).toBe("unknown");
     expect(providerStatusFields(invalid)).toEqual({
       "error.provider.status": "400",
+      ...UNCLASSIFIED_SHADOW,
     });
   });
 
@@ -719,6 +733,7 @@ describe("AWS SDK service exceptions", () => {
       expect(classifyAIError(wrapped)).toBe("quota_exhausted");
       expect(providerStatusFields(wrapped)).toEqual({
         "error.provider.status": "429",
+        ...UNCLASSIFIED_SHADOW,
       });
     }
   });

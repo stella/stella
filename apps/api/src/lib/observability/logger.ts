@@ -1,6 +1,8 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
+import { FAILURE_GRADES, isFailureReason } from "@stll/errors";
+
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 
@@ -38,6 +40,34 @@ type RequestLogOptions = {
   statusCode: number;
 };
 
+// The failure classifier's own keys hold a closed vocabulary. A value outside
+// it is not a grade, and free text riding under an owned key would be exactly
+// the payload the key names were chosen to exclude.
+const FAILURE_GRADE_KEYS: ReadonlySet<string> = new Set([
+  "failure.grade",
+  "failure.shadow_grade",
+]);
+const FAILURE_REASON_KEYS: ReadonlySet<string> = new Set([
+  "failure.reason",
+  "failure.shadow_reason",
+]);
+
+const isFailureGrade = (value: unknown): boolean =>
+  FAILURE_GRADES.some((grade) => grade === value);
+
+const isOwnedValueValid = (
+  key: string,
+  value: LoggerAttributeValue,
+): boolean => {
+  if (FAILURE_GRADE_KEYS.has(key)) {
+    return isFailureGrade(value);
+  }
+  if (FAILURE_REASON_KEYS.has(key)) {
+    return isFailureReason(value);
+  }
+  return true;
+};
+
 export const sanitizeLogAttributes = (
   attributes: LoggerAttributes | undefined,
 ): LoggerAttributes | undefined => {
@@ -49,7 +79,10 @@ export const sanitizeLogAttributes = (
   const safeAttributes: LoggerAttributes = {};
 
   for (const [key, value] of Object.entries(attributes)) {
-    if (SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key)) {
+    if (
+      SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
+      !isOwnedValueValid(key, value)
+    ) {
       dropped += 1;
       continue;
     }
@@ -84,6 +117,32 @@ export const resetLogSinkForTesting = (): void => {
   recordSink = null;
 };
 
+const ERROR_ATTRIBUTE_PREFIX = "error.";
+const OWNED_FAILURE_KEY = "failure.grade";
+const UNOWNED_KEY = "observability.unowned";
+
+/**
+ * Mark a WARN or ERROR record that describes an error without a failure
+ * grade: a sink the failure owner has not reached yet, countable from the
+ * deployed log stream.
+ */
+const annotateUnowned = (
+  severityNumber: SeverityNumber,
+  attributes: LoggerAttributes | undefined,
+): LoggerAttributes | undefined => {
+  if (
+    attributes === undefined ||
+    severityNumber < SeverityNumber.WARN ||
+    Object.hasOwn(attributes, OWNED_FAILURE_KEY) ||
+    !Object.keys(attributes).some((key) =>
+      key.startsWith(ERROR_ATTRIBUTE_PREFIX),
+    )
+  ) {
+    return attributes;
+  }
+  return { ...attributes, [UNOWNED_KEY]: true };
+};
+
 const emit = ({
   attributes,
   message,
@@ -95,7 +154,10 @@ const emit = ({
   severityNumber: SeverityNumber;
   severityText: string;
 }): void => {
-  const safeAttributes = sanitizeLogAttributes(attributes);
+  const safeAttributes = annotateUnowned(
+    severityNumber,
+    sanitizeLogAttributes(attributes),
+  );
   if (recordSink !== null) {
     recordSink({ severityText, message, attributes: safeAttributes });
     return;
@@ -160,30 +222,31 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  const safeAttributes: LoggerAttributes = {
+  const safeAttributes = annotateUnowned(REQUEST_SEVERITY[severity], {
+    // The fingerprint's keys are already this sink's attribute names, so the
+    // record ships whole rather than being re-listed field by field. A second
+    // copy of that key set can only ever be a shorter one, and a field it
+    // leaves out is a field no reader of this sink can get back. It goes
+    // first, so none of its keys can override the request's own.
+    ...sanitizeLogAttributes(errorFingerprint),
     "http.method": method,
     "http.route": route ?? "unmatched",
     "http.status_code": statusCode,
     "request.duration_ms": durationMs,
     ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
     ...(errorType === undefined ? {} : { "error.type": errorType }),
-    // The fingerprint's keys are already this sink's attribute names, so the
-    // record ships whole rather than being re-listed field by field. A second
-    // copy of that key set can only ever be a shorter one, and a field it
-    // leaves out is a field no reader of this sink can get back.
-    ...sanitizeLogAttributes(errorFingerprint),
     ...(requestId === undefined ? {} : { "request.id": requestId }),
     ...(clientAddressSource === undefined
       ? {}
       : { "client.address_source": clientAddressSource }),
-  };
+  });
 
   if (recordSink !== null) {
     recordSink({ severityText: severity, message, attributes: safeAttributes });
     return;
   }
   otelLogger.emit({
-    attributes: safeAttributes,
+    ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
     body: message,
     severityNumber: REQUEST_SEVERITY[severity],
     severityText: severity,

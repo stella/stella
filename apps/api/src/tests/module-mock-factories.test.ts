@@ -168,6 +168,7 @@ describe("module mock factories", () => {
 
     expect([...readModuleExports(captureFile, API_ROOT)].toSorted()).toEqual([
       "captureError",
+      "captureObservedError",
       "captureRequestError",
       "detached",
       "resetCaptureWindows",

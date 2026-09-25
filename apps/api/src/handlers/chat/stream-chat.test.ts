@@ -2305,6 +2305,8 @@ describe("outgoing chat stream message ids", () => {
         kind: "unknown",
         "error.class": "UnknownError",
         "error.provider.status": "403",
+        "failure.shadow_grade": "defect",
+        "failure.shadow_reason": "unclassified",
       });
     } finally {
       errorSpy.mockRestore();

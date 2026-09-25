@@ -9,12 +9,13 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 
+import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
+import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createS3CredentialGuard,
@@ -159,9 +160,12 @@ const fetchEcsCredentials = async ({
       async () => await Bun.file(authorizationTokenFile).text(),
     );
     if (token.isErr()) {
-      logger.warn("s3.container_credentials_token_unreadable", {
-        "error.type": errorTag(token.error),
-      });
+      logger.warn(
+        "s3.container_credentials_token_unreadable",
+        errorSystemFields(
+          classifyFailure(token.error, "credentials_token_unreadable"),
+        ),
+      );
       return null;
     }
     headers["Authorization"] = token.value.trim();

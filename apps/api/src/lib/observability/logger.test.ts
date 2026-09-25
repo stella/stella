@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const originalStderrWrite = process.stderr.write;
 const originalStdoutWrite = process.stdout.write;
@@ -178,5 +179,91 @@ describe("logger attributes", () => {
     expect(JSON.parse(chunks.join(""))).toMatchObject({
       "http.route": "unmatched",
     });
+  });
+});
+
+describe("failure ownership in log records", () => {
+  test("a failure key outside its closed vocabulary is dropped", () => {
+    expect(
+      sanitizeLogAttributes({
+        "failure.grade": "PRIVILEGED-SENTINEL",
+        "failure.reason": "not a reason",
+        "failure.shadow_grade": "transient",
+        "failure.shadow_reason": "network_reset",
+      }),
+    ).toEqual({
+      "failure.shadow_grade": "transient",
+      "failure.shadow_reason": "network_reset",
+      "log.attributes_dropped": 2,
+    });
+  });
+
+  test("marks a WARN or ERROR error record without a grade as unowned", () => {
+    const logs = installRecordingLogger();
+    try {
+      logger.warn("site.failed", { "error.type": "TaggedError" });
+      logger.error("site.failed", {
+        "error.type": "TaggedError",
+        "failure.grade": "defect",
+      });
+      logger.info("site.done", { "error.type": "TaggedError" });
+      logger.warn("site.slow", { "http.route": "/x" });
+
+      expect(
+        logs.records.map(
+          ({ attributes }) => attributes?.["observability.unowned"],
+        ),
+      ).toEqual([true, undefined, undefined, undefined]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("a fingerprint cannot override a request record's own keys", () => {
+    const logs = installRecordingLogger();
+    try {
+      logger.request({
+        durationMs: 3,
+        errorFingerprint: {
+          "error.class": "Error",
+          "http.status_code": "spoofed",
+        },
+        message: "request.failed",
+        method: "GET",
+        route: "/x",
+        severity: "ERROR",
+        statusCode: 502,
+      });
+      logger.request({
+        durationMs: 3,
+        errorType: "HandlerError",
+        message: "request.failed",
+        method: "GET",
+        route: "/x",
+        severity: "WARN",
+        statusCode: 404,
+      });
+
+      expect(logs.records.map(({ attributes }) => attributes)).toEqual([
+        {
+          "error.class": "Error",
+          "http.method": "GET",
+          "http.route": "/x",
+          "http.status_code": 502,
+          "request.duration_ms": 3,
+          "observability.unowned": true,
+        },
+        {
+          "http.method": "GET",
+          "http.route": "/x",
+          "http.status_code": 404,
+          "request.duration_ms": 3,
+          "error.type": "HandlerError",
+          "observability.unowned": true,
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
   });
 });

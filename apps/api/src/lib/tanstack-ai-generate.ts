@@ -20,6 +20,7 @@ import type {
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { classifyFailure } from "@stll/errors";
 
 import type {
   AIRequestServiceTier,
@@ -175,14 +176,19 @@ type ResolveTextModelOptions = Pick<
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
+// Classified as well as caused: the 502 is what the caller answers with, the
+// classification is what a failure sink records for it.
 const cancelledGenerationError = (): HandlerError =>
-  new HandlerError({
-    status: 502,
-    message: CANCELLED_GENERATION_MESSAGE,
-    cause: new AIGenerationCancelledError({
+  classifyFailure(
+    new HandlerError({
+      status: 502,
       message: CANCELLED_GENERATION_MESSAGE,
+      cause: new AIGenerationCancelledError({
+        message: CANCELLED_GENERATION_MESSAGE,
+      }),
     }),
-  });
+    "generation_cancelled",
+  );
 
 const isAbortRejection = ({
   error,

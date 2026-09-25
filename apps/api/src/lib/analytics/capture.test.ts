@@ -16,6 +16,7 @@ import {
   enrichRequestContext,
   initRequestContext,
 } from "@/api/lib/observability/request-context";
+import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
 const captured: {
   groups?: Record<string, string>;
@@ -273,5 +274,63 @@ describe("captureError extraction diagnostics", () => {
     expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
       captured.at(1)?.properties["$exception_fingerprint"],
     );
+  });
+});
+
+describe("captureError owned fields", () => {
+  test("groups by the identity the legacy fields produced", () => {
+    const driverError = Object.assign(new Error("driver"), {
+      errno: "23505",
+      constraint: "users_email_key",
+    });
+    const error = new Error("query failed", { cause: driverError });
+
+    captureError(error);
+
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
+      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+    );
+  });
+
+  test("a context cannot override the identity, the grade or the envelope", () => {
+    const spoofed = {
+      $exception_fingerprint: "spoofed",
+      "error.frame": "spoofed.ts:1:1",
+      "failure.grade": "anticipated",
+      severity: "INFO",
+      entityId: "entity-1",
+    };
+
+    captureFromSiteA(spoofed);
+    captureFromSiteA({ ...spoofed, "error.frame": "other.ts:2:2" });
+
+    // One event: suppression keys on the real identity, not the context.
+    expect(captured).toHaveLength(1);
+    const properties = captured.at(0)?.properties ?? {};
+    expect(properties["$exception_fingerprint"]).not.toBe("spoofed");
+    expect(properties["error.frame"]).not.toBe("spoofed.ts:1:1");
+    expect(properties).toMatchObject({
+      "failure.grade": "defect",
+      "failure.reason": "unclassified",
+      "failure.shadow": "true",
+      "failure.ctx_rejected": "4",
+      entityId: "entity-1",
+    });
+    expect(properties["severity"]).toBeUndefined();
+  });
+
+  test("a request capture is graded with its request's own evidence", () => {
+    const request = new Request("https://api.test/v1/items");
+    initRequestContext(request);
+
+    captureRequestError(
+      Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+      { request },
+    );
+
+    expect(captured.at(0)?.properties).toMatchObject({
+      "failure.grade": "transient",
+      "failure.reason": "network_reset",
+    });
   });
 });

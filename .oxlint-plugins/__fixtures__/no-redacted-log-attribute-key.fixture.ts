@@ -1,7 +1,9 @@
 // Passive regression fixture for
 // `no-redacted-log-attribute-key/no-redacted-log-attribute-key`.
 
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 const queueName = "document-review-run";
 const attempt = 2;
@@ -47,3 +49,21 @@ const audit = {
 export const auditLine = audit.error("audit.failed", {
   fileName: "not-a-log-record",
 });
+
+const fixtureFailed = failureSink({ event: "fixture.failed", expected: [] });
+
+export const failureContextKeys = (error: unknown): void => {
+  // MUST flag: a context key outside the reviewed list is dropped at runtime.
+  observeFailure(error, {
+    sink: fixtureFailed,
+    ctx: {
+      threadId: "thread-1",
+      // oxlint-disable-next-line no-redacted-log-attribute-key/no-redacted-log-attribute-key -- fixture: unreviewed context key
+      documentTitle: "not-a-correlation-id",
+    },
+  });
+
+  // Allowed: reviewed correlation keys only.
+  // expect-clean: no-redacted-log-attribute-key/no-redacted-log-attribute-key
+  observeFailure(error, { sink: fixtureFailed, ctx: { threadId: "thread-1" } });
+};
