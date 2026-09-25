@@ -43,19 +43,13 @@ const isSnapshotType = (node: ts.Expression): boolean =>
   (ts.isStringLiteral(node) && node.text === SNAPSHOT_TYPE) ||
   (ts.isPropertyAccessExpression(node) && node.name.text === SNAPSHOT_TYPE);
 
-const isInsideEscape = (node: ts.Node): boolean => {
-  let current: ts.Node | undefined = node.parent;
-  for (; current !== undefined; current = current.parent) {
-    if (
-      ts.isCallExpression(current) &&
-      ts.isIdentifier(current.expression) &&
-      current.expression.text === ESCAPE_CALL
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
+const isEscapeCall = (node: ts.Node): boolean =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === ESCAPE_CALL;
+
+const isInsideEscape = (node: ts.Node): boolean =>
+  ts.findAncestor(node.parent, isEscapeCall) !== undefined;
 
 /** The snapshot object literals `source` builds outside the escape. */
 export const findSnapshotLiterals = (
@@ -162,19 +156,17 @@ const readLedger = (): Ledger => {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8"),
   );
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    Array.isArray(parsed) ||
-    !Object.values(parsed).every(
-      (count) => typeof count === "number" && Number.isInteger(count),
-    )
-  ) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return panic(`${LEDGER_REL} must map file paths to literal counts`);
   }
-  // SAFETY: every value was checked to be an integer just above.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return parsed as Ledger;
+  const ledger: Record<string, number> = {};
+  for (const [file, count] of Object.entries(parsed)) {
+    if (typeof count !== "number" || !Number.isInteger(count)) {
+      return panic(`${LEDGER_REL}: ${file} needs an integer literal count`);
+    }
+    ledger[file] = count;
+  }
+  return ledger;
 };
 
 const check = async (): Promise<number> => {
