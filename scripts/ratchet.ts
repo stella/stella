@@ -2587,8 +2587,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "audit-skip-directives",
     description:
-      "`// audit: skip - <reason>` comments in API handlers, each exempting a database write from require-audit-on-mutation; the fix is an audit recorder call in the same transaction",
-    include: ["apps/api/src/handlers/**/*.ts"],
+      "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
+    include: ["apps/api/src/**/*.ts"],
     exclude: isExcludedSource,
     count: countAuditSkipDirectives,
   },
