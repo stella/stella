@@ -219,7 +219,7 @@ describe("failure ownership in log records", () => {
     }
   });
 
-  test("a request record carries the request's grade, and a fingerprint cannot override its own keys", () => {
+  test("a fingerprint cannot override a request record's own keys", () => {
     const logs = installRecordingLogger();
     try {
       logger.request({
@@ -228,7 +228,6 @@ describe("failure ownership in log records", () => {
           "error.class": "Error",
           "http.status_code": "spoofed",
         },
-        failure: { grade: "transient", reason: "network_reset" },
         message: "request.failed",
         method: "GET",
         route: "/x",
@@ -252,9 +251,7 @@ describe("failure ownership in log records", () => {
           "http.route": "/x",
           "http.status_code": 502,
           "request.duration_ms": 3,
-          "failure.grade": "transient",
-          "failure.reason": "network_reset",
-          "failure.shadow": "true",
+          "observability.unowned": true,
         },
         {
           "http.method": "GET",

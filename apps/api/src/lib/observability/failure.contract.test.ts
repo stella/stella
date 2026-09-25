@@ -65,10 +65,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  initRequestContext,
-  getRequestFailure,
-} from "@/api/lib/observability/request-context";
+import { initRequestContext } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -1186,11 +1183,6 @@ describe("observeFailure channels", () => {
       });
       expect(analytics.exceptions()).toHaveLength(expected.captures);
       expect(metricLines).toHaveLength(row.grade === "transient" ? 1 : 0);
-      expect(getRequestFailure(request)).toEqual({
-        grade: row.grade,
-        reason: row.reason,
-        sink: "contract.sink",
-      });
     },
   );
 

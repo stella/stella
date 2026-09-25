@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { FailureGrade, FailureReason } from "@stll/errors";
-
 import type { ClientAddressSource } from "@/api/lib/client-ip";
 
 /** Response header carrying the per-request correlation id (receipt). */
@@ -16,17 +14,6 @@ type RequestContext = {
   posthogDistinctId?: string;
   organizationId?: string;
   sessionId?: string;
-  failureObservation?: RequestFailureObservation;
-};
-
-/**
- * The failure a request observed on its way to an answer, so the completion
- * record grades the answer by what failed rather than by its status class.
- */
-type RequestFailureObservation = {
-  readonly grade: FailureGrade;
-  readonly reason: FailureReason;
-  readonly sink: string;
 };
 
 const requestContextStore = new WeakMap<Request, RequestContext>();
@@ -125,9 +112,7 @@ export const initRequestContext = (
 
 export const enrichRequestContext = (
   request: Request,
-  update: Partial<
-    Omit<RequestContext, "failureObservation" | "requestId" | "startTime">
-  >,
+  update: Partial<Omit<RequestContext, "startTime" | "requestId">>,
 ): void => {
   const current = requestContextStore.get(request);
   if (!current) {
@@ -136,26 +121,6 @@ export const enrichRequestContext = (
 
   Object.assign(current, update);
 };
-
-/**
- * Record the failure a request observed. The last observation wins: the one
- * nearest the answer (the request pipeline's own) is the one the answer was
- * chosen from.
- */
-export const recordRequestFailure = (
-  request: Request,
-  observation: RequestFailureObservation,
-): void => {
-  const current = requestContextStore.get(request);
-  if (current) {
-    current.failureObservation = observation;
-  }
-};
-
-export const getRequestFailure = (
-  request: Request,
-): RequestFailureObservation | undefined =>
-  requestContextStore.get(request)?.failureObservation;
 
 export const getRequestContext = (
   request: Request,

@@ -1,7 +1,6 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
-import type { FailureGrade, FailureReason } from "@stll/errors";
 import { FAILURE_GRADES, isFailureReason } from "@stll/errors";
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
@@ -27,19 +26,12 @@ type LoggerAttributeValue = boolean | number | string;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
-/** The request's graded failure, from the request's failure observation. */
-type RequestLogFailure = {
-  readonly grade: FailureGrade;
-  readonly reason: FailureReason;
-};
-
 type RequestLogOptions = {
   clientAddressSource?: string | undefined;
   durationMs: number;
   errorFingerprint?: ErrorFingerprint | undefined;
   elysiaCode?: string | undefined;
   errorType?: string | undefined;
-  failure?: RequestLogFailure | undefined;
   message: "request.completed" | "request.failed";
   method: string;
   requestId?: string | undefined;
@@ -223,7 +215,6 @@ const emitRequest = ({
   elysiaCode,
   errorFingerprint,
   errorType,
-  failure,
   message,
   method,
   requestId,
@@ -248,13 +239,6 @@ const emitRequest = ({
     ...(clientAddressSource === undefined
       ? {}
       : { "client.address_source": clientAddressSource }),
-    ...(failure === undefined
-      ? {}
-      : {
-          "failure.grade": failure.grade,
-          "failure.reason": failure.reason,
-          "failure.shadow": "true",
-        }),
   });
 
   if (recordSink !== null) {

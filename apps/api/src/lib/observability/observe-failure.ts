@@ -34,10 +34,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  getRequestContext,
-  recordRequestFailure,
-} from "@/api/lib/observability/request-context";
+import { getRequestContext } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
 type GradePolicy = OutputPolicy & {
@@ -173,15 +170,8 @@ const observe = (
       : {}),
   };
 
-  if (request !== undefined) {
-    recordRequestFailure(request, {
-      grade: grading.grade,
-      reason: grading.reason,
-      sink: sink.event,
-    });
-    if (grading.grade === "transient") {
-      emitFailureMetric({ sink: sink.event, reason: grading.reason });
-    }
+  if (request !== undefined && grading.grade === "transient") {
+    emitFailureMetric({ sink: sink.event, reason: grading.reason });
   }
   countFailureObservation({
     sink,
