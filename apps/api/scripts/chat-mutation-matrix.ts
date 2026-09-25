@@ -306,7 +306,7 @@ const selfTest = async (): Promise<number> => {
       }
       const exitCode = await child.exited;
       const restored = readFileSync(file, "utf-8") === "original\n";
-      if (first.done === true || !mutated) {
+      if (first.done || !mutated) {
         failures.push(`${ending.label}: the file was never mutated`);
       }
       if (!restored) {

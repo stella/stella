@@ -94,13 +94,13 @@ const propertyNameText = (name: ts.PropertyName): string | undefined => {
 /** The initializer of the nearest `const`/`let`/`var` named `name` that
  *  encloses `from`, without a type checker. */
 const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  let scope: ts.Node | undefined = from.parent;
-  while (scope !== undefined) {
+  /** The initializer `name` is declared with directly in `scope`, if any. */
+  const declaredIn = (scope: ts.Node): ts.Expression | undefined => {
     const statements =
       ts.isSourceFile(scope) || ts.isBlock(scope) || ts.isModuleBlock(scope)
         ? scope.statements
-        : undefined;
-    for (const statement of statements ?? []) {
+        : [];
+    for (const statement of statements) {
       if (!ts.isVariableStatement(statement)) {
         continue;
       }
@@ -114,9 +114,13 @@ const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
         }
       }
     }
-    scope = scope.parent;
-  }
-  return undefined;
+    return undefined;
+  };
+  const scope = ts.findAncestor(
+    from.parent,
+    (candidate) => declaredIn(candidate) !== undefined,
+  );
+  return scope === undefined ? undefined : declaredIn(scope);
 };
 
 const isSnapshotType = (node: ts.Expression, hops = 0): boolean => {
