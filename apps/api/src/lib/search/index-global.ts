@@ -16,6 +16,8 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
+import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -76,6 +78,38 @@ type ScoredGlobalSearchHit = {
 };
 
 type SearchPromise = Promise<RawRow[]>;
+
+type ReadLanguageAlternates = (
+  languageGroupKeys: readonly string[],
+) => Promise<PublicDecisionLanguageAlternatesByGroup>;
+
+type SearchGlobalReaders = {
+  database?: Pick<typeof rootDb, "execute">;
+  /** Language versions come from the public-law reader, as on every other
+   *  decision response. */
+  readLanguageAlternates?: ReadLanguageAlternates;
+};
+
+/**
+ * Case-law rows as hits. The language versions of the fetched rows are read
+ * in one batch after them, on the case-law branch only, so the other sources,
+ * counts and facets never wait on it.
+ */
+const readCaseLawHits = async (
+  rows: SearchPromise,
+  readLanguageAlternates: ReadLanguageAlternates,
+): Promise<ScoredGlobalSearchHit[]> => {
+  const caseLawRows = await rows;
+  const languageGroupKeys = new Set<string>();
+  for (const row of caseLawRows) {
+    const key = toNullableString(row["language_group_key"]);
+    if (key !== null) {
+      languageGroupKeys.add(key);
+    }
+  }
+  const alternates = await readLanguageAlternates([...languageGroupKeys]);
+  return caseLawRows.map((row) => mapCaseLawHit(row, alternates));
+};
 
 export type GlobalSearchQuery = {
   query: string;
@@ -313,7 +347,10 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
   return { hit, score: Number(row["score"]) };
 };
 
-const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
+const mapCaseLawHit = (
+  row: RawRow,
+  alternates: PublicDecisionLanguageAlternatesByGroup,
+): ScoredGlobalSearchHit => {
   const decisionId = String(row["id"]);
   const resource = resourceRef({
     type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -332,6 +369,13 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     court: String(row["court"]),
     country: String(row["country"]),
     decisionDate: toNullableString(row["decision_date"]),
+    slug: toNullableString(row["slug"]),
+    language: String(row["language"]),
+    // One entry per language already; the rest of each version stays off
+    // the wire, since a hit only needs to know whether to name its language.
+    languageAlternates: alternates
+      .alternatesFor(toNullableString(row["language_group_key"]))
+      .map(({ language }) => ({ language })),
     title: `${String(row["case_number"])} - ${String(row["court"])}`,
     headline: toHeadline(row["headline"]),
     updatedAt: toIso(row["updated_at"]),
@@ -620,7 +664,10 @@ export const searchGlobal = async (
     cursor,
     limit,
   }: GlobalSearchQuery,
-  database: Pick<typeof rootDb, "execute"> = rootDb,
+  {
+    database = rootDb,
+    readLanguageAlternates = readPublicDecisionLanguageAlternatesForGroupKeys,
+  }: SearchGlobalReaders = {},
 ): Promise<GlobalSearchResult> => {
   const parsedCursor = parseGlobalSearchCursor(cursor);
   const pagination = (() => {
@@ -824,10 +871,11 @@ export const searchGlobal = async (
     `),
   );
 
-  const caseLawPromise = rowsWhen(
-    !restrictToEntities && shouldSearchType(selected, "case-law"),
-    () =>
-      database.execute(sql`
+  const caseLawPromise = readCaseLawHits(
+    rowsWhen(
+      !restrictToEntities && shouldSearchType(selected, "case-law"),
+      () =>
+        database.execute(sql`
       SELECT
         clsd.decision_id AS id,
         d.case_number,
@@ -835,6 +883,9 @@ export const searchGlobal = async (
         d.court,
         d.country,
         d.decision_date,
+        d.slug,
+        d.language,
+        d.language_group_key,
         (
           SELECT coalesce(
             jsonb_agg(
@@ -867,6 +918,8 @@ export const searchGlobal = async (
       ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
       LIMIT ${fetchLimit}
     `),
+    ),
+    readLanguageAlternates,
   );
 
   const chatScope = chatThreadScopeSql({
@@ -1182,7 +1235,7 @@ export const searchGlobal = async (
     entityRows,
     matterRows,
     contactRows,
-    caseLawRows,
+    caseLawHits,
     chatRows,
     entityCount,
     matterCount,
@@ -1218,7 +1271,7 @@ export const searchGlobal = async (
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
-    ...caseLawRows.map(mapCaseLawHit),
+    ...caseLawHits,
     ...chatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);

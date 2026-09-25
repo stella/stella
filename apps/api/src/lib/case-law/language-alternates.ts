@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -198,6 +199,18 @@ export const readPublicDecisionLanguageAlternatesByGroup = async ({
   );
   return groupPublicDecisionLanguageAlternates(rows);
 };
+
+/**
+ * The same batch, bound to the public reader, for a caller whose own query
+ * also names private tables and so cannot hold the reader itself.
+ */
+export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
+  languageGroupKeys: readonly string[],
+): Promise<PublicDecisionLanguageAlternatesByGroup> =>
+  await readPublicDecisionLanguageAlternatesByGroup({
+    caseLawDb: caseLawPublicReadDb,
+    languageGroupKeys,
+  });
 
 /**
  * Alternates for rows read inside an open transaction: the group keys of a
