@@ -46,7 +46,6 @@ import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protecte
 import { Route as ProtectedInboxIndexRouteImport } from './routes/_protected.inbox/index'
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
-import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
 import { Route as ProtectedKnowledgePlaybooksRouteImport } from './routes/_protected.knowledge/playbooks'
 import { Route as ProtectedKnowledgeStylesRouteImport } from './routes/_protected.knowledge/styles'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
@@ -288,11 +287,6 @@ const ProtectedKnowledgeClausesRoute =
     path: '/clauses',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
-const ProtectedKnowledgeMcpRoute = ProtectedKnowledgeMcpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => ProtectedKnowledgeRouteRoute,
-} as any)
 const ProtectedKnowledgePlaybooksRoute =
   ProtectedKnowledgePlaybooksRouteImport.update({
     id: '/playbooks',
@@ -639,7 +633,6 @@ export interface FileRoutesByFullPath {
   '/contacts/import': typeof ProtectedContactsImportRoute
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
-  '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -723,7 +716,6 @@ export interface FileRoutesByTo {
   '/contacts/import': typeof ProtectedContactsImportRoute
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
-  '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -816,7 +808,6 @@ export interface FileRoutesById {
   '/_protected/contacts/import': typeof ProtectedContactsImportRoute
   '/_protected/dev_/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
-  '/_protected/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/_protected/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/_protected/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -910,7 +901,6 @@ export interface FileRouteTypes {
     | '/contacts/import'
     | '/dev/autocomplete'
     | '/knowledge/clauses'
-    | '/knowledge/mcp'
     | '/knowledge/playbooks'
     | '/knowledge/styles'
     | '/knowledge/templates'
@@ -994,7 +984,6 @@ export interface FileRouteTypes {
     | '/contacts/import'
     | '/dev/autocomplete'
     | '/knowledge/clauses'
-    | '/knowledge/mcp'
     | '/knowledge/playbooks'
     | '/knowledge/styles'
     | '/knowledge/templates'
@@ -1086,7 +1075,6 @@ export interface FileRouteTypes {
     | '/_protected/contacts/import'
     | '/_protected/dev_/autocomplete'
     | '/_protected/knowledge/clauses'
-    | '/_protected/knowledge/mcp'
     | '/_protected/knowledge/playbooks'
     | '/_protected/knowledge/styles'
     | '/_protected/knowledge/templates'
@@ -1424,13 +1412,6 @@ declare module '@tanstack/react-router' {
       path: '/clauses'
       fullPath: '/knowledge/clauses'
       preLoaderRoute: typeof ProtectedKnowledgeClausesRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/mcp': {
-      id: '/_protected/knowledge/mcp'
-      path: '/mcp'
-      fullPath: '/knowledge/mcp'
-      preLoaderRoute: typeof ProtectedKnowledgeMcpRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/playbooks': {
@@ -1898,7 +1879,6 @@ const ProtectedChatRouteRouteWithChildren =
 
 interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
-  ProtectedKnowledgeMcpRoute: typeof ProtectedKnowledgeMcpRoute
   ProtectedKnowledgePlaybooksRoute: typeof ProtectedKnowledgePlaybooksRoute
   ProtectedKnowledgeStylesRoute: typeof ProtectedKnowledgeStylesRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
@@ -1912,7 +1892,6 @@ interface ProtectedKnowledgeRouteRouteChildren {
 const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren =
   {
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
-    ProtectedKnowledgeMcpRoute: ProtectedKnowledgeMcpRoute,
     ProtectedKnowledgePlaybooksRoute: ProtectedKnowledgePlaybooksRoute,
     ProtectedKnowledgeStylesRoute: ProtectedKnowledgeStylesRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,

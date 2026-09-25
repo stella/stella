@@ -32,7 +32,6 @@ describe("feedback area for the current route", () => {
     ["/contacts", "contacts"],
     ["/inbox", "tasks"],
     ["/knowledge/templates", "templates"],
-    ["/knowledge/mcp", "mcp_cli"],
     ["/law/statutes/cz/89-2012", "legislation"],
     ["/law/cases", "case_law"],
     ["/law/cz/cases/abc", "case_law"],

@@ -181,8 +181,7 @@ function ToolsPage() {
   // OAuth completion lands in a popup tab/window; the popup
   // broadcasts via BroadcastChannel (falling back to opener
   // postMessage), so the catalogue page needs an active subscription
-  // to surface the toast and refetch the catalogue. The legacy
-  // listener lived on /knowledge/mcp before the surface unified.
+  // to surface the toast and refetch the catalogue.
   useExternalSyncEffect(
     () =>
       subscribeToMcpOAuthOutcome((outcome) => {
