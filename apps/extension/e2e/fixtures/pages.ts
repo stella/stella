@@ -12,6 +12,10 @@ export const ELSEWHERE_ORIGIN = "https://elsewhere.stella-test.example";
  */
 export const INTRANET_ORIGIN = "https://printer.local";
 export const INTRANET_SECRET = "Printer admin secret";
+/** A password the containment fixture reveals with a "show password" toggle. */
+export const TOGGLED_SECRET = "toggle-secret-4471";
+/** Text the containment fixture hides from view in every supported way. */
+export const HIDDEN_TEXT_MARKER = "Hidden instruction";
 
 const LONG_TEXT = Array.from(
   { length: 900 },
@@ -79,6 +83,24 @@ export const FIXTURE_PAGES: Record<string, string> = {
 </body></html>`,
   "/page2.html": `<!doctype html><html><head><title>Second Page</title></head><body>
 <h1>Second page</h1><p>You reached the second page.</p>
+</body></html>`,
+  "/containment.html": `<!doctype html><html><head><title>Containment</title></head><body>
+<h1>Containment fixture</h1>
+<p>Visible paragraph stays.</p>
+<input id="account-key" type="password" value="${TOGGLED_SECRET}" aria-label="Account key">
+<button onclick="document.getElementById('account-key').type = 'text'">Reveal key</button>
+<p aria-hidden="true">${HIDDEN_TEXT_MARKER} aria</p>
+<p style="opacity: 0">${HIDDEN_TEXT_MARKER} opacity</p>
+<p style="visibility: hidden">${HIDDEN_TEXT_MARKER} visibility</p>
+<p style="position: absolute; left: -9999px">${HIDDEN_TEXT_MARKER} offscreen</p>
+<div style="width: 0; height: 0; overflow: hidden">${HIDDEN_TEXT_MARKER} collapsed</div>
+<p style="position: absolute; clip: rect(0 0 0 0); width: 1px; height: 1px; overflow: hidden">${HIDDEN_TEXT_MARKER} clipped</p>
+<p style="font-size: 0">${HIDDEN_TEXT_MARKER} zero font</p>
+<div aria-hidden="true"><button>Concealed action</button></div>
+<button onclick="window.open('${INTRANET_ORIGIN}/popup')">Open intranet window</button>
+<a href="/page2.html" target="_blank">Open second page in a new tab</a>
+<button onclick="fetch('${INTRANET_ORIGIN}/api').catch(() => undefined); new Image().src = '${INTRANET_ORIGIN}/pixel.png'; new WebSocket('wss://printer.local/socket');">Call intranet</button>
+<a href="/file.bin">Download binary</a>
 </body></html>`,
   "/landing.html": `<!doctype html><html><head><title>Elsewhere</title></head><body>
 <p>Private text on another origin.</p>

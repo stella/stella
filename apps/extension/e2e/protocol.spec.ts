@@ -1,20 +1,18 @@
-import { chromium, expect, test, type Page } from "@playwright/test";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { expect, test } from "@playwright/test";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
-  BROWSER_CONTROL_PROTOCOL_VERSION,
-  BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
-  type BrowserControlElement,
-  type BrowserControlResult,
-  parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
 
+import {
+  createCommandSender,
+  elementNamed,
+  launchExtensionHarness,
+  successful,
+  targetOf,
+} from "./fixtures/harness";
 import {
   ELSEWHERE_ORIGIN,
   FIXTURE_ORIGIN,
@@ -24,159 +22,17 @@ import {
   INTRANET_SECRET,
 } from "./fixtures/pages";
 
-// The e2e build is the only one that trusts the loopback stella page below.
-const builtExtensionPath = path.join(
-  import.meta.dirname,
-  "../.output/chrome-mv3-e2e",
-);
 const CONTROLLER_ID = "controller-protocol";
-
-const listen = async (server: Server): Promise<number> =>
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        reject(new TypeError("Test server did not bind a TCP port"));
-        return;
-      }
-      resolve(address.port);
-    });
-  });
-
-/**
- * The shipped build keeps the website grant optional, which needs a native
- * prompt no test can accept. The spec loads a copy whose manifest grants every
- * HTTPS host at install; nothing else differs from the built output.
- */
-const prepareGrantedExtension = async (): Promise<string> => {
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "stella-extension-granted-"),
-  );
-  await cp(builtExtensionPath, directory, { recursive: true });
-  const manifestPath = path.join(directory, "manifest.json");
-  const manifest: unknown = JSON.parse(await readFile(manifestPath, "utf-8"));
-  if (typeof manifest !== "object" || manifest === null) {
-    throw new TypeError("Built manifest is not an object");
-  }
-  await writeFile(
-    manifestPath,
-    JSON.stringify({ ...manifest, host_permissions: ["https://*/*"] }),
-  );
-  return directory;
-};
-
-const STELLA_PAGE = `<!doctype html><html><head><title>stella test</title></head><body>
-<script>
-window.__responses = {};
-window.addEventListener("message", ({ data }) => {
-  if (data && data.source === "${BROWSER_EXTENSION_MESSAGE_SOURCE.extension}" && typeof data.requestId === "string") {
-    window.__responses[data.requestId] = data;
-  }
-});
-</script></body></html>`;
-
-const createCommandSender = (stella: Page) => {
-  let sequence = 0;
-  return async (
-    command: BrowserControlCommand,
-    replayToolCallId?: string,
-  ): Promise<BrowserControlResult> => {
-    sequence += 1;
-    const requestId = `request-${sequence}`;
-    await stella.evaluate(
-      (request) => {
-        window.postMessage(request, window.location.origin);
-      },
-      {
-        command,
-        controllerId: CONTROLLER_ID,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        requestId,
-        source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
-        toolCallId: replayToolCallId ?? `tool-${sequence}`,
-        type: "command",
-      },
-    );
-    const handle = await stella.waitForFunction(
-      (id) => {
-        const responses: unknown = Reflect.get(window, "__responses");
-        return typeof responses === "object" && responses !== null
-          ? Reflect.get(responses, id)
-          : undefined;
-      },
-      requestId,
-      { timeout: 60_000 },
-    );
-    const response: unknown = await handle.jsonValue();
-    const result =
-      typeof response === "object" && response !== null && "result" in response
-        ? parseBrowserControlResult(response.result)
-        : null;
-    if (!result) {
-      throw new TypeError(`Malformed command result for ${requestId}`);
-    }
-    return result;
-  };
-};
-
-const successful = (result: BrowserControlResult) => {
-  expect(result.status, JSON.stringify(result)).toBe("success");
-  if (result.status !== "success") {
-    throw new TypeError("unreachable");
-  }
-  return result.snapshot;
-};
-
-const elementNamed = (
-  elements: readonly BrowserControlElement[],
-  name: string,
-): BrowserControlElement => {
-  const element = elements.find((candidate) => candidate.name === name);
-  if (!element) {
-    throw new TypeError(`No element named ${name}`);
-  }
-  return element;
-};
-
-const targetOf = ({
-  context,
-  href,
-  name,
-  ref,
-  role,
-}: BrowserControlElement) => ({
-  name,
-  ref,
-  role,
-  ...(context === undefined ? {} : { context }),
-  ...(href === undefined ? {} : { href }),
-});
 
 test("reads frames and shadow roots, pages text, and enforces the origin policy", async () => {
   test.setTimeout(180_000);
-  const server = createServer((request, response) => {
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    response.end(
-      request.url?.startsWith("/plain")
+  const harness = await launchExtensionHarness({
+    serveLoopback: (url) =>
+      url.startsWith("/plain")
         ? "<!doctype html><html><body><p>Plain HTTP page.</p></body></html>"
-        : STELLA_PAGE,
-    );
+        : undefined,
   });
-  const port = await listen(server);
-  const stellaOrigin = `http://127.0.0.1:${port}`;
-  const extensionPath = await prepareGrantedExtension();
-  const profilePath = await mkdtemp(
-    path.join(tmpdir(), "stella-extension-protocol-"),
-  );
-  const context = await chromium.launchPersistentContext(profilePath, {
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-    channel: "chromium",
-    headless: true,
-  });
+  const { context, stella, stellaOrigin } = harness;
   const serveFixture = async (
     route: Parameters<Parameters<typeof context.route>[1]>[0],
   ) => {
@@ -212,35 +68,16 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
   });
 
   try {
-    const stella = await context.newPage();
-    await stella.goto(`${stellaOrigin}/chat`);
-    await stella.waitForFunction(() => {
-      const responses: unknown = Reflect.get(window, "__responses");
-      return (
-        typeof responses === "object" &&
-        responses !== null &&
-        "extension-ready" in responses
+    await harness.pair(CONTROLLER_ID);
+    const sender = createCommandSender(stella, CONTROLLER_ID);
+    const send = async (
+      command: BrowserControlCommand,
+      replayToolCallId?: string,
+    ) =>
+      await sender.send(
+        command,
+        replayToolCallId === undefined ? {} : { toolCallId: replayToolCallId },
       );
-    });
-    const worker =
-      context.serviceWorkers().at(0) ??
-      (await context.waitForEvent("serviceworker"));
-    await stella.bringToFront();
-    await worker.evaluate(
-      async ({ controllerId, origin }) => {
-        const tab = (
-          await chrome.tabs.query({ active: true, currentWindow: true })
-        ).at(0);
-        if (tab?.id === undefined) {
-          throw new TypeError("Could not find the stella test tab");
-        }
-        await chrome.storage.session.set({
-          browserController: { controllerId, origin, tabId: tab.id },
-        });
-      },
-      { controllerId: CONTROLLER_ID, origin: stellaOrigin },
-    );
-    const send = createCommandSender(stella);
 
     for (const url of [
       `${stellaOrigin}/plain`,
@@ -504,21 +341,6 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       code: BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
     });
   } finally {
-    await context.close();
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(
-            new Error("Could not close the extension test server", {
-              cause: error,
-            }),
-          );
-          return;
-        }
-        resolve();
-      });
-    });
-    await rm(profilePath, { force: true, recursive: true });
-    await rm(extensionPath, { force: true, recursive: true });
+    await harness.close();
   }
 });
