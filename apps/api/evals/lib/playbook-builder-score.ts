@@ -35,7 +35,7 @@ const TOPIC_PATTERNS = [
   ],
   [
     "contracts",
-    /\b(executed|signed|attach\w*)\b|\b(past|previous|existing|prior|your own)\b.*\b(contracts?|agreements?|documents?|ndas?|dpas?|msas?)\b/iu,
+    /\b(executed|signed|attach\w*|evidence)\b|\bcontract examples?\b|\b(past|previous|existing|prior|your own)\b.*\b(contracts?|agreements?|documents?|ndas?|dpas?|msas?)\b/iu,
   ],
   [
     "side",
