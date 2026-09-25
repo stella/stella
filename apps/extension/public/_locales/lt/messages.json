@@ -40,10 +40,31 @@
     "message": "Atjungti kortelę"
   },
   "downloadKept": {
-    "message": "Atsisiuntimas baigėsi, kol stella valdė skirtuką, ir buvo paliktas. Prieš atidarydami patikrinkite, iš kur jis."
+    "message": "Atsisiuntimai, kurie baigėsi, kol stella valdė skirtuką, ir buvo palikti: $COUNT$. Prieš atidarydami patikrinkite, iš kur jie.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella sustabdė atsisiuntimą, kol valdė skirtuką."
+    "message": "Atsisiuntimai, kuriuos stella sustabdė valdydama skirtuką: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Kol stella valdė skirtuką: sustabdyti atsisiuntimai: $STOPPED$. Baigti ir palikti atsisiuntimai (prieš atidarydami patikrinkite, iš kur jie): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Gavusi leidimą leidžia stellai valdyti atskirą Chrome kortelę."

@@ -4,6 +4,7 @@ import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
 
 import {
   createCommandSender,
+  openInNewControlledTab,
   elementNamed,
   launchExtensionHarness,
   successful,
@@ -144,13 +145,15 @@ const latestPong = async (stella: Page): Promise<unknown> =>
 
 /** Opens the containment fixture; the first load of a new tab can miss routing. */
 const openContainmentPage = async (
+  harness: Harness,
   send: ReturnType<typeof createCommandSender>["send"],
 ) => {
   const url = `${FIXTURE_ORIGIN}/containment.html`;
-  const first = await send({ action: "open", url });
-  return successful(
-    first.status === "success" ? first : await send({ action: "open", url }),
-  );
+  const opened = await send({ action: "open", url });
+  if (opened.status === "success") {
+    return opened.snapshot;
+  }
+  return await openInNewControlledTab(harness, send, url);
 };
 
 test("stop and popup changes end a running command at once", async () => {
@@ -178,7 +181,7 @@ test("stop and popup changes end a running command at once", async () => {
       throw new TypeError("Pairing did not notify the stella tab");
     }
     const sender = createCommandSender(harness.stella, pong.controllerId);
-    await openContainmentPage(sender.send);
+    await openContainmentPage(harness, sender.send);
 
     // The user moves the controlled tab on by hand after chat last saw it:
     // a navigation chat asked for earlier no longer applies to this page.
@@ -200,7 +203,7 @@ test("stop and popup changes end a running command at once", async () => {
     expect(controlledPage.url()).toBe(`${FIXTURE_ORIGIN}/page2.html`);
     // Once chat reads the page again, it may navigate.
     successful(await sender.send({ action: "snapshot" }));
-    await openContainmentPage(sender.send);
+    await openContainmentPage(harness, sender.send);
 
     // Chat Stop: the extension answers right away instead of waiting out
     // the navigation, and cannot claim the page did not change.
@@ -217,7 +220,7 @@ test("stop and popup changes end a running command at once", async () => {
     expect(Date.now() - started).toBeLessThan(8000);
 
     // The session still works after a stop.
-    await openContainmentPage(sender.send);
+    await openContainmentPage(harness, sender.send);
 
     // Disconnecting from the popup stops a running command the same way,
     // and nothing runs under the old pairing afterwards.
@@ -251,7 +254,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
   try {
     await harness.pair(CONTROLLER_ID);
     const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
-    let snapshot = await openContainmentPage(send);
+    let snapshot = await openContainmentPage(harness, send);
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
 
     // While stella controls a tab, the user's own downloads elsewhere go
@@ -480,6 +483,49 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         return settled?.filter(({ source }) => source.endsWith("/file.bin"));
       })
       .toEqual([{ saved: false, source: `${FIXTURE_ORIGIN}/file.bin` }]);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("the popup names downloads stopped and files kept", async () => {
+  const harness = await launchExtensionHarness();
+  try {
+    const cases = [
+      {
+        notices: { kept: 2, stopped: 1 },
+        text: "While stella controlled a tab: downloads stopped: 1. Downloads that finished and were kept (check where they came from before opening them): 2.",
+      },
+      {
+        notices: { kept: 1, stopped: 0 },
+        text: "Downloads that finished while stella controlled a tab and were kept: 1. Check where they came from before opening them.",
+      },
+      {
+        notices: { kept: 0, stopped: 4 },
+        text: "Downloads stella stopped while it controlled a tab: 4.",
+      },
+    ];
+    for (const { notices, text } of cases) {
+      await harness.worker.evaluate(async (stored) => {
+        await chrome.storage.session.set({ browserDownloadNotices: stored });
+        await chrome.action.setBadgeText({
+          text: String(stored.kept + stored.stopped),
+        });
+      }, notices);
+      const popup = await harness.context.newPage();
+      await popup.goto(new URL("/popup.html", harness.worker.url()).href);
+      await expect(popup.locator("#status")).toHaveText(text);
+      // Shown once: the notice and the badge are cleared.
+      expect(
+        await harness.worker.evaluate(async () => [
+          (await chrome.storage.session.get("browserDownloadNotices"))[
+            "browserDownloadNotices"
+          ] ?? null,
+          await chrome.action.getBadgeText({}),
+        ]),
+      ).toEqual([null, ""]);
+      await popup.close();
+    }
   } finally {
     await harness.close();
   }

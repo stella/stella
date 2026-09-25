@@ -8,6 +8,7 @@ import {
 
 import {
   createCommandSender,
+  openInNewControlledTab,
   elementNamed,
   launchExtensionHarness,
   successful,
@@ -91,15 +92,8 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       });
     }
 
-    // The extension creates the controlled tab itself, so route interception
-    // attaches only after its first navigation; that first load fails on DNS
-    // and the second reaches the fixture through the now-attached tab.
     const indexUrl = `${FIXTURE_ORIGIN}/index.html`;
-    let opened = await send({ action: "open", url: indexUrl });
-    if (opened.status !== "success") {
-      opened = await send({ action: "open", url: indexUrl });
-    }
-    let snapshot = successful(opened);
+    let snapshot = await openInNewControlledTab(harness, send, indexUrl);
     expect(snapshot.url).toBe(indexUrl);
     expect(snapshot.text).toHaveLength(BROWSER_CONTROL_LIMITS.pageTextChars);
     expect(snapshot.textTotalChars).toBeGreaterThan(
@@ -309,6 +303,26 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown });
     expect(intranetRequests).toEqual([]);
 
+    // The tab now shows Chrome's error page, which chat cannot tell apart
+    // from a page it never saw: it refuses to navigate and asks the user.
+    const stranded = await send({
+      action: "open",
+      url: `${FIXTURE_ORIGIN}/redirect`,
+    });
+    expect(stranded).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    });
+    expect(JSON.stringify(stranded)).toContain("ask the user");
+    // Chrome reports its error page at an internal address.
+    const fixtureTab = context
+      .pages()
+      .find((candidate) => candidate.url().startsWith("chrome-error:"));
+    if (!fixtureTab) {
+      throw new TypeError("Controlled tab not found");
+    }
+    await fixtureTab.goto(indexUrl);
+    successful(await send({ action: "snapshot" }));
+
     const redirected = await send({
       action: "open",
       url: `${FIXTURE_ORIGIN}/redirect`,
@@ -318,11 +332,11 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     });
     expect(JSON.stringify(redirected)).not.toContain("Private text");
     // Route interception does not follow the redirect chain to the second
-    // host, so the landing page is read through a fresh, separately approved
-    // navigation, which is the flow the guard prescribes.
-    snapshot = successful(
-      await send({ action: "open", url: `${ELSEWHERE_ORIGIN}/landing.html` }),
-    );
+    // host, so the user loads the landing page by hand and chat reads it
+    // with a separately approved snapshot, which is the flow the guard
+    // prescribes.
+    await fixtureTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
+    snapshot = successful(await send({ action: "snapshot" }));
     expect(snapshot.url).toBe(`${ELSEWHERE_ORIGIN}/landing.html`);
     expect(snapshot.text).toContain("Private text on another origin");
 

@@ -40,10 +40,31 @@
     "message": "Lap leválasztása"
   },
   "downloadKept": {
-    "message": "Egy letöltés befejeződött, miközben a stella egy lapot vezérelt, és megmaradt. Megnyitás előtt ellenőrizze, honnan származik."
+    "message": "Letöltések, amelyek befejeződtek, miközben a stella egy lapot vezérelt, és megmaradtak: $COUNT$. Megnyitás előtt ellenőrizze, honnan származnak.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "A stella leállított egy letöltést, miközben egy lapot vezérelt."
+    "message": "A stella által egy lap vezérlése közben leállított letöltések: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Amíg a stella egy lapot vezérelt: leállított letöltések: $STOPPED$. Befejezett és megtartott letöltések (megnyitás előtt ellenőrizze, honnan származnak): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Engedély után lehetővé teszi, hogy stella egy külön Chrome-lapot vezéreljen."

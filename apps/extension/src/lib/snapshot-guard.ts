@@ -25,21 +25,17 @@ export type TopDocument = {
   url: string | null;
 };
 
-/**
- * The tab's top document now, as Chrome reports it. `errorPage` holds only
- * when Chrome says the last navigation failed and the frame cannot be
- * scripted, which is how Chrome's own error page behaves; a page the user
- * or a script left behind is never taken for one.
- */
+/** The tab's top document now, as Chrome's navigation records report it. */
 export type LiveTopDocument = {
   documentId: string;
-  errorPage: boolean;
   url: string;
 };
 
 type IdentityVerdict =
   /** `documentId` is the document an element command must act in. */
   | { documentId: string | null; status: "ok" }
+  /** A navigation cannot confirm the tab shows the page chat last read. */
+  | { status: "page-unconfirmed" }
   | { status: "stale-snapshot" }
   | { status: "tab-changed" };
 
@@ -67,10 +63,14 @@ type CommandIdentity = {
 };
 
 /**
- * Whether chat may navigate the tab away from what it shows now: the page
- * chat last read, or Chrome's error page, which holds nothing to lose. When
- * Chrome cannot say what the tab shows, or chat has read nothing there, the
- * answer is no.
+ * Whether chat may navigate the tab away from what it shows now: only the
+ * page chat last read successfully. There is no exception for error pages:
+ * Chrome documents no signal that identifies its error page and that a
+ * failing script injection or an interrupted navigation over a readable
+ * page cannot also produce (`webNavigation`'s `errorOccurred` only says the
+ * last navigation failed). When Chrome cannot say what the tab shows, or
+ * chat has read nothing there, the answer is no, and the user moves the tab
+ * on.
  */
 const navigationMatchesSeenPage = (
   navigation: CommandIdentity["navigation"],
@@ -79,13 +79,8 @@ const navigationMatchesSeenPage = (
     return true;
   }
   const { live, settled } = navigation;
-  if (live === null) {
-    return false;
-  }
-  if (live.errorPage) {
-    return true;
-  }
   return (
+    live !== null &&
     settled !== null &&
     settled.documentId === live.documentId &&
     settled.url === live.url
@@ -140,7 +135,7 @@ export const checkCommandIdentity = ({
       }
       return navigationMatchesSeenPage(navigation)
         ? { documentId: null, status: "ok" }
-        : { status: "stale-snapshot" };
+        : { status: "page-unconfirmed" };
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.pressKey:

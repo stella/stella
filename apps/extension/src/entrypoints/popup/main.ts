@@ -2,7 +2,10 @@ import { panic } from "better-result";
 
 import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
-import { takeStoppedDownloads } from "../../lib/download-guard";
+import {
+  downloadNoticeMessage,
+  takeDownloadNotices,
+} from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
@@ -37,8 +40,8 @@ if (!(titleElement instanceof HTMLHeadingElement)) {
   panic("Missing popup title element");
 }
 
-const message = (name: string, substitution?: string): string =>
-  chrome.i18n.getMessage(name, substitution);
+const message = (name: string, substitutions?: string | string[]): string =>
+  chrome.i18n.getMessage(name, substitutions);
 
 document.documentElement.lang = chrome.i18n.getUILanguage();
 document.documentElement.dir = message("@@bidi_dir");
@@ -197,7 +200,12 @@ revokeButton.addEventListener("click", () => {
 });
 
 await renderAccess();
-// A download stopped while stella controlled a tab is shown once, here.
-if ((await takeStoppedDownloads()) > 0) {
-  statusElement.textContent = message("downloadStopped");
+// Downloads stopped or kept while stella controlled a tab are shown once,
+// here; a kept file is always named, since it is on disk.
+const downloadNotice = downloadNoticeMessage(await takeDownloadNotices());
+if (downloadNotice !== null) {
+  statusElement.textContent = message(
+    downloadNotice.name,
+    downloadNotice.substitutions,
+  );
 }

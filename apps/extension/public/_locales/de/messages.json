@@ -40,10 +40,31 @@
     "message": "Tab trennen"
   },
   "downloadKept": {
-    "message": "Während stella einen Tab gesteuert hat, wurde ein Download abgeschlossen und behalten. Prüfen Sie vor dem Öffnen, woher er stammt."
+    "message": "Downloads, die abgeschlossen wurden, während stella einen Tab gesteuert hat, und behalten wurden: $COUNT$. Prüfen Sie vor dem Öffnen, woher sie stammen.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   },
   "downloadStopped": {
-    "message": "stella hat einen Download gestoppt, während es einen Tab gesteuert hat."
+    "message": "Von stella gestoppte Downloads, während es einen Tab gesteuert hat: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Während stella einen Tab gesteuert hat: gestoppte Downloads: $STOPPED$. Abgeschlossene und behaltene Downloads (vor dem Öffnen Herkunft prüfen): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
   },
   "extensionDescription": {
     "message": "Ermöglicht stella nach deiner Freigabe die Steuerung eines eigenen Chrome-Tabs."

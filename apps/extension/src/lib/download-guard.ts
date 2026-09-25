@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY } from "./storage-keys";
+import { BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY } from "./storage-keys";
 import { containedTabIds, readContainedTabs } from "./tab-containment";
 
 type DownloadSource = Pick<
@@ -130,23 +130,68 @@ const readDownloadOrigins = async (
   return contained === null || user === null ? null : { contained, user };
 };
 
-/**
- * Counts a download stella stopped, or one that finished before it could
- * and was kept, on the toolbar icon until the popup opens.
- */
-const noteDownload = async (
-  notice: "downloadKept" | "downloadStopped",
-): Promise<void> => {
+/** Downloads stella stopped, and finished ones it kept, since the popup last showed them. */
+export type DownloadNotices = { kept: number; stopped: number };
+
+const NO_NOTICES: DownloadNotices = { kept: 0, stopped: 0 };
+
+const count = (value: unknown): number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : 0;
+
+const parseNotices = (input: unknown): DownloadNotices =>
+  typeof input === "object" && input !== null
+    ? {
+        kept: "kept" in input ? count(input.kept) : 0,
+        stopped: "stopped" in input ? count(input.stopped) : 0,
+      }
+    : NO_NOTICES;
+
+const readNotices = async (): Promise<DownloadNotices> => {
   const stored = await chrome.storage.session.get(
-    BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY,
+    BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY,
   );
-  const previous = stored[BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY];
-  const count = (typeof previous === "number" ? previous : 0) + 1;
+  return parseNotices(stored[BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY]);
+};
+
+/** The popup message for what happened, with its substitutions; null when nothing did. */
+export const downloadNoticeMessage = ({
+  kept,
+  stopped,
+}: DownloadNotices): { name: string; substitutions: string[] } | null => {
+  if (kept > 0 && stopped > 0) {
+    return {
+      name: "downloadsStoppedAndKept",
+      substitutions: [String(stopped), String(kept)],
+    };
+  }
+  if (kept > 0) {
+    return { name: "downloadKept", substitutions: [String(kept)] };
+  }
+  return stopped > 0
+    ? { name: "downloadStopped", substitutions: [String(stopped)] }
+    : null;
+};
+
+/**
+ * Records a download stella stopped, or one that finished before it could
+ * and was kept, and shows the count on the toolbar icon until the popup
+ * opens. The icon's tooltip names what happened.
+ */
+const noteDownload = async (outcome: keyof DownloadNotices): Promise<void> => {
+  const previous = await readNotices();
+  const next = { ...previous, [outcome]: previous[outcome] + 1 };
   await chrome.storage.session.set({
-    [BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY]: count,
+    [BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY]: next,
   });
-  await chrome.action.setBadgeText({ text: String(count) });
-  await chrome.action.setTitle({ title: chrome.i18n.getMessage(notice) });
+  await chrome.action.setBadgeText({ text: String(next.kept + next.stopped) });
+  const notice = downloadNoticeMessage(next);
+  if (notice !== null) {
+    await chrome.action.setTitle({
+      title: chrome.i18n.getMessage(notice.name, notice.substitutions),
+    });
+  }
 };
 
 // Every judgement, pending or done, by download id: Chrome may report one
@@ -182,7 +227,7 @@ const keepFinishedDownload = async (downloadId: number): Promise<void> => {
     return;
   }
   kept.add(downloadId);
-  await noteDownload("downloadKept");
+  await noteDownload("kept");
 };
 
 const runJudgement = async (
@@ -198,7 +243,11 @@ const runJudgement = async (
     stopped.add(download.id);
     const cancelled = chrome.downloads.cancel(download.id);
     await cancelled.catch(() => undefined);
-    await noteDownload("downloadStopped");
+    // It may have finished before the cancel landed; then it was kept.
+    const [after] = await chrome.downloads.search({ id: download.id });
+    await (after?.state === "complete"
+      ? keepFinishedDownload(download.id)
+      : noteDownload("stopped"));
     return;
   }
   const scope = scopeNow ?? (await readScope());
@@ -221,7 +270,10 @@ const runJudgement = async (
   }
   stopped.add(download.id);
   await chrome.downloads.cancel(download.id).catch(() => undefined);
-  await noteDownload("downloadStopped");
+  const [after] = await chrome.downloads.search({ id: download.id });
+  await (after?.state === "complete"
+    ? keepFinishedDownload(download.id)
+    : noteDownload("stopped"));
 };
 
 /**
@@ -285,13 +337,11 @@ export const holdDownloadForJudgement = (
   return true;
 };
 
-/** Clears the stopped-download notice once the user has seen it. */
-export const takeStoppedDownloads = async (): Promise<number> => {
-  const stored = await chrome.storage.session.get(
-    BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY,
-  );
-  const count = stored[BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY];
-  await chrome.storage.session.remove(BROWSER_STOPPED_DOWNLOADS_STORAGE_KEY);
+/** Returns the download notices and clears them once the user has seen them. */
+export const takeDownloadNotices = async (): Promise<DownloadNotices> => {
+  const notices = await readNotices();
+  await chrome.storage.session.remove(BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY);
   await chrome.action.setBadgeText({ text: "" });
-  return typeof count === "number" ? count : 0;
+  await chrome.action.setTitle({ title: "" });
+  return notices;
 };
