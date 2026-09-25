@@ -638,6 +638,12 @@ const detailReadFailed = failureSink({
   expected: [],
 });
 
+/** A document endpoint's read failed; `phase` names which one. */
+const documentReadFailed = failureSink({
+  event: "case_law.ingestion.document_fetch_failed",
+  expected: [],
+});
+
 /**
  * Shortest plain-text payload this adapter reads as a document. Below it the
  * endpoint answered with a portal notice rather than a decision, and the crawl
@@ -800,7 +806,20 @@ const fetchDecisionContent = async (
       // is stored as text. It is the payload this row's fulltext came from.
       fallbackText: usable ? text : undefined,
     };
-  } catch {
+  } catch (error) {
+    // A read the page's signal aborts goes back to the crawl, which disposes
+    // of the row together with the rest of its page.
+    if (signal.aborted) {
+      throw error;
+    }
+    observeFailure(publisherReadFailure(error), {
+      sink: documentReadFailed,
+      ctx: {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        documentId,
+        phase: CZ_NSS_RAW_PART.TEXT,
+      },
+    });
     return {
       fulltext: undefined,
       documentAst: undefined,
@@ -2111,10 +2130,11 @@ export const buildCzNssDecision = async ({
   const decision = rowToResult({ row, content, detail, detailHtml });
 
   // Both document endpoints answered with nothing usable. The metadata row is
-  // still a decision to the crawl; to the reconciliation it is a document that
-  // has not been read yet.
+  // still a decision to the crawl, stored listing-only so the reconciliation
+  // reads the document again; to the reconciliation it is a document that has
+  // not been read yet.
   return content.sourceRaw === undefined && content.fulltext === undefined
-    ? { type: "detail-unavailable", decision }
+    ? { type: "detail-unavailable", decision: listingOnlyDecision(decision) }
     : { type: "built", decision };
 };
 

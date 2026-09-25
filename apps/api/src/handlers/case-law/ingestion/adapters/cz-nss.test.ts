@@ -1797,9 +1797,10 @@ describe("cz-nss buildDecision", () => {
     });
 
     // Same call, one outcome, two dispositions: the crawl stores the decision
-    // this carries, the reconciliation drops it.
+    // this carries as listing-only, the reconciliation parks it.
     expect(built.type).toBe("detail-unavailable");
     expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.isListingOnly).toBe(true);
   });
 });
 
@@ -2067,4 +2068,48 @@ describe("cz-nss reads the portal did not answer", () => {
     // cursor stays on the page.
     expect(Result.isError(page)).toBe(true);
   }, 30_000);
+
+  test("holds a row whose text read fails", async () => {
+    failRequestsUnder(
+      "/DokumentOriginal/Text/",
+      () => new TypeError("fetch failed"),
+      { search: [], htmlDocumentStatus: 404 },
+    );
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("detail-unavailable");
+    expect(built.decision.isListingOnly).toBe(true);
+    // The detail page was read and stays on the row.
+    expect(built.decision.ecli).toBe("ECLI:CZ:MSPH:2026:1.Az.4.2026.79");
+    expect(
+      warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
+    ).toMatchObject({
+      documentId: MUNICIPAL_ROW.documentId,
+      phase: "text",
+      "failure.grade": "transient",
+    });
+  });
+
+  test("rethrows when the page deadline aborts a text read", async () => {
+    const deadline = new AbortController();
+    failRequestsUnder("/DokumentOriginal/Text/", deadlinePasses(deadline), {
+      search: [],
+      htmlDocumentStatus: 404,
+    });
+
+    const failure = await rejectionOf(
+      buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: deadline.signal,
+      }),
+    );
+
+    expect(failure).toBe(deadline.signal.reason);
+  });
 });
