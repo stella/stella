@@ -6,6 +6,7 @@ import { isUuid } from "@stll/uuid-codec";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
@@ -46,6 +47,7 @@ export const runWorkAttentionScoutTask: SchedulerTask = async ({
     job.lockedBy ?? panic("Work-attention scout requires a scheduler lease");
   const outcome = await runWorkAttentionScout({
     cursor: scoutCursor(job.payload),
+    dependencies: { db, createScopedDb: createRootScopedDb },
   });
 
   signal.throwIfAborted();

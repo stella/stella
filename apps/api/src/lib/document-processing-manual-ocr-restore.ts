@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -44,9 +44,9 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceFileId,
   sourceSha256Hex,
   workspaceId,
-  db = rootDb,
+  db,
 }: {
-  db?: Pick<typeof rootDb, "transaction">;
+  db: Pick<typeof rootDb, "transaction">;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;

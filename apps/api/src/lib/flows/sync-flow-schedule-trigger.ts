@@ -1,14 +1,15 @@
 import { Result } from "better-result";
-import { eq, type InferSelectModel } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import type { flowDefinitions } from "@/api/db/schema";
-import { schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
 import { logger } from "@/api/lib/observability/logger";
-import { ensureSchedulerJob } from "@/api/lib/scheduler/jobs";
+import {
+  ensureSchedulerJob,
+  removeSchedulerJob,
+} from "@/api/lib/scheduler/jobs";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
@@ -46,9 +47,7 @@ export const syncFlowScheduleTrigger = async ({
         });
         return;
       }
-      await rootDb
-        .delete(schedulerJobs)
-        .where(eq(schedulerJobs.id, flowScheduleJobId(id)));
+      await removeSchedulerJob(flowScheduleJobId(id));
     },
     catch: (cause) => cause,
   });

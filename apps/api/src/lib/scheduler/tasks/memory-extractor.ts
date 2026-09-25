@@ -310,6 +310,7 @@ const extractCandidates = async (
   const transcriptResult = await Result.tryPromise({
     try: async () =>
       await loadCompactionTranscript({
+        db,
         threadId: compaction.threadId,
         firstSummarizedMessageId: compaction.firstSummarizedMessageId,
         lastSummarizedMessageId: compaction.sourceMessageId,

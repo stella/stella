@@ -8,8 +8,7 @@ import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 import { DAY_IN_MS } from "@stll/time";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -19,7 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -46,22 +45,20 @@ const ASSIGNMENT_EVENT_TYPES = [
   WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
 ] as const;
 
-/** The two database handles the sweep needs, injectable for integration tests. */
+/**
+ * The two database handles the sweep needs: the scheduler hands in its own
+ * connection and the scoped-transaction factory; integration tests inject both.
+ */
 export type WorkAttentionScoutDependencies = {
   db: typeof rootDb;
   createScopedDb: typeof createRootScopedDb;
 };
 
-const DEFAULT_WORK_ATTENTION_SCOUT_DEPENDENCIES = {
-  db: rootDb,
-  createScopedDb: createRootScopedDb,
-} satisfies WorkAttentionScoutDependencies;
-
 export type RunWorkAttentionScoutArgs = {
   /** Keyset position from the previous tick; `null` starts a fresh cycle. */
   cursor: SafeId<"entity"> | null;
   now?: Date;
-  dependencies?: WorkAttentionScoutDependencies;
+  dependencies: WorkAttentionScoutDependencies;
 };
 
 export type RunWorkAttentionScoutResult = {
@@ -354,7 +351,7 @@ const stillWarrantedKeys = async (
 export const runWorkAttentionScout = async ({
   cursor,
   now = new Date(),
-  dependencies = DEFAULT_WORK_ATTENTION_SCOUT_DEPENDENCIES,
+  dependencies,
 }: RunWorkAttentionScoutArgs): Promise<RunWorkAttentionScoutResult> => {
   const { db, createScopedDb } = dependencies;
   const rows = await loadObligationPage(db, cursor, now);
