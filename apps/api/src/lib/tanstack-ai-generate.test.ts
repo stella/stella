@@ -761,7 +761,19 @@ describe("TanStack AI structured output generation", () => {
     // The fixture must reach the fault: the budget exceeds the model's limit.
     expect(limit).toBeLessThan(1_000_000);
 
-    expect(chatTurnOutputTokens(model)).toBe(1);
+    const allowance = chatTurnOutputTokens(model);
+    expect(allowance).toBe(1);
+    // No request of this budget fits the limit: Anthropic needs `max_tokens`
+    // above the budget, so the smallest it accepts is sent, and reported.
+    expect(
+      mergeGenerationOptions({
+        caching: noCaching,
+        maxOutputTokens: allowance,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      }),
+    ).toMatchObject({ max_tokens: 1_000_001 });
     expect(
       logs.at("WARN").map((record) => ({
         message: record.message,
@@ -1651,6 +1663,44 @@ describe("Anthropic extended-thinking budgets", () => {
         }
       }
     }
+  });
+
+  test("keeps every offered model's whole chat request within its output limit", () => {
+    for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
+      for (const role of MODEL_ROLES) {
+        for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
+          // SAFETY: the helpers read only provider/modelOptions/modelId.
+          const model = {
+            adapter: {},
+            keySource: "byok",
+            modelId,
+            modelOptions: tanStackModelOptionsForRole({
+              modelId,
+              organizationId: null,
+              provider: "anthropic",
+              reasoningEffort,
+              role,
+            }),
+            provider: "anthropic",
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+          } as ResolvedTanStackTextModel;
+
+          const merged: Record<string, unknown> = {
+            ...mergeGenerationOptions({
+              caching: noCaching,
+              maxOutputTokens: chatTurnOutputTokens(model),
+              model,
+              serviceTier: "standard",
+              temperature: undefined,
+            }),
+          };
+
+          expect(merged["max_tokens"]).toBe(getOutputTokenLimit(modelId));
+        }
+      }
+    }
+    // No offered model reaches the clamp: every budget leaves room.
+    expect(logs.at("WARN")).toEqual([]);
   });
 });
 

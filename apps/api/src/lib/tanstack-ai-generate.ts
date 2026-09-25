@@ -1183,6 +1183,9 @@ const anthropicThinkingReservation = (
  * emit (`mergeGenerationOptions` adds the reservation back). `undefined` for a
  * model the catalog does not list, which leaves the allowance to the
  * provider's default instead of a guessed cap that could cut replies short.
+ * A thinking budget at or above the limit leaves no request that fits it
+ * (Anthropic needs `max_tokens` above the budget), so the smallest valid
+ * request is sent and the misfit is logged; no offered model reaches it.
  */
 export const chatTurnOutputTokens = (
   model: ResolvedTanStackTextModel,
