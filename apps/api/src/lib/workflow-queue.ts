@@ -22,6 +22,7 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { chunked } from "@/api/lib/chunked";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
@@ -31,7 +32,8 @@ import {
   errorSystemFields,
   errorTag,
 } from "@/api/lib/errors/utils";
-import { extractionRunStore } from "@/api/lib/extraction-runs/root-store";
+import { createExtractionRunStore } from "@/api/lib/extraction-runs/store";
+import type { ExtractionRunStore } from "@/api/lib/extraction-runs/store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
@@ -461,6 +463,10 @@ export const startWorkflow = async ({
     return { status: "failed" };
   }
 
+  // A run's lifecycle row is written through the owner connection, whichever
+  // path starts the run: a request, or the worker routing classified
+  // documents into playbooks.
+  const extractionRunStore = createExtractionRunStore(rootDb);
   const createdRunKey = await extractionRunStore
     .create({
       ...runKey,
@@ -795,11 +801,13 @@ const shouldRecoverWorkflow = async ({
 
 type RecoverOrphanedWorkflowOptions = {
   expectedRequestId: string | null;
+  extractionRuns: ExtractionRunStore;
   workspaceId: SafeId<"workspace">;
 };
 
 const recoverOrphanedWorkflow = async ({
   expectedRequestId,
+  extractionRuns,
   workspaceId,
 }: RecoverOrphanedWorkflowOptions): Promise<void> => {
   const shouldRecover = await shouldRecoverWorkflow({
@@ -825,7 +833,7 @@ const recoverOrphanedWorkflow = async ({
     )
     .returning({ id: fields.id });
 
-  await extractionRunStore
+  await extractionRuns
     .failActiveForWorkspace({
       errorCode: "ExtractionRunOrphaned",
       workspaceId,
@@ -858,16 +866,17 @@ type ReconcileOrphanedWorkflowsOptions = {
  * repeatedly; a no-op when nothing is orphaned. Exported for the boot +
  * interval wiring in `initWorkflowWorkers` and for operational scripts.
  */
-export const reconcileOrphanedWorkflows = async ({
-  scanPendingCells,
-}: ReconcileOrphanedWorkflowsOptions): Promise<void> => {
+export const reconcileOrphanedWorkflows = async (
+  { scanPendingCells }: ReconcileOrphanedWorkflowsOptions,
+  extractionRuns: ExtractionRunStore,
+): Promise<void> => {
   const lockedWorkspaceIds =
     await getRootWorkflowRunStateStore().scanRunningWorkspaceIds();
   const pendingWorkspaceIds = scanPendingCells
     ? await selectWorkspacesWithPendingCells()
     : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
   const staleActiveWorkspaceIds =
-    await extractionRunStore.listStaleActiveWorkspaceIds({
+    await extractionRuns.listStaleActiveWorkspaceIds({
       before: new Date(
         Temporal.Now.instant().epochMilliseconds - RUNNING_LOCK_TTL_SEC * 1000,
       ),
@@ -947,6 +956,7 @@ export const reconcileOrphanedWorkflows = async ({
   for (const workspaceId of recoverableOrphans) {
     await recoverOrphanedWorkflow({
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
+      extractionRuns,
       workspaceId: brandPersistedWorkspaceId(workspaceId),
     });
   }
@@ -954,7 +964,10 @@ export const reconcileOrphanedWorkflows = async ({
 
 // ── Worker ─────────────────────────────────────────────
 
-const processWorkflowJob = async (job: WorkflowEntityJob): Promise<void> => {
+const processWorkflowJob = async (
+  job: WorkflowEntityJob,
+  extractionRuns: ExtractionRunStore,
+): Promise<void> => {
   // Hard process-level timeout. A hung AI provider, a runaway batch, or a
   // broken external call would otherwise keep the job "active" indefinitely.
   // The signal reaches the provider, so a retry cannot race abandoned work.
@@ -973,7 +986,7 @@ const processWorkflowJob = async (job: WorkflowEntityJob): Promise<void> => {
     );
   }, jobTimeoutMs);
   try {
-    await processEntityJob(job.data, controller.signal);
+    await processEntityJob(job.data, controller.signal, extractionRuns);
     controller.signal.throwIfAborted();
   } finally {
     clearTimeout(timeoutHandle);
@@ -992,6 +1005,7 @@ const trackFailedJobFinalization = (work: Promise<void>): void => {
 const handleWorkflowJobFailed = (
   job: WorkflowEntityJob | undefined,
   error: Error,
+  extractionRuns: ExtractionRunStore,
 ): void => {
   if (!job) {
     return;
@@ -1034,7 +1048,7 @@ const handleWorkflowJobFailed = (
           });
         },
       );
-      await extractionRunStore
+      await extractionRuns
         .recordFailure({
           id: brandPersistedExtractionRunId(data.requestId),
           organizationId: branded.organizationId,
@@ -1048,6 +1062,7 @@ const handleWorkflowJobFailed = (
           }),
         );
       await onEntityCompleted({
+        extractionRuns,
         workspaceId: branded.workspaceId,
         organizationId: branded.organizationId,
         userId: brandPersistedUserId(data.userId),
@@ -1069,16 +1084,18 @@ const handleWorkflowJobFailed = (
 // the tally so a rising real problem is still visible.
 const REDIS_POLL_WARN_INTERVAL_MS = 60 * 1000;
 
-const createWorkflowWorker = ({
-  concurrency,
-  queueClass,
-}: WorkflowWorkerSpec): WorkflowEntityWorker => {
+const createWorkflowWorker = (
+  { concurrency, queueClass }: WorkflowWorkerSpec,
+  extractionRuns: ExtractionRunStore,
+): WorkflowEntityWorker => {
   const queueName = WORKFLOW_QUEUE_NAMES[queueClass];
   // Every BullMQ Worker uses blocking commands, so each queue needs its own
   // dedicated connection rather than the producer's shared connection.
   const worker = new Worker<EntityJobData, void, WorkflowEntityJobName>(
     queueName,
-    processWorkflowJob,
+    async (job) => {
+      await processWorkflowJob(job, extractionRuns);
+    },
     {
       connection: createBullMqConnection(),
       concurrency,
@@ -1088,7 +1105,9 @@ const createWorkflowWorker = ({
     },
   );
 
-  worker.on("failed", handleWorkflowJobFailed);
+  worker.on("failed", (job, error) => {
+    handleWorkflowJobFailed(job, error, extractionRuns);
+  });
   // Per-worker rate-limit state for the recoverable Bun-adapter poll blip:
   // count every occurrence but emit at most one warn per interval, carrying
   // the tally so a rising real problem is still visible.
@@ -1172,9 +1191,16 @@ export const createWorkflowReconcileRunner = (
   };
 };
 
-/** Initialize every workflow worker. Call once at API startup. */
-export const initWorkflowWorkers = () => {
-  const workers = WORKFLOW_WORKER_SPECS.map(createWorkflowWorker);
+/**
+ * Initialize every workflow worker. Call once at API startup. The run
+ * lifecycle store is built once, over the connection the host hands in, and
+ * shared by every worker and the orphan reconciler for their lifetime.
+ */
+export const initWorkflowWorkers = ({ db }: BullMqWorkerContext) => {
+  const extractionRuns = createExtractionRunStore(db);
+  const workers = WORKFLOW_WORKER_SPECS.map((spec) =>
+    createWorkflowWorker(spec, extractionRuns),
+  );
 
   // Heal whatever a previously-killed worker left orphaned. Boot runs a
   // thorough pass (also sweeping the DB for pending cells whose lock has
@@ -1182,7 +1208,8 @@ export const initWorkflowWorkers = () => {
   // runtime — e.g. a job exhausts its retries while the lock is held —
   // without waiting for a restart.
   const runReconcile = createWorkflowReconcileRunner(
-    reconcileOrphanedWorkflows,
+    async (options) =>
+      await reconcileOrphanedWorkflows(options, extractionRuns),
   );
   runReconcile();
   const reconcileTimer = setInterval(runReconcile, RECONCILE_INTERVAL_MS);
@@ -1274,7 +1301,11 @@ const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
   );
 };
 
-const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
+const processEntityJob = async (
+  data: EntityJobData,
+  signal: AbortSignal,
+  extractionRuns: ExtractionRunStore,
+) => {
   const {
     workspaceId,
     organizationId,
@@ -1367,6 +1398,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   );
 
   await onEntityCompleted({
+    extractionRuns,
     workspaceId: branded.workspaceId,
     organizationId: branded.organizationId,
     userId,
@@ -1882,6 +1914,7 @@ const processOneBatch = async ({
 // ── Completion tracking ────────────────────────────────
 
 type OnEntityCompletedArgs = {
+  extractionRuns: ExtractionRunStore;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -1891,6 +1924,7 @@ type OnEntityCompletedArgs = {
 };
 
 const onEntityCompleted = async ({
+  extractionRuns,
   workspaceId,
   organizationId,
   userId,
@@ -1918,7 +1952,7 @@ const onEntityCompleted = async ({
     return;
   }
 
-  await extractionRunStore
+  await extractionRuns
     .syncProgress({
       completed: result.completed,
       id: brandPersistedExtractionRunId(requestId),
@@ -1929,7 +1963,13 @@ const onEntityCompleted = async ({
     .catch((error: unknown) => captureError(error, { workspaceId }));
 
   if (result.completed >= result.total) {
-    await finishWorkflow(workspaceId, organizationId, userId, requestId);
+    await finishWorkflow(
+      workspaceId,
+      organizationId,
+      userId,
+      requestId,
+      extractionRuns,
+    );
     return;
   }
 
@@ -1993,6 +2033,7 @@ const finishWorkflow = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
   requestId: string,
+  extractionRuns: ExtractionRunStore,
 ) => {
   const isCurrentRequest = await isCurrentWorkflowRequest({
     requestId,
@@ -2026,7 +2067,7 @@ const finishWorkflow = async (
   if (Result.isError(manifestResult)) {
     const invalidStateError = manifestResult.error;
     captureError(invalidStateError, { workspaceId });
-    await extractionRunStore
+    await extractionRuns
       .fail({
         id: brandPersistedExtractionRunId(requestId),
         organizationId,
@@ -2066,7 +2107,7 @@ const finishWorkflow = async (
     }
   }
 
-  await extractionRunStore
+  await extractionRuns
     .complete({
       id: brandPersistedExtractionRunId(requestId),
       organizationId,

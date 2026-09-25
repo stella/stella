@@ -70,11 +70,16 @@ const requireNonnegativeInteger = (value: number, label: string): number => {
 const normalizeErrorCode = (errorCode: string | undefined): string =>
   (errorCode ?? "ExtractionRunFailed").slice(0, 128);
 
+export type ExtractionRunStore = ReturnType<typeof createExtractionRunStore>;
+
 /**
  * Postgres lifecycle store for extraction orchestration. Every mutation is
  * tenant-keyed and terminal states are immutable. Progress accepts absolute
  * Redis SCARD snapshots and advances monotonically, so repeated or out-of-order
  * delivery cannot double-count or move a run backwards.
+ *
+ * Built over the connection its caller owns: the workflow workers construct
+ * one from the host's connection when they start.
  */
 export const createExtractionRunStore = (db: ExtractionRunDb) => ({
   create: async ({
