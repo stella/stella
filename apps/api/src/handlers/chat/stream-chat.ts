@@ -65,10 +65,15 @@ import {
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
+  findDeniedApprovals,
+  keepDeniedApprovalsOnScreen,
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "@/api/handlers/chat/stream-message-identity";
-import type { MessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import type {
+  DeniedApproval,
+  MessageIdMapper,
+} from "@/api/handlers/chat/stream-message-identity";
 import {
   createTanStackTerminalHooks,
   tanStackStreamEventLifecycle,
@@ -551,6 +556,7 @@ export const streamChat = async ({
     source: persistenceVisibleStream,
   });
   const output = transformClientVisibleStream({
+    deniedApprovals: findDeniedApprovals(preparedMessageList),
     resolveAssistantTextRefs,
     resolveAssistantToolInputRefs,
     resolveAssistantToolOutputRefs,
@@ -2036,25 +2042,36 @@ type TransformClientVisibleStreamProps = Pick<
   | "resolveAssistantToolOutputRefs"
   | "resolveAssistantValueRefs"
   | "source"
->;
+> & {
+  /** Calls the history denied (see `findDeniedApprovals`). */
+  deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
+};
 
-/** Resolve refs only after the server-side processor has consumed its copy. */
+/**
+ * Resolve refs only after the server-side processor has consumed its copy,
+ * then present the calls the history denied as denied, built from the
+ * resolved snapshot.
+ */
 export const transformClientVisibleStream = ({
+  deniedApprovals = new Map(),
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   source,
 }: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  transformOutgoingStream({
-    boundary: { type: "raw" },
-    initialRestorationPlaceholders: new Set(),
-    resolveAssistantTextRefs,
-    resolveAssistantToolInputRefs,
-    resolveAssistantToolOutputRefs,
-    resolveAssistantValueRefs,
-    restorationPairs: [],
-    source,
+  keepDeniedApprovalsOnScreen({
+    deniedApprovals,
+    source: transformOutgoingStream({
+      boundary: { type: "raw" },
+      initialRestorationPlaceholders: new Set(),
+      resolveAssistantTextRefs,
+      resolveAssistantToolInputRefs,
+      resolveAssistantToolOutputRefs,
+      resolveAssistantValueRefs,
+      restorationPairs: [],
+      source,
+    }),
   });
 
 type OutgoingChunkTransformerOptions = {

@@ -1,4 +1,5 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
+import type { StreamChunk, ToolCall } from "@tanstack/ai";
 
 import { Temporal } from "@stll/time";
 
@@ -52,6 +53,32 @@ export const normalizeFinalAssistantMessageId = ({
 }): PersistableChatMessage =>
   toPersistableChatMessage({ ...message, id: mapMessageId(message.id) });
 
+type ChatToolCallPart = Extract<
+  ChatMessage["parts"][number],
+  { type: "tool-call" }
+>;
+
+/** A denied call's approval, as the stored message keeps it. */
+export type DeniedApproval = NonNullable<
+  Extract<ChatToolCallPart, { approval?: unknown }>["approval"]
+>;
+
+/** The calls `messages` hold whose approval the user denied, by call id. */
+export const findDeniedApprovals = (
+  messages: readonly ChatMessage[],
+): ReadonlyMap<string, DeniedApproval> =>
+  new Map(
+    messages.flatMap(({ parts }) =>
+      parts.flatMap((part): [string, DeniedApproval][] =>
+        part.type === "tool-call" &&
+        "approval" in part &&
+        part.approval.approved === false
+          ? [[part.id, part.approval]]
+          : [],
+      ),
+    ),
+  );
+
 type RemapOutgoingMessageIdsProps = {
   existingMessageIds?: ReadonlySet<string> | undefined;
   mapMessageId: MessageIdMapper;
@@ -71,6 +98,34 @@ export const remapOutgoingMessageIds = async function* ({
       mapMessageId,
       snapshotMessageIds,
     });
+  }
+};
+
+/**
+ * Presents every call the history denied as denied in the snapshots the
+ * client reads (see `keepDeniedApprovals`). It runs on the client-visible
+ * stream, after its refs are resolved, so the parts it builds carry what the
+ * rest of the stream shows rather than the model-facing tokens.
+ *
+ * @yields Each chunk of `source`, a snapshot with its denied calls as stored.
+ */
+export const keepDeniedApprovalsOnScreen = async function* ({
+  deniedApprovals,
+  source,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  source: AsyncIterable<StreamChunk>;
+}): AsyncIterable<StreamChunk> {
+  for await (const chunk of source) {
+    yield chunk.type === EventType.MESSAGES_SNAPSHOT
+      ? {
+          ...chunk,
+          messages: keepDeniedApprovals({
+            deniedApprovals,
+            messages: chunk.messages,
+          }),
+        }
+      : chunk;
   }
 };
 
@@ -295,6 +350,102 @@ const withToolCallMetadata = ({
   const base = isRecord(metadata) ? metadata : {};
   const tanstack = isRecord(base["tanstack"]) ? base["tanstack"] : {};
   return { ...base, tanstack: { ...tanstack, toolCallMetadata } };
+};
+
+/**
+ * The engine replays a denied call to the model as a tool result, so the
+ * snapshot's wire messages carry that result and a client rebuilding the call
+ * from them shows a finished call, while the stored message, and so a reload,
+ * shows it denied. An assistant message holding a denied call therefore
+ * travels in UI form (TanStack's own conversion of the wire message, with the
+ * denied call as the stored thread holds it), which a client takes as is, and
+ * the denial's tool message is left out.
+ */
+const keepDeniedApprovals = ({
+  deniedApprovals,
+  messages,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  messages: readonly SnapshotMessage[];
+}): SnapshotMessage[] => {
+  if (deniedApprovals.size === 0) {
+    return [...messages];
+  }
+  return messages.flatMap((message): SnapshotMessage[] => {
+    if (message.role === "tool") {
+      return deniedApprovals.has(message.toolCallId) ? [] : [message];
+    }
+    if (message.role !== "assistant" || message.toolCalls === undefined) {
+      return [message];
+    }
+    const { toolCalls } = message;
+    if (!toolCalls.some(({ id }) => deniedApprovals.has(id))) {
+      return [message];
+    }
+    const toolCallMetadata = readToolCallMetadata(message) ?? {};
+    const { parts } = modelMessageToUIMessage(
+      {
+        content: typeof message.content === "string" ? message.content : null,
+        role: "assistant",
+        toolCalls: toolCalls.map((call) =>
+          withCallMetadata(call, toolCallMetadata[call.id]),
+        ),
+      },
+      message.id,
+    );
+    // Still a valid AG-UI assistant message, now also carrying `parts`: the
+    // client's `aguiSnapshotMessageToUIMessage` takes a message with `parts`
+    // as it is instead of rebuilding it from `toolCalls`.
+    const inUIForm = {
+      ...message,
+      parts: parts.map((part) =>
+        part.type === "tool-call"
+          ? asStoredDenial(part, deniedApprovals)
+          : part,
+      ),
+    };
+    return [inUIForm];
+  });
+};
+
+type SnapshotToolCall = NonNullable<
+  AssistantSnapshotMessage["toolCalls"]
+>[number];
+
+/** A wire tool call as the engine's own call type, with the provider
+ *  metadata the snapshot keeps beside it. */
+const withCallMetadata = (
+  call: SnapshotToolCall,
+  metadata: unknown,
+): ToolCall => ({
+  function: call.function,
+  id: call.id,
+  type: "function",
+  ...(metadata === undefined ? {} : { metadata }),
+});
+
+type UIToolCallPart = Extract<
+  ReturnType<typeof modelMessageToUIMessage>["parts"][number],
+  { type: "tool-call" }
+>;
+
+/** A rebuilt call as the stored thread holds it when its approval was denied. */
+const asStoredDenial = (
+  part: UIToolCallPart,
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>,
+): UIToolCallPart => {
+  const approval = deniedApprovals.get(part.id);
+  if (approval === undefined) {
+    return part;
+  }
+  const denied: UIToolCallPart = {
+    ...part,
+    approval,
+    state: "approval-responded",
+  };
+  // The engine's replayed result is what the denial never produced.
+  delete denied.output;
+  return denied;
 };
 
 const remapChunkMessageId = ({
