@@ -9,19 +9,30 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import type { WebApiRoutes } from "@/lib/eden-client";
 import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
 /**
- * The API client keeps timestamps as the ISO strings the server sent
- * (`parseDate: false`), whatever the generated types say. Hydration, the
- * pending-list cache and the review store need real Dates, so every response
- * carrying a suggestion `createdAt` is read through here.
+ * Responses carry timestamps as ISO strings. Hydration, the pending-list cache
+ * and the review store need real Dates, so every response carrying a
+ * suggestion `createdAt` is read through here.
  */
-export const readDocxSuggestionCreatedAt = (value: Date | string): Date =>
+export const readDocxSuggestionCreatedAt = (value: string): Date =>
   parseDeterministicDate(value) ??
   panic("The DOCX suggestion API returned an invalid createdAt");
+
+type SerializedDocxSuggestion =
+  WebApiRoutes["docx-suggestions"][":workspaceId"]["entity"][":entityId"]["get"]["response"][200]["items"][number];
+
+const readDocxSuggestionItem = ({
+  createdAt,
+  ...item
+}: SerializedDocxSuggestion) => ({
+  ...item,
+  createdAt: readDocxSuggestionCreatedAt(createdAt),
+});
 
 // Each hydration fetch requests a full page.
 // Page ALL pending rows up to DOCX_SUGGESTIONS_PENDING_MAX: pending drives the
@@ -107,11 +118,7 @@ export const docxSuggestionsOptions = ({
       }
 
       return {
-        items: pending.items.map((item) =>
-          Object.assign(item, {
-            createdAt: readDocxSuggestionCreatedAt(item.createdAt),
-          }),
-        ),
+        items: pending.items.map(readDocxSuggestionItem),
       };
     },
   });

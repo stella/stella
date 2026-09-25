@@ -728,7 +728,7 @@ function ChatIndex() {
 type PinnedMatter = {
   color: string | null;
   id: string;
-  lastActivityAt: string | Date;
+  lastActivityAt: Date;
   name: string;
   /** Drives the right-click menu's add-member affordance and header. */
   client: { displayName: string } | null;

@@ -25,20 +25,18 @@ const addLocalCalendarDaysMs = (value: number, days: number): number =>
         .toInstant().epochMilliseconds,
   ).unwrapOr(Number.NaN);
 
-const toEpochMilliseconds = (value: Date | string): number =>
-  value instanceof Date
-    ? value.getTime()
-    : Result.try(() => {
-        if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
-          return Temporal.PlainDate.from(value)
-            .toZonedDateTime({
-              plainTime: Temporal.PlainTime.from("00:00"),
-              timeZone: "UTC",
-            })
-            .toInstant().epochMilliseconds;
-        }
-        return Temporal.Instant.from(value).epochMilliseconds;
-      }).unwrapOr(Number.NaN);
+const toEpochMilliseconds = (value: string): number =>
+  Result.try(() => {
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+      return Temporal.PlainDate.from(value)
+        .toZonedDateTime({
+          plainTime: Temporal.PlainTime.from("00:00"),
+          timeZone: "UTC",
+        })
+        .toInstant().epochMilliseconds;
+    }
+    return Temporal.Instant.from(value).epochMilliseconds;
+  }).unwrapOr(Number.NaN);
 
 type FilterableWorkspace = {
   client: Pick<NonNullable<Workspace["client"]>, "id"> | null;
@@ -137,7 +135,7 @@ const resolveDateRange = (
 };
 
 const passesDateFilter = (
-  value: Date | string,
+  value: string,
   filter: DateFilter,
   now: Date | Temporal.Instant,
 ): boolean => {

@@ -59,7 +59,7 @@ describe("sidebar matter context", () => {
   test("surfaces an active below-window matter at the bottom without reordering the rest", () => {
     const workspaces = Array.from({ length: 6 }, (_, index) => ({
       id: `matter-${index}`,
-      lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
+      lastActivityAt: new Date(`2026-07-0${6 - index}T12:00:00.000Z`),
     }));
 
     // matter-5 is the OLDEST (ranks below the 5-row window). Selecting it must
@@ -84,7 +84,10 @@ describe("sidebar matter context", () => {
         limit: 0,
         pinnedIds: new Set(),
         workspaces: [
-          { id: "matter-0", lastActivityAt: "2026-07-06T12:00:00.000Z" },
+          {
+            id: "matter-0",
+            lastActivityAt: new Date("2026-07-06T12:00:00.000Z"),
+          },
         ],
       }),
     ).toEqual([]);
@@ -93,7 +96,7 @@ describe("sidebar matter context", () => {
   test("does not reorder when the active matter is already within the window", () => {
     const workspaces = Array.from({ length: 6 }, (_, index) => ({
       id: `matter-${index}`,
-      lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
+      lastActivityAt: new Date(`2026-07-0${6 - index}T12:00:00.000Z`),
     }));
 
     // matter-1 already sits at its activity-ranked slot; selecting it changes
@@ -117,8 +120,14 @@ describe("sidebar matter context", () => {
         limit: 5,
         pinnedIds: new Set(["active"]),
         workspaces: [
-          { id: "active", lastActivityAt: "2026-07-06T12:00:00.000Z" },
-          { id: "recent", lastActivityAt: "2026-07-05T12:00:00.000Z" },
+          {
+            id: "active",
+            lastActivityAt: new Date("2026-07-06T12:00:00.000Z"),
+          },
+          {
+            id: "recent",
+            lastActivityAt: new Date("2026-07-05T12:00:00.000Z"),
+          },
         ],
       }).map(({ id }) => id),
     ).toEqual(["recent"]);
@@ -127,7 +136,7 @@ describe("sidebar matter context", () => {
   test("includes matters with recently active workspace chats", () => {
     const workspaces = Array.from({ length: 6 }, (_, index) => ({
       id: `matter-${index}`,
-      lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
+      lastActivityAt: new Date(`2026-07-0${6 - index}T12:00:00.000Z`),
     }));
 
     expect(

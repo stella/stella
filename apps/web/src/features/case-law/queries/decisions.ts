@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -14,7 +14,6 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import { api } from "@/lib/api";
-import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
@@ -285,9 +284,7 @@ export const decisionsInfiniteOptions = (
             headline: h.headline,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
-            createdAt:
-              parseDeterministicDate(h.createdAt) ??
-              panic("Public case-law API returned an invalid createdAt"),
+            createdAt: h.createdAt,
           })),
           facets: data.facets,
           nextCursor: data.nextCursor,
