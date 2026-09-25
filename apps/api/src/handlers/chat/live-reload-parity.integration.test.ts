@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
 
+import { getOutputTokenLimit } from "@stll/ai-catalog";
 import {
   propertyConfig,
   propertySeed,
@@ -19,6 +20,7 @@ import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
+  HARNESS_CHAT_MODEL_ID,
   PLAIN_TOOL_ARGUMENTS,
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
@@ -94,8 +96,14 @@ type StepShape = {
   reasoning: boolean;
   text: boolean;
 };
+/** How a provider call fails before any output: it throws, or it reports
+ *  the error in the stream. */
+type FailureShape = "fail" | "report-error";
 /** A model run: its steps, or a provider call that fails before any output. */
-type RunShape = StepShape[] | "fail";
+type RunShape = StepShape[] | FailureShape;
+
+const isFailure = (shape: RunShape): shape is FailureShape =>
+  shape === "fail" || shape === "report-error";
 /**
  * How the user answers an approval card. `approve-all` approves it and then
  * every approval card that appears later in the conversation, each one
@@ -185,12 +193,14 @@ const planRun = (
   shape: RunShape,
   nextId: () => string,
 ): ScriptedTurn[] => {
-  if (shape === "fail") {
+  if (isFailure(shape)) {
     ledger.failures += 1;
     ledger.pending = [];
     ledger.latest = "failed";
     return [
-      { message: "Scripted provider failure", type: "fail-before-output" },
+      shape === "fail"
+        ? { message: "Scripted provider failure", type: "fail-before-output" }
+        : { message: "Scripted provider error", type: "error" },
     ];
   }
   const steps: ScriptedTurn[] = [];
@@ -644,9 +654,15 @@ const stepsArb: fc.Arbitrary<StepShape[]> = fc.array(stepArb, {
   maxLength: 3,
   minLength: 1,
 });
+/** A model run: steps, or now and then a provider call that fails before it
+ *  answers. */
+const runArb: fc.Arbitrary<RunShape> = fc.oneof(
+  { arbitrary: stepsArb, weight: 5 },
+  { arbitrary: fc.constant<RunShape>("fail"), weight: 1 },
+);
 /** The runs a step's requests answer with: its own, then the ones
  *  `approve-all` sends. */
-const runsArb: fc.Arbitrary<RunShape[]> = fc.array(stepsArb, {
+const runsArb: fc.Arbitrary<RunShape[]> = fc.array(runArb, {
   maxLength: 3,
   minLength: 1,
 });
@@ -746,6 +762,85 @@ describe("a conversation's live view", () => {
           ["approve-all", "approve-all", "approve-all", "approve-all"],
           [[{ ...STEP, calls: ["approval"], text: true }]],
         ).run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  const failsBeforeAnswering: [
+    string,
+    FailureShape,
+    RunShape[] | null,
+    Decision,
+  ][] = [
+    ["a new message", "fail", null, "approve"],
+    ["an answer", "fail", [[{ ...STEP, calls: ["ask-user"] }]], "approve"],
+    ["a new message", "report-error", null, "approve"],
+    [
+      "an answer",
+      "report-error",
+      [[{ ...STEP, calls: ["ask-user"] }]],
+      "approve",
+    ],
+  ];
+
+  test.each(failsBeforeAnswering)(
+    "keeps one message for the turn when the model fails before answering %s (%s)",
+    async (_label, failure, first, decision) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        if (first === null) {
+          await new SendUserMessage([failure], "Draft the NDA").run(
+            model,
+            real,
+          );
+        } else {
+          await new SendUserMessage(first, "Draft the NDA").run(model, real);
+          await new ResolveCards([decision], [failure]).run(model, real);
+        }
+        // The fixture must reach the fault: the model call failed.
+        expect(real.ledger.latest).toBe("failed");
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "bounds every model call of a turn by the model's catalog output limit",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [
+            [
+              { ...STEP, calls: ["plain"] },
+              { ...STEP, text: true },
+            ],
+          ],
+          "Draft the NDA",
+        ).run(model, real);
+        const calls = real.harness.modelOptionsOf(real.threadId);
+        // The fixture must reach the fault: a turn of two model calls.
+        expect(calls).toHaveLength(2);
+        // The harness's chat model is OpenAI's, which reads the allowance
+        // from `max_output_tokens`.
+        expect(
+          calls.map((options) =>
+            typeof options === "object" && options !== null
+              ? Reflect.get(options, "max_output_tokens")
+              : undefined,
+          ),
+        ).toEqual([
+          getOutputTokenLimit(HARNESS_CHAT_MODEL_ID),
+          getOutputTokenLimit(HARNESS_CHAT_MODEL_ID),
+        ]);
       } finally {
         closeConversation(conversation);
       }

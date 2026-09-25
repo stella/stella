@@ -454,7 +454,8 @@ export const buildModelRateRows = (
     };
   });
 
-const formatInteger = (value: number): string => {
+/** An integer as generated catalog source writes it: `65_536`, `4096`. */
+export const formatInteger = (value: number): string => {
   const digits = String(value);
   if (digits.length <= 4) {
     return digits;

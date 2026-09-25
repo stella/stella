@@ -2294,6 +2294,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
@@ -2468,6 +2474,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "provider_unavailable",
@@ -2530,6 +2542,12 @@ describe("outgoing chat stream message ids", () => {
 
     expect(stripTimestamps(await collectChunks(stream))).toEqual([
       { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      // The turn's message is named before the error.
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
       {
         type: EventType.RUN_ERROR,
         message: "unknown",
@@ -2953,10 +2971,9 @@ describe("chat stream client-disconnect persistence", () => {
       .map((part) => (part.type === "text" ? part.content : ""))
       .join("");
 
-  // A dropped client connection `.return()`s the stream generator mid-run. The
-  // metered provider call is decoupled from the socket, so the completed-or-
-  // partial content must be persisted (finish reported as not aborted) rather
-  // than lost.
+  // A dropped client connection aborts the provider call and `.return()`s the
+  // stream generator mid-run. The partial content produced before the abort
+  // must be persisted (finish reported as not aborted) rather than lost.
   test("persists the accumulated assistant message when the client disconnects mid-stream", async () => {
     const abortSignal = new AbortController().signal;
     const { getResponseMessage, processor } = accumulatingProcessor();

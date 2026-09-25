@@ -3,8 +3,8 @@
 // `bun --filter @stll/ai-catalog gen:capabilities`.
 //
 // Sources: models.dev per-model `reasoning_options`, `temperature`,
-// `modalities.input`, and release dates (first-party, openrouter, and
-// amazon-bedrock catalogs);
+// `modalities.input`, `limit.output`, and release dates (first-party,
+// openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model `default_effort`; plus reviewed provider
 // policies and dated entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
@@ -292,3 +292,68 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "mistral-medium-latest": "emit",
   "mistral-small-latest": "emit",
 } as const satisfies Record<OfferedBYOKModelId, TemperaturePolicy>;
+
+/**
+ * The most output tokens one response of each offered model may carry
+ * (models.dev `limit.output`). Consumers must go through
+ * `getOutputTokenLimit`.
+ */
+export const MODEL_OUTPUT_TOKEN_LIMITS = {
+  "gemini-3.8-flash": 65_536,
+  "gemini-3.7-flash": 65_536,
+  "gemini-3.6-flash": 65_536,
+  "gemini-3.5-flash-lite": 65_536,
+  "gemini-3.1-pro-preview": 65_536,
+  "gemini-3.5-flash": 65_536,
+  "gemini-3.1-flash-lite": 65_536,
+  "openai/gpt-6-astra": 128_000,
+  "openai/gpt-6-sol": 128_000,
+  "openai/gpt-6-luna": 128_000,
+  "openai/gpt-5.6-sol": 128_000,
+  "openai/gpt-5.6-terra": 128_000,
+  "openai/gpt-5.6-luna": 128_000,
+  "google/gemini-3.8-flash": 65_536,
+  "google/gemini-3.7-flash": 65_536,
+  "google/gemini-3.6-flash": 65_536,
+  "google/gemini-3.5-flash-lite": 65_536,
+  "google/gemini-3.1-pro-preview": 65_536,
+  "google/gemini-3.5-flash": 65_536,
+  "google/gemini-3.1-flash-lite": 65_536,
+  "anthropic/claude-sonnet-5": 128_000,
+  "anthropic/claude-opus-5": 128_000,
+  "anthropic/claude-opus-4.8": 128_000,
+  "anthropic/claude-sonnet-4.6": 128_000,
+  "openai/gpt-5.5": 128_000,
+  "openai/gpt-5.4-mini": 128_000,
+  "gpt-6-astra": 128_000,
+  "gpt-6-sol": 128_000,
+  "gpt-6-luna": 128_000,
+  "gpt-5.6": 128_000,
+  "gpt-5.6-terra": 128_000,
+  "gpt-5.6-luna": 128_000,
+  "gpt-5.5": 128_000,
+  "gpt-5.4": 128_000,
+  "gpt-5.4-mini": 128_000,
+  "gpt-5.4-nano": 128_000,
+  "gpt-5.2": 128_000,
+  "claude-sonnet-5": 128_000,
+  "claude-fable-5-1": 128_000,
+  "claude-fable-5": 128_000,
+  "claude-opus-5-5": 128_000,
+  "claude-opus-5": 128_000,
+  "claude-opus-4-8": 128_000,
+  "claude-opus-4-7": 128_000,
+  "claude-sonnet-4-6": 128_000,
+  "claude-opus-4-6": 128_000,
+  "claude-haiku-4-5-20251001": 64_000,
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": 64_000,
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": 64_000,
+  "us.amazon.nova-pro-v1:0": 10_000,
+  "us.amazon.nova-lite-v1:0": 10_000,
+  "us.amazon.nova-micro-v1:0": 10_000,
+  "openai.gpt-oss-120b-1:0": 128_000,
+  "openai.gpt-oss-20b-1:0": 128_000,
+  "mistral-large-latest": 262_144,
+  "mistral-medium-latest": 262_144,
+  "mistral-small-latest": 256_000,
+} as const satisfies Record<OfferedBYOKModelId, number>;

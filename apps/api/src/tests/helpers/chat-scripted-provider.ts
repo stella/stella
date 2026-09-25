@@ -35,6 +35,8 @@ type ScriptedProviderFindings = {
 const SIDE_CALL_TEXT = "Scripted side answer";
 
 type ThreadScripts = {
+  /** The provider options of every model call the thread made, in order. */
+  modelOptions: unknown[];
   queue: ScriptedRun[];
   unscriptedCalls: string[];
 };
@@ -45,8 +47,9 @@ const runs = new Map<string, { index: number; run: ScriptedRun }>();
 
 const adapter: AnyTextAdapter = {
   ...scriptedAdapterBase,
-  async *chatStream({ model, runId, threadId }) {
+  async *chatStream({ model, modelOptions, runId, threadId }) {
     const scripts = threadId === undefined ? undefined : threads.get(threadId);
+    scripts?.modelOptions.push(modelOptions);
     if (
       threadId === undefined ||
       runId === undefined ||
@@ -118,7 +121,11 @@ export const installScriptedProvider = () => {
     if (existing !== undefined) {
       return existing;
     }
-    const created: ThreadScripts = { queue: [], unscriptedCalls: [] };
+    const created: ThreadScripts = {
+      modelOptions: [],
+      queue: [],
+      unscriptedCalls: [],
+    };
     threads.set(threadId, created);
     owned.add(threadId);
     return created;
@@ -131,6 +138,9 @@ export const installScriptedProvider = () => {
     },
     /** `threadId`'s findings since the last call, cleared on read, so the next
      *  step starts clean. */
+    /** The provider options of `threadId`'s model calls so far. */
+    modelOptionsOf: (threadId: string): readonly unknown[] =>
+      scriptsOf(threadId).modelOptions,
     takeFindings: (threadId: string): ScriptedProviderFindings => {
       const scripts = scriptsOf(threadId);
       const unconsumedScripts = scripts.queue

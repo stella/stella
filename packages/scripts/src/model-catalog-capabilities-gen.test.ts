@@ -25,6 +25,7 @@ const upstreamWithToolCall = (
         reasoning: false,
         effortValues: null,
         inputModalities: ["text"],
+        outputTokens: 8192,
         temperature: false,
         toolCall: toolCallFor(modelId),
       },
@@ -55,6 +56,32 @@ describe("tool-calling requirement", () => {
     ).toThrow(`bedrock/${toolLessModelId}: models.dev reports no tool calling`);
   });
 
+  test("rejects a record that does not publish an output limit", () => {
+    const upstream = new Map(
+      [...upstreamWithToolCall(() => true)].map(([key, record]) => [
+        key,
+        key.endsWith(`:${toolLessModelId}`)
+          ? { ...record, outputTokens: null }
+          : record,
+      ]),
+    );
+    expect(() =>
+      buildCapabilityRows({ openRouterDefaults: new Map(), upstream }),
+    ).toThrow(
+      `bedrock/${toolLessModelId}: models.dev record lacks limit.output`,
+    );
+  });
+
+  test("carries each model's output limit into its row", () => {
+    const rows = buildCapabilityRows({
+      openRouterDefaults: new Map(),
+      upstream: upstreamWithToolCall(() => true),
+    });
+    expect(new Set(rows.map(({ outputTokens }) => outputTokens))).toEqual(
+      new Set([8192]),
+    );
+  });
+
   test("rejects a record that does not publish tool support", () => {
     expect(() =>
       buildCapabilityRows({
@@ -76,6 +103,7 @@ describe("capability module generation", () => {
         documentInputOverrideReason: "2026-08-20: reviewed source correction",
         efforts: null,
         modelId: "gpt-test",
+        outputTokens: 4096,
         overrideReason: null,
         provider: "openai",
         temperaturePolicy: "omit",
@@ -86,6 +114,7 @@ describe("capability module generation", () => {
         documentInputOverrideReason: null,
         efforts: null,
         modelId: "gpt-text-only",
+        outputTokens: 4096,
         overrideReason: null,
         provider: "openai",
         temperaturePolicy: "omit",

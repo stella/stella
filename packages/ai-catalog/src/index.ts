@@ -24,6 +24,7 @@ import * as v from "valibot";
 import {
   MODEL_DOCUMENT_INPUT_OPTIONS,
   MODEL_DEFAULT_REASONING_EFFORTS,
+  MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
@@ -775,6 +776,7 @@ export type ResolvedReasoningEffort = v.InferOutput<
 // gen:capabilities`).
 export {
   MODEL_DEFAULT_REASONING_EFFORTS,
+  MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
@@ -886,6 +888,19 @@ const MODEL_TEMPERATURE_POLICY_BY_ID: Readonly<
  */
 export const shouldEmitTemperature = (modelId: string): boolean =>
   MODEL_TEMPERATURE_POLICY_BY_ID[normalizeModelCatalogId(modelId)] === "emit";
+
+const MODEL_OUTPUT_TOKEN_LIMIT_BY_ID: Readonly<Record<string, number>> =
+  MODEL_OUTPUT_TOKEN_LIMITS;
+
+/**
+ * The most output tokens one response of `modelId` may carry, from the
+ * catalog. `undefined` for an id the catalog does not list (a deployment
+ * override, a dev model): the catalog knows nothing about it, so callers leave
+ * the allowance to the provider rather than guess one. Callers must never
+ * index `MODEL_OUTPUT_TOKEN_LIMITS` directly with a runtime string.
+ */
+export const getOutputTokenLimit = (modelId: string): number | undefined =>
+  MODEL_OUTPUT_TOKEN_LIMIT_BY_ID[normalizeModelCatalogId(modelId)];
 
 /**
  * Whether a model accepts tool use on a streaming request.
