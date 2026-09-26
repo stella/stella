@@ -72,7 +72,8 @@ type PdfSigningDatabase = typeof rootDb;
 
 export type OpenedPdfSigningSession =
   | { status: "created"; expiredSessionIds: SafeId<"pdfSigningSession">[] }
-  | { status: "in-progress" };
+  | { status: "in-progress" }
+  | { status: "version-changed" };
 
 /**
  * Open a new exchange for one person's file field.
@@ -90,9 +91,27 @@ export const openPdfSigningSession = async ({
   values,
 }: {
   now: Date;
-  tx: Pick<Transaction, "insert" | "update">;
+  tx: Pick<Transaction, "insert" | "select" | "update">;
   values: typeof pdfSigningSessions.$inferInsert;
 }): Promise<OpenedPdfSigningSession> => {
+  // The exchange is opened on the version the stamp and certification were
+  // checked against, and only while it is still current. The share lock
+  // holds a concurrent version write off until this transaction ends.
+  const current = await tx
+    .select({ currentVersionId: entities.currentVersionId })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.id, values.entityId),
+        eq(entities.workspaceId, values.workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("share");
+  if (current.at(0)?.currentVersionId !== values.baseVersionId) {
+    return { status: "version-changed" };
+  }
+
   // audit: skip — the caller records each expiry it closes and the CREATE.
   const expired = await tx
     .update(pdfSigningSessions)

@@ -108,9 +108,22 @@ export const resolveStampRequest = (
   });
 };
 
+export type PreflightedPdfSigning = {
+  /**
+   * The version whose bytes were checked, or `null` when the target was
+   * missing or not signable (the caller's own check reports that). The
+   * exchange may only be opened on this version.
+   */
+  baseVersionId: SafeId<"entityVersion"> | null;
+  /** The stamp to store; `null` for an invisible signature. */
+  stamp: PdfSigningStamp | null;
+};
+
+const UNCHECKED: PreflightedPdfSigning = { baseVersionId: null, stamp: null };
+
 /**
- * Refuse a certified document, place the stamp. Answers the stamp to store
- * (`null` for an invisible signature).
+ * Refuse a certified document, place the stamp, and name the version both
+ * were checked against.
  */
 export const preflightPdfSigning = async ({
   entityId,
@@ -126,7 +139,7 @@ export const preflightPdfSigning = async ({
   safeDb: SafeDb;
   stamp: StampRequest | undefined;
   workspaceId: SafeId<"workspace">;
-}): Promise<Result<PdfSigningStamp | null, HandlerError>> => {
+}): Promise<Result<PreflightedPdfSigning, HandlerError>> => {
   const current = await safeDb(
     async (tx) =>
       await readCurrentPdfSigningTarget({
@@ -146,8 +159,9 @@ export const preflightPdfSigning = async ({
     );
   }
   if (!current.value || current.value.target.status !== "signable") {
-    return Result.ok(null);
+    return Result.ok(UNCHECKED);
   }
+  const { baseVersionId } = current.value;
   const bytes = await readEntityVersionFile(
     pdfSigningFileDescriptor({
       entityId,
@@ -168,7 +182,7 @@ export const preflightPdfSigning = async ({
     // Unreadable bytes are phase 1's to report, with their own reason; a
     // stamp cannot be placed on them, so that request is refused here.
     return stamp === undefined
-      ? Result.ok(null)
+      ? Result.ok({ baseVersionId, stamp: null })
       : stampRejected(
           "unreadable",
           "This PDF could not be read to place a stamp.",
@@ -186,7 +200,11 @@ export const preflightPdfSigning = async ({
       }),
     );
   }
-  return stamp === undefined
-    ? Result.ok(null)
-    : resolveStampRequest(pdf, stamp);
+  if (stamp === undefined) {
+    return Result.ok({ baseVersionId, stamp: null });
+  }
+  const placed = resolveStampRequest(pdf, stamp);
+  return Result.isError(placed)
+    ? Result.err(placed.error)
+    : Result.ok({ baseVersionId, stamp: placed.value });
 };

@@ -26,6 +26,8 @@ import {
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
+  pdf_signing_base_version_changed:
+    "workspaces.files.pdfSigning.cancelledBaseVersionDescription",
   pdf_signing_certified_document:
     "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   pdf_signing_encrypted: "workspaces.files.pdfSigning.encryptedDescription",

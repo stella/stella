@@ -101,6 +101,19 @@ const createPdfSigningHandoffBodySchema = t.Object({
   stamp: stampRequestSchema,
 });
 
+/**
+ * The document gained a version between the checks against its bytes and
+ * opening the exchange; nothing was stored, and a new attempt checks the
+ * new version.
+ */
+const baseVersionChanged = () =>
+  new HandlerError({
+    status: 409,
+    code: "pdf_signing_base_version_changed",
+    message: "The document changed while signing was being prepared.",
+    hint: "Try again: the new version will be checked.",
+  });
+
 const config = {
   body: createPdfSigningHandoffBodySchema,
   permissions: { entity: ["update"] },
@@ -117,7 +130,7 @@ const createPdfSigningHandoff = createSafeHandler(
     user,
     workspaceId,
   }) {
-    const placedStamp = yield* Result.await(
+    const preflighted = yield* Result.await(
       preflightPdfSigning({
         entityId,
         organizationId: session.activeOrganizationId,
@@ -168,6 +181,9 @@ const createPdfSigningHandoff = createSafeHandler(
           };
         }
 
+        if (current.baseVersionId !== preflighted.baseVersionId) {
+          return { error: baseVersionChanged() };
+        }
         const opened = await openPdfSigningSession({
           now: new Date(),
           tx,
@@ -181,7 +197,7 @@ const createPdfSigningHandoff = createSafeHandler(
             location: sanitizeSigningAnnotation(location),
             propertyId,
             reason: sanitizeSigningAnnotation(reason),
-            stamp: placedStamp,
+            stamp: preflighted.stamp,
             // Until the handoff is redeemed the exchange lives exactly as
             // long as the deep link does; redemption replaces this with the
             // session token's own TTL.
@@ -189,6 +205,9 @@ const createPdfSigningHandoff = createSafeHandler(
             workspaceId,
           },
         });
+        if (opened.status === "version-changed") {
+          return { error: baseVersionChanged() };
+        }
         if (opened.status === "in-progress") {
           return {
             error: new HandlerError({
