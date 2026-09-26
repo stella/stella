@@ -11,8 +11,10 @@ import {
 import { eq } from "drizzle-orm";
 import crypto from "node:crypto";
 
-import type { rootDb, Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
+import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import { createSubmitPdfSigningSignatureHandler } from "@/api/handlers/entities/pdf-signing-signature";
 import type { SubmitPdfSigningSignatureDependencies } from "@/api/handlers/entities/pdf-signing-signature";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -27,6 +29,7 @@ import {
   captureSigningDigest,
   signaturePlaceholderSize,
 } from "@/api/lib/files/pdf-signing/sign-pdf";
+import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
@@ -42,6 +45,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
+let tokenDb: TokenScopedDatabase;
 let ids: TestIds;
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
@@ -53,6 +57,15 @@ const SHA256_DIGEST_INFO_PREFIX = Buffer.from(
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
+  tokenDb = {
+    scoped: ({ organizationId, userId, workspaceIds }) =>
+      asTestRaw<ScopedDb>(
+        createScopedDb(testDb, workspaceIds, organizationId, userId),
+      ),
+    tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
+      createTenantlessDb(testDb),
+    ),
+  };
   ids = fixture.ids;
 });
 
@@ -132,10 +145,7 @@ const seedPreparedSession = async () => {
     tokenExpiresAt: expiresAt,
     workspaceId: ids.wsA1,
   });
-  const redeemed = await redeemPdfSigningHandoff(
-    handoffToken,
-    asTestRaw<typeof rootDb>(testDb),
-  );
+  const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
   return {
     sessionId,
     sessionToken: redeemed?.sessionToken ?? "",
@@ -155,7 +165,7 @@ const authorizeAgainstTestDb: SubmitPdfSigningSignatureDependencies["authorize"]
     }>(raw);
     const authorized = await authorizePdfSigningSession(
       { sessionId, sessionToken },
-      asTestRaw<typeof rootDb>(testDb),
+      tokenDb,
     );
     if (authorized.status === "finalized") {
       return Result.ok({

@@ -4,8 +4,9 @@ import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { redeemPdfSigningHandoffAsOwner } from "@/api/lib/files/pdf-signing/sessions";
+import { redeemPdfSigningHandoff } from "@/api/lib/files/pdf-signing/sessions";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
+import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
 const stripTrailingSlashes = (value: string) => {
   let end = value.length;
@@ -28,7 +29,7 @@ const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
       Result.tryPromise({
         try: async () =>
           typeof handoffToken === "string"
-            ? await redeemPdfSigningHandoffAsOwner(handoffToken)
+            ? await redeemPdfSigningHandoff(handoffToken, tokenScopedDatabase)
             : null,
         catch: (cause) =>
           new HandlerError({
