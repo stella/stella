@@ -123,6 +123,7 @@ export const pdfSigningStartErrorCode = (code: string | undefined) => {
   }
   switch (code) {
     case "entity_read_only":
+    case "pdf_signing_certified_document":
     case "pdf_signing_encrypted":
     case "pdf_signing_not_a_file":
     case "pdf_signing_not_a_pdf":

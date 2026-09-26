@@ -8,8 +8,8 @@
  * certification.
  */
 
-import { PdfDict } from "@libpdf/core";
-import type { PDF, PdfObject, PdfRef } from "@libpdf/core";
+import { PDF, PdfDict } from "@libpdf/core";
+import type { PdfObject, PdfRef } from "@libpdf/core";
 
 export type DocMdpPermission = 1 | 2 | 3;
 
@@ -58,4 +58,22 @@ export const readDocMdpPermission = (pdf: PDF): DocMdpPermission | null => {
   }
   // A catalog entry without a readable transform is still a certification.
   return DEFAULT_DOC_MDP_PERMISSION;
+};
+
+/**
+ * Whether stored PDF bytes carry a certification that forbids any change,
+ * checked when signing is requested so the refusal comes before the desktop
+ * opens. Bytes LibPDF cannot parse are not refused here: preparing the
+ * signature reports them with the reason that applies.
+ */
+export const certificationForbidsChanges = async (
+  bytes: Uint8Array,
+): Promise<boolean> => {
+  let pdf: PDF;
+  try {
+    pdf = await PDF.load(bytes);
+  } catch {
+    return false;
+  }
+  return readDocMdpPermission(pdf) === 1;
 };

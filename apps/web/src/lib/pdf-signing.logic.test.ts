@@ -166,6 +166,9 @@ describe("pdf signing start failures", () => {
     expect(pdfSigningStartErrorCode("entity_read_only")).toBe(
       "entity_read_only",
     );
+    expect(pdfSigningStartErrorCode("pdf_signing_certified_document")).toBe(
+      "pdf_signing_certified_document",
+    );
   });
 
   test("leaves every other failure to the generic message", () => {

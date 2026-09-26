@@ -1,7 +1,10 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
-import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
+import {
+  certificationForbidsChanges,
+  readDocMdpPermission,
+} from "@/api/lib/pdf-signing/doc-mdp";
 import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 
 describe("reading a certification's modification permission", () => {
@@ -29,5 +32,24 @@ describe("reading a certification's modification permission", () => {
 
       expect(readDocMdpPermission(pdf)).toBe(2);
     }
+  });
+
+  test("refuses stored bytes only when the certification forbids changes", async () => {
+    expect(
+      await certificationForbidsChanges(
+        await buildCertifiedPdf({ permission: 1 }),
+      ),
+    ).toBe(true);
+    for (const permission of [2, 3]) {
+      expect(
+        await certificationForbidsChanges(
+          await buildCertifiedPdf({ permission }),
+        ),
+      ).toBe(false);
+    }
+    // Unparseable bytes are phase 1's to report, with their own reason.
+    expect(
+      await certificationForbidsChanges(new TextEncoder().encode("not a pdf")),
+    ).toBe(false);
   });
 });
