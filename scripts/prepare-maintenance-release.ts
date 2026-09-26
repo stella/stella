@@ -13,6 +13,7 @@ import {
 import nodePath from "node:path";
 
 import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
+import { parseChangesetEntry } from "./changeset-entry";
 import { computeVerdicts } from "./check-marketing-recordings";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
@@ -27,12 +28,15 @@ const GITHUB_API_ROOT = "https://api.github.com/repos/stella/stella";
 const RELEASE_PAGE_SIZE = 100;
 const RELEASE_PAGE_LIMIT = 20;
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
+// A summary line that opens a block the landing renderer cannot show: indented
+// code, a heading, quote or table row, a list item, or a code fence.
+const BLOCK_MARKUP_LINE =
+  /^(?: {4}|\t|[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3}))/u;
 const MAINTENANCE_CHANGELOG =
   "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
 const CHANGESET_DIRECTORY = ".changeset";
 /** Declares which files a version run generates; the CI gate reads the same. */
 const CHANGESET_POLICY_PATH = "scripts/changeset-policy.json";
-const CHANGESET_FRONTMATTER_FENCE = "---";
 /** Changesets ships this file; it is documentation, never a release entry. */
 const CHANGESET_README = "README.md";
 /**
@@ -97,58 +101,6 @@ const checkedVersionPart = (value: string | undefined): number => {
   return parsed;
 };
 
-/**
- * `"@stll/cli": minor`, quoted or bare, as Changesets writes the frontmatter.
- * A package name holds no colon, so the first one separates it from the bump.
- */
-const changesetPackageName = (line: string): string | null => {
-  const separator = line.indexOf(":");
-  if (separator === -1 || line.slice(separator + 1).trim().length === 0) {
-    return null;
-  }
-  const key = line.slice(0, separator).trim();
-  const quoted =
-    key.length > 1 &&
-    (key.startsWith('"') || key.startsWith("'")) &&
-    key.endsWith(key.slice(0, 1));
-  const name = quoted ? key.slice(1, -1) : key;
-  return name.length > 0 ? name : null;
-};
-
-/**
- * The packages a changeset frontmatter names and the summary beneath it.
- * An entry with no frontmatter (`bun run changeset --empty`) names none: it
- * records a deliberate no-release change and belongs in no changelog.
- */
-export const parseChangesetEntry = (
-  entry: string,
-): { packages: readonly string[]; summary: string } => {
-  const lines = entry.split("\n");
-  if (lines.at(0)?.trim() !== CHANGESET_FRONTMATTER_FENCE) {
-    return { packages: [], summary: "" };
-  }
-  const packages: string[] = [];
-  for (const [index, line] of lines.slice(1).entries()) {
-    if (line.trim() === CHANGESET_FRONTMATTER_FENCE) {
-      return {
-        packages,
-        summary: lines
-          .slice(index + 2)
-          .join(" ")
-          .replaceAll(/\s+/gu, " ")
-          .trim(),
-      };
-    }
-    const name = changesetPackageName(line);
-    if (name !== null) {
-      packages.push(name);
-    }
-  }
-  throw new MaintenanceReleaseError(
-    "A pending changeset has unterminated frontmatter",
-  );
-};
-
 export const readPendingChangesets = (
   rootDir: string,
 ): readonly PendingChangeset[] => {
@@ -207,13 +159,35 @@ const versionRollbackPaths = (
  */
 export const maintenanceChangelog = (
   changesets: readonly PendingChangeset[],
+  version: string,
 ): string => {
   const released = changesets.filter(({ packages }) => packages.length > 0);
   if (released.length === 0) {
     return MAINTENANCE_CHANGELOG;
   }
   const entries = released
-    .map(({ packages, summary }) => `- ${packages.join(", ")}: ${summary}\n`)
+    .map(({ packages, summary }) => {
+      const links = packages.map((name) => {
+        // Workspace names are @stll/<directory>; do not emit a broken link
+        // for a frontmatter name outside that repository contract.
+        if (!/^@stll\/[a-z0-9-]+$/u.test(name)) {
+          throw new MaintenanceReleaseError(`Invalid package name: ${name}`);
+        }
+        const directory = name.slice("@stll/".length);
+        return `[${name}](https://github.com/stella/stella/blob/v${version}/packages/${directory}/CHANGELOG.md)`;
+      });
+      const paragraph = summary.split(/\r?\n[^\S\r\n]*\r?\n/u).at(0) ?? "";
+      // The landing renderer supports flat bullets, not tables, code blocks
+      // or nested lists. Block-first notes stay in the linked changelog.
+      const hasBlockMarkup =
+        paragraph.includes("|") ||
+        paragraph.split(/\r?\n/u).some((line) => BLOCK_MARKUP_LINE.test(line));
+      const excerpt =
+        paragraph && !hasBlockMarkup
+          ? paragraph.replaceAll(/\s+/gu, " ").trim()
+          : "See package changelog for details.";
+      return `- ${links.join(", ")}: ${excerpt}\n`;
+    })
     .join("");
   return `${MAINTENANCE_CHANGELOG}\n## Packages\n\n${entries}`;
 };
@@ -455,7 +429,10 @@ export const prepareMaintenanceReleaseFiles = ({
       }
       // VERSION is the commit marker: every dependent file is durable before
       // it advances. Atomic sibling renames prevent truncated files.
-      writeFile(absoluteChangelogPath, maintenanceChangelog(changesets));
+      writeFile(
+        absoluteChangelogPath,
+        maintenanceChangelog(changesets, next.value),
+      );
       writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
       writeFile(versionPath, `${next.value}\n`);
       return {
