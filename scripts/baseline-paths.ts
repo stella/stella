@@ -9,6 +9,12 @@
 // `baseline-paths.test.ts` fails when a tracked baseline file is missing from
 // it, or when an entry names a producer that is not in the tree: a budget
 // nothing writes is not a budget.
+//
+// A size baseline is two-sided: a row that shrinks past its tolerance fails
+// like one that grows, and `--write` re-anchors it, so headroom a change gave
+// back cannot be spent later unreviewed. The bundle baseline is the exception
+// and only prompts on a shrink: the same tree builds up to 3% differently in CI
+// and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
   /** scripts/bundle-baseline.ts */

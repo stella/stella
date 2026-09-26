@@ -283,7 +283,7 @@ pointer, because neither surface carries the tools).
 `apps/api/mcp-surface-baseline.json` holds, per audience, the tool count, the
 UTF-16 length of each advertised part (name, title, description, input schema,
 output schema, annotations, instructions), the UTF-8 size of the `tools/list`
-array, and the largest description and output schema.
+array, and the largest description, input schema and output schema.
 `registry-quality.test.ts` fails when a row moves past its tolerance in either
 direction; `bun run mcp:surface-baseline --write` (from `apps/api`) rewrites
 the file, so a pull request that grows a surface shows the numbers it moved.

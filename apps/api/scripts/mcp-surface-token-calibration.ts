@@ -3,8 +3,10 @@
 // count_tokens endpoint for one request with and without the audience's tools
 // (as a Messages API host sends them: name, description, input schema) and
 // with and without its instructions, and divides the measured characters by
-// the token delta. Run it when retuning those ratios; never in CI, since it
-// needs a key and the network.
+// the token delta. The API adds a fixed preamble once any tool is present, so
+// tool deltas are taken over a request carrying one minimal tool rather than
+// none. Run it when retuning those ratios; never in CI, since it needs a key
+// and the network.
 //
 //   ANTHROPIC_API_KEY=... bun run mcp:surface-token-calibration [--model <id>]
 //
@@ -26,6 +28,11 @@ const COUNT_TOKENS_URL = "https://api.anthropic.com/v1/messages/count_tokens";
 const ANTHROPIC_VERSION = "2023-06-01";
 // The smallest valid conversation; every count below is a delta over it.
 const PROBE_MESSAGES = [{ role: "user", content: "." }] as const;
+// Carries the tool-use preamble at the cost of a few tokens of its own.
+const MINIMAL_TOOL = {
+  name: "probe",
+  input_schema: { type: "object" },
+} as const;
 
 class CountTokensError extends TaggedError("CountTokensError")<{
   message: string;
@@ -106,6 +113,7 @@ type CalibrateOptions = {
   model: string;
   mode: McpMode;
   baseTokens: number;
+  toolBaseTokens: number;
 };
 
 const calibrateSurface = async ({
@@ -113,6 +121,7 @@ const calibrateSurface = async ({
   model,
   mode,
   baseTokens,
+  toolBaseTokens,
 }: CalibrateOptions): Promise<Result<SurfaceCalibration, CountTokensError>> =>
   await Result.gen(async function* () {
     const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);
@@ -144,7 +153,7 @@ const calibrateSurface = async ({
           sum + name.length + JSON.stringify(inputSchema).length,
         0,
       ),
-      schemaTokens: bare - baseTokens,
+      schemaTokens: bare - toolBaseTokens,
       descriptionChars: tools.reduce(
         (sum, { description }) => sum + (description ?? "").length,
         0,
@@ -187,6 +196,15 @@ const main = async (): Promise<number> => {
     console.error(base.error.message);
     return 1;
   }
+  const toolBase = await countTokens({
+    apiKey,
+    model,
+    request: { tools: [MINIMAL_TOOL] },
+  });
+  if (Result.isError(toolBase)) {
+    console.error(toolBase.error.message);
+    return 1;
+  }
 
   console.log(
     `chars per token, ${model}, ${new Date().toISOString().slice(0, 10)}\n`,
@@ -198,6 +216,7 @@ const main = async (): Promise<number> => {
       model,
       mode,
       baseTokens: base.value,
+      toolBaseTokens: toolBase.value,
     });
     if (Result.isError(calibration)) {
       console.error(calibration.error.message);

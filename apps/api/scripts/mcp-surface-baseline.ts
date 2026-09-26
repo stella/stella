@@ -4,14 +4,16 @@
 // baseline: the tool count, the UTF-16 length of every part a host may put in
 // front of a model (name, title, description, input and output schema,
 // annotations, the connect-time instructions), the UTF-8 size of the served
-// `tools/list` array, and the largest description and output schema. Every
+// `tools/list` array, and the largest description, input schema and output
+// schema. Every
 // audience in `MCP_MODES` is read from the canonical registry and serialized
 // with its own mode, exactly as `tools/list` serves it.
 //
 // A change that moves a row past its tolerance rewrites the baseline, so
 // review sees the number diff and the pull request argues for it. The gate is
-// `src/mcp/registry-quality.test.ts`, which reads the same file; the fixed
-// per-tool ceilings stay there.
+// `src/mcp/registry-quality.test.ts`, which reads the same file. Fixed caps
+// are not measurements and stay with their owners: the per-tool ceilings in
+// that test, the per-audience instruction ceilings in `src/mcp/instructions.ts`.
 //
 // Modes (from apps/api):
 //   bun run mcp:surface-baseline                report parts and views
@@ -44,7 +46,7 @@ const TOLERANCE_FLOOR = 50;
 // Characters per token, for the estimate printed beside a drift and never for
 // the gate. Measured 2026-09-26 with `scripts/mcp-surface-token-calibration.ts`
 // (Anthropic count_tokens, claude-opus-5-5) across the four audiences: names
-// and input schemas 2.2 to 2.5, descriptions and instructions 2.9 to 3.2. The
+// and input schemas 2.4 to 2.6, descriptions and instructions 2.9 to 3.2. The
 // estimate is a size, not a count; rerun the calibration to retune.
 const CHARS_PER_TOKEN = { json: 2.4, prose: 3 } as const;
 type TextKind = keyof typeof CHARS_PER_TOKEN;
@@ -99,10 +101,28 @@ const surfaceMeasurementSchema = v.strictObject({
   chars: surfaceCharsSchema,
   payloadUtf8Bytes: countSchema,
   largestDescription: largestToolSchema,
+  largestInputSchema: largestToolSchema,
   largestOutputSchema: largestToolSchema,
 });
 
 type SurfaceMeasurement = v.InferOutput<typeof surfaceMeasurementSchema>;
+
+const LARGEST_ROWS = [
+  "largestDescription",
+  "largestInputSchema",
+  "largestOutputSchema",
+] as const;
+type LargestRow = (typeof LARGEST_ROWS)[number];
+
+type UnlistedLargestRow = Exclude<
+  {
+    [
+      Key in keyof SurfaceMeasurement
+    ]: SurfaceMeasurement[Key] extends LargestTool ? Key : never;
+  }[keyof SurfaceMeasurement],
+  LargestRow
+>;
+true satisfies UnlistedLargestRow extends never ? true : never;
 
 // Rows are keyed by any string so that a row for an audience `MCP_MODES` no
 // longer lists, or a missing row for a new one, is reported as drift rather
@@ -162,20 +182,26 @@ const measureMcpSurface = (
   const tools = registry.toMcpTools(registry.listDefinitions(mode), mode);
   const chars = emptyChars();
   let largestDescription: LargestTool = { tool: "", chars: 0 };
+  let largestInputSchema: LargestTool = { tool: "", chars: 0 };
   let largestOutputSchema: LargestTool = { tool: "", chars: 0 };
 
   for (const tool of tools) {
     const descriptionChars = (tool.description ?? "").length;
+    const inputSchemaChars = jsonChars(tool.inputSchema);
     const outputSchemaChars = jsonChars(tool.outputSchema);
     chars.name += tool.name.length;
     chars.title += (tool.title ?? "").length;
     chars.description += descriptionChars;
-    chars.inputSchema += jsonChars(tool.inputSchema);
+    chars.inputSchema += inputSchemaChars;
     chars.outputSchema += outputSchemaChars;
     chars.annotations += jsonChars(tool.annotations);
     largestDescription = larger(largestDescription, {
       tool: tool.name,
       chars: descriptionChars,
+    });
+    largestInputSchema = larger(largestInputSchema, {
+      tool: tool.name,
+      chars: inputSchemaChars,
     });
     largestOutputSchema = larger(largestOutputSchema, {
       tool: tool.name,
@@ -189,6 +215,7 @@ const measureMcpSurface = (
     chars,
     payloadUtf8Bytes: Buffer.byteLength(JSON.stringify(tools), "utf-8"),
     largestDescription,
+    largestInputSchema,
     largestOutputSchema,
   };
 };
@@ -302,8 +329,10 @@ export const readMcpSurfaceBaseline = (): SurfaceBaseline => {
 const allowedDrift = (baseline: number): number =>
   Math.max(Math.ceil(baseline * TOLERANCE_RATIO), TOLERANCE_FLOOR);
 
-type CountRow = "tools" | "payloadUtf8Bytes" | `chars.${SurfacePart}`;
-type LargestRow = "largestDescription" | "largestOutputSchema";
+type CountMetric =
+  | { type: "tools" }
+  | { type: "payloadUtf8Bytes" }
+  | { type: "part"; part: SurfacePart };
 
 type SurfaceDrift =
   | { type: "missing_row"; mode: string }
@@ -311,7 +340,7 @@ type SurfaceDrift =
   | {
       type: "count";
       mode: string;
-      row: CountRow;
+      metric: CountMetric;
       baseline: number;
       current: number;
       tolerance: number;
@@ -326,7 +355,7 @@ type SurfaceDrift =
     };
 
 type CountComparison = {
-  row: CountRow;
+  metric: CountMetric;
   baseline: number;
   current: number;
   tolerance: number;
@@ -345,19 +374,19 @@ const diffSurface = ({
 }: DiffSurfaceOptions): SurfaceDrift[] => {
   const counts: CountComparison[] = [
     {
-      row: "tools",
+      metric: { type: "tools" },
       baseline: baseline.tools,
       current: current.tools,
       tolerance: 0,
     },
     ...SURFACE_PARTS.map((part): CountComparison => ({
-      row: `chars.${part}`,
+      metric: { type: "part", part },
       baseline: baseline.chars[part],
       current: current.chars[part],
       tolerance: allowedDrift(baseline.chars[part]),
     })),
     {
-      row: "payloadUtf8Bytes",
+      metric: { type: "payloadUtf8Bytes" },
       baseline: baseline.payloadUtf8Bytes,
       current: current.payloadUtf8Bytes,
       tolerance: allowedDrift(baseline.payloadUtf8Bytes),
@@ -369,17 +398,22 @@ const diffSurface = ({
         Math.abs(after - before) > tolerance,
     )
     .map(
-      ({ row, baseline: before, current: after, tolerance }): SurfaceDrift => ({
+      ({
+        metric,
+        baseline: before,
+        current: after,
+        tolerance,
+      }): SurfaceDrift => ({
         type: "count",
         mode,
-        row,
+        metric,
         baseline: before,
         current: after,
         tolerance,
       }),
     );
 
-  for (const row of ["largestDescription", "largestOutputSchema"] as const) {
+  for (const row of LARGEST_ROWS) {
     const before = baseline[row];
     const after = current[row];
     const tolerance = allowedDrift(before.chars);
@@ -426,29 +460,41 @@ const formatNumber = (value: number): string => value.toLocaleString("en-US");
 const signed = (value: number): string =>
   `${value >= 0 ? "+" : ""}${formatNumber(value)}`;
 
+const metricLabel = (metric: CountMetric): string => {
+  switch (metric.type) {
+    case "tools":
+    case "payloadUtf8Bytes":
+      return metric.type;
+    case "part":
+      return `chars.${metric.part}`;
+    default:
+      metric satisfies never;
+      return panic(`Unhandled count metric: ${JSON.stringify(metric)}`);
+  }
+};
+
 type CountDriftDetailOptions = {
-  row: CountRow;
+  metric: CountMetric;
   delta: number;
   tolerance: number;
 };
 
 const countDriftDetail = ({
-  row,
+  metric,
   delta,
   tolerance,
 }: CountDriftDetailOptions): string => {
-  if (row === "tools") {
-    return `${signed(delta)} tools; exact`;
+  switch (metric.type) {
+    case "tools":
+      return `${signed(delta)} tools; exact`;
+    case "payloadUtf8Bytes":
+      return `${signed(delta)} bytes; tolerance ±${formatNumber(tolerance)}`;
+    case "part":
+      return `${signed(delta)} chars, ~${signed(Math.round(estimateTokens(metric.part, delta)))} tokens est.; tolerance ±${formatNumber(tolerance)}`;
+    default:
+      metric satisfies never;
+      return panic(`Unhandled count metric: ${JSON.stringify(metric)}`);
   }
-  if (row === "payloadUtf8Bytes") {
-    return `${signed(delta)} bytes; tolerance ±${formatNumber(tolerance)}`;
-  }
-  const part = SURFACE_PARTS.find((candidate) => row === `chars.${candidate}`);
-  const estimate =
-    part === undefined
-      ? ""
-      : `, ~${signed(Math.round(estimateTokens(part, delta)))} tokens est.`;
-  return `${signed(delta)} chars${estimate}; tolerance ±${formatNumber(tolerance)}`;
 };
 
 const formatDrift = (drift: SurfaceDrift): string => {
@@ -458,7 +504,7 @@ const formatDrift = (drift: SurfaceDrift): string => {
     case "unknown_row":
       return `  ${drift.mode}: baseline row for an audience MCP_MODES does not list`;
     case "count":
-      return `  ${drift.mode} ${drift.row}: ${formatNumber(drift.baseline)} -> ${formatNumber(drift.current)} (${countDriftDetail({ row: drift.row, delta: drift.current - drift.baseline, tolerance: drift.tolerance })})`;
+      return `  ${drift.mode} ${metricLabel(drift.metric)}: ${formatNumber(drift.baseline)} -> ${formatNumber(drift.current)} (${countDriftDetail({ metric: drift.metric, delta: drift.current - drift.baseline, tolerance: drift.tolerance })})`;
     case "largest_tool":
       return `  ${drift.mode} ${drift.row}: ${drift.baseline.tool} ${formatNumber(drift.baseline.chars)} -> ${drift.current.tool} ${formatNumber(drift.current.chars)} chars`;
     default:
@@ -503,8 +549,10 @@ const formatReport = (surfaces: readonly MeasuredSurface[]): string =>
           (part) =>
             `  ${part.padEnd(13)} ${formatNumber(measurement.chars[part]).padStart(8)} chars`,
         ),
-        `  largest description:   ${measurement.largestDescription.tool} (${formatNumber(measurement.largestDescription.chars)})`,
-        `  largest output schema: ${measurement.largestOutputSchema.tool} (${formatNumber(measurement.largestOutputSchema.chars)})`,
+        ...LARGEST_ROWS.map(
+          (row) =>
+            `  ${row.padEnd(19)} ${measurement[row].tool} (${formatNumber(measurement[row].chars)})`,
+        ),
         ...formatViews(surface),
         "",
       ];
@@ -528,6 +576,7 @@ const syntheticSurface = (): SurfaceMeasurement => ({
   },
   payloadUtf8Bytes: 28_000,
   largestDescription: { tool: "search_case_law", chars: 800 },
+  largestInputSchema: { tool: "search_case_law", chars: 2000 },
   largestOutputSchema: { tool: "read_statute", chars: 1400 },
 });
 
@@ -549,11 +598,20 @@ const runSelfTest = (): string[] => {
     current: readonly MeasuredSurface[];
     expected: readonly string[];
   }) => {
-    const rows = diffMcpSurfaceBaseline(current, baseline).map((drift) =>
-      drift.type === "count" || drift.type === "largest_tool"
-        ? `${drift.mode} ${drift.row}`
-        : `${drift.mode} ${drift.type}`,
-    );
+    const rows = diffMcpSurfaceBaseline(current, baseline).map((drift) => {
+      switch (drift.type) {
+        case "count":
+          return `${drift.mode} ${metricLabel(drift.metric)}`;
+        case "largest_tool":
+          return `${drift.mode} ${drift.row}`;
+        case "missing_row":
+        case "unknown_row":
+          return `${drift.mode} ${drift.type}`;
+        default:
+          drift satisfies never;
+          return panic(`Unhandled surface drift: ${JSON.stringify(drift)}`);
+      }
+    });
     if (JSON.stringify(rows) !== JSON.stringify(expected)) {
       failures.push(
         `${label}: drifts ${JSON.stringify(rows)}, want ${JSON.stringify(expected)}`,
@@ -607,6 +665,30 @@ const runSelfTest = (): string[] => {
     label: "largest tool changed",
     current: withSurface(newLargest),
     expected: ["law largestDescription"],
+  });
+
+  const heavierPayload = syntheticSurface();
+  heavierPayload.payloadUtf8Bytes += 1000;
+  expectRows({
+    label: "wire size grew",
+    current: withSurface(heavierPayload),
+    expected: ["law payloadUtf8Bytes"],
+  });
+
+  const largestGrew = syntheticSurface();
+  largestGrew.largestOutputSchema = { tool: "read_statute", chars: 1500 };
+  expectRows({
+    label: "largest tool grew past tolerance",
+    current: withSurface(largestGrew),
+    expected: ["law largestOutputSchema"],
+  });
+
+  const largestChurn = syntheticSurface();
+  largestChurn.largestInputSchema = { tool: "search_case_law", chars: 2020 };
+  expectRows({
+    label: "largest tool within tolerance",
+    current: withSurface(largestChurn),
+    expected: [],
   });
 
   expectRows({
