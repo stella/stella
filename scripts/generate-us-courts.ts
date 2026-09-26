@@ -39,15 +39,20 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  isUsCourtRegion,
+  US_ACCEPTED_COURT_FIELDS,
   US_COURT_CLASSIFICATIONS,
+  US_COURT_DIRECTORY_FIELD_SEPARATOR,
   US_COURT_PARTITION_COUNT,
   US_COURT_PARTITION_KEY_PREFIX,
   US_COURT_SYSTEMS,
   US_COURT_TIERS,
   US_HISTORICAL_TERRITORY_REGIONS,
+  US_REJECTED_COURT_FIELDS,
   US_SCOPE_REGIONS,
   US_STATE_REGIONS,
   US_TERRITORY_REGIONS,
+  US_WRITABLE_COURT_ID_LIST,
   usCourtPartitionLabel,
 } from "../packages/api-contract/src/us-court-vocabulary";
 import type {
@@ -55,7 +60,6 @@ import type {
   UsCourtClassification,
   UsCourtDirectoryRow,
   UsCourtPartition,
-  UsCourtRegion,
   UsCourtRejectionReason,
   UsCourtSystem,
   UsCourtTier,
@@ -67,13 +71,17 @@ import {
 } from "./generated-artifacts";
 
 /** Bumped when the rendering or the resolution rules change. */
-const GENERATOR_VERSION = 2;
+const GENERATOR_VERSION = 3;
 
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const DATA_DIR = path.join(REPO_ROOT, "packages/api-contract/data/us-courts");
 export const DIRECTORY_PATH = path.join(
   REPO_ROOT,
   "packages/api-contract/src/us-courts.generated.ts",
+);
+export const WRITABLE_COURTS_PATH = path.join(
+  REPO_ROOT,
+  "packages/api-contract/src/us-writable-courts.generated.ts",
 );
 const COURTLISTENER_FILE = "courtlistener-courts.tsv";
 const COURTS_DB_FILE = "courts-db-locations.tsv";
@@ -190,12 +198,6 @@ const HISTORICAL_REGIONS = new Set<string>(
   Object.keys(US_HISTORICAL_TERRITORY_REGIONS),
 );
 const SCOPE_REGIONS = new Set<string>(US_SCOPE_REGIONS);
-
-const isUsCourtRegion = (region: string): region is UsCourtRegion =>
-  STATE_REGIONS.has(region) ||
-  TERRITORY_REGIONS.has(region) ||
-  HISTORICAL_REGIONS.has(region) ||
-  SCOPE_REGIONS.has(region);
 
 /** A place a court sits in, as opposed to a reach. */
 const isPlace = (region: string): boolean => !SCOPE_REGIONS.has(region);
@@ -994,34 +996,22 @@ const property = (key: string, value: string): string => {
   return line.length <= 80 ? line : `  ${key}:\n    ${literal(value)},`;
 };
 
-const renderEntry = (entry: DirectoryEntry): string => {
-  const fields: [string, string | boolean | null][] =
-    entry.status === "accepted"
-      ? [
-          ["status", entry.status],
-          ["id", entry.id],
-          ["sourceName", entry.sourceName],
-          ["canonicalName", entry.canonicalName],
-          ["rawJurisdiction", entry.rawJurisdiction],
-          ["classification", entry.classification],
-          ["system", entry.system],
-          ["region", entry.region],
-          ["tier", entry.tier],
-          ["startDate", entry.startDate],
-          ["endDate", entry.endDate],
-          ["sourceInUse", entry.sourceInUse],
-          ["parentId", entry.parentId],
-          ["courtPartition", entry.courtPartition],
-        ]
-      : [
-          ["status", entry.status],
-          ["id", entry.id],
-          ["sourceName", entry.sourceName],
-          ["rawJurisdiction", entry.rawJurisdiction],
-          ["reason", entry.reason],
-        ];
-  return `  row({ ${fields.map(([key, value]) => `${key}: ${literal(value)}`).join(", ")} }),`;
+/** What the directory text cannot carry in a field. */
+const UNENCODABLE_FIELD = /[|\n\r\\`]|\$\{/u;
+
+const encodedField = (value: string | boolean | null): string => {
+  const encoded = value === null ? "" : String(value);
+  return UNENCODABLE_FIELD.test(encoded)
+    ? panic(`a directory field cannot hold ${JSON.stringify(encoded)}`)
+    : encoded;
 };
+
+/** One directory line, as `US_ACCEPTED_COURT_FIELDS` describes. */
+const renderEntry = (entry: DirectoryEntry): string =>
+  (entry.status === "accepted"
+    ? US_ACCEPTED_COURT_FIELDS.map((field) => encodedField(entry[field]))
+    : US_REJECTED_COURT_FIELDS.map((field) => encodedField(entry[field]))
+  ).join(US_COURT_DIRECTORY_FIELD_SEPARATOR);
 
 type InputFiles = {
   readonly courtListener: string;
@@ -1057,21 +1047,6 @@ const renderProvenance = (files: InputFiles): string =>
     2,
   )}\n`;
 
-/** A list of string literals, packed onto lines the width oxfmt keeps. */
-const packed = (values: readonly string[]): string[] => {
-  const lines: string[] = [];
-  let line = "";
-  for (const value of values) {
-    const item = `${literal(value)},`;
-    if (line !== "" && line.length + 1 + item.length > 80) {
-      lines.push(line);
-      line = "";
-    }
-    line = line === "" ? `  ${item}` : `${line} ${item}`;
-  }
-  return line === "" ? lines : [...lines, line];
-};
-
 export const renderDirectory = (
   entries: readonly DirectoryEntry[],
   files: InputFiles,
@@ -1081,8 +1056,6 @@ export const renderDirectory = (
     "// packages/api-contract/data/us-courts (see provenance.json there).",
     "// Do not edit by hand. Derived in part from courts-db; see",
     "// ../data/us-courts/courts-db.LICENSE.",
-    "",
-    'import type { UsCourtDirectoryRow } from "./us-court-vocabulary";',
     "",
     "export const US_COURT_DIRECTORY_SOURCES = {",
     `  generatorVersion: ${String(GENERATOR_VERSION)},`,
@@ -1095,36 +1068,58 @@ export const renderDirectory = (
     property("overridesSha256", sha256(files.overrides)),
     "} as const;",
     "",
-    "/** The ids of the accepted courts, in id order. */",
-    "// oxfmt-ignore",
-    "export const US_COURT_IDS: readonly string[] = [",
-    ...packed(
-      entries.filter(({ status }) => status === "accepted").map(({ id }) => id),
-    ),
-    "];",
-    "",
-    "/** The ids of the rejected source courts, in id order. */",
-    "// oxfmt-ignore",
-    "export const US_REJECTED_COURT_IDS: readonly string[] = [",
-    ...packed(
-      entries.filter(({ status }) => status === "rejected").map(({ id }) => id),
-    ),
-    "];",
-    "",
     "/**",
-    " * One row, checked against the row type on its own: the list is then typed",
-    " * as rows rather than as the union of every row's literal type, which is",
-    " * too large for the type checker to compare against.",
+    " * Every source court, accepted or rejected, in id order: one line per",
+    " * court, its fields as `US_ACCEPTED_COURT_FIELDS` and",
+    " * `US_REJECTED_COURT_FIELDS` describe. Text rather than rows, so the type",
+    " * checker reads one string instead of thousands of object literals;",
+    " * `us-courts.ts` reads it into checked rows once.",
     " */",
-    "const row = (entry: UsCourtDirectoryRow): UsCourtDirectoryRow => entry;",
-    "",
-    "/** Every source court, accepted or rejected, in id order. */",
     "// oxfmt-ignore",
-    "export const US_COURT_DIRECTORY: readonly UsCourtDirectoryRow[] = [",
-    ...entries.map(renderEntry),
+    "export const US_COURT_DIRECTORY_TEXT: string = `" +
+      entries.map(renderEntry).join("\n") +
+      "`;",
+    "",
+  ].join("\n");
+
+/**
+ * The writable courts and the canonical names their decisions are stored
+ * under: the small table a reader that formats or matches only those courts
+ * imports instead of the directory. A writable id the directory does not
+ * accept fails generation.
+ */
+export const renderWritableCourts = (
+  entries: readonly DirectoryEntry[],
+): string => {
+  const accepted = new Map(
+    entries.flatMap((entry) =>
+      entry.status === "accepted" ? [[entry.id, entry] as const] : [],
+    ),
+  );
+  return [
+    "// Generated by scripts/generate-us-courts.ts from the court directory and",
+    "// US_WRITABLE_COURT_ID_LIST. Do not edit by hand.",
+    "",
+    'import type { UsWritableCourtId } from "./us-court-vocabulary";',
+    "",
+    "type UsWritableCourt = {",
+    "  readonly id: UsWritableCourtId;",
+    "  readonly canonicalName: string;",
+    "};",
+    "",
+    "/** Each writable court and the canonical name its decisions are under. */",
+    "// oxfmt-ignore",
+    "export const US_WRITABLE_COURTS: readonly UsWritableCourt[] = [",
+    ...US_WRITABLE_COURT_ID_LIST.map((id) => {
+      const court =
+        accepted.get(id) ??
+        panic(`writable court ${id} is not an accepted directory court`);
+      return `  { id: ${literal(id)}, canonicalName: ${literal(court.canonicalName)} },`;
+    }),
     "];",
     "",
   ].join("\n");
+};
 
 // -- Files -------------------------------------------------------------------
 
@@ -1289,17 +1284,19 @@ const main = async (): Promise<number> => {
   }
 
   const files = await readInputFiles();
-  const directory = renderDirectory(
-    buildUsCourtDirectory(inputsFromFiles(files)),
-    files,
-  );
-  // The directory is compared without the formatter (its test does the
-  // same), so the renderer has to produce the formatted text itself.
-  if ((await formattedLikeRepository(directory, "ts")) !== directory) {
-    return panic("oxfmt changes the generated directory; fix the renderer");
+  const entries = buildUsCourtDirectory(inputsFromFiles(files));
+  const directory = renderDirectory(entries, files);
+  const writableCourts = renderWritableCourts(entries);
+  // Both are compared without the formatter (their test does the same), so
+  // the renderers have to produce the formatted text themselves.
+  for (const rendered of [directory, writableCourts]) {
+    if ((await formattedLikeRepository(rendered, "ts")) !== rendered) {
+      return panic("oxfmt changes a generated file; fix its renderer");
+    }
   }
   const artifacts = [
     { path: DIRECTORY_PATH, contents: directory },
+    { path: WRITABLE_COURTS_PATH, contents: writableCourts },
     {
       path: path.join(DATA_DIR, PROVENANCE_FILE),
       contents: await formattedLikeRepository(renderProvenance(files), "json"),

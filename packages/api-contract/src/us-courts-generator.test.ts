@@ -10,13 +10,20 @@ import {
   readInputFiles,
   regionsNamedIn,
   renderDirectory,
+  renderWritableCourts,
+  WRITABLE_COURTS_PATH,
 } from "../../../scripts/generate-us-courts";
 import type {
   SourceCourt,
   UsCourtInputs,
   UsCourtOverrides,
 } from "../../../scripts/generate-us-courts";
-import { US_COURT_DIRECTORY_SOURCES } from "./us-courts";
+import { US_WRITABLE_COURTS } from "./us-court-enrollment";
+import {
+  US_COURT_BY_CANONICAL_NAME,
+  US_COURT_DIRECTORY_SOURCES,
+  US_WRITABLE_COURT_ID_LIST,
+} from "./us-courts";
 
 const sha256 = (text: string): string =>
   createHash("sha256").update(text).digest("hex");
@@ -39,6 +46,19 @@ describe("the committed court directory", () => {
       courtsDbProjectionSha256: sha256(files.courtsDb),
       overridesSha256: sha256(files.overrides),
     });
+  });
+
+  test("names every writable court as the directory does", async () => {
+    const files = await readInputFiles();
+    expect(await readFile(WRITABLE_COURTS_PATH, "utf-8")).toBe(
+      renderWritableCourts(buildUsCourtDirectory(inputsFromFiles(files))),
+    );
+    expect(US_WRITABLE_COURTS.map(({ id }) => id)).toEqual([
+      ...US_WRITABLE_COURT_ID_LIST,
+    ]);
+    for (const { canonicalName, id } of US_WRITABLE_COURTS) {
+      expect(US_COURT_BY_CANONICAL_NAME.get(canonicalName)?.id).toBe(id);
+    }
   });
 
   test("marks the one region its evidence does not settle", async () => {

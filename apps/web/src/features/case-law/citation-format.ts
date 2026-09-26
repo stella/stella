@@ -1,10 +1,7 @@
 import type { createFormatter } from "use-intl/core";
 
-import {
-  US_COURT_BY_CANONICAL_NAME,
-  US_WRITABLE_COURT_IDS,
-} from "@stll/api-contract/us-courts";
-import type { UsWritableCourtId } from "@stll/api-contract/us-courts";
+import { US_WRITABLE_COURTS } from "@stll/api-contract/us-court-enrollment";
+import type { UsWritableCourtId } from "@stll/api-contract/us-court-enrollment";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -259,18 +256,19 @@ const US_COURT_INDIGOBOOK_ABBREVIATIONS = {
   scotus: "U.S.",
 } as const satisfies Record<UsWritableCourtId, string>;
 
-const isWritableCourtId = (id: string): id is UsWritableCourtId =>
-  US_WRITABLE_COURT_IDS.has(id);
+const WRITABLE_COURT_BY_NAME: ReadonlyMap<string, UsWritableCourtId> = new Map(
+  US_WRITABLE_COURTS.map(({ canonicalName, id }) => [canonicalName, id]),
+);
 
 /**
  * A USA decision is stored under its enrolled court's canonical name, so the
  * name finds the abbreviation; any other name is cited as it stands.
  */
 const usCourtAbbreviation = (court: string): string => {
-  const enrolled = US_COURT_BY_CANONICAL_NAME.get(court);
-  return enrolled !== undefined && isWritableCourtId(enrolled.id)
-    ? US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled.id]
-    : court;
+  const enrolled = WRITABLE_COURT_BY_NAME.get(court);
+  return enrolled === undefined
+    ? court
+    : US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled];
 };
 
 const DOCKET_PREFIX_RE = /^Nos?\.\s/u;

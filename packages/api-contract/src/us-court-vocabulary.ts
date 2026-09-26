@@ -138,6 +138,17 @@ export type UsCourtRegion =
   | UsHistoricalTerritoryRegion
   | UsScopeRegion;
 
+const US_COURT_REGION_CODES: ReadonlySet<string> = new Set<string>([
+  ...Object.keys(US_STATE_REGIONS),
+  ...Object.keys(US_TERRITORY_REGIONS),
+  ...Object.keys(US_HISTORICAL_TERRITORY_REGIONS),
+  ...US_SCOPE_REGIONS,
+]);
+
+/** Whether `region` is one a directory court may be recorded in. */
+export const isUsCourtRegion = (region: string): region is UsCourtRegion =>
+  US_COURT_REGION_CODES.has(region);
+
 /**
  * Court partitions: every accepted court carries one, derived from its id
  * alone as `p` plus the zero-padded value of
@@ -174,8 +185,26 @@ export type UsCourtPartition = (typeof US_COURT_PARTITIONS)[number];
 export const usCourtPartitionLabel = (bucket: number): UsCourtPartition =>
   US_COURT_PARTITIONS[bucket] ?? panic(`no court partition ${String(bucket)}`);
 
+/**
+ * The ids of the accepted courts whose decisions may be written today, as a
+ * closed list: a type keyed by it (a court's citation form, say) must decide
+ * every writable court. Every other accepted court is named by the directory
+ * but not yet admitted to the index. `scripts/generate-us-courts.ts` refuses
+ * an id the directory does not accept.
+ */
+export const US_WRITABLE_COURT_ID_LIST = ["scotus"] as const;
+
+/** The id of a court whose decisions may be written. */
+export type UsWritableCourtId = (typeof US_WRITABLE_COURT_ID_LIST)[number];
+
 /** Why a source court is not part of the jurisdiction. */
-export type UsCourtRejectionReason = "testing" | "outside-jurisdiction";
+export const US_COURT_REJECTION_REASONS = [
+  "testing",
+  "outside-jurisdiction",
+] as const;
+
+export type UsCourtRejectionReason =
+  (typeof US_COURT_REJECTION_REASONS)[number];
 
 /** A source court the jurisdiction accepts. */
 export type UsAcceptedCourtRow = {
@@ -219,3 +248,39 @@ export type UsRejectedCourtRow = {
 };
 
 export type UsCourtDirectoryRow = UsAcceptedCourtRow | UsRejectedCourtRow;
+
+/**
+ * How the generated directory writes a row: one line per court, these fields
+ * in this order, separated by `US_COURT_DIRECTORY_FIELD_SEPARATOR`, the
+ * status first. A nullable field is empty when it is null and a flag is
+ * `true` or `false`. No field holds the separator, a line break, a backslash,
+ * a backtick or `${`.
+ */
+export const US_COURT_DIRECTORY_FIELD_SEPARATOR = "|";
+
+/** The fields of an accepted row, in the order the directory writes them. */
+export const US_ACCEPTED_COURT_FIELDS = [
+  "status",
+  "id",
+  "sourceName",
+  "canonicalName",
+  "rawJurisdiction",
+  "classification",
+  "system",
+  "region",
+  "tier",
+  "startDate",
+  "endDate",
+  "sourceInUse",
+  "parentId",
+  "courtPartition",
+] as const satisfies readonly (keyof UsAcceptedCourtRow)[];
+
+/** The fields of a rejected row, as `US_ACCEPTED_COURT_FIELDS` describes. */
+export const US_REJECTED_COURT_FIELDS = [
+  "status",
+  "id",
+  "sourceName",
+  "rawJurisdiction",
+  "reason",
+] as const satisfies readonly (keyof UsRejectedCourtRow)[];
