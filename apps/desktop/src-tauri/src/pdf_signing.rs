@@ -15,7 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use stella_desktop_macos_signing::{SigningErrorCode, SigningIdentity, SigningKeyType};
+use stella_desktop_signing_core::{
+  Signer, SigningErrorCode, SigningIdentity, SigningKeyType,
+};
 use tauri::AppHandle;
 use tokio::sync::{Mutex, oneshot};
 
@@ -926,11 +928,21 @@ async fn api_rejection(
   rejection_from(response.json::<ErrorResponse>().await.ok(), status)
 }
 
-/// The keychain blocks, so both native calls run off the async runtime. A
-/// wedged keychain times out instead of holding the flow open.
+/// The certificate store this build signs with.
+fn platform_signer() -> Box<dyn Signer> {
+  #[cfg(target_os = "macos")]
+  let signer: Box<dyn Signer> = Box::new(stella_desktop_macos_signing::KeychainSigner);
+  #[cfg(not(target_os = "macos"))]
+  let signer: Box<dyn Signer> =
+    Box::new(stella_desktop_signing_core::UnsupportedSigner);
+  signer
+}
+
+/// The store blocks, so both native calls run off the async runtime. A
+/// wedged store times out instead of holding the flow open.
 async fn list_identities() -> Result<Vec<SigningIdentity>, SigningErrorCode> {
-  let listing =
-    tokio::task::spawn_blocking(stella_desktop_macos_signing::list_identities);
+  let signer = platform_signer();
+  let listing = tokio::task::spawn_blocking(move || signer.list_identities());
   match tokio::time::timeout(IDENTITY_LISTING_TIMEOUT, listing).await {
     Ok(Ok(Ok(identities))) => Ok(identities),
     Ok(Ok(Err(error))) => {
@@ -953,8 +965,9 @@ async fn sign_digest(
   digest: [u8; DIGEST_BYTES],
   key_type: SigningKeyType,
 ) -> Result<Vec<u8>, StepError> {
+  let signer = platform_signer();
   let signing = tokio::task::spawn_blocking(move || {
-    stella_desktop_macos_signing::sign_digest(&identity_id, &digest, key_type)
+    signer.sign_digest(&identity_id, &digest, key_type)
   });
   match tokio::time::timeout(SIGNING_TIMEOUT, signing).await {
     Ok(Ok(Ok(signature))) => Ok(signature),

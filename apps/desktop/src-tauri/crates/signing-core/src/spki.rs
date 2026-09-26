@@ -113,9 +113,39 @@ pub(crate) fn key_type_from_certificate(
   }
 }
 
+/// The certificate's public key as its algorithm encodes it: the contents of
+/// `subjectPublicKey` (an RSAPublicKey for RSA, an uncompressed point for
+/// EC), which is what a verifier checks a signature against.
+#[must_use]
+pub fn subject_public_key(certificate_der: &[u8]) -> Option<&[u8]> {
+  let spki = read_tagged(subject_public_key_info(certificate_der)?, TAG_SEQUENCE)?;
+  let algorithm = read_tagged(spki.contents, TAG_SEQUENCE)?;
+  let bits = read_tagged(algorithm.rest, TAG_BIT_STRING)?;
+  // A key is whole bytes: the unused-bits count must be zero.
+  match bits.contents.split_first()? {
+    (0, key) if !key.is_empty() => Some(key),
+    _ => None,
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn reads_the_public_key_a_verifier_needs() {
+    // An uncompressed P-256 point: 0x04, then 32 bytes each of x and y.
+    let point = subject_public_key(EC_CERTIFICATE).unwrap();
+    assert_eq!(point.len(), 65);
+    assert_eq!(point[0], 0x04);
+    // An RSAPublicKey is itself a DER SEQUENCE of modulus and exponent.
+    let rsa =
+      read_tagged(subject_public_key(RSA_CERTIFICATE).unwrap(), TAG_SEQUENCE).unwrap();
+    assert!(read_tagged(rsa.contents, TAG_INTEGER).is_some());
+    for end in 0..RSA_CERTIFICATE.len() {
+      assert_eq!(subject_public_key(&RSA_CERTIFICATE[..end]), None);
+    }
+  }
 
   /// Self-signed test certificates, one per supported key type.
   const RSA_CERTIFICATE: &[u8] = include_bytes!("../fixtures/rsa-certificate.der");
