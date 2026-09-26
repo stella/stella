@@ -102,7 +102,7 @@ export const keepPostedMessagesInSnapshots = async function* (
       continue;
     }
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-      return panic(`${chunk.type} replaces messages but is not a snapshot`);
+      panic(`${chunk.type} replaces messages but is not a snapshot`);
     }
     yield { ...chunk, messages: keepPostedMessages(posted, chunk.messages) };
   }
