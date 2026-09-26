@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  certificationPathReachesAnchor,
   chainReachesRoot,
   completeCertificateChain,
 } from "@/api/lib/pdf-signing/certificate-chain";
@@ -152,5 +153,114 @@ describe("fetching PKI data a certificate points at", () => {
     expect(await safePkiFetch({ maxBytes: 1024, method: "GET", url })).toBe(
       null,
     );
+  });
+});
+
+describe("certification paths to a trust anchor", () => {
+  const now = new Date();
+  const reaches = async (chain: TestCertificate[], anchor: TestCertificate) =>
+    await certificationPathReachesAnchor({
+      anchors: [anchor.der],
+      at: now,
+      chain: chain.map(({ der }) => der),
+    });
+
+  test("accepts a path through CAs, and a pinned end entity", async () => {
+    const root = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+    });
+    const issuing = await createTestCertificate({
+      commonName: "Issuing",
+      isCa: true,
+      issuer: root,
+      keyUsage: 0x06,
+    });
+    const leaf = await createTestCertificate({
+      commonName: "TSA",
+      issuer: issuing,
+    });
+
+    expect(await reaches([leaf, issuing, root], root)).toBe(true);
+    expect(await reaches([leaf, issuing, root], leaf)).toBe(true);
+  });
+
+  test("refuses a certificate issued by an ordinary end entity", async () => {
+    const root = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+    });
+    // Anyone holding an ordinary certificate under the anchor must not be
+    // able to mint a certificate that chains to it.
+    const ordinary = await createTestCertificate({
+      commonName: "Ordinary",
+      issuer: root,
+    });
+    const minted = await createTestCertificate({
+      commonName: "Minted TSA",
+      issuer: ordinary,
+    });
+
+    expect(await reaches([minted, ordinary, root], root)).toBe(false);
+  });
+
+  test("refuses a CA whose key may not sign certificates", async () => {
+    const root = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+    });
+    const issuing = await createTestCertificate({
+      commonName: "Issuing",
+      isCa: true,
+      issuer: root,
+      // digitalSignature only, no keyCertSign.
+      keyUsage: 0x80,
+    });
+    const leaf = await createTestCertificate({
+      commonName: "TSA",
+      issuer: issuing,
+    });
+
+    expect(await reaches([leaf, issuing, root], root)).toBe(false);
+  });
+
+  test("refuses a path longer than a CA allows", async () => {
+    const root = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+      pathLength: 0,
+    });
+    const issuing = await createTestCertificate({
+      commonName: "Issuing",
+      isCa: true,
+      issuer: root,
+    });
+    const leaf = await createTestCertificate({
+      commonName: "TSA",
+      issuer: issuing,
+    });
+
+    expect(await reaches([leaf, issuing, root], root)).toBe(false);
+  });
+
+  test("refuses a path with a certificate outside its validity at that time", async () => {
+    const day = 86_400_000;
+    const root = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+    });
+    const expired = await createTestCertificate({
+      commonName: "Issuing",
+      isCa: true,
+      issuer: root,
+      notAfter: new Date(Date.now() - day),
+      notBefore: new Date(Date.now() - 30 * day),
+    });
+    const leaf = await createTestCertificate({
+      commonName: "TSA",
+      issuer: expired,
+    });
+
+    expect(await reaches([leaf, expired, root], root)).toBe(false);
   });
 });

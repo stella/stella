@@ -26,6 +26,11 @@ const AUTHORITY_INFO_ACCESS_OID = "1.3.6.1.5.5.7.1.1";
 export const CA_ISSUERS_ACCESS_METHOD = "1.3.6.1.5.5.7.48.2";
 /** RFC 5280 id-ad-ocsp. */
 export const OCSP_ACCESS_METHOD = "1.3.6.1.5.5.7.48.1";
+/** RFC 5280 id-ce-basicConstraints and id-ce-keyUsage. */
+const BASIC_CONSTRAINTS_OID = "2.5.29.19";
+const KEY_USAGE_OID = "2.5.29.15";
+/** KeyUsage keyCertSign (bit 5) in the first content byte. */
+const KEY_CERT_SIGN = 0x04;
 /** RFC 5280 id-ce-cRLDistributionPoints. */
 const CRL_DISTRIBUTION_POINTS_OID = "2.5.29.31";
 /** RFC 5652 id-signedData, the wrapper a `.p7c` issuer bundle arrives in. */
@@ -107,6 +112,57 @@ export const crlDistributionPoints = (
 const isSelfIssued = (certificate: pkijs.Certificate) =>
   certificate.subject.isEqual(certificate.issuer);
 
+const extension = (certificate: pkijs.Certificate, oid: string) =>
+  certificate.extensions?.find(({ extnID }) => extnID === oid);
+
+/** RFC 5280 4.2.1.9: whether this is a CA, and how deep below it may go. */
+const basicConstraints = (certificate: pkijs.Certificate) => {
+  const value = extension(certificate, BASIC_CONSTRAINTS_OID)?.extnValue
+    .valueBlock.valueHexView;
+  if (value === undefined) {
+    return null;
+  }
+  try {
+    const parsed = pkijs.BasicConstraints.fromBER(new Uint8Array(value));
+    const { pathLenConstraint } = parsed;
+    let pathLength: number | undefined;
+    if (typeof pathLenConstraint === "number") {
+      pathLength = pathLenConstraint;
+    } else if (pathLenConstraint instanceof asn1js.Integer) {
+      pathLength = pathLenConstraint.valueBlock.valueDec;
+    }
+    return { ca: parsed.cA === true, pathLength };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * RFC 5280 6.1.4 (k, n): only a CA certificate whose key may sign
+ * certificates can issue one. An absent KeyUsage leaves the key
+ * unconstrained.
+ */
+const mayIssueCertificates = (certificate: pkijs.Certificate) => {
+  if (basicConstraints(certificate)?.ca !== true) {
+    return false;
+  }
+  const keyUsage = extension(certificate, KEY_USAGE_OID)?.extnValue.valueBlock
+    .valueHexView;
+  if (keyUsage === undefined) {
+    return true;
+  }
+  try {
+    const bits = asn1js.fromBER(new Uint8Array(keyUsage)).result;
+    if (!(bits instanceof asn1js.BitString)) {
+      return false;
+    }
+    const firstByte = bits.valueBlock.valueHexView.at(0) ?? 0;
+    return firstByte % (KEY_CERT_SIGN * 2) >= KEY_CERT_SIGN;
+  } catch {
+    return false;
+  }
+};
+
 const issued = async (
   issuer: pkijs.Certificate,
   subject: pkijs.Certificate,
@@ -114,11 +170,73 @@ const issued = async (
   if (!subject.issuer.isEqual(issuer.subject)) {
     return false;
   }
+  // A self-signed certificate vouches for itself; anyone else must be a CA.
+  if (issuer !== subject && !mayIssueCertificates(issuer)) {
+    return false;
+  }
   try {
     return await subject.verify(issuer);
   } catch {
     return false;
   }
+};
+
+const isValidAt = (certificate: pkijs.Certificate, at: Date) =>
+  certificate.notBefore.value.getTime() <= at.getTime() &&
+  at.getTime() <= certificate.notAfter.value.getTime();
+
+/**
+ * Whether `chain` (the end-entity certificate first, then its issuers) is a
+ * certification path to one of `anchors`, valid at `at` (RFC 5280 6.1):
+ * every certificate up to the anchor is inside its validity window, each
+ * issuer is a CA allowed to sign certificates and within its path length,
+ * and each link's name and signature chain to the next. An anchor that is
+ * the end-entity certificate itself pins exactly that certificate.
+ */
+export const certificationPathReachesAnchor = async ({
+  anchors,
+  at,
+  chain,
+}: {
+  anchors: readonly Uint8Array[];
+  at: Date;
+  chain: readonly Uint8Array[];
+}): Promise<boolean> => {
+  const anchorIndex = chain.findIndex((certificate) =>
+    anchors.some((anchor) =>
+      Buffer.from(anchor).equals(Buffer.from(certificate)),
+    ),
+  );
+  if (anchorIndex === -1) {
+    return false;
+  }
+  const path = chain.slice(0, anchorIndex + 1).map(parseCertificate);
+  if (!path.every((certificate) => certificate !== null)) {
+    return false;
+  }
+  if (!path.every((certificate) => isValidAt(certificate, at))) {
+    return false;
+  }
+  for (let index = 1; index < path.length; index += 1) {
+    const issuer = path[index];
+    const subject = path[index - 1];
+    if (issuer === undefined || subject === undefined) {
+      return false;
+    }
+    if (!(await issued(issuer, subject))) {
+      return false;
+    }
+    // Intermediate CAs between this issuer and the end entity; a
+    // self-issued one does not count against the length (6.1.4 l).
+    const below = path
+      .slice(1, index)
+      .filter((certificate) => !isSelfIssued(certificate)).length;
+    const pathLength = basicConstraints(issuer)?.pathLength;
+    if (pathLength !== undefined && below > pathLength) {
+      return false;
+    }
+  }
+  return true;
 };
 
 /**

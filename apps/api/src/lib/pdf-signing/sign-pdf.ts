@@ -36,7 +36,10 @@ import { TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
-import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
+import {
+  certificationPathReachesAnchor,
+  completeCertificateChain,
+} from "@/api/lib/pdf-signing/certificate-chain";
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
@@ -52,7 +55,6 @@ import {
   PdfSigningTimestampUnavailableError,
 } from "@/api/lib/pdf-signing/timestamp-authority";
 import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
-import { reachesTrustAnchor } from "@/api/lib/pdf-signing/timestamp-trust";
 import {
   embedValidationData,
   findRevokedCertificates,
@@ -502,10 +504,11 @@ export const applySignature = async (
           ],
           certificate: timestamp.signerCertificate,
         });
-        const timestampTrusted = reachesTrustAnchor(
-          [timestamp.signerCertificate, ...timestampIssuers.chain],
-          invocation.timestampTrustAnchors,
-        );
+        const timestampTrusted = await certificationPathReachesAnchor({
+          anchors: invocation.timestampTrustAnchors,
+          at: timestamp.genTime,
+          chain: [timestamp.signerCertificate, ...timestampIssuers.chain],
+        });
         const validation = await gatherValidationData({
           provider,
           signer: signerRevocation.material,
