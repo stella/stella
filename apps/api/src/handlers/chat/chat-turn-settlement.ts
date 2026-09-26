@@ -1,6 +1,9 @@
 import { panic, TaggedError } from "better-result";
 
-import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  cancelPendingToolCallPart,
+  isChatPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessage,
   ChatPart,
@@ -178,8 +181,8 @@ export const errorToolResult = (
 });
 
 /** What the model sees for a call whose turn ended before a result was
- *  stored: a cancelled clarification the user typed past, an approval never
- *  answered, or a client call cut off by a stop. */
+ *  stored: a cancelled clarification the user typed past, or a client call
+ *  cut off by a stop. */
 export const UNRESOLVED_CALL_ERROR =
   "This call never returned a result: its turn ended before one was stored.";
 
@@ -204,18 +207,27 @@ const ENGINE_ASKS_CLIENT_AGAIN = {
 /**
  * Close every call on a message the run does not resume that the engine
  * would otherwise ask the client about again. Such a call belongs to a turn
- * that already ended, so nobody can answer it any more.
+ * that already ended, so nobody can answer it any more. An approval request
+ * is denied, as the turn's cancellation stores it (`cancelPendingToolCallPart`);
+ * the engine answers a denial itself. The other calls get the error as their
+ * result.
  */
 const closeUnresolvedCallsForEngine = (
   parts: readonly ChatPart[],
 ): ChatPart[] =>
-  parts.flatMap((part): ChatPart[] =>
-    part.type === "tool-call" &&
-    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&
-    !hasStoredResult(part, parts)
-      ? [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)]
-      : [part],
-  );
+  parts.flatMap((part): ChatPart[] => {
+    if (
+      part.type !== "tool-call" ||
+      !ENGINE_ASKS_CLIENT_AGAIN[part.state] ||
+      hasStoredResult(part, parts)
+    ) {
+      return [part];
+    }
+    if (part.state === "approval-requested") {
+      return [cancelPendingToolCallPart(part)];
+    }
+    return [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)];
+  });
 
 /**
  * Close the approved calls a turn left without a result once it ended some

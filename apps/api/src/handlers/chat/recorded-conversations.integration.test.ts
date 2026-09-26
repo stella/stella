@@ -681,7 +681,7 @@ describe("recorded conversations", () => {
     60_000,
   );
 
-  test.failing.each([...SUPERSEDE_SCENARIOS])(
+  test.each([...SUPERSEDE_SCENARIOS])(
     "the committed recording of %s matches the server",
     checkRecording,
     60_000,

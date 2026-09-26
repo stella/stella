@@ -228,27 +228,35 @@ describe("the history a run hands the engine", () => {
     "input-streaming": streaming,
   } as const satisfies Record<ToolCallState, ToolCallPart>;
   const closedForEngine = {
-    "approval-requested": true,
-    "approval-responded": false,
-    "awaiting-input": false,
-    complete: false,
-    error: true,
-    "input-complete": true,
-    "input-streaming": false,
-  } as const satisfies Record<ToolCallState, boolean>;
+    "approval-requested": [
+      call("pending", {
+        approval: {
+          approved: false,
+          id: "approval_pending",
+          needsApproval: true,
+        },
+        state: "approval-responded",
+      }),
+    ],
+    "approval-responded": [denied],
+    "awaiting-input": [openCallByState["awaiting-input"]],
+    complete: [completed],
+    error: [failed, unresolvedResult("failed")],
+    "input-complete": [
+      openCallByState["input-complete"],
+      unresolvedResult("awaiting-client"),
+    ],
+    "input-streaming": [streaming],
+  } as const satisfies Record<ToolCallState, readonly ChatPart[]>;
 
   for (const part of Object.values(openCallByState)) {
-    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+    test(`an unanswered ${part.state} call on an earlier message is closed the way the engine can read`, () => {
       const history = settleHistoryForRun({
         messages: [assistant("earlier", [part])],
         resumedMessageId: undefined,
       });
 
-      expect(history[0]?.parts).toEqual(
-        closedForEngine[part.state]
-          ? [part, unresolvedResult(part.id)]
-          : [part],
-      );
+      expect(history[0]?.parts).toEqual([...closedForEngine[part.state]]);
     });
   }
 

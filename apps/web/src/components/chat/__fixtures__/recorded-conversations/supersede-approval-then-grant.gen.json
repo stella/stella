@@ -915,7 +915,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225635000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225636000}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"mcp__external__delete\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225637000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{\\\"name\\\":\\\"call-2\\\"}\",\"timestamp\":1767225638000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225639000}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225640000,\"messages\":[{\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"content\":\"Delete the NDA\"},{\"id\":\"00000000-0000-7000-8000-000000000004\",\"role\":\"user\",\"content\":\"Delete the older copy instead\"},{\"id\":\"00000000-0000-7000-8000-000000000005\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:12.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-2\\\"}\"}}]}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"approval_call-2\",\"reason\":\"tool_call\",\"message\":\"Approval required to run mcp__external__delete\",\"toolCallId\":\"call-2\",\"responseSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":true},\"editedArgs\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},\"required\":[\"name\"],\"additionalProperties\":false}},\"required\":[\"approved\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":false}},\"required\":[\"approved\"],\"additionalProperties\":false}]},\"metadata\":{\"kind\":\"approval\",\"toolName\":\"mcp__external__delete\",\"input\":{\"name\":\"call-2\"},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"tool-approval\",\"interruptId\":\"approval_call-2\",\"toolName\":\"mcp__external__delete\",\"toolCallId\":\"call-2\",\"originalArgs\":{\"name\":\"call-2\"},\"inputSchemaHash\":\"sha256:0dfd225d37d952b60e6e0583e22ce7c9fa1f9f4a9ed521723d6e7eb16131bf4b\",\"approvalSchemaHash\":\"sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e\",\"responseSchemaHash\":\"sha256:34a2aa381fe0de3042b7a9024c9e0286c074fc440cd075ca4fc91074914f7da5\",\"interruptedRunId\":\"run-recorded-2\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225635000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225636000}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"mcp__external__delete\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225637000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{\\\"name\\\":\\\"call-2\\\"}\",\"timestamp\":1767225638000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225639000}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225640000,\"messages\":[{\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"content\":\"Delete the NDA\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\"}}],\"parts\":[{\"type\":\"tool-call\",\"id\":\"call-1\",\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"state\":\"approval-responded\",\"input\":{\"name\":\"call-1\"},\"approval\":{\"id\":\"approval_call-1\",\"needsApproval\":true,\"approved\":false}}]},{\"id\":\"00000000-0000-7000-8000-000000000004\",\"role\":\"user\",\"content\":\"Delete the older copy instead\"},{\"id\":\"00000000-0000-7000-8000-000000000005\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:12.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"name\\\":\\\"call-2\\\"}\"}}]}]}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"approval_call-2\",\"reason\":\"tool_call\",\"message\":\"Approval required to run mcp__external__delete\",\"toolCallId\":\"call-2\",\"responseSchema\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":true},\"editedArgs\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"note\":{\"type\":\"string\"}},\"required\":[\"name\"],\"additionalProperties\":false}},\"required\":[\"approved\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"approved\":{\"const\":false}},\"required\":[\"approved\"],\"additionalProperties\":false}]},\"metadata\":{\"kind\":\"approval\",\"toolName\":\"mcp__external__delete\",\"input\":{\"name\":\"call-2\"},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"tool-approval\",\"interruptId\":\"approval_call-2\",\"toolName\":\"mcp__external__delete\",\"toolCallId\":\"call-2\",\"originalArgs\":{\"name\":\"call-2\"},\"inputSchemaHash\":\"sha256:0dfd225d37d952b60e6e0583e22ce7c9fa1f9f4a9ed521723d6e7eb16131bf4b\",\"approvalSchemaHash\":\"sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e\",\"responseSchemaHash\":\"sha256:34a2aa381fe0de3042b7a9024c9e0286c074fc440cd075ca4fc91074914f7da5\",\"interruptedRunId\":\"run-recorded-2\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\n",
             "status": 200
           },
           "page": {
@@ -1058,6 +1058,31 @@
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
                 "content": "Delete the NDA"
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-1",
+                "toolCallId": "call-1",
+                "content": "{\"approved\":false,\"message\":\"User denied this action\"}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
               },
               {
                 "id": "00000000-0000-7000-8000-000000000004",
