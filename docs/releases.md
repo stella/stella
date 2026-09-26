@@ -135,6 +135,12 @@ Package versions come from `.changeset/*.md`, and two flows apply them:
 Both run the repository's `changeset:version` script, so neither can produce a
 different bump than the other.
 
+Maintenance package bullets contain the first prose paragraph and link each
+package to its full `CHANGELOG.md` at the application release tag. Tables,
+lists, code blocks and later paragraphs remain in the package changelog.
+Changeset frontmatter remains authoritative for package bumps and attribution;
+release preparation does not infer package relevance from accumulated changes.
+
 ## API and CLI Compatibility
 
 MCP protected-resource discovery publishes `stella_contract`, containing a
