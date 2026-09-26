@@ -57,6 +57,12 @@ if (
 if (!exactSet(manifest.optional_host_permissions, ["https://*/*"])) {
   panic("Extension optional host permissions drifted");
 }
+// Requested with website access: cancelling downloads a controlled page
+// starts from `blob:` or `data:` URLs, and tracing which page opened a new
+// tab or which frame started a download.
+if (!exactSet(manifest.optional_permissions, ["downloads", "webNavigation"])) {
+  panic("Extension optional permissions drifted");
+}
 if (manifest.host_permissions !== undefined) {
   panic("Extension must not declare mandatory host_permissions");
 }
@@ -67,6 +73,7 @@ const forbiddenPermissions = [
   "declarativeNetRequestFeedback",
   "downloads",
   "tabs",
+  "webNavigation",
   "webRequest",
   "webRequestBlocking",
 ];

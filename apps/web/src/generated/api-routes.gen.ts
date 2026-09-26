@@ -31874,7 +31874,7 @@ type T109fc089ae = {
 };
 
 type T1143a9d800 = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -31889,6 +31889,7 @@ type T1143a9d800 = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };
@@ -31896,7 +31897,7 @@ type T1143a9d800 = {
 } | {
   code: T237fe0fe5e;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -32407,7 +32408,7 @@ type T22dff6b3c2 = {
   readonly issues?: undefined;
 };
 
-type T237fe0fe5e = "disconnected" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-closed" | "timed-out" | "unsupported-page";
+type T237fe0fe5e = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
 type T2430547df2 = {
   readonly error: "Not Found";
@@ -33879,7 +33880,7 @@ type T74114cb775 = {
 type T74581fa9f5 = {
   code: T237fe0fe5e;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -35643,7 +35644,7 @@ type Ta2cb9f1c54 = {
 type Ta2dc1740cf = undefined | tanstack_ai_ToolExecutionContext<unknown>;
 
 type Ta33827f356 = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -35658,6 +35659,7 @@ type Ta33827f356 = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };

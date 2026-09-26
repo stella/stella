@@ -29,6 +29,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { apiUrl } from "@/lib/api-url";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -331,6 +332,13 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
+  // The extension budgets browser commands per chat turn, named by its
+  // persisted user message, so a runtime rebuilt mid-turn charges the same
+  // turn.
+  const browserTool = createBrowserClientTool({
+    turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
+  });
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
@@ -360,7 +368,7 @@ export const createChatRuntime = ({
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
-    tools: [createBrowserClientTool()],
+    tools: [browserTool.tool],
   });
 
   const withBody = async (
@@ -622,6 +630,9 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         });
       client.stop();
+      // Stopping the request does not stop the extension: a browser command
+      // already approved would otherwise keep acting on the page.
+      browserTool.cancel();
       // `client.stop()` aborts the live request but never rewrites message
       // parts, so a tool-call part caught mid-run stays in a running state and
       // keeps `hasRunningToolCallInLatestAssistantMessage` — and thus

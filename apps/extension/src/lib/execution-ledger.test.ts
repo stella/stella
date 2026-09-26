@@ -19,6 +19,7 @@ const success = {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     elements: [],
     revision: "revision-1",
+    tabId: 7,
     text: "Ready",
     textOffset: 0,
     textTotalChars: 5,
@@ -147,5 +148,29 @@ describe("browser action execution ledger", () => {
     expect((await store.read()).receipts).toHaveLength(
       BROWSER_CONTROL_LIMITS.executionReceipts,
     );
+  });
+
+  test("page reads never push an action's key out of the ledger", async () => {
+    const store = createStore();
+    await executeAtMostOnce({
+      command: { action: "go-back" },
+      controllerId: "controller-1",
+      execute: async () => success,
+      store,
+      toolCallId: "tool-call-action",
+    });
+    for (let index = 0; index < 5000; index += 1) {
+      await executeAtMostOnce({
+        command: { action: "snapshot" },
+        controllerId: "controller-1",
+        execute: async () => success,
+        store,
+        toolCallId: `tool-call-read-${index}`,
+      });
+    }
+
+    expect((await store.read()).executedKeys).toEqual([
+      "controller-1:tool-call-action",
+    ]);
   });
 });

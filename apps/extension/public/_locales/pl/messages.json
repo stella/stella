@@ -39,6 +39,33 @@
   "disconnectTab": {
     "message": "Odłącz kartę"
   },
+  "downloadKept": {
+    "message": "Pobierania zakończone, gdy stella sterowała kartą, i zachowane: $COUNT$. Przed otwarciem sprawdź, skąd pochodzą.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadStopped": {
+    "message": "Pobierania zatrzymane przez stellę podczas sterowania kartą: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Gdy stella sterowała kartą: zatrzymane pobierania: $STOPPED$. Zakończone i zachowane pobierania (przed otwarciem sprawdź, skąd pochodzą): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
+  },
   "extensionDescription": {
     "message": "Po udzieleniu zgody pozwala stelli sterować osobną kartą Chrome."
   },

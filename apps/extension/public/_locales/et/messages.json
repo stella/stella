@@ -39,6 +39,33 @@
   "disconnectTab": {
     "message": "Katkesta vahekaardi ühendus"
   },
+  "downloadKept": {
+    "message": "Allalaadimised, mis lõppesid, kui stella vahekaarti juhtis, ja jäeti alles: $COUNT$. Enne avamist kontrolli, kust need pärinevad.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadStopped": {
+    "message": "Allalaadimised, mille stella vahekaarti juhtides peatas: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Kui stella vahekaarti juhtis: peatatud allalaadimised: $STOPPED$. Lõpetatud ja alles jäetud allalaadimised (enne avamist kontrolli, kust need pärinevad): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
+  },
   "extensionDescription": {
     "message": "Lubab stellal pärast sinu nõusolekut juhtida eraldi Chrome’i vahekaarti."
   },

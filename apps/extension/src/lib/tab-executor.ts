@@ -12,17 +12,24 @@ import {
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
+  type BrowserObservedTab,
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
 
 import { browserControlError } from "./browser-control-result";
+import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
-import { browserCommandMatchesSnapshot } from "./snapshot-guard";
+import {
+  checkCommandIdentity,
+  type LiveTopDocument,
+  type SnapshotState,
+  type TopDocument,
+} from "./snapshot-guard";
 import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
-import { containControlledTab, releaseControlledTab } from "./tab-containment";
+import { containControlledTab, forgetContainedTab } from "./tab-containment";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;
@@ -43,6 +50,22 @@ const outcomeUnknown = (detail: string): BrowserControlResult =>
     `${detail} The action may have taken effect; take a snapshot before retrying it.`,
   );
 
+/**
+ * Read through a call: TypeScript keeps a checked `signal.aborted` narrowed
+ * across awaits, but a stop can land during any of them.
+ */
+const isStopped = (signal: AbortSignal): boolean => signal.aborted;
+
+const STOPPED_AFTER_DISPATCH =
+  "The action was stopped before its outcome was observed.";
+
+/** Stopped before anything reached the page, so nothing ran. */
+const cancelled = (): BrowserControlResult =>
+  browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.cancelled,
+    "The browser action was stopped before it ran.",
+  );
+
 const frameLocationSchema = v.strictObject({
   origin: v.string(),
   url: v.string(),
@@ -56,33 +79,80 @@ const isBrowserControlErrorCode = (
   );
 
 type ControlledTabState = {
+  /** The user handed this tab over from the popup; chat did not open it. */
+  adopted: boolean;
   controllerId: string;
-  revision: string | null;
+  /**
+   * The top document when the last command ended: what chat last saw a
+   * result for. Null until a command has run in this tab.
+   */
+  settled: TopDocument | null;
+  /** Null until the tab is read, and again once an action may have changed it. */
+  snapshot: SnapshotState | null;
   tabId: number;
-  url: string | null;
+};
+
+const parseTopDocument = (input: unknown): TopDocument | null =>
+  typeof input === "object" &&
+  input !== null &&
+  "documentId" in input &&
+  (typeof input.documentId === "string" || input.documentId === null) &&
+  "url" in input &&
+  (typeof input.url === "string" || input.url === null)
+    ? { documentId: input.documentId, url: input.url }
+    : null;
+
+const isTabId = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value);
+
+const parseSnapshotState = (input: unknown): SnapshotState | null => {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("documents" in input) ||
+    typeof input.documents !== "object" ||
+    input.documents === null ||
+    !("revision" in input) ||
+    typeof input.revision !== "string" ||
+    !("tabId" in input) ||
+    !isTabId(input.tabId) ||
+    !("url" in input) ||
+    typeof input.url !== "string"
+  ) {
+    return null;
+  }
+  return {
+    documents: Object.fromEntries(
+      Object.entries(input.documents).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ),
+    revision: input.revision,
+    tabId: input.tabId,
+    url: input.url,
+  };
 };
 
 const parseControlledTabState = (input: unknown): ControlledTabState | null => {
   if (
     typeof input !== "object" ||
     input === null ||
+    !("adopted" in input) ||
+    typeof input.adopted !== "boolean" ||
     !("controllerId" in input) ||
     typeof input.controllerId !== "string" ||
-    !("revision" in input) ||
-    (typeof input.revision !== "string" && input.revision !== null) ||
+    !("snapshot" in input) ||
     !("tabId" in input) ||
-    typeof input.tabId !== "number" ||
-    !Number.isSafeInteger(input.tabId) ||
-    !("url" in input) ||
-    (typeof input.url !== "string" && input.url !== null)
+    !isTabId(input.tabId)
   ) {
     return null;
   }
   return {
+    adopted: input.adopted,
     controllerId: input.controllerId,
-    revision: input.revision,
+    settled: "settled" in input ? parseTopDocument(input.settled) : null,
+    snapshot: parseSnapshotState(input.snapshot),
     tabId: input.tabId,
-    url: input.url,
   };
 };
 
@@ -101,12 +171,51 @@ const writeControlledTabState = async (
   });
 };
 
-export const forgetControlledTab = async (tabId: number): Promise<void> => {
+/** The tab the controller's chat operates, or null when there is none. */
+export const readControlledTabId = async (
+  controllerId: string,
+): Promise<number | null> => {
   const state = await readControlledTabState();
-  if (state?.tabId === tabId) {
-    await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-    await releaseControlledTab();
+  return state?.controllerId === controllerId ? state.tabId : null;
+};
+
+/** Returns whether `tabId` was the controlled tab. */
+export const forgetControlledTab = async (tabId: number): Promise<boolean> => {
+  const state = await readControlledTabState();
+  if (state?.tabId !== tabId) {
+    return false;
   }
+  await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+  await forgetContainedTab(tabId);
+  return true;
+};
+
+/**
+ * Chrome swapped the controlled tab for another: the new tab is the
+ * controlled one, and its document is not the one chat read. Returns
+ * whether `removedTabId` was the controlled tab.
+ */
+export const replaceControlledTab = async (
+  addedTabId: number,
+  removedTabId: number,
+): Promise<boolean> => {
+  const state = await readControlledTabState();
+  if (state?.tabId !== removedTabId) {
+    return false;
+  }
+  await writeControlledTabState({
+    adopted: state.adopted,
+    controllerId: state.controllerId,
+    settled: state.settled,
+    snapshot: null,
+    tabId: addedTabId,
+  });
+  return true;
+};
+
+/** Refs from the last snapshot stop matching once an action is dispatched. */
+const forgetSnapshot = async (state: ControlledTabState): Promise<void> => {
+  await writeControlledTabState({ ...state, snapshot: null });
 };
 
 const readControlledTab = async (
@@ -121,29 +230,50 @@ const readControlledTab = async (
     return { state, tab: await chrome.tabs.get(state.tabId) };
   } catch {
     await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-    await releaseControlledTab();
+    await forgetContainedTab(state.tabId);
     return null;
   }
 };
 
-const sleep = async (ms: number): Promise<void> => {
+/** Waits `ms`, or less once `signal` aborts. */
+const sleep = async (ms: number, signal: AbortSignal): Promise<void> => {
+  if (signal.aborted) {
+    return;
+  }
   await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
 };
 
-/** Resolves true when `promise` settles first, false after `ms`. */
+/** Resolves true when `promise` settles first, false after `ms` or on abort. */
 const settlesWithin = async (
   promise: Promise<unknown>,
   ms: number,
+  signal: AbortSignal,
 ): Promise<boolean> => {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<boolean>((resolve) => {
-    timeout = setTimeout(() => resolve(false), ms);
-  });
-  const outcome = await Promise.race([promise.then(() => true), timedOut]);
-  clearTimeout(timeout);
-  return outcome;
+  // Ends the timer as soon as the race is decided or the command stops.
+  const settled = new AbortController();
+  const onStop = () => {
+    settled.abort();
+  };
+  signal.addEventListener("abort", onStop, { once: true });
+  try {
+    return await Promise.race([
+      promise.then(() => !isStopped(signal)),
+      sleep(ms, settled.signal).then(() => false),
+    ]);
+  } finally {
+    signal.removeEventListener("abort", onStop);
+    settled.abort();
+  }
 };
 
 /** A timer that only flags expiry; `clear` it once the wait is over. */
@@ -162,20 +292,24 @@ const startDeadline = (ms: number) => {
 
 type Deadline = ReturnType<typeof startDeadline>;
 
-/** Polls the tab until `isLoaded` holds or `deadline` expires. */
+/** Polls the tab until `isLoaded` holds, `deadline` expires or `signal` aborts. */
 const waitForTab = async (
   tabId: number,
   deadline: Deadline,
   isLoaded: (tab: chrome.tabs.Tab) => boolean,
+  signal: AbortSignal,
 ): Promise<boolean> => {
   for (;;) {
+    if (signal.aborted) {
+      return false;
+    }
     if (isLoaded(await chrome.tabs.get(tabId))) {
       return true;
     }
     if (deadline.expired()) {
       return false;
     }
-    await sleep(TAB_STATUS_POLL_MS);
+    await sleep(TAB_STATUS_POLL_MS, signal);
   }
 };
 
@@ -232,16 +366,17 @@ const createTabNavigationObserver = (tabId: number) => {
      * finish. A tab created at `about:blank` has not navigated until it has
      * left `about:blank`.
      */
-    async waitForNavigation(): Promise<boolean> {
+    async waitForNavigation(signal: AbortSignal): Promise<boolean> {
       const deadline = startDeadline(NAVIGATION_TIMEOUT_MS);
       try {
-        if (!(await settlesWithin(started, NAVIGATION_TIMEOUT_MS))) {
+        if (!(await settlesWithin(started, NAVIGATION_TIMEOUT_MS, signal))) {
           return false;
         }
         return await waitForTab(
           tabId,
           deadline,
           (tab) => tab.status !== "loading" && tab.url !== "about:blank",
+          signal,
         );
       } finally {
         deadline.clear();
@@ -252,14 +387,15 @@ const createTabNavigationObserver = (tabId: number) => {
      * starts within the grace period is awaited to completion. One that
      * starts later is caught by comparing `generation` around the snapshot.
      */
-    async waitForSettled(): Promise<boolean> {
-      await settlesWithin(started, PAGE_SETTLE_MS);
+    async waitForSettled(signal: AbortSignal): Promise<boolean> {
+      await settlesWithin(started, PAGE_SETTLE_MS, signal);
       const deadline = startDeadline(NAVIGATION_TIMEOUT_MS);
       try {
         return await waitForTab(
           tabId,
           deadline,
           (tab) => tab.status !== "loading",
+          signal,
         );
       } finally {
         deadline.clear();
@@ -330,19 +466,265 @@ const runPageOperation = async (
         "new-password",
         "one-time-code",
       ]);
+      // Whole words of a field's name or id that mark it secret: `userPassword`
+      // and `one_time_code` count, `hotplate` and `photoprint` do not.
+      const SECRET_NAME_WORDS = new Set([
+        "csc",
+        "cvc",
+        "cvv",
+        "onetime",
+        "otp",
+        "passcode",
+        "passphrase",
+        "passwd",
+        "password",
+        "pwd",
+        "totp",
+      ]);
+      const nameWords = (identifier: string) =>
+        identifier
+          .replaceAll(/([a-z\d])([A-Z])/gu, "$1 $2")
+          .toLowerCase()
+          .split(/[^a-z\d]+/u)
+          .filter((word) => word.length > 0);
+      const nameMarksSecret = (identifier: string) => {
+        const words = nameWords(identifier);
+        return words.some(
+          (word, index) =>
+            SECRET_NAME_WORDS.has(word) ||
+            (word === "one" && words[index + 1] === "time"),
+        );
+      };
+      // Values of secret fields seen in this document. A page can reveal a
+      // password by swapping the field for a new element or by printing it;
+      // any field holding one, and any text containing one, is withheld.
+      // Values shorter than this are too common to match safely.
+      const SECRET_VALUE_MIN_CHARS = 4;
+      const SECRETS_KEY = "stellaSecretValues";
+      const isSecretSet = (value: unknown): value is Set<string> =>
+        value instanceof Set;
+      const storedSecrets: unknown = Reflect.get(globalThis, SECRETS_KEY);
+      const secretValues = isSecretSet(storedSecrets)
+        ? storedSecrets
+        : new Set<string>();
+      Reflect.set(globalThis, SECRETS_KEY, secretValues);
+      const REDACTED = "[hidden]";
+      const holdsSecret = (text: string) => {
+        for (const secret of secretValues) {
+          if (text.includes(secret)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const redact = (text: string) => {
+        let redacted = text;
+        for (const secret of secretValues) {
+          redacted = redacted.replaceAll(secret, () => REDACTED);
+        }
+        return redacted;
+      };
+      // A field once seen as secret stays secret for the life of its
+      // document, so a "show password" toggle that turns type=password into
+      // text does not make the value readable. The extension's isolated world
+      // keeps this set across injections; the page can neither see nor clear
+      // it.
+      const HISTORY_KEY = "stellaSensitiveFields";
+      const storedHistory: unknown = Reflect.get(globalThis, HISTORY_KEY);
+      const sensitiveHistory: WeakSet<Element> =
+        storedHistory instanceof WeakSet ? storedHistory : new WeakSet();
+      Reflect.set(globalThis, HISTORY_KEY, sensitiveHistory);
+      const isTextField = (
+        element: Element,
+      ): element is HTMLInputElement | HTMLTextAreaElement =>
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement;
+      const namedLikeSecret = (element: Element) =>
+        isTextField(element) &&
+        (nameMarksSecret(element.name) || nameMarksSecret(element.id));
       // Passwords, payment cards and one-time codes: their values and text
       // are never read, and the model may not type or choose them.
-      const isSensitiveField = (element: Element) =>
-        (element instanceof HTMLInputElement && element.type === "password") ||
-        (element.getAttribute("autocomplete") ?? "")
-          .toLowerCase()
-          .split(/\s+/u)
-          .some(
-            (token) =>
-              token.startsWith("cc-") ||
-              SENSITIVE_AUTOCOMPLETE_TOKENS.has(token),
-          ) ||
-        masked(element);
+      const isSensitiveField = (element: Element) => {
+        if (sensitiveHistory.has(element)) {
+          return true;
+        }
+        const sensitive =
+          (isTextField(element) && holdsSecret(element.value)) ||
+          (element instanceof HTMLInputElement &&
+            element.type === "password") ||
+          (element.getAttribute("autocomplete") ?? "")
+            .toLowerCase()
+            .split(/\s+/u)
+            .some(
+              (token) =>
+                token.startsWith("cc-") ||
+                SENSITIVE_AUTOCOMPLETE_TOKENS.has(token),
+            ) ||
+          masked(element) ||
+          namedLikeSecret(element);
+        if (sensitive) {
+          sensitiveHistory.add(element);
+        }
+        return sensitive;
+      };
+      // Every secret field's current value joins the secrets, whenever it
+      // is seen, so a value typed after the first look counts too.
+      const rememberSecretValue = (element: Element) => {
+        if (
+          isTextField(element) &&
+          element.value.length >= SECRET_VALUE_MIN_CHARS &&
+          isSensitiveField(element)
+        ) {
+          secretValues.add(element.value);
+        }
+      };
+      // Records every field that is secret right now, before anything reads
+      // the page or acts on it.
+      const rememberSensitiveFields = (root: ParentNode) => {
+        for (const element of root.querySelectorAll("*")) {
+          if (
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+          ) {
+            isSensitiveField(element);
+            rememberSecretValue(element);
+          }
+          if (element.shadowRoot) {
+            rememberSensitiveFields(element.shadowRoot);
+          }
+        }
+      };
+      rememberSensitiveFields(document);
+      // From the first injection on, secret values are learned as they
+      // change, not only when a command looks: a password typed while the
+      // user has the tab, then shown by a page that swaps or retypes the
+      // field, is still known. Installed once per document, in the
+      // extension's isolated world, where the page cannot remove it.
+      const WATCH_KEY = "stellaSecretWatch";
+      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
+        Reflect.set(globalThis, WATCH_KEY, true);
+        const learn = (node: unknown) => {
+          if (node instanceof Element) {
+            rememberSecretValue(node);
+          }
+        };
+        const onEdit = (event: Event) => {
+          learn(event.composedPath().at(0));
+        };
+        document.addEventListener("input", onEdit, true);
+        document.addEventListener("change", onEdit, true);
+        new MutationObserver((records) => {
+          for (const record of records) {
+            if (
+              record.type === "attributes" &&
+              record.attributeName === "type" &&
+              record.oldValue?.toLowerCase() === "password" &&
+              record.target instanceof Element
+            ) {
+              sensitiveHistory.add(record.target);
+            }
+            learn(record.target);
+            for (const removed of record.removedNodes) {
+              if (removed instanceof Element) {
+                learn(removed);
+                for (const field of removed.querySelectorAll(
+                  "input, textarea",
+                )) {
+                  learn(field);
+                }
+              }
+            }
+          }
+        }).observe(document, {
+          attributeFilter: ["autocomplete", "id", "name", "type"],
+          attributeOldValue: true,
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+      }
+      // A rect(...) clip or a clip-path that leaves nothing to see.
+      const clippedAway = (style: CSSStyleDeclaration) => {
+        // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
+        // to NaN and never count as collapsed.
+        const clip = style.getPropertyValue("clip");
+        const edges = clip.startsWith("rect(")
+          ? clip
+              .slice("rect(".length, -1)
+              .split(",")
+              .map((edge) => Number.parseFloat(edge))
+          : [];
+        const [
+          top = Number.NaN,
+          right = Number.NaN,
+          bottom = Number.NaN,
+          left = Number.NaN,
+        ] = edges;
+        if (edges.length === 4 && (right - left <= 1 || bottom - top <= 1)) {
+          return true;
+        }
+        return /^(?:inset\((?:[5-9]\d|\d{3,})%|circle\(0(?:px)?[\s)])/u.test(
+          style.clipPath,
+        );
+      };
+      const CLIPPING_OVERFLOW = new Set(["clip", "hidden"]);
+      // Content a reader of the rendered page cannot see: hidden from
+      // assistive technology, transparent, clipped away, collapsed to a
+      // pixel or pushed off the page. Pages hide instructions for AI readers
+      // there, so neither its text nor its controls are collected.
+      const concealed = (element: Element) => {
+        if (element.getAttribute("aria-hidden") === "true") {
+          return true;
+        }
+        const style = window.getComputedStyle(element);
+        if (style.display === "contents") {
+          return false;
+        }
+        if (Number.parseFloat(style.opacity) === 0 || clippedAway(style)) {
+          return true;
+        }
+        const rect = element.getBoundingClientRect();
+        if (
+          (CLIPPING_OVERFLOW.has(style.overflowX) && rect.width <= 1) ||
+          (CLIPPING_OVERFLOW.has(style.overflowY) && rect.height <= 1)
+        ) {
+          return true;
+        }
+        return (
+          (rect.width > 0 || rect.height > 0) &&
+          (rect.right + window.scrollX <= 0 ||
+            rect.bottom + window.scrollY <= 0)
+        );
+      };
+      // Text inside a visible box that still does not show: zero-size or
+      // transparent glyphs, or text indented off the page.
+      const TRANSPARENT_COLORS = new Set(["rgba(0, 0, 0, 0)", "transparent"]);
+      const concealsText = (element: Element) => {
+        const style = window.getComputedStyle(element);
+        return (
+          style.fontSize === "0px" ||
+          Number.parseFloat(style.textIndent) <= -999 ||
+          (TRANSPARENT_COLORS.has(style.color) &&
+            style.backgroundClip !== "text" &&
+            style.getPropertyValue("-webkit-background-clip") !== "text")
+        );
+      };
+      const concealedCache = new Map<Element, boolean>();
+      const concealedInTree = (element: Element): boolean => {
+        const cached = concealedCache.get(element);
+        if (cached !== undefined) {
+          return cached;
+        }
+        const root = element.getRootNode();
+        const parent =
+          element.parentElement ??
+          (root instanceof ShadowRoot ? root.host : null);
+        const hidden =
+          concealed(element) || (parent !== null && concealedInTree(parent));
+        concealedCache.set(element, hidden);
+        return hidden;
+      };
       const childNodesOf = (element: Element): readonly Node[] => {
         if (element instanceof HTMLSlotElement) {
           const assigned = element.assignedNodes({ flatten: true });
@@ -373,6 +755,8 @@ const runPageOperation = async (
             !(node instanceof Element) ||
             SKIPPED_TAGS.has(node.tagName) ||
             !visible(node) ||
+            concealed(node) ||
+            concealsText(node) ||
             isSensitiveField(node)
           ) {
             continue;
@@ -385,7 +769,7 @@ const runPageOperation = async (
             }
           }
         }
-        return normalize(parts.join(" "));
+        return redact(normalize(parts.join(" ")));
       };
       const roleFor = (element: Element) => {
         const explicit = element.getAttribute("role");
@@ -412,11 +796,13 @@ const runPageOperation = async (
         return "interactive";
       };
       const nameFor = (element: Element) =>
-        normalize(
-          element.getAttribute("aria-label") ??
-            element.getAttribute("title") ??
-            element.getAttribute("placeholder") ??
-            collectText(element, limits.elementNameChars),
+        redact(
+          normalize(
+            element.getAttribute("aria-label") ??
+              element.getAttribute("title") ??
+              element.getAttribute("placeholder") ??
+              collectText(element, limits.elementNameChars),
+          ),
         ).slice(0, limits.elementNameChars);
       const valueFor = (element: Element) => {
         if (
@@ -431,7 +817,7 @@ const runPageOperation = async (
       };
       const hrefFor = (element: Element) =>
         element instanceof HTMLAnchorElement && element.href !== ""
-          ? element.href.slice(0, limits.urlChars)
+          ? redact(element.href).slice(0, limits.urlChars)
           : undefined;
       const isDisabled = (element: Element) =>
         element.matches(":disabled") ||
@@ -628,7 +1014,8 @@ const runPageOperation = async (
             if (
               element.matches(interactiveSelector) &&
               visible(element) &&
-              !isDisabled(element)
+              !isDisabled(element) &&
+              !concealedInTree(element)
             ) {
               const path = pathFor(element);
               if (path !== null) {
@@ -656,7 +1043,7 @@ const runPageOperation = async (
           elements,
           origin: window.origin,
           text: collectText(document.body, limits.pageTextTotalChars),
-          title: document.title.slice(0, limits.titleChars),
+          title: redact(document.title).slice(0, limits.titleChars),
           url: window.location.href.slice(0, limits.urlChars),
         };
       }
@@ -687,6 +1074,13 @@ const runPageOperation = async (
       ) {
         return {
           error: "The referenced element changed after the page snapshot.",
+          code: errorCode.staleSnapshot,
+          ok: false,
+        };
+      }
+      if (!visible(target) || concealedInTree(target)) {
+        return {
+          error: "The referenced element is no longer visible on the page.",
           code: errorCode.staleSnapshot,
           ok: false,
         };
@@ -806,17 +1200,31 @@ type ActionFrameCheck =
   | { ok: true; origin: string };
 
 /**
- * Reads the origin of the frame an element ref points into and holds it to
- * the origin policy before anything is dispatched there.
+ * Reads the origin of the document an element ref points into and holds it
+ * to the origin policy before anything is dispatched there. The document is
+ * addressed by the id the snapshot recorded, so a frame that loaded another
+ * document since, even at the same URL, is refused as stale.
  */
 const checkActionFrame = async (
   tabId: number,
   frameId: number,
+  documentId: string,
 ): Promise<ActionFrameCheck> => {
-  const results = await runPageOperation(
-    { frameIds: [frameId], tabId },
-    { kind: "locate" },
-  );
+  let results: Awaited<ReturnType<typeof runPageOperation>>;
+  try {
+    results = await runPageOperation(
+      { documentIds: [documentId], tabId },
+      { kind: "locate" },
+    );
+  } catch {
+    return {
+      error: browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+        "The frame loaded another document after the page snapshot. Take a new snapshot before acting.",
+      ),
+      ok: false,
+    };
+  }
   const location = v.safeParse(frameLocationSchema, results.at(0)?.result);
   if (
     !location.success ||
@@ -848,7 +1256,7 @@ type DomActionOutcome =
 
 const injectDomAction = async (
   tabId: number,
-  frameId: number,
+  documentId: string,
   path: string,
   expectedOrigin: string,
   command: BrowserControlElementCommand,
@@ -856,7 +1264,7 @@ const injectDomAction = async (
   let results: Awaited<ReturnType<typeof runPageOperation>>;
   try {
     results = await runPageOperation(
-      { frameIds: [frameId], tabId },
+      { documentIds: [documentId], tabId },
       {
         action: command,
         errorCode: BROWSER_CONTROL_ERROR_CODE,
@@ -924,9 +1332,11 @@ const readSnapshot = async ({
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
     },
   );
-  const frames = results.flatMap(({ frameId, result }) => {
+  const frames = results.flatMap(({ documentId, frameId, result }) => {
     const parsed = v.safeParse(frameSnapshotSchema, result);
-    return parsed.success ? [{ frameId, snapshot: parsed.output }] : [];
+    return parsed.success
+      ? [{ documentId, frameId, snapshot: parsed.output }]
+      : [];
   });
   // The tab URL was checked before injection; the page may have navigated
   // since, so the document that was actually read is checked again.
@@ -956,6 +1366,7 @@ const readSnapshot = async ({
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       revision: crypto.randomUUID(),
+      tabId,
       ...merged,
     },
     status: "success",
@@ -967,11 +1378,28 @@ const readSnapshot = async ({
     );
   }
   if (parsed.status === "success") {
+    const current = await readControlledTabState();
     await writeControlledTabState({
+      adopted: current?.adopted ?? false,
       controllerId,
-      revision: parsed.snapshot.revision,
+      // Chat has now seen this document: the one this read returned, not
+      // whatever the tab shows by the time the read is stored.
+      settled: {
+        documentId: top?.documentId ?? null,
+        url: top?.snapshot.url ?? null,
+      },
+      snapshot: {
+        documents: Object.fromEntries(
+          frames.map(({ documentId, frameId }) => [
+            String(frameId),
+            documentId,
+          ]),
+        ),
+        revision: parsed.snapshot.revision,
+        tabId,
+        url: parsed.snapshot.url,
+      },
       tabId,
-      url: parsed.snapshot.url,
     });
   }
   return parsed;
@@ -986,9 +1414,14 @@ const readOutcome = async (
   navigation: TabNavigationObserver,
   controllerId: string,
   tabId: number,
+  signal: AbortSignal,
 ): Promise<BrowserControlResult> => {
   for (let attempt = 0; attempt < OUTCOME_SNAPSHOT_ATTEMPTS; attempt += 1) {
-    if (!(await navigation.waitForSettled())) {
+    const settled = await navigation.waitForSettled(signal);
+    if (isStopped(signal)) {
+      return outcomeUnknown(STOPPED_AFTER_DISPATCH);
+    }
+    if (!settled) {
       return outcomeUnknown(
         "The page did not finish loading after the action.",
       );
@@ -1016,7 +1449,7 @@ const readOutcome = async (
 };
 
 export type AdoptControlledTabResult =
-  | { status: "adopted"; url: string }
+  | { status: "adopted"; tabId: number; url: string }
   | { status: "unsupported-page" };
 
 /**
@@ -1040,13 +1473,19 @@ export const adoptControlledTab = async (
   }
   await containControlledTab(tab.id);
   await writeControlledTabState({
+    adopted: true,
     controllerId,
-    revision: null,
+    settled: null,
+    snapshot: null,
     tabId: tab.id,
-    url: null,
   });
-  return { status: "adopted", url: tab.url };
+  return { status: "adopted", tabId: tab.id, url: tab.url };
 };
+
+type OpenedControlledTab =
+  | { status: "cancelled" }
+  | { loaded: boolean; status: "navigated"; tabId: number }
+  | { status: "unavailable" };
 
 /**
  * Points the controlled tab at an approved URL. A new tab starts at
@@ -1056,50 +1495,178 @@ export const adoptControlledTab = async (
 const openControlledTab = async (
   controllerId: string,
   url: URL,
-): Promise<{ loaded: boolean; tabId: number } | null> => {
+  signal: AbortSignal,
+): Promise<OpenedControlledTab> => {
   const existing = await readControlledTab(controllerId);
   const tabId =
     existing?.tab.id ??
     (await chrome.tabs.create({ active: true, url: "about:blank" })).id;
   if (tabId === undefined) {
-    return null;
+    return { status: "unavailable" };
+  }
+  // A tab created for this command and stopped before it navigated holds
+  // nothing; closing it leaves no controlled tab chat has never read.
+  const discardCreatedTab = async (): Promise<void> => {
+    if (existing === null) {
+      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+      await forgetContainedTab(tabId);
+      await chrome.tabs.remove(tabId).catch(() => undefined);
+    }
+  };
+  if (isStopped(signal)) {
+    await discardCreatedTab();
+    return { status: "cancelled" };
   }
   await containControlledTab(tabId);
   await writeControlledTabState({
+    adopted: existing?.state.adopted ?? false,
     controllerId,
-    revision: null,
+    settled: existing?.state.settled ?? null,
+    snapshot: null,
     tabId,
-    url: null,
   });
+  if (isStopped(signal)) {
+    await discardCreatedTab();
+    return { status: "cancelled" };
+  }
   const navigation = createTabNavigationObserver(tabId);
   try {
     await chrome.tabs.update(tabId, { active: true, url: url.href });
-    return { loaded: await navigation.waitForNavigation(), tabId };
+    return {
+      loaded: await navigation.waitForNavigation(signal),
+      status: "navigated",
+      tabId,
+    };
   } finally {
     navigation.dispose();
   }
 };
 
+type ExecuteBrowserCommandOptions = {
+  /** Charged right before the command acts; refunded if the page refuses. */
+  budget: CommandBudget;
+  /** The tab and snapshot the web client last saw a result for. */
+  observedTab: BrowserObservedTab | null;
+  /** Aborts when chat stops the command or control changes. */
+  signal: AbortSignal;
+};
+
+/** The tab's top document now; see `TopDocument`. */
+/** The tab's top document now, as Chrome's navigation records have it; null when Chrome cannot say. */
+const readTopDocument = async (
+  tabId: number,
+): Promise<LiveTopDocument | null> => {
+  const frame = await chrome.webNavigation
+    .getFrame({ frameId: TOP_FRAME_ID, tabId })
+    .catch(() => null);
+  return frame === null
+    ? null
+    : {
+        documentId: frame.documentId,
+        url: frame.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+      };
+};
+
+const budgetExceeded = (message: string): BrowserControlResult =>
+  browserControlError(BROWSER_CONTROL_ERROR_CODE.budgetExceeded, message);
+
+const IDENTITY_REFUSALS = {
+  "page-unconfirmed": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    "stella cannot confirm the tab still shows the page it last read, so it will not navigate away from it. Take a snapshot and try again. If the page cannot be read, for example an error page, ask the user to open a page in that tab themselves or to hand over another tab from the extension popup.",
+  ),
+  "stale-snapshot": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+    "The page changed after this browser action was proposed. Take a new snapshot before acting.",
+  ),
+  "tab-changed": browserControlError(
+    BROWSER_CONTROL_ERROR_CODE.tabChanged,
+    "The controlled tab changed since stella last read it. Take a snapshot of the current tab before navigating or acting.",
+  ),
+} as const satisfies Record<string, BrowserControlResult>;
+
+const identityRefusal = (
+  status: keyof typeof IDENTITY_REFUSALS,
+): BrowserControlResult => IDENTITY_REFUSALS[status];
+
 export const executeBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
+  options: ExecuteBrowserCommandOptions,
 ): Promise<BrowserControlResult> => {
-  // Set once a click, fill, select, key press or back navigation has been
-  // handed to the page; from then on a failure cannot say it did not run.
-  let dispatched = false;
+  const progress = { dispatched: false };
+  return await runBrowserCommand(controllerId, command, options, progress);
+};
+
+const runBrowserCommand = async (
+  controllerId: string,
+  command: BrowserControlCommand,
+  { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
+  // `dispatched` is set once a click, fill, select, key press or navigation
+  // has been handed to the page or tab; from then on a failure cannot say
+  // it did not run.
+  progress: { dispatched: boolean },
+): Promise<BrowserControlResult> => {
   try {
+    if (isStopped(signal)) {
+      return cancelled();
+    }
     const controlledTab = await readControlledTab(controllerId);
+    const tabId = controlledTab?.tab.id;
+    const isNavigation =
+      command.action === BROWSER_CONTROL_ACTION.open ||
+      command.action === BROWSER_CONTROL_ACTION.goBack;
+    const identity = checkCommandIdentity({
+      command,
+      controlledTab:
+        controlledTab === null || tabId === undefined
+          ? null
+          : {
+              adopted: controlledTab.state.adopted,
+              tabId,
+              url: controlledTab.tab.url,
+            },
+      ...(isNavigation && controlledTab !== null && tabId !== undefined
+        ? {
+            navigation: {
+              live: await readTopDocument(tabId),
+              settled: controlledTab.state.settled,
+            },
+          }
+        : {}),
+      observedTab,
+      snapshot: controlledTab?.state.snapshot ?? null,
+    });
+    if (identity.status !== "ok") {
+      return identityRefusal(identity.status);
+    }
+
     if (command.action === BROWSER_CONTROL_ACTION.open) {
       const requested = parseControllableUrl(command.url);
-      const opened =
-        requested === null
-          ? null
-          : await openControlledTab(controllerId, requested);
-      if (requested === null || opened === null) {
+      if (requested === null) {
         return browserControlError(
           BROWSER_CONTROL_ERROR_CODE.navigationFailed,
           "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
         );
+      }
+      const overBudget = await budget.charge();
+      if (overBudget !== null) {
+        return budgetExceeded(overBudget);
+      }
+      progress.dispatched = true;
+      const opened = await openControlledTab(controllerId, requested, signal);
+      if (opened.status === "cancelled") {
+        await budget.refund();
+        return cancelled();
+      }
+      if (opened.status === "unavailable") {
+        return browserControlError(
+          BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+          "Chrome could not create a tab for this page.",
+        );
+      }
+      if (isStopped(signal)) {
+        return outcomeUnknown(STOPPED_AFTER_DISPATCH);
       }
       if (!opened.loaded) {
         return browserControlError(
@@ -1131,7 +1698,6 @@ export const executeBrowserCommand = async (
         "Open a page with stella before using this action.",
       );
     }
-    const tabId = controlledTab.tab.id;
     if (tabId === undefined) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.tabClosed,
@@ -1151,9 +1717,18 @@ export const executeBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       const navigation = createTabNavigationObserver(tabId);
       try {
-        dispatched = true;
+        const overBudget = await budget.charge();
+        if (overBudget !== null) {
+          return budgetExceeded(overBudget);
+        }
+        await forgetSnapshot(state);
+        if (isStopped(signal)) {
+          await budget.refund();
+          return cancelled();
+        }
+        progress.dispatched = true;
         await navigateBack(tabId);
-        return await readOutcome(navigation, controllerId, tabId);
+        return await readOutcome(navigation, controllerId, tabId, signal);
       } finally {
         navigation.dispose();
       }
@@ -1165,34 +1740,45 @@ export const executeBrowserCommand = async (
         UNSUPPORTED_PAGE_MESSAGE,
       );
     }
-    if (!browserCommandMatchesSnapshot(state, tab.url, command)) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
-        "The page changed after this browser action was proposed. Take a new snapshot before acting.",
-      );
-    }
     const reference = parseElementReference(command.target.ref);
-    if (!reference) {
+    if (!reference || identity.documentId === null) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.invalidCommand,
         "The element reference is malformed.",
       );
     }
-    const frame = await checkActionFrame(tabId, reference.frameId);
+    const frame = await checkActionFrame(
+      tabId,
+      reference.frameId,
+      identity.documentId,
+    );
     if (!frame.ok) {
       return frame.error;
     }
+    const overBudget = await budget.charge();
+    if (overBudget !== null) {
+      return budgetExceeded(overBudget);
+    }
     const navigation = createTabNavigationObserver(tabId);
     try {
-      dispatched = true;
+      await forgetSnapshot(state);
+      if (isStopped(signal)) {
+        await budget.refund();
+        return cancelled();
+      }
+      progress.dispatched = true;
       const outcome = await injectDomAction(
         tabId,
-        reference.frameId,
+        identity.documentId,
         reference.path,
         frame.origin,
         command,
       );
       if (outcome.status === "refused") {
+        // The page refused before acting, so the snapshot still describes it
+        // and nothing was spent.
+        await writeControlledTabState(state);
+        await budget.refund();
         return browserControlError(outcome.code, outcome.error);
       }
       if (outcome.status === "unobserved") {
@@ -1200,12 +1786,12 @@ export const executeBrowserCommand = async (
           "Chrome lost the page before the action reported back.",
         );
       }
-      return await readOutcome(navigation, controllerId, tabId);
+      return await readOutcome(navigation, controllerId, tabId, signal);
     } finally {
       navigation.dispose();
     }
   } catch {
-    if (dispatched) {
+    if (progress.dispatched) {
       return outcomeUnknown(
         "Chrome could not observe the page after the action.",
       );
