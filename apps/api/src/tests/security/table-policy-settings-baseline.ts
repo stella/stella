@@ -143,7 +143,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "legislation_index_jobs",
   "legislation_search_documents",
   "legislation_sources",
-  "legislation_work_changes",
   "matter_counters",
   "mcp_connectors",
   "mcp_oauth_clients",
