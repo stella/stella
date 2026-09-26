@@ -1,10 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
+import type { DecisionDocketGrammar } from "./decision-docket-grammar";
 import {
+  type DecisionIdentifierIntent,
   exactDecisionMatches,
   parseDecisionQuery,
 } from "./decision-query-intent";
@@ -140,12 +143,22 @@ describe("reading a case-law box entry", () => {
   });
 });
 
-describe("the hits that are the named decision", () => {
-  const hit = (caseNumber: string, ecli: string | null = null) => ({
-    caseNumber,
-    ecli,
-  });
+const identityOf = (
+  entry: string,
+  grammar?: DecisionDocketGrammar,
+): DecisionIdentifierIntent => {
+  const intent = parseDecisionQuery(entry, { grammar });
+  return intent.type === "identifier"
+    ? intent
+    : panic(`Not an identifier: ${entry}`);
+};
 
+const hit = (caseNumber: string, ecli: string | null = null) => ({
+  caseNumber,
+  ecli,
+});
+
+describe("the hits that are the named decision", () => {
   test("spacing, case, dash style and the sheet number do not change identity", () => {
     fc.assert(
       fc.property(
@@ -154,25 +167,34 @@ describe("the hits that are the named decision", () => {
           .chain((docket) => fc.tuple(fc.constant(docket), spellingOf(docket))),
         ([stored, typed]) => {
           const hits = [hit(stored), hit("99 Cdo 1/2000")];
-          expect(exactDecisionMatches(typed, hits)).toEqual([hit(stored)]);
+          expect(exactDecisionMatches(identityOf(typed), hits)).toEqual([
+            hit(stored),
+          ]);
         },
       ),
       propertyConfig(),
     );
     expect(
-      exactDecisionMatches("21 Cdo 470/2017-28", [hit("21 Cdo 470/2017")]),
+      exactDecisionMatches(identityOf("21 Cdo 470/2017-28"), [
+        hit("21 Cdo 470/2017"),
+      ]),
     ).toHaveLength(1);
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {
     expect(
-      exactDecisionMatches("G 1/2099", [hit("G 1/2099"), hit("G/1/2099")]),
+      exactDecisionMatches(identityOf("G 1/2099"), [
+        hit("G 1/2099"),
+        hit("G/1/2099"),
+      ]),
     ).toEqual([hit("G 1/2099")]);
   });
 
   test("a Polish division split across tokens keeps the same identity", () => {
     expect(
-      exactDecisionMatches("III AUa 999999/99", [hit("III A Ua 999999/99")]),
+      exactDecisionMatches(identityOf("III AUa 999999/99"), [
+        hit("III A Ua 999999/99"),
+      ]),
     ).toHaveLength(1);
   });
 
@@ -186,7 +208,9 @@ describe("the hits that are the named decision", () => {
       },
       { caseNumber: "65 A 4/2025", court: "Krajský soud v Brně", ecli: null },
     ];
-    expect(exactDecisionMatches("65 A 3/2025", hits)).toHaveLength(2);
+    expect(exactDecisionMatches(identityOf("65 A 3/2025"), hits)).toHaveLength(
+      2,
+    );
   });
 
   test("a publisher's parallel case number matches too", () => {
@@ -200,8 +224,10 @@ describe("the hits that are the named decision", () => {
         ],
       },
     ];
-    expect(exactDecisionMatches("III AKz 12/23", hits)).toHaveLength(1);
-    expect(exactDecisionMatches("III AKz 13/23", hits)).toEqual([]);
+    expect(
+      exactDecisionMatches(identityOf("III AKz 12/23"), hits),
+    ).toHaveLength(1);
+    expect(exactDecisionMatches(identityOf("III AKz 13/23"), hits)).toEqual([]);
   });
 
   test("an ECLI matches the hit that carries it", () => {
@@ -209,10 +235,103 @@ describe("the hits that are the named decision", () => {
       hit("22 Cdo 2653/2012", "ECLI:CZ:NS:2014:22.CDO.2653.2012.1"),
     ];
     expect(
-      exactDecisionMatches("ecli:cz:ns:2014:22.cdo.2653.2012.1", hits),
+      exactDecisionMatches(
+        identityOf("ecli:cz:ns:2014:22.cdo.2653.2012.1"),
+        hits,
+      ),
     ).toHaveLength(1);
     expect(
-      exactDecisionMatches("ECLI:CZ:NS:2014:99.CDO.1.2000.1", hits),
+      exactDecisionMatches(identityOf("ECLI:CZ:NS:2014:99.CDO.1.2000.1"), hits),
     ).toEqual([]);
+  });
+});
+
+type ConstitutionalDocket = {
+  ordinal: number;
+  senate: string;
+  year: string;
+};
+
+/**
+ * A Constitutional Court docket as Czech and Slovak readers and publishers
+ * spell it: the senate's case, the dot, the gap before `ÚS`, its accent, and
+ * the join before the number all vary.
+ */
+const constitutionalSpelling = ({
+  ordinal,
+  senate,
+  year,
+}: ConstitutionalDocket) =>
+  fc
+    .record({
+      dot: fc.constantFrom("", "."),
+      gap: fc.constantFrom("", " "),
+      join: fc.constantFrom("", " ", "/", " / "),
+      lower: fc.boolean(),
+      mark: fc.constantFrom("ÚS", "US", "ús"),
+    })
+    .map(
+      ({ dot, gap, join, lower, mark }) =>
+        `${lower ? senate.toLowerCase() : senate}${dot}${gap}${mark}${join}${ordinal}/${year}`,
+    );
+
+const constitutionalPair = fc
+  .record({
+    ordinal: fc.integer({ min: 1, max: 9999 }),
+    senate: fc.constantFrom("I", "II", "III", "IV", "Pl", "PL"),
+    year: fc.constantFrom("98", "04", "2019"),
+  })
+  .chain((docket) =>
+    fc.tuple(
+      constitutionalSpelling(docket),
+      constitutionalSpelling(docket),
+      fc.constant(`${docket.senate}. ÚS ${docket.ordinal + 1}/${docket.year}`),
+    ),
+  );
+
+describe("an entry finds its decision within its own jurisdiction", () => {
+  for (const jurisdiction of ["CZE", "SVK"] as const) {
+    const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+    const accepted = (text: string) => grammar.parse(text) !== null;
+    const ordinaryPair = fc
+      .constantFrom(...canonicalDockets.filter(accepted))
+      .chain((docket) =>
+        fc.tuple(
+          spellingOf(docket),
+          spellingOf(docket),
+          fc.constant("99 Cdo 1/2000"),
+        ),
+      );
+
+    test(`${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`, () => {
+      fc.assert(
+        fc.property(
+          fc.oneof(constitutionalPair, ordinaryPair),
+          ([typed, stored, other]) => {
+            fc.pre(accepted(typed) && accepted(stored));
+            const hits = [hit(typed), hit(stored), hit(other)];
+            expect(
+              exactDecisionMatches(identityOf(typed, grammar), hits),
+              `${typed} ~ ${stored}`,
+            ).toEqual([hit(typed), hit(stored)]);
+          },
+        ),
+        propertyConfig(),
+      );
+    });
+  }
+
+  test("a compact Slovak docket finds its spaced and compact spellings", () => {
+    for (const [typed, stored] of [
+      ["II.ÚS55/98", "II. ÚS 55/98"],
+      ["II. ÚS 55/98", "II.ÚS55/98"],
+      ["PL.ÚS3/2019", "PL. ÚS 3/2019"],
+      ["II.ÚS/251/04", "II. ÚS 251/04"],
+    ] as const) {
+      const identity = identityOf(typed, DECISION_DOCKET_GRAMMARS.SVK);
+      expect(exactDecisionMatches(identity, [hit(stored)]), typed).toEqual([
+        hit(stored),
+      ]);
+    }
   });
 });

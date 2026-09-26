@@ -66,27 +66,93 @@ export const MORPHOLOGY_LANGUAGES = [
 export type MorphologyLanguage = (typeof MORPHOLOGY_LANGUAGES)[number];
 
 /**
- * What this module stems as, for anything that has to re-do work when the
- * answer changes.
+ * How many times each language's stemmer has changed its output since
+ * revisions became per language. Bump a language's entry in the commit that
+ * changes what `stemLegalTerm` returns for it (a vendored-stemmer fix, a
+ * dictionary edit); only documents in that language re-project.
+ *
+ * Total over the registry, so a new language cannot land without an entry.
+ */
+export const MORPHOLOGY_REVISIONS = {
+  cs: 0,
+  da: 0,
+  de: 0,
+  el: 0,
+  en: 0,
+  es: 0,
+  et: 0,
+  fi: 0,
+  fr: 0,
+  ga: 0,
+  hu: 0,
+  it: 0,
+  lt: 0,
+  nl: 0,
+  pl: 0,
+  pt: 0,
+  ro: 0,
+  // 1: every case form of a noun stems to one stem, none shorter than three.
+  sk: 1,
+  sv: 0,
+} as const satisfies Record<MorphologyLanguage, number>;
+
+/**
+ * The morphology key every document of a stem-writing generation carried
+ * while one global key covered all languages: the Snowball release plus the
+ * sorted language list at the cutover.
+ *
+ * Compatibility boundary: a document whose language had a stemmer at the
+ * cutover and is still at revision 0, or had none and still has none, keeps
+ * this exact key, so its fingerprint is byte-identical and it does not
+ * re-project. Removable once no generation projected under the global key
+ * serves (case_law_v6 and case_law_v7 retired or rebuilt).
+ */
+const GLOBAL_MORPHOLOGY_LANGUAGES: ReadonlySet<string> = new Set([
+  "cs",
+  "da",
+  "de",
+  "el",
+  "en",
+  "es",
+  "et",
+  "fi",
+  "fr",
+  "ga",
+  "hu",
+  "it",
+  "lt",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "sk",
+  "sv",
+]);
+export const GLOBAL_MORPHOLOGY_KEY = `${SNOWBALL_RELEASE}+${[
+  ...GLOBAL_MORPHOLOGY_LANGUAGES,
+].join(",")}`;
+
+/**
+ * What a document in `language` is stemmed as, for anything that has to re-do
+ * work when the answer changes (null: a language this module does not stem).
  *
  * Stems are content, not schema: a generation's stem *fields* are pinned by
- * its manifest digest, but what those fields hold depends on the algorithms
- * behind them, so a document stemmed under one release carries stems the next
- * would write differently. The projection folds this into the fingerprint of
- * a generation that writes stem fields, which is what makes a new language or
- * a Snowball upgrade re-project the documents it changes instead of leaving
- * stale stems under a field the read path queries.
- *
- * Derived from the stemmer set rather than declared beside it: adding a
- * language moves the list, and a Snowball upgrade moves the release. The one
- * change it does not see is an edit to the vendored Slovak stemmer, which
- * carries no upstream version of its own.
+ * its manifest digest, but what those fields hold depends on the algorithm
+ * behind them. The projection folds this key into the fingerprint of a
+ * generation that writes stem fields, so a revision bump or a newly stemmed
+ * language re-projects that language's documents and no others. A Snowball
+ * upgrade moves every key, as it changes nearly every language at once.
  */
-export const MORPHOLOGY_VERSION = `${SNOWBALL_RELEASE}+${[
-  ...MORPHOLOGY_LANGUAGES,
-]
-  .toSorted()
-  .join(",")}`;
+export const morphologyKey = (language: MorphologyLanguage | null): string => {
+  if (language === null) {
+    return GLOBAL_MORPHOLOGY_KEY;
+  }
+  const revision = MORPHOLOGY_REVISIONS[language];
+  if (revision === 0 && GLOBAL_MORPHOLOGY_LANGUAGES.has(language)) {
+    return GLOBAL_MORPHOLOGY_KEY;
+  }
+  return `${SNOWBALL_RELEASE}+${language}.${revision}`;
+};
 
 /**
  * Snowball stemmer instances carry per-call cursor state and are not

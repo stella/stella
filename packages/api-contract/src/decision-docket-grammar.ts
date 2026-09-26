@@ -435,7 +435,18 @@ const CZE_DOCKET_PATTERNS = [
 ] as const;
 const SVK_DOCKET_RE =
   /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;
-const SVK_DOCKET_PATTERNS = [SVK_DOCKET_RE] as const;
+/**
+ * A Slovak Constitutional Court docket: a Roman senate numeral or `PL.` for
+ * the plenum, `ÚS`, the number and the year as the court wrote it (two digits
+ * in older dockets, four in newer ones): `II. ÚS 55/98`, `PL. ÚS 3/2019`.
+ * Readers drop the dot, the space or the accent (`IV. US 221/04`,
+ * `II.ÚS 55/98`), so each is optional, save that the senate stays apart from
+ * `ÚS` (`plus 5/98` is prose). The court's case lists join `ÚS` to the
+ * number with a slash (`II.ÚS/251/04`), which ingestion keys alike. The year
+ * keeps its width, because the stored key does.
+ */
+const SVK_CONSTITUTIONAL_DOCKET_RE =
+  /^(?<senate>pl|iv|i{1,3})(?:\. ?| )[úu]s(?: ?\/ ?| ?)(?<ordinal>\d{1,5})\/(?<year>\d{2}|\d{4})$/iu;
 /**
  * A Hungarian docket, as the court registry decrees (Büsz. and the OBH's
  * successor rules) prescribe it: an optional Arabic panel number, the registry
@@ -497,6 +508,49 @@ const AUT_DOCKET_PATTERNS = [
   /^[a-z]{1,2} ?\d{1,4}\/\d{4}(?:-\d{1,3})?$/iu,
   /^[a-z]{1,3}\/\d{1,8}\/\d{4}$/iu,
 ] as const;
+
+/**
+ * A Constitutional Court docket in the court's spelling (`II. ÚS 55/98`) and
+ * its stored `citation_key` (`iiús55/98`, `plús3/2019`): senate, `ús`, number
+ * and year run together in lower case, the accent kept, as the ingestion
+ * dedup key writes it. The identity lookup keys the formatted string the way
+ * ingestion keys a case number, so every spelling a reader types has to leave
+ * the grammar as the court's one.
+ */
+const slovakConstitutionalDocketOf = (
+  folded: string,
+): { formatted: string; canonical: string } | null => {
+  const groups = SVK_CONSTITUTIONAL_DOCKET_RE.exec(folded)?.groups;
+  const senate = groups?.["senate"];
+  const ordinal = groups?.["ordinal"];
+  const year = groups?.["year"];
+  if (senate === undefined || ordinal === undefined || year === undefined) {
+    return null;
+  }
+  return {
+    formatted: `${senate.toUpperCase()}. ÚS ${ordinal}/${year}`,
+    canonical: `${senate.toLowerCase()}ús${ordinal}/${year}`,
+  };
+};
+
+const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
+  jurisdiction: "SVK",
+  parse: (raw) => {
+    const folded = foldDecisionIdentifierInput(raw);
+    const constitutional = slovakConstitutionalDocketOf(folded);
+    if (constitutional !== null) {
+      return { jurisdiction: "SVK", ...constitutional };
+    }
+    if (!SVK_DOCKET_RE.test(folded)) {
+      return null;
+    }
+    return {
+      jurisdiction: "SVK",
+      formatted: folded,
+      canonical: canonicalSlovakDocketKey(folded),
+    };
+  },
+};
 
 const canonicalSlovakDocketKey = (formatted: string): string => {
   const groups = SVK_DOCKET_RE.exec(formatted)?.groups;
@@ -585,11 +639,7 @@ export const DECISION_DOCKET_GRAMMARS = {
     jurisdiction: "POL",
     patterns: POL_DOCKET_PATTERNS,
   }),
-  SVK: createDecisionDocketGrammar({
-    canonicalize: canonicalSlovakDocketKey,
-    jurisdiction: "SVK",
-    patterns: SVK_DOCKET_PATTERNS,
-  }),
+  SVK: slovakDocketGrammar,
 } as const satisfies {
   readonly [
     TJurisdiction in CaseLawJurisdiction
@@ -623,7 +673,7 @@ type ParseDecisionDocketOptions = {
 export const parseDecisionDocket = (
   raw: string,
   { grammar }: ParseDecisionDocketOptions = {},
-): ParsedDecisionDocket | null => {
+): ParsedDecisionDocket<DecisionDocketJurisdiction> | null => {
   if (grammar === null) {
     return null;
   }

@@ -1,11 +1,32 @@
+import { panic } from "better-result";
+
 import {
   canonicalDecisionIdentifierKey,
   canonicalDecisionDocket,
+  DECISION_DOCKET_GRAMMARS,
   foldDecisionIdentifierInput,
   formatDecisionDocket,
   parseDecisionDocket,
 } from "./decision-docket-grammar";
-import type { DecisionDocketGrammar } from "./decision-docket-grammar";
+import type {
+  DecisionDocketGrammar,
+  DecisionDocketJurisdiction,
+} from "./decision-docket-grammar";
+
+/**
+ * A decision named by its identifier. A docket carries the jurisdiction whose
+ * grammar read it, because only that grammar keys its spellings alike: the
+ * Czech and Slovak grammars both read `II. ÚS 55/98` and key it differently,
+ * and only the Slovak one reads `II.ÚS55/98`.
+ */
+export type DecisionIdentifierIntent =
+  | {
+      type: "identifier";
+      kind: "docket";
+      jurisdiction: DecisionDocketJurisdiction;
+      value: string;
+    }
+  | { type: "identifier"; kind: "ecli"; value: string };
 
 /**
  * What a case-law box entry asks for: a decision by its identifier (a docket
@@ -14,7 +35,7 @@ import type { DecisionDocketGrammar } from "./decision-docket-grammar";
  */
 export type DecisionQueryIntent =
   | { type: "empty" }
-  | { type: "identifier"; kind: "docket" | "ecli"; value: string }
+  | DecisionIdentifierIntent
   | { type: "text"; text: string };
 
 const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
@@ -40,6 +61,7 @@ export const parseDecisionQuery = (
     return {
       type: "identifier",
       kind: "docket",
+      jurisdiction: docket.jurisdiction,
       value: formatDecisionDocket(docket),
     };
   }
@@ -49,13 +71,32 @@ export const parseDecisionQuery = (
 /**
  * The identity of a docket or ECLI as publishers vary it: case, spacing and
  * dash style are theirs, not the docket's, and the sheet number names a page
- * of the file rather than the decision.
+ * of the file rather than the decision. A docket is read by the grammar that
+ * read the entry, so the entry and every stored spelling of it key alike.
  */
-const decisionIdentifierComparisonKey = (value: string): string => {
-  const docket = parseDecisionDocket(value);
+const decisionIdentifierComparisonKey = (
+  value: string,
+  grammar: DecisionDocketGrammar | undefined,
+): string => {
+  const docket = parseDecisionDocket(value, { grammar });
   return docket === null
     ? canonicalDecisionIdentifierKey(value)
     : canonicalDecisionDocket(docket);
+};
+
+/** An ECLI belongs to no docket grammar, so it is compared unscoped. */
+const comparisonGrammarOf = (
+  identifier: DecisionIdentifierIntent,
+): DecisionDocketGrammar | undefined => {
+  switch (identifier.kind) {
+    case "docket":
+      return DECISION_DOCKET_GRAMMARS[identifier.jurisdiction];
+    case "ecli":
+      return undefined;
+    default:
+      identifier satisfies never;
+      return panic("Unhandled decision identifier kind");
+  }
 };
 
 type DecisionHitIdentity = {
@@ -73,17 +114,17 @@ type DecisionHitIdentity = {
  * never picks one for them.
  */
 export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
-  identifier: string,
+  identifier: DecisionIdentifierIntent,
   hits: readonly THit[],
 ): THit[] => {
-  const wanted = decisionIdentifierComparisonKey(identifier);
+  const grammar = comparisonGrammarOf(identifier);
+  const keyOf = (value: string) =>
+    decisionIdentifierComparisonKey(value, grammar);
+  const wanted = keyOf(identifier.value);
   return hits.filter(
     (hit) =>
-      decisionIdentifierComparisonKey(hit.caseNumber) === wanted ||
-      (hit.ecli !== null &&
-        decisionIdentifierComparisonKey(hit.ecli) === wanted) ||
-      hit.identifiers?.some(
-        ({ value }) => decisionIdentifierComparisonKey(value) === wanted,
-      ) === true,
+      keyOf(hit.caseNumber) === wanted ||
+      (hit.ecli !== null && keyOf(hit.ecli) === wanted) ||
+      hit.identifiers?.some(({ value }) => keyOf(value) === wanted) === true,
   );
 };

@@ -121,13 +121,27 @@ const canonicalDocketArbitraries = {
       )
       .map(([unit, ordinal, year]) => `${unit}-${ordinal}/${year}`),
   ),
-  SVK: fc
-    .tuple(
-      fc.integer({ min: 1, max: 999 }),
-      fc.integer({ min: 1, max: 999_999 }),
-      fc.integer({ min: 1900, max: 2099 }),
-    )
-    .map(([senate, ordinal, year]) => `${senate}Xyz/${ordinal}/${year}`),
+  SVK: fc.oneof(
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1, max: 999_999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+      )
+      .map(([senate, ordinal, year]) => `${senate}Xyz/${ordinal}/${year}`),
+    fc
+      .tuple(
+        fc.constantFrom("I", "II", "III", "IV", "PL"),
+        fc.integer({ min: 1, max: 99_999 }),
+        fc.oneof(
+          fc
+            .integer({ min: 0, max: 99 })
+            .map((year) => `${year}`.padStart(2, "0")),
+          fc.integer({ min: 1993, max: 2099 }).map((year) => `${year}`),
+        ),
+      )
+      .map(([senate, ordinal, year]) => `${senate}. ÚS ${ordinal}/${year}`),
+  ),
 } as const satisfies Record<DecisionDocketJurisdiction, Arbitrary<string>>;
 
 describe("declared decision docket grammars", () => {
@@ -258,4 +272,67 @@ describe("declared decision docket grammars", () => {
       }
     });
   }
+});
+
+describe("Slovak Constitutional Court dockets", () => {
+  const grammar = DECISION_DOCKET_GRAMMARS.SVK;
+
+  test("the spellings readers type reach the stored key", () => {
+    const cases = [
+      ["II. ÚS 55/98", "II. ÚS 55/98", "iiús55/98"],
+      ["IV. US 221/04", "IV. ÚS 221/04", "ivús221/04"],
+      ["II.ÚS 55/98", "II. ÚS 55/98", "iiús55/98"],
+      ["I. ÚS 66/98", "I. ÚS 66/98", "iús66/98"],
+      ["III. ÚS 682/2017", "III. ÚS 682/2017", "iiiús682/2017"],
+      ["PL. ÚS 3/2019", "PL. ÚS 3/2019", "plús3/2019"],
+      ["Pl. ÚS 3/2019", "PL. ÚS 3/2019", "plús3/2019"],
+      ["i. ús 19/00", "I. ÚS 19/00", "iús19/00"],
+    ] as const;
+    for (const [typed, formatted, canonical] of cases) {
+      expect(grammar.parse(typed), typed).toEqual({
+        jurisdiction: "SVK",
+        formatted,
+        canonical,
+      });
+    }
+  });
+
+  test("a senate the court does not have, or a three-digit year, is not a docket", () => {
+    for (const text of [
+      "V. ÚS 1/20",
+      "II. ÚS 55/998",
+      "II. ÚSX 55/98",
+      "ÚS 55/98",
+      "plus 5/98",
+    ]) {
+      expect(grammar.parse(text), text).toBeNull();
+    }
+  });
+
+  test("every accepted spelling of one docket normalizes to one key", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom("I", "II", "III", "IV", "PL"),
+        fc.integer({ min: 1, max: 99_999 }),
+        fc.constantFrom("98", "04", "2017"),
+        fc.tuple(
+          fc.boolean(),
+          fc.constantFrom(". ", ".", " ", ".  ", ". "),
+          fc.constantFrom("ÚS", "US", "ús", "us", "Ús", "uS", "ÚS"),
+          fc.constantFrom("", " ", "/", " / "),
+          fc.constantFrom("", " ", "  ", " "),
+        ),
+        (senate, ordinal, year, [lower, separator, mark, tail, pad]) => {
+          const reference = grammar.parse(`${senate}. ÚS ${ordinal}/${year}`);
+          const typed = `${pad}${lower ? senate.toLowerCase() : senate}${separator}${mark}${tail}${ordinal}/${year}${pad}`;
+          const parsed = grammar.parse(typed);
+          expect(parsed, typed).toEqual(reference);
+          expect(parsed?.canonical).toBe(
+            `${senate.toLowerCase()}ús${ordinal}/${year}`,
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
 });

@@ -118,6 +118,20 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
   ],
   SVK: [
     {
+      canonical: "IV. ÚS 999/99",
+      variants: [
+        "IV. US 999/99",
+        "iv.ús 999/99",
+        "IV ÚS999/99",
+        "IV.US 999/99",
+        "IV.ÚS/999/99",
+      ],
+    },
+    {
+      canonical: "PL. ÚS 99/2099",
+      variants: ["Pl. ÚS 99/2099", "pl us 99/2099", "PL.ÚS 99/2099"],
+    },
+    {
       canonical: "99Xyz/999999/2099",
       variants: ["99 xyz 999999/2099", "99 xyz / 999999/2099"],
     },
