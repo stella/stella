@@ -36,6 +36,7 @@ const supremeId = createSafeId<"caseLawDecision">();
 const administrativeId = createSafeId<"caseLawDecision">();
 const listingOnlyId = createSafeId<"caseLawDecision">();
 const restrictedId = createSafeId<"caseLawDecision">();
+const reportedId = createSafeId<"caseLawDecision">();
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -143,6 +144,17 @@ beforeAll(
         language: "cs",
         languageGroupKey: "lookup-restricted",
       },
+      {
+        id: reportedId,
+        sourceId: openSourceId,
+        caseNumber: "1",
+        citationKey: citationKeyOf("1"),
+        court: "Supreme Court",
+        country: "CZE",
+        decisionDate: "1954-05-17",
+        language: "cs",
+        languageGroupKey: "lookup-reported",
+      },
     ]);
     await db.insert(caseLawDecisionIdentifiers).values([
       // Two parallel references on one decision: a joined case's docket and
@@ -171,6 +183,23 @@ beforeAll(
         decisionId: restrictedId,
         type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         value: "4 Tdo 4/2021",
+      }),
+      // Reporter citations as a publisher spaced and abbreviated them, and a
+      // neutral citation.
+      identifierRow({
+        decisionId: reportedId,
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "347 U. S. 483",
+      }),
+      identifierRow({
+        decisionId: reportedId,
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "98 Law. Ed. 873",
+      }),
+      identifierRow({
+        decisionId: reportedId,
+        type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+        value: "[1954] SC 7",
       }),
     ]);
   },
@@ -246,4 +275,70 @@ test("the publication and redistribution gates apply to an identifier match", as
     locator: { kind: "docket", value: "30 Cdo 400/2012" },
   });
   expect(elsewhere).toEqual([]);
+});
+
+test("a reporter citation resolves however the query spaces or abbreviates it, pin and all", async () => {
+  for (const value of [
+    "347 U.S. 483",
+    "347 U. S. 483, 495",
+    "98 L. Ed. 873",
+    "98 L.Ed. 873, at 880",
+  ]) {
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: { kind: "reporter", value },
+    });
+    expect(rows.map(({ id }) => id)).toEqual([reportedId]);
+  }
+
+  // The first page is identity; the next page is another decision.
+  const neighbour = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "reporter", value: "347 U.S. 484" },
+  });
+  expect(neighbour).toEqual([]);
+});
+
+test("a reporter citation another publisher stored still resolves", async () => {
+  const rows = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "reporter", value: "Rc 55/2013" },
+  });
+  expect(rows.map(({ id }) => id)).toEqual([supremeId]);
+});
+
+test("a typed reference resolves only through identifiers of its own type", async () => {
+  const neutral = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "neutral", value: "[1954] sc 7" },
+  });
+  expect(neutral.map(({ id }) => id)).toEqual([reportedId]);
+  expect(
+    neutral
+      .at(0)
+      ?.identifiers.map(({ type }) => type)
+      .toSorted(),
+  ).toEqual([
+    DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+    DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+  ]);
+
+  const neutralAsReporter = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "reporter", value: "[1954] SC 7" },
+  });
+  expect(neutralAsReporter).toEqual([]);
+
+  const reporterAsDocket = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "docket", value: "347 U.S. 483" },
+  });
+  expect(reporterAsDocket).toEqual([]);
 });

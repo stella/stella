@@ -140,6 +140,72 @@ describe("reading a case-law box entry", () => {
   });
 });
 
+describe("reading a reporter citation entry", () => {
+  test("a reporter citation is an identifier in its canonical spelling", () => {
+    expect(parseDecisionQuery("347 U.S. 483")).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "347 U.S. 483",
+    });
+    expect(parseDecisionQuery("  163 U. S. 537 ")).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "163 U.S. 537",
+    });
+    expect(parseDecisionQuery("87 A. 2d 862")).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "87 A.2d 862",
+    });
+  });
+
+  test("a pin does not change which decision the entry names", () => {
+    expect(parseDecisionQuery("347 U.S. 483, 495")).toEqual(
+      parseDecisionQuery("347 U.S. 483"),
+    );
+    expect(parseDecisionQuery("347 U. S. 483, at 494-495")).toEqual(
+      parseDecisionQuery("347 U.S. 483"),
+    );
+  });
+
+  test("a reporter citation is read whatever grammar the jurisdiction uses", () => {
+    expect(
+      parseDecisionQuery("347 U.S. 483", {
+        grammar: DECISION_DOCKET_GRAMMARS.POL,
+      }),
+    ).toMatchObject({ type: "identifier", kind: "reporter" });
+  });
+
+  test("a statute, a short form and an unknown reporter are not citations of a decision", () => {
+    for (const text of [
+      "28 U.S.C. § 1253",
+      "42 U.S.C. 1983",
+      "347 U.S., at 495",
+      "12 Xyz. 34",
+    ]) {
+      expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+    }
+  });
+
+  test("no docket the corpus's grammars read is taken for a reporter citation", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...canonicalDockets).chain(spellingOf),
+        (entry) => {
+          expect(parseDecisionQuery(entry)).not.toMatchObject({
+            kind: "reporter",
+          });
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+});
+
+const docketRef = (value: string) => ({ kind: "docket", value }) as const;
+const ecliRef = (value: string) => ({ kind: "ecli", value }) as const;
+const reporterRef = (value: string) => ({ kind: "reporter", value }) as const;
+
 describe("the hits that are the named decision", () => {
   const hit = (caseNumber: string, ecli: string | null = null) => ({
     caseNumber,
@@ -154,33 +220,48 @@ describe("the hits that are the named decision", () => {
           .chain((docket) => fc.tuple(fc.constant(docket), spellingOf(docket))),
         ([stored, typed]) => {
           const hits = [hit(stored), hit("99 Cdo 1/2000")];
-          expect(exactDecisionMatches(typed, hits)).toEqual([hit(stored)]);
+          expect(exactDecisionMatches(docketRef(typed), hits)).toEqual([
+            hit(stored),
+          ]);
         },
       ),
       propertyConfig(),
     );
     expect(
-      exactDecisionMatches("21 Cdo 470/2017-28", [hit("21 Cdo 470/2017")]),
+      exactDecisionMatches(docketRef("21 Cdo 470/2017-28"), [
+        hit("21 Cdo 470/2017"),
+      ]),
     ).toHaveLength(1);
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {
     expect(
-      exactDecisionMatches("G 1/2099", [hit("G 1/2099"), hit("G/1/2099")]),
+      exactDecisionMatches(docketRef("G 1/2099"), [
+        hit("G 1/2099"),
+        hit("G/1/2099"),
+      ]),
     ).toEqual([hit("G 1/2099")]);
   });
 
   test("under its own scope a United States docket number is identity, not a sheet", () => {
     const usa = { grammar: DECISION_DOCKET_GRAMMARS.USA };
     const hits = [hit("21-123"), hit("21-456")];
-    expect(exactDecisionMatches("21-123", hits, usa)).toEqual([hit("21-123")]);
-    expect(exactDecisionMatches("No. 21-456", hits, usa)).toEqual([
+    expect(exactDecisionMatches(docketRef("21-123"), hits, usa)).toEqual([
+      hit("21-123"),
+    ]);
+    expect(exactDecisionMatches(docketRef("No. 21-456"), hits, usa)).toEqual([
       hit("21-456"),
     ]);
-    expect(exactDecisionMatches("21-789", hits, usa)).toEqual([]);
-    expect(exactDecisionMatches("10-12", [hit("10-34")], usa)).toEqual([]);
+    expect(exactDecisionMatches(docketRef("21-789"), hits, usa)).toEqual([]);
     expect(
-      exactDecisionMatches("No. 5", [hit("No. 5"), hit("No. 6")], usa),
+      exactDecisionMatches(docketRef("10-12"), [hit("10-34")], usa),
+    ).toEqual([]);
+    expect(
+      exactDecisionMatches(
+        docketRef("No. 5"),
+        [hit("No. 5"), hit("No. 6")],
+        usa,
+      ),
     ).toEqual([hit("No. 5")]);
     expect(
       parseDecisionQuery("No. 21-123", {
@@ -197,16 +278,18 @@ describe("the hits that are the named decision", () => {
       expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
     }
     // `no.5` against `5`: the generic key keeps the two apart.
-    expect(exactDecisionMatches("No. 5", [hit("5")])).toEqual([]);
+    expect(exactDecisionMatches(docketRef("No. 5"), [hit("5")])).toEqual([]);
     // The generic key reads a trailing number as a sheet, so both are `10`.
-    expect(exactDecisionMatches("10-12", [hit("10-34")])).toEqual([
+    expect(exactDecisionMatches(docketRef("10-12"), [hit("10-34")])).toEqual([
       hit("10-34"),
     ]);
   });
 
   test("a Polish division split across tokens keeps the same identity", () => {
     expect(
-      exactDecisionMatches("III AUa 999999/99", [hit("III A Ua 999999/99")]),
+      exactDecisionMatches(docketRef("III AUa 999999/99"), [
+        hit("III A Ua 999999/99"),
+      ]),
     ).toHaveLength(1);
   });
 
@@ -220,7 +303,9 @@ describe("the hits that are the named decision", () => {
       },
       { caseNumber: "65 A 4/2025", court: "Krajský soud v Brně", ecli: null },
     ];
-    expect(exactDecisionMatches("65 A 3/2025", hits)).toHaveLength(2);
+    expect(exactDecisionMatches(docketRef("65 A 3/2025"), hits)).toHaveLength(
+      2,
+    );
   });
 
   test("a publisher's parallel case number matches too", () => {
@@ -234,8 +319,10 @@ describe("the hits that are the named decision", () => {
         ],
       },
     ];
-    expect(exactDecisionMatches("III AKz 12/23", hits)).toHaveLength(1);
-    expect(exactDecisionMatches("III AKz 13/23", hits)).toEqual([]);
+    expect(exactDecisionMatches(docketRef("III AKz 12/23"), hits)).toHaveLength(
+      1,
+    );
+    expect(exactDecisionMatches(docketRef("III AKz 13/23"), hits)).toEqual([]);
   });
 
   test("an ECLI matches the hit that carries it", () => {
@@ -243,10 +330,64 @@ describe("the hits that are the named decision", () => {
       hit("22 Cdo 2653/2012", "ECLI:CZ:NS:2014:22.CDO.2653.2012.1"),
     ];
     expect(
-      exactDecisionMatches("ecli:cz:ns:2014:22.cdo.2653.2012.1", hits),
+      exactDecisionMatches(ecliRef("ecli:cz:ns:2014:22.cdo.2653.2012.1"), hits),
     ).toHaveLength(1);
     expect(
-      exactDecisionMatches("ECLI:CZ:NS:2014:99.CDO.1.2000.1", hits),
+      exactDecisionMatches(ecliRef("ECLI:CZ:NS:2014:99.CDO.1.2000.1"), hits),
     ).toEqual([]);
+  });
+
+  describe("typed citations", () => {
+    const brown = {
+      caseNumber: "1",
+      ecli: null,
+      identifiers: [
+        { type: "case-number", value: "1" },
+        { type: "reporter-citation", value: "347 U. S. 483" },
+        { type: "reporter-citation", value: "98 L.Ed. 873" },
+      ],
+    };
+    const other = {
+      caseNumber: "347",
+      ecli: null,
+      identifiers: [{ type: "reporter-citation", value: "347 U.S. 484" }],
+    };
+
+    test("a reporter citation matches its parallel spellings, not a neighbouring page", () => {
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 483"), [brown, other]),
+      ).toEqual([brown]);
+      expect(
+        exactDecisionMatches(reporterRef("98 L. Ed. 873"), [brown, other]),
+      ).toEqual([brown]);
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 485"), [brown]),
+      ).toEqual([]);
+    });
+
+    test("a typed reference matches only an identifier of its own type", () => {
+      const docketOnly = {
+        caseNumber: "347 U.S. 483",
+        ecli: null,
+        identifiers: [{ type: "case-number", value: "347 U.S. 483" }],
+      };
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 483"), [docketOnly]),
+      ).toEqual([]);
+
+      const neutral = {
+        caseNumber: "1",
+        ecli: null,
+        identifiers: [{ type: "neutral-citation", value: "[2020] UKSC 1" }],
+      };
+      expect(
+        exactDecisionMatches({ kind: "neutral", value: "[2020] uksc 1" }, [
+          neutral,
+        ]),
+      ).toEqual([neutral]);
+      expect(
+        exactDecisionMatches(reporterRef("[2020] UKSC 1"), [neutral]),
+      ).toEqual([]);
+    });
   });
 });

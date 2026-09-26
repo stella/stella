@@ -1331,7 +1331,7 @@ const CONTRACT_CORPUS = {
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [{ value: "22 Cdo 1000/2020" }],
+            identifiers: [{ type: "case-number", value: "22 Cdo 1000/2020" }],
             language: "cs",
             languageAlternates: [],
             slug: "ns-22-cdo-1000-2020",

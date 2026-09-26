@@ -168,7 +168,7 @@ export const openDecisionMatch = async ({
     return false;
   }
 
-  const matches = exactDecisionMatches(intent.value, firstPage.decisions);
+  const matches = exactDecisionMatches(intent, firstPage.decisions);
   const only = matches.length === 1 ? matches.at(0) : undefined;
   if (only === undefined) {
     return false;
