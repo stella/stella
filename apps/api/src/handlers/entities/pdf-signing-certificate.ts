@@ -10,7 +10,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
 import { inspectSigningCertificate } from "@/api/lib/pdf-signing/certificate";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
-import { captureSigningDigest } from "@/api/lib/pdf-signing/sign-pdf";
+import {
+  captureSigningDigest,
+  PdfSigningCertifiedDocumentError,
+} from "@/api/lib/pdf-signing/sign-pdf";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -129,28 +132,47 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),
     );
 
-    const digestHex = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await captureSigningDigest({
-            basePdf,
-            certificate,
-            certificateChain: chain.filter((entry) => entry !== null),
-            keyType: inspection.keyType,
-            location: session.location,
-            reason: session.reason,
-            signatureAlgorithm: inspection.signatureAlgorithm,
-            signingTime,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 422,
-            code: "pdf_signing_prepare_failed",
-            message: "This PDF could not be prepared for signing.",
-            cause,
-          }),
-      }),
-    );
+    const captured = await Result.tryPromise({
+      try: async () =>
+        await captureSigningDigest({
+          basePdf,
+          certificate,
+          certificateChain: chain.filter((entry) => entry !== null),
+          keyType: inspection.keyType,
+          location: session.location,
+          reason: session.reason,
+          signatureAlgorithm: inspection.signatureAlgorithm,
+          signingTime,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(captured)) {
+      // Preparing is deterministic over the stored bytes, so a document that
+      // cannot be prepared now never will be: the exchange ends here, before
+      // the desktop asks for a PIN, rather than lingering until it expires.
+      const certified = PdfSigningCertifiedDocumentError.is(captured.error);
+      yield* Result.await(
+        closePdfSigningSession({
+          closeReason: certified ? "certified_document" : "signing_failed",
+          recordAuditEvent,
+          safeDb: session.safeDb,
+          sessionId: session.sessionId,
+        }),
+      );
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: certified
+            ? "pdf_signing_certified_document"
+            : "pdf_signing_prepare_failed",
+          message: certified
+            ? "This PDF is certified and its certification does not allow further signatures."
+            : "This PDF could not be prepared for signing.",
+          cause: captured.error,
+        }),
+      );
+    }
+    const digestHex = captured.value;
 
     yield* Result.await(
       session.safeDb(async (tx) => {

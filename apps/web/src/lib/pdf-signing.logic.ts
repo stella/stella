@@ -19,7 +19,9 @@ const PDF_SIGNING_FALLBACK_WATCH_MS = 2 * 60 * 1000;
 export type PdfSigningCloseReason =
   | "base_version_diverged"
   | "certificate_rejected"
+  | "certified_document"
   | "digest_mismatch"
+  | "signing_failed"
   | "unsupported_platform"
   | "user_cancelled";
 

@@ -44,6 +44,8 @@ export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
   "digest_mismatch",
   "unsupported_platform",
   "certificate_rejected",
+  "certified_document",
+  "signing_failed",
 ] as const;
 
 export type PdfSigningSessionCloseReason =
