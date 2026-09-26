@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "id": 13549872,
+      "dbModificationDate": "2026-09-05",
+      "identifiers": [{ "value": "00397865", "validFrom": "1919-06-27" }],
+      "fullNames": [
+        {
+          "value": "Univerzita Komenského v Bratislave",
+          "validFrom": "1954-11-15"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2010-01-01",
+          "street": "Šafárikovo námestie",
+          "regNumber": 0,
+          "buildingNumber": "6",
+          "postalCodes": ["81499"],
+          "municipality": {
+            "value": "Bratislava - mestská časť Staré Mesto",
+            "code": "SK0101528595",
+            "codelistCode": "CL000025"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1919-06-27",
+      "sourceRegister": {
+        "value": {
+          "value": "Register vysokých škôl",
+          "code": "15",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Ministerstvo školstva, výskumu, vývoja a mládeže Slovenskej republiky",
+            "validFrom": "2013-01-01"
+          }
+        ],
+        "registrationNumbers": [
+          { "value": "701000000", "validFrom": "2013-01-01" }
+        ]
+      }
+    }
+  ],
+  "license": "1. ŠÚ SR ako správca informačného systému RPO uplatňuje na použitie sprístupnených údajov z RPO uvedených v § 7 ods. 2 a § 7a ods. 4 zákona č. 272/2015 Z. z. o registri právnických osôb, podnikateľov a orgánov verejnej moci a o zmene a doplnení niektorých zákonov (ďalej len „zákon o registri právnických osôb“) medzinárodnú verejnú licenciu Creative Commons Attribution License (cc-by) 4.0 (ďalej len „verejná licencia“).\n2. Predmetom verejnej licencie sú sprístupnené údaje z RPO prostredníctvom webového sídla ŠÚ SR v zmysle § 7 ods. 2 a § 7a ods. 4 zákona o registri právnických osôb.\n3. ŠÚ SR udeľuje súhlas na použitie predmetu verejnej licencie a výkon licencovaných práv („licencia“) podľa vyššie citovanej verejnej licencie."
+}

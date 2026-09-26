@@ -212,6 +212,7 @@ const getRegistryRecord = (details: RegistryDetailsValue) => {
       return details.company;
     case "brreg":
     case "krs":
+    case "rpo":
       return details.entity;
     case "denue":
       return details.establishment;

@@ -15153,7 +15153,7 @@ export type WebRoutes = {
                 name: string;
                 formatType?: "company-specification" | "registry-reference";
               }>;
-              defaultRegistryId: (null | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "vies");
+              defaultRegistryId: (null | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies");
             } & {
               account: {
                 email: string;
@@ -18955,7 +18955,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              unavailableNativeToolBackendSlugs: Array<("ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "vies" | "infosoud" | "boe" | "web-search")>;
+              unavailableNativeToolBackendSlugs: Array<("ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | "infosoud" | "boe" | "web-search")>;
             };
             400: Tc642053948;
             401: T6acd1b6804;
@@ -32493,6 +32493,14 @@ type T2a47f63130 = {
   metadata?: undefined | T699c354d0c;
 };
 
+type T2a4f47275f = {
+  street: T432e07d100;
+  postalCode: T432e07d100;
+  city: T432e07d100;
+  country: T432e07d100;
+  textAddress: T432e07d100;
+};
+
 type T2a67644a3a = {
   code?: string;
   message: string;
@@ -32760,6 +32768,7 @@ type T3906e8d961 = "other" | "billing" | "office" | "home" | "mailing" | "servic
 type T3a3428dc33 = {
   jurisdiction: T9960bad961;
   query: string;
+  registry?: undefined | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
   limit?: undefined | number;
 };
 
@@ -33180,6 +33189,11 @@ type T4f778d673c = null | T500eb4106c;
 
 type T4fc8c01a92 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "timeEntry";
+};
+
+type T4fdf96043b = null | {
+  amount: number;
+  currency: T432e07d100;
 };
 
 type T4feef5505a = {
@@ -33635,6 +33649,16 @@ type T699c354d0c = {
 
 type T69b490d0c6 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateClause";
+};
+
+type T6a0aab9fa4 = {
+  name: string;
+  organName: T432e07d100;
+  position: T432e07d100;
+  identifier: T432e07d100;
+  address: T432e07d100;
+  validFrom: T432e07d100;
+  validTo: T432e07d100;
 };
 
 type T6a4a80b749 = {
@@ -34806,6 +34830,7 @@ type T938d9cc2e1 = string & valibot_Brand<"SafeId"> & Tc13989dabb;
 type T93ee1fa9f8 = {
   jurisdiction: T9960bad961;
   query: string;
+  registry?: undefined | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
   limit?: undefined | number;
 };
 
@@ -35504,6 +35529,45 @@ type T9d9802fdcb = {
       registryUrl: string;
     };
   } | {
+    registry: "rpo";
+    entity: {
+      ico: string;
+      name: string;
+      formerNames: Array<Tce3bb03cef>;
+      legalForm: Tf12dd4efe0;
+      address: (null | T2a4f47275f);
+      formerAddresses: Array<{
+        value: T2a4f47275f;
+        validFrom: T432e07d100;
+        validTo: T432e07d100;
+      }>;
+      establishedAt: T432e07d100;
+      terminatedAt: T432e07d100;
+      status: {
+        type: "active";
+      } | {
+        type: "terminated";
+        terminatedAt: string;
+      };
+      legalStatuses: Array<string>;
+      sourceRegister: (null | {
+        name: string;
+        code: T432e07d100;
+        registrationOffice: T432e07d100;
+        registrationNumber: T432e07d100;
+      });
+      statutoryBodies: Array<T6a0aab9fa4>;
+      stakeholders: Array<T6a0aab9fa4>;
+      authorizations: Array<Tce3bb03cef>;
+      shareCapital: T4fdf96043b;
+      shareCapitalPaid: T4fdf96043b;
+      activities: Array<Tce3bb03cef>;
+      mainActivity: Tf12dd4efe0;
+      predecessors: Array<Ta08bea2410>;
+      successors: Array<Ta08bea2410>;
+      registryUrl: string;
+    };
+  } | {
     registry: "vies";
     validation: {
       vatNumber: {
@@ -35575,6 +35639,12 @@ type T9ffc3fafa7 = {
 };
 
 type Ta083079a24 = "other" | "mobile" | "office" | "home" | "fax";
+
+type Ta08bea2410 = {
+  ico: T432e07d100;
+  name: string;
+  validFrom: T432e07d100;
+};
 
 type Ta0b306ecbf = {
   templateId: string;
@@ -36177,7 +36247,7 @@ type Tb368e5ae56 = {
   status: "ready";
 };
 
-type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "vies";
+type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
 
 type Tb47b7b98fd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowDefinition";
@@ -36748,6 +36818,12 @@ type Tcdf7409741 = {
 type Tce28b0606f = {
   condition: Td23efda0c9;
   dependsOnPropertyId: T80d841ed63;
+};
+
+type Tce3bb03cef = {
+  value: string;
+  validFrom: T432e07d100;
+  validTo: T432e07d100;
 };
 
 type Td06876de99 = T24da1e86c5 | T8cd5b388a4;
@@ -37562,6 +37638,11 @@ type Teff106c9af = null | false | true;
 type Tf0ef540b72 = {
   readonly input: Record<never, never>;
   readonly output: Record<never, never>;
+};
+
+type Tf12dd4efe0 = null | {
+  code: T432e07d100;
+  label: string;
 };
 
 type Tf13f15d459 = {

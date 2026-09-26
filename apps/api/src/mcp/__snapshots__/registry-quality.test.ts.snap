@@ -1411,6 +1411,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                           "orsr",
                           "prh",
                           "recherche-entreprises",
+                          "rpo",
                           "vies"
                         ],
                         "type": "string"
@@ -2838,7 +2839,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "lookup_business_registry",
     "scope": "stella:read",
     "access": "read",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, RPO, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -2865,6 +2866,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "orsr",
             "prh",
             "recherche-entreprises",
+            "rpo",
             "vies"
           ],
           "type": "string",
@@ -5987,7 +5989,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "lookup_business_registry",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, RPO, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -6014,6 +6016,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "orsr",
             "prh",
             "recherche-entreprises",
+            "rpo",
             "vies"
           ],
           "type": "string",

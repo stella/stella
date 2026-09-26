@@ -29,6 +29,7 @@ import {
   RechercheEntreprisesAPIError,
   RechercheEntreprisesRequestError,
 } from "@stll/business-registries/recherche-entreprises";
+import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 
 import {
@@ -151,6 +152,40 @@ describe("executeRegistryLookup — details channel", () => {
       throw new TypeError("expected a mapped HandlerError");
     }
     expect(result.message).not.toContain("sensitive transport detail");
+  });
+});
+
+describe("jurisdiction routing", () => {
+  test("every jurisdiction has exactly one primary register", () => {
+    const primaries = new Map<string, string[]>();
+    for (const handler of Object.values(BUSINESS_REGISTRY_DISPATCH)) {
+      const slugs = primaries.get(handler.country) ?? [];
+      if (handler.jurisdictionRole.type === "primary") {
+        slugs.push(handler.slug);
+      }
+      primaries.set(handler.country, slugs);
+    }
+    for (const [country, slugs] of primaries) {
+      expect({ country, primaries: slugs.length }).toEqual({
+        country,
+        primaries: 1,
+      });
+    }
+  });
+
+  test("Slovakia resolves to ORSR; RPO is reached by its slug", () => {
+    expect(getRegistryHandlerByCountry("SK")?.slug).toBe("orsr");
+    expect(BUSINESS_REGISTRY_DISPATCH.rpo).toMatchObject({
+      country: "SK",
+      jurisdictionRole: { type: "supplementary" },
+    });
+  });
+
+  test("RPO treats any eight digits as an IČO, checksum or not", () => {
+    const { isCanonicalId } = BUSINESS_REGISTRY_DISPATCH.rpo;
+    expect(isCanonicalId("11111111")).toBe(true);
+    expect(isCanonicalId("31 333 532")).toBe(true);
+    expect(isCanonicalId("ESET")).toBe(false);
   });
 });
 
@@ -483,6 +518,13 @@ const UPSTREAM_FAILURES = {
     }),
     request: new RechercheEntreprisesRequestError(
       "https://recherche-entreprises.example.invalid",
+      "request failed",
+    ),
+  },
+  rpo: {
+    api: new RpoAPIError({ message: "RPO 503", httpStatus: 503 }),
+    request: new RpoRequestError(
+      "https://rpo.example.invalid",
       "request failed",
     ),
   },

@@ -2151,8 +2151,8 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register (ARES, Brreg, " +
       "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
-      "or VIES). Pass a canonical identifier (company/registration number, " +
-      "VAT number) for an exact match, or a company name to search where the " +
+      "RPO, or VIES). Pass a canonical identifier (company/registration " +
+      "number, VAT number) for an exact match, or a company name to search where the " +
       "register supports it. Returns registered names, addresses, and " +
       "registry-specific details. Result IDs belong to the external registry, " +
       "not stella's contact directory; create a contact with save_contact " +

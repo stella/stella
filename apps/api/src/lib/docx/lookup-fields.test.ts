@@ -31,6 +31,7 @@ import {
   parseLookupMarkdown,
   renderLookupHit,
   renderLookupOutput,
+  renderLookupTemplate,
   resolveLookupFields,
   stripLookupMarkdown,
 } from "./lookup-fields";
@@ -1745,6 +1746,38 @@ describe("built-in party clauses", () => {
         orsrHit(ORSR_COMPANY, "Bratislava"),
       ),
     ).toBe("oddiel Sro, vložka 3586/B");
+  });
+
+  const rpoHit = (
+    legalForm: string | null,
+    textAddress: string | null,
+  ): BusinessRegistryHit => ({
+    registry: "rpo",
+    id: "00397865",
+    name: "Univerzita Komenského v Bratislave",
+    legalForm,
+    address: textAddressOf(textAddress),
+    registryUrl: "https://example.invalid/sk/00397865",
+  });
+
+  test("RPO renders its built-in format and drops particulars it lacks", () => {
+    const complete = rpoHit(
+      "Verejnoprávna inštitúcia",
+      "Šafárikovo námestie 6, 814 99 Bratislava",
+    );
+    const expected =
+      "**Univerzita Komenského v Bratislave**, Verejnoprávna inštitúcia, sídlo: Šafárikovo námestie 6, 814 99 Bratislava, IČO: 00397865";
+    expect(renderLookupOutput(null, complete)).toBe(expected);
+    // The advertised default template renders the same text.
+    expect(
+      renderLookupTemplate(
+        BUSINESS_REGISTRY_FORMAT_CAPABILITIES.rpo.defaultFormat,
+        complete,
+      ),
+    ).toBe(expected);
+    expect(renderLookupOutput(null, rpoHit(null, null))).toBe(
+      "**Univerzita Komenského v Bratislave**, IČO: 00397865",
+    );
   });
 
   const brregHit = (textAddress: string | null): BusinessRegistryHit => ({
