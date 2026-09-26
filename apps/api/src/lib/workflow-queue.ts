@@ -454,6 +454,22 @@ export const startWorkflow = async ({
   // reports instead, releasing the claim first. Releasing is best-effort by
   // necessity — the release travels the connection that just failed — and the
   // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
+  const releaseClaimAndFail = async (
+    cause: unknown,
+  ): Promise<StartWorkflowResult> => {
+    // Compare-and-delete on this request's own id: the release runs after a
+    // failure, so by the time it lands the claim's TTL may have lapsed and a
+    // replacement run may hold the workspace. Releasing that one would hand a
+    // third caller a workspace two runs believe they own.
+    await runStateStore
+      .releaseClaim({ requestId, workspaceId })
+      .catch((releaseError: unknown) =>
+        captureError(releaseError, { workspaceId }),
+      );
+    captureError(cause, { workspaceId });
+    return { status: "failed" };
+  };
+
   const requestIdSet = await Result.tryPromise({
     try: async () =>
       await runStateStore.setRequestId({
@@ -464,33 +480,26 @@ export const startWorkflow = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(requestIdSet)) {
-    // Compare-and-delete on this request's own id: the release runs after a
-    // Valkey failure, so by the time it lands the claim's TTL may have lapsed
-    // and a replacement run may hold the workspace. Releasing that one would
-    // hand a third caller a workspace two runs believe they own.
-    await runStateStore
-      .releaseClaim({ requestId, workspaceId })
-      .catch((releaseError: unknown) =>
-        captureError(releaseError, { workspaceId }),
-      );
-    captureError(requestIdSet.error, { workspaceId });
-    return { status: "failed" };
+    return await releaseClaimAndFail(requestIdSet.error);
   }
 
-  const createdRunKey = await extractionRunStore
-    .create({
-      ...runKey,
-      requestedBy: userId,
-      scope: extractionRunScope({
-        entityIds: inputEntityIds,
-        propertyIds: inputPropertyIds,
+  // Every run that plans or enqueues work has its lifecycle row, so a start
+  // that cannot record its run dispatches nothing.
+  const runCreated = await Result.tryPromise({
+    try: async () =>
+      await extractionRunStore.create({
+        ...runKey,
+        requestedBy: userId,
+        scope: extractionRunScope({
+          entityIds: inputEntityIds,
+          propertyIds: inputPropertyIds,
+        }),
       }),
-    })
-    .then(() => runKey)
-    .catch((error: unknown) => {
-      captureError(error, { workspaceId });
-      return undefined;
-    });
+    catch: (cause) => cause,
+  });
+  if (Result.isError(runCreated)) {
+    return await releaseClaimAndFail(runCreated.error);
+  }
 
   try {
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
@@ -526,11 +535,9 @@ export const startWorkflow = async ({
     );
 
     if (!hasWork) {
-      if (createdRunKey) {
-        await extractionRunStore
-          .skip(createdRunKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-      }
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -571,11 +578,9 @@ export const startWorkflow = async ({
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
-      if (createdRunKey) {
-        await extractionRunStore
-          .skip(createdRunKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-      }
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -604,11 +609,9 @@ export const startWorkflow = async ({
       workspaceId,
     });
 
-    if (createdRunKey) {
-      await extractionRunStore
-        .start({ ...createdRunKey, total: targetCount })
-        .catch((error: unknown) => captureError(error, { workspaceId }));
-    }
+    await extractionRunStore
+      .start({ ...runKey, total: targetCount })
+      .catch((error: unknown) => captureError(error, { workspaceId }));
 
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId);
@@ -651,11 +654,9 @@ export const startWorkflow = async ({
 
     return { status: "started" };
   } catch (error: unknown) {
-    if (createdRunKey) {
-      await extractionRunStore
-        .fail({ ...createdRunKey, errorCode: errorTag(error) })
-        .catch((runError: unknown) => captureError(runError, { workspaceId }));
-    }
+    await extractionRunStore
+      .fail({ ...runKey, errorCode: errorTag(error) })
+      .catch((runError: unknown) => captureError(runError, { workspaceId }));
     await runStateStore.clear(workspaceId);
     broadcastWorkflowStatus(workspaceId);
     captureError(error, { workspaceId });
