@@ -106,6 +106,7 @@ export const correspondence = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "correspondence_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
@@ -187,18 +188,21 @@ export const correspondenceFilers = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "correspondence_filers_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "correspondence_filers_record_workspace_fk",
         columns: [table.correspondenceId, table.workspaceId],
         foreignColumns: [correspondence.id, correspondence.workspaceId],
       })
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "correspondence_filers_sender_organization_fk",
         columns: [table.filedByAllowedSenderId, table.organizationId],
         foreignColumns: [
           correspondenceAllowedSenders.id,
@@ -253,18 +257,21 @@ export const correspondenceAttachments = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "correspondence_attachments_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "correspondence_attachments_record_workspace_fk",
         columns: [table.correspondenceId, table.workspaceId],
         foreignColumns: [correspondence.id, correspondence.workspaceId],
       })
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "correspondence_attachments_entity_workspace_fk",
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
@@ -306,6 +313,7 @@ export const matterInboundAddresses = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "matter_inbound_addresses_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
@@ -331,9 +339,7 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
   "correspondence_allowed_senders",
   {
     id: pUuid<"correspondenceAllowedSender">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
     address: p.text("address").notNull(),
     kind: p.text("kind", { enum: CORRESPONDENCE_SENDER_KINDS }).notNull(),
     scope: p.text("scope", { enum: CORRESPONDENCE_SENDER_SCOPES }).notNull(),
@@ -347,6 +353,13 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
     revokedAt: timestamptz("revoked_at"),
   },
   (table) => [
+    p
+      .foreignKey({
+        name: "correspondence_allowed_senders_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     p
       .unique("correspondence_allowed_senders_id_org_unq")
       .on(table.id, table.organizationId),
@@ -398,12 +411,14 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "correspondence_allowed_sender_matters_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "correspondence_allowed_sender_matters_sender_organization_fk",
         columns: [table.allowedSenderId, table.organizationId],
         foreignColumns: [
           correspondenceAllowedSenders.id,
@@ -439,6 +454,7 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
   (table) => [
     p
       .foreignKey({
+        name: "correspondence_drop_logs_workspace_organization_fk",
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
