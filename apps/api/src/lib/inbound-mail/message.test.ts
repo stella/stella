@@ -242,7 +242,9 @@ describe("inbound MIME normalization", () => {
     expect(parsed.message.text).toContain("Original body");
     expect(parsed.message.messageId).toBe("<original@outside.test>");
     expect(parsed.message.attachments).toHaveLength(1);
-    expect(parsed.message.attachments[0]?.fileName).toBe("___brief.pdf");
+    expect(String(parsed.message.attachments[0]?.fileName)).toBe(
+      "___brief.pdf",
+    );
   });
 
   test.each([

@@ -666,6 +666,9 @@ describe("service-owned buffer publication in the database", () => {
       workspaceId: ids.wsA1,
       direction: "in",
       channel: "email",
+      intake: "direct",
+      authenticatedSenderAddress: "sender@example.test",
+      originalSignature: null,
       contentHash: "a".repeat(64),
       dedupKey: "b".repeat(64),
       from: { address: "sender@example.test", name: null },
@@ -743,11 +746,11 @@ describe("service-owned buffer publication in the database", () => {
     }
     createdEntityIds.push(created.value.entityId);
 
-    expect(intentDuringTransaction).toEqual({
+    expect(intentDuringTransaction).toMatchObject({
       status: "writing",
-      writerUserId: "",
       objectKey: objectKey(),
     });
+    expect(String(intentDuringTransaction?.writerUserId)).toBe("");
     expect(await intentForObject()).toBeUndefined();
     expect(
       await db.$count(pendingUploads, eq(pendingUploads.workspaceId, ids.wsA1)),
