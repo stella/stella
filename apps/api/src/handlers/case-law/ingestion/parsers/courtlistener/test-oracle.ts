@@ -241,6 +241,17 @@ const htmlWords = (
       cursor = commentEnd === -1 ? source.length : commentEnd + 3;
       continue;
     }
+    const next = source[opening + 1];
+    const tagStart = next !== undefined && /[a-zA-Z!?]/u.test(next);
+    const closingTagStart =
+      next === "/" &&
+      source[opening + 2] !== undefined &&
+      /[a-zA-Z]/u.test(source[opening + 2]);
+    if (!tagStart && !closingTagStart) {
+      emit(opening, opening + 1);
+      cursor = opening + 1;
+      continue;
+    }
     const close = findTagEnd(source, opening + 1);
     if (close < 0) {
       emit(opening, opening + 1);
@@ -255,15 +266,22 @@ const htmlWords = (
     }
     const closing = match[1] === "/";
     const name = match[2]?.toLowerCase();
-    if (name === undefined) {continue;}
+    if (name === undefined) {
+      continue;
+    }
     if (suppressedTag !== null) {
       if (closing && name === suppressedTag) {
         suppressedTag = null;
       }
       continue;
     }
-    if (name === "script" || name === "style") {
-      if (!closing) {
+    if (
+      name === "script" ||
+      name === "style" ||
+      name === "title" ||
+      name === "template"
+    ) {
+      if (!closing && !/\/\s*$/u.test(raw)) {
         suppressedTag = name;
       }
       continue;
