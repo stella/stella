@@ -266,7 +266,7 @@ export const parseProviderAuthentication = ({
     const properties = new Map<string, string>();
     for (const property of part
       .slice(match[0].length)
-      .matchAll(/([a-z]+\.[a-z]+)\s*=\s*(?:"([^"\s]*)"|([^\s]+))/giu)) {
+      .matchAll(/(?:^|\s)([a-z]+\.[a-z]+)\s*=\s*(?:"([^"\s]*)"|([^\s]+))/giu)) {
       const key = property[1]?.toLowerCase();
       const value = property[2] ?? property[3];
       if (!key || value === undefined || properties.has(key)) {

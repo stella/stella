@@ -29,6 +29,7 @@ import {
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   CORRESPONDENCE_DROP_HINT_LABELS,
   CORRESPONDENCE_DROP_REASON_LABELS,
@@ -87,10 +88,10 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           header: t("correspondence.receivedAt"),
           cell: ({ getValue }) => (
             <time className="tabular-nums" dateTime={getValue()}>
-              {format.dateTime(new Date(getValue()), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              {format.dateTime(
+                new Date(getValue()),
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )}
             </time>
           ),
         }),
@@ -114,7 +115,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
     [format, t],
   );
   const items = useMemo(
-    () => data?.pages.flatMap((page) => page.items) ?? [],
+    () => (data ? data.pages.flatMap((page) => page.items) : []),
     [data],
   );
   const table = useTable({
@@ -160,7 +161,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           )}
           {table.getRowModel().rows.map((row) => (
             <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
+              {row.getAllCells().map((cell) => (
                 <TableCell key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>

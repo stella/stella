@@ -65,7 +65,7 @@ export class InboundMessageError extends TaggedError("InboundMessageError")<{
 }> {}
 
 const INVALID_MAILBOX = /[\s<>;,]/u;
-const MESSAGE_ID_PATTERN = /<[^<>\s]+@[^<>\s]+>/gu;
+const MESSAGE_ID_PATTERN = /<[^<>\s@]+@[^<>\s@]+>/gu;
 const RFC_EXPLICIT_ZONE_DATE =
   /^(?:[a-z]{3},?\s+)?(\d{1,2})\s+([a-z]{3})\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+([+-]\d{4}|UTC|GMT|UT)$/iu;
 const ISO_EXPLICIT_ZONE_DATE =
@@ -161,9 +161,9 @@ const parseOneMailbox = (value: string): string | null => {
   return addresses.length === 1 && address ? normalizeMailbox(address) : null;
 };
 
-const normalizeAddresses = (addresses: Address[] | undefined): string[] => {
+const normalizeAddresses = (addresses: Address[] = []): string[] => {
   const result: string[] = [];
-  for (const address of addresses ?? []) {
+  for (const address of addresses) {
     if (address.group) {
       for (const member of address.group) {
         const mailbox = normalizeMailbox(member);
@@ -190,11 +190,11 @@ const normalizeHeaderId = (value: string | undefined): string | null => {
   return `${id.slice(0, at + 1)}${id.slice(at + 1, -1).toLowerCase()}>`;
 };
 
-const normalizeReferences = (value: string | undefined): string[] =>
-  value?.match(MESSAGE_ID_PATTERN)?.flatMap((id) => {
+const normalizeReferences = (value = ""): string[] =>
+  Array.from(value.matchAll(MESSAGE_ID_PATTERN)).flatMap(([id]) => {
     const normalized = normalizeHeaderId(id);
     return normalized ? [normalized] : [];
-  }) ?? [];
+  });
 
 const parseExplicitDateParts = (value: string) => {
   const rfc = RFC_EXPLICIT_ZONE_DATE.exec(value);
@@ -235,7 +235,10 @@ const hasInvalidDateOffset = (zone: string): boolean => {
 };
 
 const explicitZoneDate = (value: string): string | null => {
-  const trimmed = value.trim().replace(/\s+\([^()]*\)$/u, "");
+  const trimmed = value
+    .trim()
+    .replace(/\s\([^()]*\)$/u, "")
+    .trimEnd();
   const parts = parseExplicitDateParts(trimmed);
   if (!parts || hasInvalidDateOffset(parts.zone)) {
     return null;
@@ -291,8 +294,8 @@ const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {
     .decode(raw.subarray(0, headerEnd))
     .replace(/\r?\n[\t ]+/gu, " ");
   const dates = headers.split(/\r?\n/u).flatMap((line) => {
-    const match = /^date:\s*(.*)$/iu.exec(line);
-    return match ? [match[1] ?? ""] : [];
+    const match = /^date:(.*)$/iu.exec(line);
+    return match ? [match[1]?.trimStart() ?? ""] : [];
   });
   return dates.length === 1 ? (dates.at(0) ?? null) : null;
 };

@@ -41,6 +41,8 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -60,6 +62,11 @@ const ENTITY_BUFFER_INTENT_TELEMETRY = {
   heartbeat: "buffer-entity-intent-heartbeat",
   heartbeatUnhandled: "buffer-entity-intent-heartbeat-unhandled",
 };
+
+const cleanupSettlementFailure = failureSink({
+  event: "entities.buffer_cleanup_settlement_failed",
+  expected: [],
+});
 
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
@@ -297,7 +304,10 @@ export const createEntityFromBuffer = async ({
           }),
         });
         if (settled.isErr()) {
-          captureError(settled.error, { entityId });
+          observeFailure(settled.error, {
+            sink: cleanupSettlementFailure,
+            ctx: { entityId },
+          });
         }
       }
       throw error;
@@ -488,7 +498,10 @@ export const createEntityFromBuffer = async ({
             }),
           });
           if (settled.isErr()) {
-            captureError(settled.error, { entityId });
+            observeFailure(settled.error, {
+              sink: cleanupSettlementFailure,
+              ctx: { entityId },
+            });
           }
         } else if (cleanupSucceeded) {
           await abandonBufferIntent({
