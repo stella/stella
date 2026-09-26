@@ -1,6 +1,7 @@
 error-payload.js: toRunErrorRawEvent keeps the provider's HTTP status next to
-the body it forwards, and forwards an AWS service exception's name, fault side
-and status (it has no body). `code` precedence (#985) is unchanged.
+the body it forwards, forwards an AWS service exception's name, fault side
+and status (it has no body), and forwards the status alone when the error has
+no body. `code` precedence (#985) is unchanged.
 Upstream: to be raised as an issue (a status field on RUN_ERROR).
 Remove when a @tanstack/ai release carries the status on RUN_ERROR.
 
@@ -75,10 +76,10 @@ index 240c7373c037311973b4e304e59071a6b7660a56..d982a23b7ca8cf8c009f9db383c3f40e
  		if (resumeState?.cancelledToolCallIds?.has(toolCall.id)) {
  			results.push({
 diff --git a/dist/esm/activities/error-payload.js b/dist/esm/activities/error-payload.js
-index adf8a899dda16d289331cebfece36a6c80263d0c..8c7703d4daeb63c0122752d3aa898fb5d8aa24f6 100644
+index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a3f55e56f 100644
 --- a/dist/esm/activities/error-payload.js
 +++ b/dist/esm/activities/error-payload.js
-@@ -91,12 +91,44 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
+@@ -91,12 +91,52 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
  *   const rawEvent = toRunErrorRawEvent(error)
  *   yield { type: EventType.RUN_ERROR, ..., ...(rawEvent !== undefined && { rawEvent }) }
  */
@@ -113,6 +114,14 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..8c7703d4daeb63c0122752d3aa898fb5
 +		...typeof e.message === "string" && { message: e.message }
 +	};
 +}
++/**
++* A response whose body is not a JSON object (plain text, HTML, empty) still
++* left its HTTP status on the exception.
++*/
++function statusEvidence(e) {
++	const status = httpStatusOf(e);
++	return status === void 0 ? void 0 : { status };
++}
  function toRunErrorRawEvent(error) {
  	if (!error || typeof error !== "object") return void 0;
  	const e = error;
@@ -122,7 +131,7 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..8c7703d4daeb63c0122752d3aa898fb5
 +	if (e.rawEvent !== void 0 && e.rawEvent !== null) return withHttpStatus(e.rawEvent, e);
 +	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return withHttpStatus(e.error, e);
 +	if (e.metadata !== void 0 && e.metadata !== null) return withHttpStatus(e.metadata, e);
-+	return awsExceptionEvidence(e);
++	return awsExceptionEvidence(e) ?? statusEvidence(e);
  }
  //#endregion
  export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };

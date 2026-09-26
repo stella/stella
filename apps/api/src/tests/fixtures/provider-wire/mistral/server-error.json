@@ -3,7 +3,7 @@
   "provider": "mistral",
   "scenario": "server-error",
   "source": "synthetic",
-  "basis": "Mistral API error reference: {object:error, message, type, param, code} JSON bodies",
+  "basis": "A gateway's plain-text 503 in front of the API: no JSON error body",
   "model": "mistral-medium-latest",
   "exchanges": [
     {
@@ -14,11 +14,11 @@
       "response": {
         "status": 503,
         "headers": {
-          "content-type": "application/json"
+          "content-type": "text/plain"
         },
         "body": {
           "encoding": "text",
-          "text": "{\"object\":\"error\",\"message\":\"Service unavailable\",\"type\":\"service_unavailable\",\"param\":null,\"code\":\"1000\"}"
+          "text": "Service Unavailable"
         }
       },
       "repeat": true
