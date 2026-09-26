@@ -142,6 +142,42 @@ export const redeemPdfSigningHandoff = async (
     return null;
   }
 
+  // The creator's access is re-read before the handoff is spent: the link
+  // may have been minted just before access was withdrawn, and redemption
+  // hands back document and matter names.
+  const creators = await db
+    .select({
+      organizationRole: member.role,
+      workspaceMemberId: workspaceMembers.id,
+    })
+    .from(pdfSigningSessions)
+    .innerJoin(workspaces, eq(pdfSigningSessions.workspaceId, workspaces.id))
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, pdfSigningSessions.createdBy),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
+        eq(workspaceMembers.workspaceId, pdfSigningSessions.workspaceId),
+      ),
+    )
+    .where(
+      eq(
+        pdfSigningSessions.handoffTokenHash,
+        hashPdfSigningToken(handoffToken),
+      ),
+    )
+    .limit(1);
+  const creator = creators.at(0);
+  if (!creator || !canWriteWorkspaceEntities(creator)) {
+    return null;
+  }
+
   const now = new Date();
   const sessionToken = createPdfSigningToken();
   const expiresAt = computePdfSigningSessionExpiresAt();
