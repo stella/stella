@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "provider": "anthropic",
+  "scenario": "server-error",
+  "source": "synthetic",
+  "basis": "Anthropic Messages API errors reference: error object shape; 529 overloaded_error",
+  "model": "claude-opus-5-5",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages?beta=true"
+      },
+      "response": {
+        "status": 529,
+        "headers": {
+          "content-type": "application/json",
+          "request-id": "req_011CassetteReplay00000002"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"},\"request_id\":\"req_011CassetteReplay00000002\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}

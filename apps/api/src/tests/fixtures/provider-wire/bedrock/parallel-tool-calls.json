@@ -1,0 +1,243 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "parallel-tool-calls",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream",
+          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "role": "assistant",
+                "p": "abcdef"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "start": {
+                  "toolUse": {
+                    "toolUseId": "tooluse_R8wLk2nQS0eYp4vM7cJd1B",
+                    "name": "mcp__external__delete"
+                  }
+                },
+                "p": "abcdefghijklm"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": ""
+                  }
+                },
+                "p": "abcdefghijklmnopqrst"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "{\"name\": "
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzA"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "\"draft\"}"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGH"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "start": {
+                  "toolUse": {
+                    "toolUseId": "tooluse_Hm5tZ1xWQyO9fA3sLb6kPc",
+                    "name": "mcp__external__delete"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "delta": {
+                  "toolUse": {
+                    "input": ""
+                  }
+                },
+                "p": "ab"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "delta": {
+                  "toolUse": {
+                    "input": "{\"na"
+                  }
+                },
+                "p": "abcdefghi"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "delta": {
+                  "toolUse": {
+                    "input": "me\": \"memo\"}"
+                  }
+                },
+                "p": "abcdefghijklmnop"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "p": "abcdefghijklmnopqrstuvw"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "stopReason": "tool_use",
+                "p": "abcdefghijklmnopqrstuvwxyzABCD"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "usage": {
+                  "inputTokens": 668,
+                  "outputTokens": 98,
+                  "totalTokens": 766
+                },
+                "metrics": {
+                  "latencyMs": 1702
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJK"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      },
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "memo"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 668,
+      "completionTokens": 98,
+      "totalTokens": 766
+    }
+  }
+}

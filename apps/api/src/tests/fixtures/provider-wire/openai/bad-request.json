@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "provider": "openai",
+  "scenario": "bad-request",
+  "source": "synthetic",
+  "basis": "OpenAI Responses API streaming reference: typed response.* server-sent events, strict function tools; error object shape",
+  "model": "stella-cassette-no-such-model",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/responses"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"The model `stella-cassette-no-such-model` does not exist or you do not have access to it.\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"model_not_found\"}}"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "model_unavailable"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "bad-request",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock Runtime API reference: restJson1 error, type in the x-amzn-errortype header, { message } body",
+  "model": "stella-cassette-no-such-model",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/stella-cassette-no-such-model/converse-stream"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json",
+          "x-amzn-errortype": "ValidationException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+          "x-amzn-requestid": "0d3f6a2e-9b1c-4c5e-8a7d-6e2f1b3c4d50"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"message\":\"The provided model identifier is invalid.\"}"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}

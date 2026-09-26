@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "provider": "mistral",
+  "scenario": "strict-null",
+  "source": "synthetic",
+  "basis": "Mistral chat completions streaming reference: data-only chat.completion.chunk SSE events, usage on the finishing chunk, then data: [DONE]",
+  "model": "mistral-medium-latest",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"tool_calls\":[{\"id\":\"Dq3kX8vRt\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"{\\\"note\\\": null, \\\"name\\\": \\\"draft\\\"}\"},\"index\":0}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":99,\"total_tokens\":120,\"completion_tokens\":21}}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 99,
+      "completionTokens": 21,
+      "totalTokens": 120
+    }
+  }
+}

@@ -293,6 +293,90 @@
       },
       "oracle": "chat.render.cards-match-stored",
       "reason": "No recorded conversation spawns subagents yet; the entry returns with such a recording."
+    },
+    {
+      "id": "bedrock-streams-through-fetch",
+      "fix": "#1180",
+      "behaviour": "The Bedrock adapter sends its Converse streams through the fetch transport.",
+      "status": "active",
+      "file": "src/lib/tanstack-ai-models.ts",
+      "search": "client.config.requestHandler = this.requestHandler;",
+      "replace": "void this.requestHandler;",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "bedrock text"
+      },
+      "oracle": "chat.provider-wire.transport"
+    },
+    {
+      "id": "openrouter-chat-completions",
+      "fix": "#1218",
+      "behaviour": "OpenRouter chat runs on the Chat Completions adapter.",
+      "status": "active",
+      "file": "src/lib/stella-openrouter-text-adapter.ts",
+      "search": "import { OpenRouterTextAdapter } from \"@tanstack/ai-openrouter\";",
+      "replace": "import { OpenRouterResponsesTextAdapter as OpenRouterTextAdapter } from \"@tanstack/ai-openrouter\";",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openrouter text"
+      },
+      "oracle": "chat.provider-wire.transport"
+    },
+    {
+      "id": "responses-terminal-text",
+      "fix": "#1203, #1209",
+      "behaviour": "Text that arrives only with a Responses stream's completed response still reaches the answer.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/adapters/responses-text.js",
+      "search": "if (accumulatedContent.length === 0 && completedText.length > 0) {",
+      "replace": "if (false) {",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai text-terminal-only"
+      },
+      "oracle": "chat.provider-wire.text"
+    },
+    {
+      "id": "openai-strict-null-input",
+      "fix": "#1174",
+      "behaviour": "The OpenAI adapter drops the nulls strict mode widens optional tool fields to.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/utils/tool-input-normalizer.js",
+      "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
+      "replace": "return (toolName, input) => input;",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai strict-null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "mistral-strict-null-input",
+      "fix": "#1189",
+      "behaviour": "The Mistral adapter drops the nulls strict mode widens optional tool fields to.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/utils/tool-input-normalizer.js",
+      "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
+      "replace": "return (toolName, input) => input;",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "mistral strict-null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "stored-arguments-from-tool-call-end",
+      "fix": "#3831",
+      "behaviour": "A tool call's stored arguments are the adapter's normalized input, not the raw wire string.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/ai/dist/esm/activities/chat/stream/processor.js",
+      "search": "if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;",
+      "replace": "void serializedInput;",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
+        "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
+      },
+      "oracle": "chat.live.equals-reload"
     }
   ]
 }

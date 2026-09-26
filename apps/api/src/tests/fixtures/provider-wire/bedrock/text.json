@@ -1,0 +1,131 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "text",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream",
+          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "role": "assistant",
+                "p": "abcdefg"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": "The"
+                },
+                "p": "abcdefghijklmn"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": " cassette"
+                },
+                "p": "abcdefghijklmnopqrstu"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": " plays."
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzAB"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHI"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "stopReason": "end_turn",
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "usage": {
+                  "inputTokens": 612,
+                  "outputTokens": 8,
+                  "totalTokens": 620
+                },
+                "metrics": {
+                  "latencyMs": 734
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "stop",
+    "text": "The cassette plays.",
+    "usage": {
+      "promptTokens": 612,
+      "completionTokens": 8,
+      "totalTokens": 620
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "early-eof",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream",
+          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "role": "assistant",
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": "The"
+                },
+                "p": "a"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}

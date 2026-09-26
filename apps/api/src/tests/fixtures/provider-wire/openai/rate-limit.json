@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "openai",
+  "scenario": "rate-limit",
+  "source": "synthetic",
+  "basis": "OpenAI Responses API streaming reference: typed response.* server-sent events, strict function tools; error object shape",
+  "model": "gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/responses"
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"Rate limit reached for gpt-6-sol in organization org-cassette on tokens per min (TPM): Limit 30000, Used 30000, Requested 31. Please try again in 62ms.\",\"type\":\"tokens\",\"param\":null,\"code\":\"rate_limit_exceeded\"}}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "quota_exhausted"
+  }
+}

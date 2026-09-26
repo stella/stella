@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "provider": "anthropic",
+  "scenario": "tool-call",
+  "source": "synthetic",
+  "basis": "Anthropic Messages streaming reference: named SSE events (message_start, content_block_*, message_delta, message_stop, ping)",
+  "model": "claude-opus-5-5",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages?beta=true"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+          "request-id": "req_011CassetteReplay00000001"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01CassetteReplay0000000001\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-5-5\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":612,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\"}}}\n\nevent: ping\ndata: {\"type\":\"ping\"}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01CassetteDraft000000001\",\"name\":\"mcp__external__delete\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"name\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\": \\\"dr\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"aft\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":612,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":41}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 612,
+      "completionTokens": 41,
+      "totalTokens": 653
+    }
+  }
+}

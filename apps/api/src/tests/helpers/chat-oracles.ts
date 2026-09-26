@@ -50,6 +50,29 @@ export const CHAT_ORACLE = {
   renderRequestsMatchRecorded: "chat.render.requests-match-recorded",
   /** A conversation grant answers each matching approval exactly once. */
   renderGrantAnswersOnce: "chat.render.grant-answers-once",
+  // Reported by the provider wire replay
+  // (`apps/api/src/lib/tanstack-ai-provider-wire.test.ts`).
+  /** Every provider request went through `fetch` to a provider host and
+   *  was answered by the cassette, which it consumed. */
+  providerWireTransport: "chat.provider-wire.transport",
+  /** An adapter run ends in exactly one terminal event, last, and never
+   *  throws. */
+  providerWireOneTerminal: "chat.provider-wire.one-terminal",
+  /** The run ends the way the wire did: the declared finish reason, or a
+   *  run error. */
+  providerWireFinish: "chat.provider-wire.finish",
+  /** The answer's text reaches the text deltas. */
+  providerWireText: "chat.provider-wire.text",
+  /** Each tool call ends once with input that satisfies the tool's
+   *  declared schema. */
+  providerWireToolInput: "chat.provider-wire.tool-input",
+  /** A finished run reports its token usage. */
+  providerWireUsage: "chat.provider-wire.usage",
+  /** A provider failure reaches the run error with its message and
+   *  classification. */
+  providerWireError: "chat.provider-wire.error",
+  /** A cancelled run ends promptly, unfinished, with no further request. */
+  providerWireCancel: "chat.provider-wire.cancel",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

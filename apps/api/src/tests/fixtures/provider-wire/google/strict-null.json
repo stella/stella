@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "provider": "google",
+  "scenario": "strict-null",
+  "source": "synthetic",
+  "basis": "Gemini API streamGenerateContent?alt=sse reference: data-only SSE frames, each a GenerateContentResponse, CRLF separated",
+  "model": "gemini-3.8-flash",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream",
+          "content-disposition": "attachment",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "server-timing": "gfet4t7; dur=412"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"mcp__external__delete\",\"args\": {\"name\": \"draft\",\"note\": null}},\"thoughtSignature\": \"CiQBjz1rX2Nhc3NldHRlLXRob3VnaHQtc2lnbmF0dXJlLW9wYXF1ZQ==\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 79,\"candidatesTokenCount\": 25,\"totalTokenCount\": 104,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 79}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 79,
+      "completionTokens": 25,
+      "totalTokens": 104
+    }
+  }
+}

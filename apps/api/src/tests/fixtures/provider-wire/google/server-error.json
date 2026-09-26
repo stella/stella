@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "provider": "google",
+  "scenario": "server-error",
+  "source": "synthetic",
+  "basis": "Gemini API error reference: google.rpc.Status JSON body",
+  "model": "gemini-3.8-flash",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json; charset=UTF-8",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"The model is overloaded. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}

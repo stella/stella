@@ -1,0 +1,145 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "strict-null",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream",
+          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "role": "assistant",
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQR"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "start": {
+                  "toolUse": {
+                    "toolUseId": "tooluse_Vt7yN3bXR2uGk8qE5hWm0D",
+                    "name": "mcp__external__delete"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": ""
+                  }
+                },
+                "p": "abcde"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "{\"name\": \"draft\", \"note\": null}"
+                  }
+                },
+                "p": "abcdefghijkl"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdefghijklmnopqrs"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "stopReason": "tool_use",
+                "p": "abcdefghijklmnopqrstuvwxyz"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "usage": {
+                  "inputTokens": 652,
+                  "outputTokens": 61,
+                  "totalTokens": 713
+                },
+                "metrics": {
+                  "latencyMs": 1240
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFG"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 652,
+      "completionTokens": 61,
+      "totalTokens": 713
+    }
+  }
+}
