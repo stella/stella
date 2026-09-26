@@ -1,7 +1,13 @@
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -614,9 +620,18 @@ const checkRecording = async (scenario: string) => {
   const { failure, recording } = await recordScenario(scenario, run);
   const recorded = stabilize(recording);
   const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
-  if (process.env[WRITE_ENV] === "1") {
+  // A message the page never posted is a finding, never a recording: writing
+  // it would make the committed file expect the page to drop it.
+  const unposted = recording.steps.flatMap(({ action, exchanges }, index) =>
+    (action.type === "send" || action.type === "retry") &&
+    exchanges.length === 0
+      ? [`step ${String(index + 1)} (${action.type})`]
+      : [],
+  );
+  if (process.env[WRITE_ENV] === "1" && unposted.length === 0) {
     writeFileSync(file, recorded);
   }
+  expect(unposted).toEqual([]);
   // A scenario step that failed is the finding, not a stale file.
   expect(failure).toBeUndefined();
   expect(existsSync(file)).toBe(true);
@@ -673,6 +688,19 @@ describe("recorded conversations", () => {
   );
 
   test("every committed recording belongs to a scenario", () => {
+    const recordings = new Set(
+      Object.keys(SCENARIOS).map(
+        (scenario) => `${scenario}${RECORDING_EXTENSION}`,
+      ),
+    );
+    if (process.env[WRITE_ENV] === "1") {
+      // A scenario that no longer exists leaves no recording behind.
+      for (const name of readdirSync(FIXTURE_DIR)) {
+        if (name.endsWith(RECORDING_EXTENSION) && !recordings.has(name)) {
+          rmSync(path.join(FIXTURE_DIR, name));
+        }
+      }
+    }
     expect(
       readdirSync(FIXTURE_DIR)
         .filter((name) => name.endsWith(RECORDING_EXTENSION))
