@@ -220,15 +220,16 @@ const createPdfSigningHandoff = createSafeHandler(
             }),
           };
         }
-        for (const expiredSessionId of opened.expiredSessionIds) {
-          await recordAuditEvent(tx, {
+        await recordAuditEvent(
+          tx,
+          opened.expiredSessionIds.map((expiredSessionId) => ({
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
             resourceId: expiredSessionId,
             changes: { status: { old: "open", new: "cancelled" } },
             metadata: { closeReason: "expired" },
-          });
-        }
+          })),
+        );
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
