@@ -240,7 +240,7 @@ pub fn handle_url(
     }) => {
       tracing::info!("PDF signing handoff deep link received");
       tauri::async_runtime::spawn(async move {
-        if !is_trusted_api_base_url(&manager, &api_base_url).await {
+        if !crate::pdf_signing::api_trusted_for_signing(&manager, &api_base_url).await {
           tracing::warn!(
             api_base_url = %api_base_url,
             "PDF signing handoff rejected because API URL is not trusted"

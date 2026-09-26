@@ -65,6 +65,7 @@
     "pdfSignMatter": "Byla",
     "pdfSignNoIdentities": "Raktinėje nėra nė vieno pasirašymo sertifikato.",
     "pdfSignRetry": "Bandyti dar kartą",
+    "pdfSignServer": "Prašo",
     "pdfSignSign": "Pasirašyti",
     "pdfSignSigned": "Pasirašyta kaip {versionNumber} versija",
     "pdfSignSigning": "Pasirašoma…",

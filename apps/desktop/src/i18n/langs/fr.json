@@ -65,6 +65,7 @@
     "pdfSignMatter": "Dossier",
     "pdfSignNoIdentities": "Aucun certificat de signature n’est disponible dans votre trousseau.",
     "pdfSignRetry": "Réessayer",
+    "pdfSignServer": "Demandé par",
     "pdfSignSign": "Signer",
     "pdfSignSigned": "Signé en version {versionNumber}",
     "pdfSignSigning": "Signature en cours…",
