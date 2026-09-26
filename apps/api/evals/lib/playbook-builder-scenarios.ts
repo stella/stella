@@ -117,6 +117,8 @@ const DISPUTE_MATTER = {
   reference: "NWL-2025-003",
 };
 const MATTERS = [SUPPLY_MATTER, DISPUTE_MATTER];
+/** The matters the user can access, in the order chat offers their refs. */
+export const ACCESSIBLE_MATTER_IDS = MATTERS.map(({ id }) => id);
 const MATTER_TIMESTAMP = "2026-08-20T09:00:00.000Z";
 
 type FixtureDocument = {
@@ -459,7 +461,10 @@ const readsBeforeDiscovery = ({
 const readDocumentIds = (events: readonly BuilderEvent[]) =>
   new Set(
     events
-      .filter(({ name }) => name === "read_content_across_matters")
+      .filter(
+        ({ name, error }) =>
+          name === "read_content_across_matters" && error === null,
+      )
       .map(({ input }) => stringArg(input, "entity_id")),
   );
 

@@ -64,7 +64,10 @@ import {
   LIST_TEMPLATES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/template-tools";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   streamChatChunks,
@@ -103,6 +106,7 @@ import type {
   SaveCallRecord,
 } from "./lib/playbook-authoring-score";
 import {
+  ACCESSIBLE_MATTER_IDS,
   BUILDER_SCENARIOS,
   BUILDER_SURFACES,
   DISCOVER_TOOLS,
@@ -988,12 +992,14 @@ const chatMatterTools = ({
   store,
   record,
   skill,
+  refRegistry,
 }: {
   store: PlaybookStore;
   record: Recorder;
   skill: ActiveChatSkillContext;
+  /** The registry of the chat request the call belongs to. */
+  refRegistry: () => ChatRefRegistry;
 }): AnyServerTool[] => {
-  const refRegistry = createChatRefRegistry();
   const listPlaybooks =
     getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
     panic(`The static tool registry has no ${LIST_PLAYBOOKS} handler`);
@@ -1027,7 +1033,7 @@ const chatMatterTools = ({
       toolName,
       args,
       context: store.context,
-      refRegistry,
+      refRegistry: refRegistry(),
       handler,
     });
     if (Result.isError(result)) {
@@ -1156,6 +1162,29 @@ const createBehaviorTools = ({
     return payload;
   };
 
+  // Chat mints refs per request, and every ask-user answer and user message
+  // starts a new one. A script's output keeps the refs of its request, so a
+  // document ref listed before an answer no longer resolves after it; matter
+  // refs do, because each request offers the accessible matters first, in
+  // the same order. The eval answers inside one model turn; it starts a
+  // registry the same way at the same boundaries.
+  const createRequestRefRegistry = () => {
+    const registry = createChatRefRegistry();
+    for (const matterId of ACCESSIBLE_MATTER_IDS) {
+      registry.offerMatterRef(matterId);
+    }
+    return registry;
+  };
+  let answers = 0;
+  let request = { turn: 0, answers, registry: createRequestRefRegistry() };
+  const requestRefRegistry = () => {
+    const turn = currentTurn();
+    if (request.turn !== turn || request.answers !== answers) {
+      request = { turn, answers, registry: createRequestRefRegistry() };
+    }
+    return request.registry;
+  };
+
   const askUser = createOrgTools({
     accessibleWorkspaceIds: store.context.accessibleWorkspaceIds,
     organizationId: store.context.organizationId,
@@ -1163,6 +1192,7 @@ const createBehaviorTools = ({
   })[ASK_USER_TOOL_NAME].server((input) => {
     const questions = askedQuestionsOf(input);
     record({ name: ASK_USER_TOOL_NAME, input, questions });
+    answers += 1;
     return {
       answers: questions.map((question) => ({
         question: question.question,
@@ -1173,7 +1203,12 @@ const createBehaviorTools = ({
 
   const matterTools =
     surface === "chat"
-      ? chatMatterTools({ store, record, skill })
+      ? chatMatterTools({
+          store,
+          record,
+          skill,
+          refRegistry: requestRefRegistry,
+        })
       : mcpMatterTools(record);
 
   return [

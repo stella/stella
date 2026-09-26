@@ -672,6 +672,11 @@ export const OWNERSHIP = [
           reason:
             "Rebuilds persisted bindings to turn saved transcript refs into durable links before storing memories.",
         },
+        {
+          path: "apps/api/evals/playbook-authoring.ts",
+          reason:
+            "Replays each scripted chat request against the live tools and mints that request's registry, as send-message does; refs never outlive the replayed request.",
+        },
       ],
     },
   },
