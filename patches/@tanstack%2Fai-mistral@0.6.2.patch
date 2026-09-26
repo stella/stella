@@ -5,9 +5,13 @@
    RUN_ERROR forwards them as rawEvent, as the SDK-based adapters do since
    TanStack/ai#985. The rethrow after RUN_ERROR is upstream's (tested) and
    stays. Upstream PR to be opened; remove when released.
+3. finish_reason model_length reads as length, and finish_reason error ends
+   the run in a RUN_ERROR (code incomplete-stream, as TanStack/ai#1494 names
+   a cut-off stream) instead of a finished answer. Upstream PR to be opened;
+   remove when released.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index eb1590b59f2c300617d15087221238ff62cd1683..60c33192bc7e7018d51672cba9b2ad9f2acd45a6 100644
+index eb1590b59f2c300617d15087221238ff62cd1683..90043fab42a2fe7393ca219dc5454ebeb8c84b29 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -3,6 +3,7 @@ import { convertToolsToProviderFormat } from "../tools/tool-converter.js";
@@ -52,7 +56,42 @@ index eb1590b59f2c300617d15087221238ff62cd1683..60c33192bc7e7018d51672cba9b2ad9f
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
  		let parsed;
-@@ -414,7 +417,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -256,7 +259,24 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					});
+ 				}
+ 				const finishReason = choice.finish_reason;
+-				if (finishReason) {
++				// An `error` finish means the model failed before it finished: the
++				// run ends in a RUN_ERROR, not a RUN_FINISHED.
++				if (finishReason === "error" && !hasEmittedRunFinished) {
++					hasEmittedRunFinished = true;
++					yield asChunk({
++						type: "RUN_ERROR",
++						runId: aguiState.runId,
++						model: chunkModel,
++						timestamp,
++						message: "The model stopped with an error before it finished.",
++						code: "incomplete-stream",
++						error: {
++							message: "The model stopped with an error before it finished.",
++							code: "incomplete-stream"
++						}
++					});
++				}
++				if (finishReason && finishReason !== "error") {
+ 					if (finishReason === "tool_calls" || toolCallsInProgress.size > 0) for (const [, toolCall] of toolCallsInProgress) {
+ 						if (!toolCall.started || !toolCall.id || !toolCall.name || toolCall.ended) continue;
+ 						const parsedInput = parseToolCallInput(toolCall, normalizeToolInput);
+@@ -272,7 +292,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 							input: parsedInput
+ 						});
+ 					}
+-					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" ? "length" : "stop";
++					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" || finishReason === "model_length" ? "length" : "stop";
+ 					if (reasoningMessageId !== null && !hasClosedReasoning) {
+ 						hasClosedReasoning = true;
+ 						yield asChunk({
+@@ -414,7 +434,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -61,7 +100,7 @@ index eb1590b59f2c300617d15087221238ff62cd1683..60c33192bc7e7018d51672cba9b2ad9f
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -426,11 +429,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -426,11 +446,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  		const response = await fetch(url, {
  			method: "POST",
  			headers,
