@@ -42,13 +42,15 @@ used_underscore_binding = "warn"
 [lints.rust]
 unsafe_code = "forbid"
 
-# The raw AppKit/WebKit and Security.framework calls this crate cannot express
-# without `unsafe` live in the workspace members below, behind safe APIs.
+# The raw AppKit/WebKit, Security.framework and CryptoAPI calls this crate
+# cannot express without `unsafe` live in the workspace members below, behind
+# safe APIs.
 [workspace]
 members = [
   "crates/macos-park",
   "crates/macos-signing",
   "crates/signing-core",
+  "crates/windows-signing",
 ]
 
 [lints.rustdoc]
@@ -147,6 +149,7 @@ stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
+stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
 winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
