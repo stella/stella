@@ -141,6 +141,20 @@ describe("UTF-8 punctuation read as windows-1252", () => {
     ).toBe(first);
   });
 
+  // "Â" is a letter French and Romanian write: before a footnote mark or a
+  // nonbreaking space it is a capital with notation, not C2 read as
+  // windows-1252.
+  test.each([
+    ["fr", "La lettre Â¹ et la lettre Â² sont identiques."],
+    ["ro", "Literele Â¹ și Â² sunt identice."],
+    ["fr", "Les lettres Â  et Â  sont identiques."],
+  ])(
+    "is not found in %s %s, where the lead is a native letter",
+    (language, text) => {
+      expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
+    },
+  );
+
   test("letters restored in capitals alone are no signature", () => {
     // Slovak "ÄŽ" is C4 8E: the UTF-8 bytes of "Ď".
     expect(checkTextEncoding("ÄŽ ÄŽ ÄŽ", "sk")).toEqual({ status: "clean" });

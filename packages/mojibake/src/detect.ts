@@ -26,6 +26,7 @@ import {
   decodeBytes,
   DECODING_PAIRS,
   type DecodingPair,
+  encodeText,
   isEncodable,
   undoMisdecoding,
 } from "./charsets.js";
@@ -332,19 +333,14 @@ const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
   return nativeLetter ? "native" : "neutral";
 };
 
-type UndoneWord = {
-  text: string;
-  failed: boolean;
-  /** A run read back into a punctuation mark or sign (`isRestoredPunctuation`). */
-  restoredPunctuation: boolean;
-};
+type UndoneWord = { text: string; failed: boolean };
 
 /**
  * Punctuation and signs whose UTF-8 bytes read as windows-1252 are "â€"
  * or "Â" followed by more punctuation ("â€™" for ’, "â€”" for —, "Â§" for
  * §). No pair of letters reads back into one (a letter byte after C2 or E2
- * spells a control, a letter or a mathematical sign), so unlike a restored
- * letter a restored mark needs no alphabet to be told from a capital.
+ * spells a control, a letter or a mathematical sign); only the lead byte
+ * reads as a letter (`marksSignOnTheirOwn`).
  */
 const RESTORED_PUNCTUATION = /^[\u00A0-\u00BF\u2000-\u206F\u20AC\u2122]$/u;
 
@@ -365,7 +361,6 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
   let text = "";
   let run = "";
   let failed = false;
-  let restoredPunctuation = false;
   const flush = () => {
     if (run.length === 0) {
       return;
@@ -375,8 +370,6 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
       failed ||= NON_ASCII.test(run);
       text += run;
     } else {
-      restoredPunctuation ||=
-        undone !== run && Array.from(undone).some(isRestoredPunctuation);
       text += undone;
     }
     run = "";
@@ -391,7 +384,7 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
     }
   }
   flush();
-  return { text, failed, restoredPunctuation };
+  return { text, failed };
 };
 
 type WordRepair =
@@ -870,14 +863,6 @@ const UTF8_SEQUENCE_READ_AS_SINGLE_BYTE = new RegExp(
 );
 
 /**
- * Words that become valid UTF-8 with a non-ASCII letter or a punctuation
- * mark once written back as windows-1252 or Latin-1 bytes. A word a person wrote rarely spells a UTF-8
- * multi-byte sequence in those bytes, but capitals do: Czech "POSPÍŠIL" is
- * bytes CD 8A, a combining mark, and Slovak "VÝŠKA" is DD 8A, a Syriac one.
- * So where the language is known the word read back must read natively in
- * it; where it is not, it must at least stay in one script.
- */
-/**
  * Whether a word read back as UTF-8 reads as something a person wrote:
  * its restored marks are punctuation, and its restored letters, if any,
  * read natively in the language (or, where it is not known, stay in one
@@ -916,11 +901,108 @@ const readsAsWritten = (
     : classifyWord(letters, alphabet) === "native";
 };
 
+type ReadBackOptions = {
+  alphabet: Alphabet | null;
+  work: EncodingCheckCounters;
+};
+
+/** The first UTF-8 signature pair a word reads back through as written. */
+const readBack = (
+  word: string,
+  { alphabet, work }: ReadBackOptions,
+): { pair: DecodingPair; text: string } | undefined => {
+  for (const pair of UTF8_SIGNATURE_PAIRS) {
+    work.codeUnits += word.length;
+    const undone = undoWord(word, pair);
+    if (readsAsWritten(undone, { word, alphabet, work })) {
+      return { pair, text: undone.text };
+    }
+  }
+  return undefined;
+};
+
+/** Bytes in the UTF-8 sequence `lead` starts; zero for a byte that starts none. */
+const utf8SequenceLength = (lead: number): number => {
+  if (lead >= 0xc2 && lead <= 0xdf) {
+    return 2;
+  }
+  if (lead >= 0xe0 && lead <= 0xef) {
+    return 3;
+  }
+  if (lead >= 0xf0 && lead <= 0xf4) {
+    return 4;
+  }
+  return 0;
+};
+
+type MarksSignOptions = {
+  pair: DecodingPair;
+  alphabet: Alphabet | null;
+  work: EncodingCheckCounters;
+};
+
+/**
+ * Whether a word read back through `pair` restores a mark from a sequence
+ * whose lead is no letter the language writes, so that the mark is a
+ * signature on its own.
+ *
+ * The bytes cannot tell the two apart where the lead is one: C2 B9 is "¹"
+ * in UTF-8 and "Â¹" in windows-1252, and French and Romanian write "Â"
+ * before a footnote mark, a nonbreaking space or a closing guillemet. That
+ * a sequence reads back is no proof it was UTF-8, so there the mark needs a
+ * word outside capitals to vouch for it, as a restored letter does. Czech
+ * and English never write "Â", so there "Â§" and "20Â°C" are § and °C read
+ * as windows-1252. Where the language is not known nothing tells a lead
+ * byte from a writer's letter, so no mark signs on its own.
+ */
+const marksSignOnTheirOwn = (
+  word: string,
+  { pair, alphabet, work }: MarksSignOptions,
+): boolean => {
+  if (alphabet === null) {
+    return false;
+  }
+  work.codeUnits += word.length;
+  const chars = Array.from(word);
+  let index = 0;
+  while (index < chars.length) {
+    const lead = chars[index] ?? "";
+    const length = utf8SequenceLength(
+      encodeText(lead, pair.assumed)?.at(0) ?? 0,
+    );
+    const restored =
+      length === 0
+        ? null
+        : undoMisdecoding(chars.slice(index, index + length).join(""), pair);
+    if (restored === null) {
+      index += 1;
+      continue;
+    }
+    if (
+      isRestoredPunctuation(restored) &&
+      !alphabet.native.has(lead.codePointAt(0) ?? 0)
+    ) {
+      return true;
+    }
+    index += length;
+  }
+  return false;
+};
+
 type Utf8SignatureOptions = {
   alphabet: Alphabet | null;
   progress: Progress;
 };
 
+/**
+ * Words that become valid UTF-8 with a non-ASCII letter or a punctuation
+ * mark once written back as windows-1252 or Latin-1 bytes. A word a person
+ * wrote rarely spells a UTF-8 multi-byte sequence in those bytes, but
+ * capitals do: Czech "POSPÍŠIL" is bytes CD 8A, a combining mark, and Slovak
+ * "VÝŠKA" is DD 8A, a Syriac one. So where the language is known the word
+ * read back must read natively in it; where it is not, it must at least
+ * stay in one script.
+ */
 const utf8Signature = (
   words: readonly CountedWord[],
   { alphabet, progress }: Utf8SignatureOptions,
@@ -933,32 +1015,31 @@ const utf8Signature = (
     if (!UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(word)) {
       continue;
     }
-    // Read back and classified per pair; these pairs are not the ones pair
-    // evaluations count.
+    // Read back and classified per pair, then scanned for its marks once;
+    // these pairs are not the ones pair evaluations count.
     const cost = {
       words: 0,
       codeUnits: word.length,
-      passes: 2 * UTF8_SIGNATURE_PAIRS.length,
+      passes: 2 * UTF8_SIGNATURE_PAIRS.length + 1,
     };
     if (!affords(progress, cost)) {
       break;
     }
-    const repaired = UTF8_SIGNATURE_PAIRS.map((pair) => {
-      work.codeUnits += word.length;
-      return undoWord(word, pair);
-    }).find((undone) => readsAsWritten(undone, { word, alphabet, work }));
+    const repaired = readBack(word, { alphabet, work });
     if (repaired === undefined) {
       continue;
     }
     occurrences += stat.count;
-    signed ||= repaired.restoredPunctuation || !CAPITALS_ONLY.test(word);
+    // Capitals are where a writer's letters spell UTF-8 by accident (Slovak
+    // "ÄŽ" is C4 8E, "Ď"): what capitals alone restore is no signature,
+    // unless it is a mark no letter of the language leads.
+    signed ||=
+      !CAPITALS_ONLY.test(word) ||
+      marksSignOnTheirOwn(word, { pair: repaired.pair, alphabet, work });
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });
     }
   }
-  // Capitals are where a writer's letters spell UTF-8 by accident (Slovak
-  // "ÄŽ" is C4 8E, "Ď"): letters restored in capitals alone are no
-  // signature. A restored mark is one wherever it stands ("Â§ 1", "20Â°C").
   return signed && occurrences >= MIN_UTF8_SIGNATURE_OCCURRENCES
     ? { kind: "utf8-read-as-single-byte", occurrences, samples }
     : null;

@@ -28,7 +28,12 @@ import {
 } from "@stll/property-testing";
 
 import { alphabetFor } from "./alphabet.js";
-import { DECODING_PAIRS, type DecodingPair, misdecode } from "./charsets.js";
+import {
+  DECODING_PAIRS,
+  type DecodingPair,
+  misdecode,
+  undoMisdecoding,
+} from "./charsets.js";
 import {
   checkTextEncoding,
   CODE_UNIT_BUDGET,
@@ -337,6 +342,94 @@ describe("typographic punctuation in otherwise ASCII text", () => {
       );
     },
   );
+});
+
+describe("a native capital before a mark", () => {
+  const UTF8_READ_AS_WINDOWS_1252 = {
+    actual: "utf-8",
+    assumed: "windows-1252",
+  } as const satisfies DecodingPair;
+  /** Marks a writer sets after a capital: footnotes, degrees, spacing, quotes. */
+  const MARKS = [" ", "¹", "²", "³", "°", "«", "»"];
+  const lettersOf = (tag: keyof typeof CLDR_EXEMPLARS): string[] =>
+    Array.from(CLDR_EXEMPLARS[tag].main).filter((char) => /\p{L}/u.test(char));
+  const capitalsOf = (tag: keyof typeof CLDR_EXEMPLARS): string[] =>
+    lettersOf(tag)
+      .map((char) => char.toUpperCase())
+      .filter(
+        (char) => Array.from(char).length === 1 && /[^\p{ASCII}]/u.test(char),
+      );
+  /**
+   * Every language CLDR has exemplars for, with each capital it writes that
+   * spells a UTF-8 punctuation mark with a mark after it ("Â¹" is C2 B9,
+   * "¹"): French, Romanian, Portuguese, Vietnamese and every other language
+   * whose letters include one.
+   */
+  const AMBIGUOUS = Object.keys(CLDR_EXEMPLARS)
+    .filter((tag): tag is keyof typeof CLDR_EXEMPLARS =>
+      Object.hasOwn(CLDR_EXEMPLARS, tag),
+    )
+    .flatMap((tag) => {
+      const sequences = capitalsOf(tag).flatMap((capital) =>
+        MARKS.map((mark) => `${capital}${mark}`).filter((sequence) => {
+          const restored = undoMisdecoding(sequence, UTF8_READ_AS_WINDOWS_1252);
+          return (
+            restored !== null &&
+            Array.from(restored).length === 1 &&
+            /^[\p{P}\p{S}\p{Z}\p{No}]$/u.test(restored)
+          );
+        }),
+      );
+      return sequences.length === 0 ? [] : [{ tag, sequences }];
+    });
+
+  test("the languages are derived, not listed", () => {
+    expect(AMBIGUOUS.map(({ tag }) => tag)).toEqual(
+      expect.arrayContaining(["fr", "ro", "pt", "vi"]),
+    );
+    expect(AMBIGUOUS.map(({ tag }) => tag)).not.toContain("cs");
+    expect(AMBIGUOUS.map(({ tag }) => tag)).not.toContain("en");
+  });
+
+  test("in a language that writes the capital, text is clean", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...AMBIGUOUS).chain(({ tag, sequences }) => {
+          const lower = lettersOf(tag).filter((char) => /\p{Ll}/u.test(char));
+          const word = fc
+            .array(fc.constantFrom(...lower), { minLength: 1, maxLength: 9 })
+            .map((chars) => chars.join(""));
+          // "Â¹", "Â¹,", "ĂÂ²", « Â » with nonbreaking spaces inside.
+          const marked = fc
+            .tuple(
+              fc.array(fc.constantFrom(...capitalsOf(tag)), { maxLength: 2 }),
+              fc.constantFrom(...sequences),
+              fc.constantFrom("", ",", ".", ";"),
+            )
+            .map(
+              ([capitals, sequence, after]) =>
+                `${capitals.join("")}${sequence}${after}`,
+            );
+          const quoted = fc
+            .constantFrom(...capitalsOf(tag))
+            .map((capital) => `« ${capital} »`);
+          return fc.record({
+            tag: fc.constant(tag),
+            tokens: fc.array(fc.oneof(word, word, marked, quoted), {
+              minLength: 2,
+              maxLength: 40,
+            }),
+          });
+        }),
+        ({ tag, tokens }) => {
+          expect(checkTextEncoding(tokens.join(" "), tag)).toEqual({
+            status: "clean",
+          });
+        },
+      ),
+      config(300),
+    );
+  });
 });
 
 describe("generated text", () => {
