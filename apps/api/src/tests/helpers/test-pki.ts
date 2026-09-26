@@ -40,6 +40,9 @@ type TestCertificateOptions = {
   isCa?: boolean;
   /** Omitted: self-signed. */
   issuer?: TestCertificate;
+  /** Default: valid from a minute ago for a day. */
+  notAfter?: Date;
+  notBefore?: Date;
   ocspUrl?: string;
 };
 
@@ -65,6 +68,8 @@ export const createTestCertificate = async ({
   extendedKeyUsages,
   isCa = false,
   issuer,
+  notAfter = new Date(Date.now() + 86_400_000),
+  notBefore = new Date(Date.now() - 60_000),
   ocspUrl,
 }: TestCertificateOptions): Promise<TestCertificate> => {
   const keys = await crypto.subtle.generateKey(RSA_KEY, true, [
@@ -77,8 +82,8 @@ export const createTestCertificate = async ({
   certificate.serialNumber = new asn1js.Integer({ value: serial });
   certificate.subject = nameOf(commonName);
   certificate.issuer = issuer ? issuer.certificate.subject : nameOf(commonName);
-  certificate.notBefore.value = new Date(Date.now() - 60_000);
-  certificate.notAfter.value = new Date(Date.now() + 86_400_000);
+  certificate.notBefore.value = notBefore;
+  certificate.notAfter.value = notAfter;
 
   const extensions = [
     new pkijs.Extension({
