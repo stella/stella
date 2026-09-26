@@ -513,7 +513,9 @@ const StampBoxControl = ({
     <button
       aria-describedby={describedBy}
       aria-label={t("workspaces.files.pdfSigning.placementBox")}
-      className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start overflow-hidden border p-1 text-start outline-none select-none focus-visible:ring-2"
+      // Drawn at the stamp's true size; an invisible layer around a small
+      // box keeps it at least 44px to grab.
+      className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start border text-start outline-none select-none before:absolute before:top-1/2 before:start-1/2 before:size-full before:min-h-11 before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] focus-visible:ring-2"
       onKeyDown={(event) => {
         const adjustment = stampKeyAdjustment({
           key: event.key,
@@ -576,14 +578,17 @@ const StampBoxControl = ({
       }}
       type="button"
     >
-      <span className="text-2xs truncate leading-tight">
+      <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
         {t("workspaces.files.pdfSigning.stampSignedBy")}
       </span>
+      {/* A 44px target centred on the visible corner square. */}
       <span
         aria-hidden
-        className="bg-primary absolute end-0 bottom-0 size-2.5 cursor-nwse-resize after:absolute after:-inset-2 after:content-['']"
+        className="absolute -end-5.5 -bottom-5.5 z-10 flex size-11 cursor-nwse-resize items-center justify-center"
         data-stamp-resize=""
-      />
+      >
+        <span className="bg-primary size-2.5" />
+      </span>
     </button>
   );
 };
