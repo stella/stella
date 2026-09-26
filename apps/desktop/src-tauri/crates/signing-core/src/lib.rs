@@ -12,6 +12,7 @@ mod certificate;
 mod ecdsa;
 mod failure;
 mod identity;
+mod prompt_owner;
 mod spki;
 
 pub use ecdsa::ecdsa_signature_der;
@@ -20,6 +21,7 @@ pub use identity::{
   SigningError, SigningIdentity, SigningKeyType, certificate_fingerprint,
   signing_identity, unix_now,
 };
+pub use prompt_owner::{CloseRequest, PromptOwner};
 pub use spki::subject_public_key;
 
 /// A platform's certificate store, as the signing flow sees it. Both calls

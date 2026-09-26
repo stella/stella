@@ -1,4 +1,5 @@
-//! Signing a PDF with a certificate that never leaves the user's keychain.
+//! Signing a PDF with a certificate that never leaves the user's keychain or
+//! certificate store.
 //!
 //! The web app hands the desktop a one-shot handoff token over a deep link.
 //! Redeeming it yields a short-lived session token, and the desktop then runs
@@ -16,7 +17,7 @@ use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use stella_desktop_signing_core::{
-  Signer, SigningErrorCode, SigningIdentity, SigningKeyType,
+  CloseRequest, PromptOwner, Signer, SigningErrorCode, SigningIdentity, SigningKeyType,
 };
 use tauri::AppHandle;
 use tokio::sync::{Mutex, oneshot};
@@ -56,6 +57,19 @@ const DIALOG_WIDTH: f64 = 420.0;
 /// Fits the ready dialog, with its status line, in every shipped language
 /// and with two-line document and matter names; longer content scrolls.
 const DIALOG_HEIGHT: f64 = 640.0;
+
+/// What the platform keeps signing keys in, as the log names it.
+#[cfg(target_os = "windows")]
+const SIGNING_STORE: &str = "the certificate store";
+#[cfg(not(target_os = "windows"))]
+const SIGNING_STORE: &str = "the keychain";
+/// The same, as the dialog picks its wording by it: a key with a
+/// `CertificateStore` variant reads that variant where the store is not a
+/// keychain.
+#[cfg(target_os = "windows")]
+const DIALOG_STORE: &str = "certificateStore";
+#[cfg(not(target_os = "windows"))]
+const DIALOG_STORE: &str = "keychain";
 
 const DIGEST_ALGORITHM: &str = "SHA-256";
 const DIGEST_BYTES: usize = 32;
@@ -204,13 +218,13 @@ impl PdfSignResult {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 enum DialogState {
-  /// At least one keychain identity can sign.
+  /// At least one stored identity can sign.
   Ready,
-  /// macOS, but nothing in the keychain to sign with.
+  /// A supported platform, but nothing in its store to sign with.
   NoIdentities,
-  /// The keychain could not be read: locked, wedged or refusing.
+  /// The store could not be read: locked, wedged or refusing.
   KeychainUnavailable,
-  /// Not macOS: signing is not available at all.
+  /// No signer on this platform: signing is not available at all.
   UnsupportedPlatform,
 }
 
@@ -566,8 +580,8 @@ pub async fn redeem_and_sign(
     version_number: redeemed.version_number,
     workspace_name: &redeemed.workspace_name,
   };
-  let window = match open_dialog(&app_handle, content) {
-    Ok(window) => window,
+  let (window, prompt_owner) = match open_dialog(&app_handle, content) {
+    Ok(opened) => opened,
     Err(error) => {
       cancel_dialog();
       session.cancel(REASON_USER_CANCELLED).await;
@@ -618,7 +632,7 @@ pub async fn redeem_and_sign(
     return Err("stella desktop no longer has the chosen certificate.".to_string());
   };
 
-  let signature = match prepare_signature(&session, &identity).await {
+  let signature = match prepare_signature(&session, &identity, &prompt_owner).await {
     Ok(signature) => signature,
     Err(error) => {
       report_failure(&session, error, outcome_sender).await;
@@ -752,11 +766,12 @@ impl SigningSession {
   }
 }
 
-/// Phase 1 and the keychain: the certificate goes up, the digest comes back
-/// and the keychain signs it. The one step that may ask for a PIN.
+/// Phase 1 and the store: the certificate goes up, the digest comes back
+/// and the store signs it. The one step that may ask for a PIN.
 async fn prepare_signature(
   session: &SigningSession,
   identity: &SigningIdentity,
+  prompt_owner: &PromptOwner,
 ) -> Result<Vec<u8>, StepError> {
   let prepared: CertificateResponse = post(
     &session.client,
@@ -794,7 +809,13 @@ async fn prepare_signature(
   }
   let digest = decode_digest(&prepared.digest_hex)?;
 
-  sign_digest(identity.id.clone(), digest, identity.key_type).await
+  sign_digest(
+    prompt_owner.clone(),
+    identity.id.clone(),
+    digest,
+    identity.key_type,
+  )
+  .await
 }
 
 /// Phase 2: the API embeds the signature. Safe to repeat with the same
@@ -928,20 +949,48 @@ async fn api_rejection(
   rejection_from(response.json::<ErrorResponse>().await.ok(), status)
 }
 
-/// The certificate store this build signs with.
-fn platform_signer() -> Box<dyn Signer> {
+/// The certificate store this build signs with. `prompt_owner` is the native
+/// handle of the window a PIN prompt should sit on top of, for a store that
+/// does not place its own; [`PromptOwner`] keeps that window alive while the
+/// store may use it.
+fn platform_signer(prompt_owner: Option<isize>) -> Box<dyn Signer> {
+  // The keychain places its own prompts.
   #[cfg(target_os = "macos")]
-  let signer: Box<dyn Signer> = Box::new(stella_desktop_macos_signing::KeychainSigner);
-  #[cfg(not(target_os = "macos"))]
-  let signer: Box<dyn Signer> =
-    Box::new(stella_desktop_signing_core::UnsupportedSigner);
+  let signer: Box<dyn Signer> = {
+    let _ = prompt_owner;
+    Box::new(stella_desktop_macos_signing::KeychainSigner)
+  };
+  // A smart card's PIN prompt belongs over the dialog that asked for it, not
+  // behind it.
+  #[cfg(target_os = "windows")]
+  let signer: Box<dyn Signer> = Box::new(
+    stella_desktop_windows_signing::CertificateStoreSigner::new(prompt_owner),
+  );
+  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+  let signer: Box<dyn Signer> = {
+    let _ = prompt_owner;
+    Box::new(stella_desktop_signing_core::UnsupportedSigner)
+  };
   signer
+}
+
+/// The dialog's native handle, for a store that parents its PIN prompt.
+fn native_handle(window: &tauri::WebviewWindow) -> Option<isize> {
+  #[cfg(target_os = "windows")]
+  let handle = window.hwnd().ok().map(|hwnd| hwnd.0.addr().cast_signed());
+  #[cfg(not(target_os = "windows"))]
+  let handle = {
+    let _ = window;
+    None
+  };
+  handle
 }
 
 /// The store blocks, so both native calls run off the async runtime. A
 /// wedged store times out instead of holding the flow open.
 async fn list_identities() -> Result<Vec<SigningIdentity>, SigningErrorCode> {
-  let signer = platform_signer();
+  // Listing never prompts, so it needs no window to parent a prompt to.
+  let signer = platform_signer(None);
   let listing = tokio::task::spawn_blocking(move || signer.list_identities());
   match tokio::time::timeout(IDENTITY_LISTING_TIMEOUT, listing).await {
     Ok(Ok(Ok(identities))) => Ok(identities),
@@ -960,14 +1009,18 @@ async fn list_identities() -> Result<Vec<SigningIdentity>, SigningErrorCode> {
   }
 }
 
+/// The dialog stays open for as long as the store may show a prompt over it:
+/// a timeout here stops the wait, not the store's call, and closing the
+/// dialog meanwhile is deferred until that call returns. A dialog already
+/// closed cancels the signature before the store is asked.
 async fn sign_digest(
+  prompt_owner: PromptOwner,
   identity_id: String,
   digest: [u8; DIGEST_BYTES],
   key_type: SigningKeyType,
 ) -> Result<Vec<u8>, StepError> {
-  let signer = platform_signer();
   let signing = tokio::task::spawn_blocking(move || {
-    signer.sign_digest(&identity_id, &digest, key_type)
+    prompt_owner.sign_digest(platform_signer, &identity_id, &digest, key_type)
   });
   match tokio::time::timeout(SIGNING_TIMEOUT, signing).await {
     Ok(Ok(Ok(signature))) => Ok(signature),
@@ -980,7 +1033,7 @@ async fn sign_digest(
     )),
     Err(_) => Err(StepError::local(
       SigningErrorCode::KeychainTimeout.as_str(),
-      "no signature from the keychain in time".to_string(),
+      format!("no signature from {SIGNING_STORE} in time"),
     )),
   }
 }
@@ -990,7 +1043,7 @@ async fn sign_digest(
 fn open_dialog(
   app_handle: &AppHandle,
   content: DialogContent<'_>,
-) -> Result<tauri::WebviewWindow, String> {
+) -> Result<(tauri::WebviewWindow, PromptOwner), String> {
   use tauri::Manager;
 
   // Defensive: a stale window without a reserved bridge should never happen
@@ -1014,7 +1067,7 @@ fn open_dialog(
   // strings of its own, so its wording rides along and it renders in the
   // language the rest of the app runs in.
   let hash = format!(
-    "state={}&stateMessage={}&apiOrigin={}&stampPage={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
+    "state={}&store={DIALOG_STORE}&stateMessage={}&apiOrigin={}&stampPage={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
     encode_json(&content.state)?,
     content
       .state_message_key
@@ -1057,16 +1110,33 @@ fn open_dialog(
     .build()
     .map_err(|error| format!("failed to open the PDF signing dialog: {error}"))?;
 
-  // Closing the dialog with the OS window control bypasses the buttons, so
-  // release the reserved bridge on destroy. Otherwise the slot stays taken
-  // until the timeout and every retry fails as "already open".
-  window.on_window_event(|event| {
-    if matches!(event, tauri::WindowEvent::Destroyed) {
-      cancel_dialog();
+  // A close the store's prompt would outlive waits for the prompt, then
+  // closes the dialog; `close` asks again, which the owner now lets through.
+  let prompt_owner = PromptOwner::new(native_handle(&window), {
+    let window = window.clone();
+    move || {
+      let _ = window.close();
     }
   });
+  let events_owner = prompt_owner.clone();
+  // Closing the dialog with the OS window control bypasses the buttons, so
+  // release the reserved bridge on destroy. Otherwise the slot stays taken
+  // until the timeout and every retry fails as "already open". `close`
+  // from the flow comes through the same close request.
+  window.on_window_event(move |event| match event {
+    tauri::WindowEvent::CloseRequested { api, .. } => {
+      if events_owner.request_close() == CloseRequest::Defer {
+        api.prevent_close();
+      }
+    }
+    tauri::WindowEvent::Destroyed => {
+      events_owner.closed();
+      cancel_dialog();
+    }
+    _ => {}
+  });
   let _ = window.set_focus();
-  Ok(window)
+  Ok((window, prompt_owner))
 }
 
 fn encode_json<T: serde::Serialize>(value: &T) -> Result<String, String> {
@@ -1324,6 +1394,42 @@ mod tests {
     "pdf_signing_edit_session_open",
     "pdf_signing_failed",
   ];
+
+  /// The dialog reads a `CertificateStore` variant of a sentence where the
+  /// store is not a keychain, so every sentence that names the keychain needs
+  /// one, in every language, that does not.
+  #[test]
+  fn every_sentence_naming_the_keychain_has_certificate_store_wording() {
+    crate::i18n::init_en();
+    let dialog: serde_json::Map<String, serde_json::Value> =
+      serde_json::from_str(&crate::i18n::namespace_json("dialog")).unwrap();
+    let text = |key: &str| {
+      dialog
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_lowercase()
+    };
+    let naming_the_keychain: Vec<&String> = dialog
+      .keys()
+      .filter(|key| !key.ends_with("CertificateStore"))
+      .filter(|key| text(key).contains("keychain"))
+      .collect();
+    assert!(
+      naming_the_keychain.contains(&&"pdfSignErrors.signingFailed".to_string()),
+      "{naming_the_keychain:?}"
+    );
+    for key in naming_the_keychain {
+      let variant = format!("{key}CertificateStore");
+      assert!(
+        !text(&variant).is_empty(),
+        "{variant} has no English wording"
+      );
+      assert!(!text(&variant).contains("keychain"), "{variant}");
+      let missing = crate::i18n::locales_missing(&format!("dialog.{variant}"));
+      assert!(missing.is_empty(), "{variant} missing in {missing:?}");
+    }
+  }
 
   #[test]
   fn every_code_the_dialog_can_show_has_wording_in_every_language() {
