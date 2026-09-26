@@ -22,6 +22,8 @@ import type { SearchTotal } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_MATCH_BASES,
   CZ_INSOLVENCY_PHASES,
+  CZ_VAT_FINDING_TYPES,
+  CZ_VAT_SUBJECT_TYPES,
   ENTITY_CHECK_KINDS,
   ENTITY_CHECK_NOT_COVERED_REASONS,
   ENTITY_CHECK_SUBJECT_TYPES,
@@ -2022,6 +2024,14 @@ const entityCheckSourceProjection = v.strictObject({
 const entityCheckSubjectProjection = v.variant("type", [
   v.strictObject({ type: v.literal("company-id"), value: v.string() }),
   v.strictObject({
+    type: v.literal("tax-id"),
+    value: v.string(),
+    // Set when the check derived the tax ID from a company ID.
+    derivedFrom: v.nullable(
+      v.strictObject({ type: v.literal("company-id"), value: v.string() }),
+    ),
+  }),
+  v.strictObject({
     type: v.literal("person"),
     firstName: v.string(),
     lastName: v.string(),
@@ -2048,6 +2058,26 @@ const czInsolvencyFindingProjection = v.strictObject({
   url: v.nullable(publicUrl()),
 });
 
+const czVatFindingProjection = v.strictObject({
+  type: v.picklist(CZ_VAT_FINDING_TYPES),
+  publishedOn: v.nullable(v.string()),
+});
+
+// What the VAT register holds beyond the reliability answer.
+const czVatPayerRecordProjection = v.strictObject({
+  subjectType: v.picklist(CZ_VAT_SUBJECT_TYPES),
+  name: v.nullable(v.string()),
+  address: v.nullable(v.string()),
+  taxOfficeCode: v.nullable(v.string()),
+  publishedAccounts: v.array(
+    v.strictObject({
+      account: v.string(),
+      publishedOn: v.string(),
+      withdrawnOn: v.nullable(v.string()),
+    }),
+  ),
+});
+
 const entityCheckOutcomeEntries = {
   kind: v.picklist(ENTITY_CHECK_KINDS),
   source: entityCheckSourceProjection,
@@ -2066,6 +2096,7 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       ...entityCheckOutcomeEntries,
       checkedAt: v.string(),
       sourceDataAsOf: v.nullable(v.string()),
+      record: v.nullable(czVatPayerRecordProjection),
     }),
   ),
   projectionBranch(
@@ -2074,8 +2105,19 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       ...entityCheckOutcomeEntries,
       checkedAt: v.string(),
       sourceDataAsOf: v.nullable(v.string()),
-      findings: v.array(czInsolvencyFindingProjection),
+      findings: v.array(
+        v.union([czInsolvencyFindingProjection, czVatFindingProjection]),
+      ),
       totalMatches: v.number(),
+      record: v.nullable(czVatPayerRecordProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("not-registered"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
     }),
   ),
   projectionBranch(

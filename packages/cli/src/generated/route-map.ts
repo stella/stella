@@ -2330,10 +2330,10 @@ export const generatedRouteMap: RouteNode = {
                 flag: "--check",
                 prop: "check",
                 kind: "enum",
-                enum: ["cz-insolvency"],
+                enum: ["cz-insolvency", "cz-vat-reliability"],
                 repeatable: false,
                 description:
-                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
                 required: true,
               },
             ],
@@ -2349,10 +2349,10 @@ export const generatedRouteMap: RouteNode = {
               additionalProperties: false,
               properties: {
                 check: {
-                  enum: ["cz-insolvency"],
+                  enum: ["cz-insolvency", "cz-vat-reliability"],
                   type: "string",
                   description:
-                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized.",
+                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
                   "x-stella-agent-input": {
                     kind: "enum",
                   },
@@ -2378,6 +2378,25 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["type", "company_id"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["tax-id"],
+                          description: "A taxpayer, by its tax ID.",
+                          type: "string",
+                        },
+                        tax_id: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 32,
+                          description:
+                            "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649",
+                        },
+                      },
+                      required: ["type", "tax_id"],
                       additionalProperties: false,
                     },
                     {
@@ -11142,12 +11161,12 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "contacts.business-registries.check",
                 description:
-                  "Screen a company or person against an official source, such as the Czech insolvency register. Returns one outcome: clear (the source answered and holds nothing), found (with the records it holds), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type).",
+                  "Screen a company or person against an official source, such as the Czech insolvency or VAT register. Returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type).",
                 access: "read",
                 flags: [
                   {
                     kind: "enum",
-                    enum: ["cz-insolvency"],
+                    enum: ["cz-insolvency", "cz-vat-reliability"],
                     repeatable: false,
                     description:
                       "Which official source to screen the subject against",
@@ -11159,10 +11178,10 @@ export const generatedRouteMap: RouteNode = {
                   },
                   {
                     kind: "enum",
-                    enum: ["company-id", "person"],
+                    enum: ["company-id", "tax-id", "person"],
                     repeatable: false,
                     description:
-                      "'company-id' screens a registered business by its national ID; 'person' screens a natural person by name and birth date",
+                      "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
                     flag: "--subject-type",
                     prop: "subjectType",
                     required: true,
@@ -11178,6 +11197,16 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "query",
                     partPath: "companyId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Tax ID",
+                    flag: "--tax-id",
+                    prop: "taxId",
+                    required: false,
+                    part: "query",
+                    partPath: "taxId",
                   },
                   {
                     kind: "string",
@@ -11225,19 +11254,25 @@ export const generatedRouteMap: RouteNode = {
                           description:
                             "Which official source to screen the subject against",
                           type: "string",
-                          enum: ["cz-insolvency"],
+                          enum: ["cz-insolvency", "cz-vat-reliability"],
                         },
                         subjectType: {
                           default: "company-id",
                           description:
-                            "'company-id' screens a registered business by its national ID; 'person' screens a natural person by name and birth date",
+                            "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
                           type: "string",
-                          enum: ["company-id", "person"],
+                          enum: ["company-id", "tax-id", "person"],
                         },
                         companyId: {
                           minLength: 1,
                           maxLength: 32,
                           description: "National business ID",
+                          type: "string",
+                        },
+                        taxId: {
+                          minLength: 1,
+                          maxLength: 32,
+                          description: "Tax ID",
                           type: "string",
                         },
                         firstName: {

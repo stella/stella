@@ -1,12 +1,22 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { validate as validateCzDic } from "@stll/stdnum/cz/dic";
 import { validate as validateCzIco } from "@stll/stdnum/cz/ico";
 
 import { checkCzInsolvency, CZ_INSOLVENCY_SOURCE } from "./cz-insolvency.js";
 import type { CzInsolvencyFinding } from "./cz-insolvency.js";
+import {
+  checkCzVatReliability,
+  CZ_VAT_RELIABILITY_SOURCE,
+} from "./cz-vat-reliability.js";
+import type {
+  CzVatPayerRecord,
+  CzVatReliabilityFinding,
+} from "./cz-vat-reliability.js";
 import { nowInstant } from "./result.js";
 import type {
+  CheckedEntityCheckSubject,
   EntityCheckCancelledError,
   EntityCheckOutcome,
   EntityCheckSource,
@@ -16,16 +26,28 @@ import type {
   SourceAnswer,
 } from "./result.js";
 
-export const ENTITY_CHECK_KINDS = ["cz-insolvency"] as const;
+export const ENTITY_CHECK_KINDS = [
+  "cz-insolvency",
+  "cz-vat-reliability",
+] as const;
 
 export type EntityCheckKind = (typeof ENTITY_CHECK_KINDS)[number];
 
 type EntityCheckFindings = {
   "cz-insolvency": CzInsolvencyFinding;
+  "cz-vat-reliability": CzVatReliabilityFinding;
 };
 
-export type EntityCheckResultOf<TKind extends EntityCheckKind> =
-  EntityCheckOutcome<TKind, EntityCheckFindings[TKind]>;
+type EntityCheckRecords = {
+  "cz-insolvency": null;
+  "cz-vat-reliability": CzVatPayerRecord;
+};
+
+type EntityCheckResultOf<TKind extends EntityCheckKind> = EntityCheckOutcome<
+  TKind,
+  EntityCheckFindings[TKind],
+  EntityCheckRecords[TKind]
+>;
 
 export type EntityCheckResult = {
   [TKind in EntityCheckKind]: EntityCheckResultOf<TKind>;
@@ -35,13 +57,25 @@ type EntityCheckDescriptor = {
   country: "CZ";
   source: EntityCheckSource;
   subjectTypes: readonly [EntityCheckSubjectType, ...EntityCheckSubjectType[]];
+  /**
+   * `derive-tax-id`: a company ID is sent as the tax ID a legal person is
+   * assigned from it (CZ + IČO), and the outcome marks it derived.
+   */
+  companyId: "as-is" | "derive-tax-id";
 };
 
-export const ENTITY_CHECKS = {
+const ENTITY_CHECKS = {
   "cz-insolvency": {
     country: "CZ",
     source: CZ_INSOLVENCY_SOURCE,
     subjectTypes: ["company-id", "person"],
+    companyId: "as-is",
+  },
+  "cz-vat-reliability": {
+    country: "CZ",
+    source: CZ_VAT_RELIABILITY_SOURCE,
+    subjectTypes: ["tax-id", "company-id"],
+    companyId: "derive-tax-id",
   },
 } as const satisfies Record<EntityCheckKind, EntityCheckDescriptor>;
 
@@ -102,17 +136,64 @@ const normalizeCompanyId = (
   }
 };
 
-const normalizeSubject = (
+/** A tax ID in its prefixed form, e.g. CZ45274649. */
+const normalizeTaxId = (
   country: EntityCheckDescriptor["country"],
+  value: string,
+): InputResult<string> => {
+  switch (country) {
+    case "CZ": {
+      const result = validateCzDic(value);
+      return result.valid
+        ? Result.ok(`CZ${result.compact}`)
+        : invalidInput(
+            "Tax ID must be a valid Czech DIČ (CZ followed by 8 to 10 digits)",
+          );
+    }
+    default: {
+      country satisfies never;
+      return panic("Unhandled country");
+    }
+  }
+};
+
+const checkedSubject = (
+  descriptor: EntityCheckDescriptor,
   subject: EntityCheckSubject,
-): InputResult<EntityCheckSubject> =>
+): InputResult<CheckedEntityCheckSubject> =>
   Result.gen(function* () {
     switch (subject.type) {
       case "company-id": {
+        const companyId = yield* normalizeCompanyId(
+          descriptor.country,
+          subject.value,
+        );
+        switch (descriptor.companyId) {
+          case "as-is": {
+            return Result.ok({
+              type: "company-id",
+              value: companyId,
+            } satisfies CheckedEntityCheckSubject);
+          }
+          case "derive-tax-id": {
+            return Result.ok({
+              type: "tax-id",
+              value: `${descriptor.country}${companyId}`,
+              derivedFrom: { type: "company-id", value: companyId },
+            } satisfies CheckedEntityCheckSubject);
+          }
+          default: {
+            descriptor.companyId satisfies never;
+            return panic("Unhandled company ID disposition");
+          }
+        }
+      }
+      case "tax-id": {
         return Result.ok({
-          type: "company-id",
-          value: yield* normalizeCompanyId(country, subject.value),
-        } as const);
+          type: "tax-id",
+          value: yield* normalizeTaxId(descriptor.country, subject.value),
+          derivedFrom: null,
+        } satisfies CheckedEntityCheckSubject);
       }
       case "person": {
         return Result.ok({
@@ -120,7 +201,7 @@ const normalizeSubject = (
           firstName: yield* normalizeName(subject.firstName, "First name"),
           lastName: yield* normalizeName(subject.lastName, "Last name"),
           birthDate: yield* normalizeBirthDate(subject.birthDate),
-        } as const);
+        } satisfies CheckedEntityCheckSubject);
       }
       default: {
         subject satisfies never;
@@ -129,48 +210,56 @@ const normalizeSubject = (
     }
   });
 
-export type EntityCheckError =
-  | EntityCheckInputError
-  | EntityCheckCancelledError;
+/** The subject as given, for an outcome that sent nothing to the source. */
+const unsentSubject = (
+  subject: EntityCheckSubject,
+): CheckedEntityCheckSubject =>
+  subject.type === "tax-id"
+    ? { type: "tax-id", value: subject.value, derivedFrom: null }
+    : subject;
 
-type SettleOptions<TKind extends EntityCheckKind, TFinding> = {
+type EntityCheckError = EntityCheckInputError | EntityCheckCancelledError;
+
+type SettleOptions<TKind extends EntityCheckKind, TFinding, TRecord> = {
   kind: TKind;
   subject: EntityCheckSubject;
   signal: AbortSignal | undefined;
   query: (
-    subject: EntityCheckSubject,
+    subject: CheckedEntityCheckSubject,
     signal: AbortSignal | undefined,
-  ) => Promise<Result<SourceAnswer<TFinding>, EntityCheckSourceError>>;
+  ) => Promise<Result<SourceAnswer<TFinding, TRecord>, EntityCheckSourceError>>;
 };
 
 // The single place a source answer becomes an outcome. `clear` is reachable
 // only from a source client's explicit clear answer; every source error is
 // `unavailable`.
-const settle = async <TKind extends EntityCheckKind, TFinding>({
+const settle = async <TKind extends EntityCheckKind, TFinding, TRecord>({
   kind,
   subject,
   signal,
   query,
-}: SettleOptions<TKind, TFinding>): Promise<
-  Result<EntityCheckOutcome<TKind, TFinding>, EntityCheckError>
+}: SettleOptions<TKind, TFinding, TRecord>): Promise<
+  Result<EntityCheckOutcome<TKind, TFinding, TRecord>, EntityCheckError>
 > => {
-  const { country, source, subjectTypes } = ENTITY_CHECKS[kind];
+  const descriptor: EntityCheckDescriptor = ENTITY_CHECKS[kind];
+  const { source, subjectTypes } = descriptor;
   if (!subjectTypes.some((type) => type === subject.type)) {
     return Result.ok({
       status: "not-covered",
       kind,
       source,
-      subject,
+      subject: unsentSubject(subject),
       reason: "subject-type-not-supported",
       supportedSubjectTypes: [...subjectTypes],
-    } satisfies EntityCheckOutcome<TKind, TFinding>);
+    } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
   }
-  const normalized = normalizeSubject(country, subject);
+  const normalized = checkedSubject(descriptor, subject);
   if (normalized.isErr()) {
     return Result.err(normalized.error);
   }
+  const checked = normalized.value;
   const checkedAt = nowInstant();
-  const answer = await query(normalized.value, signal);
+  const answer = await query(checked, signal);
   if (answer.isErr()) {
     const error = answer.error;
     switch (error._tag) {
@@ -182,15 +271,15 @@ const settle = async <TKind extends EntityCheckKind, TFinding>({
           status: "unavailable",
           kind,
           source,
-          subject: normalized.value,
+          subject: checked,
           checkedAt,
           reason: error.reason,
           detail: error.detail,
-        } satisfies EntityCheckOutcome<TKind, TFinding>);
+        } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
       }
       default: {
         error satisfies never;
-        return panic("Unhandled error");
+        return panic("Unhandled source error");
       }
     }
   }
@@ -201,31 +290,43 @@ const settle = async <TKind extends EntityCheckKind, TFinding>({
         status: "clear",
         kind,
         source,
-        subject: normalized.value,
+        subject: checked,
         checkedAt,
         sourceDataAsOf: value.sourceDataAsOf,
-      } satisfies EntityCheckOutcome<TKind, TFinding>);
+        record: value.record,
+      } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
     }
     case "found": {
       return Result.ok({
         status: "found",
         kind,
         source,
-        subject: normalized.value,
+        subject: checked,
         checkedAt,
         sourceDataAsOf: value.sourceDataAsOf,
         totalMatches: value.totalMatches,
         findings: value.findings,
-      } satisfies EntityCheckOutcome<TKind, TFinding>);
+        record: value.record,
+      } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
+    }
+    case "not-registered": {
+      return Result.ok({
+        status: "not-registered",
+        kind,
+        source,
+        subject: checked,
+        checkedAt,
+        sourceDataAsOf: value.sourceDataAsOf,
+      } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
     }
     default: {
       value satisfies never;
-      return panic("Unhandled value");
+      return panic("Unhandled source answer");
     }
   }
 };
 
-export type RunEntityCheckOptions = {
+type RunEntityCheckOptions = {
   kind: EntityCheckKind;
   subject: EntityCheckSubject;
   signal?: AbortSignal | undefined;
@@ -247,9 +348,17 @@ export const runEntityCheck = async ({
     case "cz-insolvency": {
       return await settle({ kind, subject, signal, query: checkCzInsolvency });
     }
+    case "cz-vat-reliability": {
+      return await settle({
+        kind,
+        subject,
+        signal,
+        query: checkCzVatReliability,
+      });
+    }
     default: {
       kind satisfies never;
-      return panic("Unhandled kind");
+      return panic("Unhandled entity check");
     }
   }
 };
