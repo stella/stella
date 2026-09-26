@@ -15,7 +15,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Allowed:
 //   - apiUrl(`/entities/...`) from `@/lib/api-url` (owns origin + `/v1`)
 //   - the Eden treaty client (`@/lib/api`) — compile-time route checking
-//   - browserApiUrl()/browserApiBaseUrl from `@/lib/api-origins`
+//   - browserApiBaseUrl from `@/lib/api-origins`
 //   - externalApiUrl()/externalApiOrigin for explicit non-browser handoffs
 //   - other service bases (e.g. `${DESKTOP_BRIDGE_URL}/v1/...`)
 //
@@ -127,8 +127,8 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawApiUrl:
-            "Build API URLs with apiUrl()/browserApiUrl() or call the Eden " +
-            "client. The shared resolver owns the same-origin `/api` prefix.",
+            "Build API URLs with apiUrl() or call the Eden client. The " +
+            "shared resolver owns the same-origin `/api` prefix.",
         },
       },
       createOnce(context) {

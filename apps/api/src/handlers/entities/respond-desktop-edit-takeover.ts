@@ -11,10 +11,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/lib/desktop-edit-session-notifications";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
   computeTokenExpiresAt,
@@ -25,6 +22,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { broadcastSessionEvent } from "@/api/lib/sse";
 
 export const respondDesktopEditTakeoverParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -182,7 +180,7 @@ export const respondDesktopEditTakeoverHandler = async ({
 
   // Side effects after transaction commits
   if (txResult.outcome === "transferred") {
-    pushSessionEvent(txResult.sessionId, {
+    broadcastSessionEvent(txResult.sessionId, {
       type: "session-taken-over",
       data: { message: DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE },
     });

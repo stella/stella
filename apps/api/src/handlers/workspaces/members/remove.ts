@@ -22,15 +22,12 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/lib/desktop-edit-session-notifications";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { revokeWorkspaceSseAccess } from "@/api/lib/sse";
+import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
   description:
@@ -54,16 +51,16 @@ export type RemoveWorkspaceMemberProps = {
 };
 
 export type RemoveWorkspaceMemberDependencies = {
+  broadcastSessionEvent: typeof broadcastSessionEvent;
   broadcastWorkspaceResourceSetUpdated: typeof broadcastWorkspaceResourceSetUpdated;
   closeSessionConnections: typeof closeSessionConnections;
-  pushSessionEvent: typeof pushSessionEvent;
   revokeWorkspaceSseAccess: typeof revokeWorkspaceSseAccess;
 };
 
 const defaultRemoveWorkspaceMemberDependencies = {
+  broadcastSessionEvent,
   broadcastWorkspaceResourceSetUpdated,
   closeSessionConnections,
-  pushSessionEvent,
   revokeWorkspaceSseAccess,
 } satisfies RemoveWorkspaceMemberDependencies;
 
@@ -312,7 +309,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   await dependencies.revokeWorkspaceSseAccess(workspaceId, userId);
 
   for (const sessionId of txResult.closedSessionIds) {
-    dependencies.pushSessionEvent(sessionId, {
+    dependencies.broadcastSessionEvent(sessionId, {
       type: "session-closed",
       data: { reason: "released" },
     });

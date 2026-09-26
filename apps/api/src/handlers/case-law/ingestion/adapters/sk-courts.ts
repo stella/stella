@@ -236,9 +236,6 @@ type SkApiResponse = {
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
-const isOptionalNumber = (value: unknown): value is number | null | undefined =>
-  isNullishNumber(value);
-
 const isOptionalStringArray = (
   value: unknown,
 ): value is string[] | null | undefined =>
@@ -263,8 +260,8 @@ const isSkDokument = (
   isNullishString(value["name"]) &&
   isNullishString(value["fileExtension"]) &&
   isNullishString(value["url"]) &&
-  isOptionalNumber(value["id"]) &&
-  isOptionalNumber(value["size"]);
+  isNullishNumber(value["id"]) &&
+  isNullishNumber(value["size"]);
 
 const isSkOdkazovanyPredpis = (value: unknown): value is SkOdkazovanyPredpis =>
   isRecord(value) &&
@@ -308,7 +305,7 @@ const isSkDetailItem = (value: unknown): value is SkDetailItem => {
 const isSkApiResponse = (value: unknown): value is SkApiResponse =>
   isRecord(value) &&
   isNullishArrayOf(value["rozhodnutieList"], isSkApiItem) &&
-  isOptionalNumber(value["numFound"]);
+  isNullishNumber(value["numFound"]);
 
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
 const parseSkDate = (raw: string | null | undefined): string | undefined => {

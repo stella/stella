@@ -544,9 +544,6 @@ const processPdfDerivativeJob = async ({
   await processExtraction(brandedEntityId);
 };
 
-const getS3File = async (key: string): Promise<ArrayBuffer> =>
-  await readS3ArrayBuffer(key);
-
 // The derivative-state literals below cast `::text::jsonb`, never a bare
 // `::jsonb`. A bare cast fixes the bind parameter's type to jsonb, so the
 // driver JSON-encodes the already-serialized string and `jsonb_set` stores a
@@ -658,7 +655,7 @@ const processImageThumbnailJob = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const sourceBuffer = await getS3File(sourceKey);
+  const sourceBuffer = await readS3ArrayBuffer(sourceKey);
   const thumbnailResult = await generateImageThumbnail(
     new Uint8Array(sourceBuffer),
   );

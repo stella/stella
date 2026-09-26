@@ -73,10 +73,6 @@ export const formatMarker = (meta: MarkerMeta): string => {
 
 // ── Named writers for the Studio's insert actions ─────────
 
-/** The loop variable a fresh `{% for %}` names its item, derived from the
- *  array path by the same rule the marker codemod uses. */
-const loopAliasFor = (path: string): string => legacyLoopAlias(path);
-
 export const fieldMarker = (path: string): string =>
   formatMarker({ kind: "placeholder", expr: path, filters: [] });
 
@@ -94,7 +90,7 @@ export const CONDITION_CLOSE_TAG = formatMarker({ kind: "endif" });
 export const loopOpenTag = (path: string): string =>
   formatMarker({
     kind: "for",
-    alias: loopAliasFor(path),
+    alias: legacyLoopAlias(path),
     path,
     filters: [],
   });

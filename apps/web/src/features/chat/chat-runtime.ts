@@ -243,10 +243,6 @@ export const createChatRuntime = ({
     return normalized;
   };
 
-  const reportRuntimeError = (error: unknown): void => {
-    captureRuntimeError(error);
-  };
-
   const enqueueToolResult = async (
     operation: () => Promise<void>,
   ): Promise<void> => {
@@ -610,7 +606,7 @@ export const createChatRuntime = ({
         throw captureRuntimeError(new ChatMessageStartError(message.id));
       }
 
-      detached(stream.catch(reportRuntimeError), "chat-queries.stream");
+      detached(stream.catch(captureRuntimeError), "chat-queries.stream");
       return { messageId: message.id, status: "started", stream };
     },
     stop: () => {
