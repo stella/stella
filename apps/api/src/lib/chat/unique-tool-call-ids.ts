@@ -86,7 +86,7 @@ export const withUniqueToolCallIds = async function* (
     switch (carrier) {
       case "starts": {
         if (chunk.type !== EventType.TOOL_CALL_START) {
-          return panic(`${chunk.type} does not start a tool call`);
+          panic(`${chunk.type} does not start a tool call`);
         }
         if (!taken.has(chunk.toolCallId)) {
           taken.add(chunk.toolCallId);
@@ -105,16 +105,16 @@ export const withUniqueToolCallIds = async function* (
           chunk.type !== EventType.TOOL_CALL_END &&
           chunk.type !== EventType.TOOL_CALL_RESULT
         ) {
-          return panic(`${chunk.type} does not name a tool call`);
+          panic(`${chunk.type} does not name a tool call`);
         }
         yield { ...chunk, toolCallId: idOf(chunk.toolCallId) };
         break;
       }
       case "value": {
         if (chunk.type !== EventType.CUSTOM) {
-          return panic(`${chunk.type} carries no value`);
+          panic(`${chunk.type} carries no value`);
         }
-        const { value } = chunk;
+        const value: unknown = chunk.value;
         const toolCallId: unknown = isRecord(value)
           ? value["toolCallId"]
           : undefined;
@@ -131,9 +131,7 @@ export const withUniqueToolCallIds = async function* (
           (chunk.type === EventType.RUN_FINISHED &&
             chunk.outcome?.type === "interrupt");
         if (namesCalls && renamed.size > 0) {
-          return panic(
-            `An adapter sent ${chunk.type} after a call was renamed`,
-          );
+          panic(`An adapter sent ${chunk.type} after a call was renamed`);
         }
         yield chunk;
         break;
@@ -144,7 +142,7 @@ export const withUniqueToolCallIds = async function* (
       }
       default: {
         carrier satisfies never;
-        return panic(`Unhandled call id carrier: ${String(carrier)}`);
+        panic(`Unhandled call id carrier: ${String(carrier)}`);
       }
     }
   }
