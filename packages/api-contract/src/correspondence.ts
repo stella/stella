@@ -52,6 +52,32 @@ export type CorrespondenceAuthentication = {
   alignedIdentifier: string | null;
 };
 
+export const CORRESPONDENCE_INTAKES = [
+  "direct",
+  "forwarded_inline",
+  "forwarded_attachment",
+] as const;
+
+export type CorrespondenceAuthenticatedSender = CorrespondenceAuthentication & {
+  address: string;
+};
+
+export type CorrespondenceOriginalSignature =
+  | { status: "unverified" }
+  | { status: "verified"; domain: string };
+
+/** Extracted headers are assertions; only the outer delivery is authenticated. */
+export type CorrespondenceProvenance = {
+  authenticatedSender: CorrespondenceAuthenticatedSender;
+} & (
+  | { intake: "direct"; originalSignature: null }
+  | { intake: "forwarded_inline"; originalSignature: { status: "unverified" } }
+  | {
+      intake: "forwarded_attachment";
+      originalSignature: CorrespondenceOriginalSignature;
+    }
+);
+
 export const CORRESPONDENCE_SENDER_KINDS = [
   "verified_alias",
   "shared_mailbox",
@@ -78,7 +104,7 @@ export type CorrespondenceFiler =
     };
 
 /** The parser's output. The authenticated filer is supplied separately. */
-export type ParsedCorrespondence = {
+export type ParsedCorrespondence = CorrespondenceProvenance & {
   direction: CorrespondenceDirection;
   channel: CorrespondenceChannel;
   messageId: string | null;
@@ -93,5 +119,4 @@ export type ParsedCorrespondence = {
   references: string[];
   bodyText: string;
   bodyHtml: string | null;
-  authentication: CorrespondenceAuthentication;
 };
