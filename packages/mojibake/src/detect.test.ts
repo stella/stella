@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { misdecode } from "./charsets.js";
 import {
   checkTextEncoding,
+  CODE_UNIT_BUDGET,
   type EncodingCheckCounters,
   type EncodingFinding,
   MAX_EXAMINED_WORDS,
+  MAX_WORD_CODE_UNITS,
   PAIR_EVALUATION_BUDGET,
   repairMisdecoding,
 } from "./detect.js";
@@ -188,6 +190,7 @@ describe("work on a long text of distinct words", () => {
       const counters: EncodingCheckCounters = {
         wordsExamined: 0,
         pairEvaluations: 0,
+        codeUnits: 0,
       };
       const check = checkTextEncoding(text, "cs", { counters });
       expect(check.status).toBe(status);
@@ -196,8 +199,60 @@ describe("work on a long text of distinct words", () => {
       expect(counters.pairEvaluations).toBeLessThanOrEqual(
         PAIR_EVALUATION_BUDGET,
       );
+      expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
     },
   );
+
+  test("a word past the length bound is not weighed, and the check says so", () => {
+    const counters: EncodingCheckCounters = {
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+    };
+    const check = checkTextEncoding(`Søren${"a".repeat(500_000)}`, "cs", {
+      counters,
+    });
+    expect(check).toEqual({ status: "incomplete", limit: "long-words" });
+    expect(counters.codeUnits).toBe(0);
+  });
+
+  test("words within the length bound are weighed up to the code-unit budget", () => {
+    // Distinct native words, each just inside the length bound, that add up
+    // to more characters than the check classifies.
+    const length = MAX_WORD_CODE_UNITS;
+    const count = Math.ceil((CODE_UNIT_BUDGET * 1.5) / length);
+    const text = Array.from({ length: count }, (_, index) =>
+      `př${spelled(index)}`.padEnd(length, "a"),
+    ).join(" ");
+    expect(count).toBeLessThan(MAX_EXAMINED_WORDS);
+    const counters: EncodingCheckCounters = {
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+    };
+    expect(checkTextEncoding(text, "cs", { counters })).toEqual({
+      status: "incomplete",
+      limit: "code-units",
+    });
+    expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
+  });
+
+  test("counters describe the last check alone", () => {
+    const counters: EncodingCheckCounters = {
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+    };
+    checkTextEncoding("pod¾a ¾udí, pod¾a ¾udí", "sk", { counters });
+    expect(counters.pairEvaluations).toBeGreaterThan(0);
+    expect(counters.codeUnits).toBeGreaterThan(0);
+    checkTextEncoding("plain ASCII", "sk", { counters });
+    expect(counters).toEqual({
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+    });
+  });
 
   test("a decision-sized text is checked whole", () => {
     const text = textOf(20_000, (index) => `př${spelled(index % 300)}`);

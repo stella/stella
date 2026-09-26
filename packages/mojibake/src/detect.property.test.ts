@@ -31,9 +31,11 @@ import { alphabetFor } from "./alphabet.js";
 import { DECODING_PAIRS, type DecodingPair, misdecode } from "./charsets.js";
 import {
   checkTextEncoding,
+  CODE_UNIT_BUDGET,
   type EncodingCheck,
   type EncodingCheckCounters,
   MAX_EXAMINED_WORDS,
+  MAX_WORD_CODE_UNITS,
   PAIR_EVALUATION_BUDGET,
   repairMisdecoding,
 } from "./detect.js";
@@ -456,6 +458,7 @@ describe("bounded work", () => {
           const counters: EncodingCheckCounters = {
             wordsExamined: 0,
             pairEvaluations: 0,
+            codeUnits: 0,
           };
           checkTextEncoding(mixedText(wordCount), "cs", { counters });
           expect(counters.wordsExamined).toBeLessThanOrEqual(
@@ -464,7 +467,46 @@ describe("bounded work", () => {
           expect(counters.pairEvaluations).toBeLessThanOrEqual(
             PAIR_EVALUATION_BUDGET,
           );
+          expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
         }),
+        config(30),
+      );
+    },
+    propertyTestTimeout(20_000),
+  );
+
+  test(
+    "characters classified and read back never exceed the code-unit budget, however long the words",
+    () => {
+      fc.assert(
+        fc.property(
+          fc.integer({ min: 1, max: 40 }),
+          fc.integer({ min: 0, max: 500_000 }),
+          (count, total) => {
+            // Words in letters Czech does not write, read back through every
+            // pair: the costliest word there is, grown in length and number.
+            const padding = Math.floor(total / count);
+            const tokens = Array.from(
+              { length: count },
+              (_, index) => `Sø${spelled(index)}${"a".repeat(padding)}`,
+            );
+            const counters: EncodingCheckCounters = {
+              wordsExamined: 0,
+              pairEvaluations: 0,
+              codeUnits: 0,
+            };
+            const check = checkTextEncoding(tokens.join(" "), "cs", {
+              counters,
+            });
+            expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
+            expect(counters.pairEvaluations).toBeLessThanOrEqual(
+              PAIR_EVALUATION_BUDGET,
+            );
+            if (tokens.some((token) => token.length > MAX_WORD_CODE_UNITS)) {
+              expect(check.status).not.toBe("clean");
+            }
+          },
+        ),
         config(30),
       );
     },
@@ -492,6 +534,7 @@ describe("bounded work", () => {
             const counters: EncodingCheckCounters = {
               wordsExamined: 0,
               pairEvaluations: 0,
+              codeUnits: 0,
             };
             const check = checkTextEncoding(text, "cs", { counters });
             expect(counters.wordsExamined).toBe(MAX_EXAMINED_WORDS);

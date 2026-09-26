@@ -56,16 +56,26 @@ const FIXED_PER_DAMAGED = 4;
 const MAX_LAYERS = 2;
 const MIN_UTF8_SIGNATURE_OCCURRENCES = 2;
 /**
- * Bounds on the work one check does, so that a long text of distinct words
- * cannot hold a synchronous caller for seconds. The most frequent words are
- * examined first; a check that stops at a bound says so (`incomplete`)
- * instead of calling the text clean.
+ * Bounds on the work one check does, so that a long text of distinct words,
+ * or one long word, cannot hold a synchronous caller for seconds. The most
+ * frequent words are examined first; a check that stops at a bound says so
+ * (`incomplete`) instead of calling the text clean. Splitting the text into
+ * words is one linear pass and is not bounded.
  */
 export const MAX_EXAMINED_WORDS = 20_000;
+/**
+ * Code units in the longest word weighed. A word is split on ASCII
+ * whitespace only, so text without it (a payload, a space-free script, words
+ * joined by U+00A0) is one word, and reading that back through every pair is
+ * work no check can afford.
+ */
+export const MAX_WORD_CODE_UNITS = 256;
 /** Misfit words every pair is tried on. */
 export const MAX_PAIR_MISFITS = 200;
 /** Words read back through a pair, across all pairs. */
 export const PAIR_EVALUATION_BUDGET = 40_000;
+/** Code units classified or read back through a charset, across the check. */
+export const CODE_UNIT_BUDGET = 2_000_000;
 const MAX_SAMPLES = 5;
 const PREVIEW_CHARS = 400;
 
@@ -130,14 +140,17 @@ export type EncodingFindingKind = EncodingFinding["kind"];
 
 /**
  * Test-only: how much work a check actually did, so a test can assert the
- * documented bounds (`MAX_EXAMINED_WORDS`, `PAIR_EVALUATION_BUDGET`) without
- * timing the check. Filled in place; the caller owns the object.
+ * documented bounds (`MAX_EXAMINED_WORDS`, `PAIR_EVALUATION_BUDGET`,
+ * `CODE_UNIT_BUDGET`) without timing the check. The caller owns the object;
+ * every check overwrites every field with its own work alone.
  */
 export type EncodingCheckCounters = {
-  /** Distinct words weighed, after the distinct-words bound. */
+  /** Distinct words weighed, after the length and distinct-words bounds. */
   wordsExamined: number;
   /** Word read-backs spent trying every pair, across all pairs. */
   pairEvaluations: number;
+  /** Code units classified or read back through a charset. */
+  codeUnits: number;
 };
 
 export type CheckTextEncodingOptions = {
@@ -147,8 +160,10 @@ export type CheckTextEncodingOptions = {
 /** The bound a check stopped at before it had weighed every word. */
 export type EncodingCheckLimit =
   | "distinct-words"
+  | "long-words"
   | "misfit-words"
-  | "pair-evaluations";
+  | "pair-evaluations"
+  | "code-units";
 
 export type EncodingCheck =
   | { status: "clean" }
@@ -380,18 +395,26 @@ type RepairWordOptions = {
   pair: DecodingPair;
   alphabet: Alphabet;
   maxLayers: MisdecodingLayers;
+  /** Where a bounded check counts the code units read back and classified. */
+  work?: EncodingCheckCounters;
 };
 
 /** A word through up to `maxLayers` layers of the pair, until it reads natively. */
 const repairWord = (
   word: string,
-  { pair, alphabet, maxLayers }: RepairWordOptions,
+  { pair, alphabet, maxLayers, work }: RepairWordOptions,
 ): WordRepair => {
   let current = word;
   for (let layer = 1; layer <= maxLayers; layer += 1) {
     const undone = undoWord(current, pair);
+    if (work !== undefined) {
+      work.codeUnits += current.length;
+    }
     if (undone.failed || undone.text === current) {
       return { status: "unrepaired" };
+    }
+    if (work !== undefined) {
+      work.codeUnits += undone.text.length;
     }
     if (classifyWord(undone.text, alphabet) === "native") {
       return {
@@ -482,15 +505,49 @@ type PairEvidence = {
 type CountedWord = { word: string; stat: WordStat };
 type ClassifiedWord = CountedWord & { wordClass: WordClass };
 
-/** Word read-backs a check may still spend; spent in place. */
-type Budget = { remaining: number };
+/** A check's work so far, and the first bound it stopped at. */
+type Progress = {
+  work: EncodingCheckCounters;
+  limit: EncodingCheckLimit | undefined;
+};
+
+type Cost = {
+  /** Pair evaluations: words read back through a pair of `DECODING_PAIRS`. */
+  words: number;
+  /** Code units of the words, each read back or classified `passes` times. */
+  codeUnits: number;
+  passes: number;
+};
+
+/**
+ * Whether the check can still afford `cost`; records the bound it cannot.
+ * A read-back never lengthens a word (no pair assumes UTF-8), so the cost is
+ * an upper bound on the work the counters then record.
+ */
+const affords = (
+  progress: Progress,
+  { words, codeUnits, passes }: Cost,
+): boolean => {
+  const { work } = progress;
+  if (work.pairEvaluations + words > PAIR_EVALUATION_BUDGET) {
+    progress.limit ??= "pair-evaluations";
+    return false;
+  }
+  if (work.codeUnits + codeUnits * passes > CODE_UNIT_BUDGET) {
+    progress.limit ??= "code-units";
+    return false;
+  }
+  return true;
+};
+
+const codeUnitsOf = (words: readonly CountedWord[]): number =>
+  words.reduce((total, { word }) => total + word.length, 0);
 
 type PairEvidenceOptions = {
   misfits: readonly ClassifiedWord[];
   natives: readonly ClassifiedWord[];
   alphabet: Alphabet;
-  budget: Budget;
-  counters: EncodingCheckCounters | undefined;
+  progress: Progress;
 };
 
 /**
@@ -499,15 +556,19 @@ type PairEvidenceOptions = {
  */
 const pairEvidence = (
   pair: DecodingPair,
-  { misfits, natives, alphabet, budget, counters }: PairEvidenceOptions,
+  { misfits, natives, alphabet, progress }: PairEvidenceOptions,
 ): PairEvidence | null | "exhausted" => {
-  budget.remaining -= misfits.length;
-  if (budget.remaining < 0) {
+  const { work } = progress;
+  const misfitCost = {
+    words: misfits.length,
+    codeUnits: codeUnitsOf(misfits),
+    // A read-back and a classification per layer.
+    passes: 2 * MAX_LAYERS,
+  };
+  if (!affords(progress, misfitCost)) {
     return "exhausted";
   }
-  if (counters !== undefined) {
-    counters.pairEvaluations += misfits.length;
-  }
+  work.pairEvaluations += misfits.length;
   let fixedOccurrences = 0;
   /** Fixed occurrences of words that are more than attached notation. */
   let lexicalOccurrences = 0;
@@ -518,7 +579,12 @@ const pairEvidence = (
   const samples: RepairedSpan[] = [];
   const repairs = new Map<string, string>();
   for (const { word, stat, wordClass } of misfits) {
-    const repair = repairWord(word, { pair, alphabet, maxLayers: MAX_LAYERS });
+    const repair = repairWord(word, {
+      pair,
+      alphabet,
+      maxLayers: MAX_LAYERS,
+      work,
+    });
     if (repair.status === "unrepaired") {
       unresolvedOccurrences += stat.count;
       continue;
@@ -549,19 +615,25 @@ const pairEvidence = (
   // went through leaves them as they are, or turns them into other native
   // words (Polish "siź" is "się" through windows-1250 read as windows-1257),
   // and never breaks them.
-  budget.remaining -= natives.length;
-  if (budget.remaining < 0) {
+  const nativeCost = {
+    words: natives.length,
+    codeUnits: codeUnitsOf(natives),
+    passes: 2,
+  };
+  if (!affords(progress, nativeCost)) {
     return "exhausted";
   }
-  if (counters !== undefined) {
-    counters.pairEvaluations += natives.length;
-  }
+  work.pairEvaluations += natives.length;
   let damagedOccurrences = 0;
   let convertedOccurrences = 0;
   for (const { word, stat } of natives) {
     const undone = undoWord(word, pair);
+    work.codeUnits += word.length;
     if (undone.text === word && !undone.failed) {
       continue;
+    }
+    if (!undone.failed) {
+      work.codeUnits += undone.text.length;
     }
     if (undone.failed || classifyWord(undone.text, alphabet) !== "native") {
       damagedOccurrences += stat.count;
@@ -737,9 +809,15 @@ const UTF8_SEQUENCE_READ_AS_SINGLE_BYTE = new RegExp(
  * read natively in the language (or, where it is not known, stay in one
  * script).
  */
+type ReadsAsWrittenOptions = {
+  word: string;
+  alphabet: Alphabet | null;
+  work: EncodingCheckCounters;
+};
+
 const readsAsWritten = (
   undone: UndoneWord,
-  { word, alphabet }: { word: string; alphabet: Alphabet | null },
+  { word, alphabet, work }: ReadsAsWrittenOptions,
 ): boolean => {
   if (undone.failed || undone.text === word) {
     return false;
@@ -758,15 +836,22 @@ const readsAsWritten = (
   ) {
     return false;
   }
+  work.codeUnits += letters.length;
   return alphabet === null
     ? writtenInOneScript(letters)
     : classifyWord(letters, alphabet) === "native";
 };
 
+type Utf8SignatureOptions = {
+  alphabet: Alphabet | null;
+  progress: Progress;
+};
+
 const utf8Signature = (
   words: readonly CountedWord[],
-  alphabet: Alphabet | null,
+  { alphabet, progress }: Utf8SignatureOptions,
 ): Extract<EncodingFinding, { kind: "utf8-read-as-single-byte" }> | null => {
+  const { work } = progress;
   let occurrences = 0;
   let signed = false;
   const samples: RepairedSpan[] = [];
@@ -774,9 +859,20 @@ const utf8Signature = (
     if (!UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(word)) {
       continue;
     }
-    const repaired = UTF8_SIGNATURE_PAIRS.map((pair) =>
-      undoWord(word, pair),
-    ).find((undone) => readsAsWritten(undone, { word, alphabet }));
+    // Read back and classified per pair; these pairs are not the ones pair
+    // evaluations count.
+    const cost = {
+      words: 0,
+      codeUnits: word.length,
+      passes: 2 * UTF8_SIGNATURE_PAIRS.length,
+    };
+    if (!affords(progress, cost)) {
+      break;
+    }
+    const repaired = UTF8_SIGNATURE_PAIRS.map((pair) => {
+      work.codeUnits += word.length;
+      return undoWord(word, pair);
+    }).find((undone) => readsAsWritten(undone, { word, alphabet, work }));
     if (repaired === undefined) {
       continue;
     }
@@ -860,33 +956,45 @@ export const checkTextEncoding = (
     findings.push({ kind: "c1-control", ...c1 });
   }
 
-  const words = collectWords(text);
-  let limit: EncodingCheckLimit | undefined =
-    words.size > MAX_EXAMINED_WORDS ? "distinct-words" : undefined;
-  const examined = mostFrequent(
-    Array.from(words, ([word, stat]) => ({ word, stat })),
-    MAX_EXAMINED_WORDS,
+  const progress: Progress = {
+    work: { wordsExamined: 0, pairEvaluations: 0, codeUnits: 0 },
+    limit: undefined,
+  };
+  const words = Array.from(collectWords(text), ([word, stat]) => ({
+    word,
+    stat,
+  }));
+  const weighable = words.filter(
+    ({ word }) => word.length <= MAX_WORD_CODE_UNITS,
   );
-  if (counters !== undefined) {
-    counters.wordsExamined = examined.length;
+  if (weighable.length < words.length) {
+    progress.limit = "long-words";
   }
+  if (weighable.length > MAX_EXAMINED_WORDS) {
+    progress.limit ??= "distinct-words";
+  }
+  const examined = mostFrequent(weighable, MAX_EXAMINED_WORDS);
+  progress.work.wordsExamined = examined.length;
   const alphabet = alphabetFor(language);
-  const utf8 = utf8Signature(examined, alphabet);
+  const utf8 = utf8Signature(examined, { alphabet, progress });
   if (utf8 !== null) {
     findings.push(utf8);
   }
 
   if (alphabet !== null) {
-    const classified = examined.map(({ word, stat }) => ({
-      word,
-      stat,
-      wordClass: classifyWord(word, alphabet),
-    }));
+    const classified: ClassifiedWord[] = [];
+    for (const { word, stat } of examined) {
+      if (!affords(progress, { words: 0, codeUnits: word.length, passes: 1 })) {
+        break;
+      }
+      progress.work.codeUnits += word.length;
+      classified.push({ word, stat, wordClass: classifyWord(word, alphabet) });
+    }
     const allMisfits = classified.filter(({ wordClass }) =>
       isMisfit(wordClass),
     );
     if (allMisfits.length > MAX_PAIR_MISFITS) {
-      limit ??= "misfit-words";
+      progress.limit ??= "misfit-words";
     }
     const best =
       allMisfits.length === 0
@@ -897,12 +1005,10 @@ export const checkTextEncoding = (
               ({ wordClass }) => wordClass === "native",
             ),
             alphabet,
-            budget: { remaining: PAIR_EVALUATION_BUDGET },
-            counters,
+            progress,
           });
-    if (best === "exhausted") {
-      limit ??= "pair-evaluations";
-    } else if (best !== null) {
+    // An exhausted search has recorded the bound it stopped at.
+    if (best !== null && best !== "exhausted") {
       const { evidence, alternatives } = best;
       const { pair, layers, fixedOccurrences, damagedOccurrences, samples } =
         evidence;
@@ -929,11 +1035,14 @@ export const checkTextEncoding = (
     }
   }
 
+  if (counters !== undefined) {
+    Object.assign(counters, progress.work);
+  }
   const [first, ...rest] = findings;
   if (first !== undefined) {
     return { status: "suspect", findings: [first, ...rest] };
   }
-  return limit === undefined
+  return progress.limit === undefined
     ? { status: "clean" }
-    : { status: "incomplete", limit };
+    : { status: "incomplete", limit: progress.limit };
 };

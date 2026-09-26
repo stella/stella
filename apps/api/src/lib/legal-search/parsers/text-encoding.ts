@@ -32,7 +32,8 @@ export const TEXT_MISDECODED = "case_law.ingestion.text_misdecoded";
 
 /**
  * Log event emitted when a decision's text found nothing but was too long,
- * in distinct words, to be weighed whole: not a verdict that it is clean.
+ * in distinct words or in one word's length, to be weighed whole: not a
+ * verdict that it is clean.
  */
 export const TEXT_ENCODING_INCOMPLETE =
   "case_law.ingestion.text_encoding_incomplete";

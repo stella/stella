@@ -61,7 +61,8 @@ describe("a stored text read through the wrong charset", () => {
   });
 
   test("a mis-decoded sample and its repair are each capped", () => {
-    const long = `pod¾a${"x".repeat(500)}`;
+    // Longer than an excerpt, within the longest word the check weighs.
+    const long = `pod¾a${"x".repeat(200)}`;
     const text = `${long} ${long} ${PUBLISHED}`;
     const samples = textMisdecodedFields(text, "sk")?.encodingSamples ?? "";
     expect(samples).toContain(`pod¾axxx`);
