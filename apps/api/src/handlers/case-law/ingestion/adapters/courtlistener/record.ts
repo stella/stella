@@ -112,20 +112,20 @@ export type CourtListenerRecordV1 = v.InferOutput<
   typeof courtListenerRecordSchema
 >;
 
-type AdmittedOpinion = {
+export type AdmittedOpinion = {
   readonly row: OpinionRow;
   readonly type: OpinionType;
   readonly perCuriam: boolean;
   readonly extractedByOcr: boolean;
 };
 
-type AdmittedCitation = {
+export type AdmittedCitation = {
   readonly row: CitationRow;
   readonly type: CitationType;
 };
 
 /** A record that passed every check, with typed readings beside its rows. */
-type AdmittedCourtListenerRecord = {
+export type AdmittedCourtListenerRecord = {
   readonly record: CourtListenerRecordV1;
   readonly clusterId: string;
   readonly sourceRecordKey: string;

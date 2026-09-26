@@ -26,7 +26,7 @@ const DISSENTING = "dissenting" satisfies DecisionJudgeRole;
  * Every opinion type the snapshot's opinion rows use, spelled as upstream
  * spells them (`015unamimous` included). Any other value is schema drift.
  */
-const OPINION_TYPES = {
+export const OPINION_TYPES = {
   "010combined": { rank: 10, judgeRole: PANEL, classSignal: "none" },
   "015unamimous": { rank: 15, judgeRole: PANEL, classSignal: "opinion" },
   "020lead": { rank: 20, judgeRole: PANEL, classSignal: "opinion" },
@@ -56,7 +56,7 @@ export const isOpinionType = (value: string): value is OpinionType =>
  * court-assigned neutral citation; every other declared type names a printed
  * reporter. An undeclared type is schema drift, not a reporter by default.
  */
-const CITATION_TYPES = {
+export const CITATION_TYPES = {
   "1": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "2": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "3": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,

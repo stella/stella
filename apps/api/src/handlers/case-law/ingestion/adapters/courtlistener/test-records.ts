@@ -56,7 +56,7 @@ export const docketRow = (
     ...values,
   });
 
-const courtRow = (
+export const courtRow = (
   values: Partial<Record<(typeof COURT_COLUMNS)[number], string>> = {},
 ) =>
   row(COURT_COLUMNS, {

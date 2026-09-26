@@ -320,7 +320,7 @@ export const isCanonicalId = (value: string): boolean =>
   /^[1-9][0-9]*$/u.test(value);
 
 /** UTF-16 code-unit order, independent of locale. */
-const compareBytewise = (left: string, right: string): number => {
+export const compareBytewise = (left: string, right: string): number => {
   if (left === right) {
     return 0;
   }
