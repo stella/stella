@@ -5,8 +5,6 @@ import {
   type FileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 
-export type { StorageFetchPurpose } from "@/lib/files/file-metadata-query.logic";
-
 type FileMetadataOptions = FileMetadataQueryKey & { enabled?: boolean };
 
 type FileMetadata = {

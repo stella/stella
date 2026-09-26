@@ -1,11 +1,12 @@
 // Design-system lint backlog guard.
 //
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
-// local `no-raw-overflow-scroll` and `no-imported-class-constant`, and the API
+// local `no-raw-overflow-scroll` and `no-imported-class-constant`, the API
 // size-bound rules `require-bounded-request-schema` and
-// `no-unbounded-response-body`) for every file in their scope except the ones
-// this baseline lists per rule (scripts/design-lint-policy.ts turns the rule
-// off there). Those files carry merged-code debt; this guard holds each file's
+// `no-unbounded-response-body`, and the function size limits `complexity`,
+// `max-lines-per-function` and `max-params`) for every file in their scope
+// except the ones this baseline lists per rule (scripts/design-lint-policy.ts
+// turns the rule off there, or down to its ceiling for a size limit). Those files carry merged-code debt; this guard holds each file's
 // count at its baseline by running the rule-only pass
 // (`oxlint.design.config.ts`) over them. A rise fails, a file that reaches
 // zero fails until it is pruned (an override on a clean file would hide the
@@ -39,6 +40,24 @@ const BASELINE_PATH = BASELINE_PATHS.designLint;
 const CONFIG_PATH = "oxlint.design.config.ts";
 /** The paths `code-check` lints; the baseline is measured on the same tree. */
 const LINT_SCOPE = [".claude/mcp", "apps", "packages"];
+/**
+ * The files `lint-root-scripts.sh` and `lint-oxlint-fixtures.sh` lint with the
+ * same config, listed from git for the reason those scripts give. The
+ * fixtures break rules on purpose and are linted on their own.
+ */
+const TOOLING_PATHSPECS = [
+  "scripts/*.ts",
+  ".oxlint-plugins/*.ts",
+  ":(exclude).oxlint-plugins/__fixtures__/**",
+];
+
+const toolingFiles = (): string[] => {
+  const result = Bun.spawnSync(["git", "ls-files", ...TOOLING_PATHSPECS]);
+  if (result.exitCode !== 0) {
+    panic(`git ls-files exited with ${result.exitCode}`);
+  }
+  return result.stdout.toString().split("\n").filter(Boolean);
+};
 const WRITE_HINT = "bun scripts/design-lint-baseline.ts --write";
 /** Cap the stale list so a large prune stays readable in CI logs. */
 const STALE_PREVIEW = 10;
@@ -77,6 +96,9 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
+  "eslint/complexity": {},
+  "eslint/max-lines-per-function": {},
+  "eslint/max-params": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>
@@ -163,7 +185,7 @@ const run = (): number => {
   }
 
   if (mode === "write") {
-    const current = lint(LINT_SCOPE);
+    const current = lint([...LINT_SCOPE, ...toolingFiles()]);
     writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
     for (const rule of DESIGN_LINT_BACKLOG_RULES) {
       console.log(
@@ -209,7 +231,7 @@ const run = (): number => {
     console.error(
       "\nThe rule is off in these files only for the findings already there.\n" +
         "Fix the new finding: `bun --bun oxlint -c oxlint.design.config.ts <file>`\n" +
-        "names the replacement to use.",
+        "names the replacement to use, or the function to split.",
     );
   }
   if (stale.length > 0) {

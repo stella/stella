@@ -20,9 +20,9 @@ import {
 
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const removeWorkspaceMember = createRemoveWorkspaceMember({
+  broadcastSessionEvent: () => undefined,
   broadcastWorkspaceResourceSetUpdated: () => undefined,
   closeSessionConnections: () => undefined,
-  pushSessionEvent: () => undefined,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
 });
 

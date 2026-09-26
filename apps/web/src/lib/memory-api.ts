@@ -7,12 +7,12 @@ export const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE_AND_ARCHIVED: "active-and-archived",
 } as const;
 
-export type WorkspaceNavigationStatusScope =
+type WorkspaceNavigationStatusScope =
   (typeof WORKSPACE_NAVIGATION_STATUS_SCOPE)[keyof typeof WORKSPACE_NAVIGATION_STATUS_SCOPE];
 
 export type MemoryScope = "organization" | "user" | "workspace";
 export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
-export type MemoryKind =
+type MemoryKind =
   | "preference"
   | "instruction"
   | "fact"
@@ -51,7 +51,7 @@ export const fetchMemoriesPage = async ({
   return unwrapEden(response);
 };
 
-export type MemoriesPage = Awaited<ReturnType<typeof fetchMemoriesPage>>;
+type MemoriesPage = Awaited<ReturnType<typeof fetchMemoriesPage>>;
 export type MemoryListItem = MemoriesPage["items"][number];
 
 type CreateMemoryOptions =
@@ -79,8 +79,6 @@ export const createMemory = async (options: CreateMemoryOptions) => {
   );
   return unwrapEden(response);
 };
-
-export type PersistedMemoryResult = Awaited<ReturnType<typeof createMemory>>;
 
 type CreateFirmMemoryOptions = {
   content: string;
@@ -145,7 +143,7 @@ export const fetchWorkspaceNavigationPage = async ({
   };
 };
 
-export type WorkspaceNavigationPage = Awaited<
+type WorkspaceNavigationPage = Awaited<
   ReturnType<typeof fetchWorkspaceNavigationPage>
 >;
 export type WorkspaceNavigationItem = WorkspaceNavigationPage["items"][number];

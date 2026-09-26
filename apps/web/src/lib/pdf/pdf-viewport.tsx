@@ -34,8 +34,6 @@ import {
 import { getSearchTextCandidates } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 
-export { usePDFStore } from "@/lib/pdf/pdf-context";
-
 const [, roundY] = approximateFraction(getDevicePixelRatio());
 
 type PDFViewportProps = {

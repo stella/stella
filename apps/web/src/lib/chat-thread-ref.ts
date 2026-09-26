@@ -5,12 +5,12 @@ import { toSafeId } from "@/lib/safe-id";
 
 export type ChatThreadId = SafeId<"chatThread">;
 
-export type GlobalChatThreadRef = {
+type GlobalChatThreadRef = {
   scope: "global";
   threadId: ChatThreadId;
 };
 
-export type WorkspaceChatThreadRef = {
+type WorkspaceChatThreadRef = {
   scope: "workspace";
   threadId: ChatThreadId;
   workspaceId: string;

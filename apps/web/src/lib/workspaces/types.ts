@@ -99,7 +99,7 @@ export type FilterableColumnId = {
     : never;
 }[MattersColumnId];
 
-export const FILTERABLE_COLUMN_IDS = ALL_COLUMNS.filter(
+const FILTERABLE_COLUMN_IDS = ALL_COLUMNS.filter(
   (columnId): columnId is FilterableColumnId =>
     MATTERS_COLUMN_FILTERABILITY[columnId] === "filterable",
 );

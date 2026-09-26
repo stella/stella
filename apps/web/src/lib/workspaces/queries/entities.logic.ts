@@ -42,7 +42,7 @@ export const normalizeFind = (
 
 export type { ViewSort };
 
-export type EntitiesFieldMode = "full" | "visible";
+type EntitiesFieldMode = "full" | "visible";
 
 export type EntitiesPageKey = {
   workspaceId: string;

@@ -14,7 +14,7 @@ export const inboxDayKey = (createdAt: string): string =>
   ).unwrapOr(createdAt);
 
 /** Higher severity sorts first; ties keep feed order (newest first). */
-export const severityRank = (severity: SignalSeverity): number =>
+const severityRank = (severity: SignalSeverity): number =>
   SIGNAL_SEVERITIES.indexOf(severity);
 
 type DayGroupable = { id: string; createdAt: string; severity: SignalSeverity };

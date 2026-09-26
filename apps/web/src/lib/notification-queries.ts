@@ -9,7 +9,7 @@ type NotificationsKey = {
   organizationId: string;
 };
 
-export const notificationKeys = {
+const notificationKeys = {
   all: ({ organizationId }: NotificationsKey) =>
     ["notifications", organizationId] as const,
   list: (key: NotificationsKey) => [...notificationKeys.all(key), "list"],

@@ -102,13 +102,13 @@ const ENTITY_COLORS: Record<string, EntityColor> = {
 };
 
 /** Normalized sRGB triple (0–1 per channel) to a CSS `rgb()` color string. */
-export const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
+const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
   const [r, g, b] = triple;
   return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
 };
 
 /** RGB triples for PDF redaction export and UI overlays. */
-export const getEntityPDFColors = (
+const getEntityPDFColors = (
   label: string,
 ): { fill: ColorTriple; border: ColorTriple; text: ColorTriple } => {
   const c = ENTITY_COLORS[label] ?? FALLBACK_COLOR;

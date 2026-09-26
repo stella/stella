@@ -2,7 +2,7 @@ import { env } from "@/env";
 
 export type JsonLdObject = Record<string, unknown>;
 
-export type PublicAlternateLink = {
+type PublicAlternateLink = {
   href: string;
   hreflang: string;
 };

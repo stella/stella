@@ -17,6 +17,8 @@ import {
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
+  SIZE_LINT_POLICY_OVERRIDES,
+  SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
@@ -707,7 +709,6 @@ export default defineConfig({
     // `no-network-await-in-loop` flag with the owner in hand.
     "no-await-in-loop": "off",
     "no-console": "error",
-    "no-shadow": "error",
     "no-unused-vars": [
       "error",
       {
@@ -720,22 +721,9 @@ export default defineConfig({
     // The TypeScript extension below recognizes returned thenables. Retain
     // the base rule only for JavaScript through the override below.
     "require-await": "off",
-    "no-useless-catch": "error",
-    "no-non-null-assertion": "error",
 
-    "typescript/no-explicit-any": "error",
-    "typescript/no-dynamic-delete": "error",
     "typescript/require-await": "error",
-    "typescript/no-misused-promises": [
-      "error",
-      { checksVoidReturn: { attributes: false } },
-    ],
-    "typescript/consistent-type-definitions": ["error", "type"],
 
-    "unicorn/no-useless-undefined": "off",
-    "unicorn/prefer-array-find": "error",
-    "unicorn/prefer-at": "error",
-    "unicorn/prefer-node-protocol": "error",
     // Stylistic only; the negated form (`a !== b ? x : y`) is often
     // clearer than the swapped equivalent. No bug-catching value.
     "unicorn/no-negated-condition": "off",
@@ -753,7 +741,6 @@ export default defineConfig({
     // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
     "logical-assignment-operators": "off",
 
-    "react/rules-of-hooks": "error",
     // Override libraryRules so React correctness is checked in every app and
     // shared package.
     "react/jsx-key": "error",
@@ -777,15 +764,8 @@ export default defineConfig({
         unnamedComponents: "arrow-function",
       },
     ],
-    "react/style-prop-object": "error",
-    "react/jsx-no-comment-textnodes": "error",
-    "react/iframe-missing-sandbox": "error",
-    "react/jsx-no-target-blank": "error",
     "react/jsx-no-script-url": ["error", { includeFromSettings: true }],
-    "react/button-has-type": "error",
-    "react/checked-requires-onchange-or-readonly": "error",
     "react/no-unknown-property": "error",
-    "react/no-object-type-as-default-prop": "error",
     // Allow component creation in prop position: i18n rich-text render
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
     // element builders are idiomatic here and are not remounted components.
@@ -794,9 +774,6 @@ export default defineConfig({
     // `yield* Result.await(...)`) have no meaningful user-facing yield type
     // to document, and the codebase's JSDoc style uses bare tags.
     "jsdoc/require-yields-type": "off",
-    "promise/always-return": "error",
-    "promise/no-return-in-finally": "error",
-    "no-useless-assignment": "error",
 
     // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
     // time. The Module Side Effects section in AGENTS.md documents the TDZ class
@@ -905,48 +882,33 @@ export default defineConfig({
     "no-unpaired-playbook-verdict/no-unpaired-playbook-verdict": "error",
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
-    "stella-lowercase/stella-lowercase": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
     "require-function-replacer/require-function-replacer": "error",
-    "no-void": ["error", { allowAsStatement: true }],
 
-    // --- Disabled ultracite defaults ---
+    // Object keys follow meaning (id first, related fields together).
     "sort-keys": "off",
-    "no-plusplus": "off",
-    "no-inline-comments": "off",
-    "max-statements": "off",
-    "prefer-destructuring": "off",
-    "no-negated-condition": "off",
-    "no-nested-ternary": "error",
-    "no-use-before-define": "off",
+    // promise/always-return requires the trailing `return;` in `.then`
+    // callbacks that this rule flags.
     "no-useless-return": "off",
+    // Only a handful of task markers exist; "todo" is also domain vocabulary
+    // (kanban todos, React Compiler "Todo" bailouts).
     "no-warning-comments": "off",
-    "no-unexpected-multiline": "off",
-    "max-classes-per-file": "off",
-    "class-methods-use-this": "off",
     "no-unmodified-loop-condition": [
       "error",
       { checkConditionalExpressions: true },
     ],
-    "no-loop-func": "error",
-    complexity: ["error", 50],
-    "func-style": "off",
-    "func-names": "off",
+    ...SIZE_LINT_RULES,
+    // libraryRules sets the bare `complexity` key, which outranks the
+    // canonical id above.
+    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
+    // Annotations on literal initializers are deliberate widening
+    // (`const marker: string = "…"`); removing them narrows to the literal.
     "typescript/no-inferrable-types": "off",
-    "typescript/consistent-return": "error",
-    "typescript/dot-notation": "error",
-    "typescript/prefer-readonly": "error",
-    "typescript/no-unnecessary-type-conversion": "error",
-    "typescript/no-unnecessary-condition": [
-      "error",
-      { allowConstantLoopConditions: "only-allowed-literals" },
-    ],
-    "typescript/no-unnecessary-type-arguments": "error",
 
     // Redundant with switch-exhaustiveness-check: an exhaustive switch
     // covers every union member by construction, so a `default:` clause
@@ -982,63 +944,54 @@ export default defineConfig({
       },
     ],
 
+    // Formatting only: braces around `case` bodies.
     "unicorn/switch-case-braces": "off",
+    // Formatting only: the letter case of `\x`/`\u` escapes.
     "unicorn/escape-case": "off",
+    // `\x1b` and `\u001b` name the same character.
     "unicorn/no-hex-escape": "off",
+    // A global regex `replace` and `replaceAll` behave the same.
     "unicorn/prefer-string-replace-all": "off",
-    "unicorn/consistent-function-scoping": "off",
-    "unicorn/filename-case": "off",
+    // Nearly every hit is a test double spelling out a fake upstream body.
     "unicorn/prefer-response-static-json": "off",
+    // Filling a new Map or Set line by line reads as well as a literal.
     "unicorn/no-immediate-mutation": "off",
-    "unicorn/prefer-ternary": "off",
     // Disabled: the legitimate "throw Error() needs new" case is already
     // covered (more strictly) by the custom no-bare-error rule, and oxlint
     // 1.70+ broadened this rule to flag error-named factory calls in a class
     // `extends` clause — a false positive on the better-result
     // `TaggedError("X")<{...}>()` pattern used throughout the codebase.
     "unicorn/throw-new-error": "off",
-    "unicorn/no-array-reduce": "error",
-    "unicorn/no-array-sort": "error",
+    // Flags `for (const n of [...el.childNodes])`, where the copy detaches a
+    // live NodeList (or Set) from the mutations the loop body makes.
     "unicorn/no-useless-spread": "off",
-    // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
-    // Number(x) transform is not semantics-preserving (lenient prefix parsing,
-    // "" handling, hex strings); ingestion adapters rely on parseInt behavior.
+    // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",
-    "unicorn/prefer-set-has": "error",
+    // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
 
+    // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
     // These categories report React Compiler implementation limits and internal
     // invariants. The former monolithic rule filtered them unless
     // reportAllBailouts was enabled; keep that behavior while actionable
     // categories remain enabled by Ultracite.
     "react/invariant": "off",
+    // Compiler implementation limits, as with react/invariant above.
     "react/todo": "off",
-    "react/no-children-prop": "off",
+    // no-unsafe-inner-html checks what reaches `dangerouslySetInnerHTML`.
     "react/no-danger": "off",
+    // Naming convention only, like hook-use-state above.
     "react/jsx-handler-names": "off",
 
+    // Libraries document members of their default export (`fc.property`).
     "import/no-named-as-default-member": "off",
+    // Libraries document their default export as the entry point
+    // (`import Bold from "@tiptap/extension-bold"`).
     "import/no-named-as-default": "off",
 
-    "promise/prefer-await-to-then": "off",
-    "promise/prefer-await-to-callbacks": "off",
-    "promise/avoid-new": "off",
-
-    "typescript/strict-boolean-expressions": [
-      "error",
-      { allowNullableString: true, allowNullableBoolean: true },
-    ],
-    "typescript/no-confusing-void-expression": [
-      "error",
-      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
-    ],
-    "typescript/prefer-nullish-coalescing": [
-      "error",
-      { ignorePrimitives: { string: true, boolean: true } },
-    ],
     // The rule is still nursery; restrict it to actual nullish operands so
     // replacing a truthiness check cannot change 0/false/empty-string behavior.
     "typescript/prefer-optional-chain": ["error", { requireNullish: true }],
@@ -1054,19 +1007,28 @@ export default defineConfig({
         ],
       },
     ],
-    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    // It rewrites `x as NonNullable<T>` to `x!`, which no-non-null-assertion
+    // bans.
     "typescript/non-nullable-type-assertion-style": "off",
 
-    // Ultracite 7.9.3 removed its slow JS-plugin rules from the default
-    // presets. These native-rule exceptions remain Stella-specific.
+    // Importing a symbol, then exporting it, is how a module that also uses
+    // it locally re-exports it.
     "unicorn/prefer-export-from": "off",
+    // Its parseInt(x, 10) -> Number(x) transform is not semantics-preserving
+    // (lenient prefix parsing, "" handling, hex strings); ingestion adapters
+    // rely on parseInt behavior.
     "unicorn/prefer-number-coercion": "off",
+    // Style only: one `push` with several arguments.
     "unicorn/prefer-single-call": "off",
-    "prefer-named-capture-group": "off",
+    // Style only: `a="x"` over `a={"x"}` in JSX.
     "react/jsx-curly-brace-presence": "off",
+    // Short patterns read better with positional groups.
+    "prefer-named-capture-group": "off",
+    // Quotes and apostrophes render correctly in JSX text.
     "react/no-unescaped-entities": "off",
     // Fires on any method named setState; no class components exist here.
     "react/no-set-state": "off",
+    // Arrow components take their name from the binding.
     "react/display-name": "off",
 
     // React Compiler memoizes context values in apps/web; the remaining
@@ -1285,6 +1247,7 @@ export default defineConfig({
 
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
+    ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {

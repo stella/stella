@@ -501,14 +501,9 @@ const validateProviderKey = async (
 ): Promise<ValidationResult> => {
   const result = await Result.tryPromise({
     try: async () =>
-      await probeProvider(
-        providerConfig.provider,
-        providerConfig.apiKey,
-        undefined,
-        undefined,
-        undefined,
-        SETTINGS_PROBE_TIMEOUT_MS,
-      ),
+      await probeProvider(providerConfig.provider, providerConfig.apiKey, {
+        timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,
+      }),
     catch: (error: unknown) =>
       `API key validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
   });

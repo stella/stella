@@ -22,11 +22,9 @@ import {
 export const externalApiUrl = (path: `/${string}`): string =>
   buildVersionedApiUrl(externalApiOrigin(), path);
 
-export const browserApiUrl = (path: `/${string}`): string =>
-  buildVersionedApiUrl(browserApiBaseUrl(), path);
-
 /** Browser API URL used by the app's REST, stream, and download calls. */
-export const apiUrl = (path: `/${string}`): string => browserApiUrl(path);
+export const apiUrl = (path: `/${string}`): string =>
+  buildVersionedApiUrl(browserApiBaseUrl(), path);
 
 /** Better Auth expects the origin and appends `/api/auth` itself. */
 export const mcpAppSandboxUrl = (): URL =>

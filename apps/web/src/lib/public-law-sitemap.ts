@@ -113,7 +113,7 @@ type PublicLawIndexingOptions = {
   publicLawIndexingEnabled?: boolean;
 };
 
-export type SitemapShardRouteParams = {
+type SitemapShardRouteParams = {
   bucket: string;
   country: string;
   month: string;

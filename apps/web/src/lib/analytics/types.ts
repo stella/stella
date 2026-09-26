@@ -47,7 +47,7 @@ export type Analytics = {
 // Discriminated rather than a flat record with optional fields: `tour-empty`
 // describes the whole run and has no one anchor to name, and a placeholder
 // there would be a value no dashboard filter can match.
-export type GuideStepSkippedProperties =
+type GuideStepSkippedProperties =
   // `anchor-missing` is real divergence: the anchor should have been on the
   // page. `route-unavailable` means the user has no authorized destination
   // matching the semantic route. `anchor-pending` is declared-unwired, so it
@@ -79,11 +79,11 @@ export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
   | { type: "recovery"; reference: ErrorReference };
 
-export type AnalyticsResetOptions = {
+type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;
 };
 
-export type PageViewedProperties = {
+type PageViewedProperties = {
   path: string;
 };
 
@@ -100,7 +100,7 @@ export type RouteErrorLifecycleProperties = RouteErrorLifecycleCommon & {
   status: "shown" | "retry_started" | "recurred";
 };
 
-export type AnalyticsUserIdentity = {
+type AnalyticsUserIdentity = {
   id: string;
   // Attached as the `organization` group so insights can aggregate and
   // break down by organization, not just by person.
