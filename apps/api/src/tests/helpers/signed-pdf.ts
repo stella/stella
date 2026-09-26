@@ -201,7 +201,10 @@ export const createEncryptedPdf = async (
 ): Promise<Uint8Array> => {
   const pdf = PDF.create();
   drawScan(pdf);
-  pdf.setProtection({ ownerPassword: "fixture-owner", userPassword });
+  pdf.setProtection({
+    ownerPassword: "fixture-owner",
+    ...(userPassword !== undefined && { userPassword }),
+  });
   return await pdf.save();
 };
 

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -53,6 +54,16 @@ const decodeBase64Der = (value: string): Uint8Array | null => {
     : null;
 };
 
+/** How a stamp that cannot be drawn closes the exchange. */
+const STAMP_CLOSE_REASONS = {
+  overflow: "stamp_overflow",
+  placement: "signing_failed",
+  unrenderable: "stamp_unrenderable",
+} as const satisfies Record<
+  PdfSigningStampError["reason"],
+  PdfSigningSessionCloseReason
+>;
+
 /** Why preparing failed, as the exchange closes and the desktop reads it. */
 const prepareRefusal = (error: unknown) => {
   if (PdfSigningCertifiedDocumentError.is(error)) {
@@ -72,10 +83,7 @@ const prepareRefusal = (error: unknown) => {
   }
   if (PdfSigningStampError.is(error)) {
     return {
-      closeReason:
-        error.reason === "placement"
-          ? "signing_failed"
-          : `stamp_${error.reason}`,
+      closeReason: STAMP_CLOSE_REASONS[error.reason],
       code: `pdf_signing_stamp_${error.reason}`,
       message: error.message,
     } as const;

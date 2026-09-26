@@ -701,6 +701,9 @@ describe("storing phase 1's result", () => {
       .from(pdfSigningSessions)
       .where(eq(pdfSigningSessions.id, sessionId));
     const winner = rows.at(0)?.digestHex;
+    if (typeof winner !== "string") {
+      throw new TypeError("Expected one preparation to be stored");
+    }
     // The loser answers with the winner's digest, never its own.
     const loser = first.status === "stored" ? second : first;
     expect(loser).toEqual({ status: "already-prepared", digestHex: winner });

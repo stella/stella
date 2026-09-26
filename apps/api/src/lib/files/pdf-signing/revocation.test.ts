@@ -41,7 +41,11 @@ describe("revocation data for long-term validation", () => {
     const requests: { method: string; url: string; contentType?: string }[] =
       [];
     const fetcher: PkiFetcher = async ({ contentType, method, url }) => {
-      requests.push({ contentType, method, url });
+      requests.push({
+        ...(contentType !== undefined && { contentType }),
+        method,
+        url,
+      });
       return null;
     };
 
