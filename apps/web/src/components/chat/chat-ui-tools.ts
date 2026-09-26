@@ -219,6 +219,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  counterparty_check: "chat.tool.counterparty_check",
   "use-browser": "chat.tool.use-browser",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
@@ -330,6 +331,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   boe_get_law_structure: true,
   borme_get_summary: true,
   business_registry_lookup: true,
+  counterparty_check: true,
   infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 

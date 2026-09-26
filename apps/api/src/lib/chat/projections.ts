@@ -19,6 +19,14 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
+import {
+  CZ_INSOLVENCY_MATCH_BASES,
+  CZ_INSOLVENCY_PHASES,
+  ENTITY_CHECK_KINDS,
+  ENTITY_CHECK_NOT_COVERED_REASONS,
+  ENTITY_CHECK_SUBJECT_TYPES,
+  ENTITY_CHECK_UNAVAILABLE_REASONS,
+} from "@stll/business-registries/entity-checks";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
@@ -2001,6 +2009,90 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
       type: v.literal("search"),
       registry: v.string(),
       hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
+]);
+
+const entityCheckSourceProjection = v.strictObject({
+  name: v.string(),
+  authority: v.string(),
+  url: publicUrl(),
+});
+
+const entityCheckSubjectProjection = v.variant("type", [
+  v.strictObject({ type: v.literal("company-id"), value: v.string() }),
+  v.strictObject({
+    type: v.literal("person"),
+    firstName: v.string(),
+    lastName: v.string(),
+    birthDate: v.string(),
+  }),
+]);
+
+const czInsolvencyFindingProjection = v.strictObject({
+  fileNumber: v.string(),
+  court: v.nullable(v.string()),
+  phase: v.picklist(CZ_INSOLVENCY_PHASES),
+  stateCode: v.nullable(v.string()),
+  matchedBy: v.picklist(CZ_INSOLVENCY_MATCH_BASES),
+  debtor: v.strictObject({
+    name: v.nullable(v.string()),
+    firstName: v.nullable(v.string()),
+    companyId: v.nullable(v.string()),
+    birthDate: v.nullable(v.string()),
+    address: v.nullable(v.string()),
+  }),
+  insolvencyDeclaredOn: v.nullable(v.string()),
+  insolvencyEndedOn: v.nullable(v.string()),
+  // The register's public page for the proceeding.
+  url: v.nullable(publicUrl()),
+});
+
+const entityCheckOutcomeEntries = {
+  kind: v.picklist(ENTITY_CHECK_KINDS),
+  source: entityCheckSourceProjection,
+  subject: entityCheckSubjectProjection,
+};
+
+/**
+ * check_counterparty. Source of truth: `runEntityCheck`'s `EntityCheckResult`
+ * union, forwarded verbatim by `handleCheckCounterpartyTool`
+ * (`matter-tools.ts`). Public-register data about the screened subject.
+ */
+export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("clear"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("found"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
+      findings: v.array(czInsolvencyFindingProjection),
+      totalMatches: v.number(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("unavailable"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      reason: v.picklist(ENTITY_CHECK_UNAVAILABLE_REASONS),
+      detail: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("not-covered"),
+      ...entityCheckOutcomeEntries,
+      reason: v.picklist(ENTITY_CHECK_NOT_COVERED_REASONS),
+      supportedSubjectTypes: v.array(v.picklist(ENTITY_CHECK_SUBJECT_TYPES)),
     }),
   ),
 ]);

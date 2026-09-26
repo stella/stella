@@ -2318,6 +2318,114 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "check-counterparty": {
+          kind: "leaf",
+          spec: {
+            commandPath: ["contact", "check-counterparty"],
+            toolName: "check_counterparty",
+            description:
+              "Screen a company or a person against an official register for due diligence.",
+            flags: [
+              {
+                flag: "--check",
+                prop: "check",
+                kind: "enum",
+                enum: ["cz-insolvency"],
+                repeatable: false,
+                description:
+                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized.",
+                required: true,
+              },
+            ],
+            inputOnly: ["subject"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["check", "subject"],
+              additionalProperties: false,
+              properties: {
+                check: {
+                  enum: ["cz-insolvency"],
+                  type: "string",
+                  description:
+                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "x-stella-agent-input": {
+                    kind: "enum",
+                  },
+                },
+                subject: {
+                  description: "The company or person to screen",
+                  anyOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["company-id"],
+                          description:
+                            "A registered business, by its national business ID.",
+                          type: "string",
+                        },
+                        company_id: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 32,
+                          description:
+                            "National business ID in the check's country, e.g. the Czech IČO 26863154",
+                        },
+                      },
+                      required: ["type", "company_id"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["person"],
+                          description:
+                            "A natural person, by name and birth date.",
+                          type: "string",
+                        },
+                        first_name: {
+                          type: "string",
+                          minLength: 2,
+                          maxLength: 100,
+                          description: "First name",
+                        },
+                        last_name: {
+                          type: "string",
+                          minLength: 2,
+                          maxLength: 100,
+                          description: "Last name (surname)",
+                        },
+                        birth_date: {
+                          type: "string",
+                          format: "date",
+                          maxLength: 10,
+                          description:
+                            "Birth date. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
+                          "x-stella-agent-input": {
+                            kind: "date",
+                          },
+                        },
+                      },
+                      required: [
+                        "type",
+                        "first_name",
+                        "last_name",
+                        "birth_date",
+                      ],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
       },
     },
     organization: {
@@ -11024,6 +11132,135 @@ export const generatedRouteMap: RouteNode = {
         contacts: {
           kind: "route",
           children: {
+            "business-registries-check": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "contacts",
+                  "business-registries-check",
+                ],
+                capabilityId: "contacts.business-registries.check",
+                description:
+                  "Screen a company or person against an official source, such as the Czech insolvency register. Returns one outcome: clear (the source answered and holds nothing), found (with the records it holds), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type).",
+                access: "read",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["cz-insolvency"],
+                    repeatable: false,
+                    description:
+                      "Which official source to screen the subject against",
+                    flag: "--check",
+                    prop: "check",
+                    required: true,
+                    part: "query",
+                    partPath: "check",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["company-id", "person"],
+                    repeatable: false,
+                    description:
+                      "'company-id' screens a registered business by its national ID; 'person' screens a natural person by name and birth date",
+                    flag: "--subject-type",
+                    prop: "subjectType",
+                    required: true,
+                    part: "query",
+                    partPath: "subjectType",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "National business ID",
+                    flag: "--company-id",
+                    prop: "companyId",
+                    required: false,
+                    part: "query",
+                    partPath: "companyId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--first-name",
+                    prop: "firstName",
+                    required: false,
+                    part: "query",
+                    partPath: "firstName",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--last-name",
+                    prop: "lastName",
+                    required: false,
+                    part: "query",
+                    partPath: "lastName",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Birth date, YYYY-MM-DD",
+                    flag: "--birth-date",
+                    prop: "birthDate",
+                    required: false,
+                    part: "query",
+                    partPath: "birthDate",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      required: ["check", "subjectType"],
+                      properties: {
+                        check: {
+                          default: "cz-insolvency",
+                          description:
+                            "Which official source to screen the subject against",
+                          type: "string",
+                          enum: ["cz-insolvency"],
+                        },
+                        subjectType: {
+                          default: "company-id",
+                          description:
+                            "'company-id' screens a registered business by its national ID; 'person' screens a natural person by name and birth date",
+                          type: "string",
+                          enum: ["company-id", "person"],
+                        },
+                        companyId: {
+                          minLength: 1,
+                          maxLength: 32,
+                          description: "National business ID",
+                          type: "string",
+                        },
+                        firstName: {
+                          minLength: 1,
+                          maxLength: 100,
+                          type: "string",
+                        },
+                        lastName: {
+                          minLength: 1,
+                          maxLength: 100,
+                          type: "string",
+                        },
+                        birthDate: {
+                          format: "date",
+                          description: "Birth date, YYYY-MM-DD",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "business-registries-lookup": {
               kind: "capability-leaf",
               spec: {

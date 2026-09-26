@@ -615,6 +615,7 @@
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
         "better-result": "catalog:",
+        "fast-xml-parser": "^5.10.1",
         "temporal-polyfill": "catalog:",
       },
       "devDependencies": {

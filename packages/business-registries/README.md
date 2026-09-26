@@ -52,6 +52,26 @@ the `/browser` subpath.
 More jurisdictions land per-PR; see the package README on the main branch for
 the current list.
 
+## Entity checks
+
+`/entity-checks` screens a company or a person against an official source,
+such as the Czech insolvency register:
+
+```ts
+import { runEntityCheck } from "@stll/business-registries/entity-checks";
+
+const result = await runEntityCheck({
+  kind: "cz-insolvency",
+  subject: { type: "company-id", value: "26863154" },
+});
+```
+
+Every check resolves to one outcome: `clear` (the source answered and lists
+nothing), `found` (typed findings), `unavailable` (a transport error, timeout,
+outage page, SOAP fault, error code, or unparseable answer), or `not-covered`
+(the source cannot answer for this subject type). A failure is never reported
+as `clear`.
+
 ## Design notes
 
 Every registry client follows the same contract:

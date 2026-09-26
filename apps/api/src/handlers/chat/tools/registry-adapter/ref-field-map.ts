@@ -326,6 +326,9 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   },
+  // Chat screens counterparties through its own hand-written
+  // `counterparty_check` tool, which runs the same shared check.
+  check_counterparty: { chatProjectable: false },
 
   // --- Templates: org-scoped template handles -------------------------------
   list_templates: {

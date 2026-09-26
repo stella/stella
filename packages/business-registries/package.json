@@ -64,6 +64,7 @@
     "./denue": "./src/denue/index.ts",
     "./edgar": "./src/edgar/index.ts",
     "./edgar/identifier-format": "./src/edgar/identifier-format.ts",
+    "./entity-checks": "./src/entity-checks/index.ts",
     "./gcis": "./src/gcis/index.ts",
     "./krs": "./src/krs/index.ts",
     "./krs/default-format": "./src/krs/default-format.ts",
@@ -103,6 +104,7 @@
     "@stll/country-codes": "workspace:*",
     "@stll/stdnum": "^2.3.2",
     "better-result": "catalog:",
+    "fast-xml-parser": "^5.10.1",
     "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
