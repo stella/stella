@@ -804,6 +804,12 @@ const renderEmailBody = (
 export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
   renderEmailBody(parsed).bodyHtml;
 
+export const sanitizeEmailBodyHtml = (html: string): string => {
+  const $ = load(html);
+  sanitizeDom($);
+  return $.html();
+};
+
 const getReferencedInlineContentIds = ($: CheerioApi): Set<string> => {
   const contentIds = new Set<string>();
   $("img").each((_, element) => {

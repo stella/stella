@@ -433,6 +433,7 @@ export const AUDIT_ACTIVITY_CATEGORIES = [
   "team",
   "court",
   "automation",
+  "correspondence",
   "other",
 ] as const;
 

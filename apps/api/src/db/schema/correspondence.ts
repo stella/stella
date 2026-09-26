@@ -206,7 +206,7 @@ export const correspondenceAttachments = p.pgTable(
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
-      .onDelete("restrict"),
+      .onDelete("cascade"),
     p
       .uniqueIndex("correspondence_attachments_record_ordinal_uidx")
       .on(table.correspondenceId, table.ordinal),
