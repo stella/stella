@@ -591,7 +591,6 @@
     "apps/api/src/lib/sse-broadcast.ts": 1,
     "apps/api/src/lib/tasks/create-task-entity.ts": 2,
     "apps/api/src/lib/tasks/update-task.ts": 1,
-    "apps/api/src/lib/workflow-queue.ts": 1,
     "apps/api/src/mcp/document-tools.ts": 1,
     "apps/api/src/mcp/template-tools.ts": 1,
     "apps/api/src/scripts/adapter-health.ts": 1,
