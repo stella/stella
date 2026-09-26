@@ -34627,7 +34627,7 @@ type T888e660ed8 = "task" | "deadline";
 type T88eaf34343 = "translated" | "bilingual";
 
 type T88f3735ffa = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK");
+  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
   health: Ta8b78a42c5;
   stored: {
     decisions: number;

@@ -3,17 +3,22 @@
 // The grammar and calendar checks these build on live in `@stll/time`, which
 // both apps share.
 
+import {
+  type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 /** Length of the `YYYY-MM-DD` prefix a decision date is canonicalized to. */
 const ISO_DATE_LENGTH = 10;
 
 /**
- * Range a decision date may fall in. The floor year predates any court whose
- * decisions are published as machine-readable records, so a lower year is a
- * transcription or parsing artifact rather than a real date. The ceiling is
- * the current UTC day plus `daysAhead`: a decision cannot have been issued in
- * the future, and one calendar day of slack covers a court whose local date is
+ * Range a decision date may fall in. The floor year is per jurisdiction and
+ * predates the oldest decision its courts publish as records, so a lower year
+ * is a transcription or parsing artifact rather than a real date; a stored
+ * country no jurisdiction declares takes `defaultMinYear`. The ceiling is the
+ * current UTC day plus `daysAhead`: a decision cannot have been issued in the
+ * future, and one calendar day of slack covers a court whose local date is
  * already ahead of UTC when it publishes. Anything later is a parsing
  * artifact, and a newest-first list would show it first.
  *
@@ -22,9 +27,31 @@ const ISO_DATE_LENGTH = 10;
  * repair predicate from this declaration rather than restating the numbers.
  */
 export const DECISION_DATE_BOUNDS = {
-  minYear: 1800,
+  defaultMinYear: 1800,
+  minYearByJurisdiction: {
+    AUT: 1800,
+    CZE: 1800,
+    EU: 1800,
+    HUN: 1800,
+    POL: 1800,
+    SVK: 1800,
+    USA: 1600,
+  },
   daysAhead: 1,
-} as const;
+} as const satisfies {
+  defaultMinYear: number;
+  minYearByJurisdiction: Record<CaseLawJurisdiction, number>;
+  daysAhead: number;
+};
+
+/**
+ * The earliest year a decision of `country` may carry: its jurisdiction's
+ * floor, or the default for a stored code no jurisdiction declares.
+ */
+export const decisionDateMinYear = (country: string): number =>
+  isCaseLawJurisdiction(country)
+    ? DECISION_DATE_BOUNDS.minYearByJurisdiction[country]
+    : DECISION_DATE_BOUNDS.defaultMinYear;
 
 /**
  * An ISO time of day following a date: `T` or a space, then a bounded hour
@@ -77,16 +104,19 @@ export const isoCalendarDay = (raw: string): string | null => {
  *
  * Accepts a bare calendar date or an ISO datetime, and rejects anything that
  * is not a real calendar day (e.g. "2024-02-30") or that falls outside
- * `DECISION_DATE_BOUNDS`. A date column takes a malformed year or a future
- * day as readily as a correct one, so callers writing to one need this in
- * front of the write.
+ * `DECISION_DATE_BOUNDS` for the decision's stored `country`. A date column
+ * takes a malformed year or a future day as readily as a correct one, so
+ * callers writing to one need this in front of the write.
  */
-export const canonicalDecisionDate = (raw: string): string | null => {
+export const canonicalDecisionDate = (
+  raw: string,
+  country: string,
+): string | null => {
   const candidate = plainCalendarDay(raw);
   if (candidate === null) {
     return null;
   }
-  if (candidate.year < DECISION_DATE_BOUNDS.minYear) {
+  if (candidate.year < decisionDateMinYear(country)) {
     return null;
   }
   const ceiling = Temporal.Now.plainDateISO("UTC").add({

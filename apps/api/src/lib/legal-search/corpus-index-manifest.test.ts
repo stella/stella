@@ -67,6 +67,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
+    USA: "usa",
   },
   case_law_v6: {
     AUT: "aut",
@@ -75,6 +76,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
+    USA: "usa",
   },
   case_law_v7: {
     AUT: "aut",
@@ -83,6 +85,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
     HUN: "hun",
     POL: "pol",
     SVK: "cs_sk",
+    USA: "usa",
   },
 } as const satisfies Record<
   CaseLawManifestGeneration,
@@ -240,6 +243,17 @@ test("every declared jurisdiction routes into every case-law generation", () => 
   expect(
     Object.keys(CORPUS_INDEX_MANIFESTS.case_law_v7.route.byJurisdiction),
   ).not.toContain("HUN");
+  // Nor was USA, which reaches its own index in every generation as well.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    expect(corpusIndexIdFromManifest(manifest, "USA")).toBe(
+      `${manifest.generation}_usa`,
+    );
+    expect(Object.keys(manifest.route.byJurisdiction)).not.toContain("USA");
+  }
 });
 
 test("the groups a generation was created with still route there", () => {
@@ -301,6 +315,10 @@ test("a query routes where the projection writes", () => {
   // the projection writes to, read off the live group map.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN")).toEqual({
     indexId: "case_law_v7_hun",
+    jurisdictionClause: undefined,
+  });
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "USA")).toEqual({
+    indexId: "case_law_v7_usa",
     jurisdictionClause: undefined,
   });
   // Off the declared union there is no group, so there is no index to name.

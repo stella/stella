@@ -1303,7 +1303,10 @@ describe("processDecision — fields on an existing row", () => {
                                   decisionDate:
                                     decisionDate === undefined
                                       ? null
-                                      : canonicalDecisionDate(decisionDate),
+                                      : canonicalDecisionDate(
+                                          decisionDate,
+                                          "SVK",
+                                        ),
                                   metadata: storedMetadata,
                                 },
                               ],

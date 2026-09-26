@@ -239,6 +239,12 @@ const NAME_CASES: readonly Case[] = [
     expected: "LB",
   },
   {
+    name: "US supreme court by its canonical name",
+    country: "USA",
+    court: "Supreme Court of the United States",
+    expected: "SCOTUS",
+  },
+  {
     name: "EU court of justice by name",
     country: "EU",
     court: "Court of Justice",
@@ -270,6 +276,18 @@ const UNKNOWN_CASES: readonly Case[] = [
     name: "a Hungarian regional court, which is not apex",
     country: "HUN",
     court: "Fővárosi Törvényszék",
+    expected: undefined,
+  },
+  {
+    name: "a US court outside the enrolled apex",
+    country: "USA",
+    court: "United States Court of Appeals for the Ninth Circuit",
+    expected: undefined,
+  },
+  {
+    name: "a state supreme court, which is not the federal apex",
+    country: "USA",
+    court: "Supreme Court of California",
     expected: undefined,
   },
   {

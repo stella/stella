@@ -38,6 +38,7 @@
     "./safe-id": "./src/safe-id.ts",
     "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
+    "./us-courts": "./src/us-courts.ts",
     "./time-entries": "./src/time-entries.ts",
     "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",

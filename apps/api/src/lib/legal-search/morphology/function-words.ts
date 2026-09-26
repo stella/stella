@@ -54,21 +54,20 @@ import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem"
 
 /**
  * Languages whose function words a query may drop: every language the
- * corpus's own jurisdictions are written in, plus English.
+ * corpus's own jurisdictions are written in, plus English, each once.
  *
- * English is listed explicitly because no jurisdiction contributes it: the
- * multi-language EU index spans 24 languages under one jurisdiction, so it
- * has no jurisdiction language, and its queries stem — and now drop function
- * words — only under the language a request names.
+ * English is listed explicitly as well because the multi-language EU index
+ * spans 24 languages under one jurisdiction, so it has no jurisdiction
+ * language, and its queries stem — and drop function words — only under the
+ * language a request names.
  *
  * Derived from the jurisdiction set rather than hand-listed, so a new
  * single-language corpus cannot land without a list: {@link FUNCTION_WORDS}
  * is total over this union and fails to compile until one is authored.
  */
 export const FUNCTION_WORD_LANGUAGES = [
-  ...CORPUS_MORPHOLOGY_LANGUAGES,
-  "en",
-] as const satisfies readonly MorphologyLanguage[];
+  ...new Set([...CORPUS_MORPHOLOGY_LANGUAGES, "en" as const]),
+] satisfies readonly MorphologyLanguage[];
 
 export type FunctionWordLanguage = (typeof FUNCTION_WORD_LANGUAGES)[number];
 
@@ -620,7 +619,7 @@ const HUNGARIAN_FUNCTION_WORDS = [
   "úgy",
 ] as const;
 
-/** English, the language the multi-jurisdiction EU index is asked in. */
+/** English: a jurisdiction language, and one the EU index is asked in. */
 const ENGLISH_FUNCTION_WORDS = [
   "a",
   "an",

@@ -595,12 +595,12 @@ export const caseLawDecisions = p.pgTable(
       sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
-    // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`.
-    // A NULL date is allowed: it is how a decision without a usable date is
-    // stored.
+    // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,
+    // whose floor is per country. A NULL date is allowed: it is how a
+    // decision without a usable date is stored.
     p.check(
       CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
-      sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate)}`,
+      sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
     ),
     // The byte budget `case_law_decisions_search_candidate_idx` needs its
     // variable-width columns to stay inside; `varchar(n)` bounds characters,

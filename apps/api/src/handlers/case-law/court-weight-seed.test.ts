@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { US_COURT_NAMES } from "@stll/api-contract/us-courts";
+
 import {
   COURT_WEIGHT_SEED,
   courtWeightEntriesFromSeed,
+  courtWeightJurisdictionSeedSql,
   courtWeightMapFromSeed,
   courtWeightSeedSql,
   seededCourtWeightEntries,
@@ -13,15 +16,56 @@ import {
   LOWEST_COURT_TIER,
 } from "@/api/lib/legal-search/rerank";
 
-const MIGRATION = nodePath.resolve(
-  import.meta.dir,
-  "../../../drizzle/20260918210100_case_law_court_weight_seed_hun/migration.sql",
-);
+const migrationPath = (directory: string) =>
+  nodePath.resolve(
+    import.meta.dir,
+    "../../../drizzle",
+    directory,
+    "migration.sql",
+  );
+
+/**
+ * Jurisdictions seeded by a migration of their own after the last full seed.
+ * The full seed rendered the declaration without them, and each one's own
+ * migration renders its rows alone.
+ */
+const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA"]);
+
+/**
+ * Jurisdictions whose apex court is also their supreme court, so one rank
+ * answers for both.
+ */
+const SINGLE_APEX_JURISDICTIONS: ReadonlySet<string> = new Set(["USA"]);
 
 describe("court weight seed", () => {
-  test("the seed migration is the rendering of the declaration", async () => {
-    const migration = await Bun.file(MIGRATION).text();
-    expect(migration.trimEnd().endsWith(courtWeightSeedSql())).toBe(true);
+  test("each seed migration is the rendering of its part of the declaration", async () => {
+    const full = await Bun.file(
+      migrationPath("20260918210100_case_law_court_weight_seed_hun"),
+    ).text();
+    const fullRows = COURT_WEIGHT_SEED.filter(
+      (row) => !SEEDED_AFTER_THE_FULL_SEED.has(row.country),
+    );
+    expect(full.trimEnd().endsWith(courtWeightSeedSql(fullRows))).toBe(true);
+
+    const usa = await Bun.file(
+      migrationPath("20260926100100_case_law_court_weight_seed_usa"),
+    ).text();
+    expect(usa.trimEnd().endsWith(courtWeightJurisdictionSeedSql("USA"))).toBe(
+      true,
+    );
+  });
+
+  test("a jurisdiction's own seed names no other jurisdiction and removes nothing", () => {
+    const rendered = courtWeightJurisdictionSeedSql("USA");
+    expect(rendered.includes("DELETE")).toBe(false);
+    const countries = [
+      ...rendered.matchAll(/^ {2}\('(?<country>[A-Z]+)', /gmu),
+    ].map((match) => match.groups?.["country"]);
+    expect(countries.length).toBeGreaterThan(0);
+    expect(countries).toEqual(countries.map(() => "USA"));
+    expect(() => courtWeightJurisdictionSeedSql("XXX")).toThrow(
+      "court weight seed declares no jurisdiction XXX",
+    );
   });
 
   test("every jurisdiction declares a constitutional and a supreme rank", () => {
@@ -33,11 +77,14 @@ describe("court weight seed", () => {
       "HUN",
       "POL",
       "SVK",
+      "USA",
     ]);
     for (const [country, entries] of map) {
       const labels = entries.map((entry) => entry.tierLabel);
       expect(labels, country).toContain("constitutional");
-      expect(labels, country).toContain("supreme");
+      if (!SINGLE_APEX_JURISDICTIONS.has(country)) {
+        expect(labels, country).toContain("supreme");
+      }
       expect(entries.map((entry) => entry.tier)).toEqual(
         entries.map((entry) => entry.tier).toSorted((a, b) => b - a),
       );
@@ -85,6 +132,7 @@ describe("court weight seed", () => {
       ["HUN", "Debreceni Járásbíróság", "district"],
       ["EU", "Court of Justice", "constitutional"],
       ["EU", "General Court", "supreme"],
+      ["USA", "Supreme Court of the United States", "constitutional"],
     ];
     for (const [country, court, label] of stored) {
       const entry = seededCourtWeightEntries(country).find((candidate) =>
@@ -187,6 +235,29 @@ describe("court weight seed", () => {
         entry.pattern.test(court),
       );
       expect([court, matched.length]).toEqual([court, 1]);
+    }
+  });
+
+  test("the United States ranks each enrolled court once, and nothing else", () => {
+    // Its decisions carry the directory's canonical court names, so the rank
+    // is anchored to that spelling rather than to words other courts share.
+    for (const court of US_COURT_NAMES) {
+      const matched = seededCourtWeightEntries("USA").filter((entry) =>
+        entry.pattern.test(court),
+      );
+      expect([court, matched.length]).toEqual([court, 1]);
+    }
+    for (const court of [
+      "Supreme Court of California",
+      "United States Court of Appeals for the Ninth Circuit",
+      "Supreme Court of the United States Virgin Islands",
+    ]) {
+      expect([
+        court,
+        seededCourtWeightEntries("USA").some((entry) =>
+          entry.pattern.test(court),
+        ),
+      ]).toEqual([court, false]);
     }
   });
 

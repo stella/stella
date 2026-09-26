@@ -11,11 +11,12 @@ import type {
 } from "@/api/lib/case-law/court-weights";
 
 /**
- * The court rank declaration every jurisdiction ships with. The latest
- * `case_law_court_weight_seed*` migration inserts exactly these rows, so a
- * deployed database is never without them; `seed-court-weights.ts` re-upserts
- * them after an edit here, and `court-weight-seed.test.ts` holds that
- * migration to this list. Ranking code reads the table, never this constant.
+ * The court rank declaration every jurisdiction ships with. The
+ * `case_law_court_weight_seed*` migrations, applied in order, leave exactly
+ * these rows, so a deployed database is never without them;
+ * `seed-court-weights.ts` re-upserts them after an edit here, and
+ * `court-weight-seed.test.ts` holds each migration to its rendering. Ranking
+ * code reads the table, never this constant.
  */
 
 export type CourtWeightSeedRow = {
@@ -189,6 +190,13 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     courtPattern: "general court",
     ...RANK.supreme,
   },
+  // United States. One enrolled court, stored under its directory name
+  // (`us-courts.ts`); it is the apex of its hierarchy.
+  {
+    country: "USA",
+    courtPattern: "^supreme court of the united states$",
+    ...RANK.constitutional,
+  },
 ];
 
 const compile = (row: CourtWeightSeedRow): CourtWeightEntry => ({
@@ -237,44 +245,36 @@ const sqlLiteral = (value: string): string => `'${value.replace(/'/gu, "''")}'`;
 const SEED_COLUMNS =
   '"country", "court_pattern", "tier", "tier_label", "weight"';
 
-/**
- * The statements the seed migration carries, rendered from the list above
- * so the two cannot drift: the migration file is compared to this text.
- * The declaration is the table's only writer, so a pattern it no longer
- * carries is dropped and a row an older seed left at another rank is brought
- * to the declared one before the missing rows are added. A superseded pattern
- * left behind would keep matching court names the declaration now ranks
- * elsewhere, and which of the two wins is a precedence accident. Every
- * statement reads the VALUES list, never a table.
- */
-export const courtWeightSeedSql = (): string => {
-  const values = [
+const seedValuesSql = (rows: readonly CourtWeightSeedRow[]): string =>
+  [
     "(VALUES",
-    COURT_WEIGHT_SEED.map(
-      (row) =>
-        `  (${sqlLiteral(row.country)}, ${sqlLiteral(row.courtPattern)}, ${String(row.tier)}, ${sqlLiteral(row.tierLabel)}, ${String(row.weight)})`,
-    ).join(",\n"),
+    rows
+      .map(
+        (row) =>
+          `  (${sqlLiteral(row.country)}, ${sqlLiteral(row.courtPattern)}, ${String(row.tier)}, ${sqlLiteral(row.tierLabel)}, ${String(row.weight)})`,
+      )
+      .join(",\n"),
     `) AS v (${SEED_COLUMNS})`,
   ].join("\n");
-  const remove = [
-    `-- stella-migration-safety: reviewed delete-data - drops only the (country, court_pattern) keys the declaration above no longer carries, from an operator-seeded registry of ${String(COURT_WEIGHT_SEED.length)} rows; rollback re-runs the previous release's seed`,
-    'DELETE FROM "case_law_court_weights" w',
-    "WHERE NOT EXISTS (",
-    `  SELECT 1 FROM ${values}`,
-    '  WHERE v.country = w."country" AND v.court_pattern = w."court_pattern"',
-    ");",
-  ].join("\n");
-  const update = [
+
+/** Brings a row an older seed left at another rank to the declared one. */
+const seedUpdateSql = (values: string): string =>
+  [
     'UPDATE "case_law_court_weights" w',
     'SET "tier" = v.tier, "tier_label" = v.tier_label, "weight" = v.weight',
     `FROM ${values}`,
     'WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern',
     '  AND (w."tier", w."tier_label", w."weight") IS DISTINCT FROM (v.tier, v.tier_label, v.weight);',
   ].join("\n");
-  // The arbiter is a unique index, not a named constraint, so the rows that
-  // already exist are skipped by an anti-join rather than ON CONFLICT.
-  const insert = [
-    `-- stella-migration-safety: reviewed insert-select - the source relation is a ${String(COURT_WEIGHT_SEED.length)}-row VALUES list, not a table, so the statement is bounded and instant; rollback deletes the same (country, court_pattern) keys`,
+
+/**
+ * Adds the declared rows the table lacks. The arbiter is a unique index, not
+ * a named constraint, so the rows that already exist are skipped by an
+ * anti-join rather than ON CONFLICT.
+ */
+const seedInsertSql = (values: string, rowCount: number): string =>
+  [
+    `-- stella-migration-safety: reviewed insert-select - the source relation is a ${String(rowCount)}-row VALUES list, not a table, so the statement is bounded and instant; rollback deletes the same (country, court_pattern) keys`,
     `INSERT INTO "case_law_court_weights" ("id", ${SEED_COLUMNS})`,
     "SELECT gen_random_uuid(), v.country, v.court_pattern, v.tier, v.tier_label, v.weight",
     `FROM ${values}`,
@@ -283,5 +283,51 @@ export const courtWeightSeedSql = (): string => {
     '  WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern',
     ");",
   ].join("\n");
-  return [remove, update, insert].join("\n--> statement-breakpoint\n");
+
+/**
+ * The statements a full seed migration carries, rendered from `rows` so the
+ * two cannot drift: the migration file is compared to this text. The
+ * declaration is the table's only writer, so a pattern it no longer carries
+ * is dropped and a row an older seed left at another rank is brought to the
+ * declared one before the missing rows are added. A superseded pattern left
+ * behind would keep matching court names the declaration now ranks
+ * elsewhere, and which of the two wins is a precedence accident. Every
+ * statement reads the VALUES list, never a table.
+ */
+export const courtWeightSeedSql = (
+  rows: readonly CourtWeightSeedRow[] = COURT_WEIGHT_SEED,
+): string => {
+  const values = seedValuesSql(rows);
+  const remove = [
+    `-- stella-migration-safety: reviewed delete-data - drops only the (country, court_pattern) keys the declaration above no longer carries, from an operator-seeded registry of ${String(rows.length)} rows; rollback re-runs the previous release's seed`,
+    'DELETE FROM "case_law_court_weights" w',
+    "WHERE NOT EXISTS (",
+    `  SELECT 1 FROM ${values}`,
+    '  WHERE v.country = w."country" AND v.court_pattern = w."court_pattern"',
+    ");",
+  ].join("\n");
+  return [
+    remove,
+    seedUpdateSql(values),
+    seedInsertSql(values, rows.length),
+  ].join("\n--> statement-breakpoint\n");
+};
+
+/**
+ * The statements one jurisdiction's own seed migration carries: that
+ * jurisdiction's declared rows brought to their rank and added where missing,
+ * and nothing else. There is no DELETE and no other jurisdiction's row in the
+ * VALUES list, so applying it cannot drop, move or re-rank a court another
+ * jurisdiction declares; reconciling the whole registry stays the full seed's
+ * job.
+ */
+export const courtWeightJurisdictionSeedSql = (country: string): string => {
+  const rows = COURT_WEIGHT_SEED.filter((row) => row.country === country);
+  if (rows.length === 0) {
+    return panic(`court weight seed declares no jurisdiction ${country}`);
+  }
+  const values = seedValuesSql(rows);
+  return [seedUpdateSql(values), seedInsertSql(values, rows.length)].join(
+    "\n--> statement-breakpoint\n",
+  );
 };

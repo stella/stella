@@ -56,6 +56,7 @@ export const CITATION_RESOLUTION_JURISDICTION_POLICY = {
   HUN: { alsoResolvesTo: ["EU"] },
   POL: { alsoResolvesTo: ["EU"] },
   SVK: { alsoResolvesTo: ["EU"] },
+  USA: { alsoResolvesTo: [] },
 } as const satisfies Record<
   CaseLawJurisdiction,
   CitationResolutionJurisdictionPolicy

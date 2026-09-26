@@ -957,3 +957,14 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
     expect(persistedCursor).toBe("cursor-1");
   });
 });
+
+describe("sanitizeResult — decision-date floor", () => {
+  test("bounds a stated date by the decision's own jurisdiction", () => {
+    const dated = (country: IngestionResult["country"], decisionDate: string) =>
+      sanitizeResult({ ...decision, country, decisionDate }).decisionDate;
+    expect(dated("USA", "1791-08-03")).toBe("1791-08-03");
+    expect(dated("USA", "1599-12-31")).toBeUndefined();
+    expect(dated("SVK", "1791-08-03")).toBeUndefined();
+    expect(dated("SVK", "1800-01-01")).toBe("1800-01-01");
+  });
+});

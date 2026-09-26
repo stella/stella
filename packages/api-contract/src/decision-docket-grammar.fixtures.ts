@@ -122,6 +122,45 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       variants: ["99 xyz 999999/2099", "99 xyz / 999999/2099"],
     },
   ],
+  USA: [
+    {
+      canonical: "21-123",
+      variants: ["No. 21-123", "no.21‑123", " 21–123 "],
+    },
+    // The same term one number apart is another case, not a sheet of it.
+    {
+      canonical: "21-456",
+      variants: ["No. 21-456"],
+    },
+    {
+      canonical: "19-1392",
+      variants: ["No. 19-1392", "no 19−1392"],
+    },
+    {
+      canonical: "20A87",
+      variants: ["20a87", "No. 20A87"],
+    },
+    {
+      canonical: "22O141",
+      variants: ["22o141", "No. 22O141"],
+    },
+    {
+      canonical: "No. 8, Orig.",
+      variants: ["8, Orig.", "No. 8 Orig", "no. 8, original"],
+    },
+    {
+      canonical: "No. 141, Orig.",
+      variants: ["141, Orig."],
+    },
+    {
+      canonical: "No. 1",
+      variants: ["no. 1", "No 1", "No.1"],
+    },
+    {
+      canonical: "No. 8",
+      variants: ["no.8"],
+    },
+  ],
 } as const satisfies Record<
   DecisionDocketJurisdiction,
   readonly DecisionDocketGrammarFixture[]

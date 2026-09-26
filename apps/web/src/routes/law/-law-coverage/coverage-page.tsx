@@ -306,16 +306,17 @@ const CAPITAL_BY_JURISDICTION = {
   HUN: [47.5, 19.04],
   POL: [52.23, 21.01],
   SVK: [48.15, 17.11],
+  USA: [38.89, -77],
 } as const satisfies Record<CaseLawJurisdiction, readonly [number, number]>;
 
 /**
  * Each jurisdiction's colour, on the pin and in the legend, taken from its
  * flag: the EU's blue, the Czech red, the Slovak blue, the Hungarian green,
- * the Polish and Austrian reds. Flags in this region are red, white and blue,
- * so the reds cannot be told apart by colour alone; the legend's names and
- * the capitals' places on the sphere carry the identity where the hue does
- * not. Fixed per jurisdiction, so a country keeps its colour when another
- * arrives.
+ * the Polish and Austrian reds, the United States' navy. Most of these flags
+ * are red, white and blue, so the reds cannot be told apart by colour alone;
+ * the legend's names and the capitals' places on the sphere carry the
+ * identity where the hue does not. Fixed per jurisdiction, so a country keeps
+ * its colour when another arrives.
  */
 const COLOR_BY_JURISDICTION = {
   AUT: "#ed2939",
@@ -324,6 +325,7 @@ const COLOR_BY_JURISDICTION = {
   HUN: "#477050",
   POL: "#dc143c",
   SVK: "#0b4ea2",
+  USA: "#0a3161",
 } as const satisfies Record<CaseLawJurisdiction, string>;
 
 /**

@@ -39,6 +39,7 @@ let db: ReturnType<typeof drizzle>;
 
 const czSourceId = createSafeId<"caseLawSource">();
 const plSourceId = createSafeId<"caseLawSource">();
+const usSourceId = createSafeId<"caseLawSource">();
 
 const currentYear = new Date().getUTCFullYear();
 
@@ -148,7 +149,49 @@ const fixtures: readonly Fixture[] = [
     metadata: {},
     sourceId: czSourceId,
   },
+  // A jurisdiction whose floor is lower than the default: its dates between
+  // the two floors are dates, and the repair must neither select nor clear
+  // them.
+  {
+    adapterKey: "us-fixture",
+    id: createSafeId<"caseLawDecision">(),
+    decisionDate: "1791-08-03",
+    label: "a USA date before the default floor",
+    metadata: mirrored("1791-08-03", "1791-08-03"),
+    sourceId: usSourceId,
+  },
+  {
+    adapterKey: "us-fixture",
+    id: createSafeId<"caseLawDecision">(),
+    decisionDate: "1600-01-01",
+    label: "the USA floor itself",
+    metadata: mirrored("1600-01-01", "1600-01-01"),
+    sourceId: usSourceId,
+  },
+  {
+    adapterKey: "us-fixture",
+    id: createSafeId<"caseLawDecision">(),
+    decisionDate: "1599-12-31",
+    label: "day before the USA floor",
+    metadata: mirrored("1599-12-31", "1599-12-31"),
+    sourceId: usSourceId,
+  },
+  {
+    adapterKey: "us-fixture",
+    id: createSafeId<"caseLawDecision">(),
+    decisionDate: "2791-08-03",
+    label: "a USA row whose metadata keeps a date before the default floor",
+    metadata: { decisionDate: "1791-08-03" },
+    sourceId: usSourceId,
+  },
 ];
+
+const countryOf = (fixture: Fixture): "CZE" | "POL" | "USA" => {
+  if (fixture.sourceId === usSourceId) {
+    return "USA";
+  }
+  return fixture.adapterKey === "pl-courts" ? "POL" : "CZE";
+};
 
 const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
 
@@ -156,7 +199,7 @@ const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
 const rejectedByGuard = fixtures.filter(
   (fixture) =>
     fixture.decisionDate !== null &&
-    canonicalDecisionDate(fixture.decisionDate) === null,
+    canonicalDecisionDate(fixture.decisionDate, countryOf(fixture)) === null,
 );
 
 beforeAll(
@@ -174,6 +217,7 @@ beforeAll(
     await db.insert(caseLawSources).values([
       { id: czSourceId, adapterKey: "cz-regional", name: "cz source" },
       { id: plSourceId, adapterKey: "pl-courts", name: "pl source" },
+      { id: usSourceId, adapterKey: "us-fixture", name: "us source" },
     ]);
 
     await db.insert(caseLawDecisions).values(
@@ -182,8 +226,8 @@ beforeAll(
         sourceId: fixture.sourceId,
         caseNumber: `${String(index)} C ${String(index)}/2020`,
         court: "Krajský soud",
-        country: fixture.adapterKey === "pl-courts" ? "POL" : "CZE",
-        language: fixture.adapterKey === "pl-courts" ? "pl" : "cs",
+        country: countryOf(fixture),
+        language: { CZE: "cs", POL: "pl", USA: "en" }[countryOf(fixture)],
         decisionDate: fixture.decisionDate,
         metadata: fixture.metadata,
         contentHash: "a".repeat(64),
@@ -245,6 +289,30 @@ test("the selection is exactly what the write-path guard rejects", async () => {
   }
 });
 
+test("a date inside its own jurisdiction's floor is never selected", async () => {
+  const selected = new Set((await corruptRows(100)).map(({ id }) => id));
+  const verdictOf = (label: string) => {
+    const fixture = fixtures.find((candidate) => candidate.label === label);
+    if (fixture === undefined) {
+      throw new Error(`no fixture ${label}`);
+    }
+    return [label, selected.has(fixture.id)];
+  };
+  expect([
+    verdictOf("a USA date before the default floor"),
+    verdictOf("the USA floor itself"),
+    verdictOf("day before the USA floor"),
+    verdictOf("day before the floor"),
+    verdictOf("the floor itself"),
+  ]).toEqual([
+    ["a USA date before the default floor", false],
+    ["the USA floor itself", false],
+    ["day before the USA floor", true],
+    ["day before the floor", true],
+    ["the floor itself", false],
+  ]);
+});
+
 test("the surveys count the same population without writing", async () => {
   const bySource = executedRows(
     await db.execute(decisionDateSourceSurveyStatement(50)),
@@ -266,7 +334,7 @@ test("the surveys count the same population without writing", async () => {
   expect(countRows(byYear)).toBe(rejectedByGuard.length);
   expect(
     bySource.map((row) => (isRecord(row) ? row["adapterKey"] : null)),
-  ).toEqual(["cz-regional", "pl-courts"]);
+  ).toEqual(["cz-regional", "us-fixture", "pl-courts"]);
 
   // A dry run reads; it must leave the population exactly as it found it.
   expect((await corruptRows(100)).length).toBe(rejectedByGuard.length);
@@ -281,11 +349,17 @@ test("a row keeps a re-derivable date and loses an unrecoverable one", async () 
     ({ outcome }) => outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
   );
   expect(
-    rederived.map(({ decisionDate, id }) => ({
-      decisionDate,
-      label: labelOf(id),
-    })),
+    rederived
+      .map(({ decisionDate, id }) => ({
+        decisionDate,
+        label: labelOf(id),
+      }))
+      .toSorted((left, right) => (left.label < right.label ? -1 : 1)),
   ).toEqual([
+    {
+      decisionDate: "1791-08-03",
+      label: "a USA row whose metadata keeps a date before the default floor",
+    },
     { decisionDate: "2017-05-05", label: "metadata keeps a usable date" },
   ]);
 
@@ -296,7 +370,7 @@ test("a row keeps a re-derivable date and loses an unrecoverable one", async () 
       expect(decisionDate).toBeNull();
     }
   }
-  expect(decided.length - rederived.length).toBe(rejectedByGuard.length - 1);
+  expect(decided.length - rederived.length).toBe(rejectedByGuard.length - 2);
 });
 
 test("applying writes the decisions, re-enqueues them, and converges", async () => {
