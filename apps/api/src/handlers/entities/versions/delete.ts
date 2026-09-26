@@ -11,6 +11,7 @@ import {
   entityVersions,
   fields,
   folioCollabRooms,
+  pdfSigningSessions,
   searchDocuments,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -120,6 +121,17 @@ export const deleteEntityVersionHandler = async function* ({
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
             eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .for("update");
+      await tx
+        .select({ id: pdfSigningSessions.id })
+        .from(pdfSigningSessions)
+        .where(
+          and(
+            eq(pdfSigningSessions.baseVersionId, params.versionId),
+            eq(pdfSigningSessions.workspaceId, workspaceId),
+            eq(pdfSigningSessions.status, "open"),
           ),
         )
         .for("update");
@@ -328,6 +340,24 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .returning({ id: desktopEditSessions.id });
+      // A signature over the tombstoned version could never be stored, so its
+      // open signing exchanges end here, with the reason the browser shows.
+      const cancelledSignings = await tx
+        .update(pdfSigningSessions)
+        .set({
+          closeReason: "base_version_diverged",
+          closedAt: new Date(),
+          finalizeLeaseExpiresAt: null,
+          status: "cancelled",
+        })
+        .where(
+          and(
+            eq(pdfSigningSessions.baseVersionId, params.versionId),
+            eq(pdfSigningSessions.workspaceId, workspaceId),
+            eq(pdfSigningSessions.status, "open"),
+          ),
+        )
+        .returning({ id: pdfSigningSessions.id });
       const events: AuditEvent[] = [
         {
           action: AUDIT_ACTION.DELETE,
@@ -364,6 +394,15 @@ export const deleteEntityVersionHandler = async function* ({
           resourceId: session.id,
           changes: { status: { old: "open", new: "cancelled" } },
           metadata: { reason: "base_version_tombstoned" },
+        });
+      }
+      for (const signing of cancelledSignings) {
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+          resourceId: signing.id,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { closeReason: "base_version_diverged" },
         });
       }
       await recordAuditEvent(tx, events);
