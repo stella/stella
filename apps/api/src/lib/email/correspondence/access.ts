@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq, sql, isNull } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
@@ -26,7 +26,7 @@ type ResolveUserAccessOptions = {
   tx: AccessTransaction;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
 };
 
 export const correspondenceUserHasAccess = async ({
@@ -105,10 +105,12 @@ export const assertCorrespondenceAccess = async ({
     .limit(1)
     .for("update");
   if (matters.at(0)?.status !== "active") {
-    throw new HandlerError({
-      status: 403,
-      message: "Matter access required",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        message: "Matter access required",
+      }),
+    );
   }
   switch (filer.type) {
     case "user": {
@@ -120,10 +122,12 @@ export const assertCorrespondenceAccess = async ({
           userId: filer.userId,
         }))
       ) {
-        throw new HandlerError({
-          status: 403,
-          message: "Matter access required",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Matter access required",
+          }),
+        );
       }
       break;
     }
@@ -142,10 +146,12 @@ export const assertCorrespondenceAccess = async ({
         .for("update")
         .limit(1);
       if (approval === undefined) {
-        throw new HandlerError({
-          status: 403,
-          message: "Mailbox approval required",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Mailbox approval required",
+          }),
+        );
       }
       if (approval.scope === "matters") {
         const [scope] = await tx
@@ -167,10 +173,12 @@ export const assertCorrespondenceAccess = async ({
           .limit(1)
           .for("share");
         if (scope === undefined) {
-          throw new HandlerError({
-            status: 403,
-            message: "Mailbox not approved for matter",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Mailbox not approved for matter",
+            }),
+          );
         }
       }
       break;
@@ -180,4 +188,5 @@ export const assertCorrespondenceAccess = async ({
       return panic("Unhandled correspondence filer");
     }
   }
+  return Result.ok();
 };
