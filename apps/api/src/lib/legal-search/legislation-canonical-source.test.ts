@@ -17,8 +17,8 @@ describe("canonical legislation payload source", () => {
     (mode) => {
       const expectedKeyed =
         mode === "off"
-          ? { type: "database" }
-          : { type: "object_storage", key: STORED_KEY };
+          ? ({ type: "database" } as const)
+          : ({ type: "object_storage", key: STORED_KEY } as const);
 
       expect(
         canonicalLegislationAstSource({ astS3Key: STORED_KEY }, mode),
