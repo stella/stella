@@ -2,10 +2,10 @@
  * Digitally signed PDF fixtures, and the check that a signature still covers
  * the bytes it was made over.
  *
- * The certificate is minted per run with WebCrypto and a small DER encoder
- * rather than checked in: these tests care whether the signed byte ranges
- * survive, never whether the signer is trusted, and a checked-in key would be
- * one more secret-shaped file in the tree.
+ * The certificate is minted per run by the shared test PKI rather than
+ * checked in: these tests care whether the signed byte ranges survive, never
+ * whether the signer is trusted, and a checked-in key would be one more
+ * secret-shaped file in the tree.
  */
 
 import {
@@ -21,6 +21,8 @@ import {
 } from "@libpdf/core";
 import { panic } from "better-result";
 
+import { createTestCertificate } from "@/api/tests/helpers/test-pki";
+
 const concat = (parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> => {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
@@ -31,88 +33,12 @@ const concat = (parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> => {
   return out;
 };
 
-const derLength = (length: number): Uint8Array => {
-  if (length < 0x80) {
-    return Uint8Array.of(length);
-  }
-  const bytes: number[] = [];
-  for (let rest = length; rest > 0; rest = Math.floor(rest / 256)) {
-    bytes.unshift(rest % 256);
-  }
-  return Uint8Array.of(0x80 + bytes.length, ...bytes);
-};
-
-const der = (tag: number, ...parts: Uint8Array[]): Uint8Array<ArrayBuffer> => {
-  const body = concat(parts);
-  return concat([Uint8Array.of(tag), derLength(body.length), body]);
-};
-
-const ascii = (text: string) => new TextEncoder().encode(text);
-
-// sha256WithRSAEncryption (1.2.840.113549.1.1.11) and commonName (2.5.4.3).
-const SHA256_WITH_RSA = der(
-  0x30,
-  der(
-    0x06,
-    Uint8Array.of(0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b),
-  ),
-  Uint8Array.of(0x05, 0x00),
-);
-const commonName = (value: string) =>
-  der(
-    0x30,
-    der(
-      0x31,
-      der(
-        0x30,
-        der(0x06, Uint8Array.of(0x55, 0x04, 0x03)),
-        der(0x0c, ascii(value)),
-      ),
-    ),
-  );
-
-const RSA_KEY = {
-  name: "RSASSA-PKCS1-v1_5",
-  modulusLength: 2048,
-  publicExponent: Uint8Array.of(1, 0, 1),
-  hash: "SHA-256",
-} as const;
-
+/** A signer over a per-run test certificate; see `test-pki.ts`. */
 const createSigner = async (): Promise<CryptoKeySigner> => {
-  const keys = await crypto.subtle.generateKey(RSA_KEY, true, [
-    "sign",
-    "verify",
-  ]);
-  const name = commonName("stella signed pdf fixture");
-  const tbs = der(
-    0x30,
-    der(0xa0, der(0x02, Uint8Array.of(2))),
-    der(0x02, Uint8Array.of(1)),
-    SHA256_WITH_RSA,
-    name,
-    der(
-      0x30,
-      der(0x17, ascii("000101000000Z")),
-      der(0x17, ascii("491231235959Z")),
-    ),
-    name,
-    new Uint8Array(await crypto.subtle.exportKey("spki", keys.publicKey)),
-  );
-  const signature = new Uint8Array(
-    await crypto.subtle.sign(RSA_KEY.name, keys.privateKey, tbs),
-  );
-  const certificate = der(
-    0x30,
-    tbs,
-    SHA256_WITH_RSA,
-    der(0x03, Uint8Array.of(0), signature),
-  );
-  return new CryptoKeySigner(
-    keys.privateKey,
-    certificate,
-    "RSA",
-    "RSASSA-PKCS1-v1_5",
-  );
+  const { der, privateKey } = await createTestCertificate({
+    commonName: "stella signed pdf fixture",
+  });
+  return new CryptoKeySigner(privateKey, der, "RSA", "RSASSA-PKCS1-v1_5");
 };
 
 /**
@@ -131,8 +57,12 @@ export type SignatureHidingRevision =
   | "remove-signature-field";
 
 type SignedPdfOptions = {
-  /** Certify the first signature with DocMDP at this permission level. */
-  certify?: 1 | 2 | 3;
+  /**
+   * Certify the first signature with DocMDP at this permission level; `null`
+   * leaves `/P` out, which readers take as 2. Out-of-range numbers are
+   * written as given.
+   */
+  certify?: number | null;
   hidingRevision?: SignatureHidingRevision;
   /** How many signatures to apply, each in its own revision. */
   signatures?: number;
@@ -155,7 +85,7 @@ const drawScan = (pdf: PDF) => {
  * signature: a DocMDP /Reference transform on the signature, and the catalog's
  * /Perms pointing at it, written in the same revision as the signature.
  */
-const certifyNextSignature = (pdf: PDF, level: 1 | 2 | 3) => {
+const certifyNextSignature = (pdf: PDF, level: number | null) => {
   const { registry } = pdf.context;
   const register = registry.register.bind(registry);
   registry.register = (object) => {
@@ -174,7 +104,7 @@ const certifyNextSignature = (pdf: PDF, level: 1 | 2 | 3) => {
           TransformMethod: PdfName.of("DocMDP"),
           TransformParams: PdfDict.of({
             Type: PdfName.of("TransformParams"),
-            P: PdfNumber.of(level),
+            ...(level !== null && { P: PdfNumber.of(level) }),
             V: PdfName.of("1.2"),
           }),
         }),
