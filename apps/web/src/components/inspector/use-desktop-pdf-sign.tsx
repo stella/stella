@@ -44,6 +44,8 @@ const START_ERROR_KEYS = {
     "workspaces.files.pdfSigning.stampRejectedDescription",
   pdf_signing_stamp_too_small:
     "workspaces.files.pdfSigning.stampRejectedDescription",
+  pdf_signing_stamp_unrenderable:
+    "workspaces.files.pdfSigning.stampTextUnrenderableDescription",
   pdf_signing_too_large: "workspaces.files.pdfSigning.tooLargeDescription",
 } as const satisfies Record<PdfSigningStartErrorCode, TranslationKey>;
 
@@ -61,9 +63,15 @@ const CLOSE_REASON_KEYS = {
   signature_invalid:
     "workspaces.files.pdfSigning.cancelledSignatureDescription",
   signing_failed: "workspaces.files.pdfSigning.cancelledFailedDescription",
+  stamp_overflow:
+    "workspaces.files.pdfSigning.cancelledStampOverflowDescription",
+  stamp_unrenderable:
+    "workspaces.files.pdfSigning.cancelledStampNameDescription",
   unsupported_platform:
     "workspaces.files.pdfSigning.cancelledPlatformDescription",
   user_cancelled: "workspaces.files.pdfSigning.cancelledUserDescription",
+  would_break_signatures:
+    "workspaces.files.pdfSigning.cancelledWouldBreakSignaturesDescription",
 } as const satisfies Record<PdfSigningCloseReason, TranslationKey>;
 
 /**

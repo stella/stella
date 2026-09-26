@@ -179,6 +179,9 @@ describe("pdf signing start failures", () => {
     expect(pdfSigningStartErrorCode("pdf_signing_stamp_off_page")).toBe(
       "pdf_signing_stamp_off_page",
     );
+    expect(pdfSigningStartErrorCode("pdf_signing_stamp_unrenderable")).toBe(
+      "pdf_signing_stamp_unrenderable",
+    );
   });
 
   test("leaves every other failure to the generic message", () => {
