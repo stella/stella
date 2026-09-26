@@ -56,7 +56,6 @@ const ANSI_CODE_PAGES = [
   [1253, "windows-1253"],
   [1254, "windows-1254"],
   [1257, "windows-1257"],
-  [437, "ibm866"],
   [10_000, "macintosh"],
 ] as const;
 
@@ -73,7 +72,9 @@ const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
  * Western-European machine writes `\ansicpg1252` and a Hungarian text in a
  * `\fcharset238` font, whose byte F5 is "ő", not the "õ" of windows-1252.
  * `0` (ANSI) and `1` (default) defer to the document; `2` (symbol) has no
- * code page and does too.
+ * code page and does too. Any other charset (`255`, the OEM code page 437,
+ * which no WHATWG decoder reads; the double-byte Asian sets) is reported
+ * where text is written in it, never read as a neighbour.
  */
 const FONT_CHARSET_CODE_PAGES = new Map<number, number>([
   [77, 10_000],
@@ -82,8 +83,14 @@ const FONT_CHARSET_CODE_PAGES = new Map<number, number>([
   [186, 1257],
   [204, 1251],
   [238, 1250],
-  [255, 437],
 ]);
+
+const DOCUMENT_FONT_CHARSETS = new Set([0, 1, 2]);
+
+/** What a font's `\fcharsetN` says its bytes are read against. */
+type FontCharset =
+  | { type: "code-page"; label: CodePageLabel }
+  | { type: "unsupported"; charset: number };
 
 /**
  * Control words the dialect states and this reader answers for. Every other
@@ -560,18 +567,14 @@ const readRtfInto = (
     unicodeFallbackCount: 1,
     fontTable: false,
   };
-  /** Each font's code page, from its `\fcharsetN`, where it states one. */
-  const fontCodePages = new Map<number, CodePageLabel>();
+  /** Each font's charset, from its `\fcharsetN`, where it states its own. */
+  const fontCharsets = new Map<number, FontCharset>();
   let definingFont: number | undefined;
   let defaultFont: number | undefined;
 
-  /** What the `\'xx` bytes written now are read against. */
-  const currentLabel = (): CodePageLabel => {
+  const currentFontCharset = (): FontCharset | undefined => {
     const font = state.character.font ?? defaultFont;
-    return (
-      (font === undefined ? undefined : fontCodePages.get(font)) ??
-      codePageLabel
-    );
+    return font === undefined ? undefined : fontCharsets.get(font);
   };
   /**
    * One frame per open group. `heldParagraph` is the body paragraph a
@@ -605,7 +608,12 @@ const readRtfInto = (
 
   /** A byte of text, read later against the code page in force now. */
   const appendByte = (byte: number): void => {
-    const label = currentLabel();
+    const fontCharset = currentFontCharset();
+    if (fontCharset?.type === "unsupported" && byte >= 0x80) {
+      unknownWords.add(`fcharset${String(fontCharset.charset)}`);
+    }
+    const label =
+      fontCharset?.type === "code-page" ? fontCharset.label : codePageLabel;
     if (label !== pending.label) {
       appendText("");
       pending.label = label;
@@ -771,18 +779,21 @@ const readRtfInto = (
         state.character.font = parameter;
         return true;
       case "fcharset": {
-        const codePage =
-          parameter === undefined
-            ? undefined
-            : FONT_CHARSET_CODE_PAGES.get(parameter);
-        const label = codePageOf(codePage);
         if (
-          state.fontTable &&
-          definingFont !== undefined &&
-          label !== undefined
+          !state.fontTable ||
+          definingFont === undefined ||
+          parameter === undefined ||
+          DOCUMENT_FONT_CHARSETS.has(parameter)
         ) {
-          fontCodePages.set(definingFont, label);
+          return true;
         }
+        const label = codePageOf(FONT_CHARSET_CODE_PAGES.get(parameter));
+        fontCharsets.set(
+          definingFont,
+          label === undefined
+            ? { type: "unsupported", charset: parameter }
+            : { type: "code-page", label },
+        );
         return true;
       }
       default:

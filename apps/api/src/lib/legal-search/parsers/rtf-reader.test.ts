@@ -223,6 +223,34 @@ describe("code pages", () => {
     );
   });
 
+  test("an OEM code page no decoder here reads is reported, not read as another", () => {
+    // Code page 437 byte 0x82 is "é"; IBM866 reads the same byte as "В".
+    expect(
+      readRtf(bytesOf(String.raw`{\rtf1\ansi\ansicpg437 caf\'82\par }`))
+        .warnings,
+    ).toEqual(["rtf: unhandled control word \\ansicpg437"]);
+    const oemFont = readRtf(
+      bytesOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset255 Terminal;}}\f1 caf\'82\par }`,
+      ),
+    );
+    expect(oemFont.warnings).toEqual([
+      "rtf: unhandled control word \\fcharset255",
+    ]);
+    const [paragraph] = oemFont.package.document.content;
+    expect(paragraph === undefined ? "" : textOf(paragraph)).not.toContain("В");
+  });
+
+  test("a font charset no decoder here reads is reported only where the text uses it", () => {
+    expect(
+      readRtf(
+        bytesOf(
+          String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset128 MS Mincho;}}caf\'e9\f1 abc\par }`,
+        ),
+      ).warnings,
+    ).toBeUndefined();
+  });
+
   test("a code page outside the map is reported, not guessed at", () => {
     const document = readRtf(
       bytesOf(String.raw`{\rtf1\ansi\ansicpg99999 a\par }`),
