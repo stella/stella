@@ -53,14 +53,47 @@ import {
   installProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 
-const KEY_ENV = {
-  anthropic: "RECORD_ANTHROPIC_API_KEY",
-  bedrock: "RECORD_BEDROCK_API_KEY",
-  google: "RECORD_GOOGLE_API_KEY",
-  mistral: "RECORD_MISTRAL_API_KEY",
-  openai: "RECORD_OPENAI_API_KEY",
-  openrouter: "RECORD_OPENROUTER_API_KEY",
-} as const satisfies Record<ProviderWireProvider, string>;
+/** Each provider's recording key and the variable it is read from. */
+const recordingKey = (
+  provider: ProviderWireProvider,
+): { name: string; value: string } => {
+  switch (provider) {
+    case "anthropic":
+      return {
+        name: "RECORD_ANTHROPIC_API_KEY",
+        value: process.env["RECORD_ANTHROPIC_API_KEY"] ?? "",
+      };
+    case "bedrock":
+      return {
+        name: "RECORD_BEDROCK_API_KEY",
+        value: process.env["RECORD_BEDROCK_API_KEY"] ?? "",
+      };
+    case "google":
+      return {
+        name: "RECORD_GOOGLE_API_KEY",
+        value: process.env["RECORD_GOOGLE_API_KEY"] ?? "",
+      };
+    case "mistral":
+      return {
+        name: "RECORD_MISTRAL_API_KEY",
+        value: process.env["RECORD_MISTRAL_API_KEY"] ?? "",
+      };
+    case "openai":
+      return {
+        name: "RECORD_OPENAI_API_KEY",
+        value: process.env["RECORD_OPENAI_API_KEY"] ?? "",
+      };
+    case "openrouter":
+      return {
+        name: "RECORD_OPENROUTER_API_KEY",
+        value: process.env["RECORD_OPENROUTER_API_KEY"] ?? "",
+      };
+    default: {
+      provider satisfies never;
+      return panic(`Unhandled provider ${String(provider)}`);
+    }
+  }
+};
 
 const ORIGINS = {
   anthropic: ["https://api.anthropic.com"],
@@ -342,9 +375,9 @@ const main = async (): Promise<number> => {
   );
   let failures = 0;
   for (const provider of providers) {
-    const secret = process.env[KEY_ENV[provider]] ?? "";
+    const { name: keyName, value: secret } = recordingKey(provider);
     if (secret === "") {
-      console.log(`${provider}: skipped (${KEY_ENV[provider]} is not set)`);
+      console.log(`${provider}: skipped (${keyName} is not set)`);
       continue;
     }
     for (const scenario of scenarios) {

@@ -508,15 +508,24 @@ export const findWireContractViolations = ({
           got: finishReason ?? null,
         });
       }
-      usage.push(...usageProblems(finished.usage));
+      // An adapter reports usage normalized; the AG-UI spec array is the
+      // engine's outbound form, not an adapter's.
+      const reported = Array.isArray(finished.usage)
+        ? undefined
+        : finished.usage;
+      if (Array.isArray(finished.usage)) {
+        usage.push("the finished run reports usage in the spec array form");
+      } else {
+        usage.push(...usageProblems(reported));
+      }
       if (
         expected.usage !== undefined &&
-        finished.usage !== undefined &&
-        (finished.usage.promptTokens !== expected.usage.promptTokens ||
-          finished.usage.completionTokens !== expected.usage.completionTokens ||
-          finished.usage.totalTokens !== expected.usage.totalTokens)
+        reported !== undefined &&
+        (reported.promptTokens !== expected.usage.promptTokens ||
+          reported.completionTokens !== expected.usage.completionTokens ||
+          reported.totalTokens !== expected.usage.totalTokens)
       ) {
-        usage.push({ expected: expected.usage, got: finished.usage });
+        usage.push({ expected: expected.usage, got: reported });
       }
     }
     const streamedText = textOf(chunks);
