@@ -2562,6 +2562,8 @@ jobs:
       - name: Start web dev server
         if: steps.e2e-stack.outputs.status == 'ready'
         run: |
+          NODE_ENV=development \
+          STELLA_LOCAL_DEV=1 \
           STELLA_API_URL=http://localhost:3001 \
           STELLA_COLLAB_MODE=single-process \
           STELLA_COLLAB_PORT=3002 \
