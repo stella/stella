@@ -7,7 +7,7 @@ import {
   holdDownloadForJudgement,
   judgeDownload,
   recordDownloadNotice,
-  refreshContainedDownloadScope,
+  loadDownloadScope,
   takeDownloadNotices,
 } from "./download-guard";
 
@@ -194,7 +194,7 @@ describe("holding a download for its judgement", () => {
     test(`the file name waits for the verdict (${order})`, async () => {
       const saved = savedByControlledPage(id);
       const { events, releaseFrames } = installFakeChrome();
-      await refreshContainedDownloadScope();
+      await loadDownloadScope();
       const suggested = new Promise<void>((resolve) => {
         const suggest = () => {
           events.push("suggest");
@@ -238,7 +238,7 @@ describe("a download of uncertain origin", () => {
         state,
         userSite: null,
       });
-      await refreshContainedDownloadScope();
+      await loadDownloadScope();
       releaseFrames();
       await judgeDownload({ ...savedByControlledPage(id), state });
 
@@ -261,7 +261,7 @@ describe("a download of uncertain origin", () => {
         failingTab: 1,
         state,
       });
-      await refreshContainedDownloadScope();
+      await loadDownloadScope();
       releaseFrames();
       await judgeDownload({
         ...savedByControlledPage(id),
@@ -279,7 +279,7 @@ describe("a download of uncertain origin", () => {
 
   test("the user's own download from their own site goes through", async () => {
     const { events, releaseFrames } = installFakeChrome();
-    await refreshContainedDownloadScope();
+    await loadDownloadScope();
     releaseFrames();
     await judgeDownload({
       ...savedByControlledPage(49),
@@ -310,7 +310,7 @@ describe("download notices", () => {
 
   test("a download with no origin that finished before its cancel is noted as kept", async () => {
     const { events, releaseFrames } = installFakeChrome({ state: "complete" });
-    await refreshContainedDownloadScope();
+    await loadDownloadScope();
     releaseFrames();
     await judgeDownload({
       ...savedByControlledPage(50),

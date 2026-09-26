@@ -5,7 +5,11 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
-import { adoptControlledTab, executeBrowserCommand } from "./tab-executor";
+import {
+  adoptControlledTab,
+  executeBrowserCommand,
+  replaceControlledTab,
+} from "./tab-executor";
 
 type TabChange = { status?: string; url?: string };
 type FakeTab = { id: number; status: string; url: string };
@@ -87,6 +91,8 @@ const createFakeChrome = () => {
     }
   };
 
+  const hooks = { afterCreate: (): void => undefined };
+
   // What Chrome's navigation records say each tab's top frame shows.
   const probe = {
     failing: false,
@@ -149,7 +155,12 @@ const createFakeChrome = () => {
         const tab = { id: 7, status: "complete", url };
         tabs.set(tab.id, tab);
         log.push(`create:${url}`);
+        hooks.afterCreate();
         return { ...tab };
+      },
+      remove: async (tabId: number) => {
+        tabs.delete(tabId);
+        log.push(`remove:${tabId}`);
       },
       get: async (tabId: number) => {
         const tab = tabs.get(tabId);
@@ -183,7 +194,7 @@ const createFakeChrome = () => {
     },
   };
 
-  return { chrome, emit, handlers, log, probe, session, tabs };
+  return { chrome, emit, handlers, hooks, log, probe, session, tabs };
 };
 
 let fake = createFakeChrome();
@@ -429,6 +440,47 @@ describe("controlled tab confinement", () => {
       `rules:except:${CONTROLLER_TAB_ID},${CONTROLLED_TAB_ID},-1`,
       `update:${PAGE_URL}`,
     ]);
+  });
+
+  test("a first open stopped before it navigates leaves no tab behind", async () => {
+    const { handlers, hooks, log, session } = installFakeChrome();
+    await chrome.storage.session.remove("browserControlledTab");
+    const stop = new AbortController();
+    // Stop lands while Chrome creates the tab.
+    hooks.afterCreate = () => {
+      stop.abort();
+    };
+
+    expect(
+      await run(
+        { action: "open", url: PAGE_URL },
+        { observedTab: null, signal: stop.signal },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(log).toContain("remove:7");
+    expect(session["browserControlledTab"]).toBeUndefined();
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+
+    // The next open starts over instead of being refused.
+    hooks.afterCreate = () => undefined;
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Home") },
+    ];
+    expect(
+      await run({ action: "open", url: PAGE_URL }, { observedTab: null }),
+    ).toMatchObject({ status: "success" });
+  });
+
+  test("follows the controlled tab when Chrome swaps it for another", async () => {
+    const { session } = installFakeChrome();
+
+    expect(await replaceControlledTab(8, CONTROLLED_TAB_ID)).toBe(true);
+    expect(session["browserControlledTab"]).toMatchObject({
+      settled: { documentId: "document-top", url: PAGE_URL },
+      snapshot: null,
+      tabId: 8,
+    });
+    expect(await replaceControlledTab(9, 5)).toBe(false);
   });
 
   test("never adopts the controller's stella tab or a stella page", async () => {

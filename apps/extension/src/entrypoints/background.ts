@@ -22,12 +22,14 @@ import {
   notifyControllerTab,
   pairStellaTab,
   readBrowserController,
+  replaceBrowserControllerTab,
 } from "../lib/controller";
 import {
   enforceStoppedDownload,
   holdDownloadForJudgement,
   judgeDownload,
-  refreshContainedDownloadScope,
+  loadDownloadScope,
+  setDownloadScope,
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
@@ -53,6 +55,7 @@ import {
   executeBrowserCommand,
   forgetControlledTab,
   readControlledTabId,
+  replaceControlledTab,
 } from "../lib/tab-executor";
 import { trustedStellaOriginFromUrl } from "../lib/trusted-origin";
 
@@ -78,6 +81,30 @@ const notifyController = async (): Promise<void> => {
       controllerId: controller.controllerId,
     });
   }
+};
+
+/**
+ * Chrome swapped one tab for another (a prerendered page taking over): every
+ * record of the old tab id moves to the new one, in turn with commands.
+ */
+const handleTabReplaced = async (
+  addedTabId: number,
+  removedTabId: number,
+): Promise<void> => {
+  await session.change(async () => {
+    await replaceTab(addedTabId, removedTabId);
+    const controllerMoved = await replaceBrowserControllerTab(
+      addedTabId,
+      removedTabId,
+    );
+    const controlledMoved = await replaceControlledTab(
+      addedTabId,
+      removedTabId,
+    );
+    if (controllerMoved || controlledMoved) {
+      await notifyController();
+    }
+  });
 };
 
 const handleTabRemoved = async (tabId: number): Promise<void> => {
@@ -324,13 +351,9 @@ const handlePopupRequest = async (
   }
 };
 
-const refreshDownloadScope = (): void => {
-  refreshContainedDownloadScope().catch(() => undefined);
-};
-
 export default defineBackground(() => {
-  onContainedTabsChanged(refreshDownloadScope);
-  refreshDownloadScope();
+  onContainedTabsChanged(setDownloadScope);
+  loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
 
@@ -338,7 +361,7 @@ export default defineBackground(() => {
     handleTabRemoved(tabId).catch(() => undefined);
   });
   chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
-    replaceTab(addedTabId, removedTabId).catch(() => undefined);
+    handleTabReplaced(addedTabId, removedTabId).catch(() => undefined);
   });
   chrome.tabs.onUpdated.addListener((_tabId, _change, tab) => {
     judgeOpenedTab(tab).catch(() => undefined);

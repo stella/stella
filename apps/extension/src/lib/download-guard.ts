@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 
 import { BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY } from "./storage-keys";
-import { containedTabIds, readContainedTabs } from "./tab-containment";
+import {
+  containedTabIds,
+  readContainedTabs,
+  type TabOwners,
+} from "./tab-containment";
 
 type DownloadSource = Pick<
   chrome.downloads.DownloadItem,
@@ -223,7 +227,7 @@ const judgements = new Map<number, Promise<void>>();
 const stopped = new Set<number>();
 const kept = new Set<number>();
 
-type DownloadScope = { contained: readonly number[]; user: readonly number[] };
+type DownloadScope = TabOwners;
 
 // The owners of tabs, kept in memory so a download can be stopped in the
 // same task Chrome reports it; null until first read after the worker starts.
@@ -237,9 +241,18 @@ const readScope = async (): Promise<DownloadScope> => {
   };
 };
 
-/** Re-reads the tab owners; call after every change to them. */
-export const refreshContainedDownloadScope = async (): Promise<void> => {
-  scopeNow = await readScope();
+/** Takes the owners a containment change publishes, in the same task. */
+export const setDownloadScope = (owners: TabOwners): void => {
+  scopeNow = owners;
+};
+
+/**
+ * Reads the stored owners when the worker starts. A change published while
+ * the read ran is newer and wins.
+ */
+export const loadDownloadScope = async (): Promise<void> => {
+  const stored = await readScope();
+  scopeNow ??= stored;
 };
 
 /** A download that finished before it could be stopped stays, and is noted. */
