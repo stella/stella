@@ -87,7 +87,7 @@ describe("folio collaboration publication cut", () => {
     expect(roomLock).toBeGreaterThan(transactionStart);
     expect(canonicalWrite).toBeGreaterThan(roomLock);
     expect(source).toMatch(
-      /safeDb\(\(tx\) =>\s*publishCheckpointInTransaction\(/u,
+      /safeDb\(\s*async \(tx\) =>\s*await publishCheckpointInTransaction\(/u,
     );
     expect(source).toContain(
       "eq(folioCollabRooms.generation, expectedGeneration)",
