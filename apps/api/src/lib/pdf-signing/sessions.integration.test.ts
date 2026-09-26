@@ -18,6 +18,7 @@ import {
   releaseFinalizeAttempt,
   storeDesktopSignature,
 } from "@/api/lib/pdf-signing/finalize-attempts";
+import { storePreparedState } from "@/api/lib/pdf-signing/prepared-state";
 import {
   authorizePdfSigningSession,
   createPdfSigningToken,
@@ -440,5 +441,69 @@ describe("opening a pdf signing exchange", () => {
       .from(pdfSigningSessions)
       .where(eq(pdfSigningSessions.id, first.id));
     expect(rows.at(0)).toEqual({ closeReason: "expired", status: "cancelled" });
+  });
+});
+
+describe("storing phase 1's result", () => {
+  const prepared = (certificate: number[], digestHex: string) => ({
+    digestHex,
+    keyType: "RSA" as const,
+    placeholderSize: 16_384,
+    signedAttributes: new Uint8Array([0x31, 0x00]),
+    signerCertificateChain: [],
+    signerCertificateDer: new Uint8Array(certificate),
+    signingTime: new Date("2026-06-01T12:00:00.000Z"),
+  });
+
+  test("the first of two concurrent preparations wins and the second reads it back", async () => {
+    const { sessionId } = await seedHandoff();
+    const tx = asTestRaw<Transaction>(testDb);
+
+    const [first, second] = await Promise.all([
+      storePreparedState({
+        sessionId,
+        tx,
+        values: prepared([1, 2, 3], "a".repeat(64)),
+      }),
+      storePreparedState({
+        sessionId,
+        tx,
+        values: prepared([1, 2, 3], "b".repeat(64)),
+      }),
+    ]);
+    const statuses = [first.status, second.status].toSorted();
+    expect(statuses).toEqual(["already-prepared", "stored"]);
+
+    const rows = await testDb
+      .select({ digestHex: pdfSigningSessions.digestHex })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    const winner = rows.at(0)?.digestHex;
+    // The loser answers with the winner's digest, never its own.
+    const loser = first.status === "stored" ? second : first;
+    expect(loser).toEqual({ status: "already-prepared", digestHex: winner });
+  });
+
+  test("a different certificate cannot replace a stored preparation", async () => {
+    const { sessionId } = await seedHandoff();
+    const tx = asTestRaw<Transaction>(testDb);
+    await storePreparedState({
+      sessionId,
+      tx,
+      values: prepared([1, 2, 3], "a".repeat(64)),
+    });
+
+    expect(
+      await storePreparedState({
+        sessionId,
+        tx,
+        values: prepared([9, 9, 9], "c".repeat(64)),
+      }),
+    ).toEqual({ status: "conflict" });
+    const rows = await testDb
+      .select({ digestHex: pdfSigningSessions.digestHex })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)?.digestHex).toBe("a".repeat(64));
   });
 });
