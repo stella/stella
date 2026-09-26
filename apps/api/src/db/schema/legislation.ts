@@ -312,7 +312,17 @@ export const legislationWorkChanges = p.pgTable(
     eli: p.varchar({ length: 512 }).notNull(),
     changedAt: timestamptz("changed_at").defaultNow().notNull(),
   },
-  () => [...caseLawIngestionOnlyPolicies()],
+  () => [
+    ...caseLawIngestionOnlyPolicies(),
+    // Row security is forced on this table (migration
+    // `20260926150000_legislation_payload_revision`), so owner-context writes
+    // to legislation_documents need a policy to append; grants limit it.
+    p.pgPolicy("legislation_work_change_append", {
+      for: "insert",
+      to: "public",
+      withCheck: sql`true`,
+    }),
+  ],
 );
 
 export const legislationSearchDocuments = p.pgTable(

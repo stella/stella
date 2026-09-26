@@ -306,11 +306,12 @@ export const installPgliteCorpusProjectionRevisionFence = async (
 };
 
 const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
+  'ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",
   "CREATE TRIGGER",
 ] as const;
 
-/** Install the payload revision and work-change triggers omitted by push. */
+/** Install the triggers and forced row security that schema push omits. */
 export const installPgliteLegislationPayloadRevision = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {

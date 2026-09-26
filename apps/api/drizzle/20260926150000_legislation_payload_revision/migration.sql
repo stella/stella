@@ -11,8 +11,21 @@ CREATE TABLE "legislation_work_changes" (
 );--> statement-breakpoint
 
 ALTER TABLE "legislation_work_changes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "legislation_work_changes"
   AS PERMISSIVE FOR ALL TO "stella_ingestion" USING (true) WITH CHECK (true);--> statement-breakpoint
+-- With row security forced, the owner is bound by policy too. Owner-context
+-- writes to legislation_documents (migrations, operator repairs) still fire the
+-- change trigger, so any role may append a change; table privileges decide who
+-- can (the owner and stella_ingestion), and nothing but the ingestion policy
+-- lets a role read, update or delete a queued change. The owner role is named
+-- per deployment, so the policy cannot name it.
+-- stella-migration-safety: reviewed permissive-policy - INSERT only; stella
+-- holds no privilege on the table and stella_ingestion only INSERT, so the
+-- policy admits only the owner and the ingestion role, and reads nothing.
+-- Rollback drops the table.
+CREATE POLICY "legislation_work_change_append" ON "legislation_work_changes"
+  AS PERMISSIVE FOR INSERT TO public WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "legislation_work_changes" FROM stella;--> statement-breakpoint
 -- The change trigger runs as the writer of legislation_documents, so that
 -- writer needs INSERT here and nothing more.

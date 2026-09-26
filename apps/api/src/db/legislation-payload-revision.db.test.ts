@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { asc, eq, isNotNull, sql } from "drizzle-orm";
+import { asc, eq, isNotNull, sql, TransactionRollbackError } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -566,5 +566,69 @@ describe("work changes", () => {
         }),
       ),
     ).toContain("permission denied");
+  });
+
+  /**
+   * Row security is forced on the queue, so the owner (the role migrations
+   * run as) is bound by policy like any other role. PGlite runs as a
+   * superuser, which bypasses row security even when forced, so the owner
+   * here is a plain role that owns both tables.
+   */
+  test("the owner can still append changes but cannot read them through row security", async () => {
+    const owner = "legislation_payload_revision_owner";
+    let ownerReads: unknown[] = [];
+    let recorded: unknown[] = [];
+    let withoutAppendPolicy = "";
+
+    await db
+      .transaction(async (tx) => {
+        await tx.insert(legislationDocuments).values(BASE_ROW);
+        await tx.delete(legislationWorkChanges).where(sql`true`);
+        await tx.execute(sql.raw(`CREATE ROLE ${owner} NOLOGIN`));
+        await tx.execute(
+          sql.raw(`ALTER TABLE legislation_documents OWNER TO ${owner}`),
+        );
+        await tx.execute(
+          sql.raw(`ALTER TABLE legislation_work_changes OWNER TO ${owner}`),
+        );
+
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${owner}`));
+        await tx
+          .update(legislationDocuments)
+          .set(PAYLOAD_INPUT_CHANGES.content_hash)
+          .where(eq(legislationDocuments.id, DOCUMENT_ID));
+        ownerReads = await tx.select().from(legislationWorkChanges);
+        await tx.execute(sql`RESET ROLE`);
+        recorded = await tx
+          .select({
+            country: legislationWorkChanges.country,
+            eli: legislationWorkChanges.eli,
+          })
+          .from(legislationWorkChanges);
+
+        withoutAppendPolicy = await rejectionMessage(
+          tx.transaction(async (savepoint) => {
+            await savepoint.execute(sql`
+              DROP POLICY "legislation_work_change_append"
+                ON legislation_work_changes
+            `);
+            await savepoint.execute(sql.raw(`SET LOCAL ROLE ${owner}`));
+            await savepoint
+              .update(legislationDocuments)
+              .set(PAYLOAD_INPUT_CHANGES.ast_s3_key)
+              .where(eq(legislationDocuments.id, DOCUMENT_ID));
+          }),
+        );
+        tx.rollback();
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof TransactionRollbackError)) {
+          throw error;
+        }
+      });
+
+    expect(recorded).toEqual([BASE_KEY]);
+    expect(ownerReads).toEqual([]);
+    expect(withoutAppendPolicy).toContain("row-level security");
   });
 });
