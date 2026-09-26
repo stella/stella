@@ -197,8 +197,8 @@
       "behaviour": "Stop reloads the thread from what the server stored, so a tool call the stopped turn left running does not keep the page busy.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "        client.stop();\n        onTurnStopped();\n        return;",
-      "replace": "        client.stop();\n        return;",
+      "search": "      setSnapshot({ turnAbandoned: true });\n      reloadThread();",
+      "replace": "      setSnapshot({ turnAbandoned: true });",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "stop-mid-stream shows what the server stored, live and in a second tab"

@@ -47,7 +47,8 @@ export const CHAT_USER_ACTIONS = {
   "improve-prompt": { via: "page" },
   "load-older": { handler: "loadOlder", via: "session" },
   "move-to-side": { via: "page" },
-  "new-chat": { via: "page" },
+  /** Leaves the thread: its request closes, and its turn is not stopped. */
+  "new-chat": { handler: "leave", via: "session" },
   "open-created-document": {
     handler: "handleOpenCreatedDocument",
     via: "session",

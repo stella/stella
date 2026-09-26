@@ -10,7 +10,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // adapter, with the web app's request body, native interrupt resolution,
 // rejected-continuation rollback and stop) and the page load's
 // `sanitizeRunningToolCalls`. Nothing here re-implements them. What the page
-// does around the runtime, reloading the thread once a stopped turn settles,
+// does around the runtime, reloading the thread once a turn it stopped or left
+// settles,
 // is the query layer's: `createWebChatClient` stands in for it.
 //
 // The web modules resolve their own `@/` imports through `apps/web`'s
@@ -58,6 +59,7 @@ type WebChatRuntime = {
     id: string;
   }) => Promise<void>;
   stop: () => void;
+  leave: () => void;
 };
 
 /** An assistant message's action, as `chat-user-actions.ts` offers it. */
@@ -96,7 +98,7 @@ type WebChatModules = {
     key: { scope: "global"; threadId: string };
     onError: (error: Error) => void;
     onFinish: () => void;
-    onTurnStopped: () => void;
+    reloadThread: () => void;
   }) => WebChatRuntime;
   resetChatRequestStateForTests: () => void;
   sanitizeRunningToolCalls: (messages: readonly UIMessage[]) => UIMessage[];
@@ -277,6 +279,8 @@ export type WebChatClient = {
   ) => Promise<void>;
   /** The composer's Stop. */
   stop: () => Promise<void>;
+  /** The page leaves the thread (a new chat), with no Stop. */
+  leave: () => Promise<void>;
   /** Waits until no request is open and the runtime is idle. */
   settle: () => Promise<void>;
   /** Errors the runtime reported since the last call, cleared on read. */
@@ -310,7 +314,8 @@ export const createWebChatClient = async ({
   const web = await loadWebChat();
   const errors: Error[] = [];
   let disposed = false;
-  /** The page's reload after a stop, until its runtime is rebuilt. */
+  /** The page's reload after a stop or a leave, until its runtime is
+   *  rebuilt. */
   let reloading: Promise<void> | undefined;
   const createRuntime = (seed: WebChatPage): WebChatRuntime =>
     web.createChatRuntime({
@@ -322,7 +327,7 @@ export const createWebChatClient = async ({
         errors.push(error);
       },
       onFinish: () => undefined,
-      onTurnStopped: () => {
+      reloadThread: () => {
         reloading = (async () => {
           runtime = createRuntime(await reload());
           reloading = undefined;
@@ -449,6 +454,10 @@ export const createWebChatClient = async ({
     },
     stop: async () => {
       runtime.stop();
+      await settle();
+    },
+    leave: async () => {
+      runtime.leave();
       await settle();
     },
     takeErrors: () => errors.splice(0),

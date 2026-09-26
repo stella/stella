@@ -762,6 +762,23 @@ class StopRunningCall implements fc.AsyncCommand<Model, Real> {
 }
 
 /**
+ * The user leaves the thread for a new chat while the page may still run a
+ * client call, and comes back: leaving asks the server for nothing, so the
+ * conversation is as it was and still waits on whatever it waited on.
+ */
+class LeaveThread implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = () => true;
+  check = LeaveThread.allows;
+  run = async (model: Model, real: Real) => {
+    await real.client.leave();
+    real.client.dispose();
+    real.client = await real.harness.openWebClient(real.threadId);
+    await verify(model, real, { failuresBefore: real.ledger.failures });
+  };
+  toString = () => "LeaveThread";
+}
+
+/**
  * The user sends a message and stops the answer while it streams: after its
  * server call has streamed, or while the call's input still streams. The
  * call stays in the answer and nothing waits on the user.
@@ -1029,7 +1046,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
-  "new-chat": notModelled("It leaves the thread."),
+  "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
   "remove-queued-message": notModelled(
@@ -1185,6 +1202,7 @@ const pageActionCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
   ...conversationCommandsOf(runsArb),
   fc.nat({ max: 5 }).map((pick) => new ForkFrom(pick)),
   fc.constant(new StopRunningCall()),
+  fc.constant(new LeaveThread()),
   fc
     .constantFrom<"after-tool-end" | "before-tool-end">(
       "after-tool-end",
@@ -1366,6 +1384,20 @@ const stopARunningClientCall = async () => {
     expect(model.pendingKinds).toEqual(["client"]);
     await new StopRunningCall().run(model, real);
     await new ReloadPage().run(model, real);
+  });
+};
+
+const leaveARunningClientCall = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["client"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    // The fixture must reach the fault: the page still runs the call.
+    expect(model.pendingKinds).toEqual(["client"]);
+    await new LeaveThread().run(model, real);
+    // Leaving stopped nothing: the turn still waits on the call.
+    expect(model.pendingKinds).toEqual(["client"]);
   });
 };
 
@@ -2016,6 +2048,12 @@ describe("a conversation's live view", () => {
   test(
     "stops a client call the page still runs",
     stopARunningClientCall,
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "leaves a thread whose client call the page still runs",
+    leaveARunningClientCall,
     propertyTestTimeout(30_000),
   );
 

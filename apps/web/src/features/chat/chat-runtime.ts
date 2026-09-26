@@ -128,7 +128,12 @@ export type ChatRuntime = {
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
   ) => ChatRouteHandoffStart;
+  /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
+  /** The page leaves the thread: it closes its own request and asks the
+   *  server for nothing, so the turn carries on or ends as that request
+   *  leaves it. */
+  leave: () => void;
   subscribe: (listener: () => void) => () => void;
 };
 
@@ -166,8 +171,9 @@ type CreateChatRuntimeProps = {
   key: ChatThreadKey;
   onError: (error: Error) => void;
   onFinish: () => void;
-  /** The stopped turn is settled on the server: reload the thread from it. */
-  onTurnStopped: () => void;
+  /** Reload the thread from what the server stored: once a stop has settled,
+   *  or once the page has left a turn that was still running. */
+  reloadThread: () => void;
 };
 
 type ActiveToolResultOperation = {
@@ -266,7 +272,7 @@ export const createChatRuntime = ({
   key,
   onError,
   onFinish,
-  onTurnStopped,
+  reloadThread,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
@@ -688,7 +694,26 @@ export const createChatRuntime = ({
       return;
     }
     setSnapshot({ stop: { status: "idle" } });
-    onTurnStopped();
+    reloadThread();
+  };
+
+  const isTurnActive = (): boolean =>
+    snapshot.isLoading ||
+    snapshot.sessionGenerating ||
+    isChatClientRequestActive(snapshot.status) ||
+    hasRunningToolCallInLatestAssistantMessage({
+      messages: snapshot.messages,
+    });
+
+  /** Close the page's request, and reload the thread if a turn was running:
+   *  the server stores what the closed request leaves. */
+  const closeRequest = (): void => {
+    const turnWasActive = isTurnActive();
+    client.stop();
+    if (turnWasActive) {
+      setSnapshot({ turnAbandoned: true });
+      reloadThread();
+    }
   };
 
   const runtime = {
@@ -798,29 +823,17 @@ export const createChatRuntime = ({
       return started;
     },
     stop: () => {
-      const turnWasActive =
-        snapshot.isLoading ||
-        snapshot.sessionGenerating ||
-        isChatClientRequestActive(snapshot.status) ||
-        hasRunningToolCallInLatestAssistantMessage({
-          messages: snapshot.messages,
-        });
-      if (!turnWasActive) {
-        client.stop();
+      const stoppedTurn = turnId;
+      if (!isTurnActive() || stoppedTurn === null) {
+        // Nothing runs, or the server has not named the turn yet and nothing
+        // has streamed: closing the request is all that can stop it.
+        closeRequest();
         return;
       }
       // Shown stopped at once. The server decides how the turn ends, and the
       // thread is reloaded from it once it has: a local rewrite of the
       // stopped parts would differ from what a reload shows.
       setSnapshot({ turnAbandoned: true });
-      const stoppedTurn = turnId;
-      if (stoppedTurn === null) {
-        // The server has not named the turn yet, so nothing has streamed:
-        // closing the request is all that can stop it.
-        client.stop();
-        onTurnStopped();
-        return;
-      }
       if (
         snapshot.stop.status === "pending" &&
         snapshot.stop.turnId === stoppedTurn
@@ -831,6 +844,7 @@ export const createChatRuntime = ({
       setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
       detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
+    leave: closeRequest,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

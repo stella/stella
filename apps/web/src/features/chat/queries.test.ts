@@ -1116,7 +1116,7 @@ describe("chat runtime", () => {
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     const stream = sendThreadChatMessage(
@@ -1186,7 +1186,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const observedSources: string[] = [];
     const unsubscribe = runtime.subscribe(() => {
@@ -1272,7 +1272,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await runtime.addToolResult({
@@ -1362,7 +1362,7 @@ describe("chat runtime", () => {
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     const result = await Result.tryPromise(async () => {
@@ -1414,7 +1414,7 @@ describe("chat runtime", () => {
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const output = {
       success: true,
@@ -1474,7 +1474,7 @@ describe("chat runtime", () => {
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const output = {
       success: true,
@@ -1557,7 +1557,7 @@ describe("chat runtime", () => {
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const firstOutput = {
       success: true,
@@ -1644,7 +1644,7 @@ describe("chat runtime", () => {
       onFinish: () => {
         finishCount += 1;
       },
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -1731,7 +1731,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await runtime.reload();
@@ -1782,7 +1782,7 @@ describe("chat runtime", () => {
       onFinish: () => {
         finishCount += 1;
       },
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -1839,7 +1839,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const unsubscribe = runtime.subscribe(() => {
       snapshots.push(runtime.getSnapshot().messages);
@@ -1915,7 +1915,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const message = createOutgoingMessage(
       "22222222-2222-4222-8222-222222222204",
@@ -1984,7 +1984,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     const messageId = toSafeId<"chatMessage">(
@@ -2149,7 +2149,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -2358,7 +2358,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     const firstMessageId = "22222222-2222-4222-8222-222222222301";
@@ -2509,7 +2509,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     await sendThreadChatMessage(
       runtime,
@@ -2596,7 +2596,7 @@ describe("chat runtime", () => {
         reported.push(error);
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     const firstMessageId = "22222222-2222-4222-8222-222222222305";
     await sendThreadChatMessage(
@@ -2633,7 +2633,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
     await rebuilt.resolveToolApproval({
       approved: true,
@@ -2684,7 +2684,7 @@ describe("chat runtime", () => {
         reported.push(error);
       },
       onFinish: () => {},
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -2768,7 +2768,7 @@ describe("chat runtime identity across query refetch", () => {
       activeOrganizationId: "org-A",
       key: { scope: "global", threadId: toChatThreadId("thread-opts") },
       context: { allowMissingThread: true },
-      onTurnStopped: () => {},
+      reloadThread: () => {},
     });
 
     // Guards the known requirement: this query keeps

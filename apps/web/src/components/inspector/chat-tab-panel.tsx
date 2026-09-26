@@ -251,6 +251,7 @@ export const ChatTabPanel = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -476,7 +477,7 @@ export const ChatTabPanel = ({
             newThreadMessages.push(args);
             return;
           }
-          stop();
+          leave();
           resetChatTabId(tab.id, createChatThreadId());
           editorController.setContent(composerText(""));
         },
@@ -528,7 +529,7 @@ export const ChatTabPanel = ({
         queryClient,
         threadRef: newThreadRef,
       });
-      stop();
+      leave();
       resetChatTabId(tab.id, newThreadId);
     },
   );
