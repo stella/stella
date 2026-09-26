@@ -1,0 +1,88 @@
+{
+  "surfaces": {
+    "default": {
+      "tools": 67,
+      "chars": {
+        "name": 1131,
+        "title": 1166,
+        "description": 27994,
+        "inputSchema": 73717,
+        "outputSchema": 55085,
+        "annotations": 7155,
+        "instructions": 1699
+      },
+      "payloadUtf8Bytes": 172283,
+      "largestDescription": {
+        "tool": "create_template",
+        "chars": 807
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 3434
+      }
+    },
+    "documents": {
+      "tools": 13,
+      "chars": {
+        "name": 247,
+        "title": 255,
+        "description": 5636,
+        "inputSchema": 14432,
+        "outputSchema": 8840,
+        "annotations": 1502,
+        "instructions": 888
+      },
+      "payloadUtf8Bytes": 32258,
+      "largestDescription": {
+        "tool": "compare_documents",
+        "chars": 770
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 3434
+      }
+    },
+    "anonymized": {
+      "tools": 29,
+      "chars": {
+        "name": 472,
+        "title": 496,
+        "description": 13296,
+        "inputSchema": 22016,
+        "outputSchema": 33799,
+        "annotations": 2756,
+        "instructions": 1005
+      },
+      "payloadUtf8Bytes": 75334,
+      "largestDescription": {
+        "tool": "read_case_law_citations",
+        "chars": 802
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 3434
+      }
+    },
+    "law": {
+      "tools": 10,
+      "chars": {
+        "name": 161,
+        "title": 176,
+        "description": 6018,
+        "inputSchema": 10039,
+        "outputSchema": 9831,
+        "annotations": 956,
+        "instructions": 1188
+      },
+      "payloadUtf8Bytes": 28042,
+      "largestDescription": {
+        "tool": "read_case_law_citations",
+        "chars": 802
+      },
+      "largestOutputSchema": {
+        "tool": "search_case_law",
+        "chars": 2417
+      }
+    }
+  }
+}

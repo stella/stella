@@ -278,6 +278,44 @@ resources live. Terse and factual, under hard character budgets asserted in
 `instructions.test.ts` (the anonymized and law variants drop the feedback
 pointer, because neither surface carries the tools).
 
+## Surface size
+
+`apps/api/mcp-surface-baseline.json` holds, per audience, the tool count, the
+UTF-16 length of each advertised part (name, title, description, input schema,
+output schema, annotations, instructions), the UTF-8 size of the `tools/list`
+array, and the largest description and output schema.
+`registry-quality.test.ts` fails when a row moves past its tolerance in either
+direction; `bun run mcp:surface-baseline --write` (from `apps/api`) rewrites
+the file, so a pull request that grows a surface shows the numbers it moved.
+Without a flag the script prints the parts and three views built from them:
+
+- anthropic: name + description + input schema;
+- deferred upfront: names + instructions;
+- codex upper bound: instructions x tool count + description + input schema +
+  output schema (Codex renders output schemas shorter than their JSON).
+
+Which parts reach the model depends on the host. Observed on 2026-09-26 by
+capturing the requests each host sent to its model API; these are
+observations of those versions, not protocol guarantees:
+
+| Part               | Claude Code 2.1.283             | Codex CLI 0.157.1, code mode                          | Codex CLI 0.157.1, function tools    |
+| ------------------ | ------------------------------- | ----------------------------------------------------- | ------------------------------------ |
+| name               | sent                            | on discovery                                          | on discovery                         |
+| description        | sent                            | on discovery, prefixed with the instructions          | on discovery                         |
+| input schema       | sent                            | on discovery, as a TypeScript declaration             | on discovery                         |
+| output schema      | not sent                        | on discovery, as a TypeScript return type             | not sent                             |
+| title, annotations | not sent                        | not sent                                              | not sent                             |
+| instructions       | once, in the first user message | prefixed to every tool description                    | once, in the tool-search description |
+| call result        | `structuredContent` JSON only   | the script receives `content` and `structuredContent` | `structuredContent` JSON only        |
+
+Claude Code sends every tool upfront or, when the definitions are large, only
+the names (and instructions) and loads a definition when a tool is searched
+for. Codex always defers MCP tools behind discovery.
+
+`scripts/mcp-surface-token-calibration.ts` measures the chars-per-token ratios
+behind the estimates with the Anthropic count_tokens endpoint; it needs
+`ANTHROPIC_API_KEY` and is run by hand, never in CI.
+
 ## Code map
 
 - `constants.ts`: resource paths, scopes and discovery URLs.
