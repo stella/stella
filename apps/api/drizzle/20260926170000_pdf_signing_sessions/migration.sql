@@ -113,41 +113,19 @@ ALTER TABLE "pdf_signing_sessions"
 ALTER TABLE "pdf_signing_sessions"
   FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
+-- The owner is named by the catalog rather than by role: its login name
+-- differs from one deployment to the next.
 CREATE POLICY "owner_select" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR SELECT TO current_user
-  USING (true);--> statement-breakpoint
+  AS PERMISSIVE FOR SELECT TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass));--> statement-breakpoint
 
 CREATE POLICY "owner_redeem_update" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR UPDATE TO current_user
-  USING ("status" = 'open' AND "handoff_consumed_at" IS NULL)
-  WITH CHECK ("status" = 'open');--> statement-breakpoint
+  AS PERMISSIVE FOR UPDATE TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass) AND "status" = 'open' AND "handoff_consumed_at" IS NULL)
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass) AND "status" = 'open');--> statement-breakpoint
 
 CREATE POLICY "owner_delete" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR DELETE TO current_user
-  USING (true);--> statement-breakpoint
-
-CREATE POLICY "workspace_select" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR SELECT TO "stella"
-  USING (workspace_id = ANY((SELECT current_setting(
-  'app.workspace_ids', true
-))::uuid[]));--> statement-breakpoint
-
-CREATE POLICY "workspace_insert" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR INSERT TO "stella"
-  WITH CHECK (workspace_id = ANY((SELECT current_setting(
-  'app.workspace_ids', true
-))::uuid[]));--> statement-breakpoint
-
-CREATE POLICY "workspace_update" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR UPDATE TO "stella"
-  USING (workspace_id = ANY((SELECT current_setting(
-  'app.workspace_ids', true
-))::uuid[]));--> statement-breakpoint
-
-CREATE POLICY "workspace_delete" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR DELETE TO "stella"
-  USING (workspace_id = ANY((SELECT current_setting(
-  'app.workspace_ids', true
-))::uuid[]));--> statement-breakpoint
+  AS PERMISSIVE FOR DELETE TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass));--> statement-breakpoint
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "pdf_signing_sessions" TO stella;

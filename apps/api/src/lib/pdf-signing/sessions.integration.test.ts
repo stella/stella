@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
@@ -661,5 +661,106 @@ describe("storing phase 1's result", () => {
       .from(pdfSigningSessions)
       .where(eq(pdfSigningSessions.id, sessionId));
     expect(rows.at(0)?.digestHex).toBe("a".repeat(64));
+  });
+});
+
+describe("pdf signing session row security", () => {
+  /**
+   * Row security is forced on the table, so its owner is held to the owner
+   * policies. Runs as a non-superuser that owns the table, inside a
+   * transaction rolled back at the end so the fixture keeps its owner.
+   */
+  const probe = async (
+    role: "owner" | "application",
+    run: (tx: Transaction) => Promise<void>,
+  ): Promise<void> => {
+    const rolledBack = new Error("roll back the probe");
+    const outcome = await db
+      .transaction(async (tx) => {
+        if (role === "owner") {
+          await tx.execute(sql`CREATE ROLE pdf_signing_owner_probe NOLOGIN`);
+          await tx.execute(
+            sql`ALTER TABLE pdf_signing_sessions OWNER TO pdf_signing_owner_probe`,
+          );
+          // The test database is pushed from the schema, which cannot say
+          // "forced"; the migration does, and the policy baseline checks it.
+          await tx.execute(
+            sql`ALTER TABLE pdf_signing_sessions FORCE ROW LEVEL SECURITY`,
+          );
+          await tx.execute(sql`SET LOCAL ROLE pdf_signing_owner_probe`);
+        } else {
+          // No matter settings: only an owner policy could show a row.
+          await tx.execute(sql`SET LOCAL ROLE stella`);
+        }
+        await run(tx);
+        throw rolledBack;
+      })
+      .catch((error: unknown) => error);
+    if (outcome !== rolledBack) {
+      throw outcome;
+    }
+  };
+
+  test("lets the owner read, spend an open handoff and delete, never insert", async () => {
+    const { sessionId } = await seedHandoff();
+
+    await probe("owner", async (tx) => {
+      const visible = await tx
+        .select({ id: pdfSigningSessions.id })
+        .from(pdfSigningSessions)
+        .where(eq(pdfSigningSessions.id, sessionId));
+      expect(visible).toHaveLength(1);
+
+      const spend = async () =>
+        await tx
+          .update(pdfSigningSessions)
+          .set({ handoffConsumedAt: new Date() })
+          .where(eq(pdfSigningSessions.id, sessionId))
+          .returning({ id: pdfSigningSessions.id });
+      expect(await spend()).toHaveLength(1);
+      // Spent once, the handoff is out of the owner's reach for updates.
+      expect(await spend()).toHaveLength(0);
+
+      const deleted = await tx
+        .delete(pdfSigningSessions)
+        .where(eq(pdfSigningSessions.id, sessionId))
+        .returning({ id: pdfSigningSessions.id });
+      expect(deleted).toHaveLength(1);
+
+      const handoffExpiresAt = new Date(Date.now() + MINUTE_MS);
+      const inserted = await tx
+        .insert(pdfSigningSessions)
+        .values({
+          baseVersionId: ids.entityVersionA1,
+          createdBy: ids.userA1,
+          entityId: ids.entityA1,
+          handoffExpiresAt,
+          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          id: createSafeId<"pdfSigningSession">(),
+          propertyId: ids.filePropertyA1,
+          tokenExpiresAt: handoffExpiresAt,
+          workspaceId: ids.wsA1,
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(inserted).toBeInstanceOf(Error);
+      expect(
+        String(inserted instanceof Error ? inserted.cause : inserted),
+      ).toMatch(/row-level security/u);
+    });
+  });
+
+  test("gives the application role nothing through the owner policies", async () => {
+    const { sessionId } = await seedHandoff();
+
+    await probe("application", async (tx) => {
+      const visible = await tx
+        .select({ id: pdfSigningSessions.id })
+        .from(pdfSigningSessions)
+        .where(eq(pdfSigningSessions.id, sessionId));
+      expect(visible).toHaveLength(0);
+    });
   });
 });
