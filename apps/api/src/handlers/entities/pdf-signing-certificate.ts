@@ -193,6 +193,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
           reserveTimestamp: timestamped,
           signatureAlgorithm: inspection.signatureAlgorithm,
           signingTime,
+          stamp: session.stamp,
         }),
       catch: (cause) => cause,
     });

@@ -177,6 +177,7 @@ const embed = async (
         signatureAlgorithm:
           prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
         signingTime: prepared.signingTime,
+        stamp: session.stamp,
         timestampAuthorities: configuredTimestampAuthorities(),
         timestampTrustAnchors: configuredTimestampTrustAnchors(),
       }),

@@ -56,6 +56,7 @@ const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
       expiresAt: redeemed.expiresAt.toISOString(),
       sessionId: redeemed.sessionId,
       sessionToken: redeemed.sessionToken,
+      stampPageNumber: redeemed.stampPageNumber,
       versionNumber: redeemed.versionNumber,
       workspaceName: redeemed.workspaceName,
     });

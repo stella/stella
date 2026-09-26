@@ -28,6 +28,7 @@ CREATE TABLE "pdf_signing_sessions" (
   "signer_certificate_der" bytea,
   "signer_certificate_chain" jsonb,
   "signing_time" timestamptz,
+  "stamp" jsonb,
   "digest_hex" varchar(64),
   "signed_attributes" bytea,
   "placeholder_size" integer,

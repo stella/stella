@@ -27,6 +27,7 @@ import {
 import type {
   PdfSigningKeyType,
   PdfSigningSessionCloseReason,
+  PdfSigningStamp,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -121,6 +122,8 @@ export const openPdfSigningSession = async ({
 
 export type RedeemedPdfSigningSession = {
   documentName: string;
+  /** 1-based page of the visible stamp, `null` for an invisible signature. */
+  stampPageNumber: number | null;
   expiresAt: Date;
   sessionId: SafeId<"pdfSigningSession">;
   sessionToken: string;
@@ -209,6 +212,7 @@ export const redeemPdfSigningHandoff = async (
           handoffExpiresAt: pdfSigningSessions.handoffExpiresAt,
           id: pdfSigningSessions.id,
           organizationId: workspaces.organizationId,
+          stamp: pdfSigningSessions.stamp,
           status: pdfSigningSessions.status,
           workspaceId: pdfSigningSessions.workspaceId,
         })
@@ -289,6 +293,8 @@ export const redeemPdfSigningHandoff = async (
         expiresAt,
         sessionId: session.id,
         sessionToken,
+        stampPageNumber:
+          session.stamp === null ? null : session.stamp.pageIndex + 1,
         versionNumber: descriptor.versionNumber,
         workspaceName: descriptor.workspaceName,
       };
@@ -318,6 +324,7 @@ export type AuthorizedPdfSigningSession = {
   signerCertificateChain: string[] | null;
   signerCertificateDer: Uint8Array | null;
   signingTime: Date | null;
+  stamp: PdfSigningStamp | null;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -378,6 +385,7 @@ export const authorizePdfSigningSession = async (
       signerCertificateChain: pdfSigningSessions.signerCertificateChain,
       signerCertificateDer: pdfSigningSessions.signerCertificateDer,
       signingTime: pdfSigningSessions.signingTime,
+      stamp: pdfSigningSessions.stamp,
       tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
       workspaceId: pdfSigningSessions.workspaceId,
       workspaceMemberId: workspaceMembers.id,
@@ -469,6 +477,7 @@ export const authorizePdfSigningSession = async (
       signerCertificateChain: session.signerCertificateChain,
       signerCertificateDer: session.signerCertificateDer,
       signingTime: session.signingTime,
+      stamp: session.stamp,
       userId,
       workspaceId: session.workspaceId,
     },
