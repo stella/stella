@@ -31,6 +31,10 @@ import {
   omitDerivablePlainText,
   parseDocumentAst,
 } from "@stll/legal-ast/document-ast";
+import {
+  projectionDigest,
+  projectionPieces,
+} from "@stll/legal-ast/projection-digest";
 
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
@@ -40,6 +44,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -255,6 +260,28 @@ describe("public decision AST plain text", () => {
     // Guards the corpus itself: a fixture set that shrank silently would
     // make the assertion above pass over nothing.
     expect(pieces).toBeGreaterThan(3000);
+  });
+
+  /**
+   * Stored provision spans index each piece's text and are certified by
+   * the projection digest, so the whole read path (the stored-object
+   * parse, the omission, the reader's parse) must leave both untouched.
+   */
+  test("keeps every piece's text and the projection digest on the read path", async () => {
+    for (const { name, ast } of await fixtureAsts()) {
+      const stored = storedAst(ast, name);
+      // The stored object is JSON bytes; reading it back parses them.
+      const object = JSON.stringify(stored);
+      const read = parsePersistedCorpusAst(JSON.parse(object));
+      if (!isDocumentAst(read)) {
+        throw new Error(`stored AST did not read back: ${name}`);
+      }
+      const served = roundTripped(read);
+      expect(projectionPieces(served), name).toEqual(projectionPieces(stored));
+      expect(await projectionDigest(served), name).toBe(
+        await projectionDigest(stored),
+      );
+    }
   });
 
   test("omission removes about a third of the largest fixture", async () => {
