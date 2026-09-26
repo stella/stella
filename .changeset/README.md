@@ -29,7 +29,13 @@ include a Changeset describing the user-visible change and its semver impact:
 <!-- published-packages:end -->
 
 Run `bun run changeset`, select the affected package(s), and commit the generated
-Markdown file. Changes that do not alter a published package do not need one.
+Markdown file. Every package named by an added or edited entry must have a
+release-gated file in the same pull request; CI and the pre-push guard enforce
+this. Name only packages whose user-visible change the summary describes.
+A lint comment or test-only edit does not by itself justify a package bump;
+use `bun run changeset --empty` when no public behavior changes. The path check
+cannot infer semantic impact or assign different summaries within a pull request.
+Changes that do not alter a published package do not need a changeset.
 
 Pending entries are applied by whichever flow gets there first. `bun run
 release:maintenance` applies them in the release commit, so the release carries

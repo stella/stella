@@ -435,6 +435,11 @@ jobs:
         # reads only the policy file and needs no dependency install.
         run: bun scripts/check-published-package-lists.ts --check
 
+      - name: Changeset packages match changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
+
       - name: Enforce release intent
         # The repository owner publishes this versioned shared contract.
         uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1

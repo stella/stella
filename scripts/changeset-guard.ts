@@ -12,16 +12,17 @@
 // matches them locally. Neither side owns a private copy, so they cannot
 // drift.
 //
-// The shared action additionally validates entry shape (frontmatter package
-// names, a non-empty summary) and recognizes the generated version pull
-// request. Both stay there: the first is cheap for CI to own once, the second
-// can only happen on a bot branch. This guard covers the failure a developer
-// actually hits — a release-gated change with no new changeset.
+// The shared action additionally validates entry shape and recognizes the
+// generated version pull request. This guard also checks that packages named
+// by added or edited entries have release-gated files in the diff. CI runs
+// that same relevance check; empty entries remain valid no-release intent.
 //
-//   bun scripts/changeset-guard.ts [--base origin/main]
+//   bun scripts/changeset-guard.ts [--base origin/main] [--packages-only]
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { parseChangesetEntry } from "./changeset-entry";
 
 // This module is also imported by the no-install Dependabot autofix runner.
 class ChangesetPolicyError extends Error {
@@ -164,6 +165,52 @@ export const decideChangesetGate = ({
   return { status: "missing", releaseFiles };
 };
 
+type ChangesetPackageCheckOptions = {
+  readonly changedFiles: readonly string[];
+  readonly entries: readonly { file: string; contents: string }[];
+  readonly policy: ChangesetPolicy;
+};
+
+/** Path evidence cannot establish semantic impact: comment-only edits count. */
+export const checkChangesetPackages = ({
+  changedFiles,
+  entries,
+  policy,
+}: ChangesetPackageCheckOptions): void => {
+  const matchers = policy.releasePaths.map(parseReleasePathspec);
+  const releaseFiles = changedFiles.filter((file) =>
+    matchers.some((matcher) => matchesRelease(matcher, file)),
+  );
+  // Workspace names follow @stll/<directory>, as the generated package lists do.
+  const directories = new Map(
+    policy.packageFiles.map((file) => {
+      const directory = path.posix.dirname(file);
+      return [
+        `@stll/${path.posix.basename(directory)}`,
+        `${directory}/`,
+      ] as const;
+    }),
+  );
+  const unrelated: string[] = [];
+  for (const { file, contents } of entries) {
+    for (const name of parseChangesetEntry(contents).packages) {
+      const directory = directories.get(name);
+      if (directory === undefined) {
+        panic(`${file} names a package outside the release policy: ${name}`);
+      }
+      if (!releaseFiles.some((changed) => changed.startsWith(directory))) {
+        unrelated.push(`${file}: ${name}`);
+      }
+    }
+  }
+  if (unrelated.length > 0) {
+    panic(
+      `Changeset packages have no changed release-gated files:\n${unrelated.join("\n")}\n` +
+        "Remove unrelated packages from the entry; use an empty changeset for a no-release change.",
+    );
+  }
+};
+
 const preview = (files: readonly string[]): string => {
   const shown = files.slice(0, PREVIEW_LIMIT).join(", ");
   const remaining = files.length - PREVIEW_LIMIT;
@@ -282,10 +329,15 @@ const resolveBase = (base: string): string | null => {
   return hasCommit(base) ? base : null;
 };
 
-const parseArgs = (args: readonly string[]): { readonly base: string } => {
+const parseArgs = (args: readonly string[]) => {
   let base = DEFAULT_BASE;
+  let check: "all" | "packages" = "all";
   const argv = args.values();
   for (const argument of argv) {
+    if (argument === "--packages-only") {
+      check = "packages";
+      continue;
+    }
     if (argument !== "--base") {
       panic(`Unknown argument: ${argument}`);
     }
@@ -295,11 +347,11 @@ const parseArgs = (args: readonly string[]): { readonly base: string } => {
     }
     base = value;
   }
-  return { base };
+  return { base, check };
 };
 
 const main = (args: readonly string[]): number => {
-  const { base } = parseArgs(args);
+  const { base, check } = parseArgs(args);
   const resolved = resolveBase(base);
   if (resolved === null) {
     process.stderr.write(
@@ -316,11 +368,35 @@ const main = (args: readonly string[]): number => {
     return 0;
   }
 
+  const policy = loadChangesetPolicy();
+  const diff = readChangesetDiff({ mergeBase, root: REPO_ROOT });
+  const entries = gitPaths([
+    "diff",
+    "--no-renames",
+    "--name-only",
+    "-z",
+    "--diff-filter=AM",
+    mergeBase,
+    "HEAD",
+    "--",
+    CHANGESET_PATHSPEC,
+  ])
+    .filter(isChangesetEntry)
+    .map((file) => {
+      // Read the same committed snapshot as the diff, not uncommitted edits.
+      const result = git(["show", `HEAD:${file}`]);
+      if (!result.ok) {
+        return panic(`Could not read changeset at HEAD: ${file}`);
+      }
+      return { file, contents: result.stdout };
+    });
+  checkChangesetPackages({ changedFiles: diff.changedFiles, entries, policy });
+  // CI leaves generated version-PR exemptions to the shared presence gate.
+  if (check === "packages") {
+    return 0;
+  }
   return report(
-    decideChangesetGate({
-      ...readChangesetDiff({ mergeBase, root: REPO_ROOT }),
-      releasePaths: loadChangesetPolicy().releasePaths,
-    }),
+    decideChangesetGate({ ...diff, releasePaths: policy.releasePaths }),
   );
 };
 
