@@ -255,9 +255,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DATABASE_POOL_MAX_LIFETIME_S:
     "Maximum database connection lifetime in seconds; zero disables retirement.",
   DATABASE_RLS_POOL_MAX:
-    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
+    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
-    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
+    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -439,7 +439,7 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
-  CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
+  CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
@@ -492,7 +492,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
 const HIDDEN_SCHEMA_KEYS = new Set([
   "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_DATABASE_URL",
-  "isDev",
 ]);
 
 const humanizeEnvName = (name: string) => {
@@ -637,7 +636,7 @@ export const API_ENV_SCHEMA = {
   ...envApiServerSchema,
 };
 
-export type ApiEnvironmentName = Exclude<keyof typeof API_ENV_SCHEMA, "isDev">;
+export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
@@ -864,6 +863,7 @@ export const AMBIENT_ENV_KEYS = new Set([
   "NODE_ENV",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
+  "STELLA_LOCAL_DEV",
   "TMPDIR",
   "TZ",
 ]);

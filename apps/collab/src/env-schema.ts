@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export const COLLAB_MODES = ["redis", "single-process"] as const;
@@ -36,17 +38,18 @@ export const isSecureCollabRedisUrl = (value: string) => {
 
 type CollabEnvInvariantInput = {
   mode: (typeof COLLAB_MODES)[number];
-  nodeEnv: string | undefined;
   redisUrl: string | undefined;
+  runtimeMode: RuntimeMode;
 };
 
 export const collabEnvInvariantViolation = ({
   mode,
-  nodeEnv,
   redisUrl,
+  runtimeMode,
 }: CollabEnvInvariantInput): string | null => {
-  if (nodeEnv === "production" && mode === "single-process") {
-    return "STELLA_COLLAB_MODE=single-process is not allowed in production.";
+  // One process holds every document, so it cannot serve more than one task.
+  if (mode === "single-process" && runtimeMode.mode !== RUNTIME_MODE.open) {
+    return "STELLA_COLLAB_MODE=single-process is only supported in local development (NODE_ENV=development with STELLA_LOCAL_DEV=1).";
   }
   if (mode === "redis" && redisUrl === undefined) {
     return "STELLA_COLLAB_REDIS_URL is required in redis mode.";

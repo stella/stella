@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 
-import { env } from "@/api/env";
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -9,6 +8,7 @@ import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getUserEmailAndTwoFactorEnabled } from "@/api/lib/two-factor";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
   mcp: { type: "internal", reason: "account_lifecycle" },
@@ -45,7 +45,7 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
       catch: (err) => err,
     });
 
-    if (env.isDev) {
+    if (isLocalDevOpen()) {
       // oxlint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: two-factor-manage)\x1b[0m\n`,

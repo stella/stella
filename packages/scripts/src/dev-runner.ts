@@ -1144,6 +1144,8 @@ export const createApiEnv = ({
   BETTER_AUTH_URL: `http://localhost:${String(ports.api)}`,
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
+  // Local development capabilities require an explicit runtime opt-in.
+  STELLA_LOCAL_DEV: "1",
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
   ...(infraOffset > 0 && {

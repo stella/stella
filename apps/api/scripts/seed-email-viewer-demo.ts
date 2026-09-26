@@ -30,6 +30,7 @@ import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
 import { seedId } from "./seed-utils";
@@ -217,9 +218,7 @@ const resolveTarget = async () => {
 };
 
 const seedEmailViewerDemo = async () => {
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to seed email fixtures in production.");
-  }
+  requireLocalDevOpen("Seeding");
 
   const target = await resolveTarget();
   for (const [index, fileName] of SEED_EMAIL_FILE_NAMES.entries()) {

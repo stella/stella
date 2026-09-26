@@ -1,8 +1,8 @@
 import Elysia from "elysia";
 
-import { env } from "@/api/env";
 import autocompleteStream from "@/api/handlers/ai-autocomplete/stream";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Mounted at `/v1/ai-autocomplete` directly at the root rather
 // than inside the `.group("/v1", ...)` chain in
@@ -20,7 +20,7 @@ export const aiAutocompleteRoute = new Elysia({
   .guard({
     validateAuth: true,
     beforeHandle: () => {
-      if (env.isDev) {
+      if (isLocalDevOpen()) {
         return undefined;
       }
       return new Response("Not available", { status: 404 });

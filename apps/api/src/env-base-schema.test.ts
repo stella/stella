@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import {
   envBaseInvariantViolation,
   envBaseServerSchema,
@@ -16,7 +18,7 @@ const deployedCorpusEnvironment = {
   LEGAL_SEARCH_PROVIDER: "corpus-index",
   S3_CREDENTIALS_PROVIDER: "aws-runtime",
   S3_ENDPOINT: "https://s3.eu-central-1.amazonaws.com",
-  isDev: false,
+  runtimeMode: { mode: RUNTIME_MODE.strict },
 } as const;
 
 describe("corpus cluster endpoint transport", () => {

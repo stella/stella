@@ -7,8 +7,8 @@
  * as plaintext wrapped in a no-op envelope so the schema
  * stays consistent. The worker env validator
  * (`apps/api/src/env-document-processing-worker.ts`)
- * requires the key when NODE_ENV is 'production' or 'staging',
- * so this fallback only fires in local dev / tests.
+ * requires the key unless local development access is open, so this
+ * fallback only fires in local development and tests.
  */
 
 import { hkdf } from "node:crypto";

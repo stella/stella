@@ -67,8 +67,8 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // Session-authenticated (sessionAuthMacro + validateSession guard), not
   // an org-role-scoped resource.
   "ai-config/routes.ts": ["POST /validate-provider"],
-  // Dev-only surface, several endpoints gated by env.isDev inline; the
-  // whole route group sits behind the standard auth macro at mount time.
+  // Local development surface, gated on local development access and behind
+  // the standard auth macro.
   "dev/routes.ts": [
     "POST /seed",
     "POST /seed-firm-knowledge",

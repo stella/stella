@@ -80,3 +80,39 @@ test("long-running API builds map frames to source", () => {
 test("the long-running case-law runner build maps frames to source", () => {
   expect(runnerPackage.scripts.build).toContain("--sourcemap=inline");
 });
+
+// Bun inlines direct `process.env.NODE_ENV` reads at bundle time, and inlines
+// "development" when the variable is unset, so the builder must set it before
+// its first bundle. The runner stage setting it too proves nothing here.
+const BUNDLE_INSTRUCTION = /\bbun build\b|\bbun --filter \S+ build\b/u;
+const RELEASE_DEFINE = "--define __STELLA_RELEASE__=true";
+
+test("the builder stage sets NODE_ENV before its first bundle", () => {
+  const instructions = logicalInstructions(stage("builder"));
+  const nodeEnv = instructions.indexOf("ENV NODE_ENV=production");
+  const firstBundle = instructions.findIndex(
+    (instruction) =>
+      instruction.startsWith("RUN ") && BUNDLE_INSTRUCTION.test(instruction),
+  );
+  expect(firstBundle).toBeGreaterThan(-1);
+  expect(nodeEnv).toBeGreaterThan(-1);
+  expect(nodeEnv).toBeLessThan(firstBundle);
+});
+
+// A published artifact refuses local development access at startup only if
+// the release flag is compiled into it.
+test("every builder bundle is a release build", () => {
+  const bundles = logicalInstructions(stage("builder"))
+    .filter((instruction) => instruction.startsWith("RUN "))
+    .flatMap((instruction) =>
+      instruction
+        .split(/\bbun build\b/u)
+        .slice(1)
+        .map((invocation) => invocation.split("&&").at(0) ?? ""),
+    );
+  expect(bundles.length).toBeGreaterThan(0);
+  expect(bundles.filter((bundle) => !bundle.includes(RELEASE_DEFINE))).toEqual(
+    [],
+  );
+  expect(runnerPackage.scripts.build).toContain(RELEASE_DEFINE);
+});

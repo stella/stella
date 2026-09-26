@@ -47,6 +47,7 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listStatutes = createSafePublicHandler(
   {
@@ -262,7 +263,7 @@ export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
   .onBeforeHandle(({ set }) => {
-    if (env.isDev || env.FEATURE_PUBLIC_LAW) {
+    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
       return undefined;
     }
 

@@ -650,7 +650,7 @@ const completeDocumentProcessingRun = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
   const shouldDispatchDeadlineScout = documentScoutsEnabled(
-    envDocumentProcessingWorker,
+    envDocumentProcessingWorker.FEATURE_INBOX_DOCUMENT_SCOUTS,
   );
   const completed = await database
     .update(documentProcessingRuns)

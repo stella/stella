@@ -14,7 +14,8 @@
  *
  * Prerequisites:
  *  - Local dev stack running: `bun run dev` (API on 3001, web origin 3000).
- *  - Seeded test user: `bun --filter @stll/api db:seed-test-user`
+ *  - Seeded test user:
+ *    `NODE_ENV=development STELLA_LOCAL_DEV=1 bun --filter @stll/api db:seed-test-user`
  *    (default email test@stella.dev, override with --email).
  *  - The OTP is read from the dev-only endpoint `GET /dev-public/last-otp`,
  *    so this only works against a dev API.
@@ -30,7 +31,8 @@
  *
  * devModelId constraints (see validateTanStackDevModelOverride in
  * apps/api/src/lib/tanstack-ai-models.ts):
- *  - Rejected outside dev (env.isDev must be true).
+ *  - Rejected unless local development access is open
+ *    (NODE_ENV=development with STELLA_LOCAL_DEV=1).
  *  - Charset [A-Za-z0-9._:/-], max length 160.
  *  - `provider::modelId` form: the provider must be TanStack-supported and
  *    configured for the active org (or have instance credentials when the

@@ -30,7 +30,7 @@ export const createAnalyticsValue = (): AnalyticsValue => {
   const posthogConfig = {
     host: env.VITE_POSTHOG_HOST,
     key: env.VITE_POSTHOG_KEY,
-    isDev: import.meta.env.DEV,
+    suppressTelemetry: import.meta.env.DEV,
     localDebug: env.VITE_POSTHOG_LOCAL_DEBUG,
   };
   const value = shouldEnablePostHog(posthogConfig)

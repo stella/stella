@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import {
   collabEnvInvariantViolation,
   envCollabServerSchema,
@@ -61,29 +63,31 @@ describe("Redis transport", () => {
     expect(
       collabEnvInvariantViolation({
         mode: "redis",
-        nodeEnv: "development",
         redisUrl: undefined,
+        runtimeMode: { mode: RUNTIME_MODE.strict },
       }),
     ).toBe("STELLA_COLLAB_REDIS_URL is required in redis mode.");
   });
 
-  test("allows the single-process mode outside production", () => {
+  test("allows the single-process mode in local development", () => {
     expect(
       collabEnvInvariantViolation({
         mode: "single-process",
-        nodeEnv: "development",
         redisUrl: undefined,
+        runtimeMode: { mode: RUNTIME_MODE.open },
       }),
     ).toBeNull();
   });
 
-  test("rejects the single-process mode in production", () => {
+  test("rejects the single-process mode outside local development", () => {
     expect(
       collabEnvInvariantViolation({
         mode: "single-process",
-        nodeEnv: "production",
         redisUrl: undefined,
+        runtimeMode: { mode: RUNTIME_MODE.strict },
       }),
-    ).toBe("STELLA_COLLAB_MODE=single-process is not allowed in production.");
+    ).toContain(
+      "STELLA_COLLAB_MODE=single-process is only supported in local development",
+    );
   });
 });

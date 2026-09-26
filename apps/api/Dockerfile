@@ -34,11 +34,11 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 # Copy source code and compile the API to a Bun binary.
 #
-# NODE_ENV must be set during `bun build` because Bun inlines
-# `process.env.NODE_ENV` at bundle time. Without this, every
-# `process.env.NODE_ENV !== "production"` check in the source
-# is baked as `true` in the compiled binary, and the resulting
-# image runs as if it were dev (e.g. OTP emails are skipped).
+# NODE_ENV must be set before the first `bun build`: Bun inlines direct
+# `process.env.NODE_ENV` reads (dependencies included) at bundle time, and
+# inlines "development" when it is unset. Every bundle is also built with
+# `--define __STELLA_RELEASE__=true`, so a published artifact refuses local
+# development access whatever its runtime environment says.
 FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
@@ -46,6 +46,7 @@ COPY --from=pruner /app/out/full/ .
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --compile \
     --no-compile-autoload-dotenv \
     --sourcemap=inline \
@@ -55,6 +56,7 @@ RUN bun build \
 # Dedicated Hocuspocus collaboration service. The infrastructure runs this
 # binary from the same immutable image with command override ["/app/collab"].
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --compile \
     --no-compile-autoload-dotenv \
     --target bun \
@@ -67,6 +69,7 @@ RUN bun build \
 # task on the API task-def (it needs the API env, not the migrate env):
 #   command override -> ["bun", "/app/backfill.js"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
@@ -78,6 +81,7 @@ RUN bun build \
 #    "/tmp/better-auth-identity-map.json", "--oauth-base-url",
 #    "https://api.stll.app"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/better-auth-migration-audit.js \
     apps/api/src/scripts/better-auth-migration-audit.ts
@@ -85,24 +89,28 @@ RUN bun build \
 # reads stored ID tokens only inside the isolated task and writes the verified
 # sub-to-oid map to the task's private tmpfs without logging identity values.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/better-auth-microsoft-identity-map.js \
     apps/api/src/scripts/better-auth-microsoft-identity-map.ts
 # Bounded Better Auth bridge backfill. The command reproduces the private
 # baseline before mutating and runs the post-backfill audit before succeeding.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/better-auth-17-backfill.js \
     apps/api/src/scripts/better-auth-17-backfill.ts
 # Whole-database census (counts, digests, foreign-key orphans) recorded before
 # a migration rehearsal and compared after it.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/database-census.js \
     apps/api/src/scripts/database-census.ts
 # Replays stored sign-ins and sessions against a migrated database with the
 # provider served locally; counts only.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/better-auth-sign-in-replay.js \
     apps/api/src/scripts/better-auth-sign-in-replay.ts
@@ -112,6 +120,7 @@ RUN bun build \
 # task like backfill.js:
 #   ["bun", "/app/replay-case-law-source.js", "--adapter", "eu-ecj"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
@@ -120,10 +129,12 @@ RUN bun build \
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
 #   ["bun", "/app/case-law-raw-layout.js", "sweep-legacy", "--source", "<id>"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/redact-case-law-decision.js \
     apps/api/src/scripts/redact-case-law-decision.ts
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/case-law-raw-layout.js \
     apps/api/src/scripts/case-law-raw-layout.ts
@@ -135,14 +146,17 @@ RUN bun build \
 #   ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
 #   ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/decision-analysis-candidates.js \
     apps/api/src/scripts/decision-analysis-candidates.ts
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/decision-analysis-input.js \
     apps/api/src/scripts/decision-analysis-input.ts
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/decision-analysis-save.js \
     apps/api/src/scripts/decision-analysis-save.ts
@@ -152,10 +166,12 @@ RUN bun build \
 #   ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
 #   ["bun", "/app/repair-cz-ns-court.js", "--apply"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/repair-publisher-absent-text.js \
     apps/api/src/scripts/repair-publisher-absent-text.ts
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/repair-cz-ns-court.js \
     apps/api/src/scripts/repair-cz-ns-court.ts
@@ -165,6 +181,7 @@ RUN bun build \
 # the API env (database) and runs inside the API task:
 #   ["bun", "/app/classify-citations.js", "--recheck", "--language", "cs"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/classify-citations.js \
     apps/api/scripts/classify-citations.ts
@@ -173,6 +190,7 @@ RUN bun build \
 # reports without writing until `--apply`:
 #   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/apply-reviewed-citation-labels.js \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
@@ -182,6 +200,7 @@ RUN bun build \
 #    "--queries", "/app/corpus-snippet-compare.sample.json",
 #    "--out-dir", "/tmp/snippets"]
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/corpus-snippet-compare.js \
     apps/api/src/scripts/corpus-snippet-compare.ts
@@ -189,6 +208,7 @@ RUN bun build \
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --sourcemap=inline \
     --outfile /app/document-processing-worker.js \
@@ -198,6 +218,7 @@ RUN bun build \
 # source so its `import.meta.dir`-relative migrationsFolder lookup resolves to
 # /app/apps/api/drizzle in the runtime image.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/apps/api/src/db/migrate.js \
     apps/api/src/db/migrate.ts
@@ -210,22 +231,27 @@ RUN bun build \
 # cp follows it and materializes each asset before the cross-stage COPY.
 RUN mkdir -p /app/runtime-workers && \
     bun build \
+      --define __STELLA_RELEASE__=true \
       --target bun \
       --outfile /app/runtime-workers/pdf-worker.js \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
+      --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/runtime-workers \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
+      --define __STELLA_RELEASE__=true \
       --target bun \
       --outfile /app/runtime-workers/ocr-searchable-pdf-worker.js \
       apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
     bun build \
+      --define __STELLA_RELEASE__=true \
       --target bun \
       --outfile /app/runtime-workers/office-evidence-worker.js \
       apps/api/src/lib/files/office-evidence-worker.ts && \
     bun build \
+      --define __STELLA_RELEASE__=true \
       --target bun \
       --outfile /app/runtime-workers/ocr-local-worker.js \
       apps/api/src/lib/ocr-local/ocr-local-worker.ts && \
@@ -254,6 +280,7 @@ RUN bun --filter @stll/legal-atlas-runner build
 # runtimes, plus the external YARA rules, worker bundles, OCR model, and font.
 # Compiled like the server and run by the verification stage below.
 RUN bun build \
+    --define __STELLA_RELEASE__=true \
     --compile \
     --no-compile-autoload-dotenv \
     --target bun \

@@ -16,7 +16,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -226,6 +225,7 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -238,7 +238,7 @@ const assertDevModelOverride = (
   if (!devModelId) {
     return Result.ok(undefined);
   }
-  if (!env.isDev) {
+  if (!isLocalDevOpen()) {
     return Result.err(
       new HandlerError({
         status: 400,
