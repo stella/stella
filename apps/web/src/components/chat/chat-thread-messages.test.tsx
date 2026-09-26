@@ -368,6 +368,77 @@ describe("chat thread messages", () => {
     expect(html).toContain("Searching chat history");
   });
 
+  const approvalRequestMessages = (): ChatUIMessage[] => [
+    {
+      id: "message-user",
+      parts: [{ type: "text", content: "Search for it" }],
+      role: "user",
+    },
+    {
+      id: "message-approval",
+      parts: [
+        {
+          approval: { id: "approval-1", needsApproval: true },
+          arguments: JSON.stringify({ query: "civil code" }),
+          id: "tool-call-approval",
+          input: { query: "civil code" },
+          name: "web_search",
+          state: "approval-requested",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    },
+  ];
+
+  test("offers a decision on the approval the conversation waits on", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId="message-approval"
+        messages={approvalRequestMessages()}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Allow once");
+  });
+
+  // A user who types instead of answering supersedes the turn: the server
+  // cancels the approval when it accepts the new message, so the card keeps
+  // showing the request but stops offering a decision.
+  test("withdraws the decision once a later message supersedes the turn", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={[
+          ...approvalRequestMessages(),
+          {
+            id: "message-user-2",
+            parts: [
+              { type: "text", content: "Before searching, list the sources." },
+            ],
+            role: "user",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).not.toContain("Allow once");
+    expect(html).toContain("Before searching, list the sources.");
+  });
+
   test("folds process steps across invisible tool results into one disclosure", () => {
     const chatMessages: ChatUIMessage[] = [
       {

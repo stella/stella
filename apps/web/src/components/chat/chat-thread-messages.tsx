@@ -263,6 +263,7 @@ export const ChatThreadMessages = ({
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
+              approvalPendingMessageId={approvalPendingMessageId}
               assistantTextDensity={assistantTextDensity}
               isGenerating={generationActive}
               isLatestAssistantMessage={
@@ -1285,6 +1286,7 @@ const QueuedUserMessages = ({
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
   | "activeFileName"
+  | "approvalPendingMessageId"
   | "onAskUserEditAndRerun"
   | "onAskUserEditingChange"
   | "onAskUserSubmit"
@@ -1467,6 +1469,7 @@ const toAssistantPartRenderGroups = (
 const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
+  approvalPendingMessageId,
   assistantTextDensity,
   isGenerating,
   isLatestAssistantMessage,
@@ -1487,6 +1490,7 @@ const AssistantMessageParts = ({
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
+  const isAwaitingUser = approvalPendingMessageId === message.id;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
@@ -1618,6 +1622,7 @@ const AssistantMessageParts = ({
       ) {
         return (
           <ToolApprovalCard
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}
@@ -1632,6 +1637,7 @@ const AssistantMessageParts = ({
         return (
           <ToolApprovalCard
             activeFileName={activeFileName}
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}

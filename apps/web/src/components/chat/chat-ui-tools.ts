@@ -728,6 +728,35 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 };
 
 /**
+ * The assistant message whose approval cards the conversation still waits
+ * on, or null. Only the latest assistant message can be waited on, and only
+ * until a later user message supersedes its turn: the runtime appends that
+ * message before the new stream starts, and the server cancels the awaited
+ * approvals when it accepts it, so the cards stop being answerable at the
+ * same moment their answers stop being accepted.
+ */
+export const getCurrentApprovalPendingMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message === undefined || message.role === "user") {
+      return null;
+    }
+    if (message.role !== "assistant") {
+      continue;
+    }
+    return message.parts.some(
+      (part) =>
+        part.type === "tool-call" && part.state === "approval-requested",
+    )
+      ? message.id
+      : null;
+  }
+  return null;
+};
+
+/**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
  * `suggest_changes`), narrowed by {@link isUnresolvedFolioAgentDocToolCallPart}.
  */

@@ -29,12 +29,12 @@ import type {
   AskUserOutput,
   ChatPart,
   ChatUITools,
-  PersistedChatMessage,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
   getChatAssistantTurnError,
+  getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
   isApprovalToolName,
@@ -1723,27 +1723,6 @@ const getApprovedToolsChangedDetail = (
       scope: "session",
       conversationId: detail.conversationId,
     };
-  }
-
-  return null;
-};
-
-const getCurrentApprovalPendingMessageId = (
-  messages: PersistedChatMessage[],
-) => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const msg = messages.at(index);
-    if (!msg || msg.role !== "assistant") {
-      continue;
-    }
-
-    for (const part of msg.parts) {
-      if (part.type === "tool-call" && part.state === "approval-requested") {
-        return msg.id;
-      }
-    }
-
-    return null;
   }
 
   return null;

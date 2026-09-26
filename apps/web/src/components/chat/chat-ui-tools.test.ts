@@ -4,6 +4,7 @@ import {
   consumeDocumentDeletionToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
+  getCurrentApprovalPendingMessageId,
   getApprovalToolName,
   getToolApprovalGrant,
   getUserMessageHtmlHistory,
@@ -1329,5 +1330,62 @@ describe("getUserMessageHtmlHistory", () => {
         },
       ]),
     ).toEqual(["<p>Clean prompt</p>"]);
+  });
+});
+
+describe("getCurrentApprovalPendingMessageId", () => {
+  const approvalMessage = {
+    id: "assistant-1",
+    parts: [
+      {
+        approval: { id: "approval-1", needsApproval: true },
+        arguments: JSON.stringify({ query: "civil code" }),
+        id: "tool-call-1",
+        input: { query: "civil code" },
+        name: "web_search",
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    ],
+    role: "assistant",
+  } satisfies PersistedChatMessage;
+  const userMessage = (id: string) =>
+    ({
+      id,
+      parts: [{ type: "text", content: "Next" }],
+      role: "user",
+    }) satisfies PersistedChatMessage;
+
+  test("waits on the latest assistant message's approvals", () => {
+    expect(
+      getCurrentApprovalPendingMessageId([
+        userMessage("user-1"),
+        approvalMessage,
+      ]),
+    ).toBe("assistant-1");
+  });
+
+  test("stops waiting once a later user message supersedes the turn", () => {
+    expect(
+      getCurrentApprovalPendingMessageId([
+        userMessage("user-1"),
+        approvalMessage,
+        userMessage("user-2"),
+      ]),
+    ).toBeNull();
+  });
+
+  test("stops waiting once a later assistant message has answered", () => {
+    expect(
+      getCurrentApprovalPendingMessageId([
+        approvalMessage,
+        userMessage("user-2"),
+        {
+          id: "assistant-2",
+          parts: [{ type: "text", content: "Two titles." }],
+          role: "assistant",
+        },
+      ]),
+    ).toBeNull();
   });
 });
