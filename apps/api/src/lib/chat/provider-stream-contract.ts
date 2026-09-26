@@ -137,11 +137,28 @@ async function* withDeclaredToolInput(
     }
   }
   const names = new Map<string, string>();
+  /** The argument text each call streamed, for an end that carries none. */
+  const argumentText = new Map<string, string>();
   for await (const chunk of chunks) {
     if (chunk.type === EventType.TOOL_CALL_START) {
       names.set(chunk.toolCallId, chunk.toolCallName);
     }
-    if (chunk.type !== EventType.TOOL_CALL_END || chunk.input === undefined) {
+    if (chunk.type === EventType.TOOL_CALL_ARGS) {
+      argumentText.set(
+        chunk.toolCallId,
+        (argumentText.get(chunk.toolCallId) ?? "") + chunk.delta,
+      );
+    }
+    if (chunk.type !== EventType.TOOL_CALL_END) {
+      yield chunk;
+      continue;
+    }
+    // `input` is optional on the event, and some adapters (Bedrock) end a
+    // call without parsing what it streamed.
+    const input =
+      chunk.input ?? parsedArguments(argumentText.get(chunk.toolCallId));
+    argumentText.delete(chunk.toolCallId);
+    if (input === undefined) {
       yield chunk;
       continue;
     }
@@ -149,11 +166,26 @@ async function* withDeclaredToolInput(
     const name =
       typeof endName === "string" ? endName : names.get(chunk.toolCallId);
     const schema = name === undefined ? undefined : schemas.get(name);
-    yield schema === undefined
-      ? chunk
-      : { ...chunk, input: withNullOptionalsOmitted(schema, chunk.input) };
+    yield {
+      ...chunk,
+      input:
+        schema === undefined ? input : withNullOptionalsOmitted(schema, input),
+    };
   }
 }
+
+/** Streamed argument text as the object it spells, if it spells one. */
+const parsedArguments = (text: string | undefined): unknown => {
+  if (text === undefined || text.trim() === "") {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isOk(parsed) &&
+    typeof parsed.value === "object" &&
+    parsed.value !== null
+    ? parsed.value
+    : undefined;
+};
 
 async function* withOneTerminalEvent(
   chunks: AsyncIterable<StreamChunk>,
