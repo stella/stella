@@ -57,12 +57,6 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "anthropic/length": { oracles: [usage], reason: "maintenance" },
   "anthropic/refusal": { oracles: [finish], reason: "maintenance" },
   "bedrock/early-eof": { oracles: [finish], reason: "maintenance" },
-  "bedrock/parallel-tool-calls": {
-    oracles: [toolInput],
-    reason: "maintenance",
-  },
-  "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
   "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
   "openai/length": { oracles: [usage], reason: "maintenance" },
@@ -70,7 +64,7 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 10;
+const UNMET_SIZE = 7;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
