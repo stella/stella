@@ -34,7 +34,7 @@ export default createSafeRootHandler(
     const editor = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await readStyleSetEditorPreset(stored.buffer, stored.name),
+          await readStyleSetEditorPreset(stored.file, stored.name),
         catch: (cause) =>
           new HandlerError({
             status: 500,

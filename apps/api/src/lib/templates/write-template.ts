@@ -2,7 +2,7 @@ import { Result, panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { abortableTx } from "@/api/db/safe-db";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   templateDeletionCleanupRequests,
   templates,
@@ -23,19 +23,21 @@ import {
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
+import type { ScannedObject } from "@/api/lib/file-scan/stored-object";
 import { LIMITS } from "@/api/lib/limits";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { buildTemplateWriteS3Key } from "@/api/lib/templates/storage-keys";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_WRITE_ATTEMPTS = 3;
 
 type TemplateWriteSnapshot = Pick<
   typeof templates.$inferSelect,
-  "s3Key" | "currentVersion"
+  "s3Key" | "scanState" | "currentVersion"
 >;
 
 export type TemplateMetadataUpdate = Partial<
@@ -61,14 +63,14 @@ type WriteStoredTemplateOptions = {
     | { type: "new-version"; userId: SafeId<"user"> }
     | { type: "current-version" };
   metadata?: TemplateMetadataUpdate;
-  /** The document to publish. Only the bytes: the manifest this write records
-   *  is derived from them here, so no caller can store a field list that
+  /** The document to publish, scanned. Only the file: the manifest this write
+   *  records is derived from it here, so no caller can store a field list that
    *  disagrees with the document it stored beside it. */
   prepare: (
     snapshot: TemplateWriteSnapshot,
   ) =>
-    | Result<{ bytes: Uint8Array }, HandlerError>
-    | Promise<Result<{ bytes: Uint8Array }, HandlerError>>;
+    | Result<{ file: ScannedFile }, HandlerError>
+    | Promise<Result<{ file: ScannedFile }, HandlerError>>;
   recordAuditEvent: AuditRecorder;
   writeObject?: typeof writeS3ObjectWithRetry;
 };
@@ -96,7 +98,7 @@ const writeTemplateAttempt = async function* ({
             id: { eq: templateId },
             organizationId: { eq: organizationId },
           },
-          columns: { s3Key: true, currentVersion: true },
+          columns: { s3Key: true, scanState: true, currentVersion: true },
         }),
     );
 
@@ -123,11 +125,11 @@ const writeTemplateAttempt = async function* ({
     }
     return Result.err(prepared.error);
   }
-  const { bytes } = prepared.value;
-  // The manifest is what these bytes declare, read here rather than taken from
+  const { file } = prepared.value;
+  // The manifest is what this file declares, read here rather than taken from
   // the caller: `templates.manifest` is a cache of the stored document, and a
   // cache a caller can fill by hand is a second source of truth.
-  const manifest = await deriveManifestFromDocx(Buffer.from(bytes));
+  const manifest = await deriveManifestFromDocx(file);
   const s3Key = buildTemplateWriteS3Key({
     organizationId,
     templateId,
@@ -153,14 +155,10 @@ const writeTemplateAttempt = async function* ({
   const intentIds = reservation.value;
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
-  const certainty = yield* Result.await(
+  const { certainty, object: stored } = yield* Result.await(
     Result.tryPromise(
       async () =>
-        await writeObject({
-          key: s3Key,
-          data: bytes,
-          contentType: DOCX_MIME_TYPE,
-        }),
+        await writeScannedObject({ file, key: s3Key, write: writeObject }),
     ),
   );
   switch (certainty) {
@@ -243,8 +241,9 @@ const writeTemplateAttempt = async function* ({
           ...metadata,
           manifest,
           fieldCount: manifest.fields.length,
-          sizeBytes: bytes.byteLength,
-          s3Key,
+          sizeBytes: file.bytes.byteLength,
+          s3Key: stored.key,
+          scanState: stored.scanState,
           currentVersion: version,
           updatedAt: new Date(),
         })
@@ -272,7 +271,8 @@ const writeTemplateAttempt = async function* ({
             organizationId,
             templateId,
             version,
-            s3Key,
+            s3Key: stored.key,
+            scanState: stored.scanState,
             manifest,
             fieldCount: manifest.fields.length,
             createdBy: mode.userId,
@@ -282,7 +282,8 @@ const writeTemplateAttempt = async function* ({
           const versions = await tx
             .update(templateVersions)
             .set({
-              s3Key,
+              s3Key: stored.key,
+              scanState: stored.scanState,
               manifest,
               fieldCount: manifest.fields.length,
             })
@@ -392,3 +393,43 @@ export const writeStoredTemplate = async function* (
     }),
   );
 };
+
+type RecordTemplateFileScannedOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  object: ScannedObject;
+};
+
+/**
+ * Records that a stored file passed the scan on read, on every template and
+ * version row that names it. The bytes and the publication pointer stay as
+ * they are, so none of the publication coordination above applies.
+ */
+export const recordTemplateFileScanned = async ({
+  safeDb,
+  organizationId,
+  object,
+}: RecordTemplateFileScannedOptions): Promise<Result<void, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    // audit: skip — records the scan verdict for bytes already stored; the template's content and metadata do not change
+    await tx
+      .update(templates)
+      .set({ scanState: object.scanState })
+      .where(
+        and(
+          eq(templates.organizationId, organizationId),
+          eq(templates.s3Key, object.key),
+          eq(templates.scanState, "unscanned"),
+        ),
+      );
+    await tx
+      .update(templateVersions)
+      .set({ scanState: object.scanState })
+      .where(
+        and(
+          eq(templateVersions.organizationId, organizationId),
+          eq(templateVersions.s3Key, object.key),
+          eq(templateVersions.scanState, "unscanned"),
+        ),
+      );
+  });

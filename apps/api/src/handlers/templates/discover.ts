@@ -39,9 +39,8 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
   if (Result.isError(scanned)) {
     return templateUploadRejectionResponse(scanned.error);
   }
-  const buffer = scanned.value;
 
-  const discovered = await discoverTemplate(buffer);
+  const discovered = await discoverTemplate(scanned.value);
   const manifest = deriveManifest(discovered);
 
   return {

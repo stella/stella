@@ -2,6 +2,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ScanResult } from "@/api/lib/file-scan/types";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 
 /**
@@ -28,4 +29,18 @@ export const testScannedFile = ({
       scan === undefined
         ? { type: "stored", key: testFileKey(path) }
         : { type: "scan", scan, warnings: getScanWarnings(scan) },
+  });
+
+/**
+ * DOCX fixture bytes as a stored `ScannedFile`, for the template and style-set
+ * parsers. The bytes are copied, so a fixture buffer can be reused.
+ */
+export const testDocxFile = (
+  bytes: ArrayBuffer | Uint8Array,
+  path = "org/templates/fixture.docx",
+): ScannedFile =>
+  testScannedFile({
+    bytes: new Uint8Array(bytes).slice().buffer,
+    mimeType: DOCX_MIME_TYPE,
+    path,
   });

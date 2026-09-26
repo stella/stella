@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { discoverTemplate } from "./discover-template";
 
 // ── Helpers ──────────────────────────────────────────────
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -16,8 +19,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const WRAP = (body: string) =>
@@ -35,8 +37,8 @@ const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 describe("discoverTemplate", () => {
   test("plain placeholders inferred as string fields", async () => {
     const xml = WRAP([P("Name: {{name}}"), P("City: {{city}}")].join(""));
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.placeholders).toEqual([
       { name: "city", count: 1 },
@@ -58,8 +60,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const field = result.fields.find((f) => f.path === "has_guarantor");
     expect(field).toBeDefined();
@@ -74,8 +76,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const field = result.fields.find((f) => f.path === "jurisdiction");
     expect(field).toBeDefined();
@@ -86,8 +88,8 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       P("Buyer{% if has_spouse %} and their spouse{% endif %} hereby agrees."),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.fields.find((field) => field.path === "has_spouse")).toEqual({
       path: "has_spouse",
@@ -98,8 +100,8 @@ describe("discoverTemplate", () => {
 
   test("inline condition discovery shares the canonical operator grammar", async () => {
     const xml = WRAP(P('{% if "admin" in roles %}Administrator{% endif %}'));
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.fields).toEqual([
       { path: "roles", kind: "string", count: 1 },
@@ -108,8 +110,8 @@ describe("discoverTemplate", () => {
 
   test("inline parse errors are part of template discovery", async () => {
     const xml = WRAP(P("Buyer {% if has_spouse %} and spouse"));
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.structureErrors).toEqual([
       expect.objectContaining({
@@ -128,8 +130,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const field = result.fields.find((f) => f.path === "sellers");
     expect(field).toBeDefined();
@@ -145,8 +147,8 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       P("Parties: {% for party in parties %}party; {% endfor %}"),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.fields.find((field) => field.path === "parties")).toEqual({
       path: "parties",
@@ -159,8 +161,8 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       P("Tags: {% for tag in tags %}{{ tag.value }}, {% endfor %}"),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.fields.find((field) => field.path === "tags")).toEqual({
       path: "tags",
@@ -273,8 +275,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const sellers = result.fields.find((field) => field.path === "sellers");
     expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
@@ -294,8 +296,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const sellers = result.fields.find((field) => field.path === "sellers");
     expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
@@ -312,8 +314,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.fields.find((field) => field.path === "deal.tags")).toEqual({
       path: "deal.tags",
@@ -331,8 +333,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(
       result.fields.find((field) => field.path === "client.has_spouse"),
@@ -355,8 +357,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const groups = result.fields.find((field) => field.path === "groups");
     const items = result.fields.find((field) => field.path === "groups.items");
@@ -376,8 +378,8 @@ describe("discoverTemplate", () => {
         P("ID: {{company.registration_number}}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const field = result.fields.find((f) => f.path === "company");
     expect(field).toBeDefined();
@@ -401,8 +403,8 @@ describe("discoverTemplate", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     // Placeholders
     const placeholderNames = result.placeholders.map((p) => p.name);
@@ -426,8 +428,8 @@ describe("discoverTemplate", () => {
         // Missing {% endif %}
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.structureErrors.length).toBeGreaterThan(0);
     expect(result.structureErrors[0]?.message).toContain("Unclosed");
@@ -435,8 +437,8 @@ describe("discoverTemplate", () => {
 
   test("empty template returns empty results", async () => {
     const xml = WRAP(P("Just text, no templates."));
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     expect(result.placeholders).toEqual([]);
     expect(result.fields).toEqual([]);
@@ -447,8 +449,8 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       [P("{{name}} and {{name}} again"), P("Also {{name}}")].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const nameP = result.placeholders.find((p) => p.name === "name");
     expect(nameP?.count).toBe(3);
@@ -462,8 +464,8 @@ describe("discoverTemplate", () => {
         "",
       ),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const ukField = result.fields.find((f) => f.path === "uk_number");
     expect(ukField).toBeDefined();
@@ -510,8 +512,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const nameField = result.fields.find((f) => f.path === "name");
     expect(nameField?.visibleWhen).toBeUndefined();
@@ -526,8 +528,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const nameField = result.fields.find((f) => f.path === "name");
     expect(nameField?.visibleWhen).toBeUndefined();
@@ -543,8 +545,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const otherField = result.fields.find((f) => f.path === "other_number");
     expect(otherField?.visibleWhen).toBe("not isUK");
@@ -560,8 +562,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const deField = result.fields.find((f) => f.path === "de_field");
     expect(deField?.visibleWhen).toBe("not isUK and isDE");
@@ -577,8 +579,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const field = result.fields.find((f) => f.path === "license_number");
     expect(field?.visibleWhen).toBe("isUK and hasLicense");
@@ -588,8 +590,8 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       [P("{% if isUK %}"), P("{{uk_number}}"), P("{% endif %}")].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     // isUK is a boolean used in conditions, not a
     // placeholder — it should have no visibleWhen
@@ -609,8 +611,8 @@ describe("discoverTemplate", () => {
         P("{% endif %}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
-    const result = await discoverTemplate(buf);
+    const docx = await makeDocx(xml);
+    const result = await discoverTemplate(docx);
 
     const otherField = result.fields.find((f) => f.path === "other_field");
     expect(otherField?.visibleWhen).toBe("not isUK and not isDE");

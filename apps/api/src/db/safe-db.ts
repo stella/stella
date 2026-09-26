@@ -35,6 +35,12 @@ export type SafeDb = <T>(
   retry?: SafeDbRetryConfig,
 ) => Promise<Result<T, SafeDbError>>;
 
+/** The same scoped handle, failing with a `Result` instead of a throw. */
+export const safeDbFromScoped =
+  (scopedDb: ScopedDb): SafeDb =>
+  async <T>(run: (tx: Transaction) => Promise<T>) =>
+    await Result.tryPromise(async () => await scopedDb(run));
+
 /** A safe scoped handle or a transaction already opened by its caller. */
 export type SafeDbOrTx =
   | { safeDb: SafeDb; tx?: undefined }

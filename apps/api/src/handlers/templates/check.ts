@@ -12,8 +12,11 @@ import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { listTemplateClausesHandler } from "@/api/lib/template-clause-links";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 const checkTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -39,7 +42,7 @@ const checkTemplateHandler = async function* ({
           id: { eq: templateId },
           organizationId: { eq: organizationId },
         },
-        columns: { s3Key: true },
+        columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
       }),
     ),
   );
@@ -50,12 +53,19 @@ const checkTemplateHandler = async function* ({
     );
   }
 
-  const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
+  const file = yield* Result.await(
+    readStoredTemplateFile({
+      safeDb,
+      organizationId,
+      row: template,
+      fileName: template.fileName,
+    }),
+  );
 
   const [discovered, clauseSlots, extracted] = await Promise.all([
-    discoverTemplate(buffer),
-    discoverClauseSlots(buffer),
-    extractDocxDocument(buffer),
+    discoverTemplate(file),
+    discoverClauseSlots(file),
+    extractDocxDocument(file),
   ]);
   const manifest = deriveManifest(discovered);
 

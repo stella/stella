@@ -61,6 +61,9 @@ const templateVersionSummarize = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Version not found" }),
       );
     }
+    if (sources.type === "unreadable") {
+      return Result.err(sources.error);
+    }
 
     const summary = yield* Result.await(
       summarizeVersionChange({

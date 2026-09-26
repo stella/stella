@@ -20,6 +20,9 @@ import {
   filtersFromFieldConfig,
 } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { isFieldMeta, type FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
@@ -31,10 +34,12 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
+const makeDocx = async (
+  paragraphs: readonly string[],
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", WRAP(paragraphs.map(P).join("")));
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 /** The document every generated configuration is written into: two plain value
@@ -124,7 +129,7 @@ describe("deriving a manifest from the document that declares it", () => {
     await fc.assert(
       fc.asyncProperty(configuration, async (fields) => {
         const document = await makeDocx(documentParagraphs);
-        const { buffer, written } = await writeFieldFilters(
+        const { file, written } = await writeFieldFilters(
           document,
           rewritesFor(fields),
         );
@@ -134,7 +139,7 @@ describe("deriving a manifest from the document that declares it", () => {
           fields.map(({ path }) => path).toSorted(),
         );
 
-        const manifest = await deriveManifestFromDocx(buffer);
+        const manifest = await deriveManifestFromDocx(file);
         for (const field of configured(fields)) {
           expect(
             manifest.fields.find(({ path }) => path === field.path),
@@ -150,13 +155,13 @@ describe("deriving a manifest from the document that declares it", () => {
       fc.asyncProperty(configuration, async (fields) => {
         const document = await makeDocx(documentParagraphs);
         const once = await writeFieldFilters(document, rewritesFor(fields));
-        const first = await deriveManifestFromDocx(once.buffer);
+        const first = await deriveManifestFromDocx(once.file);
 
         const twice = await writeFieldFilters(
-          once.buffer,
+          once.file,
           rewritesFor(first.fields),
         );
-        expect(await deriveManifestFromDocx(twice.buffer)).toEqual(first);
+        expect(await deriveManifestFromDocx(twice.file)).toEqual(first);
       }),
       propertyConfig(),
     );

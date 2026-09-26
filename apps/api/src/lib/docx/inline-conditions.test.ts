@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
 import {
   MAX_INLINE_NESTING,
@@ -53,7 +56,7 @@ const boldRunTexts = (body: slimdom.Element): string[] => {
   return texts;
 };
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -64,11 +67,11 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
-const documentText = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const documentText = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   // Cut spans leave empty self-closing <w:t/> runs behind; match both forms.
@@ -80,8 +83,8 @@ const documentText = async (buffer: Buffer): Promise<string> => {
   return texts.join("");
 };
 
-const documentBody = async (buffer: Buffer): Promise<slimdom.Element> => {
-  const zip = await JSZip.loadAsync(buffer);
+const documentBody = async (file: ScannedFile): Promise<slimdom.Element> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   return parseBody(xml);
 };
@@ -551,11 +554,11 @@ describe("processInlineConditions", () => {
       p: [{ name: "Alice" }, { name: "Bob" }],
     });
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "List: 1. 1 Alice; 2. 2 Bob; end.",
     );
     // The bold name run survives serialization for both expanded items.
-    const filledBody = await documentBody(result.buffer);
+    const filledBody = await documentBody(result.file);
     expect(boldRunTexts(filledBody)).toEqual(["Alice", "Bob"]);
   });
 
@@ -593,7 +596,7 @@ describe("fillTemplate with inline conditions", () => {
       spouse_name: "Jana Nováková",
     });
     expect(kept.structureErrors).toEqual([]);
-    expect(await documentText(kept.buffer)).toBe(
+    expect(await documentText(kept.file)).toBe(
       "the Buyer Jan Novák and their spouse Jana Nováková hereby agree.",
     );
 
@@ -602,7 +605,7 @@ describe("fillTemplate with inline conditions", () => {
       has_spouse: false,
       spouse_name: "Jana Nováková",
     });
-    expect(await documentText(cut.buffer)).toBe(
+    expect(await documentText(cut.file)).toBe(
       "the Buyer Jan Novák hereby agree.",
     );
     // The cut branch's marker was removed before discovery, so it is not
@@ -623,7 +626,7 @@ describe("fillTemplate with inline conditions", () => {
       items: [{ name: "A" }, { name: "B" }, { name: "C" }],
     });
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "Items: Clause 1 (A); Clause 2 (B); Clause 3 (C); end.",
     );
   });
@@ -642,7 +645,7 @@ describe("fillTemplate with inline conditions", () => {
       items: [{ name: "Alpha" }, { name: "Beta" }],
     });
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "List: 1/2: Alpha. 2/2: Beta. ",
     );
   });
@@ -663,7 +666,7 @@ describe("fillTemplate with inline conditions", () => {
       ],
     });
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "Signed by Jan Novák (Director), Eva Malá (Secretary), this day.",
     );
   });
@@ -685,7 +688,7 @@ describe("fillTemplate with inline conditions", () => {
       has_agent: false,
     });
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "The Seller warrants.Closing.",
     );
   });
@@ -707,7 +710,7 @@ describe("fillTemplate with inline conditions", () => {
     });
 
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe("Acme Ltd.Alice.");
+    expect(await documentText(result.file)).toBe("Acme Ltd.Alice.");
   });
 
   test("inline loops inside block rows use each row's nested array", async () => {
@@ -727,7 +730,7 @@ describe("fillTemplate with inline conditions", () => {
     });
 
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "Items: Alpha, Items: Beta, Gamma, ",
     );
   });
@@ -743,8 +746,8 @@ describe("fillTemplate with inline conditions", () => {
 
   test("aiAdapt per-occurrence renderings inside a cut branch are removed with it", async () => {
     // adaptAiFields runs at the fill boundary BEFORE fillTemplate, on the raw
-    // template buffer: extraction and per-occurrence patching see the same
-    // buffer, so occurrence indices stay aligned regardless of what the
+    // template file: extraction and per-occurrence patching see the same
+    // bytes, so occurrence indices stay aligned regardless of what the
     // inline pass cuts afterwards.
     const docx = await makeDocx(
       WRAP(
@@ -758,18 +761,18 @@ describe("fillTemplate with inline conditions", () => {
     const adapter: AiOccurrenceAdapter = async ({ occurrences }) =>
       occurrences.map((_, i) => `RENDERING-${String(i + 1)}`);
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [{ path: "law", aiAdapt: true }],
       values: { law: "czech law", has_spouse: false },
       adapt: adapter,
     });
     expect(adapted.adaptedPaths).toEqual(["law"]);
 
-    const filled = await fillTemplate(adapted.buffer, {
+    const filled = await fillTemplate(adapted.file, {
       law: "czech law",
       has_spouse: false,
     });
-    const text = await documentText(filled.buffer);
+    const text = await documentText(filled.file);
     expect(text).toBe("Governed by RENDERING-1.Spousal property.");
     expect(text).not.toContain("RENDERING-2");
   });
@@ -810,7 +813,7 @@ describe("fillTemplate with inline conditions", () => {
 
     const result = await fillTemplate(docx, values);
     expect(result.structureErrors).toEqual([]);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "Signed 13. června 2028 (after cutoff).Notice sent.",
     );
   });
@@ -845,7 +848,7 @@ describe("fillTemplate with inline conditions", () => {
     expect(stepError).toBeNull();
 
     const result = await fillTemplate(docx, values);
-    expect(await documentText(result.buffer)).toBe(
+    expect(await documentText(result.file)).toBe(
       "Signed 13. června 2028 (after cutoff).",
     );
   });

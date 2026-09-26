@@ -15,6 +15,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
@@ -23,6 +24,7 @@ import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -352,7 +354,7 @@ const HOST_FILE_REFERENCE = {
 
 /** A real DOCX carrying the given paragraphs, so a fill whose result is read
  *  back through the shared extractor runs the real reader instead of a stub. */
-const makeDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
+const makeDocxFile = async (paragraphs: string[]): Promise<ScannedFile> => {
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
     .join("");
@@ -361,7 +363,7 @@ const makeDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
-  return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 describe("MCP template tools", () => {
@@ -899,7 +901,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: docxBytes,
+      file: testDocxFile(docxBytes),
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
@@ -969,7 +971,7 @@ describe("MCP template tools", () => {
   });
 
   test("fill_template returns rendered text and no base64 by default", async () => {
-    const docxBytes = await makeDocxBuffer([
+    const docxFile = await makeDocxFile([
       "Lease between ACME and Tenant.",
       "Signed in Prague.",
     ]);
@@ -977,7 +979,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: docxBytes,
+      file: docxFile,
       text: "Lease between ACME and Tenant.\nSigned in Prague.",
       unmatchedPlaceholders: [],
       unusedValues: [],
@@ -1012,7 +1014,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: await makeDocxBuffer(["Lease between ACME and Tenant."]),
+      file: await makeDocxFile(["Lease between ACME and Tenant."]),
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
@@ -1271,7 +1273,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: await makeDocxBuffer([oversized, "Trailing paragraph."]),
+      file: await makeDocxFile([oversized, "Trailing paragraph."]),
       text: oversized,
       unmatchedPlaceholders: [],
       unusedValues: [],
@@ -1305,7 +1307,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
+      file: await makeDocxFile(["Zakres: {{scope}}"]),
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
@@ -1341,7 +1343,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("partial"),
+      file: testDocxFile(Buffer.from("partial")),
       text: "Partial lease",
       unmatchedPlaceholders,
       unusedValues: [],
@@ -1372,7 +1374,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: await makeDocxBuffer([
+      file: await makeDocxFile([
         "Lease between ACME and {{landlord.signature}}.",
       ]),
       text: "Lease between ACME and {{landlord.signature}}.",
@@ -1408,7 +1410,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Power of attorney",
       fileName: "poa.docx",
-      buffer: Buffer.from("partial"),
+      file: testDocxFile(Buffer.from("partial")),
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
@@ -1448,7 +1450,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Power of attorney",
       fileName: "poa.docx",
-      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
+      file: await makeDocxFile(["Zakres: {{scope}}"]),
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
@@ -1584,7 +1586,7 @@ describe("MCP template tools", () => {
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: await makeDocxBuffer(["Lease"]),
+      file: await makeDocxFile(["Lease"]),
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
@@ -1637,7 +1639,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "lease.docx",
-      buffer: Buffer.from("filled docx"),
+      file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
       aiFieldErrors: [],
@@ -1750,7 +1752,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "draft.docx",
-      buffer: Buffer.from("optional field defaulted to blank"),
+      file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
       aiFieldErrors: [
@@ -1797,7 +1799,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "draft.docx",
-      buffer: Buffer.from("optional field defaulted to blank"),
+      file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
       aiFieldErrors,
@@ -1853,7 +1855,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "draft.docx",
-      buffer: Buffer.from("optional field defaulted to blank"),
+      file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
       aiFieldErrors: [
@@ -1892,7 +1894,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "draft.docx",
-      buffer: Buffer.from("optional field defaulted to blank"),
+      file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
       aiFieldErrors: [
@@ -1964,7 +1966,7 @@ describe("MCP template tools", () => {
         conditionDecisions: [],
         templateName: "Summary",
         fileName: "summary.docx",
-        buffer: Buffer.from("blank optional value"),
+        file: testDocxFile(Buffer.from("blank optional value")),
         text: "Summary:",
         unmatchedPlaceholders: [],
         unusedValues: [],
@@ -2008,7 +2010,7 @@ describe("MCP template tools", () => {
       controller.abort();
       return {
         fileName: "lease.docx",
-        buffer: Buffer.from("filled docx"),
+        file: testDocxFile(Buffer.from("filled docx")),
         unmatchedPlaceholders: [],
         unusedValues: [],
         aiFieldErrors: [],
@@ -2152,7 +2154,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "lease",
-      buffer: Buffer.from("filled docx v2"),
+      file: testDocxFile(Buffer.from("filled docx v2")),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
       aiFieldErrors: [],
@@ -2236,7 +2238,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "lease",
-      buffer: Buffer.from("filled docx"),
+      file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: [],
       unusedValues: [],
       aiFieldErrors: [],
@@ -2294,7 +2296,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
       fileName: "lease",
-      buffer: Buffer.from("filled docx"),
+      file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: ["signature", "landlord.name"],
       unusedValues: [],
       aiFieldErrors: [],
@@ -2669,9 +2671,14 @@ describe("MCP template tools", () => {
       expect.objectContaining({
         name: "NDA",
         fileName: "NDA.docx",
-        buffer: Buffer.from(bytes),
       }),
     );
+    const created = createStoredTemplateMock.mock.calls.at(0)?.at(0);
+    expect(
+      Buffer.from(
+        asTestRaw<{ file: { bytes: ArrayBuffer } }>(created).file.bytes,
+      ).equals(Buffer.from(bytes)),
+    ).toBe(true);
     expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_hosted",
       fieldCount: 1,
@@ -4095,9 +4102,11 @@ describe("MCP template tools", () => {
     expect(safeOutboundFetchBytesMock).toHaveBeenCalled();
     // The attached file's bytes are the ones that reached the create path.
     const created = createStoredTemplateMock.mock.calls.at(0)?.at(0);
-    expect(asTestRaw<{ buffer: Buffer }>(created).buffer.equals(fileDocx)).toBe(
-      true,
-    );
+    expect(
+      Buffer.from(
+        asTestRaw<{ file: { bytes: ArrayBuffer } }>(created).file.bytes,
+      ).equals(fileDocx),
+    ).toBe(true);
     expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_new",
       warnings: [

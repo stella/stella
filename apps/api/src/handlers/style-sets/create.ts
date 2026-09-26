@@ -7,7 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {
-  extractStyleSetBuffer,
+  extractStyleSetFile,
   normalizeStyleSetName,
 } from "@/api/lib/style-sets";
 
@@ -50,8 +50,8 @@ export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     const name = yield* normalizeStyleSetName(body.name);
-    const buffer = yield* Result.await(
-      extractStyleSetBuffer(body.styleSource, name),
+    const file = yield* Result.await(
+      extractStyleSetFile(body.styleSource, name),
     );
 
     const row = yield* Result.await(
@@ -60,7 +60,7 @@ export default createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         userId: user.id,
         name,
-        buffer,
+        file,
         recordAuditEvent,
       }),
     );

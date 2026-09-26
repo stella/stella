@@ -10,8 +10,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -26,10 +28,10 @@ import { fillTemplateDocx } from "./template-fill-service";
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -41,7 +43,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 // Every fill boundary runs one pipeline (template-fill-service). This suite
@@ -66,7 +68,7 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -82,8 +84,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const organizationId = toSafeId<"organization">("org_1");
@@ -120,7 +121,7 @@ const expectedMissingFields: MissingRequiredField[] = [
   },
 ];
 
-const buildTemplate = async (): Promise<Buffer> =>
+const buildTemplate = async (): Promise<ScannedFile> =>
   await authorFieldMarkers(
     await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
     manifest.fields,
@@ -134,6 +135,7 @@ const stubDb = () =>
           name: "NDA",
           fileName: "nda.docx",
           s3Key,
+          scanState: "scanned",
           languages: [],
         }),
       },
@@ -144,12 +146,12 @@ const stubDb = () =>
 /** Serve the fixture from the fake object store for the stored-template
  *  boundaries, which load their source through S3. */
 const withStoredTemplate = async <T>(
-  buffer: Buffer,
+  file: ScannedFile,
   run: () => Promise<T>,
 ): Promise<T> => {
   const fakeS3 = startFakeS3();
   try {
-    fakeS3.put("stella", s3Key, buffer);
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
     return await run();
   } finally {
     fakeS3.stop();
@@ -158,11 +160,11 @@ const withStoredTemplate = async <T>(
 
 describe("required-fields rejection is identical at every enforcing fill boundary", () => {
   test("the fill service reports the full structured rejection the tools return", async () => {
-    const buffer = await buildTemplate();
+    const file = await buildTemplate();
     const { scopedDb } = stubDb();
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: {},
       scopedDb,
       organizationId,
@@ -173,7 +175,7 @@ describe("required-fields rejection is identical at every enforcing fill boundar
   });
 
   test("the raw-upload download route returns that same list as missingFields", async () => {
-    const buffer = await buildTemplate();
+    const file = await buildTemplate();
     const { safeDb, scopedDb } = stubDb();
 
     const response = await fillHandler({
@@ -183,7 +185,7 @@ describe("required-fields rejection is identical at every enforcing fill boundar
       userId,
       query: {},
       body: {
-        file: new File([new Uint8Array(buffer)], "nda.docx", {
+        file: new File([new Uint8Array(file.bytes)], "nda.docx", {
           type: DOCX_MIME_TYPE,
         }),
         values: "{}",
@@ -203,11 +205,11 @@ describe("required-fields rejection is identical at every enforcing fill boundar
   });
 
   test("the by-id download route carries that same list on its HandlerError", async () => {
-    const buffer = await buildTemplate();
+    const file = await buildTemplate();
     const { safeDb, scopedDb } = stubDb();
 
     const result = await withStoredTemplate(
-      buffer,
+      file,
       async () =>
         await Result.gen(() =>
           fillByIdLogic({
@@ -234,11 +236,11 @@ describe("required-fields rejection is identical at every enforcing fill boundar
   });
 
   test("the live preview renders the same values instead of rejecting them", async () => {
-    const buffer = await buildTemplate();
+    const file = await buildTemplate();
     const { safeDb, scopedDb } = stubDb();
 
     const result = await withStoredTemplate(
-      buffer,
+      file,
       async () =>
         await fillPreviewLogic({
           safeDb,
@@ -259,7 +261,7 @@ describe("required-fields rejection is identical at every enforcing fill boundar
   });
 
   test("the preview keeps a partially filled document renderable field by field", async () => {
-    const buffer = await authorFieldMarkers(
+    const file = await authorFieldMarkers(
       await makeDocx(
         WRAP(P("Governed by {{governing_law}} law, signed {{signing_date}}.")),
       ),
@@ -271,7 +273,7 @@ describe("required-fields rejection is identical at every enforcing fill boundar
     const { safeDb, scopedDb } = stubDb();
 
     const result = await withStoredTemplate(
-      buffer,
+      file,
       async () =>
         await fillPreviewLogic({
           safeDb,

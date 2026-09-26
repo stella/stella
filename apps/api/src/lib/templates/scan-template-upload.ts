@@ -1,27 +1,25 @@
-import { Result } from "better-result";
+import type { Result } from "better-result";
 
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
  * An uploaded template DOCX, scanned before anything parses or stores it. A
  * rejecting verdict is the structured 422 every other upload route answers
- * with, a scanner failure a retryable 503; the bytes that come back are the
- * scanned copy, not the request's.
+ * with, a scanner failure a retryable 503; the file that comes back holds the
+ * scanned copy, not the request's bytes.
  */
 export const scanTemplateUpload = async (
   file: File,
-): Promise<Result<Buffer, HandlerError<422 | 503>>> =>
-  Result.map(
-    await scanUploadForHandler({
-      bytes: await file.arrayBuffer(),
-      declaredMimeType: DOCX_MIME_TYPE,
-      fileName: sanitizeFilename(file.name),
-    }),
-    (scanned) => Buffer.from(scanned.bytes),
-  );
+): Promise<Result<ScannedFile, HandlerError<422 | 503>>> =>
+  await scanUploadForHandler({
+    bytes: await file.arrayBuffer(),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: sanitizeFilename(file.name),
+  });
 
 /**
  * The same error as a JSON response, for the template routes that answer

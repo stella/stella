@@ -9,7 +9,7 @@ import type { ParseOptions } from "@stll/folio-core/server";
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { fileKeySchema } from "@/api/lib/file-key";
 import type * as keys from "@/api/lib/file-key";
-// Only the translation review module may wrap its own output.
+// Only the modules that rewrite a scanned file may wrap their own output.
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 // Publisher downloads are for case-law adapters only.
@@ -19,6 +19,14 @@ import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ScannedFile as ParserFile } from "@/api/lib/file-scan/scanned-file";
+// A row's scan state is trusted only by the modules that own the row; the
+// reader beside it takes a reference and stays importable.
+import {
+  // expect-clean: scanned-file-boundary/scanned-file-boundary
+  readStoredObject,
+  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+  storedObject,
+} from "@/api/lib/file-scan/stored-object";
 
 declare class ScannedFile {
   private constructor();
@@ -80,6 +88,8 @@ export const __scannedFileBoundaryFixture = {
   _namespaceReviewer,
   fileKeySchema,
   mintScannedFile,
+  storedObject,
+  readStoredObject,
   _forgedFile,
   _forgedKey,
   _aliasedFile,

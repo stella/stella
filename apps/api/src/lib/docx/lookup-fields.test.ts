@@ -20,6 +20,8 @@ import {
   BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
 } from "@/api/lib/business-registries/dispatch";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { discoverTemplate } from "./discover-template";
 import {
@@ -47,10 +49,10 @@ import { writeFieldFilters } from "./write-field-filters";
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -62,7 +64,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 const KRS_ADDRESS = {
@@ -1328,7 +1330,7 @@ describe("named-format lookup — end-to-end fill", () => {
   const CELL = (text: string) =>
     `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
 
-  const makeDocx = async (documentXml: string): Promise<Buffer> => {
+  const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
     const zip = new JSZip();
     zip.file("word/document.xml", documentXml);
     zip.file(
@@ -1339,11 +1341,11 @@ describe("named-format lookup — end-to-end fill", () => {
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `</Types>`,
     );
-    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
   };
 
-  const docText = async (buffer: Buffer): Promise<string> => {
-    const zip = await JSZip.loadAsync(buffer);
+  const docText = async (file: ScannedFile): Promise<string> => {
+    const zip = await JSZip.loadAsync(file.bytes);
     return (await zip.file("word/document.xml")?.async("string")) ?? "";
   };
 
@@ -1394,7 +1396,7 @@ describe("named-format lookup — end-to-end fill", () => {
 
     const result = await fillTemplate(withManifest, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
-    const text = await docText(result.buffer);
+    const text = await docText(result.file);
     expect(text).toContain(DEFAULT_RENDER);
     expect(text).toContain(FULL_RENDER);
   });
@@ -1424,7 +1426,7 @@ describe("named-format lookup — end-to-end fill", () => {
 
     const result = await fillTemplate(withManifest, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
-    const text = await docText(result.buffer);
+    const text = await docText(result.file);
     // One rendering per loop iteration: the flat company.full key resolves
     // inside every expanded copy, not just the first.
     expect(text.split(FULL_RENDER)).toHaveLength(3);
@@ -1448,7 +1450,7 @@ describe("named-format lookup — end-to-end fill", () => {
 
     const result = await fillTemplate(withManifest, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
-    const text = await docText(result.buffer);
+    const text = await docText(result.file);
     expect(text).toContain(DEFAULT_RENDER);
     expect(text).toContain(FULL_RENDER);
   });
@@ -1486,7 +1488,7 @@ describe("lookup formats are addressed by their keys", () => {
     `<w:body>${inner}</w:body></w:document>`;
   const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-  const makeDocx = async (documentXml: string): Promise<Buffer> => {
+  const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
     const zip = new JSZip();
     zip.file("word/document.xml", documentXml);
     zip.file(
@@ -1497,11 +1499,11 @@ describe("lookup formats are addressed by their keys", () => {
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `</Types>`,
     );
-    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
   };
 
-  const docText = async (buffer: Buffer): Promise<string> => {
-    const zip = await JSZip.loadAsync(buffer);
+  const docText = async (file: ScannedFile): Promise<string> => {
+    const zip = await JSZip.loadAsync(file.bytes);
     return (await zip.file("word/document.xml")?.async("string")) ?? "";
   };
 
@@ -1583,7 +1585,7 @@ describe("lookup formats are addressed by their keys", () => {
 
     const result = await fillTemplate(withManifest, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
-    const text = await docText(result.buffer);
+    const text = await docText(result.file);
     expect(text).toContain(NAME_RENDER);
     expect(text).toContain(KRS_RENDER);
   });
@@ -1633,7 +1635,7 @@ describe("lookup formats are addressed by their keys", () => {
 
     const result = await fillTemplate(docx, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
-    const text = await docText(result.buffer);
+    const text = await docText(result.file);
     expect(text).toContain(NAME_RENDER);
     expect(text).toContain(KRS_RENDER);
   });

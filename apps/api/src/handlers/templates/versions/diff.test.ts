@@ -82,7 +82,11 @@ const makeScopedDb = (versions: StubVersionRow[]): ScopedDb => {
             return undefined;
           }
           requestedVersion = row.version;
-          return { version: row.version, s3Key: row.s3Key };
+          return {
+            version: row.version,
+            s3Key: row.s3Key,
+            scanState: "scanned",
+          };
         },
       },
     },
@@ -99,7 +103,7 @@ const makeScopedDb = (versions: StubVersionRow[]): ScopedDb => {
         .filter((v) => v.version < target)
         .toSorted((a, b) => b.version - a.version)
         .slice(0, n)
-        .map((v) => ({ s3Key: v.s3Key }));
+        .map((v) => ({ s3Key: v.s3Key, scanState: "scanned" }));
     },
   };
 

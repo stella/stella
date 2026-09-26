@@ -7,7 +7,9 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { fillPreviewLogic } from "./fill-preview-logic";
@@ -18,10 +20,10 @@ import { fillPreviewLogic } from "./fill-preview-logic";
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -33,7 +35,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 // fillPreviewLogic backs the live "as you type" fill-preview route: values
@@ -55,7 +57,7 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -71,8 +73,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const organizationId = toSafeId<"organization">("org_1");
@@ -93,6 +94,7 @@ const stubDb = () =>
           name: "Template",
           fileName: "template.docx",
           s3Key,
+          scanState: "scanned",
           languages: [],
         }),
       },
@@ -102,12 +104,12 @@ const stubDb = () =>
 
 describe("fillPreviewLogic required fields (allow-partial)", () => {
   test("never rejects a preview omitting a required field", async () => {
-    let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
+    let docx = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
+    docx = await authorFieldMarkers(docx, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, buffer);
+      fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
       const { safeDb, scopedDb } = stubDb();
 
       const result = await fillPreviewLogic({
@@ -131,12 +133,12 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
   });
 
   test("still renders correctly once the required field is provided", async () => {
-    let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
+    let docx = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
+    docx = await authorFieldMarkers(docx, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, buffer);
+      fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
       const { safeDb, scopedDb } = stubDb();
 
       const result = await fillPreviewLogic({

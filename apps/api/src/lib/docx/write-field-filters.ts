@@ -30,6 +30,9 @@ import {
   type ScannedMarker,
 } from "@stll/template-conditions";
 
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
 import { templateContentPartPaths, W_NS } from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 
@@ -58,7 +61,9 @@ export type ConditionRewrite = {
 };
 
 export type WriteFieldFiltersResult = {
-  buffer: Buffer;
+  /** The rewritten document, derived from the input; the input itself when
+   *  nothing was written. */
+  file: ScannedFile;
   /** The paths a marker was actually rewritten for. A path the document does
    *  not carry is absent, which is how the caller learns to refuse the entry
    *  rather than reporting a change that never happened. */
@@ -202,13 +207,13 @@ const rewritePart = (
  * brace in it is a marker the scanner stops reading.
  */
 export const writeFieldFilters = async (
-  docxBuffer: Buffer,
+  file: ScannedFile,
   rewrites: readonly FieldFilterRewrite[],
   conditionRewrites: readonly ConditionRewrite[] = [],
 ): Promise<WriteFieldFiltersResult> => {
   const written = new Set<string>();
   if (rewrites.length === 0 && conditionRewrites.length === 0) {
-    return { buffer: docxBuffer, written };
+    return { file, written };
   }
   const byPath = new Map(
     rewrites.map((rewrite) => [rewrite.path, rewrite] as const),
@@ -217,7 +222,7 @@ export const writeFieldFilters = async (
     conditionRewrites.map((rewrite) => [rewrite.path, rewrite] as const),
   );
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await JSZip.loadAsync(file.bytes);
   let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two
   // parts, so each part walks with a stack of its own.
@@ -240,11 +245,11 @@ export const writeFieldFilters = async (
   // A configuration that asks for what the markers already say is not a new
   // document: re-zipping would republish identical content under a new key.
   if (!changed) {
-    return { buffer: docxBuffer, written };
+    return { file, written };
   }
   const output = await zip.generateAsync({
     compression: "DEFLATE",
-    type: "nodebuffer",
+    type: "uint8array",
   });
-  return { buffer: Buffer.from(output), written };
+  return { file: derivedScannedFile(file, output), written };
 };

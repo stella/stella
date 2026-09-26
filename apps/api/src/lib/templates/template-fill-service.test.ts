@@ -9,7 +9,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   describeStoredTemplate,
@@ -28,7 +30,7 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -44,12 +46,11 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
-const extractTexts = async (buffer: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const extractTexts = async (file: ScannedFile): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const documentXmlFile =
     zip.file("word/document.xml") ??
     panic("fixture DOCX is missing word/document.xml");
@@ -79,10 +80,10 @@ const stubScopedDb = (): ScopedDb => {
  * code under test never sees.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -94,7 +95,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 /**
@@ -103,10 +104,10 @@ const authorFieldMarkers = async (
  * `{% if %}` tag itself. Mirrors what `configure_template_fields` writes.
  */
 const authorConditionTags = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     [],
     fields.map((field) => ({
@@ -121,7 +122,7 @@ const authorConditionTags = async (
       throw new Error(`fixture has no {% if ${path} %} tag to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 const requiredTextField: FieldMeta = {
@@ -131,7 +132,7 @@ const requiredTextField: FieldMeta = {
   required: true,
 };
 
-const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<Buffer> =>
+const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<ScannedFile> =>
   authorFieldMarkers(
     await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
     fields,
@@ -139,10 +140,10 @@ const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<Buffer> =>
 
 describe("fillTemplateDocx required-field rejection", () => {
   test("rejects a fill omitting a required, non-AI-fillable field", async () => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
@@ -162,10 +163,10 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("rejects when the required field is present but empty", async () => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -176,10 +177,10 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("rejects when the required field is whitespace-only", async () => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -190,7 +191,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("rejects when a required loop item field is missing in one array row", async () => {
-    const buffer = await makeDocx(
+    const file = await makeDocx(
       WRAP(
         [
           P("{% for person in persons %}"),
@@ -199,12 +200,12 @@ describe("fillTemplateDocx required-field rejection", () => {
         ].join(""),
       ),
     );
-    const withManifest = await authorFieldMarkers(buffer, [
+    const withManifest = await authorFieldMarkers(file, [
       { path: "persons.member", label: "Member", required: true },
     ]);
 
     const result = await fillTemplateDocx({
-      source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
+      source: { name: "Roster", fileName: "roster.docx", file: withManifest },
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -224,7 +225,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("fills when every array row supplies the required loop item field", async () => {
-    const buffer = await makeDocx(
+    const file = await makeDocx(
       WRAP(
         [
           P("{% for person in persons %}"),
@@ -233,12 +234,12 @@ describe("fillTemplateDocx required-field rejection", () => {
         ].join(""),
       ),
     );
-    const withManifest = await authorFieldMarkers(buffer, [
+    const withManifest = await authorFieldMarkers(file, [
       { path: "persons.member", label: "Member", required: true },
     ]);
 
     const result = await fillTemplateDocx({
-      source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
+      source: { name: "Roster", fileName: "roster.docx", file: withManifest },
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -246,19 +247,19 @@ describe("fillTemplateDocx required-field rejection", () => {
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
-    const texts = await extractTexts(result.buffer);
+    const texts = await extractTexts(result.file);
     expect(texts.join("")).toContain("Alice");
     expect(texts.join("")).toContain("Bob");
   });
 
   test("fills when the required field is provided", async () => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -266,15 +267,15 @@ describe("fillTemplateDocx required-field rejection", () => {
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
-    const texts = await extractTexts(result.buffer);
+    const texts = await extractTexts(result.file);
     expect(texts.join("")).toContain("Governed by Czech law.");
   });
 
   test("does not reject a required field that is AI-fillable when omitted; drafts it instead", async () => {
-    const buffer = await makeConfiguredDocx([
+    const file = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -285,7 +286,7 @@ describe("fillTemplateDocx required-field rejection", () => {
     ]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
@@ -296,16 +297,16 @@ describe("fillTemplateDocx required-field rejection", () => {
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
-    const texts = await extractTexts(result.buffer);
+    const texts = await extractTexts(result.file);
     expect(texts.join("")).toContain("Governed by Slovak law.");
     expect(result.aiFieldErrors).toEqual([]);
   });
 
   test("reports a field the model could not draft and leaves it unfilled", async () => {
-    const buffer = await makeConfiguredDocx([
+    const file = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -316,7 +317,7 @@ describe("fillTemplateDocx required-field rejection", () => {
     ]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
@@ -330,7 +331,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       }),
     });
 
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
     // The cut draft is reported instead of being written into the instrument.
@@ -347,7 +348,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("does not reject a required, source-bound field left unfilled", async () => {
-    const buffer = await makeConfiguredDocx([
+    const file = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -358,7 +359,7 @@ describe("fillTemplateDocx required-field rejection", () => {
     ]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
@@ -374,10 +375,10 @@ describe("fillTemplateDocx required-field rejection", () => {
   // so the service must not resolve it for a manifest that declares no AI
   // field. A factory that throws proves it was never called.
   test("never resolves the AI collaborators for a deterministic manifest", async () => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer },
+      source: { name: "NDA", fileName: "nda.docx", file },
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
@@ -386,18 +387,18 @@ describe("fillTemplateDocx required-field rejection", () => {
         panic("deterministic fill resolved the AI collaborators"),
     });
 
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
-    const texts = await extractTexts(result.buffer);
+    const texts = await extractTexts(result.file);
     expect(texts.join("")).toContain("Governed by Czech law.");
   });
 
   test("does not check required fields on a manifest-less template", async () => {
-    const buffer = await makeDocx(WRAP(P("Hello {{name}}.")));
+    const file = await makeDocx(WRAP(P("Hello {{name}}.")));
 
     const result = await fillTemplateDocx({
-      source: { name: "Plain", fileName: "plain.docx", buffer },
+      source: { name: "Plain", fileName: "plain.docx", file },
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
@@ -421,6 +422,7 @@ describe("fillStoredTemplateDocx use recording", () => {
     name: "NDA",
     fileName: "nda.docx",
     s3Key: storedS3Key,
+    scanState: "scanned",
     languages: [],
   };
 
@@ -474,11 +476,11 @@ describe("fillStoredTemplateDocx use recording", () => {
       "organizationId" | "useRecording"
     >,
   ) => {
-    const buffer = await makeConfiguredDocx([requiredTextField]);
+    const file = await makeConfiguredDocx([requiredTextField]);
     const { scopedDb, updates } = storedTemplateScopedDb();
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", storedS3Key, buffer);
+      fakeS3.put("stella", storedS3Key, new Uint8Array(file.bytes));
       const result = await fillStoredTemplateDocx({
         templateId: usedTemplateId,
         values: { governing_law: "Czech" },
@@ -495,7 +497,7 @@ describe("fillStoredTemplateDocx use recording", () => {
   test("bumps the use counter once by default", async () => {
     const { result, updates } = await fillStored({ organizationId });
 
-    expect("buffer" in result).toBe(true);
+    expect("file" in result).toBe(true);
     expect(updates).toBe(1);
   });
 
@@ -505,7 +507,7 @@ describe("fillStoredTemplateDocx use recording", () => {
       useRecording: "caller",
     });
 
-    expect("buffer" in result).toBe(true);
+    expect("file" in result).toBe(true);
     expect(updates).toBe(0);
   });
 
@@ -526,7 +528,7 @@ describe("fillTemplateDocx condition decisions", () => {
   /** A document whose only paragraph is gated by an AI-decided condition, so
    *  the rendered text alone cannot say whether the condition was false or
    *  never settled. */
-  const gatedDocx = async (): Promise<Buffer> =>
+  const gatedDocx = async (): Promise<ScannedFile> =>
     await authorConditionTags(
       await authorFieldMarkers(
         await makeDocx(
@@ -558,14 +560,14 @@ describe("fillTemplateDocx condition decisions", () => {
     values?: Record<string, unknown>;
   }) => {
     const result = await fillTemplateDocx({
-      source: { name: "NDA", fileName: "nda.docx", buffer: await gatedDocx() },
+      source: { name: "NDA", fileName: "nda.docx", file: await gatedDocx() },
       values,
       scopedDb: stubScopedDb(),
       organizationId,
       requiredFields: "enforce",
       aiCollaborators: async () => ({ decideAiCondition: decide }),
     });
-    if (!("buffer" in result)) {
+    if (!("file" in result)) {
       throw new Error("expected a filled document");
     }
     return result;
@@ -590,7 +592,7 @@ describe("fillTemplateDocx condition decisions", () => {
         probability: 0.94,
       },
     ]);
-    expect((await extractTexts(result.buffer)).join("")).toContain(
+    expect((await extractTexts(result.file)).join("")).toContain(
       "Consumer notice.",
     );
   });
@@ -610,7 +612,7 @@ describe("fillTemplateDocx condition decisions", () => {
       },
     ]);
     // The gated paragraph is out, which is why the decision has to be reported.
-    expect((await extractTexts(result.buffer)).join("")).not.toContain(
+    expect((await extractTexts(result.file)).join("")).not.toContain(
       "Consumer notice.",
     );
   });
@@ -648,7 +650,7 @@ describe("fillTemplateDocx condition decisions", () => {
         reason: "failed",
       },
     ]);
-    expect((await extractTexts(result.buffer)).join("")).not.toContain(
+    expect((await extractTexts(result.file)).join("")).not.toContain(
       "Consumer notice.",
     );
   });
@@ -666,6 +668,7 @@ describe("describeStoredTemplate gated blocks", () => {
             name: "Engagement letter",
             fileName: "engagement.docx",
             s3Key,
+            scanState: "scanned",
           }),
         },
       },
@@ -682,7 +685,7 @@ describe("describeStoredTemplate gated blocks", () => {
     // AI-decided condition the document never prints has only its `{% if %}`
     // tag to be configured in. Both shapes appear here, plus a plain boolean
     // the person answers.
-    const buffer = await authorConditionTags(
+    const file = await authorConditionTags(
       await authorFieldMarkers(
         await makeDocx(
           WRAP(
@@ -719,7 +722,7 @@ describe("describeStoredTemplate gated blocks", () => {
 
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, buffer);
+      fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
       const result = await describeStoredTemplate({
         templateId,
         organizationId,
@@ -759,6 +762,7 @@ describe("describeStoredTemplate array shape", () => {
             name: "Engagement letter",
             fileName: "engagement.docx",
             s3Key,
+            scanState: "scanned",
           }),
         },
       },
@@ -771,7 +775,7 @@ describe("describeStoredTemplate array shape", () => {
   };
 
   test("groups an {% for %} loop over object items under `arrays`, distinct from `fields`", async () => {
-    let buffer = await makeDocx(
+    let file = await makeDocx(
       WRAP(
         [
           P("{% for deliverable in deliverables %}"),
@@ -780,7 +784,7 @@ describe("describeStoredTemplate array shape", () => {
         ].join(""),
       ),
     );
-    buffer = await authorFieldMarkers(buffer, [
+    file = await authorFieldMarkers(file, [
       { path: "deliverables.name", label: "Name", inputType: "text" },
       { path: "deliverables.due_date", label: "Due date", inputType: "date" },
     ]);
@@ -788,7 +792,7 @@ describe("describeStoredTemplate array shape", () => {
     // describeStoredTemplate loads via S3; exercise it against the fake store.
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, buffer);
+      fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
       const result = await describeStoredTemplate({
         templateId,
         organizationId,
@@ -820,7 +824,7 @@ describe("describeStoredTemplate array shape", () => {
     // scalars) and what an object-item loop over `{ value }` rows discovers
     // (values.entries an array of objects). Suppressing this group entirely
     // would hide the latter, real case from a caller; it must stay listed.
-    let buffer = await makeDocx(
+    let file = await makeDocx(
       WRAP(
         [
           P("{% for entry in entries %}"),
@@ -829,13 +833,13 @@ describe("describeStoredTemplate array shape", () => {
         ].join(""),
       ),
     );
-    buffer = await authorFieldMarkers(buffer, [
+    file = await authorFieldMarkers(file, [
       { path: "entries.value", label: "Value", inputType: "text" },
     ]);
 
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, buffer);
+      fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
       const result = await describeStoredTemplate({
         templateId,
         organizationId,

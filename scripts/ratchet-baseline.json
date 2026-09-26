@@ -283,7 +283,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 261,
+    "count": 263,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -413,8 +413,10 @@
       "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts": 1,
       "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts": 1,
       "apps/api/src/lib/style-set-package-cleanup-queue.ts": 1,
+      "apps/api/src/lib/style-sets.ts": 1,
       "apps/api/src/lib/templates/lookup-formats/set-user-default.ts": 1,
       "apps/api/src/lib/templates/record-use.ts": 1,
+      "apps/api/src/lib/templates/write-template.ts": 1,
       "apps/api/src/lib/uploads/entity-create.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/sweep.ts": 1,
@@ -1046,11 +1048,8 @@
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/lib/docx/extract-text.ts": 1,
-      "apps/api/src/lib/style-set-editor.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
     "count": 0,

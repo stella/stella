@@ -85,13 +85,23 @@ const createTemplateFromStylesHandler = async function* ({
     }),
   );
 
+  const fileName = sanitizeFilenamePreservingExtension(`${name}.docx`);
+  // The rebuilt package is new bytes, so it is scanned before it is stored.
+  const file = yield* Result.await(
+    scanUploadForHandler({
+      bytes: buffer,
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName,
+    }),
+  );
+
   return yield* createStoredTemplate({
     safeDb,
     organizationId,
     userId,
-    buffer,
+    file,
     name,
-    fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
+    fileName,
     recordAuditEvent,
   });
 };

@@ -11,7 +11,10 @@ import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-b
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import {
+  testDocxFile,
+  testScannedFile,
+} from "@/api/tests/helpers/scanned-file";
 
 // The blank-create handler's only logic on top of the shared
 // `createStoredTemplate` recipe is generating the source buffer from a
@@ -37,7 +40,7 @@ describe("blank template buffer", () => {
   test("discovers zero fields, so the manifest it declares is empty", async () => {
     const buffer = await createTemplateBuffer({ type: "stella" });
 
-    const discovered = await discoverTemplate(buffer);
+    const discovered = await discoverTemplate(testDocxFile(buffer));
 
     expect(discovered.fields).toHaveLength(0);
     expect(discovered.placeholders).toHaveLength(0);

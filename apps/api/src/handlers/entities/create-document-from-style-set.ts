@@ -5,7 +5,7 @@ import { createBlankDocument } from "@/api/handlers/entities/create-blank-docume
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { readStyleSetBuffer } from "@/api/lib/style-sets";
+import { readStyleSetFile } from "@/api/lib/style-sets";
 
 const bodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 256 }),
@@ -30,8 +30,8 @@ export default createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const buffer = yield* Result.await(
-      readStyleSetBuffer({
+    const styleSet = yield* Result.await(
+      readStyleSetFile({
         safeDb,
         organizationId: session.activeOrganizationId,
         styleSetId: body.styleSetId,
@@ -45,7 +45,7 @@ export default createSafeHandler(
         workspaceId,
         userId: user.id,
         recordAuditEvent,
-        buffer,
+        buffer: styleSet.bytes,
         name: body.name,
         parentId: body.parentId ?? null,
       }),

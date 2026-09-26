@@ -14,9 +14,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { LIMITS } from "@/api/lib/limits";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
   canInstallTemplatePacks,
@@ -167,11 +169,19 @@ export const installTemplatePackHandler = async function* ({
         }),
       );
     }
+    // Bundled bytes are stored like any upload: scanned first.
+    const file = yield* Result.await(
+      scanUploadForHandler({
+        bytes: docx.value.bytes,
+        declaredMimeType: DOCX_MIME_TYPE,
+        fileName: docx.value.fileName,
+      }),
+    );
     const created = yield* createTemplate({
       safeDb,
       organizationId,
       userId,
-      buffer: Buffer.from(docx.value.bytes),
+      file,
       name: template.title,
       fileName: docx.value.fileName,
       categoryId: body.categoryId,

@@ -1,7 +1,7 @@
 /**
  * Configuring a template's fields, as an edit to the document.
  *
- * Bytes in, bytes out: the entries are read against what the markers already
+ * A file in, a file out: the entries are read against what the markers already
  * declare, merged onto them, written back into the markers, and the manifest
  * is derived from the result. No database and no object storage: the storage
  * wrapper lives in `handlers/templates/configure-template-fields-service.ts`,
@@ -33,6 +33,7 @@ import {
   type ConditionRewrite,
   type FieldFilterRewrite,
 } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import {
   fieldConfigurationIssuePath,
@@ -43,8 +44,8 @@ import {
 
 export type ConfigureTemplateDocumentResult = {
   /** The document with the configuration written into its markers; the same
-   *  bytes when nothing applied. */
-  buffer: Buffer;
+   *  file when nothing applied. */
+  file: ScannedFile;
   /** The manifest those bytes declare. */
   manifest: TemplateManifest;
   /** Every entry that did not land, addressed by the position the caller sent
@@ -163,7 +164,7 @@ const noCarrierIssue = (
 });
 
 export type ConfigureTemplateDocumentOptions = {
-  buffer: Buffer;
+  file: ScannedFile;
   /** The entries, in the order the caller sent them. */
   entries: readonly FieldMeta[];
 };
@@ -178,10 +179,10 @@ export type ConfigureTemplateDocumentOptions = {
  * rewritten bytes rather than assembled beside them.
  */
 export const configureTemplateDocument = async ({
-  buffer,
+  file,
   entries,
 }: ConfigureTemplateDocumentOptions): Promise<ConfigureTemplateDocumentResult> => {
-  const discovered = await discoverTemplate(buffer);
+  const discovered = await discoverTemplate(file);
   const declared = deriveManifest(discovered);
   const partitioned = partitionFieldConfiguration({
     configured: declared.fields,
@@ -305,8 +306,8 @@ export const configureTemplateDocument = async ({
   const conditionRewrites = conditionCandidates.filter(
     ({ path }) => !refused.has(path),
   );
-  const { buffer: rewritten, written } = await writeFieldFilters(
-    buffer,
+  const { file: rewritten, written } = await writeFieldFilters(
+    file,
     rewrites,
     conditionRewrites,
   );
@@ -322,18 +323,18 @@ export const configureTemplateDocument = async ({
   }
 
   return {
-    buffer: rewritten,
-    manifest: await deriveManifestFromBuffer(rewritten, buffer, discovered),
+    file: rewritten,
+    manifest: await deriveManifestFromFile(rewritten, file, discovered),
     issues: issues.toSorted((left, right) => left.index - right.index),
   };
 };
 
-/** The manifest of the rewritten bytes, or of the ones already in hand when
+/** The manifest of the rewritten file, or of the one already in hand when
  *  nothing was written: re-running discovery over an unchanged document would
  *  read the same markers twice. */
-const deriveManifestFromBuffer = async (
-  rewritten: Buffer,
-  original: Buffer,
+const deriveManifestFromFile = async (
+  rewritten: ScannedFile,
+  original: ScannedFile,
   discovered: DiscoveredTemplate,
 ): Promise<TemplateManifest> =>
   rewritten === original

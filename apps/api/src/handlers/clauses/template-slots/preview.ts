@@ -21,7 +21,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { resolveClauseSlotTexts } from "@/api/lib/docx/resolve-clause-slots";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 const templateSlotPreviewParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -53,7 +56,7 @@ const getTemplateClausePreview = createSafeRootHandler(
             id: { eq: templateId },
             organizationId: { eq: organizationId },
           },
-          columns: { s3Key: true },
+          columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
         }),
       ),
     );
@@ -64,8 +67,15 @@ const getTemplateClausePreview = createSafeRootHandler(
       );
     }
 
-    const arrayBuf = await readS3ArrayBuffer(template.s3Key);
-    const slots = await discoverClauseSlots(Buffer.from(arrayBuf));
+    const file = yield* Result.await(
+      readStoredTemplateFile({
+        safeDb,
+        organizationId,
+        row: template,
+        fileName: template.fileName,
+      }),
+    );
+    const slots = await discoverClauseSlots(file);
     const slotTexts = await resolveClauseSlotTexts(
       templateId,
       slots,
