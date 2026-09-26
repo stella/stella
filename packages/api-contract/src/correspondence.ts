@@ -50,6 +50,30 @@ export type CorrespondenceAuthentication = {
   alignedIdentifier: string | null;
 };
 
+export const CORRESPONDENCE_SENDER_KINDS = [
+  "verified_alias",
+  "shared_mailbox",
+] as const;
+export type CorrespondenceSenderKind =
+  (typeof CORRESPONDENCE_SENDER_KINDS)[number];
+
+export const CORRESPONDENCE_SENDER_SCOPES = [
+  "organization",
+  "matters",
+] as const;
+export type CorrespondenceSenderScope =
+  (typeof CORRESPONDENCE_SENDER_SCOPES)[number];
+
+export type CorrespondenceFiler =
+  | { type: "user"; userId: string; filedAt: string }
+  | {
+      type: "shared_mailbox";
+      allowedSenderId: string;
+      address: string;
+      approvedBy: string;
+      filedAt: string;
+    };
+
 /** The parser's output. The authenticated filer is supplied separately. */
 export type ParsedCorrespondence = {
   direction: CorrespondenceDirection;

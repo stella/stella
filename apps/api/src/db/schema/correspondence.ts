@@ -5,12 +5,15 @@ import {
   CORRESPONDENCE_DROP_REASONS,
   CORRESPONDENCE_HANDLING_STATES,
   CORRESPONDENCE_SCAN_VERDICTS,
+  CORRESPONDENCE_SENDER_KINDS,
+  CORRESPONDENCE_SENDER_SCOPES,
   type CorrespondenceAddress,
 } from "@stll/api-contract/correspondence";
 
 import {
   jsonb,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -119,10 +122,12 @@ export const correspondenceFilers = p.pgTable(
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     correspondenceId: safeUuid<"correspondence">("correspondence_id").notNull(),
-    userId: p
-      .text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    filedByUserId: p
+      .text("filed_by_user_id")
+      .references(() => user.id, { onDelete: "restrict" }),
+    filedByAllowedSenderId: safeUuid<"correspondenceAllowedSender">(
+      "filed_by_allowed_sender_id",
+    ),
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
@@ -139,11 +144,29 @@ export const correspondenceFilers = p.pgTable(
       })
       .onDelete("cascade"),
     p
+      .foreignKey({
+        columns: [table.filedByAllowedSenderId, table.organizationId],
+        foreignColumns: [
+          correspondenceAllowedSenders.id,
+          correspondenceAllowedSenders.organizationId,
+        ],
+      })
+      .onDelete("restrict"),
+    p
       .uniqueIndex("correspondence_filers_record_user_uidx")
-      .on(table.correspondenceId, table.userId),
+      .on(table.correspondenceId, table.filedByUserId)
+      .where(sql`${table.filedByUserId} is not null`),
+    p
+      .uniqueIndex("correspondence_filers_record_sender_uidx")
+      .on(table.correspondenceId, table.filedByAllowedSenderId)
+      .where(sql`${table.filedByAllowedSenderId} is not null`),
     p
       .index("correspondence_filers_ws_record_idx")
       .on(table.workspaceId, table.correspondenceId),
+    p.check(
+      "correspondence_filers_actor_check",
+      sql`(${table.filedByUserId} is null) <> (${table.filedByAllowedSenderId} is null)`,
+    ),
     ...wsOrganizationPolicies("correspondence_filers"),
   ],
 );
@@ -241,20 +264,60 @@ export const correspondenceAllowedSenders = p.pgTable(
   "correspondence_allowed_senders",
   {
     id: pUuid<"correspondenceAllowedSender">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     address: p.text("address").notNull(),
-    kind: p
-      .text("kind", { enum: ["verified_alias", "shared_mailbox"] })
-      .notNull(),
+    kind: p.text("kind", { enum: CORRESPONDENCE_SENDER_KINDS }).notNull(),
+    scope: p.text("scope", { enum: CORRESPONDENCE_SENDER_SCOPES }).notNull(),
     ownerUserId: p
       .text("owner_user_id")
       .references(() => user.id, { onDelete: "cascade" }),
     approvedBy: p
       .text("approved_by")
-      .references(() => user.id, { onDelete: "set null" }),
+      .references(() => user.id, { onDelete: "restrict" }),
     approvedAt: timestamptz("approved_at").notNull().defaultNow(),
     revokedAt: timestamptz("revoked_at"),
+  },
+  (table) => [
+    p
+      .unique("correspondence_allowed_senders_id_org_unq")
+      .on(table.id, table.organizationId),
+    p
+      .uniqueIndex("correspondence_allowed_senders_active_uidx")
+      .on(table.organizationId, table.address)
+      .where(sql`${table.revokedAt} is null`),
+    p
+      .index("correspondence_allowed_senders_org_kind_idx")
+      .on(table.organizationId, table.kind),
+    p.check(
+      "correspondence_allowed_senders_kind_check",
+      sql`${table.kind} in (${valuesSql(CORRESPONDENCE_SENDER_KINDS)})`,
+    ),
+    p.check(
+      "correspondence_allowed_senders_scope_check",
+      sql`${table.scope} in (${valuesSql(CORRESPONDENCE_SENDER_SCOPES)})`,
+    ),
+    p.check(
+      "correspondence_allowed_senders_owner_check",
+      sql`(${table.kind} = 'verified_alias') = (${table.ownerUserId} is not null)`,
+    ),
+    p.check(
+      "correspondence_allowed_senders_approval_check",
+      sql`${table.kind} <> 'shared_mailbox' or ${table.approvedBy} is not null`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const correspondenceAllowedSenderMatters = p.pgTable(
+  "correspondence_allowed_sender_matters",
+  {
+    id: pUuid<"correspondenceAllowedSenderMatter">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    allowedSenderId:
+      safeUuid<"correspondenceAllowedSender">("allowed_sender_id").notNull(),
   },
   (table) => [
     p
@@ -264,21 +327,21 @@ export const correspondenceAllowedSenders = p.pgTable(
       })
       .onDelete("cascade"),
     p
-      .uniqueIndex("correspondence_allowed_senders_active_uidx")
-      .on(table.workspaceId, table.address)
-      .where(sql`${table.revokedAt} is null`),
+      .foreignKey({
+        columns: [table.allowedSenderId, table.organizationId],
+        foreignColumns: [
+          correspondenceAllowedSenders.id,
+          correspondenceAllowedSenders.organizationId,
+        ],
+      })
+      .onDelete("cascade"),
     p
-      .index("correspondence_allowed_senders_ws_kind_idx")
-      .on(table.workspaceId, table.kind),
-    p.check(
-      "correspondence_allowed_senders_kind_check",
-      sql`${table.kind} in ('verified_alias', 'shared_mailbox')`,
-    ),
-    p.check(
-      "correspondence_allowed_senders_owner_check",
-      sql`(${table.kind} = 'verified_alias') = (${table.ownerUserId} is not null)`,
-    ),
-    ...wsOrganizationPolicies("correspondence_allowed_senders"),
+      .uniqueIndex("correspondence_allowed_sender_matters_sender_ws_uidx")
+      .on(table.allowedSenderId, table.workspaceId),
+    p
+      .index("correspondence_allowed_sender_matters_ws_sender_idx")
+      .on(table.workspaceId, table.allowedSenderId),
+    ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
   ],
 );
 

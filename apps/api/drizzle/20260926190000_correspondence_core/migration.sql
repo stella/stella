@@ -48,13 +48,16 @@ CREATE TABLE "correspondence_filers" (
   "organization_id" varchar(128) NOT NULL,
   "workspace_id" uuid NOT NULL,
   "correspondence_id" uuid NOT NULL,
-  "user_id" text NOT NULL,
+  "filed_by_user_id" text,
+  "filed_by_allowed_sender_id" uuid,
   "filed_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "correspondence_filers_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE cascade,
   CONSTRAINT "correspondence_filers_record_workspace_fk" FOREIGN KEY ("correspondence_id", "workspace_id") REFERENCES "correspondence"("id", "workspace_id") ON DELETE cascade,
-  CONSTRAINT "correspondence_filers_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE cascade
+  CONSTRAINT "correspondence_filers_filed_by_user_id_user_id_fk" FOREIGN KEY ("filed_by_user_id") REFERENCES "user"("id") ON DELETE restrict,
+  CONSTRAINT "correspondence_filers_actor_check" CHECK (("filed_by_user_id" is null) <> ("filed_by_allowed_sender_id" is null))
 );--> statement-breakpoint
-CREATE UNIQUE INDEX "correspondence_filers_record_user_uidx" ON "correspondence_filers" ("correspondence_id", "user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "correspondence_filers_record_user_uidx" ON "correspondence_filers" ("correspondence_id", "filed_by_user_id") WHERE "filed_by_user_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "correspondence_filers_record_sender_uidx" ON "correspondence_filers" ("correspondence_id", "filed_by_allowed_sender_id") WHERE "filed_by_allowed_sender_id" is not null;--> statement-breakpoint
 CREATE INDEX "correspondence_filers_ws_record_idx" ON "correspondence_filers" ("workspace_id", "correspondence_id");--> statement-breakpoint
 
 CREATE TABLE "correspondence_attachments" (
@@ -98,21 +101,37 @@ CREATE INDEX "matter_inbound_addresses_ws_created_idx" ON "matter_inbound_addres
 CREATE TABLE "correspondence_allowed_senders" (
   "id" uuid PRIMARY KEY NOT NULL,
   "organization_id" varchar(128) NOT NULL,
-  "workspace_id" uuid NOT NULL,
   "address" text NOT NULL,
   "kind" text NOT NULL,
+  "scope" text NOT NULL,
   "owner_user_id" text,
   "approved_by" text,
   "approved_at" timestamptz DEFAULT now() NOT NULL,
   "revoked_at" timestamptz,
-  CONSTRAINT "correspondence_allowed_senders_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE cascade,
+  CONSTRAINT "correspondence_allowed_senders_id_org_unq" UNIQUE ("id", "organization_id"),
+  CONSTRAINT "correspondence_allowed_senders_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE cascade,
   CONSTRAINT "correspondence_allowed_senders_owner_user_id_user_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "user"("id") ON DELETE cascade,
-  CONSTRAINT "correspondence_allowed_senders_approved_by_user_id_fk" FOREIGN KEY ("approved_by") REFERENCES "user"("id") ON DELETE set null,
+  CONSTRAINT "correspondence_allowed_senders_approved_by_user_id_fk" FOREIGN KEY ("approved_by") REFERENCES "user"("id") ON DELETE restrict,
   CONSTRAINT "correspondence_allowed_senders_kind_check" CHECK ("kind" in ('verified_alias', 'shared_mailbox')),
-  CONSTRAINT "correspondence_allowed_senders_owner_check" CHECK (("kind" = 'verified_alias') = ("owner_user_id" is not null))
+  CONSTRAINT "correspondence_allowed_senders_scope_check" CHECK ("scope" in ('organization', 'matters')),
+  CONSTRAINT "correspondence_allowed_senders_owner_check" CHECK (("kind" = 'verified_alias') = ("owner_user_id" is not null)),
+  CONSTRAINT "correspondence_allowed_senders_approval_check" CHECK ("kind" <> 'shared_mailbox' or "approved_by" is not null)
 );--> statement-breakpoint
-CREATE UNIQUE INDEX "correspondence_allowed_senders_active_uidx" ON "correspondence_allowed_senders" ("workspace_id", "address") WHERE "revoked_at" is null;--> statement-breakpoint
-CREATE INDEX "correspondence_allowed_senders_ws_kind_idx" ON "correspondence_allowed_senders" ("workspace_id", "kind");--> statement-breakpoint
+CREATE UNIQUE INDEX "correspondence_allowed_senders_active_uidx" ON "correspondence_allowed_senders" ("organization_id", "address") WHERE "revoked_at" is null;--> statement-breakpoint
+CREATE INDEX "correspondence_allowed_senders_org_kind_idx" ON "correspondence_allowed_senders" ("organization_id", "kind");--> statement-breakpoint
+
+CREATE TABLE "correspondence_allowed_sender_matters" (
+  "id" uuid PRIMARY KEY NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "allowed_sender_id" uuid NOT NULL,
+  CONSTRAINT "correspondence_allowed_sender_matters_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE cascade,
+  CONSTRAINT "correspondence_allowed_sender_matters_sender_organization_fk" FOREIGN KEY ("allowed_sender_id", "organization_id") REFERENCES "correspondence_allowed_senders"("id", "organization_id") ON DELETE cascade
+);--> statement-breakpoint
+CREATE UNIQUE INDEX "correspondence_allowed_sender_matters_sender_ws_uidx" ON "correspondence_allowed_sender_matters" ("allowed_sender_id", "workspace_id");--> statement-breakpoint
+CREATE INDEX "correspondence_allowed_sender_matters_ws_sender_idx" ON "correspondence_allowed_sender_matters" ("workspace_id", "allowed_sender_id");--> statement-breakpoint
+
+ALTER TABLE "correspondence_filers" ADD CONSTRAINT "correspondence_filers_sender_organization_fk" FOREIGN KEY ("filed_by_allowed_sender_id", "organization_id") REFERENCES "correspondence_allowed_senders"("id", "organization_id") ON DELETE restrict;--> statement-breakpoint
 
 CREATE TABLE "correspondence_drop_logs" (
   "id" uuid PRIMARY KEY NOT NULL,
@@ -154,10 +173,16 @@ CREATE POLICY "matter_inbound_addresses_workspace_update" ON "matter_inbound_add
 CREATE POLICY "matter_inbound_addresses_workspace_delete" ON "matter_inbound_addresses" FOR DELETE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 ALTER TABLE "correspondence_allowed_senders" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "correspondence_allowed_senders" TO "stella";--> statement-breakpoint
-CREATE POLICY "correspondence_allowed_senders_workspace_select" ON "correspondence_allowed_senders" FOR SELECT TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
-CREATE POLICY "correspondence_allowed_senders_workspace_insert" ON "correspondence_allowed_senders" FOR INSERT TO "stella" WITH CHECK (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
-CREATE POLICY "correspondence_allowed_senders_workspace_update" ON "correspondence_allowed_senders" FOR UPDATE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
-CREATE POLICY "correspondence_allowed_senders_workspace_delete" ON "correspondence_allowed_senders" FOR DELETE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_select" ON "correspondence_allowed_senders" FOR SELECT TO "stella" USING ("organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_insert" ON "correspondence_allowed_senders" FOR INSERT TO "stella" WITH CHECK ("organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_update" ON "correspondence_allowed_senders" FOR UPDATE TO "stella" USING ("organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_delete" ON "correspondence_allowed_senders" FOR DELETE TO "stella" USING ("organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+ALTER TABLE "correspondence_allowed_sender_matters" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "correspondence_allowed_sender_matters" TO "stella";--> statement-breakpoint
+CREATE POLICY "correspondence_allowed_sender_matters_workspace_select" ON "correspondence_allowed_sender_matters" FOR SELECT TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "correspondence_allowed_sender_matters_workspace_insert" ON "correspondence_allowed_sender_matters" FOR INSERT TO "stella" WITH CHECK (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "correspondence_allowed_sender_matters_workspace_update" ON "correspondence_allowed_sender_matters" FOR UPDATE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "correspondence_allowed_sender_matters_workspace_delete" ON "correspondence_allowed_sender_matters" FOR DELETE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 ALTER TABLE "correspondence_drop_logs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "correspondence_drop_logs" TO "stella";--> statement-breakpoint
 CREATE POLICY "correspondence_drop_logs_workspace_select" ON "correspondence_drop_logs" FOR SELECT TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
