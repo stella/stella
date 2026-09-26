@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
+import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { buildAnnotationAnchors } from "@/components/legal-reader/annotations/annotation-anchors";
@@ -11,6 +12,7 @@ import type { AnnotationAnchorSource } from "@/components/legal-reader/annotatio
 import {
   BlockRenderer,
   FulltextFallback,
+  READER_BLOCK_CHROME_REVEAL_CLASS,
 } from "@/components/legal-reader/document-ast-text";
 import type {
   AnchorPresentation,
@@ -302,13 +304,19 @@ const ProvisionDetailsAction = ({
   return (
     <button
       aria-label={t("statutes.provisionDetailsFor", { provision })}
-      className="reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
+      className={cn(
+        "reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal transition-[color,background-color,border-color,opacity] focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden",
+        // Revealed with the heading's ¶, by the same rule.
+        READER_BLOCK_CHROME_REVEAL_CLASS,
+      )}
       onClick={onOpen}
       type="button"
     >
       <span>{t("common.details")}</span>
+      {/* The count needs a wide pane; beside the designation in a narrow
+          one there is room for the action's name only. */}
       {citationCount !== undefined && citationCount > 0 && (
-        <span className="text-muted-foreground ms-2 tabular-nums">
+        <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
           {t("caseLaw.citation.decisionCount", { count: citationCount })}
         </span>
       )}

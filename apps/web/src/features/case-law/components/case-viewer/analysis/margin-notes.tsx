@@ -35,15 +35,27 @@ import { getCategoryVar } from "./types";
 const capitalize = (s: string): string =>
   s.charAt(0).toUpperCase() + s.slice(1);
 
-export type AnalysisMarginItem = {
-  kind: "card" | "annotation";
+type AnalysisMarginItemBase = {
   id: string;
   heading?: string | undefined;
-  text: string;
   category: string;
   depth: number;
   startAnchorId: string;
 };
+
+export type AnalysisMarginItem = AnalysisMarginItemBase &
+  (
+    | { kind: "card" | "annotation"; text: string }
+    | {
+        /**
+         * The shape a note takes, shown before any analysis exists: the
+         * category is real, the lines are placeholders. Never invented text
+         * beside a real decision.
+         */
+        kind: "example";
+        lines: readonly number[];
+      }
+  );
 
 export type CommentMarginItem = {
   kind: "comment";
@@ -356,8 +368,18 @@ type MarginNoteProps = {
   presence?: NotePresence | undefined;
 };
 
-/** One note, in whichever of the two places the reader has room for it. */
-const MarginNote = ({
+/**
+ * One note, in whichever of the two places the reader has room for it. The
+ * wrapper draws no box of its own; it only marks the note's kind.
+ */
+const MarginNote = (props: MarginNoteProps) => (
+  // `MARGIN_NOTE_KIND_ATTRIBUTE`, which the notes column's click reads.
+  <div className="contents" data-margin-note={props.item.kind}>
+    <MarginNoteBody {...props} />
+  </div>
+);
+
+const MarginNoteBody = ({
   item,
   measureRef,
   onHover,
@@ -384,6 +406,16 @@ const MarginNote = ({
           item={item}
           measureRef={measureRef}
           placement={placement}
+        />
+      );
+    }
+    case "example": {
+      return (
+        <ExampleNote
+          item={item}
+          measureRef={measureRef}
+          placement={placement}
+          presence={presence}
         />
       );
     }
@@ -422,15 +454,18 @@ type NoteProps<T extends MarginItem> = {
   presence: NotePresence;
 };
 
-const AnalysisNote = ({
+type AnalysisNoteStyleOptions = {
+  item: AnalysisMarginItem;
+  placement: NotePlacement;
+  presence: NotePresence;
+};
+
+/** The stripe, indent and position an analysis-shaped note is drawn with. */
+const analysisNoteStyle = ({
   item,
-  measureRef,
-  onHover,
-  onJump,
   placement,
   presence,
-}: NoteProps<AnalysisMarginItem>) => {
-  const position = notePlacementPresentation(placement);
+}: AnalysisNoteStyleOptions) => {
   const cssVar = getCategoryVar(item.category);
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
@@ -439,27 +474,83 @@ const AnalysisNote = ({
     if (presence === "dimmed") {
       return `color-mix(in srgb, var(${cssVar}) 22%, transparent)`;
     }
-    if (presence === "highlighted" || item.kind === "card") {
+    if (
+      presence === "highlighted" ||
+      item.kind === "card" ||
+      item.kind === "example"
+    ) {
       return `var(${cssVar})`;
     }
     return `color-mix(in srgb, var(${cssVar}) 60%, transparent)`;
   })();
 
-  const style = {
-    ...position.style,
+  return {
+    ...notePlacementPresentation(placement).style,
     paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
     borderInlineStartColor: stripe,
     ...(presence === "highlighted" && {
       boxShadow: `inset 2px 0 0 var(${cssVar})`,
     }),
   };
+};
+
+const NoteHeading = ({ heading }: { heading: string | undefined }) =>
+  heading ? (
+    <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
+      {capitalize(heading)}
+    </span>
+  ) : null;
+
+/**
+ * The shape a note would take, before there is an analysis. Decorative: its
+ * lines are placeholders at seeded paragraphs, so it is neither focusable nor
+ * announced, and there is nothing to jump to. The invitation's button is the
+ * keyboard path to the offer.
+ */
+const ExampleNote = ({
+  item,
+  measureRef,
+  placement,
+  presence,
+}: Omit<
+  NoteProps<Extract<AnalysisMarginItem, { kind: "example" }>>,
+  "onHover" | "onJump"
+>) => (
+  <div
+    aria-hidden
+    className={cn(
+      "text-foreground-muted border-s-[3px] py-1 ps-2.5 text-start",
+      notePlacementPresentation(placement).className,
+    )}
+    ref={(el) => measureRef?.(el, item.id)}
+    style={analysisNoteStyle({ item, placement, presence })}
+  >
+    <NoteHeading heading={item.heading} />
+    <span className="mt-1 flex flex-col gap-1.5">
+      {item.lines.map((width) => (
+        <span
+          className="bg-muted block h-2 rounded-full"
+          key={width}
+          style={{ width: `${width * 100}%` }}
+        />
+      ))}
+    </span>
+  </div>
+);
+
+const AnalysisNote = ({
+  item,
+  measureRef,
+  onHover,
+  onJump,
+  placement,
+  presence,
+}: NoteProps<Extract<AnalysisMarginItem, { kind: "card" | "annotation" }>>) => {
+  const position = notePlacementPresentation(placement);
+  const style = analysisNoteStyle({ item, placement, presence });
   const body = (
     <>
-      {item.heading && (
-        <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
-          {capitalize(item.heading)}
-        </span>
-      )}
+      <NoteHeading heading={item.heading} />
       {item.text && (
         <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
           {item.text}

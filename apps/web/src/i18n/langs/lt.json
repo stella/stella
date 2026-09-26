@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
-    "requireAccount": {
-      "askAboutDocument": "Sukurkite nemokamą paskyrą, kad galėtumėte klausti apie šį dokumentą",
-      "askInChat": "Sukurkite nemokamą paskyrą, kad paklaustumėte to pokalbyje",
-      "description": "Kai paskyra bus paruošta, grįšite į šį puslapį.",
-      "generateHeadnotes": "Sukurkite nemokamą paskyrą, kad DI parengtų santraukas",
-      "refineSearch": "Sukurkite nemokamą paskyrą, kad patobulintumėte paiešką su DI",
-      "writeResearchQuestion": "Sukurkite nemokamą paskyrą, kad užduotumėte klausimą šiems rezultatams"
-    },
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -595,6 +587,7 @@
       },
       "generate": "Parengti DI santraukas",
       "holdingAnchor": "Pereiti prie pastraipos",
+      "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
     },

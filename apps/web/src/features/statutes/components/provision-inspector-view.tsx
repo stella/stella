@@ -287,19 +287,16 @@ const ProvisionAsk = ({
   passages: readonly CitingDecisionRow[];
   payload: ProvisionViewPayload;
 }) => {
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
 
   return (
-    <>
-      <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-        <LazyProvisionAskActions
-          activeLegal={activeLegal}
-          ensureAccount={() => ensureAccount("askAboutDocument")}
-          passages={passages}
-          payload={payload}
-        />
-      </Suspense>
-      {accountDialog}
-    </>
+    <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+      <LazyProvisionAskActions
+        activeLegal={activeLegal}
+        ensureAccount={ensureAccount}
+        passages={passages}
+        payload={payload}
+      />
+    </Suspense>
   );
 };

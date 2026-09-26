@@ -18,6 +18,7 @@ import {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,
@@ -29,6 +30,7 @@ import {
   SidebarTrigger as SidebarTriggerShell,
   useSidebar,
   useSidebarInlineSize,
+  useSidebarLayout,
 } from "@stll/ui/sidebar";
 
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
@@ -131,6 +133,7 @@ export {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,
@@ -143,4 +146,5 @@ export {
   SidebarTrigger,
   useSidebar,
   useSidebarInlineSize,
+  useSidebarLayout,
 };

@@ -203,7 +203,7 @@ const GuestDecisionWorkspace = ({
   initialAnchorId?: string | undefined;
   initialSearchQuery?: string | undefined;
 }) => {
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -214,10 +214,9 @@ const GuestDecisionWorkspace = ({
         initialAnchorId={initialAnchorId}
         initialSearchQuery={initialSearchQuery}
         onRequestAnalysis={() => {
-          ensureAccount("generateHeadnotes");
+          ensureAccount();
         }}
       />
-      {accountDialog}
     </div>
   );
 };

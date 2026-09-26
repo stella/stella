@@ -825,6 +825,14 @@ const PERMALINK_PLACEMENT_CLASS = {
 } as const satisfies Record<PermalinkPlacement, string>;
 
 /**
+ * Reader chrome on a block (its permalink, a provision's actions) stays out
+ * of the text until the reader points at or focuses the block. A device that
+ * cannot hover shows it always, since there would be no way to reveal it.
+ */
+export const READER_BLOCK_CHROME_REVEAL_CLASS =
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+
+/**
  * A block's own address, as a link the reader can take with them.
  *
  * A plain click copies the link and writes the hash with `replaceState`: the
@@ -857,7 +865,8 @@ const BlockPermalink = ({
     <a
       aria-label={t("common.copyLink")}
       className={cn(
-        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100",
+        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
+        READER_BLOCK_CHROME_REVEAL_CLASS,
         PERMALINK_PLACEMENT_CLASS[placement],
       )}
       data-reader-chrome=""
@@ -1112,15 +1121,14 @@ export const BlockRenderer = ({
               </span>
             )}
             {/* Two equal side tracks keep the designation on the column's
-                axis however wide the accessory is. A column too narrow for
-                a localized action beside it stacks the actions below, so
-                they never overlap the designation or leave the pane. */}
+                axis however wide the accessory is. The actions always sit in
+                the trailing track, never in a row of their own: they appear
+                on hover, and a row kept for them would hold a gap between the
+                designation and its title. The accessory sizes itself to the
+                track (`@container/provision`). */}
             <span className="@container/provision block">
-              <span className="grid grid-cols-1 justify-items-center gap-2 @lg/provision:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @lg/provision:gap-3">
-                <span
-                  aria-hidden="true"
-                  className="hidden @lg/provision:block"
-                />
+              <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                <span aria-hidden="true" />
                 <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
                   <InlineContent
                     {...sharedInlineProps}
@@ -1128,9 +1136,16 @@ export const BlockRenderer = ({
                     inlines={provision.designation.inlines}
                   />
                 </span>
-                <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-base @lg/provision:justify-self-start">
+                <span className="flex min-w-0 items-center justify-self-start text-base">
                   {provision.accessory}
-                  {headingPermalink}
+                  {/* Zero-width, as on a plain heading: the glyph is invisible
+                      until hover, and stacked under the designation it would
+                      otherwise pull the centred actions off the axis. */}
+                  {headingPermalink !== null && (
+                    <span className="inline-block w-0 whitespace-nowrap">
+                      {headingPermalink}
+                    </span>
+                  )}
                 </span>
               </span>
             </span>

@@ -2,7 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -12,7 +12,6 @@ import {
   FEEDBACK_KINDS,
   FEEDBACK_LIMITS,
 } from "@stll/api-contract/feedback";
-import type { FeedbackSubmitResponse } from "@stll/api-contract/feedback";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
@@ -45,24 +44,63 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
+  buildFeedbackRequestBody,
   FEEDBACK_AREA_LABEL_KEYS,
+  FEEDBACK_CHANNELS,
   FEEDBACK_DEFAULT_KIND,
   FEEDBACK_KIND_LABEL_KEYS,
+  feedbackReceiptSchema,
   resolveFeedbackArea,
+} from "@/components/feedback-dialog.logic";
+import type {
+  FeedbackChannel,
+  FeedbackReceiptView,
 } from "@/components/feedback-dialog.logic";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FeedbackReportSource } from "@/lib/analytics/types";
-import { api } from "@/lib/api";
+import { api, publicFeedbackApi } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const RATE_LIMITED_STATUS = 429;
 
+type FeedbackRequestBody = ReturnType<typeof buildFeedbackRequestBody>;
+
+const submitFeedbackReport = async (
+  channel: FeedbackChannel,
+  body: FeedbackRequestBody,
+): Promise<FeedbackReceiptView> => {
+  switch (channel) {
+    case FEEDBACK_CHANNELS.account:
+      return unwrapEden(await api.feedback.post(body));
+    case FEEDBACK_CHANNELS.public: {
+      // The intake parses the raw text itself so it can reject unknown keys.
+      const data = unwrapEden(
+        await publicFeedbackApi.post(JSON.stringify(body)),
+      );
+      const receipt = v.safeParse(feedbackReceiptSchema, data);
+      if (!receipt.success) {
+        throw new ClientOperationError({
+          action: "feedback.submit_public",
+          message: "Feedback intake answered without a receipt",
+          cause: receipt.issues,
+        });
+      }
+      return receipt.output;
+    }
+    default:
+      channel satisfies never;
+      return panic(`Unhandled feedback channel: ${String(channel)}`);
+  }
+};
+
 type FeedbackDialogProps = {
+  channel: FeedbackChannel;
   /** Set when the dialog is opened from the route error screen; travels with
    *  the report so support can join it to the captured exception. */
   errorReference?: ErrorReference | undefined;
@@ -72,7 +110,7 @@ type FeedbackDialogProps = {
 };
 
 /**
- * Collects a structured report and posts it to `/v1/feedback`. The popup
+ * Collects a structured report and posts it through `channel`. The popup
  * unmounts on close, so each opening starts from a clean form and a clean
  * mutation; nothing typed here survives a dismissal.
  *
@@ -80,6 +118,7 @@ type FeedbackDialogProps = {
  * reports an open its parent caused, so the capture belongs with the trigger.
  */
 export const FeedbackDialog = ({
+  channel,
   errorReference,
   onOpenChange,
   open,
@@ -88,6 +127,7 @@ export const FeedbackDialog = ({
   <Dialog onOpenChange={onOpenChange} open={open}>
     <DialogPopup className="max-w-xl">
       <FeedbackReport
+        channel={channel}
         errorReference={errorReference}
         onClose={() => onOpenChange(false)}
         source={source}
@@ -97,12 +137,14 @@ export const FeedbackDialog = ({
 );
 
 type FeedbackReportProps = {
+  channel: FeedbackChannel;
   errorReference: ErrorReference | undefined;
   onClose: () => void;
   source: FeedbackReportSource;
 };
 
 const FeedbackReport = ({
+  channel,
   errorReference,
   onClose,
   source,
@@ -131,19 +173,13 @@ const FeedbackReport = ({
 
   const submit = useMutation({
     mutationFn: async (report: v.InferOutput<typeof schema>) =>
-      unwrapEden(
-        await api.feedback.post({
-          area: report.area,
-          kind: report.kind,
-          title: report.title,
-          whatHappened: report.whatHappened,
-          ...(report.steps.length > 0 && { steps: report.steps }),
-          context: {
-            client: "web",
-            clientVersion: __APP_VERSION__,
-            route,
-            ...(errorReference !== undefined && { errorReference }),
-          },
+      await submitFeedbackReport(
+        channel,
+        buildFeedbackRequestBody({
+          clientVersion: __APP_VERSION__,
+          errorReference,
+          report,
+          route,
         }),
       ),
     onSuccess: (_response, report) => {
@@ -349,7 +385,7 @@ const FeedbackReport = ({
 
 type FeedbackReceiptProps = {
   onClose: () => void;
-  response: FeedbackSubmitResponse;
+  response: FeedbackReceiptView;
 };
 
 const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {

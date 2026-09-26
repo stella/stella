@@ -31,7 +31,11 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
-import { SidebarMenuItem, useSidebar } from "@/components/sidebar";
+import {
+  sidebarIdentityTriggerClassName,
+  SidebarMenuItem,
+  useSidebarLayout,
+} from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
@@ -73,8 +77,8 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const signOut = useSignOut();
-  const { state, isMobile } = useSidebar();
-  const isCollapsed = state === "collapsed" && !isMobile;
+  const sidebarLayout = useSidebarLayout();
+  const isCollapsed = sidebarLayout === "rail";
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
@@ -90,10 +94,8 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           render={
             <MenuTrigger
               className={cn(
-                "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
-                // The rail's 32px square, as `SidebarMenuButton` renders it,
-                // so the avatar sits on the same axis as the icons above.
-                isCollapsed ? "size-8 justify-center p-0.5" : "gap-2",
+                sidebarIdentityTriggerClassName(sidebarLayout),
+                "data-popup-open:bg-sidebar-accent",
               )}
             />
           }

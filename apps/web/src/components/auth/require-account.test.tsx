@@ -16,7 +16,6 @@ import { GatedChatComposer } from "@/components/ai-suggestions/gated-chat-compos
 import {
   ACCOUNT_GATE_FOR_SESSION,
   ACCOUNT_GATE_OUTCOME,
-  ACCOUNT_INTENT_TITLE_KEYS,
 } from "@/components/auth/require-account.logic";
 import en from "@/i18n/langs/en.json";
 
@@ -26,7 +25,7 @@ const rootRoute = createRootRoute();
 
 /**
  * Enough router for a static render: the gate reads the current href for its
- * return trip and links to `/auth` when no shell dialog is in reach.
+ * return trip and navigates to `/auth` when no shell dialog is in reach.
  */
 const TestRouter = ({ children }: { children: ReactNode }) => {
   const router = createRouter({
@@ -55,25 +54,6 @@ const render = (node: ReactNode): string =>
   );
 
 describe("account gate", () => {
-  // Every gated act has to say what it is: an intent with no sentence, or one
-  // reusing another's, leaves the visitor reading about something else. The
-  // dialog itself is portalled, so there is no server markup to read this from.
-  test("every intent leads with a sentence of its own", () => {
-    const intents = Object.entries(ACCOUNT_INTENT_TITLE_KEYS);
-    const sentences = intents.map(([intent, key]) => {
-      const sentence: unknown = Reflect.get(en.auth.requireAccount, intent);
-
-      // The catalog is reached through the intent's own name, so a renamed
-      // intent takes its sentence with it instead of silently losing one.
-      expect(key.startsWith("auth.requireAccount.")).toBe(true);
-      expect(key.split(".").at(-1)).toBe(intent);
-      expect(typeof sentence).toBe("string");
-      return sentence;
-    });
-
-    expect(new Set(sentences).size).toBe(intents.length);
-  });
-
   // The public shell mounts the authenticated-user provider only once the
   // session read resolves, so "no provider yet" and "no account" look alike.
   // A member who presses an AI control in that window must not be told to
@@ -89,7 +69,7 @@ describe("account gate", () => {
       Object.entries(ACCOUNT_GATE_FOR_SESSION)
         .filter(([, outcome]) => outcome === ACCOUNT_GATE_OUTCOME.asking)
         .map(([status]) => status),
-    ).toEqual(["anonymous"]);
+    ).toEqual(["anonymous", "unavailable"]);
   });
 });
 

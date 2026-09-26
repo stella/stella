@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
-    "requireAccount": {
-      "askAboutDocument": "Erstellen Sie ein kostenloses Konto, um Fragen zu diesem Dokument zu stellen",
-      "askInChat": "Erstellen Sie ein kostenloses Konto, um das im Chat zu fragen",
-      "description": "Sobald Ihr Konto bereit ist, kehren Sie auf diese Seite zurück.",
-      "generateHeadnotes": "Erstellen Sie ein kostenloses Konto, um KI-Leitsätze zu erzeugen",
-      "refineSearch": "Erstellen Sie ein kostenloses Konto, um Ihre Suche mit KI zu verbessern",
-      "writeResearchQuestion": "Erstellen Sie ein kostenloses Konto, um diesen Ergebnissen eine Frage zu stellen"
-    },
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -595,6 +587,7 @@
       },
       "generate": "KI-Leitsätze erzeugen",
       "holdingAnchor": "Zum Absatz",
+      "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
     },

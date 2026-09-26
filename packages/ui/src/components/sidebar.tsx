@@ -23,11 +23,12 @@ import {
 } from "./sheet";
 import {
   deriveSidebarState,
-  isSidebarMenuButtonTooltipVisible,
   nextOpenMobile,
   nextRequestedOpen,
+  resolveSidebarLayout,
   resolveSidebarOpen,
 } from "./sidebar.logic";
+import type { SidebarLayout } from "./sidebar.logic";
 import { Skeleton } from "./skeleton";
 import {
   TooltipPopup,
@@ -99,6 +100,13 @@ function useSidebar() {
   }
 
   return context;
+}
+
+/** The sidebar's current layout; see `resolveSidebarLayout`. */
+function useSidebarLayout(): SidebarLayout {
+  const { isMobile, state } = useSidebar();
+
+  return resolveSidebarLayout({ isMobile, state });
 }
 
 /**
@@ -593,6 +601,22 @@ const sidebarMenuButtonVariants = cva(
   },
 );
 
+/**
+ * The footer's avatar trigger, signed in (user menu) or not (sign-in): a
+ * 28px avatar, then its label while expanded. Collapsed, it is the rail's
+ * 32px square with the avatar centred on the axis of the icons above.
+ *
+ * Not a `SidebarMenuButton` size: that button fades its last span when
+ * collapsed, and an avatar renders as a span. Every avatar trigger takes
+ * this class and renders its label only while expanded, so the two auth
+ * states cannot drift apart.
+ */
+const sidebarIdentityTriggerClassName = (layout: SidebarLayout): string =>
+  cn(
+    "ring-sidebar-ring hover:bg-sidebar-accent flex items-center overflow-hidden rounded-md text-start text-sm outline-hidden focus-visible:ring-2",
+    layout === "rail" ? "size-8 justify-center p-0.5" : "w-full gap-2 p-2",
+  );
+
 const SidebarMenuButton = ({
   asChild = false,
   isActive = false,
@@ -607,7 +631,7 @@ const SidebarMenuButton = ({
   tooltip?: string | React.ComponentProps<typeof TooltipPopup>;
 } & VariantProps<typeof sidebarMenuButtonVariants>) => {
   const Comp = asChild ? Slot : "button";
-  const { isMobile, state } = useSidebar();
+  const sidebarLayout = useSidebarLayout();
 
   const button = (
     <Comp
@@ -632,7 +656,8 @@ const SidebarMenuButton = ({
       <TooltipTrigger render={button} />
       <TooltipPopup
         align="center"
-        hidden={!isSidebarMenuButtonTooltipVisible({ isMobile, state })}
+        // The label is on screen except in the desktop icon rail.
+        hidden={sidebarLayout !== "rail"}
         side="right"
         {...tooltipProps}
       />
@@ -801,6 +826,7 @@ export {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,
@@ -812,4 +838,5 @@ export {
   SidebarTrigger,
   useSidebar,
   useSidebarInlineSize,
+  useSidebarLayout,
 };

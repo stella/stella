@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 
 import {
-  BlocksIcon,
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
@@ -19,7 +18,6 @@ type WorkspacePrimaryRoute =
   | "/inbox"
   | "/knowledge"
   | "/law"
-  | "/tools"
   | "/workspaces";
 
 type WorkspacePrimaryNavItem = {
@@ -79,15 +77,6 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/law",
   },
   {
-    icon: BlocksIcon,
-    id: "tools",
-    audience: "public",
-    kind: "route",
-    // Reuse the canonical "Tools" label; no per-surface variant.
-    labelKey: "knowledge.sections.tools.title",
-    to: "/tools",
-  },
-  {
     icon: LibraryBigIcon,
     id: "knowledge",
     audience: "authenticated",
@@ -111,11 +100,9 @@ export type WorkspacePrimaryNavId =
 export const getWorkspacePrimaryNavItems = ({
   includeInbox,
   includePublicLaw,
-  includePublicTools,
 }: {
   includeInbox: boolean;
   includePublicLaw: boolean;
-  includePublicTools: boolean;
 }) =>
   WORKSPACE_PRIMARY_NAV_ITEMS.filter((item) => {
     if (item.id === "caseLaw") {
@@ -123,9 +110,6 @@ export const getWorkspacePrimaryNavItems = ({
     }
     if (item.id === "inbox") {
       return includeInbox;
-    }
-    if (item.id === "tools") {
-      return includePublicTools;
     }
     return true;
   });

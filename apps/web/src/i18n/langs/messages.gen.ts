@@ -109,14 +109,6 @@ type Messages = {
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
-    "requireAccount": {
-      "askAboutDocument": "Create a free account to ask about this document";
-      "askInChat": "Create a free account to ask this in chat";
-      "description": "You'll come back to this page once your account is ready.";
-      "generateHeadnotes": "Create a free account to generate AI headnotes";
-      "refineSearch": "Create a free account to improve your search with AI";
-      "writeResearchQuestion": "Create a free account to ask a question of these results";
-    };
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
@@ -598,6 +590,7 @@ type Messages = {
       };
       "generate": "Generate AI headnotes";
       "holdingAnchor": "Go to paragraph";
+      "invitation": "With a free account, AI drafts working notes on this decision.";
       "topics": "Topics";
       "treatment": "Later treatment";
     };

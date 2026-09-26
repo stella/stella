@@ -27,6 +27,10 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
+import {
+  EXAMPLE_NOTES,
+  exampleNoteAnchors,
+} from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
@@ -42,6 +46,13 @@ import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import {
+  clickOpensVisitorOffer,
+  NOTES_FILTER_SHOWS_AI,
+  READER_ASIDE_RESIZE_SLOT,
+  resolveVisitorOffer,
+} from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -123,9 +134,6 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
-/** The notes margin's mutually exclusive source filter. */
-type NotesFilter = "all" | "ai" | "mine";
-
 /** What the margin's source filter means for the reader's own marks. */
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
@@ -159,7 +167,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
-  const showAiNotes = notesFilter === "all" || notesFilter === "ai";
+  const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
@@ -344,8 +352,40 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
+  const visitorOffer = resolveVisitorOffer({
+    analysisStatus: analysisState.status,
+    notesFilter,
+    onRequest: props.aiMode === "gated" ? props.onRequestAnalysis : undefined,
+  });
+
+  // A visitor sees the shape the notes would take, where they would sit,
+  // until there is an analysis to show instead.
+  const exampleMarginItems: AnalysisMarginItem[] =
+    visitorOffer !== undefined
+      ? exampleNoteAnchors({
+          anchorIds: visibleDecisionBlocks(ast).map((block) => block.anchorId),
+          seed: decisionId,
+        }).flatMap((startAnchorId, index) => {
+          const note = EXAMPLE_NOTES.at(index);
+          return note === undefined
+            ? []
+            : [
+                {
+                  kind: "example",
+                  id: `example:${note.category}`,
+                  heading: t(`caseLaw.analysis.categories.${note.category}`),
+                  category: note.category,
+                  depth: 0,
+                  lines: note.lines,
+                  startAnchorId,
+                },
+              ];
+        })
+      : [];
+
   const visibleMarginItems = [
     ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...exampleMarginItems,
     ...annotations.notes,
   ];
 
@@ -486,7 +526,26 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
-                <aside className="relative flex flex-col max-lg:hidden">
+                {/* Before a visitor has an account, the notes column is the
+                    offer: a click on its surface or an example note asks for
+                    the account. The reader's own comments stay usable. The
+                    prompt's own button is the keyboard path to the same gate. */}
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pointer shortcut only; the sticky prompt's button is the keyboard path */}
+                <aside
+                  className={cn(
+                    "relative flex flex-col max-lg:hidden",
+                    visitorOffer !== undefined && "cursor-pointer",
+                  )}
+                  onClick={
+                    visitorOffer === undefined
+                      ? undefined
+                      : (event) => {
+                          if (clickOpensVisitorOffer(event.target)) {
+                            visitorOffer();
+                          }
+                        }
+                  }
+                >
                   {completeAnalysis !== null && showAiNotes && (
                     <AnalysisLayers analysis={completeAnalysis} />
                   )}
@@ -547,6 +606,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
                   <div
                     className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                    data-slot={READER_ASIDE_RESIZE_SLOT}
                     onPointerDown={(event) => {
                       event.preventDefault();
                       isDragging.current = true;
@@ -655,9 +715,10 @@ const AnalysisLoader = () => {
 };
 
 /**
- * The analysis column before a run: the layer is named and offered where it
- * would be drawn, rather than teased behind a blur. Without a handler the
- * column only names the layer, which is what a member's loading shell needs.
+ * The analysis column's offer before a run. A visitor also sees example
+ * notes in the margin beside the text (`exampleNoteAnchors`); this box says
+ * what a free account unlocks. Without a handler the column only names the
+ * layer, which is what a member's loading shell needs.
  */
 const GatedAnalysisInvitation = ({
   onRequest,
@@ -666,24 +727,45 @@ const GatedAnalysisInvitation = ({
 }) => {
   const t = useTranslations();
 
-  return (
-    <div
-      aria-label={t("caseLaw.notesFilter.ai")}
-      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-      data-slot="gated-analysis-invitation"
-      role="region"
-    >
-      {onRequest === undefined ? (
+  if (onRequest === undefined) {
+    return (
+      <div
+        aria-label={t("caseLaw.notesFilter.ai")}
+        className="mx-2 mt-8 flex justify-center"
+        data-slot="gated-analysis-invitation"
+        role="region"
+      >
         <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
           <SparklesIcon className="size-3.5" />
           {t("caseLaw.notesFilter.ai")}
         </span>
-      ) : (
-        <Button onClick={onRequest} size="sm" variant="muted">
-          <SparklesIcon className="size-3" />
-          {t("caseLaw.analysis.generate")}
-        </Button>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-label={t("caseLaw.notesFilter.ai")}
+      // Pinned while the example notes scroll past beneath it.
+      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 sticky top-4 z-20 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+      data-slot="gated-analysis-invitation"
+      role="region"
+    >
+      <p className="text-foreground-strong-muted text-xs leading-snug">
+        {t("caseLaw.analysis.invitation")}
+      </p>
+      <Button
+        onClick={(event) => {
+          // The column around it asks for the account too; ask once.
+          event.stopPropagation();
+          onRequest();
+        }}
+        size="sm"
+        variant="muted"
+      >
+        <SparklesIcon className="size-3" />
+        {t("caseLaw.analysis.generate")}
+      </Button>
     </div>
   );
 };

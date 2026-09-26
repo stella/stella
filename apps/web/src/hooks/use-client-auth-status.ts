@@ -3,9 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { sessionOptions } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
+/**
+ * `anonymous` is reserved for a session read that answered "no session". A
+ * read that failed is `unavailable`, even with a member session still cached:
+ * the reader's identity is unknown, so neither member-only UI nor an
+ * anonymous-only path (such as the public feedback intake) may assume one.
+ */
 export type ClientAuthStatus =
   | { status: "checking"; isAuthenticated: false }
   | { status: "anonymous"; isAuthenticated: false }
+  | { status: "unavailable"; isAuthenticated: false }
   | {
       status: "authenticated";
       isAuthenticated: true;
@@ -22,8 +29,15 @@ export const useClientAuthStatus = (): ClientAuthStatus => {
     };
   }
 
+  if (isError) {
+    return {
+      status: "unavailable",
+      isAuthenticated: false,
+    };
+  }
+
   const activeOrganizationId = sessionData?.session.activeOrganizationId;
-  if (isError || sessionData === null || !activeOrganizationId) {
+  if (!activeOrganizationId) {
     return {
       status: "anonymous",
       isAuthenticated: false,

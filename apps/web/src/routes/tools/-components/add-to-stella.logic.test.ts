@@ -21,6 +21,14 @@ describe("public catalogue install affordance", () => {
     ).toEqual({ type: "sign-in" });
     expect(
       resolveAddToStellaState({
+        authStatus: "unavailable",
+        canInstall: undefined,
+        entry,
+        organizationEntries: undefined,
+      }),
+    ).toEqual({ type: "sign-in" });
+    expect(
+      resolveAddToStellaState({
         authStatus: "authenticated",
         canInstall: undefined,
         entry,

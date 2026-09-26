@@ -101,32 +101,29 @@ const PublicLawRefine = ({
   onRefine,
 }: PublicLawSearchRefine & { disabled: boolean }) => {
   const t = useTranslations();
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
 
   return (
-    <>
-      <Button
-        aria-label={t("search.aiRefine")}
-        disabled={disabled || isPending}
-        onClick={() => {
-          if (ensureAccount("refineSearch") !== ACCOUNT_GATE_OUTCOME.allowed) {
-            return;
-          }
-          onRefine();
-        }}
-        size="icon-sm"
-        title={t("search.aiRefine")}
-        type="button"
-        variant="muted"
-      >
-        {isPending ? (
-          <Loader label={t("search.aiRefine")} size="sm" />
-        ) : (
-          <WandSparklesIcon aria-hidden="true" className="size-4" />
-        )}
-      </Button>
-      {accountDialog}
-    </>
+    <Button
+      aria-label={t("search.aiRefine")}
+      disabled={disabled || isPending}
+      onClick={() => {
+        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+          return;
+        }
+        onRefine();
+      }}
+      size="icon-sm"
+      title={t("search.aiRefine")}
+      type="button"
+      variant="muted"
+    >
+      {isPending ? (
+        <Loader label={t("search.aiRefine")} size="sm" />
+      ) : (
+        <WandSparklesIcon aria-hidden="true" className="size-4" />
+      )}
+    </Button>
   );
 };
 
@@ -143,26 +140,23 @@ export const PublicLawAskInChat = ({
   prompt: string;
 }) => {
   const t = useTranslations();
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
 
   return (
-    <>
-      <Button
-        className="text-muted-foreground"
-        onClick={() => {
-          if (ensureAccount("askInChat") !== ACCOUNT_GATE_OUTCOME.allowed) {
-            return;
-          }
-          openPublicLawChat({ label, prompt });
-        }}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
-        {t("common.askInChat")}
-      </Button>
-      {accountDialog}
-    </>
+    <Button
+      className="text-muted-foreground"
+      onClick={() => {
+        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+          return;
+        }
+        openPublicLawChat({ label, prompt });
+      }}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
+      {t("common.askInChat")}
+    </Button>
   );
 };

@@ -149,7 +149,7 @@ describe("route error support", () => {
 
   test("never offers reporting to a session that cannot post a report", () => {
     for (const deployment of ["hosted", "selfHosted"] as const) {
-      for (const session of ["anonymous", "checking"] as const) {
+      for (const session of ["anonymous", "checking", "unavailable"] as const) {
         expect(resolveRouteErrorSupport({ deployment, session }).type).not.toBe(
           "report",
         );

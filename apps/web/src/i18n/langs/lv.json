@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
-    "requireAccount": {
-      "askAboutDocument": "Izveidojiet bezmaksas kontu, lai jautātu par šo dokumentu",
-      "askInChat": "Izveidojiet bezmaksas kontu, lai jautātu to tērzēšanā",
-      "description": "Kad konts būs gatavs, atgriezīsieties šajā lapā.",
-      "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai AI sagatavotu kopsavilkumus",
-      "refineSearch": "Izveidojiet bezmaksas kontu, lai uzlabotu meklēšanu ar AI",
-      "writeResearchQuestion": "Izveidojiet bezmaksas kontu, lai uzdotu jautājumu šiem rezultātiem"
-    },
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -595,6 +587,7 @@
       },
       "generate": "Sagatavot AI kopsavilkumus",
       "holdingAnchor": "Pāriet uz rindkopu",
+      "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
     },

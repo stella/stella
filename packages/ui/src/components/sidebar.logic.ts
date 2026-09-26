@@ -1,17 +1,21 @@
 export type SidebarState = "expanded" | "collapsed";
 
+/** How the sidebar's contents are drawn: the icon rail, or full width. */
+export type SidebarLayout = "rail" | "full";
+
 /**
- * A `SidebarMenuButton`'s tooltip repeats the label already visible in the
- * expanded rail, and mobile never collapses to icons, so it only earns its
- * keep on desktop while the sidebar is icon-collapsed.
+ * The layout the sidebar's contents are drawn in. The mobile sheet never
+ * collapses to icons, whatever the desktop collapse state holds, so chrome
+ * that changes shape when collapsed (labels, tooltips, the avatar trigger)
+ * reads this rather than `state`.
  */
-export const isSidebarMenuButtonTooltipVisible = ({
+export const resolveSidebarLayout = ({
   state,
   isMobile,
 }: {
   state: SidebarState;
   isMobile: boolean;
-}): boolean => state === "collapsed" && !isMobile;
+}): SidebarLayout => (state === "collapsed" && !isMobile ? "rail" : "full");
 
 /**
  * The sidebar's displayed open state: the requested state (controlled prop,

@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from "react";
 import { MegaphoneIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { FeedbackChannel } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { useAnalytics } from "@/lib/analytics/provider";
 
@@ -22,7 +23,11 @@ const DIALOG_STATES = {
 type DialogState = (typeof DIALOG_STATES)[keyof typeof DIALOG_STATES];
 
 /** Sidebar entry point. Owns its own dialog so the shell stays a layout. */
-export const FeedbackSidebarItem = () => {
+export const FeedbackSidebarItem = ({
+  channel,
+}: {
+  channel: FeedbackChannel;
+}) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   // `idle` until first opened, so the chunk is never fetched for a session
@@ -47,6 +52,7 @@ export const FeedbackSidebarItem = () => {
       {dialogState !== DIALOG_STATES.idle && (
         <Suspense fallback={null}>
           <FeedbackDialog
+            channel={channel}
             onOpenChange={(open) =>
               setDialogState(open ? DIALOG_STATES.open : DIALOG_STATES.closed)
             }
