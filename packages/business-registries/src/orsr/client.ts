@@ -94,12 +94,22 @@ const isOrsrDocumentList = (value: unknown): value is OrsrRawDocument[] =>
         typeof item["isElectronic"] === "boolean"),
   );
 
+const isOrsrRelatedHit = (item: unknown): boolean =>
+  isRecord(item) &&
+  hasOptionalString(item, "corporateBodyFullName") &&
+  hasOptionalString(item, "registrationNumber") &&
+  hasOptionalString(item, "physicalAddressLine1") &&
+  hasOptionalString(item, "physicalAddressLine2") &&
+  (item["relatedPersonName"] === null ||
+    hasOptionalString(item, "relatedPersonName")) &&
+  (item["fileReference"] === undefined || isRecord(item["fileReference"]));
+
 const isOrsrRelatedResponse = (
   value: unknown,
 ): value is OrsrRawRelatedResponse =>
   isRecord(value) &&
   (value["data"] === undefined ||
-    (Array.isArray(value["data"]) && value["data"].every(isRecord)));
+    (Array.isArray(value["data"]) && value["data"].every(isOrsrRelatedHit)));
 
 const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
   if (!isRecord(value)) {
