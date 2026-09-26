@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Ez a PDF jelszóval védett. Aláírás előtt távolítsd el a védelmet.",
         "expiredDescription": "A stella desktop nem fejezte be időben az aláírást. Indítsd el, és próbáld újra.",
         "expiredTitle": "Az aláírás ideje lejárt",
+        "inProgressDescription": "Ezt a fájlt már aláírják. Előbb fejezd be vagy szakítsd meg azt az aláírást a stella desktopban.",
         "noFileDescription": "Ehhez a dokumentumhoz nem tartozik aláírható fájl.",
         "notAPdfDescription": "Csak PDF-fájlok írhatók alá.",
         "readOnlyDescription": "Ez a dokumentum csak olvasható.",

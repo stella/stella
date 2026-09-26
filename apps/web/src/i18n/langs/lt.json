@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Šis PDF apsaugotas slaptažodžiu. Prieš pasirašydami pašalinkite apsaugą.",
         "expiredDescription": "stella desktop nespėjo užbaigti pasirašymo. Paleiskite ją ir bandykite dar kartą.",
         "expiredTitle": "Pasirašymo laikas baigėsi",
+        "inProgressDescription": "Šis failas jau pasirašomas. Pirmiausia užbaikite arba atšaukite tą pasirašymą stella desktop.",
         "noFileDescription": "Šis dokumentas neturi failo, kurį būtų galima pasirašyti.",
         "notAPdfDescription": "Pasirašyti galima tik PDF failus.",
         "readOnlyDescription": "Šis dokumentas yra tik skaitomas.",

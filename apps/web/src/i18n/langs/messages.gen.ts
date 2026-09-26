@@ -5111,6 +5111,7 @@ type Messages = {
         "encryptedDescription": "This PDF is password-protected. Remove the protection before signing.";
         "expiredDescription": "stella desktop did not finish signing in time. Start it and try again.";
         "expiredTitle": "Signing timed out";
+        "inProgressDescription": "This file is already being signed. Finish or cancel that signing in stella desktop first.";
         "noFileDescription": "This document has no file to sign.";
         "notAPdfDescription": "Only PDF files can be signed.";
         "readOnlyDescription": "This document is read-only.";

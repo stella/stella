@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Šis PDF ir aizsargāts ar paroli. Pirms parakstīšanas noņemiet aizsardzību.",
         "expiredDescription": "stella desktop nepaspēja pabeigt parakstīšanu. Palaidiet to un mēģiniet vēlreiz.",
         "expiredTitle": "Parakstīšanas laiks beidzies",
+        "inProgressDescription": "Šis fails jau tiek parakstīts. Vispirms pabeidziet vai atceliet šo parakstīšanu stella desktop.",
         "noFileDescription": "Šim dokumentam nav faila, ko parakstīt.",
         "notAPdfDescription": "Parakstīt var tikai PDF failus.",
         "readOnlyDescription": "Šis dokuments ir tikai lasāms.",

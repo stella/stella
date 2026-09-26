@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Dieses PDF ist passwortgeschützt. Entfernen Sie den Schutz vor dem Signieren.",
         "expiredDescription": "stella desktop hat das Signieren nicht rechtzeitig abgeschlossen. Starten Sie die App und versuchen Sie es erneut.",
         "expiredTitle": "Zeit zum Signieren abgelaufen",
+        "inProgressDescription": "Diese Datei wird bereits signiert. Schließen Sie diese Signatur in stella desktop zuerst ab oder brechen Sie sie ab.",
         "noFileDescription": "Zu diesem Dokument gibt es keine Datei zum Signieren.",
         "notAPdfDescription": "Nur PDF-Dateien können signiert werden.",
         "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",

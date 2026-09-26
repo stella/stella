@@ -5108,6 +5108,7 @@
         "encryptedDescription": "ملف PDF هذا محمي بكلمة مرور. أزل الحماية قبل التوقيع.",
         "expiredDescription": "لم يُكمل تطبيق stella لسطح المكتب التوقيع في الوقت المحدد. شغّله وحاول مرة أخرى.",
         "expiredTitle": "انتهت مهلة التوقيع",
+        "inProgressDescription": "يجري توقيع هذا الملف بالفعل. أكمل ذلك التوقيع أو ألغه في stella desktop أولًا.",
         "noFileDescription": "لا يحتوي هذا المستند على ملف قابل للتوقيع.",
         "notAPdfDescription": "يمكن توقيع ملفات PDF فقط.",
         "readOnlyDescription": "هذا المستند للقراءة فقط.",

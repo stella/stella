@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Ten plik PDF jest chroniony hasłem. Usuń zabezpieczenie przed podpisaniem.",
         "expiredDescription": "stella desktop nie ukończył podpisywania na czas. Uruchom go i spróbuj ponownie.",
         "expiredTitle": "Czas na podpis minął",
+        "inProgressDescription": "Ten plik jest już podpisywany. Najpierw dokończ lub anuluj to podpisywanie w stella desktop.",
         "noFileDescription": "Ten dokument nie ma pliku do podpisania.",
         "notAPdfDescription": "Podpisać można tylko pliki PDF.",
         "readOnlyDescription": "Ten dokument jest tylko do odczytu.",
