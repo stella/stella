@@ -6,7 +6,7 @@
  * an exchange open that nothing can finish.
  */
 
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
@@ -36,10 +36,6 @@ import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-
 import { configuredTimestampTrustAnchors } from "@/api/lib/pdf-signing/timestamp-trust";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-class PdfSigningSessionClosedError extends TaggedError(
-  "PdfSigningSessionClosedError",
-)<{ message: string }> {}
 
 /** What phase 1 stored, all of it present. */
 export type PreparedSigningState = {
@@ -158,33 +154,29 @@ const embed = async (
   const certificateChain = decodeCertificateChain(
     session.signerCertificateChain,
   );
-  const applied = await Result.tryPromise({
-    try: async () =>
-      await applySignature({
-        basePdf,
-        certificate: new Uint8Array(prepared.signerCertificateDer),
-        certificateChain,
-        certificateChainComplete: chainReachesRoot(
-          prepared.signerCertificateDer,
-          certificateChain,
-        ),
-        expectedDigestHex: prepared.digestHex,
-        keyType: prepared.keyType,
-        location: session.location,
-        placeholderSize: prepared.placeholderSize,
-        reason: session.reason,
-        signature,
-        signatureAlgorithm:
-          prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
-        signingTime: prepared.signingTime,
-        stamp: session.stamp,
-        timestampAuthorities: configuredTimestampAuthorities(),
-        timestampTrustAnchors: configuredTimestampTrustAnchors(),
-      }),
-    catch: (cause) => cause,
+  const applied = await applySignature({
+    basePdf,
+    certificate: new Uint8Array(prepared.signerCertificateDer),
+    certificateChain,
+    certificateChainComplete: chainReachesRoot(
+      prepared.signerCertificateDer,
+      certificateChain,
+    ),
+    expectedDigestHex: prepared.digestHex,
+    keyType: prepared.keyType,
+    location: session.location,
+    placeholderSize: prepared.placeholderSize,
+    reason: session.reason,
+    signature,
+    signatureAlgorithm:
+      prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
+    signingTime: prepared.signingTime,
+    stamp: session.stamp,
+    timestampAuthorities: configuredTimestampAuthorities(),
+    timestampTrustAnchors: configuredTimestampTrustAnchors(),
   });
   if (Result.isOk(applied)) {
-    return applied;
+    return Result.ok(applied.value);
   }
   const cause = applied.error;
   if (PdfSigningDigestMismatchError.is(cause)) {
@@ -279,12 +271,10 @@ const writeSignedVersion = async (
             )
             .returning({ id: pdfSigningSessions.id });
           // Cancelled, or superseded by a later attempt after this one's
-          // lease lapsed: throwing rolls the version back with it, so only
+          // lease lapsed: rolling back takes the version with it, so only
           // the attempt holding the exchange can finalize it.
           if (!finalized.at(0)) {
-            throw new PdfSigningSessionClosedError({
-              message: "The signing session closed before it finalized.",
-            });
+            tx.rollback();
           }
 
           await recordAuditEvent(tx, {

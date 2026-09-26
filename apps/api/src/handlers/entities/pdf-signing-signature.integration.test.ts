@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import { settled } from "@/api/tests/helpers/settled";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -82,19 +83,21 @@ const seedPreparedSession = async () => {
     certificateChain: [],
     timestamped: false,
   });
-  const { digestHex, signedAttributes } = await captureSigningDigest({
-    basePdf: await created.save(),
-    certificate: der,
-    certificateChain: [],
-    keyType: "RSA",
-    location: null,
-    placeholderSize,
-    reason: null,
-    reserveTimestamp: false,
-    signatureAlgorithm: "RSASSA-PKCS1-v1_5",
-    signingTime,
-    stamp: null,
-  });
+  const { digestHex, signedAttributes } = await settled(
+    captureSigningDigest({
+      basePdf: await created.save(),
+      certificate: der,
+      certificateChain: [],
+      keyType: "RSA",
+      location: null,
+      placeholderSize,
+      reason: null,
+      reserveTimestamp: false,
+      signatureAlgorithm: "RSASSA-PKCS1-v1_5",
+      signingTime,
+      stamp: null,
+    }),
+  );
   const key = crypto.createPrivateKey({
     key: Buffer.from(await crypto.subtle.exportKey("pkcs8", privateKey)),
     format: "der",

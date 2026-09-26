@@ -24,7 +24,7 @@ import {
   PdfStream,
 } from "@libpdf/core";
 import type { PDF, PdfObject } from "@libpdf/core";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
 import { Temporal } from "@stll/time";
@@ -289,17 +289,14 @@ export const placeStamp = ({
 };
 
 /** The certificate's subject common name, the name the stamp shows. */
-export const certificateSubjectName = (certificate: Uint8Array): string => {
-  try {
+export const certificateSubjectName = (certificate: Uint8Array): string =>
+  Result.try(() => {
     const parsed = pkijs.Certificate.fromBER(new Uint8Array(certificate));
     const value = parsed.subject.typesAndValues.find(
       ({ type }) => type === COMMON_NAME_OID,
     )?.value.valueBlock.value;
     return typeof value === "string" ? value.trim() : "";
-  } catch {
-    return "";
-  }
-};
+  }).unwrapOr("");
 
 const pad = (value: number, length = 2) => String(value).padStart(length, "0");
 
@@ -486,13 +483,15 @@ export const addSignatureStamp = ({
   lines: readonly string[];
   pdf: PDF;
   stamp: SignatureStamp;
-}): string => {
+}): Result<string, PdfSigningStampError> => {
   const page = pdf.getPages().at(stamp.pageIndex);
   if (page === undefined) {
-    throw new PdfSigningStampError({
-      message: "The stamp's page is not in this document.",
-      reason: "placement",
-    });
+    return Result.err(
+      new PdfSigningStampError({
+        message: "The stamp's page is not in this document.",
+        reason: "placement",
+      }),
+    );
   }
   const [x1, y1, x2, y2] = stamp.rect;
   const turned = stamp.rotation === 90 || stamp.rotation === 270;
@@ -502,11 +501,13 @@ export const addSignatureStamp = ({
   // Never draw a blank glyph or a misordered script: see `stamp-text.ts`.
   const check = stampTextCheck(fontBytes);
   if (!lines.every((line) => check.canDraw(line))) {
-    throw new PdfSigningStampError({
-      message:
-        "The stamp's text cannot be shown in a visible stamp. Sign invisibly instead.",
-      reason: "unrenderable",
-    });
+    return Result.err(
+      new PdfSigningStampError({
+        message:
+          "The stamp's text cannot be shown in a visible stamp. Sign invisibly instead.",
+        reason: "unrenderable",
+      }),
+    );
   }
   const font = pdf.embedFont(fontBytes);
   const unitWidth = (text: string) =>
@@ -523,11 +524,13 @@ export const addSignatureStamp = ({
     width,
   });
   if (layout === null) {
-    throw new PdfSigningStampError({
-      message:
-        "The stamp's text does not fit its box at a readable size. Draw a larger box, shorten the text or sign invisibly.",
-      reason: "overflow",
-    });
+    return Result.err(
+      new PdfSigningStampError({
+        message:
+          "The stamp's text does not fit its box at a readable size. Draw a larger box, shorten the text or sign invisibly.",
+        reason: "overflow",
+      }),
+    );
   }
   const { fontSize, padding, rows } = layout;
 
@@ -584,10 +587,12 @@ export const addSignatureStamp = ({
     ?.getArray("Fields");
   const widgetRef = acroFormFields?.at(-1);
   if (!(widgetRef instanceof PdfRef) || pdf.getObject(widgetRef) !== widget) {
-    throw new PdfSigningStampError({
-      message: "The stamp's field could not be located.",
-      reason: "placement",
-    });
+    return Result.err(
+      new PdfSigningStampError({
+        message: "The stamp's field could not be located.",
+        reason: "placement",
+      }),
+    );
   }
 
   widget.set("Rect", new PdfArray(stamp.rect.map((v) => PdfNumber.of(v))));
@@ -612,5 +617,5 @@ export const addSignatureStamp = ({
   } else {
     annotations.push(widgetRef);
   }
-  return fieldName;
+  return Result.ok(fieldName);
 };
