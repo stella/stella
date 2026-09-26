@@ -11,9 +11,9 @@ import { recordedOpinionClusters } from "./test-oracle";
 const rawText = (block: Block): string =>
   "inlines" in block ? plainTextOf(block.inlines) : block.plainText;
 
-const blocksOf = (parsed: FormatParse): Block[] => {
-  if (parsed.status !== "parsed") {
-    throw new Error(`expected a parse, got ${parsed.status}`);
+const blocksOf = (parsed: FormatParse | null): Block[] => {
+  if (parsed === null || parsed.status !== "parsed") {
+    throw new Error(`expected a parse, got ${parsed?.status ?? "html"}`);
   }
   return parsed.text.units.flatMap(({ blocks }) => [...blocks]);
 };
@@ -148,18 +148,15 @@ describe("preformatted bodies", () => {
   test("hands markup other than preformatted runs to the HTML parsers", () => {
     expect(
       parsePreformatted(input('<pre>a</pre><div class="x">b</div>')),
-    ).toEqual({
-      status: "unsupported",
-      structure: "html:div",
-    });
+    ).toBeNull();
   });
 
-  test("holds a body with a graphic for its asset", () => {
+  test("delegates a preformatted body with other markup to HTML", () => {
     expect(
       parsePreformatted(
         input('<pre class="inline">See the map.</pre><img src="map.png"/>'),
       ),
-    ).toEqual({ status: "requires-assets", graphics: { img: 1 } });
+    ).toBeNull();
   });
 
   test("refuses a script-only body", () => {
@@ -228,6 +225,7 @@ describe("recorded unmarked opinions", () => {
       outcome.blocks.map(({ id }, index) => ({
         opinionId: `cl-opinion:4912325/block-${index + 1}`,
         blockIds: [id],
+        boundaries: "unproven",
       })),
     );
     expect(outcome.principal.singleOpinionBody).toBe(false);
@@ -250,6 +248,7 @@ describe("recorded unmarked opinions", () => {
       outcome.blocks.map(({ id }, index) => ({
         opinionId: `cl-opinion:11209260/block-${index + 1}`,
         blockIds: [id],
+        boundaries: "unproven",
       })),
     );
     const texts = outcome.blocks.map(({ plainText }) => plainText);
