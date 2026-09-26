@@ -108,7 +108,7 @@ export const PdfSignPlacement = ({
       box: placement.box,
       direction: getLangDir(loadedLang),
       labels: {
-        date: t("workspaces.files.pdfSigning.stampDate"),
+        date: t("common.date"),
         location: t("workspaces.files.pdfSigning.stampLocation"),
         reason: t("workspaces.files.pdfSigning.stampReason"),
         signedBy: t("workspaces.files.pdfSigning.stampSignedBy"),
@@ -327,9 +327,7 @@ const StampDocument = ({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <Label htmlFor={selectId}>
-          {t("workspaces.files.pdfSigning.placementPage")}
-        </Label>
+        <Label htmlFor={selectId}>{t("common.page")}</Label>
         <Select
           onValueChange={(value) => {
             if (value === null || value === selectedPage) {
@@ -515,7 +513,7 @@ const StampBoxControl = ({
       aria-label={t("workspaces.files.pdfSigning.placementBox")}
       // Drawn at the stamp's true size; an invisible layer around a small
       // box keeps it at least 44px to grab.
-      className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start border text-start outline-none select-none before:absolute before:top-1/2 before:start-1/2 before:size-full before:min-h-11 before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] focus-visible:ring-2"
+      className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start border text-start outline-none select-none before:absolute before:start-1/2 before:top-1/2 before:size-full before:min-h-11 before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] focus-visible:ring-2"
       onKeyDown={(event) => {
         const adjustment = stampKeyAdjustment({
           key: event.key,

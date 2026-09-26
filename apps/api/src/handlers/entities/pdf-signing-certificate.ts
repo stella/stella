@@ -15,6 +15,7 @@ import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocatio
 import {
   captureSigningDigest,
   PdfSigningCertifiedDocumentError,
+  PdfSigningWouldBreakSignaturesError,
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { PdfSigningStampError } from "@/api/lib/pdf-signing/stamp";
@@ -62,9 +63,19 @@ const prepareRefusal = (error: unknown) => {
         "This PDF is certified and its certification does not allow further signatures.",
     } as const;
   }
+  if (PdfSigningWouldBreakSignaturesError.is(error)) {
+    return {
+      closeReason: "would_break_signatures",
+      code: "pdf_signing_would_break_signatures",
+      message: error.message,
+    } as const;
+  }
   if (PdfSigningStampError.is(error)) {
     return {
-      closeReason: "signing_failed",
+      closeReason:
+        error.reason === "placement"
+          ? "signing_failed"
+          : `stamp_${error.reason}`,
       code: `pdf_signing_stamp_${error.reason}`,
       message: error.message,
     } as const;

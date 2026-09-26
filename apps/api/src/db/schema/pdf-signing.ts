@@ -49,6 +49,9 @@ export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
   "expired",
   "signature_invalid",
   "signing_failed",
+  "stamp_overflow",
+  "stamp_unrenderable",
+  "would_break_signatures",
 ] as const;
 
 export type PdfSigningSessionCloseReason =
