@@ -29,6 +29,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { apiUrl } from "@/lib/api-url";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -331,15 +332,11 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
-  // A turn starts with a user message, a regeneration or a route hand-off;
-  // tool results and approvals continue it. The extension budgets browser
-  // commands per turn.
-  let browserTurnId = crypto.randomUUID();
-  const startBrowserTurn = (): void => {
-    browserTurnId = crypto.randomUUID();
-  };
+  // The extension budgets browser commands per chat turn, named by its
+  // persisted user message, so a runtime rebuilt mid-turn charges the same
+  // turn.
   const browserTool = createBrowserClientTool({
-    currentTurnId: () => browserTurnId,
+    turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
@@ -452,7 +449,6 @@ export const createChatRuntime = ({
     });
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    startBrowserTurn();
     const stream = client.sendMessage(message, options?.body);
 
     if (!hasUserMessage(snapshot.messages, message.id)) {
@@ -561,7 +557,6 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
-      startBrowserTurn();
       await withBody(
         {
           body: {
@@ -579,7 +574,6 @@ export const createChatRuntime = ({
       setSnapshot({ messages });
     },
     startRouteHandoffMessage: (message, options) => {
-      startBrowserTurn();
       const stream = client.sendMessage(message, options?.body);
 
       if (!hasUserMessage(snapshot.messages, message.id)) {
