@@ -22161,7 +22161,7 @@
       "version": "0.12.16"
     },
     {
-      "bom-ref": "pkg:cargo/tauri@2.11.5",
+      "bom-ref": "pkg:cargo/tauri@2.11.6",
       "evidence": {
         "identity": [
           {
@@ -22182,7 +22182,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "667b20e2726d572dea2de7370da16e188eb06008faf9a92fab7cdc46791190b5"
+          "content": "6fa5bacdb9bbad5954af3d1bd6cf6ae9192cab1b2e270f4a07f904610b9e85f4"
         }
       ],
       "licenses": [
@@ -22204,9 +22204,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri@2.11.5",
+      "purl": "pkg:cargo/tauri@2.11.6",
       "type": "library",
-      "version": "2.11.5"
+      "version": "2.11.6"
     },
     {
       "bom-ref": "pkg:cargo/tauri-build@2.6.3",
@@ -22737,7 +22737,7 @@
       "version": "2.3.1"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-plugin-single-instance@2.4.4",
+      "bom-ref": "pkg:cargo/tauri-plugin-single-instance@2.4.5",
       "evidence": {
         "identity": [
           {
@@ -22758,7 +22758,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5cd0cb5c412a5071b69bab6a6df1583cbb89460d4a83b6a24769b08d15b6b1e1"
+          "content": "db817fe9295e19b7d8357e900af31edb93703dd9fb6de524b007b47b6afc63b0"
         }
       ],
       "licenses": [
@@ -22780,12 +22780,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-plugin-single-instance@2.4.4",
+      "purl": "pkg:cargo/tauri-plugin-single-instance@2.4.5",
       "type": "library",
-      "version": "2.4.4"
+      "version": "2.4.5"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-plugin-updater@2.11.0",
+      "bom-ref": "pkg:cargo/tauri-plugin-updater@2.12.0",
       "evidence": {
         "identity": [
           {
@@ -22806,7 +22806,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b28d8cabdeb0564f03ae261963de4bc3d98321cd3d213e76a81b7d344e5df606"
+          "content": "7a5cad8ed5948d988e1018ecd31e27cacedbf72ce3fb972940c3e4bf51639e4b"
         }
       ],
       "licenses": [
@@ -22828,9 +22828,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-plugin-updater@2.11.0",
+      "purl": "pkg:cargo/tauri-plugin-updater@2.12.0",
       "type": "library",
-      "version": "2.11.0"
+      "version": "2.12.0"
     },
     {
       "bom-ref": "pkg:cargo/tauri-runtime@2.11.3",
@@ -35406,9 +35406,9 @@
         "pkg:cargo/tauri-plugin-notification@2.4.0",
         "pkg:cargo/tauri-plugin-opener@2.5.5",
         "pkg:cargo/tauri-plugin-process@2.3.1",
-        "pkg:cargo/tauri-plugin-single-instance@2.4.4",
-        "pkg:cargo/tauri-plugin-updater@2.11.0",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri-plugin-single-instance@2.4.5",
+        "pkg:cargo/tauri-plugin-updater@2.12.0",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
@@ -35429,7 +35429,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-web-kit@0.3.2",
         "pkg:cargo/objc2@0.6.4",
-        "pkg:cargo/tauri@2.11.5"
+        "pkg:cargo/tauri@2.11.6"
       ],
       "ref": "pkg:cargo/stella-desktop-macos@0.0.1"
     },
@@ -35624,7 +35624,7 @@
         "pkg:cargo/window-vibrancy@0.6.0",
         "pkg:cargo/windows@0.61.3"
       ],
-      "ref": "pkg:cargo/tauri@2.11.5"
+      "ref": "pkg:cargo/tauri@2.11.6"
     },
     {
       "dependsOn": [
@@ -35698,7 +35698,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-autostart@2.5.1"
@@ -35710,7 +35710,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-clipboard-manager@2.3.3"
@@ -35724,7 +35724,7 @@
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri-utils@2.9.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/url@2.5.8",
@@ -35740,7 +35740,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20"
       ],
       "ref": "pkg:cargo/tauri-plugin-global-shortcut@2.3.2"
@@ -35754,7 +35754,7 @@
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8"
@@ -35772,7 +35772,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows@0.61.3",
@@ -35783,7 +35783,7 @@
     {
       "dependsOn": [
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5"
+        "pkg:cargo/tauri@2.11.6"
       ],
       "ref": "pkg:cargo/tauri-plugin-process@2.3.1"
     },
@@ -35792,14 +35792,14 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin-deep-link@2.4.10",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-sys@0.60.2",
         "pkg:cargo/zbus@5.18.0"
       ],
-      "ref": "pkg:cargo/tauri-plugin-single-instance@2.4.4"
+      "ref": "pkg:cargo/tauri-plugin-single-instance@2.4.5"
     },
     {
       "dependsOn": [
@@ -35820,7 +35820,7 @@
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tar@0.4.46",
         "pkg:cargo/tauri-plugin@2.6.3",
-        "pkg:cargo/tauri@2.11.5",
+        "pkg:cargo/tauri@2.11.6",
         "pkg:cargo/tempfile@3.27.0",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
@@ -35829,7 +35829,7 @@
         "pkg:cargo/windows-sys@0.60.2",
         "pkg:cargo/zip@4.6.1"
       ],
-      "ref": "pkg:cargo/tauri-plugin-updater@2.11.0"
+      "ref": "pkg:cargo/tauri-plugin-updater@2.12.0"
     },
     {
       "dependsOn": [
