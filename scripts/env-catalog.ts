@@ -255,9 +255,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DATABASE_POOL_MAX_LIFETIME_S:
     "Maximum database connection lifetime in seconds; zero disables retirement.",
   DATABASE_RLS_POOL_MAX:
-    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX within the process connection budget.",
+    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
-    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
+    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
