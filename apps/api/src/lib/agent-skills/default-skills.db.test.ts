@@ -6,10 +6,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import type { Transaction } from "@/api/db/root";
 import { agentSkills, auditLogs } from "@/api/db/schema";
+import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { getAuth } from "@/api/lib/auth";
@@ -162,5 +165,109 @@ describe("default skills for a new membership", () => {
     });
 
     await expectDefaults(membership);
+  });
+});
+
+const BACKFILL_MIGRATION_PATH = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20260925230400_agent_skill_default_backfill/migration.sql",
+);
+
+const applyBackfillMigration = async () => {
+  const statements = readFileSync(BACKFILL_MIGRATION_PATH, "utf-8")
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  for (const statement of statements) {
+    await testDb.execute(sql.raw(statement));
+  }
+};
+
+const ownerMembership = async (label: string): Promise<Membership> => {
+  const owner = await signInHuman(
+    `default-skills-${label}-${Bun.randomUUIDv7()}@stella.dev`,
+  );
+  return {
+    organizationId: await createOrganization(owner),
+    userId: brandPersistedUserId(owner.userId),
+  };
+};
+
+const deleteMemberSkills = async (
+  { organizationId, userId }: Membership,
+  commands: readonly string[],
+) => {
+  for (const command of commands) {
+    await testDb
+      .delete(agentSkills)
+      .where(
+        and(
+          eq(agentSkills.organizationId, organizationId),
+          eq(agentSkills.userId, userId),
+          eq(agentSkills.command, command),
+        ),
+      );
+  }
+};
+
+describe("default skills for memberships that predate seeding at creation", () => {
+  test("the backfill installs defaults only where the retired seed gate would", async () => {
+    const unseeded = await ownerMembership("backfill-unseeded");
+    await deleteMemberSkills(unseeded, DEFAULT_COMMANDS);
+    const seeded = await ownerMembership("backfill-seeded");
+    await deleteMemberSkills(seeded, ["summarize"]);
+
+    await applyBackfillMigration();
+
+    const backfilled = await testDb
+      .select({
+        body: agentSkills.body,
+        command: agentSkills.command,
+        contentHash: agentSkills.contentHash,
+        description: agentSkills.description,
+        name: agentSkills.name,
+        origin: agentSkills.origin,
+        scope: agentSkills.scope,
+      })
+      .from(agentSkills)
+      .where(
+        and(
+          eq(agentSkills.organizationId, unseeded.organizationId),
+          eq(agentSkills.userId, unseeded.userId),
+        ),
+      );
+    expect(backfilled.map(({ command }) => command).toSorted()).toEqual(
+      DEFAULT_COMMANDS,
+    );
+    for (const {
+      body,
+      contentHash,
+      description,
+      name,
+      origin,
+      scope,
+    } of backfilled) {
+      expect({ origin, scope }).toEqual({
+        origin: "authored",
+        scope: "private",
+      });
+      expect(contentHash).toBe(
+        hashSkillContent({
+          body,
+          compatibility: null,
+          description,
+          license: null,
+          metadata: {},
+          name,
+          resources: [],
+          version: null,
+        }),
+      );
+    }
+
+    const kept = await memberSkills(seeded);
+    expect(kept.map(({ command }) => command).toSorted()).toEqual(
+      DEFAULT_COMMANDS.filter((command) => command !== "summarize"),
+    );
   });
 });
