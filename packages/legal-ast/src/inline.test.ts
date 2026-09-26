@@ -38,6 +38,18 @@ const SAMPLES = {
     cite: "Rep. 2019, 412",
     href: "https://reports.test/2019/412",
     children: [{ type: "text", text: "the earlier case" }],
+    target: {
+      status: "identified",
+      identifiers: [{ type: "reporter-citation", value: "347 U.S. 483" }],
+    },
+    pin: {
+      raw: "495–97 & n. 12",
+      parts: [
+        { kind: "page", start: "495", end: "97" },
+        { kind: "footnote", start: "12" },
+      ],
+      reporter: { type: "reporter-citation", value: "347 U.S. 483" },
+    },
   },
 } satisfies Record<Inline["type"], Inline>;
 
@@ -114,5 +126,131 @@ describe("citation", () => {
   test("is valid without a link: not every printed reference has one", () => {
     const { href: _href, ...unlinked } = SAMPLES.citation;
     expect(isInline(unlinked)).toBe(true);
+  });
+});
+
+/** Whether both readers accept one citation inline. */
+const readers = (citation: unknown) => ({
+  canonical: isInline(citation),
+  persisted:
+    parseDocumentAst({
+      version: 1,
+      blocks: [
+        { id: "p1", anchorId: "p-1", type: "paragraph", inlines: [citation] },
+      ],
+    }) !== null,
+});
+
+const persistedCitation = (citation: unknown): unknown => {
+  const block = parseDocumentAst({
+    version: 1,
+    blocks: [
+      { id: "p1", anchorId: "p-1", type: "paragraph", inlines: [citation] },
+    ],
+  })?.blocks.at(0);
+  return block?.type === "paragraph" ? block.inlines.at(0) : undefined;
+};
+
+describe("citation target and pin", () => {
+  const { pin: _pin, target: _target, ...plain } = SAMPLES.citation;
+
+  test("a citation written before either field decodes without them", () => {
+    const decoded = persistedCitation(plain);
+    expect(decoded).toEqual(plain);
+    expect(Object.keys(decoded ?? {}).toSorted()).toEqual(
+      Object.keys(plain).toSorted(),
+    );
+  });
+
+  test("an unresolved target carries no identifiers", () => {
+    const unresolved = {
+      ...plain,
+      target: { status: "unresolved", reason: "missing-antecedent" },
+    };
+    expect(readers(unresolved)).toEqual({ canonical: true, persisted: true });
+    expect(
+      readers({
+        ...plain,
+        target: {
+          status: "unresolved",
+          reason: "missing-antecedent",
+          identifiers: SAMPLES.citation.target.identifiers,
+        },
+      }),
+    ).toEqual({ canonical: false, persisted: false });
+  });
+
+  const reporter = { type: "reporter-citation", value: "347 U.S. 483" };
+  const malformed = {
+    "no identifiers": {
+      target: { status: "identified", identifiers: [] },
+    },
+    "too many identifiers": {
+      target: {
+        status: "identified",
+        identifiers: Array.from({ length: 33 }, (_, index) => ({
+          type: "reporter-citation",
+          value: `${String(index + 1)} U.S. 1`,
+        })),
+      },
+    },
+    "an unknown reason": {
+      target: { status: "unresolved", reason: "guessed" },
+    },
+    "a letter in a page": {
+      pin: { raw: "49a", parts: [{ kind: "page", start: "49a" }] },
+    },
+    "an empty raw pin": {
+      pin: { raw: "", parts: [{ kind: "page", start: "495" }] },
+    },
+    "an overlong raw pin": {
+      pin: { raw: "4".repeat(129), parts: [{ kind: "page", start: "4" }] },
+    },
+    "no parts": { pin: { raw: "495", parts: [] } },
+    "nine parts": {
+      pin: {
+        raw: "1, 2, 3, 4, 5, 6, 7, 8, 9",
+        parts: Array.from({ length: 9 }, (_, index) => ({
+          kind: "page",
+          start: String(index + 1),
+        })),
+      },
+    },
+    "an undeclared key in a part": {
+      pin: { raw: "495", parts: [{ kind: "page", start: "495", line: 3 }] },
+    },
+    "a reporter of another identifier type": {
+      pin: {
+        raw: "495",
+        parts: [{ kind: "page", start: "495" }],
+        reporter: { type: "ecli", value: "ECLI:US:1954:483" },
+      },
+    },
+  } as const;
+
+  test("a malformed target or pin fails both readers instead of being dropped", () => {
+    for (const [name, fields] of Object.entries(malformed)) {
+      expect({ name, ...readers({ ...plain, ...fields }) }).toEqual({
+        name,
+        canonical: false,
+        persisted: false,
+      });
+    }
+  });
+
+  test("a star page and a paragraph pin are valid", () => {
+    expect(
+      readers({
+        ...plain,
+        pin: {
+          raw: "at *3, ¶ 12",
+          parts: [
+            { kind: "page", start: "*3" },
+            { kind: "paragraph", start: "12" },
+          ],
+          reporter,
+        },
+      }),
+    ).toEqual({ canonical: true, persisted: true });
   });
 });

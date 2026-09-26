@@ -1,5 +1,15 @@
 import * as v from "valibot";
 
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  decisionIdentifierSchema,
+  reporterCitationIdentifierSchema,
+} from "./decision-identifier.js";
+import type {
+  DecisionIdentifiers,
+  ReporterCitationIdentifier,
+} from "./decision-identifier.js";
+
 export type InlineText = {
   type: "text";
   text: string;
@@ -15,6 +25,48 @@ export type InlineSubscript = { type: "subscript"; children: Inline[] };
 export type InlineLink = { type: "link"; href: string; children: Inline[] };
 export type InlineLineBreak = { type: "line-break" };
 
+/** Why the text alone does not settle which decision a reference names. */
+export const CITATION_UNRESOLVED_REASONS = [
+  "missing-antecedent",
+  "ambiguous-antecedent",
+  "ambiguous-reporter",
+  "authority-barrier",
+  "scope-unknown",
+  "conflicting-parallels",
+] as const;
+
+export type CitationUnresolvedReason =
+  (typeof CITATION_UNRESOLVED_REASONS)[number];
+
+/**
+ * Which decision a printed reference names, as read from the text alone.
+ *
+ * `identified` is the reference's own identity, never a database match. An
+ * `unresolved` reference says why the text did not settle it, and carries no
+ * identifiers, so a reader never links it on a guess.
+ */
+export type InlineCitationTarget =
+  | { status: "identified"; identifiers: DecisionIdentifiers }
+  | { status: "unresolved"; reason: CitationUnresolvedReason };
+
+/**
+ * One place a pin points at. Endpoints are the digits as printed: a range
+ * printed `495–97` ends at `97`, not at a page worked out from it.
+ */
+export type InlineCitationPinPart = {
+  kind: "page" | "paragraph" | "footnote";
+  start: string;
+  end?: string | undefined;
+};
+
+/** Where inside the cited decision a reference points; never its identity. */
+export type InlineCitationPin = {
+  raw: string;
+  parts: readonly [InlineCitationPinPart, ...InlineCitationPinPart[]];
+  /** The reporter the pages belong to, when the text establishes one. */
+  reporter?: ReporterCitationIdentifier | undefined;
+};
+
 /**
  * A reference to another authority, as the publisher printed it.
  *
@@ -28,6 +80,8 @@ export type InlineCitation = {
   cite: string;
   href?: string | undefined;
   children: Inline[];
+  target?: InlineCitationTarget | undefined;
+  pin?: InlineCitationPin | undefined;
 };
 
 /**
@@ -95,6 +149,65 @@ export const isKnownInlineType = (type: string): boolean =>
  */
 const inlineChildrenSchema = v.array(v.lazy(() => inlineSchema));
 
+export const CITATION_PIN_RAW_MAX_LENGTH = 128;
+export const CITATION_PIN_MAX_PARTS = 8;
+const CITATION_PIN_ENDPOINT_MAX_LENGTH = 16;
+
+const citationTargetSchema: v.GenericSchema<InlineCitationTarget> = v.variant(
+  "status",
+  [
+    v.strictObject({
+      status: v.literal("identified"),
+      identifiers: v.pipe(
+        v.tupleWithRest([decisionIdentifierSchema], decisionIdentifierSchema),
+        v.maxLength(DECISION_IDENTIFIER_MAX_COUNT),
+      ),
+    }),
+    v.strictObject({
+      status: v.literal("unresolved"),
+      reason: v.picklist(CITATION_UNRESOLVED_REASONS),
+    }),
+  ],
+);
+
+const pinEndpointSchema = v.pipe(
+  v.string(),
+  v.maxLength(CITATION_PIN_ENDPOINT_MAX_LENGTH),
+  v.regex(/^\*?\d+$/u),
+);
+
+const citationPinPartSchema = v.strictObject({
+  kind: v.picklist(["page", "paragraph", "footnote"]),
+  start: pinEndpointSchema,
+  end: v.optional(pinEndpointSchema),
+});
+
+const citationPinSchema: v.GenericSchema<InlineCitationPin> = v.strictObject({
+  raw: v.pipe(
+    v.string(),
+    v.nonEmpty(),
+    v.maxLength(CITATION_PIN_RAW_MAX_LENGTH),
+  ),
+  parts: v.pipe(
+    v.tupleWithRest([citationPinPartSchema], citationPinPartSchema),
+    v.maxLength(CITATION_PIN_MAX_PARTS),
+  ),
+  reporter: v.optional(reporterCitationIdentifierSchema),
+});
+
+/**
+ * The citation fields both readers share. Strict inside the structured
+ * fields, so a malformed target or pin fails the parse instead of being
+ * stripped; the outer object keeps the tolerant shape every inline has.
+ */
+const citationFieldEntries = {
+  type: v.literal("citation"),
+  cite: v.pipe(v.string(), v.nonEmpty()),
+  href: v.optional(v.string()),
+  target: v.optional(citationTargetSchema),
+  pin: v.optional(citationPinSchema),
+};
+
 export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
   v.object({
     type: v.literal("text"),
@@ -111,12 +224,7 @@ export const inlineSchema: v.GenericSchema<Inline> = v.variant("type", [
     href: v.string(),
     children: inlineChildrenSchema,
   }),
-  v.object({
-    type: v.literal("citation"),
-    cite: v.pipe(v.string(), v.nonEmpty()),
-    href: v.optional(v.string()),
-    children: inlineChildrenSchema,
-  }),
+  v.object({ ...citationFieldEntries, children: inlineChildrenSchema }),
   v.object({ type: v.literal("line-break") }),
   v.object({
     type: v.literal("page-anchor"),
@@ -235,9 +343,7 @@ const persistedInlineSchema: v.GenericSchema<unknown, DegradedInline> = v.union(
         children: v.lazy(() => persistedInlineArraySchema),
       }),
       v.object({
-        type: v.literal("citation"),
-        cite: v.pipe(v.string(), v.nonEmpty()),
-        href: v.optional(v.string()),
+        ...citationFieldEntries,
         children: v.lazy(() => persistedInlineArraySchema),
       }),
       v.object({ type: v.literal("line-break") }),
