@@ -99,6 +99,9 @@ export type PdfSigningStamp = {
   timeZone: string;
 };
 
+/** Whether the connected role owns `pdf_signing_sessions` (see its policies). */
+const currentUserOwnsSessions = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass)`;
+
 export const pdfSigningSessions = p.pgTable(
   "pdf_signing_sessions",
   {
@@ -228,22 +231,24 @@ export const pdfSigningSessions = p.pgTable(
     // owner login gets exactly what its token-authenticated paths do: the
     // desktop's handoff redemption and session lookup read a session by its
     // token, redemption spends an open, unspent handoff, and account
-    // deletion removes a user's sessions. It never inserts one.
+    // deletion removes a user's sessions. It never inserts one. The owner is
+    // named by the catalog rather than by role, since its login name differs
+    // from one deployment to the next.
     p.pgPolicy("owner_select", {
       for: "select",
-      to: "current_user",
-      using: sql`true`,
+      to: "public",
+      using: currentUserOwnsSessions,
     }),
     p.pgPolicy("owner_redeem_update", {
       for: "update",
-      to: "current_user",
-      using: sql`${table.status} = 'open' AND ${table.handoffConsumedAt} IS NULL`,
-      withCheck: sql`${table.status} = 'open'`,
+      to: "public",
+      using: sql`${currentUserOwnsSessions} AND ${table.status} = 'open' AND ${table.handoffConsumedAt} IS NULL`,
+      withCheck: sql`${currentUserOwnsSessions} AND ${table.status} = 'open'`,
     }),
     p.pgPolicy("owner_delete", {
       for: "delete",
-      to: "current_user",
-      using: sql`true`,
+      to: "public",
+      using: currentUserOwnsSessions,
     }),
   ],
 );
