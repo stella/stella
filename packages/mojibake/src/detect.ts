@@ -1,19 +1,27 @@
 /**
- * Text decoded with the wrong character set, found without reading the
- * language.
+ * Text decoded with the wrong character set, found without reading what the
+ * text says.
  *
- * Two kinds of evidence, both independent of what the text says:
+ * Three kinds of evidence, the later ones weighed against the declared
+ * language's alphabet:
  *
- * - signatures that are wrong in any language: U+FFFD (bytes a decoder could
- *   not read), C1 control characters (bytes a single-byte decoder mapped to
- *   no printable character), and runs that are valid UTF-8 once written back
- *   as windows-1252 or Latin-1 bytes;
- * - reversible mis-decoding: for every pair of charsets (written in one,
- *   read as the other) the words that do not fit the declared language's
- *   alphabet are written back with the charset they were read as and read
- *   with the one they were written in. A pair that turns several distinct
- *   misfit words into the language's own letters, while leaving the words
- *   that already fit alone, is the pair the text went through.
+ * - U+FFFD (bytes a decoder could not read) and C1 control characters
+ *   (bytes a single-byte decoder mapped to no printable character): wrong
+ *   in any language, and found whatever language is declared;
+ * - runs that are valid UTF-8 once written back as windows-1252 or Latin-1
+ *   bytes. The restored letters must read natively in the declared
+ *   language, and a restored mark whose lead is a letter the language
+ *   writes ("Â¹" in French) counts only when a lowercase letter vouches for
+ *   it. Where the language has no alphabet, the restored letters need only
+ *   stay in one script and no mark counts on its own: "Â" may be a writer's
+ *   letter, so "Â§" alone is not reported there, while "courtâ€™s" is;
+ * - reversible mis-decoding, only where the language has an alphabet: for
+ *   every pair of charsets (written in one, read as the other) the words
+ *   that do not fit the alphabet are written back with the charset they
+ *   were read as and read with the one they were written in. A pair that
+ *   turns several distinct misfit words into the language's own letters,
+ *   while leaving the words that already fit alone, is the pair the text
+ *   went through.
  *
  * The alphabet is the language's CLDR exemplar set (`alphabet.ts`), so the
  * same code covers every language CLDR does, and no language needs a list
