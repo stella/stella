@@ -3,11 +3,11 @@ import { panic } from "better-result";
 import type { CorrespondenceFiler } from "@stll/api-contract/correspondence";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CorrespondenceActor } from "@/api/lib/correspondence/access";
+import type { CorrespondenceActor } from "@/api/lib/email/correspondence/access";
 import {
   hasAlignedAuthentication,
   type MailAuthentication,
-} from "@/api/lib/inbound-mail/authentication";
+} from "@/api/lib/email/inbound/authentication";
 
 export type InboundFiler = {
   user: Extract<CorrespondenceActor, { type: "user" }> & { filedAt: string };

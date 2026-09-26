@@ -10,8 +10,8 @@ import type {
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 
-import type { AttachmentScanVerdict } from "@/api/lib/inbound-mail/acceptance";
-import { parseInboundAddressToken } from "@/api/lib/inbound-mail/address";
+import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
+import { parseInboundAddressToken } from "@/api/lib/email/inbound/address";
 import {
   hasAlignedAuthentication,
   verifyOriginalSignature,
@@ -19,15 +19,15 @@ import {
   type MailAuthResult,
   type MailEnvelope,
   type MailVerifier,
-} from "@/api/lib/inbound-mail/authentication";
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+} from "@/api/lib/email/inbound/authentication";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   InboundMessageError,
   parseInboundMessage,
   type InboundAttachment,
   type InboundMessageErrorReason,
   type ParsedInboundMessage,
-} from "@/api/lib/inbound-mail/message";
+} from "@/api/lib/email/inbound/message";
 
 const AUTH_PROJECTION = {
   pass: "pass",

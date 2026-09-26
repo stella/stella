@@ -3,7 +3,7 @@ import { isIP } from "node:net";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
 
-import { mailboxDomain } from "@/api/lib/inbound-mail/authentication";
+import { mailboxDomain } from "@/api/lib/email/inbound/authentication";
 
 export class InboundDevInputError extends TaggedError("InboundDevInputError")<{
   message: string;

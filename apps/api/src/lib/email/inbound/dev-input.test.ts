@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   InboundDevInputError,
   parseInboundDevInput,
-} from "@/api/lib/inbound-mail/dev-input";
+} from "@/api/lib/email/inbound/dev-input";
 
 const validArgs = [
   "--file",

@@ -3,13 +3,13 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { Readable } from "node:stream";
 
-import { hasAlignedAuthentication } from "@/api/lib/inbound-mail/authentication";
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+import { hasAlignedAuthentication } from "@/api/lib/email/inbound/authentication";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   createSesS3ObjectReader,
   readSesInboundDelivery,
   receiveSesInboundMail,
-} from "@/api/lib/inbound-mail/ses";
+} from "@/api/lib/email/inbound/ses";
 
 const event = {
   notificationType: "Received",

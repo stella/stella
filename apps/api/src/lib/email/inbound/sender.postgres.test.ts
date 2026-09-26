@@ -12,14 +12,14 @@ import {
 } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createCorrespondence } from "@/api/lib/correspondence/create";
-import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
-import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
-import type { PersistInboundDeliveryOptions } from "@/api/lib/inbound-mail/ingest";
+import { createCorrespondence } from "@/api/lib/email/correspondence/create";
+import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
+import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
+import type { PersistInboundDeliveryOptions } from "@/api/lib/email/inbound/ingest";
 import {
   createInboundMailStore,
   type FileInboundCandidateOptions,
-} from "@/api/lib/inbound-mail/store";
+} from "@/api/lib/email/inbound/store";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {

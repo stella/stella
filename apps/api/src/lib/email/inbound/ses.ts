@@ -3,20 +3,20 @@ import { Result, TaggedError, panic } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
-import type { AttachmentScanVerdict } from "@/api/lib/inbound-mail/acceptance";
+import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import {
   MailAuthenticationError,
   mailboxDomain,
   type MailAuthentication,
   type MailAuthResult,
   type MailVerifier,
-} from "@/api/lib/inbound-mail/authentication";
+} from "@/api/lib/email/inbound/authentication";
 import {
   ingestInboundMail,
   recordOversizedInboundMail,
   type InboundDeliveryStore,
-} from "@/api/lib/inbound-mail/ingest";
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+} from "@/api/lib/email/inbound/ingest";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const SES_STATUS = ["PASS", "FAIL", "GRAY", "PROCESSING_FAILED"] as const;

@@ -25,7 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
-} from "@/api/lib/correspondence/access";
+} from "@/api/lib/email/correspondence/access";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 

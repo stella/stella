@@ -5,7 +5,7 @@ import { organization } from "@/api/db/auth-schema";
 import { matterInboundAddresses, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
+import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   getTestDb,

@@ -4,12 +4,12 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   evaluateInboundAcceptance,
   type SenderMembership,
-} from "@/api/lib/inbound-mail/acceptance";
+} from "@/api/lib/email/inbound/acceptance";
 import {
   generateInboundAddressToken,
   parseInboundAddressToken,
-} from "@/api/lib/inbound-mail/address";
-import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
+} from "@/api/lib/email/inbound/address";
+import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const memberId = mintAuthProviderId<"user">();

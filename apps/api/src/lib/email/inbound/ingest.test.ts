@@ -1,14 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { MailVerifier } from "@/api/lib/inbound-mail/authentication";
+import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
   ingestInboundMail,
   InboundPersistenceError,
   type InboundDeliveryOutcome,
   type InboundDeliveryStore,
   type PersistInboundDeliveryOptions,
-} from "@/api/lib/inbound-mail/ingest";
+} from "@/api/lib/email/inbound/ingest";
 
 const token = "a".repeat(64);
 const envelope = {

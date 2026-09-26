@@ -1,7 +1,7 @@
 import { rlsDb } from "@/api/db/root";
-import { ingestInboundMail } from "@/api/lib/inbound-mail/ingest";
-import { createInboundMailPersistence } from "@/api/lib/inbound-mail/persistence";
-import { receiveSesInboundMail as receiveSesDelivery } from "@/api/lib/inbound-mail/ses";
+import { ingestInboundMail } from "@/api/lib/email/inbound/ingest";
+import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
+import { receiveSesInboundMail as receiveSesDelivery } from "@/api/lib/email/inbound/ses";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 
 type ReceiveInboundMailOptions = Omit<
