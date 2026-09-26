@@ -36,6 +36,7 @@ export * from "./schema/usage";
 export * from "./schema/workflow";
 export * from "./schema/signals";
 export * from "./schema/notifications";
+export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/relations";
 export {
