@@ -17,6 +17,7 @@ import {
   PdfSigningCertifiedDocumentError,
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
+import { PdfSigningStampError } from "@/api/lib/pdf-signing/stamp";
 import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
 import { findRevokedCertificates } from "@/api/lib/pdf-signing/validation-data";
 import {
@@ -49,6 +50,31 @@ const decodeBase64Der = (value: string): Uint8Array | null => {
   return bytes.length > 0 && bytes.toString("base64") === value
     ? new Uint8Array(bytes)
     : null;
+};
+
+/** Why preparing failed, as the exchange closes and the desktop reads it. */
+const prepareRefusal = (error: unknown) => {
+  if (PdfSigningCertifiedDocumentError.is(error)) {
+    return {
+      closeReason: "certified_document",
+      code: "pdf_signing_certified_document",
+      message:
+        "This PDF is certified and its certification does not allow further signatures.",
+    } as const;
+  }
+  if (PdfSigningStampError.is(error)) {
+    return {
+      closeReason: "signing_failed",
+      code: "pdf_signing_stamp_unrenderable",
+      message:
+        "This certificate's name cannot be shown in a visible stamp. Sign invisibly instead.",
+    } as const;
+  }
+  return {
+    closeReason: "signing_failed",
+    code: "pdf_signing_prepare_failed",
+    message: "This PDF could not be prepared for signing.",
+  } as const;
 };
 
 const certificateConflict = () =>
@@ -201,10 +227,10 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       // Preparing is deterministic over the stored bytes, so a document that
       // cannot be prepared now never will be: the exchange ends here, before
       // the desktop asks for a PIN, rather than lingering until it expires.
-      const certified = PdfSigningCertifiedDocumentError.is(captured.error);
+      const refusal = prepareRefusal(captured.error);
       yield* Result.await(
         closePdfSigningSession({
-          closeReason: certified ? "certified_document" : "signing_failed",
+          closeReason: refusal.closeReason,
           recordAuditEvent,
           safeDb: session.safeDb,
           sessionId: session.sessionId,
@@ -213,12 +239,8 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       return Result.err(
         new HandlerError({
           status: 422,
-          code: certified
-            ? "pdf_signing_certified_document"
-            : "pdf_signing_prepare_failed",
-          message: certified
-            ? "This PDF is certified and its certification does not allow further signatures."
-            : "This PDF could not be prepared for signing.",
+          code: refusal.code,
+          message: refusal.message,
           cause: captured.error,
         }),
       );

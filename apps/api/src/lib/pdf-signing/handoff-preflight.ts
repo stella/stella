@@ -24,6 +24,11 @@ import type {
   StampPlacementRejection,
   ViewerBox,
 } from "@/api/lib/pdf-signing/stamp";
+import { loadStampFont } from "@/api/lib/pdf-signing/stamp-font";
+import {
+  drawableLabels,
+  stampTextCheck,
+} from "@/api/lib/pdf-signing/stamp-text";
 
 /** A stamp label is a short phrase ("Digitally signed by", "Date"). */
 export const STAMP_LABEL_MAX_LENGTH = 64;
@@ -122,20 +127,50 @@ export type PreflightedPdfSigning = {
 const UNCHECKED: PreflightedPdfSigning = { baseVersionId: null, stamp: null };
 
 /**
+ * What the stamp will say, made drawable: labels in the signer's language
+ * or, when that cannot be drawn, English; a reason or location that cannot
+ * be drawn refuses the visible stamp. See `stamp-text.ts`.
+ */
+export const drawableStamp = async ({
+  location,
+  reason,
+  stamp,
+}: {
+  location: string | null;
+  reason: string | null;
+  stamp: PdfSigningStamp;
+}): Promise<Result<PdfSigningStamp, HandlerError>> => {
+  const check = stampTextCheck(await loadStampFont());
+  const values = [reason, location].filter((value) => value !== null);
+  if (!values.every((value) => check.canDraw(value))) {
+    return stampRejected(
+      "unrenderable",
+      "The reason or location cannot be shown in a visible stamp. Change the text or sign invisibly.",
+    );
+  }
+  return Result.ok(drawableLabels(stamp, check));
+};
+
+/**
  * Refuse a certified document, place the stamp, and name the version both
  * were checked against.
  */
 export const preflightPdfSigning = async ({
   entityId,
+  location,
   organizationId,
   propertyId,
+  reason,
   safeDb,
   stamp,
   workspaceId,
 }: {
   entityId: SafeId<"entity">;
+  /** Sanitized; drawn on the stamp when there is one. */
+  location: string | null;
   organizationId: SafeId<"organization">;
   propertyId: SafeId<"property">;
+  reason: string | null;
   safeDb: SafeDb;
   stamp: StampRequest | undefined;
   workspaceId: SafeId<"workspace">;
@@ -204,7 +239,15 @@ export const preflightPdfSigning = async ({
     return Result.ok({ baseVersionId, stamp: null });
   }
   const placed = resolveStampRequest(pdf, stamp);
-  return Result.isError(placed)
-    ? Result.err(placed.error)
-    : Result.ok({ baseVersionId, stamp: placed.value });
+  if (Result.isError(placed)) {
+    return Result.err(placed.error);
+  }
+  const drawable = await drawableStamp({
+    location,
+    reason,
+    stamp: placed.value,
+  });
+  return Result.isError(drawable)
+    ? Result.err(drawable.error)
+    : Result.ok({ baseVersionId, stamp: drawable.value });
 };
