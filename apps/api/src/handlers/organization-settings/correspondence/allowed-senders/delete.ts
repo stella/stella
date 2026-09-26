@@ -54,14 +54,23 @@ const revokeAllowedSender = createSafeRootHandler(
           });
           return { kind: "revoked" as const, id: revoked.id };
         }
-        const existing = await tx.query.correspondenceAllowedSenders.findFirst({
-          where: {
-            id: { eq: params.senderId },
-            organizationId: { eq: session.activeOrganizationId },
-            kind: { eq: "shared_mailbox" },
-          },
-          columns: { id: true, revokedAt: true },
-        });
+        const [existing] = await tx
+          .select({
+            id: correspondenceAllowedSenders.id,
+            revokedAt: correspondenceAllowedSenders.revokedAt,
+          })
+          .from(correspondenceAllowedSenders)
+          .where(
+            and(
+              eq(correspondenceAllowedSenders.id, params.senderId),
+              eq(
+                correspondenceAllowedSenders.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(correspondenceAllowedSenders.kind, "shared_mailbox"),
+            ),
+          )
+          .limit(1);
         return existing
           ? {
               kind: "existing" as const,
@@ -72,10 +81,11 @@ const revokeAllowedSender = createSafeRootHandler(
       }),
     );
 
-    if (result.kind === "missing")
+    if (result.kind === "missing") {
       return Result.err(
         new HandlerError({ status: 404, message: "Allowed sender not found" }),
       );
+    }
     return Result.ok({ id: result.id, revoked: true });
   },
 );
