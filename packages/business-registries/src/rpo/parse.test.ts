@@ -67,7 +67,7 @@ describe("parseEntity", () => {
     }
 
     const key = (person: { name: string; organName: string | null }) =>
-      `${person.name}|${person.organName}`;
+      `${person.name}|${person.organName ?? ""}`;
     const openInHistory = historical.statutoryBodies
       .filter(({ validTo }) => validTo === null)
       .map(key);

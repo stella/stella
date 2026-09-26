@@ -306,8 +306,9 @@ describe("searchByName", () => {
 
     expect(fullName).toBe("slovnaft");
     // Every upstream row survives the ranking.
-    expect(results.map(({ rpoId }) => rpoId).toSorted()).toEqual(
-      fixture.results.map(({ id }) => id).toSorted(),
+    const byNumber = (a: number, b: number): number => a - b;
+    expect(results.map(({ rpoId }) => rpoId).toSorted(byNumber)).toEqual(
+      fixture.results.map(({ id }) => id).toSorted(byNumber),
     );
     const first = results.at(0);
     expect(first?.name.toLowerCase()).toStartWith("slovnaft");
