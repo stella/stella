@@ -35,6 +35,7 @@ import type {
 import { TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
+import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
 import {
   certificationPathReachesAnchor,
@@ -92,6 +93,14 @@ export class PdfSigningDigestMismatchError extends TaggedError(
  * The document carries a certification that permits no changes, so any
  * signature appended to it would break the certification.
  */
+/**
+ * The document already carries signatures and LibPDF could only sign it by
+ * rewriting the whole file, which would break every one of them.
+ */
+export class PdfSigningWouldBreakSignaturesError extends TaggedError(
+  "PdfSigningWouldBreakSignaturesError",
+)<{ message: string }> {}
+
 /** Revocation data says a certificate of the signer's chain is revoked. */
 export class PdfSigningCertificateRevokedError extends TaggedError(
   "PdfSigningCertificateRevokedError",
@@ -284,6 +293,18 @@ export const captureSigningDigest = async (
       const pdf = await PDF.load(invocation.basePdf);
       // Checked here, before any digest exists, so the desktop never asks
       // for a PIN on a document the signature would invalidate.
+      // A signature is appended as a new revision; where LibPDF would
+      // rewrite the file instead (a linearized or repaired file), existing
+      // signatures would no longer cover their bytes.
+      if (
+        isSignedPdf({ pdf, source: invocation.basePdf }) &&
+        pdf.canSaveIncrementally() !== null
+      ) {
+        throw new PdfSigningWouldBreakSignaturesError({
+          message:
+            "Signing this PDF would invalidate the signatures it already carries.",
+        });
+      }
       if (readDocMdpPermission({ pdf, source: invocation.basePdf }) === 1) {
         throw new PdfSigningCertifiedDocumentError({
           message:
