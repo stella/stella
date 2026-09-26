@@ -37,16 +37,25 @@ export type TestTimestampMisbehaviour = {
 
 /** A timestamping certificate: self-signed unless `issuer` is given. */
 export const createTestTimestampCertificate = async ({
+  critical = true,
   extendedKeyUsages = [TIME_STAMPING_USAGE],
   issuer,
+  notAfter,
+  notBefore,
 }: {
+  critical?: boolean;
   extendedKeyUsages?: string[];
   issuer?: TestCertificate;
+  notAfter?: Date;
+  notBefore?: Date;
 } = {}) =>
   await createTestCertificate({
     commonName: "stella test timestamp authority",
     extendedKeyUsages,
+    extendedKeyUsagesCritical: critical,
     ...(issuer !== undefined && { issuer }),
+    ...(notAfter !== undefined && { notAfter }),
+    ...(notBefore !== undefined && { notBefore }),
   });
 
 export const issueTestTimestampToken = async ({
