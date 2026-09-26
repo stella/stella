@@ -383,3 +383,35 @@ describe("text that reads correctly", () => {
     });
   });
 });
+
+describe("short mis-decoded text in letters alone", () => {
+  // What the foreign-word threshold (`MIN_FOREIGN_WORDS`) costs on short
+  // text: damage in letters alone reads as foreign names until a third
+  // distinct word shows it. Moving the threshold moves a row here.
+  const SHORT_MISDECODED = [
+    // "øízení" and "naøízení": two words, three occurrences.
+    ["řízení podle nařízení; toto řízení se zastavuje.", 2, "clean"],
+    // "øízení", "pøerušuje", "skonèení".
+    ["řízení se přerušuje do skončení řízení", 3, "suspect"],
+  ] as const;
+
+  test.each(SHORT_MISDECODED)(
+    "cs %s read as windows-1252, %d distinct words damaged, is %s",
+    (written, damaged, status) => {
+      const misread = misdecode(written, {
+        actual: "windows-1250",
+        assumed: "windows-1252",
+      });
+      if (misread === null) {
+        throw new Error("Czech is writable in windows-1250");
+      }
+      const originals = written.split(/\s+/u);
+      const changed = misread
+        .split(/\s+/u)
+        .filter((word, index) => word !== originals[index])
+        .map((word) => word.replaceAll(/[^\p{L}]/gu, ""));
+      expect(new Set(changed).size).toBe(damaged);
+      expect(checkTextEncoding(misread, "cs").status).toBe(status);
+    },
+  );
+});

@@ -39,6 +39,12 @@ const MIN_FIXED_WORDS = 2;
  * names are made of too, so a text with no garbled word needs more of them:
  * a Czech sentence naming Søren from Brønshøj is not windows-1250 read as
  * windows-1252.
+ *
+ * The price is recall on short text: two distinct corrupted native words
+ * look exactly like two foreign names, so a sentence whose only damage is
+ * "øízení" and "naøízení" (Czech "řízení", "nařízení" through windows-1250
+ * read as windows-1252) stays clean however often they repeat; a third word
+ * reports it. `detect.test.ts` pins both sides of the threshold.
  */
 const MIN_FOREIGN_WORDS = 3;
 /**
