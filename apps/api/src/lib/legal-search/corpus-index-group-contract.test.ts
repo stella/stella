@@ -76,8 +76,8 @@ test("every group declared before a group contract keeps its manifest's exact co
         indexGroup,
       });
       expect(contract.type).toBe("base");
-      // Byte for byte: the configuration Plane creates and attests is the one
-      // the manifest produced before any group contract existed.
+      // Byte for byte: the configuration the operator creates and attests is
+      // the one the manifest produced before any group contract existed.
       expect(JSON.stringify(corpusIndexGroupConfig(contract))).toBe(
         JSON.stringify(
           corpusIndexConfigFromManifest(manifest, contract.indexId),

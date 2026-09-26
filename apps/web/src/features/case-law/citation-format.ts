@@ -229,10 +229,10 @@ const euCitation = (input: CitationInput): string => {
 };
 
 /**
- * Bluebook month abbreviations. A fixed table, not a locale formatter: the
+ * IndigoBook month abbreviations. A fixed table, not a locale formatter: the
  * convention belongs to the court, not to the reader's locale settings.
  */
-const BLUEBOOK_MONTHS = [
+const INDIGOBOOK_MONTHS = [
   "Jan.",
   "Feb.",
   "Mar.",
@@ -248,10 +248,10 @@ const BLUEBOOK_MONTHS = [
 ] as const;
 
 /**
- * The Bluebook court abbreviation of each enrolled court. Total over the
+ * The IndigoBook court abbreviation of each enrolled court. Total over the
  * directory, so enrolling a court cannot compile without deciding its form.
  */
-const US_COURT_BLUEBOOK_ABBREVIATIONS = {
+const US_COURT_INDIGOBOOK_ABBREVIATIONS = {
   scotus: "U.S.",
 } as const satisfies Record<UsCourtId, string>;
 
@@ -263,7 +263,7 @@ const usCourtAbbreviation = (court: string): string => {
   const enrolled = US_COURTS.find((candidate) => candidate.name === court);
   return enrolled === undefined
     ? court
-    : US_COURT_BLUEBOOK_ABBREVIATIONS[enrolled.id];
+    : US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled.id];
 };
 
 const DOCKET_PREFIX_RE = /^Nos?\.\s/u;
@@ -281,7 +281,7 @@ const usDocketCitation = (input: CitationInput): string => {
   const named = input.name === null ? docket : `${input.name}, ${docket}`;
   const court = usCourtAbbreviation(input.court);
   const date = parseDecisionDate(input.decisionDate);
-  const month = date === null ? undefined : BLUEBOOK_MONTHS[date.month - 1];
+  const month = date === null ? undefined : INDIGOBOOK_MONTHS[date.month - 1];
   const dated =
     date === null || month === undefined
       ? ""
