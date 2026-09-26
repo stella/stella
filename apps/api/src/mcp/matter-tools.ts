@@ -2309,7 +2309,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
     },
     access: "read",
-    anonymized: { exposure: "passthrough" },
+    anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
     scope: "stella:read",
   }),

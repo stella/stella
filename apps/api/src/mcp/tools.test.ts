@@ -1267,7 +1267,6 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_document",
       "list_properties",
       "lookup_business_registry",
-      "check_counterparty",
       "list_tasks",
       "list_clauses",
       "list_playbooks",
