@@ -2,9 +2,8 @@
  * Czech Republic: Sbírka zákonů, e-sbirka.cz anchors.
  *
  * The lists carry the spellings courts print, including ones that look like
- * typos and are not: `o. s. ř` without its last period, `zák. práce`. Each
- * would otherwise cost a citation. Spacing inside an abbreviation is the
- * grammar's, so `o.s.ř.` and `o. s. ř.` are one spelling.
+ * typos and are not: `o. s. ř` without its last period, `o.s.ř.` unspaced,
+ * `zák. práce`. Each would otherwise cost a citation.
  *
  * Where a title names different acts before and after a recodification, the
  * entry carries the window the citing decision must fall in. `občanský
@@ -185,8 +184,9 @@ export const CZ_PROFILE = {
       identifier: sb(513, 1991),
     },
     // Court convention, whatever the citing date: `tr. zák.` is the 1961
-    // criminal code and `tr. zákoník` the 2009 one. A decision that defines
-    // `tr. zák.` otherwise overrides this in its own text.
+    // criminal code and `tr. zákoník` the 2009 one. A reader that applies a
+    // decision's own `dále jen` definitions lets one of `tr. zák.` take
+    // precedence; the statute reader's fallback grammar reads no definitions.
     {
       spellings: ["tr. zák.", "tr. zákon", "tr. zákona", "tr. zákonem"],
       identifier: sb(140, 1961),
