@@ -23,7 +23,7 @@ const approverUser = alias(user, "correspondence_approver_user");
 
 const config = {
   description:
-    "Read one matter correspondence record with its filers and attachments.",
+    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "correspondence" },
   access: "read",

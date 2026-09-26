@@ -153,6 +153,7 @@
     "ip-address": "^10.7.2",
     "jose": "^6.2.12",
     "jszip": "catalog:",
+    "mailauth": "5.0.3",
     "nodemailer": "^10.0.10",
     "onnxruntime-node": "1.30.0",
     "postal-mime": "^3.0.0",
@@ -161,6 +162,7 @@
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
     "ssf": "catalog:",
+    "tldts": "7.4.13",
     "valibot": "catalog:"
   },
   "devDependencies": {

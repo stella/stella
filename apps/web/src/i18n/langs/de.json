@@ -1936,6 +1936,20 @@
     "deliveredBy": "Zugestellt von <address>{sender}</address>",
     "deliveredByAuthenticated": "Zugestellt von <address>{sender}</address> · authentifiziert",
     "deliveryAuthentication": "Authentifizierung der Zustellung",
+    "drops": {
+      "authenticationHint": "Bitten Sie die E-Mail-Administration des Absenders, <protocol>SPF</protocol>, <protocol>DKIM</protocol> und <protocol>DMARC</protocol> für die Absenderdomain einzurichten.",
+      "reason": "Grund",
+      "reasons": {
+        "attachmentRejected": "Anhang abgewiesen",
+        "authenticationFailed": "Authentifizierung der Zustellung fehlgeschlagen",
+        "malformedMessage": "Nachricht konnte nicht gelesen werden",
+        "messageTooLarge": "Nachricht zu groß",
+        "revokedAddress": "E-Mail-Adresse widerrufen",
+        "unauthorizedSender": "Absender nicht berechtigt",
+        "unknownRecipient": "Unbekannter Empfänger"
+      },
+      "title": "Abgewiesene Zustellungen"
+    },
     "empty": "Noch keine Korrespondenz.",
     "filers": "Einreicher",
     "forwardedBy": "Weitergeleitet von <address>{sender}</address>",

@@ -1936,6 +1936,20 @@
     "deliveredBy": "Edastas <address>{sender}</address>",
     "deliveredByAuthenticated": "Edastas <address>{sender}</address> · autenditud",
     "deliveryAuthentication": "Edastuse autentimine",
+    "drops": {
+      "authenticationHint": "Paluge saatja e-posti administraatoril seadistada saatva domeeni <protocol>SPF</protocol>, <protocol>DKIM</protocol> ja <protocol>DMARC</protocol>.",
+      "reason": "Põhjus",
+      "reasons": {
+        "attachmentRejected": "Manus lükati tagasi",
+        "authenticationFailed": "Edastuse autentimine ebaõnnestus",
+        "malformedMessage": "Sõnumit ei saanud lugeda",
+        "messageTooLarge": "Sõnum on liiga suur",
+        "revokedAddress": "E-posti aadress tühistatud",
+        "unauthorizedSender": "Saatjal puudub luba",
+        "unknownRecipient": "Tundmatu saaja"
+      },
+      "title": "Tagasi lükatud sõnumid"
+    },
     "empty": "Kirjavahetust veel pole.",
     "filers": "Esitajad",
     "forwardedBy": "Edasi saatis <address>{sender}</address>",

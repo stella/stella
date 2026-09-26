@@ -1,0 +1,7 @@
+From: Member <member@example.test>
+From: Counterparty <counterparty@outside.test>
+To: Matter <matter@example.test>
+Subject: Header ambiguity
+Content-Type: text/plain; charset=UTF-8
+
+This message has two From headers.

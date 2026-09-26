@@ -1,7 +1,4 @@
-import type {
-  CorrespondenceProvenance,
-  CorrespondenceOriginalSignature,
-} from "@stll/api-contract/correspondence";
+import type { CorrespondenceProvenance } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -25,12 +22,9 @@ const DELIVERY_LABEL_KEYS = {
 
 const ORIGINAL_SENDER_LABEL_KEYS = {
   direct: "emailViewer.from",
-  verified: "correspondence.originalSender",
-  unverified: "correspondence.originalSenderUnverified",
-} as const satisfies Record<
-  "direct" | CorrespondenceOriginalSignature["status"],
-  TranslationKey
->;
+  forwarded_inline: "correspondence.originalSenderUnverified",
+  forwarded_attachment: "correspondence.originalSenderUnverified",
+} as const satisfies Record<CorrespondenceProvenance["intake"], TranslationKey>;
 
 export const correspondenceProvenancePresentation = (
   provenance: CorrespondenceProvenance,
@@ -41,10 +35,7 @@ export const correspondenceProvenancePresentation = (
         provenance.authenticatedSender.dmarc === "pass" ? "pass" : "other"
       ],
     deliverySender: provenance.authenticatedSender.address,
-    originalSenderLabel:
-      ORIGINAL_SENDER_LABEL_KEYS[
-        provenance.originalSignature?.status ?? "direct"
-      ],
+    originalSenderLabel: ORIGINAL_SENDER_LABEL_KEYS[provenance.intake],
     signatureDomain:
       provenance.originalSignature?.status === "verified"
         ? provenance.originalSignature.domain

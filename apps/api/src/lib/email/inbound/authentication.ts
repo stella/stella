@@ -1,0 +1,518 @@
+import { panic, Result, TaggedError } from "better-result";
+import { authenticate, dkimVerify, type DNSResolver } from "mailauth";
+import type { MxRecord } from "node:dns";
+import { Resolver } from "node:dns/promises";
+import { isIP } from "node:net";
+import { getDomain } from "tldts";
+
+import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
+
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
+import { withTimeout } from "@/api/lib/with-timeout";
+
+export type MailEnvelope = {
+  mailFrom: string;
+  recipients: string[];
+  remoteIp: string;
+  helo: string;
+};
+
+const AUTH_RESULTS = [
+  "pass",
+  "fail",
+  "none",
+  "neutral",
+  "softfail",
+  "temperror",
+  "permerror",
+] as const;
+export type MailAuthResult = (typeof AUTH_RESULTS)[number];
+
+export type MailAuthentication = (
+  | {
+      source: "provider";
+      evidence: "provider-dmarc";
+    }
+  | {
+      source: "provider" | "local";
+      evidence: "identifiers";
+    }
+) & {
+  fromDomain: string;
+  spf: {
+    result: MailAuthResult;
+    domain: string | null;
+    alignment: "strict" | "relaxed";
+  };
+  dkim: {
+    result: MailAuthResult;
+    domain: string | null;
+    alignment: "strict" | "relaxed";
+  }[];
+  dmarc: MailAuthResult;
+};
+
+export class MailAuthenticationError extends TaggedError(
+  "MailAuthenticationError",
+)<{
+  message: string;
+}> {}
+
+type VerifyMailOptions = {
+  raw: Uint8Array;
+  envelope: MailEnvelope;
+  fromAddress: string;
+};
+
+export type MailVerifier = (
+  options: VerifyMailOptions,
+) => Promise<Result<MailAuthentication, MailAuthenticationError>>;
+
+const normalizeDomain = (input: string) => {
+  const domain = input.toLowerCase();
+  if (
+    domain.length > 253 ||
+    !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*[a-z0-9]$/u.test(
+      domain,
+    )
+  ) {
+    return null;
+  }
+  return domain;
+};
+
+export const mailboxDomain = (address: string) => {
+  const at = address.lastIndexOf("@");
+  return at > 0 ? normalizeDomain(address.slice(at + 1)) : null;
+};
+
+type DomainAlignmentOptions = {
+  fromDomain: string;
+  authenticatedDomain: string | null;
+  mode: "strict" | "relaxed";
+};
+
+export const domainsAlign = ({
+  fromDomain,
+  authenticatedDomain,
+  mode,
+}: DomainAlignmentOptions) => {
+  const from = normalizeDomain(fromDomain);
+  const authenticated =
+    authenticatedDomain && normalizeDomain(authenticatedDomain);
+  if (!from || !authenticated) {
+    return false;
+  }
+  if (from === authenticated) {
+    return true;
+  }
+  if (mode === "strict") {
+    return false;
+  }
+  const organization = getDomain(from, { allowPrivateDomains: true });
+  return (
+    organization !== null &&
+    organization === getDomain(authenticated, { allowPrivateDomains: true })
+  );
+};
+
+export const hasAlignedAuthentication = (
+  auth: MailAuthentication,
+  fromAddress: string,
+) => {
+  const fromDomain = mailboxDomain(fromAddress);
+  if (!fromDomain || auth.dmarc !== "pass" || fromDomain !== auth.fromDomain) {
+    return false;
+  }
+  if (auth.evidence === "provider-dmarc") {
+    return (
+      auth.spf.result === "pass" ||
+      auth.dkim.some(({ result }) => result === "pass")
+    );
+  }
+  return (
+    (auth.spf.result === "pass" &&
+      domainsAlign({
+        fromDomain,
+        authenticatedDomain: auth.spf.domain,
+        mode: auth.spf.alignment,
+      })) ||
+    auth.dkim.some(
+      (signature) =>
+        signature.result === "pass" &&
+        domainsAlign({
+          fromDomain,
+          authenticatedDomain: signature.domain,
+          mode: signature.alignment,
+        }),
+    )
+  );
+};
+
+const authResult = (value: string): MailAuthResult => {
+  for (const candidate of AUTH_RESULTS) {
+    if (candidate === value) {
+      return candidate;
+    }
+  }
+  return "permerror";
+};
+
+// This parser only accepts a header value supplied out of band by the trusted
+// receiving adapter. An authserv-id in the sender's RFC 822 bytes proves nothing.
+const splitAuthResults = (value: string) => {
+  if (
+    value.length > INBOUND_MAIL_LIMITS.headerBytes ||
+    /[\r\n\0]/u.test(value)
+  ) {
+    return null;
+  }
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (const character of value) {
+    if (escaped) {
+      if (depth === 0) {
+        current += character;
+      }
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && (quoted || depth > 0)) {
+      escaped = true;
+      continue;
+    }
+    if (!quoted && character === "(") {
+      depth += 1;
+      continue;
+    }
+    if (depth > 0) {
+      if (character === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          current += " ";
+        }
+      }
+      continue;
+    }
+    if (character === '"') {
+      quoted = !quoted;
+      current += character;
+      continue;
+    }
+    if (!quoted && character === ";") {
+      parts.push(current.trim());
+      current = "";
+      continue;
+    }
+    if (character === ")" && !quoted) {
+      return null;
+    }
+    current += character;
+  }
+  if (quoted || depth !== 0 || escaped) {
+    return null;
+  }
+  parts.push(current.trim());
+  return parts;
+};
+
+type ProviderAuthOptions = {
+  authenticationResults: string;
+  authservId: string;
+  fromAddress: string;
+};
+
+export const parseProviderAuthentication = ({
+  authenticationResults,
+  authservId,
+  fromAddress,
+}: ProviderAuthOptions) => {
+  const parts = splitAuthResults(authenticationResults);
+  const fromDomain = mailboxDomain(fromAddress);
+  if (!parts || parts.shift() !== authservId || !fromDomain) {
+    return Result.err(
+      new MailAuthenticationError({
+        message: "Invalid provider authentication metadata",
+      }),
+    );
+  }
+  const auth: MailAuthentication = {
+    source: "provider",
+    evidence: "identifiers",
+    fromDomain,
+    spf: { result: "none", domain: null, alignment: "relaxed" },
+    dkim: [],
+    dmarc: "none",
+  };
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const match = /^(spf|dkim|dmarc)\s*=\s*([a-z]+)(?:\s|$)/iu.exec(part);
+    if (!match) {
+      continue;
+    }
+    const method = match[1]?.toLowerCase();
+    const result = authResult(match[2]?.toLowerCase() ?? "permerror");
+    if (!method || (method !== "dkim" && seen.has(method))) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Ambiguous provider authentication metadata",
+        }),
+      );
+    }
+    seen.add(method);
+    const properties = new Map<string, string>();
+    for (const property of part
+      .slice(match[0].length)
+      .matchAll(/([a-z]+\.[a-z]+)\s*=\s*(?:"([^"\s]*)"|([^\s]+))/giu)) {
+      const key = property[1]?.toLowerCase();
+      const value = property[2] ?? property[3];
+      if (!key || value === undefined || properties.has(key)) {
+        return Result.err(
+          new MailAuthenticationError({
+            message: "Ambiguous provider authentication metadata",
+          }),
+        );
+      }
+      properties.set(key, value);
+    }
+    switch (method) {
+      case "spf": {
+        const mailFrom = properties.get("smtp.mailfrom");
+        auth.spf = {
+          result,
+          domain: mailFrom
+            ? (mailboxDomain(mailFrom) ?? normalizeDomain(mailFrom))
+            : null,
+          alignment: "relaxed",
+        };
+        break;
+      }
+      case "dkim": {
+        const domain = properties.get("header.d");
+        const identity = properties.get("header.i");
+        const signingDomain =
+          domain ?? identity?.slice(identity.lastIndexOf("@") + 1);
+        auth.dkim.push({
+          result,
+          domain: signingDomain ? normalizeDomain(signingDomain) : null,
+          alignment: "relaxed",
+        });
+        break;
+      }
+      case "dmarc":
+        auth.dmarc =
+          properties.get("header.from")?.toLowerCase() === fromDomain
+            ? result
+            : "permerror";
+        break;
+    }
+  }
+  return Result.ok(auth);
+};
+
+export const createProviderMailVerifier =
+  (metadata: Omit<ProviderAuthOptions, "fromAddress">): MailVerifier =>
+  async ({ fromAddress }) =>
+    parseProviderAuthentication({ ...metadata, fromAddress });
+
+type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
+
+type MailDnsBackend = {
+  resolveTxt: (domain: string) => Promise<string[][]>;
+  resolve4: (domain: string) => Promise<string[]>;
+  resolve6: (domain: string) => Promise<string[]>;
+  resolveMx: (domain: string) => Promise<MxRecord[]>;
+  resolvePtr: (domain: string) => Promise<string[]>;
+  cancel: () => void;
+};
+
+export const createMailDnsResolver = (
+  resolver: MailDnsBackend = new Resolver({
+    timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
+    tries: 1,
+  }),
+): LocalDnsResolver => ({
+  resolve: async (domain, rrtype) => {
+    switch (rrtype) {
+      case "TXT":
+        return await resolver.resolveTxt(domain);
+      case "A":
+        return await resolver.resolve4(domain);
+      case "AAAA":
+        return await resolver.resolve6(domain);
+      case "MX":
+        return await resolver.resolveMx(domain);
+      case "PTR":
+        return await resolver.resolvePtr(domain);
+      default:
+        return panic(`Unsupported mail DNS record type: ${rrtype}`);
+    }
+  },
+  cancel: () => resolver.cancel(),
+});
+
+type RunMailVerificationOptions<T> = {
+  createResolver: () => LocalDnsResolver;
+  verify: (resolve: DNSResolver) => Promise<T>;
+};
+
+const runMailVerification = async <T>({
+  createResolver,
+  verify,
+}: RunMailVerificationOptions<T>) => {
+  const resolver = createResolver();
+  let budgetExceeded = false;
+  const verified = await Result.tryPromise({
+    try: () =>
+      withTimeout(
+        async (signal) => {
+          let queries = 0;
+          const cancellation = () => resolver.cancel();
+          signal.addEventListener("abort", cancellation, { once: true });
+          try {
+            const result = await verify(async (domain, rrtype) => {
+              queries += 1;
+              if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+                budgetExceeded = true;
+                resolver.cancel();
+                return [];
+              }
+              return await resolver.resolve(domain, rrtype);
+            });
+            if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+              budgetExceeded = true;
+            }
+            return result;
+          } finally {
+            signal.removeEventListener("abort", cancellation);
+          }
+        },
+        {
+          label: "mail-verification",
+          timeoutMs: INBOUND_MAIL_LIMITS.authenticationTimeoutMs,
+        },
+      ),
+    catch: () =>
+      new MailAuthenticationError({
+        message: "Mail authentication could not complete",
+      }),
+  });
+  resolver.cancel();
+  if (budgetExceeded) {
+    return Result.err(
+      new MailAuthenticationError({
+        message: "Mail verification budget exhausted",
+      }),
+    );
+  }
+  return verified;
+};
+
+export const createLocalMailVerifier =
+  (
+    createResolver: () => LocalDnsResolver = createMailDnsResolver,
+  ): MailVerifier =>
+  async ({ raw, envelope, fromAddress }) => {
+    const fromDomain = mailboxDomain(fromAddress);
+    if (
+      !fromDomain ||
+      !isIP(envelope.remoteIp) ||
+      !normalizeDomain(envelope.helo) ||
+      raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes
+    ) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Invalid mail verification input",
+        }),
+      );
+    }
+    const verification = await runMailVerification({
+      createResolver,
+      verify: async (resolver) =>
+        await authenticate(Buffer.from(raw), {
+          sender: envelope.mailFrom,
+          ip: envelope.remoteIp,
+          helo: envelope.helo,
+          trustReceived: false,
+          disableArc: true,
+          disableBimi: true,
+          resolver,
+        }),
+    });
+    if (verification.isErr()) {
+      return verification;
+    }
+    const { spf, dkim, dmarc } = verification.value;
+    return Result.ok({
+      source: "local",
+      evidence: "identifiers",
+      fromDomain,
+      spf: {
+        result: spf ? authResult(spf.status.result) : "none",
+        domain: spf ? spf.domain : null,
+        alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
+      },
+      dkim: dkim.results.map((signature) => ({
+        result: signature.status.underSized
+          ? "fail"
+          : authResult(signature.status.result),
+        domain: signature.signingDomain ?? null,
+        alignment: dmarc && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
+      })),
+      dmarc: dmarc ? authResult(dmarc.status.result) : "none",
+    } satisfies MailAuthentication);
+  };
+
+export const verifyMailLocally = createLocalMailVerifier();
+
+// A valid signature proves only the signing domain's signature over these bytes;
+// it never authenticates the forwarder's assertions as the original author's identity.
+export const createOriginalSignatureVerifier =
+  (createResolver: () => LocalDnsResolver = createMailDnsResolver) =>
+  async (
+    raw: Uint8Array,
+  ): Promise<
+    Result<CorrespondenceOriginalSignature, MailAuthenticationError>
+  > => {
+    if (raw.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Invalid original verification input",
+        }),
+      );
+    }
+    const verified = await runMailVerification({
+      createResolver,
+      verify: async (resolver) =>
+        await dkimVerify(Buffer.from(raw), { resolver }),
+    });
+    if (verified.isErr()) {
+      // Original signatures are optional provenance, not delivery admission.
+      // Unavailable proof stays visibly unverified, including exhausted budgets.
+      return Result.ok({
+        status: "unverified",
+      } as const satisfies CorrespondenceOriginalSignature);
+    }
+    return verified.map(({ results }) => {
+      for (const signature of results) {
+        if (signature.status.result !== "pass" || signature.status.underSized) {
+          continue;
+        }
+        const domain = normalizeDomain(signature.signingDomain);
+        if (domain !== null) {
+          return {
+            status: "verified",
+            domain,
+          } as const satisfies CorrespondenceOriginalSignature;
+        }
+      }
+      return {
+        status: "unverified",
+      } as const satisfies CorrespondenceOriginalSignature;
+    });
+  };
+
+export const verifyOriginalSignature = createOriginalSignatureVerifier();

@@ -29558,7 +29558,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "matters", "correspondence-get"],
                 capabilityId: "matters.correspondence.get",
                 description:
-                  "Read one matter correspondence record with its filers and attachments.",
+                  "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
                 access: "read",
                 flags: [
                   {
@@ -29618,7 +29618,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "matters", "correspondence-list"],
                 capabilityId: "matters.correspondence.list",
                 description:
-                  "List correspondence filed in a matter, newest received first.",
+                  "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
                 access: "read",
                 flags: [
                   {

@@ -1936,6 +1936,20 @@
     "deliveredBy": "Kézbesítette: <address>{sender}</address>",
     "deliveredByAuthenticated": "Kézbesítette: <address>{sender}</address> · hitelesítve",
     "deliveryAuthentication": "Kézbesítés hitelesítése",
+    "drops": {
+      "authenticationHint": "Kérje meg a feladó levelezési rendszergazdáját az <protocol>SPF</protocol>, <protocol>DKIM</protocol> és <protocol>DMARC</protocol> beállítására a küldő domainhez.",
+      "reason": "Ok",
+      "reasons": {
+        "attachmentRejected": "Elutasított melléklet",
+        "authenticationFailed": "A kézbesítés hitelesítése sikertelen",
+        "malformedMessage": "Az üzenet nem olvasható",
+        "messageTooLarge": "Az üzenet túl nagy",
+        "revokedAddress": "Visszavont e-mail-cím",
+        "unauthorizedSender": "Nem jogosult feladó",
+        "unknownRecipient": "Ismeretlen címzett"
+      },
+      "title": "Elutasított kézbesítések"
+    },
     "empty": "Még nincs levelezés.",
     "filers": "Benyújtók",
     "forwardedBy": "Továbbította: <address>{sender}</address>",
