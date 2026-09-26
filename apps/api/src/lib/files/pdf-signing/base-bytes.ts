@@ -100,7 +100,7 @@ export const loadPdfSigningBaseBytes = async ({
   }
 
   return Result.ok({
-    bytes: new Uint8Array(bytes.value),
+    bytes: new Uint8Array(bytes.value.bytes),
     fileName: resolved.value.fileContent.fileName,
   });
 };
