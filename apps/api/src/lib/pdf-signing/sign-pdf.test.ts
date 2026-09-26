@@ -12,8 +12,8 @@ import {
   PdfSigningPlaceholderTooSmallError,
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
-import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
 import {
   createTestCertificate,
   createTestCrl,
@@ -201,7 +201,7 @@ describe("two-phase PDF signing", () => {
 
     const locked = await digestOf({
       ...invocation,
-      basePdf: await buildCertifiedPdf({ permission: 1 }),
+      basePdf: await createSignedPdf({ certify: 1 }),
     }).catch((error: unknown) => error);
     expect(locked).toBeInstanceOf(PdfSigningCertifiedDocumentError);
 
@@ -211,7 +211,7 @@ describe("two-phase PDF signing", () => {
       expect(
         await digestOf({
           ...invocation,
-          basePdf: await buildCertifiedPdf({ permission }),
+          basePdf: await createSignedPdf({ certify: permission }),
         }),
       ).toMatch(/^[0-9a-f]{64}$/u);
     }
