@@ -717,7 +717,7 @@ export const isRunningToolPart = (part: unknown): boolean => {
 export const hasRunningToolCallInLatestAssistantMessage = ({
   messages,
 }: {
-  messages: PersistedChatMessage[];
+  messages: readonly PersistedChatMessage[];
 }) => {
   const message = messages.at(-1);
   if (!message || message.role !== "assistant") {
