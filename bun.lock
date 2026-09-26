@@ -1211,7 +1211,7 @@
     "@stll/anonymize": "3.0.1",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.1",
-    "@stll/docx-core": "0.27.0",
+    "@stll/docx-core": "0.28.0",
     "@stll/folio-agents": "0.14.1",
     "@stll/folio-core": "0.51.0",
     "@stll/folio-react": "0.23.0",
@@ -2754,7 +2754,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.27.0", "", { "dependencies": { "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-DyMMa7samVpuD/JO/96KwN6VWfHZjq12LmcLQAmFH4AjcnYH2OAwZuek0u6iWFmVEc7dhElgA/TupyvdkTS19Q=="],
+    "@stll/docx-core": ["@stll/docx-core@0.28.0", "", { "dependencies": { "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-VXtsl64/hi3j2IxRyeIiF5XV5B+IFIbSFLD0ukij2NGF0a0i0OYvKrHYAswSYvpj05PZLHL6egmxboyEmp9v4g=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -6025,8 +6025,6 @@
     "@selderee/plugin-htmlparser2/domhandler": ["domhandler@5.0.3", "", { "dependencies": { "domelementtype": "^2.3.0" } }, "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w=="],
 
     "@stll/docx-core/jszip": ["jszip@3.10.1", "", { "dependencies": { "lie": "~3.3.0", "pako": "~1.0.2", "readable-stream": "~2.3.6", "setimmediate": "^1.0.5" } }, "sha512-xXDvecyTpGLrqFrvkrUSoxxfJI5AH7U8zxxtVclpsUtMCq4JQ290LY8AW5c7Ggnr/Y/oK+bQMbqK2qmtk3pN4g=="],
-
-    "@stll/folio-core/@stll/docx-core": ["@stll/docx-core@0.28.0", "", { "dependencies": { "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-VXtsl64/hi3j2IxRyeIiF5XV5B+IFIbSFLD0ukij2NGF0a0i0OYvKrHYAswSYvpj05PZLHL6egmxboyEmp9v4g=="],
 
     "@stll/folio-core/jszip": ["jszip@3.10.1", "", { "dependencies": { "lie": "~3.3.0", "pako": "~1.0.2", "readable-stream": "~2.3.6", "setimmediate": "^1.0.5" } }, "sha512-xXDvecyTpGLrqFrvkrUSoxxfJI5AH7U8zxxtVclpsUtMCq4JQ290LY8AW5c7Ggnr/Y/oK+bQMbqK2qmtk3pN4g=="],
 
