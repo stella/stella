@@ -2,25 +2,34 @@ import { Result, panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
-import { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
 import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import {
+  applyDecisionBatch,
+  MAX_CONSECUTIVE_FAILURES,
+  recordIngestionFailures,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch";
+import type {
+  DecisionBatchHalt,
+  FailureLedgerWrite,
+  IngestionFailureRow,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch";
+import { partitionWithinBatchBounds } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
   wrappedErrorDetail,
   PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
-  processResultForCorpusOutcome,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -35,17 +44,13 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import {
   canStartCyclePage,
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
-import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
-import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
 type DbSlot = {
@@ -105,17 +110,81 @@ export const CYCLE_HALT_REASON = {
   TIMEOUT: "Cycle timeout exceeded",
 } as const;
 
-const failureRecordsNotWritten = failureSink({
-  event: "case_law.ingestion.failure_records_not_written",
-  expected: [],
-});
-
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
+
+/**
+ * What a failure-ledger write means for the cursor. A timeout or a transient
+ * database condition holds it and the page is read again. A rejection
+ * repeats on a replay of the same rows, so it is reported and the page moves
+ * on.
+ */
+const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
+  switch (write.type) {
+    case "written":
+    case "rejected":
+      return null;
+    case "timeout":
+      return databaseTimeoutHaltReason(write.error);
+    case "transient":
+      return `${write.count} failure record(s) not written; cursor held for retry`;
+    default:
+      write satisfies never;
+      return panic(`Unhandled ledger write: ${String(write)}`);
+  }
+};
+
+const RETRY_HALT_REASON = {
+  [PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE]:
+    "1 corpus write failure(s); cursor held for retry",
+  [PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE]:
+    "1 source raw write failure(s); cursor held for retry",
+  [PROCESS_DECISION_RETRY_REASON.CONTENTION]:
+    "Concurrent decision reconciliation; cursor held for retry",
+} as const satisfies Record<
+  (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON],
+  string
+>;
+
+/** The halt reason a stopped batch leaves on its page. */
+const batchHaltReason = (
+  stop: DecisionBatchHalt,
+  maxDecisions: number | undefined,
+): string => {
+  switch (stop.type) {
+    case "retryable":
+      return RETRY_HALT_REASON[stop.reason];
+    case "timeout":
+      return databaseTimeoutHaltReason(stop.error);
+    case "insert-limit":
+      // Halting (instead of breaking quietly) keeps the cursor at this page
+      // so the unprocessed remainder is not skipped.
+      return `Decision cap (${String(maxDecisions)}) reached`;
+    case "failure-streak":
+      return (
+        `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
+        `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
+      );
+    case "aborted":
+      return panic("A crawl batch carries no abort signal");
+    default:
+      stop satisfies never;
+      return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
 
 /** What a page asks the database to write: its decisions and supplements. */
 const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0);
+
+const PAGE_SLOT = {
+  HELD: "held",
+  NOT_NEEDED: "not-needed",
+  /** The cycle ended while the page waited for the slot. */
+  CYCLE_ENDED: "cycle-ended",
+} as const;
+
+type PageSlot = (typeof PAGE_SLOT)[keyof typeof PAGE_SLOT];
 
 /**
  * Run the ingestion pipeline for a configured source.
@@ -154,11 +223,10 @@ export const runIngestionPipeline = async ({
   const recentCursors = new Set<string | null>();
   /**
    * Consecutive decision-level failures. Reset on each success.
-   * If this exceeds the threshold, the adapter is halted for
+   * If this reaches the batch threshold, the adapter is halted for
    * this cycle to avoid hammering a broken court API.
    */
   let consecutiveFailures = 0;
-  const MAX_CONSECUTIVE_FAILURES = 10;
   let haltReason: string | null = null;
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
@@ -267,39 +335,19 @@ export const runIngestionPipeline = async ({
   };
 
   /**
-   * Write a page's decision failures in one insert. The handle is bound here,
-   * outside the page loop, so the loop hands the whole set to a batched write
-   * instead of reaching for the database once per page. Returns a halt reason
-   * when the write meets a timeout or a transient database condition: the
-   * cursor holds and the page is read again. Any other rejection repeats on
-   * a replay of the same rows, so it is reported and the page moves on.
+   * Write a page's supplement failures in one insert. Returns a halt reason
+   * when the write meets a timeout or a transient database condition.
    */
   const flushIngestionFailures = async (
-    failures: readonly (typeof caseLawIngestionFailures.$inferInsert)[],
-  ): Promise<string | null> => {
-    try {
-      await logIngestionFailures(scopedDb, failures);
-      return null;
-    } catch (error) {
-      observeFailure(error, {
-        sink: failureRecordsNotWritten,
-        ctx: {
-          adapterKey: adapter.key,
-          step: "runIngestionPipeline.logIngestionFailures",
-        },
-      });
-      if (error instanceof TimeoutError) {
-        return databaseTimeoutHaltReason(error);
-      }
-      const { grade } = gradeFailure(
-        readEvidence(error),
-        failureRecordsNotWritten,
-      );
-      return grade === "transient"
-        ? `${failures.length} failure record(s) not written; cursor held for retry`
-        : null;
-    }
-  };
+    failures: readonly IngestionFailureRow[],
+  ): Promise<string | null> =>
+    failureLedgerHaltReason(
+      await recordIngestionFailures({
+        scopedDb,
+        failures,
+        adapterKey: adapter.key,
+      }),
+    );
 
   const reparseStoredRaw = adapter.reparseStoredRaw;
   const nextObservationOrder = async (): Promise<bigint> => {
@@ -309,6 +357,77 @@ export const runIngestionPipeline = async ({
       scopedDb,
       sourceId: source.id,
     });
+  };
+
+  /**
+   * Acquire the DB slot before processing a page's items (DB-heavy: insert,
+   * search index, citation extraction).
+   *
+   * A page with no decisions never touches the slot: it has no DB
+   * work, and acquiring anyway let a cycle-timeout abort land in
+   * the gap between the fetch returning and the acquire — breaking
+   * out before the cursor advance below ever ran, silently
+   * discarding the forward progress the fetch had already made and
+   * pinning the adapter to the same cursor on every later cycle.
+   */
+  const acquirePageSlot = async (page: SyncPage): Promise<PageSlot> => {
+    if (!dbSlot || pageItemCount(page) === 0) {
+      return PAGE_SLOT.NOT_NEEDED;
+    }
+    try {
+      await dbSlot.acquire(deadline?.signal);
+      return PAGE_SLOT.HELD;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return PAGE_SLOT.CYCLE_ENDED;
+      }
+      throw error;
+    }
+  };
+
+  /**
+   * Apply a page's decisions in bounded batches, each settled before the
+   * next starts. Every batch carries the page's one observation; the first
+   * that stops ends the page with its halt reason, and the cursor holds.
+   */
+  const applyPageDecisions = async ({
+    decisions,
+    observation,
+  }: {
+    decisions: SyncPage["decisions"];
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    for (const batch of partitionWithinBatchBounds(decisions)) {
+      // db-await-in-loop: one bounded batch at a time, each settled before the next, ordered per observation
+      const applied = await applyDecisionBatch({
+        decisions: batch,
+        sourceId: source.id,
+        scopedDb,
+        observation,
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus,
+        polarityRules,
+        context: { adapterKey: adapter.key, cursor },
+        failureStreak: consecutiveFailures,
+        insertLimit:
+          maxDecisions === undefined ? undefined : maxDecisions - inserted,
+      });
+      inserted += applied.inserted;
+      skipped += applied.skipped;
+      searchVectorFailures += applied.searchVectorFailures;
+      s3UploadFailures += applied.corpusWriteFailures;
+      consecutiveFailures = applied.failureStreak;
+      // A reason the batch stopped for wins over the ledger write's own.
+      const batchHalt =
+        (applied.halt === null
+          ? null
+          : batchHaltReason(applied.halt, maxDecisions)) ??
+        failureLedgerHaltReason(applied.failureLedger);
+      if (batchHalt !== null) {
+        return batchHalt;
+      }
+    }
+    return null;
   };
 
   /**
@@ -332,7 +451,7 @@ export const runIngestionPipeline = async ({
         `Adapter ${adapter.key} emits supplements but cannot rebuild the judgments they join`,
       );
     }
-    const failures: (typeof caseLawIngestionFailures.$inferInsert)[] = [];
+    const failures: IngestionFailureRow[] = [];
     for (const supplement of supplements) {
       const placed = await Result.tryPromise({
         try: async () =>
@@ -407,206 +526,26 @@ export const runIngestionPipeline = async ({
     checkpointObservationOrder = observationOrder;
     const observedAt = new Date();
 
-    // Acquire DB slot before processing decisions (DB-heavy:
-    // insert, search index, citation extraction). Released
-    // before the next page fetch so external API calls don't
-    // hold the slot. try-finally ensures no slot leak on
-    // unexpected exceptions.
-    //
-    // A page with no decisions never touches the slot: it has no DB
-    // work, and acquiring anyway let a cycle-timeout abort land in
-    // the gap between the fetch returning and the acquire — breaking
-    // out before the cursor advance below ever ran, silently
-    // discarding the forward progress the fetch had already made and
-    // pinning the adapter to the same cursor on every later cycle.
-    let pageHoldsDbSlot = false;
-    if (dbSlot && pageItemCount(page) > 0) {
-      try {
-        await dbSlot.acquire(deadline?.signal);
-        pageHoldsDbSlot = true;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          haltReason = CYCLE_HALT_REASON.TIMEOUT;
-          break;
-        }
-        throw error;
-      }
+    // Released before the next page fetch so external API calls don't hold
+    // the slot. try-finally ensures no slot leak on unexpected exceptions.
+    const pageSlot = await acquirePageSlot(page);
+    if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
+      haltReason = CYCLE_HALT_REASON.TIMEOUT;
+      break;
     }
     const pageT0 = performance.now();
     const insertedBefore = inserted;
     const skippedBefore = skipped;
     const s3FailuresBefore = s3UploadFailures;
     try {
-      let retryableDecision = false;
-      const pageFailures: (typeof caseLawIngestionFailures.$inferInsert)[] = [];
-      // One pack for the page: every decision below contributes its payloads
-      // to this batch, which is written and settled once the page is
-      // processed.
-      const corpusBatch = openCorpusPackBatch({
-        scopedDb,
-        transfer: corpus.transfer,
+      // db-await-in-loop: one bounded application pass per page, before its supplements and the cursor advance
+      haltReason = await applyPageDecisions({
+        decisions: page.decisions,
+        observation: { order: observationOrder, observedAt },
       });
-      try {
-        for (const result of page.decisions) {
-          if (maxDecisions !== undefined && inserted >= maxDecisions) {
-            // Halting (instead of breaking quietly) keeps the cursor at
-            // this page so the unprocessed remainder is not skipped.
-            haltReason = `Decision cap (${maxDecisions}) reached`;
-            break;
-          }
-          try {
-            // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
-            const outcome = await processDecision({
-              input: result,
-              sourceId: source.id,
-              scopedDb,
-              observedAt,
-              observationOrder,
-              corpus,
-              corpusBatch,
-              polarityRules,
-            });
 
-            if (outcome.inserted) {
-              inserted++;
-            } else {
-              skipped++;
-            }
-            consecutiveFailures = 0;
-            switch (outcome.status) {
-              case PROCESS_DECISION_STATUS.COMPLETE:
-                if (outcome.searchVectorFailed) {
-                  searchVectorFailures++;
-                }
-                break;
-              case PROCESS_DECISION_STATUS.RETRYABLE:
-                switch (outcome.reason) {
-                  case PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE:
-                    s3UploadFailures++;
-                    haltReason =
-                      "1 corpus write failure(s); cursor held for retry";
-                    break;
-                  case PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE:
-                    s3UploadFailures++;
-                    haltReason =
-                      "1 source raw write failure(s); cursor held for retry";
-                    break;
-                  case PROCESS_DECISION_RETRY_REASON.CONTENTION:
-                    haltReason =
-                      "Concurrent decision reconciliation; cursor held for retry";
-                    break;
-                  default:
-                    outcome.reason satisfies never;
-                    return panic(`Unhandled reason: ${String(outcome.reason)}`);
-                }
-                retryableDecision = true;
-                break;
-              default:
-                outcome satisfies never;
-                return panic(`Unhandled outcome: ${String(outcome)}`);
-            }
-            if (retryableDecision) {
-              break;
-            }
-          } catch (error) {
-            consecutiveFailures++;
-            const tag = errorTag(error);
-            const message =
-              error instanceof Error ? error.message : String(error);
-
-            logger.error("case_law.ingestion.decision_failed", {
-              adapterKey: adapter.key,
-              caseNumber: result.caseNumber,
-              cursor: cursor ?? "",
-              ...errorSystemFields(error),
-              ...pgErrorFields(error),
-              // "message" is stripped by the logger sanitizer; use
-              // "error.detail" so the SQL/HTTP/SDK reason reaches
-              // CloudWatch. Case-law data is public, no PII concern.
-              "error.detail": wrappedErrorDetail(error),
-              consecutiveFailures,
-            });
-            captureError(error, {
-              adapterKey: adapter.key,
-              caseNumber: result.caseNumber,
-              cursor: cursor ?? "",
-            });
-
-            if (error instanceof TimeoutError) {
-              haltReason = databaseTimeoutHaltReason(error);
-              break;
-            }
-
-            // Persist failure for later analysis; written once per page below.
-            pageFailures.push({
-              sourceId: source.id,
-              caseNumber: result.caseNumber,
-              language: result.language,
-              errorType: tag.slice(0, 128),
-              errorMessage: message.slice(0, 2048),
-              cursor,
-            });
-
-            skipped++;
-
-            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-              haltReason =
-                `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
-                `last: [${tag}] ${message.slice(0, 200)}`;
-              break;
-            }
-          }
-        }
-      } finally {
-        // The page's pack goes out here for the same reason the failures do:
-        // every mid-page exit above is a `break` or a throw, and the
-        // decisions already processed have rows waiting for their payloads.
-        // A decision whose settlement did not land holds the cursor, so the
-        // page is retried and it joins the next batch's pack.
-        //
-        // A flush that fails outright is the whole page's corpus write
-        // failing, counted as such: raising from a `finally` would replace
-        // whatever brought the page here and skip the failure rows below.
-        const corpusOutcomes = await corpusBatch.flush();
-        if (Result.isError(corpusOutcomes)) {
-          s3UploadFailures++;
-          logger.error("case_law.ingestion.corpus_write_failed", {
-            adapterKey: adapter.key,
-            cursor: cursor ?? "",
-            ...errorSystemFields(corpusOutcomes.error),
-            ...pgErrorFields(corpusOutcomes.error),
-            "error.detail": wrappedErrorDetail(corpusOutcomes.error),
-          });
-          captureError(corpusOutcomes.error, {
-            adapterKey: adapter.key,
-            step: "runIngestionPipeline.corpusPackFlush",
-          });
-        } else {
-          for (const [settledDecisionId, outcome] of corpusOutcomes.value) {
-            const settlement = processResultForCorpusOutcome(outcome, {
-              decisionId: settledDecisionId,
-            });
-            if (settlement.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-              s3UploadFailures++;
-            }
-          }
-        }
-        // Flush here, not after the loop: every mid-page exit above is a
-        // `break` or a throw, and a `finally` still records what the page
-        // collected. It runs before the cursor advance below, so a timeout
-        // writing these rows still holds the cursor.
-        //
-        // Flush unconditionally. `haltReason ??= await flush(...)` would skip
-        // the flush entirely once the page had halted, dropping exactly the
-        // failures a halted page most needs recorded; an existing halt reason
-        // still wins over the flush's own.
-        // db-await-in-loop: one batched failure insert per page, before the cursor advances
-        const flushHaltReason = await flushIngestionFailures(pageFailures);
-        haltReason ??= flushHaltReason;
-      }
-
-      // After the page's pack is flushed, so a judgment written on this page
-      // is settled before its supplement writes it again, and before the
+      // After the page's packs are flushed, so a judgment written on this
+      // page is settled before its supplement writes it again, and before the
       // cursor moves, so a supplement that could not be placed holds it.
       // db-await-in-loop: one placement pass per page, after the page's pack is flushed and before the cursor moves
       haltReason = await placePageSupplements({
@@ -650,7 +589,7 @@ export const runIngestionPipeline = async ({
       cursor = page.nextCursor;
       pagesProcessed++;
     } finally {
-      if (dbSlot && pageHoldsDbSlot) {
+      if (dbSlot && pageSlot === PAGE_SLOT.HELD) {
         dbSlot.release();
       }
     }
@@ -710,61 +649,4 @@ export const runIngestionPipeline = async ({
     nextCursor: cursor,
     haltReason,
   };
-};
-
-type IngestionFailureRow = typeof caseLawIngestionFailures.$inferInsert;
-
-/** Column bounds of `case_law_ingestion_failures` (schema/case-law.ts). */
-const INGESTION_FAILURE_LIMITS = {
-  caseNumber: 256,
-  language: 8,
-  errorType: 128,
-  errorMessage: 2048,
-} as const;
-
-/** Postgres text and jsonb columns do not store NUL characters. */
-const storableText = (value: string, maxLength?: number): string => {
-  const text = value.replaceAll("\u0000", "");
-  return maxLength === undefined ? text : text.slice(0, maxLength);
-};
-
-/**
- * A failure row as the table accepts it: values copied from the decision
- * that failed are held to the column bounds and carry no NUL characters.
- */
-const storableIngestionFailure = (
-  row: IngestionFailureRow,
-): IngestionFailureRow => ({
-  ...row,
-  caseNumber: storableText(row.caseNumber, INGESTION_FAILURE_LIMITS.caseNumber),
-  errorType: storableText(row.errorType, INGESTION_FAILURE_LIMITS.errorType),
-  errorMessage: storableText(
-    row.errorMessage,
-    INGESTION_FAILURE_LIMITS.errorMessage,
-  ),
-  ...(typeof row.language === "string"
-    ? {
-        language: storableText(row.language, INGESTION_FAILURE_LIMITS.language),
-      }
-    : {}),
-  ...(typeof row.cursor === "string"
-    ? { cursor: storableText(row.cursor) }
-    : {}),
-});
-
-const logIngestionFailures = async (
-  scopedDb: ScopedDb,
-  failures: readonly IngestionFailureRow[],
-) => {
-  if (failures.length === 0) {
-    return;
-  }
-  // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
-    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    return tx
-      .insert(caseLawIngestionFailures)
-      .values(failures.map(storableIngestionFailure));
-  });
 };
