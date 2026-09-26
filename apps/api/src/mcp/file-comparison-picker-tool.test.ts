@@ -6,8 +6,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   handleOpenFileComparisonTool,
+  OPEN_FILE_COMPARISON_OUTPUT_CONTRACT,
   OPEN_FILE_COMPARISON_TOOL_DEFINITION,
 } from "@/api/mcp/file-comparison-picker-tool";
+import { serializeToolResult } from "@/api/mcp/tool-utils";
+import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const contextFor = (memberRole: string): McpRequestContext =>
@@ -56,8 +59,10 @@ describe("open_file_comparison", () => {
     if ("egress" in result || result.status !== "success") {
       throw new Error(`Expected success, got ${JSON.stringify(result)}`);
     }
-    expect(result.data).toEqual({});
-    expect(result.mcp?.primaryText).toContain(
+    const seen = modelViewOf(
+      serializeToolResult(result, OPEN_FILE_COMPARISON_OUTPUT_CONTRACT),
+    );
+    expect(seen["nextStep"]).toContain(
       FILE_COMPARISON_TRANSPORT.compareToolName,
     );
   });

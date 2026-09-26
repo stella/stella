@@ -45,7 +45,6 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
   InternalToolErrorResult,
-  InternalToolMcpPresentation,
   InternalToolResult,
   InternalToolSuccess,
   RuntimeMcpToolOutputContract,
@@ -383,11 +382,9 @@ export const confirmProp = (
 
 export const toolDataResult = <TData>(
   data: TData,
-  mcp?: InternalToolMcpPresentation,
 ): InternalToolSuccess<TData> => ({
   status: "success",
   data,
-  ...(mcp === undefined ? {} : { mcp }),
 });
 
 // TypeScript's JSON.stringify overload for `unknown` claims it always returns
@@ -438,21 +435,18 @@ export const serializeToolResult = (
     if (typeof serializedData !== "string") {
       panic("Internal tool success data must be JSON-serializable");
     }
-    const content: CallToolResult["content"] = [
-      {
-        type: "text",
-        text: result.mcp?.primaryText ?? serializedData,
-      },
-    ];
-    const additionalText = result.mcp?.additionalText;
-    if (additionalText !== undefined) {
-      for (const text of additionalText) {
-        content.push({ type: "text", text });
-      }
-    }
+    // A host shows the model either the text or `structuredContent`, so the
+    // one text block is the JSON of the same validated object. An explicit
+    // projection only wraps the payload (`{ result }`); its text stays the
+    // unwrapped payload callers parse.
     const structuredContent = successStructuredContent(result, outputContract);
+    const text =
+      structuredContent !== undefined &&
+      outputContract?.projection === "identity"
+        ? JSON.stringify(structuredContent)
+        : serializedData;
     return {
-      content,
+      content: [{ type: "text", text }],
       ...(structuredContent === undefined ? {} : { structuredContent }),
     };
   }

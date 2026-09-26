@@ -157,6 +157,9 @@ export const LIST_MATTERS_LIST_PROJECTION = v.strictObject({
   ),
   // Opaque base64 cursor (boundary matter id), not UUID-formatted.
   nextCursor: v.nullable(passthroughId()),
+  // Only on an empty page while the organization has no practice
+  // jurisdictions: how to set them.
+  nextStep: v.optional(v.string()),
 });
 
 /**
@@ -1424,6 +1427,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
     }),
   ),
   total: searchTotalProjection,
+  // Only on an empty result while the organization has no practice
+  // jurisdictions: how to set them.
+  nextStep: v.optional(v.string()),
 });
 
 const decisionTextFieldProjection = v.variant("type", [
