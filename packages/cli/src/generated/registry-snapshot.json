@@ -2753,6 +2753,91 @@
   },
   {
     "cli": {
+      "command": ["contact", "check-counterparty"],
+      "scope": "read"
+    },
+    "name": "check_counterparty",
+    "description": "Screen a company or a person against an official register for due diligence. `check` picks the source; `subject` is a company by national business ID or a person by name and birth date. Returns one outcome: clear (the source answered and lists nothing), found (the records it lists, each with a public link), unavailable (the source did not answer: the subject is NOT cleared; retry later or say the check could not run), or not-covered (the source cannot screen this subject type). Person matches rely on name and birth date: compare the debtor as registered before relying on one.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["check", "subject"],
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "enum": ["cz-insolvency"],
+          "type": "string",
+          "description": "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized.",
+          "x-stella-agent-input": {
+            "kind": "enum"
+          }
+        },
+        "subject": {
+          "description": "The company or person to screen",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["company-id"],
+                  "description": "A registered business, by its national business ID.",
+                  "type": "string"
+                },
+                "company_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32,
+                  "description": "National business ID in the check's country, e.g. the Czech IČO 26863154"
+                }
+              },
+              "required": ["type", "company_id"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": ["person"],
+                  "description": "A natural person, by name and birth date.",
+                  "type": "string"
+                },
+                "first_name": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 100,
+                  "description": "First name"
+                },
+                "last_name": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 100,
+                  "description": "Last name (surname)"
+                },
+                "birth_date": {
+                  "type": "string",
+                  "format": "date",
+                  "maxLength": 10,
+                  "description": "Birth date. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
+                  "x-stella-agent-input": {
+                    "kind": "date"
+                  }
+                }
+              },
+              "required": ["type", "first_name", "last_name", "birth_date"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Check counterparty",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "cli": {
       "command": ["task", "list"],
       "scope": "read",
       "itemsKey": "tasks",

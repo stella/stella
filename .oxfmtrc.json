@@ -3,6 +3,7 @@
   "ignorePatterns": [
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.html",
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.json",
+    "packages/business-registries/src/**/__fixtures__/**/*.html",
     "**/*.gen.*",
     "**/*.min.*",
     "sbom.cdx.json",

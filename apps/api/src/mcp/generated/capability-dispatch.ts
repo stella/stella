@@ -145,6 +145,10 @@ export const CAPABILITY_DISPATCH = {
   "clauses.versions.summarize": {
     load: async () => await import("@/api/handlers/clauses/versions/summarize"),
   },
+  "contacts.business-registries.check": {
+    load: async () =>
+      await import("@/api/handlers/contacts/business-registries/check"),
+  },
   "contacts.business-registries.lookup": {
     load: async () =>
       await import("@/api/handlers/contacts/business-registries/lookup"),

@@ -149,9 +149,14 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // anchor and a quote and reports per-passage issues, update names one change,
 // delete is destructive and confirmed. Only the list is a read, so only it
 // reaches the anonymized surface.
+// default 67 -> 68 and anonymized 29 -> 30 for check_counterparty: screening
+// a company or person against an official register answers clear, found,
+// unavailable or not-covered, which a registry lookup cannot express. One tool
+// with a `check` discriminator covers every source; it is a passthrough read,
+// like lookup_business_registry.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 67,
-  anonymized: 29,
+  default: 68,
+  anonymized: 30,
   law: 10,
 };
 
@@ -329,9 +334,11 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // then adds 161 default: the projection states bounds and defaults the
 // validators already enforced (`minLength`, the cursor's `maxLength`,
 // `access`/`limit` defaults) plus Valibot's empty `required`.
+// check_counterparty adds its subject union and the four-outcome output:
+// measured 176_547 default and 79_598 anonymized.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 172_400,
-  anonymized: 75_400,
+  default: 176_700,
+  anonymized: 79_750,
   law: 28_250,
 };
 
@@ -412,9 +419,11 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // The reader-annotation tools add the listed marks with their passages, the
 // created mark's stored passages, and two receipts: measured 55_085 default and
 // 33_799 anonymized, where the list is the only one of them.
+// check_counterparty's outcome union with its typed findings: measured 57_133
+// default and 35_847 anonymized.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 55_150,
-  anonymized: 33_850,
+  default: 57_200,
+  anonymized: 35_900,
   law: 10_050,
 };
 

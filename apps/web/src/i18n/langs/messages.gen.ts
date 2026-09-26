@@ -1176,6 +1176,7 @@ type Messages = {
       "business_registry_lookup": "Searching business registry";
       "compare_versions": "Comparing versions";
       "configure_template_fields": "Configure template fields";
+      "counterparty_check": "Checking counterparty";
       "create-document": "Preparing document";
       "create_matter_document": "Creating document";
       "create_reader_annotation": "Add highlight or comment";

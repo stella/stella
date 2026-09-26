@@ -44,6 +44,10 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["contact", "lookup-registry"],
       scope: "read",
     },
+    check_counterparty: {
+      command: ["contact", "check-counterparty"],
+      scope: "read",
+    },
 
     list_tasks: {
       command: ["task", "list"],

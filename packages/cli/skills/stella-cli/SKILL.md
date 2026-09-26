@@ -106,6 +106,7 @@ requires (request it at `stella auth login --scopes`).
 | clause       | `stella clause delete`                          | knowledge_write             | destructive (needs `--yes` off a TTY)   |
 | clause       | `stella clause list`                            | read                        | paginated                               |
 | clause       | `stella clause save`                            | knowledge_write             |                                         |
+| contact      | `stella contact check-counterparty`             | read                        |                                         |
 | contact      | `stella contact delete`                         | matters_write               | destructive (needs `--yes` off a TTY)   |
 | contact      | `stella contact list`                           | read                        | paginated                               |
 | contact      | `stella contact lookup-registry`                | read                        |                                         |
@@ -202,6 +203,8 @@ are omitted here.
   - optional: --clause-id, --version-id, --category-id, --query, --include-categories
 - `stella clause save`
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
+- `stella contact check-counterparty`
+  - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency)
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
@@ -367,7 +370,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 351
+Beyond the curated commands above, the CLI generates 352
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

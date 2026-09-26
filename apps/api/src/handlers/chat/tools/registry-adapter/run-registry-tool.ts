@@ -67,6 +67,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   list_properties: DOCUMENT_TOOL_HANDLERS.list_properties,
   list_tasks: MATTER_TOOL_HANDLERS.list_tasks,
   lookup_business_registry: MATTER_TOOL_HANDLERS.lookup_business_registry,
+  // Non-projectable: chat uses its hand-written counterparty check tool.
+  check_counterparty: MATTER_TOOL_HANDLERS.check_counterparty,
   list_clauses: KNOWLEDGE_TOOL_HANDLERS.list_clauses,
   list_playbooks: KNOWLEDGE_TOOL_HANDLERS.list_playbooks,
   list_reader_annotations:
