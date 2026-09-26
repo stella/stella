@@ -43,6 +43,7 @@ import {
   CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_STATUS,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-resolution-status";
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import { resolveDecisionReference } from "@/api/handlers/case-law/citations/reference-resolution";
 import type { ReferenceResolution } from "@/api/handlers/case-law/citations/reference-resolution";
@@ -449,8 +450,8 @@ const cases: Case[] = [
 ];
 
 type Outcome = {
-  status: string;
-  target: string | null;
+  status: CitationResolutionStatus;
+  target: SafeId<"caseLawDecision"> | null;
   rule: string | null;
 };
 
@@ -684,7 +685,7 @@ const expectOneOutcome = async (
   });
 
   const fromHolders = outcomeOf(stated);
-  expect<Outcome>(
+  expect(
     classified === undefined
       ? PENDING
       : {
@@ -830,7 +831,8 @@ test("the matrix declares every rule and every outcome", () => {
           return expected.rule;
         case CITATION_RESOLUTION_STATUS.UNMATCHED:
           return expected.blocked ? "unmatched, blocked" : "unmatched";
-        default:
+        case CITATION_RESOLUTION_STATUS.AMBIGUOUS:
+        case CITATION_RESOLUTION_STATUS.PENDING:
           return expected.status;
       }
     }),

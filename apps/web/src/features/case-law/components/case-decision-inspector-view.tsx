@@ -226,6 +226,7 @@ export const CaseDecisionInspectorView = ({
                 <DecisionCitations
                   decision={{
                     caseNumber: decision.caseNumber,
+                    caseNumberType: decision.caseNumberType,
                     country: decision.country,
                     court: decision.court,
                     decisionDate: decision.decisionDate,

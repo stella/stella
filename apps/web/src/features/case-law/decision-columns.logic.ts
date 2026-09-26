@@ -128,11 +128,20 @@ const DECISION_REFERENCE_COLUMN_LABEL_KEYS = {
   reference: "common.reference",
 } as const satisfies Record<DecisionReferenceColumnKind, TranslationKey>;
 
+/**
+ * The few keys a decision column is labelled with. Kept to these literals
+ * rather than every translation key, so a translator call on one stays cheap
+ * to type.
+ */
+type DecisionColumnLabelKey =
+  | (typeof DECISION_COLUMN_LABEL_KEYS)[DecisionColumnId]
+  | (typeof DECISION_REFERENCE_COLUMN_LABEL_KEYS)[DecisionReferenceColumnKind];
+
 /** A decision column's label, given what the case-number column holds. */
 export const decisionColumnLabelKey = (
   column: DecisionColumnId,
   referenceKind: DecisionReferenceColumnKind,
-): TranslationKey =>
+): DecisionColumnLabelKey =>
   column === "caseNumber"
     ? DECISION_REFERENCE_COLUMN_LABEL_KEYS[referenceKind]
     : DECISION_COLUMN_LABEL_KEYS[column];

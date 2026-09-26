@@ -2191,7 +2191,7 @@ const nonDocketReference = ({
 }: Pick<ReadCaseLawDecisionSuccess, "caseNumberType" | "identifiers">) =>
   caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
     ? {}
-    : { caseNumberType, identifiers };
+    : { caseNumberType, identifiers: [...identifiers] };
 
 type DecisionItemOptions = {
   decisionId: string;
