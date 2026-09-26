@@ -246,7 +246,10 @@
       setText(
         "appearance",
         stampPage
-          ? (strings.pdfSignStampOnPage || "").replace("{pageNumber}", stampPage)
+          ? (strings.pdfSignStampOnPage || "").replace(
+              "{pageNumber}",
+              stampPage,
+            )
           : strings.pdfSignInvisible,
       );
       setText("certificateLabel", strings.pdfSignCertificate);
@@ -287,7 +290,9 @@
         }
         const expires = new Date(`${identity.expiresOn}T00:00:00Z`);
         if (!Number.isNaN(expires.getTime())) {
-          parts.push(`${strings.pdfSignExpires || ""} ${expiryFormat.format(expires)}`);
+          parts.push(
+            `${strings.pdfSignExpires || ""} ${expiryFormat.format(expires)}`,
+          );
         }
         return parts.join(" · ");
       };
