@@ -9,18 +9,29 @@
  * output is intentionally compact: a scheduled reviewer reads residual
  * lines, not decisions.
  *
+ * A reporter-citing jurisdiction is read from the document's AST, and its
+ * lines report the references the extractor left unresolved, by reason.
+ *
  *   AWS_REGION=eu-central-1 bun src/scripts/citation-probe.ts \
- *     --bucket <legal-corpus-bucket> [--sample 18]
+ *     --bucket <legal-corpus-bucket> [--sample 18] [--jurisdictions CZE,SVK,POL]
  */
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
+import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import { fetchWithTimeout } from "@stll/fetch";
 
-import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  countUnresolvedTargets,
+  type UsCitationDiagnostics,
+  type UsCitationOccurrence,
+} from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
+import { parseUsableDocumentAst } from "@/api/lib/case-law/document-ast";
+import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import { zstdDecompressToString } from "@/api/lib/compression";
 import { isRecord } from "@/api/lib/type-guards";
 
-const JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
+const DEFAULT_JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
 
 class CitationProbeS3ReadError extends TaggedError("CitationProbeS3ReadError")<{
@@ -42,6 +53,14 @@ if (!bucket) {
 const sampleTarget = Number(argValue("--sample") ?? "18");
 if (!Number.isInteger(sampleTarget) || sampleTarget <= 0 || sampleTarget > 60) {
   console.error("citation-probe: --sample must be an integer between 1 and 60");
+  process.exit(2);
+}
+const JURISDICTIONS: readonly string[] =
+  argValue("--jurisdictions")
+    ?.split(",")
+    .filter((code) => /^[A-Z]{3}$/u.test(code)) ?? DEFAULT_JURISDICTIONS;
+if (JURISDICTIONS.length === 0) {
+  console.error("citation-probe: --jurisdictions must list ISO alpha-3 codes");
   process.exit(2);
 }
 
@@ -339,14 +358,13 @@ type ProbedDoc = {
   jurisdiction: string;
   documentId: string;
   empty: boolean;
+  /** A reporter-citing decision whose AST could not be read. */
+  unread: boolean;
   extractedCount: number;
   residuals: string[];
 };
 
-const probeKey = async (
-  jurisdiction: string,
-  key: string,
-): Promise<ProbedDoc> => {
+const readObject = async (key: string): Promise<string> => {
   // Keep the presigned fetch here because the probe requires a hard request
   // timeout; Bun's native S3 body reads do not yet accept an AbortSignal.
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator script; presigned by this script's own client, built from its fixed bucket and region config
@@ -359,19 +377,116 @@ const probeKey = async (
       status: response.status,
     });
   }
-  const body = await response.bytes();
-  const text = zstdDecompressToString(body);
+  return zstdDecompressToString(await response.bytes());
+};
+
+type AstRead =
+  | { status: "usable"; ast: DocumentAst }
+  | { status: "unavailable" }
+  | { status: "unusable" };
+
+/**
+ * The AST stored beside a text object of the same content version. A missing
+ * or undecodable one is reported as such: read as no AST, the decision would
+ * look like one citing nothing.
+ */
+const readAst = async (textKey: string): Promise<AstRead> => {
+  const raw = await Result.tryPromise({
+    try: async () =>
+      await readObject(textKey.replace(/text\.zst$/u, "ast.json.zst")),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(raw)) {
+    return { status: "unavailable" };
+  }
+  const ast = parseUsableDocumentAst(raw.value);
+  return ast === null ? { status: "unusable" } : { status: "usable", ast };
+};
+
+/**
+ * A reporter jurisdiction's residuals, since broad detectors would only
+ * re-find the references its extractor already located: the references it
+ * left unresolved, by reason, and the authority spans no supported grammar
+ * names, by kind.
+ */
+const abstentionLines = (
+  occurrences: readonly UsCitationOccurrence[],
+  diagnostics: UsCitationDiagnostics,
+): string[] => [
+  ...Object.entries(countUnresolvedTargets(occurrences)).flatMap(
+    ([reason, count]) =>
+      count === 0
+        ? []
+        : [
+            `unresolved ${reason}: ${String(count)} of ${String(occurrences.length)}`,
+          ],
+  ),
+  ...Object.entries(diagnostics.barriers).flatMap(([kind, count]) =>
+    count === 0 ? [] : [`unsupported ${kind}: ${String(count)}`],
+  ),
+  ...(diagnostics.overlongPins === 0
+    ? []
+    : [`overlong pins: ${String(diagnostics.overlongPins)}`]),
+];
+
+const probeKey = async (
+  jurisdiction: string,
+  key: string,
+): Promise<ProbedDoc> => {
+  const text = await readObject(key);
   const documentId = key.slice(KEY_PREFIX.length).split("/").at(1) ?? key;
   if (text.trim().length === 0) {
     return {
       jurisdiction,
       documentId,
       empty: true,
+      unread: false,
       extractedCount: 0,
       residuals: [],
     };
   }
-  const extracted = extractCitations([{ index: 0, text }]);
+  const astRead = readsUsReporterCitations(jurisdiction)
+    ? await readAst(key)
+    : null;
+  if (astRead !== null && astRead.status !== "usable") {
+    return {
+      jurisdiction,
+      documentId,
+      empty: false,
+      unread: true,
+      extractedCount: 0,
+      residuals: [`AST ${astRead.status}: citations not read`],
+    };
+  }
+  const extraction = extractDecisionCitations({
+    country: jurisdiction,
+    sections: [{ index: 0, text }],
+    documentAst: astRead?.ast,
+  });
+  if (Result.isError(extraction)) {
+    return {
+      jurisdiction,
+      documentId,
+      empty: false,
+      unread: false,
+      extractedCount: 0,
+      residuals: [`rejected: ${extraction.error.message}`],
+    };
+  }
+  const { citations: extracted, occurrences, reading } = extraction.value;
+  if (reading.type !== "patterns") {
+    return {
+      jurisdiction,
+      documentId,
+      empty: false,
+      unread: reading.type === "ast-unavailable",
+      extractedCount: extracted.length,
+      residuals:
+        reading.type === "reporter-occurrences"
+          ? abstentionLines(occurrences, reading.diagnostics)
+          : ["AST unavailable: citations not read"],
+    };
+  }
   // Both sides normalize (prefix stripped, whitespace collapsed) before
   // the containment check: the extractor dedups sp. zn. and č. j.
   // spellings of one case number to a single entry, and the surviving
@@ -419,6 +534,7 @@ const probeKey = async (
     jurisdiction,
     documentId,
     empty: false,
+    unread: false,
     extractedCount: extracted.length,
     residuals: [...residuals],
   };
@@ -448,7 +564,11 @@ const docs = (
 let totalExtracted = 0;
 let totalResiduals = 0;
 let emptyDocs = 0;
+let unreadDocs = 0;
 for (const doc of docs) {
+  if (doc.unread) {
+    unreadDocs += 1;
+  }
   if (doc.empty) {
     emptyDocs += 1;
     continue;
@@ -464,7 +584,7 @@ for (const doc of docs) {
 }
 
 console.log(
-  `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
+  `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} ast-unread=${unreadDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
 
 // A run whose sampled documents are all empty is a failure. An empty listing

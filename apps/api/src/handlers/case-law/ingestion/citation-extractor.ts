@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   DECISION_DASH_CLASS_SOURCE,
@@ -44,6 +44,19 @@ import {
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
 import {
+  type CitationScopeIndex,
+  type CitationScopesRejectedError,
+  indexCitationScopes,
+} from "@/api/handlers/case-law/ingestion/citation-scopes";
+import { extractUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
+import type {
+  UsCitationDiagnostics,
+  UsCitationOccurrence,
+  UsCitationRejection,
+  UsCitedDecision,
+} from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
+import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
@@ -53,11 +66,12 @@ import {
   primaryDecisionIdentifier,
   primaryReferenceIsDocket,
 } from "@/api/lib/legal-search/decision-primary-reference";
+import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * Extracted citation reference found in decision text.
  */
-type ExtractedCitation = {
+export type ExtractedCitation = {
   /** The raw citation text as found in the source. */
   citationText: string;
   /** Section index where the citation was found. */
@@ -97,6 +111,12 @@ type ExtractedCitation = {
    * one of them by occurrence order.
    */
   citedDecisionDate: string | null;
+  /**
+   * Further identities the text printed for the same decision beside the
+   * primary one (a parallel reporter citation), never a pin. Absent where the
+   * text names the decision once.
+   */
+  parallelIdentifiers?: readonly DecisionIdentifier[] | undefined;
 };
 
 /**
@@ -1982,4 +2002,111 @@ export const extractCitations = (
   mergeCollectionCitations({ byKey, positions, sectionText });
 
   return [...byKey.values()];
+};
+
+export type ExtractDecisionCitationsOptions = {
+  /** The decision's country as stored on its row. */
+  country: string;
+  sections: readonly { index: number; text: string }[];
+  documentAst?: DocumentAst | undefined;
+  citationScopes?: readonly CitationOpinionScope[] | undefined;
+};
+
+/**
+ * How the decision was read: by the pattern list, by the reporter occurrence
+ * pass, or not at all, for a reporter-citing decision without an AST, whose
+ * empty result says nothing about what it cites.
+ */
+export type DecisionCitationReading =
+  | { type: "patterns" }
+  | { type: "reporter-occurrences"; diagnostics: UsCitationDiagnostics }
+  | { type: "ast-unavailable" };
+
+export type DecisionCitationExtraction = {
+  citations: ExtractedCitation[];
+  /** Every reporter reference in source order; empty for other countries. */
+  occurrences: UsCitationOccurrence[];
+  /** The document with its reporter references annotated, when it has one. */
+  documentAst: DocumentAst | undefined;
+  reading: DecisionCitationReading;
+};
+
+export type DecisionCitationRejection =
+  | CitationScopesRejectedError
+  | UsCitationRejection;
+
+/** A cited decision as the citation graph's row source reads it. */
+const extractedCitationOf = ({
+  citationText,
+  identifiers: [primary, ...parallels],
+  sectionIndex,
+}: UsCitedDecision): ExtractedCitation => ({
+  citationText,
+  sectionIndex,
+  citedDecisionTypeHint: null,
+  identifierType: primary.type,
+  identifierValue: primary.value,
+  citedCourtHint: null,
+  citedSheetNumber: null,
+  citedDecisionDate: null,
+  ...(parallels.length === 0 ? {} : { parallelIdentifiers: parallels }),
+});
+
+/**
+ * Citations a decision makes, read the way its country cites. Every other
+ * country reads through `extractCitations` unchanged. A reporter-citing
+ * country is read from its AST, since short forms resolve by position and
+ * scope; without one it is reported unread rather than read by the other
+ * countries' patterns.
+ */
+export const extractDecisionCitations = ({
+  citationScopes,
+  country,
+  documentAst,
+  sections,
+}: ExtractDecisionCitationsOptions): Result<
+  DecisionCitationExtraction,
+  DecisionCitationRejection
+> => {
+  if (!readsUsReporterCitations(country)) {
+    return Result.ok({
+      citations: extractCitations([...sections]),
+      occurrences: [],
+      documentAst,
+      reading: { type: "patterns" },
+    });
+  }
+  if (documentAst === undefined) {
+    return Result.ok({
+      citations: [],
+      occurrences: [],
+      documentAst,
+      reading: { type: "ast-unavailable" },
+    });
+  }
+  let scopes: CitationScopeIndex | undefined;
+  if (citationScopes !== undefined) {
+    const indexed = indexCitationScopes(documentAst.blocks, citationScopes);
+    if (Result.isError(indexed)) {
+      return Result.err(indexed.error);
+    }
+    scopes = indexed.value;
+  }
+  const extracted = extractUsCitations({
+    ast: documentAst,
+    scopes,
+    sections,
+    identityKey: (identifier) =>
+      normalizeDecisionIdentifierIn(country, identifier),
+  });
+  if (Result.isError(extracted)) {
+    return Result.err(extracted.error);
+  }
+  const { citedDecisions, diagnostics, occurrences } = extracted.value;
+  return Result.ok({
+    citations: citedDecisions.map(extractedCitationOf),
+    occurrences,
+    documentAst: extracted.value.documentAst,
+    reading: { type: "reporter-occurrences", diagnostics },
+  });
 };
