@@ -551,14 +551,15 @@ export const createAcceptGenerationCandidate = (
     async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
       const reservedEntityId = createSafeId<"entity">();
       const claimed = yield* Result.await(
-        safeDb((tx) =>
-          claimCandidate({
-            body,
-            recordAuditEvent,
-            reservedEntityId,
-            tx,
-            workspaceId,
-          }),
+        safeDb(
+          async (tx) =>
+            await claimCandidate({
+              body,
+              recordAuditEvent,
+              reservedEntityId,
+              tx,
+              workspaceId,
+            }),
         ),
       );
 
@@ -649,16 +650,18 @@ export const createAcceptGenerationCandidate = (
 
       const entityId = taskResult.value.entityId;
 
-      const finalizedResult = await abortableTx(safeDb, (tx) =>
-        finalizeAcceptance({
-          body,
-          claimedSources: claimed.candidate.sources,
-          entityId,
-          recordAuditEvent,
-          tx,
-          userId: user.id,
-          workspaceId,
-        }),
+      const finalizedResult = await abortableTx(
+        safeDb,
+        async (tx) =>
+          await finalizeAcceptance({
+            body,
+            claimedSources: claimed.candidate.sources,
+            entityId,
+            recordAuditEvent,
+            tx,
+            userId: user.id,
+            workspaceId,
+          }),
       );
       if (finalizedResult.isErr()) {
         // A lost claim aborts the transaction rather than committing the staged

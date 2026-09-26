@@ -294,7 +294,9 @@ const readPublishableCheckpoint = async ({
   expectedSha256Hex,
   fileName,
   signal,
-}: ReadPublishableCheckpointOptions) => {
+}: ReadPublishableCheckpointOptions): Promise<
+  Result<Uint8Array<ArrayBuffer>, HandlerError>
+> => {
   const checkpoint = await readS3ArrayBuffer(checkpointKey, signal);
   const checkpointBytes = new Uint8Array(checkpoint);
   const actualSha256Hex = new Bun.CryptoHasher("sha256")
@@ -900,8 +902,9 @@ const publishFolioCollabVersion = createSafeHandler(
   }) {
     const organizationId = session.activeOrganizationId;
     const preliminary = yield* Result.await(
-      safeDb((tx) =>
-        loadPublicationPreliminary({ cut: body, tx, workspaceId }),
+      safeDb(
+        async (tx) =>
+          await loadPublicationPreliminary({ cut: body, tx, workspaceId }),
       ),
     );
     if (preliminary.status === "published") {
@@ -966,20 +969,21 @@ const publishFolioCollabVersion = createSafeHandler(
       }),
     );
 
-    const publicationResult = await safeDb((tx) =>
-      publishCheckpointInTransaction({
-        body,
-        checkpointKey,
-        checkpointRoom,
-        organizationId,
-        recordAuditEvent,
-        source,
-        storedSha256Hex,
-        storedSizeBytes: storedBytes.byteLength,
-        tx,
-        userId: user.id,
-        workspaceId,
-      }),
+    const publicationResult = await safeDb(
+      async (tx) =>
+        await publishCheckpointInTransaction({
+          body,
+          checkpointKey,
+          checkpointRoom,
+          organizationId,
+          recordAuditEvent,
+          source,
+          storedSha256Hex,
+          storedSizeBytes: storedBytes.byteLength,
+          tx,
+          userId: user.id,
+          workspaceId,
+        }),
     );
     if (Result.isError(publicationResult)) {
       await cleanupPublicationSource({
