@@ -296,7 +296,7 @@ describe("a long run of one character class finishes promptly", () => {
   test.each([
     ["before a final non-ASCII letter", `${".".repeat(RUN)}ø`, "clean"],
     ["inside a token", `a${".".repeat(RUN)}ø`, "incomplete"],
-  ])("ASCII punctuation %s", (_, text, status) => {
+  ] as const)("ASCII punctuation %s", (_, text, status) => {
     const started = performance.now();
     const check = checkTextEncoding(text, "cs");
     expect(performance.now() - started).toBeLessThan(PROMPT_MS);
