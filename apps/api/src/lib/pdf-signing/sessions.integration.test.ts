@@ -25,6 +25,7 @@ import {
   authorizePdfSigningSession,
   createPdfSigningToken,
   hashPdfSigningToken,
+  lockedCreatorAccess,
   openPdfSigningSession,
   redeemPdfSigningHandoff,
 } from "@/api/lib/pdf-signing/sessions";
@@ -153,6 +154,46 @@ describe("pdf signing handoff redemption", () => {
       .from(pdfSigningSessions)
       .where(eq(pdfSigningSessions.id, sessionId));
     expect(rows.at(0)?.sessionTokenHash).toBeNull();
+  });
+
+  test("spends nothing unless the whole redemption commits", async () => {
+    const { handoffToken, sessionId } = await seedHandoff();
+
+    // Access check, consumption and descriptor read are one transaction:
+    // failing at its very end leaves the handoff as it was.
+    const failed = await redeemPdfSigningHandoff(handoffToken, db, {
+      afterConsume: async () => {
+        throw new Error("interrupted before commit");
+      },
+    }).catch((error: unknown) => error);
+    expect(failed).toBeInstanceOf(Error);
+
+    const rows = await testDb
+      .select({
+        handoffConsumedAt: pdfSigningSessions.handoffConsumedAt,
+        sessionTokenHash: pdfSigningSessions.sessionTokenHash,
+      })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)).toEqual({
+      handoffConsumedAt: null,
+      sessionTokenHash: null,
+    });
+    // The same link still works once, as if the failed attempt never ran.
+    expect(await redeemPdfSigningHandoff(handoffToken, db)).not.toBeNull();
+  });
+
+  test("locks the creator's access rows while redeeming", () => {
+    // The row locks are what order a racing revocation against redemption;
+    // assert they are taken rather than trusting a comment.
+    const access = lockedCreatorAccess(asTestRaw<Transaction>(testDb), {
+      createdBy: ids.userA1,
+      organizationId: asTestRaw(ids.orgA),
+      workspaceId: ids.wsA1,
+    });
+    for (const query of [access.role, access.membership]) {
+      expect(query.toSQL().sql).toMatch(/ for share$/u);
+    }
   });
 
   test("refuses a handoff whose deep link has expired", async () => {
