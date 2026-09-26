@@ -156,7 +156,7 @@ const rejectedRow = (
 
 const directoryRow = (source: string, index: number): UsCourtDirectoryRow => {
   const values = source.split(US_COURT_DIRECTORY_FIELD_SEPARATOR);
-  const [status] = values;
+  const [status = ""] = values;
   switch (status) {
     case "accepted":
       return acceptedRow(values, index + 1);
