@@ -3128,7 +3128,8 @@ jobs:
   # libraries a Linux clippy run would require. Windows builds the
   # test binaries but does not execute them: hosted Windows currently
   # exits before the Rust test harness starts with a native entrypoint
-  # error in the Tauri-linked binary. macOS executes the test suite.
+  # error in the Tauri-linked binary. The signer crates link no Tauri,
+  # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
     name: Desktop Rust (${{ matrix.os }})
@@ -3152,6 +3153,10 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+    env:
+      # Names the signer test certificates, unique per run so a rerun on a
+      # reused machine never meets a previous run's.
+      STELLA_SIGNING_FIXTURE_PREFIX: stella-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout
@@ -3184,6 +3189,54 @@ jobs:
       - name: Build test binaries
         if: matrix.os == 'windows'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+
+      # The signer crates link no Tauri, so their tests do run here: against
+      # throwaway certificates in the runner's own current-user store, one
+      # per case the listing must keep or leave out.
+      - name: Install signing test certificates
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
+          $store = 'Cert:\CurrentUser\My'
+          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
+          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
+          $common = @{
+            CertStoreLocation = $store
+            Type = 'Custom'
+            Provider = 'Microsoft Software Key Storage Provider'
+            KeyExportPolicy = 'NonExportable'
+            NotAfter = (Get-Date).AddDays(2)
+          }
+          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
+          $expired = $common.Clone()
+          $expired.NotBefore = (Get-Date).AddDays(-10)
+          $expired.NotAfter = (Get-Date).AddDays(-1)
+          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          # Keep only the public half of this one: a certificate whose key is gone.
+          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
+          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
+          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
+          Remove-Item -Path $keyed.PSPath -DeleteKey
+          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+
+      - name: Test signer against the certificate store
+        if: matrix.os == 'windows'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+
+      - name: Remove signing test certificates
+        if: always() && matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
+            ForEach-Object {
+              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
+            }
 
       - name: Smoke native desktop transport against hosted API
         if: matrix.os == 'macos'
