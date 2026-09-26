@@ -35,11 +35,13 @@ import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-c
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   ADAPTER_KEYS,
+  IMPORT_SOURCE_KEYS,
   type AdapterKey,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 import { courtListenerImport } from "./courtlistener/import";
+import { checkedSourceRegistrations } from "./source-registrations";
 
 /**
  * The Slovak document walk's gated fetch, carried here because the registry is
@@ -92,30 +94,36 @@ type SourceImport = Pick<
   readonly reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
 };
 
+type ImportRegistry = {
+  readonly [TKey in ImportSourceKey]: SourceImport & { readonly key: TKey };
+};
+
 const IMPORT_REGISTRY = {
-  [courtListenerImport.key]: courtListenerImport,
-} as const satisfies Record<ImportSourceKey, SourceImport>;
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: courtListenerImport,
+} as const satisfies ImportRegistry;
 
 const SOURCE_REGISTRATIONS = [
-  ...Object.values(ADAPTER_REGISTRY).map(
-    (source) => ({ capability: "crawl", source }) as const,
+  ...Object.values(ADAPTER_KEYS).map(
+    (key) =>
+      ({ key, capability: "crawl", source: ADAPTER_REGISTRY[key] }) as const,
   ),
-  ...Object.values(IMPORT_REGISTRY).map(
-    (source) => ({ capability: "import", source }) as const,
+  ...Object.values(IMPORT_SOURCE_KEYS).map(
+    (key) =>
+      ({ key, capability: "import", source: IMPORT_REGISTRY[key] }) as const,
   ),
 ];
 
 export type SourceRegistration = (typeof SOURCE_REGISTRATIONS)[number];
-export type SourceRegistrationKey = SourceRegistration["source"]["key"];
+export type SourceRegistrationKey = SourceRegistration["key"];
 
 /** Both importers and crawlers participate in inventory and surface conformance. */
 export const listSourceRegistrations = (): readonly SourceRegistration[] =>
-  SOURCE_REGISTRATIONS;
+  checkedSourceRegistrations(SOURCE_REGISTRATIONS);
 
 export const getSourceRegistration = (
   key: string,
 ): SourceRegistration | undefined =>
-  SOURCE_REGISTRATIONS.find(({ source }) => source.key === key);
+  listSourceRegistrations().find((registration) => registration.key === key);
 
 /** Look up an adapter by its key. */
 export const getAdapter = (key: string): SourceAdapter | undefined => {
@@ -125,10 +133,10 @@ export const getAdapter = (key: string): SourceAdapter | undefined => {
 
 /** List all registered adapters. */
 export const listAdapters = (): readonly AdapterRegistry[AdapterKey][] =>
-  SOURCE_REGISTRATIONS.flatMap((registration) =>
+  listSourceRegistrations().flatMap((registration) =>
     registration.capability === "crawl" ? [registration.source] : [],
   );
 
 /** List all registered adapter keys. */
 export const listAdapterKeys = (): readonly AdapterKey[] =>
-  listAdapters().map(({ key }) => key);
+  Object.values(ADAPTER_KEYS);

@@ -1,6 +1,9 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import { composeCourtListenerText } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
+import {
+  composeCourtListenerText,
+  type CourtListenerTextOutcome,
+} from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
 import {
   absentTextField,
   presentTextField,
@@ -33,6 +36,22 @@ const textField = (value: string) =>
     ? presentTextField(value)
     : absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
 
+export const courtListenerTextRejectionReason = (
+  outcome: Exclude<CourtListenerTextOutcome, { status: "parsed" }>,
+) => {
+  switch (outcome.status) {
+    case "held":
+      return outcome.reason;
+    case "scope-defect":
+      return COURTLISTENER_REJECTION_REASON.SCOPE_DEFECT;
+    case "unsupported":
+      return COURTLISTENER_REJECTION_REASON.NO_USABLE_TEXT;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled CourtListener text rejection");
+  }
+};
+
 export const mapCourtListenerRecord = (
   input: unknown,
 ): Result<IngestionResult, CourtListenerRecordRejectedError> => {
@@ -45,10 +64,7 @@ export const mapCourtListenerRecord = (
   if (composed.status !== "parsed") {
     return Result.err(
       rejectCourtListenerRecord({
-        reason:
-          composed.status === "held"
-            ? composed.reason
-            : COURTLISTENER_REJECTION_REASON.NO_USABLE_TEXT,
+        reason: courtListenerTextRejectionReason(composed),
         sourceRecordKey,
         clusterId,
         opinionIds: opinions.map(({ row }) => row.id),

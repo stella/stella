@@ -1,3 +1,4 @@
+import { COURTLISTENER_TEXT_FORMATS } from "../../parsers/courtlistener/select";
 import { mapCourtListenerRecord } from "./map";
 import {
   clusterRow,
@@ -41,6 +42,14 @@ const record = () =>
     }),
     opinions: [
       opinionRow({
+        ...Object.fromEntries(
+          [...COURTLISTENER_TEXT_FORMATS, "xml_scan"]
+            .filter((column) => column !== "xml_harvard")
+            .map((column) => [
+              column,
+              `${column}: Žluťoučký 東京\u0000retained\u200btext`,
+            ]),
+        ),
         author_str: "Byron White",
         author_id: "3045",
         download_url: "https://www.courtlistener.com/example.pdf",

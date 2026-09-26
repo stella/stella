@@ -19,6 +19,7 @@ import {
 import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
 import {
   COURTLISTENER_IMPORT_KEY,
+  courtListenerTextRejectionReason,
   mapCourtListenerRecord,
   reparseStoredRaw,
 } from "./map";
@@ -199,4 +200,24 @@ test("the importer participates in conformance and replay but has no crawl capab
   ).toBe(false);
   expect(registration?.source).not.toHaveProperty("fetchPage");
   expect(registration?.source).not.toHaveProperty("reconciliation");
+});
+
+test("parser scope defects remain distinct from missing or unsupported source text", () => {
+  expect(
+    courtListenerTextRejectionReason({
+      status: "scope-defect",
+      defect: "duplicate-block-id",
+      opinions: [],
+    }),
+  ).toBe("scope-defect");
+  expect(
+    courtListenerTextRejectionReason({
+      status: "held",
+      reason: "no-usable-text",
+      opinions: [],
+    }),
+  ).toBe("no-usable-text");
+  expect(
+    courtListenerTextRejectionReason({ status: "unsupported", opinions: [] }),
+  ).toBe("no-usable-text");
 });

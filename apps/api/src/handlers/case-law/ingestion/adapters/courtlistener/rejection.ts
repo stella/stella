@@ -17,6 +17,8 @@ export const COURTLISTENER_REJECTION_REASON = {
   IDENTIFIER_OVERFLOW: "identifier-overflow",
   /** Some opinion has no text representation a parser could use. */
   NO_USABLE_TEXT: "no-usable-text",
+  /** The parser emitted invalid citation scopes; this is not a source condition. */
+  SCOPE_DEFECT: "scope-defect",
   /** Some opinion's text depends on images or scans nothing captured. */
   REQUIRES_ASSETS: "requires-assets",
 } as const;
