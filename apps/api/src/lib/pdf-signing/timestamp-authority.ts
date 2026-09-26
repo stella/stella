@@ -16,10 +16,11 @@
 
 import type { DigestAlgorithm, TimestampAuthority } from "@libpdf/core";
 import * as asn1js from "asn1js";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
 import { env } from "@/api/env";
+import { settleForLibpdf } from "@/api/lib/pdf-signing/libpdf-callbacks";
 import { safePkiFetch } from "@/api/lib/pdf-signing/pki-fetch";
 import type { PkiFetcher } from "@/api/lib/pdf-signing/pki-fetch";
 import { parseTimestampAuthorityUrls } from "@/api/lib/pdf-signing/timestamp-authority-urls";
@@ -62,47 +63,73 @@ export type FallbackTimestampAuthority = TimestampAuthority & {
 const describe = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const assertSha256 = (algorithm: DigestAlgorithm) => {
-  if (algorithm !== "SHA-256") {
-    throw new PdfSigningTimestampInvalidError({
-      message: `Timestamps are only requested over SHA-256, not ${algorithm}.`,
-    });
-  }
-};
+const sha256Only = (
+  algorithm: DigestAlgorithm,
+): Result<void, PdfSigningTimestampInvalidError> =>
+  algorithm === "SHA-256"
+    ? Result.ok(undefined)
+    : Result.err(
+        new PdfSigningTimestampInvalidError({
+          message: `Timestamps are only requested over SHA-256, not ${algorithm}.`,
+        }),
+      );
 
 export const createFallbackTimestampAuthority = (
   authorities: readonly NamedTimestampAuthority[],
   now: () => Date = () => new Date(),
 ): FallbackTimestampAuthority => {
   let used: UsedTimestamp | null = null;
+
+  const firstValid = async (
+    digest: Uint8Array,
+    algorithm: DigestAlgorithm,
+  ): Promise<
+    Result<
+      Uint8Array,
+      PdfSigningTimestampInvalidError | PdfSigningTimestampUnavailableError
+    >
+  > => {
+    const supported = sha256Only(algorithm);
+    if (Result.isError(supported)) {
+      return supported;
+    }
+    const failures: { url: string; message: string }[] = [];
+    for (const { authority, url } of authorities) {
+      // Sequential on purpose: the list is a preference order, and a later
+      // authority is only asked once every earlier one failed.
+      const token = await Result.tryPromise(
+        async () => await authority.timestamp(digest, algorithm),
+      );
+      if (Result.isError(token)) {
+        failures.push({ url, message: describe(token.error.cause) });
+        continue;
+      }
+      const validated = await validateTimestampToken({
+        digest,
+        now: now(),
+        token: token.value,
+      });
+      if (Result.isError(validated)) {
+        failures.push({ url, message: describe(validated.error) });
+        continue;
+      }
+      used = { ...validated.value, token: token.value, url };
+      return Result.ok(token.value);
+    }
+    return Result.err(
+      new PdfSigningTimestampUnavailableError({
+        message: "No timestamp authority issued a valid timestamp.",
+        failures,
+      }),
+    );
+  };
+
   return {
     used: () => used,
     usedToken: () => used?.token ?? null,
     usedUrl: () => used?.url ?? null,
-    timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) => {
-      assertSha256(algorithm);
-      const failures: { url: string; message: string }[] = [];
-      for (const { authority, url } of authorities) {
-        try {
-          // Sequential on purpose: the list is a preference order, and a
-          // later authority is only asked once every earlier one failed.
-          const token = await authority.timestamp(digest, algorithm);
-          const validated = await validateTimestampToken({
-            digest,
-            now: now(),
-            token,
-          });
-          used = { ...validated, token, url };
-          return token;
-        } catch (error) {
-          failures.push({ url, message: describe(error) });
-        }
-      }
-      throw new PdfSigningTimestampUnavailableError({
-        message: "No timestamp authority issued a valid timestamp.",
-        failures,
-      });
-    },
+    timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) =>
+      await settleForLibpdf(firstValid(digest, algorithm)),
   };
 };
 
@@ -113,6 +140,86 @@ const randomNonce = () => {
   return new asn1js.Integer({ valueHex: bytes.buffer });
 };
 
+/** One RFC 3161 request to `url`, and its token once it checks out. */
+const requestTimestamp = async ({
+  algorithm,
+  digest,
+  fetcher,
+  now,
+  url,
+}: {
+  algorithm: DigestAlgorithm;
+  digest: Uint8Array;
+  fetcher: PkiFetcher;
+  now: () => Date;
+  url: string;
+}): Promise<Result<Uint8Array, PdfSigningTimestampInvalidError>> => {
+  const supported = sha256Only(algorithm);
+  if (Result.isError(supported)) {
+    return supported;
+  }
+  const nonce = randomNonce();
+  const request = new pkijs.TimeStampReq({
+    version: 1,
+    messageImprint: new pkijs.MessageImprint({
+      hashAlgorithm: new pkijs.AlgorithmIdentifier({
+        algorithmId: SHA256_OID,
+      }),
+      hashedMessage: new asn1js.OctetString({
+        valueHex: new Uint8Array(digest).buffer,
+      }),
+    }),
+    nonce,
+    certReq: true,
+  });
+  const body = await fetcher({
+    body: new Uint8Array(request.toSchema().toBER(false)),
+    contentType: "application/timestamp-query",
+    maxBytes: TIMESTAMP_RESPONSE_MAX_BYTES,
+    method: "POST",
+    url,
+  });
+  if (body === null) {
+    return Result.err(
+      new PdfSigningTimestampInvalidError({
+        message: "The timestamp authority did not answer.",
+      }),
+    );
+  }
+  const response = Result.try(() =>
+    pkijs.TimeStampResp.fromBER(new Uint8Array(body)),
+  );
+  if (Result.isError(response)) {
+    return Result.err(unreadableAnswer());
+  }
+  const { status, timeStampToken } = response.value;
+  if (!GRANTED_STATUSES.has(status.status) || timeStampToken === undefined) {
+    return Result.err(
+      new PdfSigningTimestampInvalidError({
+        message: "The timestamp authority refused the request.",
+      }),
+    );
+  }
+  const token = Result.try(
+    () => new Uint8Array(timeStampToken.toSchema().toBER(false)),
+  );
+  if (Result.isError(token)) {
+    return Result.err(unreadableAnswer());
+  }
+  const validated = await validateTimestampToken({
+    digest,
+    nonce,
+    now: now(),
+    token: token.value,
+  });
+  return Result.isError(validated) ? validated : Result.ok(token.value);
+};
+
+const unreadableAnswer = () =>
+  new PdfSigningTimestampInvalidError({
+    message: "The timestamp authority's answer could not be read.",
+  });
+
 /**
  * An RFC 3161 client over the guarded fetcher. Its tokens must answer the
  * nonce it sent; the rest of the token is checked by the fallback above.
@@ -122,57 +229,10 @@ export const createHttpTimestampAuthority = (
   fetcher: PkiFetcher = safePkiFetch,
   now: () => Date = () => new Date(),
 ): TimestampAuthority => ({
-  timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) => {
-    assertSha256(algorithm);
-    const nonce = randomNonce();
-    const request = new pkijs.TimeStampReq({
-      version: 1,
-      messageImprint: new pkijs.MessageImprint({
-        hashAlgorithm: new pkijs.AlgorithmIdentifier({
-          algorithmId: SHA256_OID,
-        }),
-        hashedMessage: new asn1js.OctetString({
-          valueHex: new Uint8Array(digest).buffer,
-        }),
-      }),
-      nonce,
-      certReq: true,
-    });
-    const body = await fetcher({
-      body: new Uint8Array(request.toSchema().toBER(false)),
-      contentType: "application/timestamp-query",
-      maxBytes: TIMESTAMP_RESPONSE_MAX_BYTES,
-      method: "POST",
-      url,
-    });
-    if (body === null) {
-      throw new PdfSigningTimestampInvalidError({
-        message: "The timestamp authority did not answer.",
-      });
-    }
-    let token: Uint8Array;
-    try {
-      const response = pkijs.TimeStampResp.fromBER(new Uint8Array(body));
-      if (
-        !GRANTED_STATUSES.has(response.status.status) ||
-        response.timeStampToken === undefined
-      ) {
-        throw new PdfSigningTimestampInvalidError({
-          message: "The timestamp authority refused the request.",
-        });
-      }
-      token = new Uint8Array(response.timeStampToken.toSchema().toBER(false));
-    } catch (error) {
-      if (PdfSigningTimestampInvalidError.is(error)) {
-        throw error;
-      }
-      throw new PdfSigningTimestampInvalidError({
-        message: "The timestamp authority's answer could not be read.",
-      });
-    }
-    await validateTimestampToken({ digest, nonce, now: now(), token });
-    return token;
-  },
+  timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) =>
+    await settleForLibpdf(
+      requestTimestamp({ algorithm, digest, fetcher, now, url }),
+    ),
 });
 
 /** The configured authorities, in the order they are tried. */

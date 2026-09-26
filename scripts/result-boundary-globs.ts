@@ -179,6 +179,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack AI reads a chat tool's failure only from the error its server
   // function throws; tools keep `Result`s and raise through this one module.
   "apps/api/src/handlers/chat/tools/tool-failure.ts",
+  // Handed to LibPDF as a signer and a timestamp authority, which report a
+  // failure back through `pdf.sign` only by rejecting.
+  "apps/api/src/lib/pdf-signing/libpdf-callbacks.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.

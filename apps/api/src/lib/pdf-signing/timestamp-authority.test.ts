@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -143,19 +144,20 @@ describe("checking a timestamp token", () => {
   const digest = crypto.getRandomValues(new Uint8Array(32));
   const refused = async (token: Uint8Array) =>
     await validateTimestampToken({ digest, now: new Date(), token }).then(
-      () => null,
-      (error: unknown) => error,
+      (validated) => (Result.isError(validated) ? validated.error : null),
     );
 
   test("accepts a token about this signature from a timestamping key", async () => {
     const signer = await createTestTimestampCertificate();
     const token = await issueTestTimestampToken({ digest, serial: 1, signer });
 
-    const validated = await validateTimestampToken({
-      digest,
-      now: new Date(),
-      token,
-    });
+    const validated = (
+      await validateTimestampToken({
+        digest,
+        now: new Date(),
+        token,
+      })
+    ).unwrap();
     expect(Buffer.from(validated.signerCertificate)).toEqual(
       Buffer.from(signer.der),
     );
