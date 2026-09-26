@@ -234,6 +234,13 @@
       const strings = JSON.parse(params.get("strings") || "{}");
       const state = JSON.parse(params.get("state") || '"unsupportedPlatform"');
       const identities = JSON.parse(params.get("identities") || "[]");
+      // Where the platform keeps signing keys: a sentence that names the
+      // keychain has a `CertificateStore` variant, read where the store is not
+      // a keychain, so the wording names it the way the user's system does.
+      const inCertificateStore = params.get("store") === "certificateStore";
+      const wording = (key) =>
+        (inCertificateStore && strings[`${key}CertificateStore`]) ||
+        strings[key];
 
       document.documentElement.lang = params.get("lang") || "en";
       document.documentElement.dir = params.get("dir") || "ltr";
@@ -304,7 +311,7 @@
       const GENERIC_ERROR_KEY = "pdfSignErrors.generic";
       const failureText = (result) => {
         const key = result.messageKey || GENERIC_ERROR_KEY;
-        const text = strings[key] || strings[GENERIC_ERROR_KEY];
+        const text = wording(key) || strings[GENERIC_ERROR_KEY];
         return {
           detail:
             key === GENERIC_ERROR_KEY || !strings[key] ? result.code : null,
@@ -339,7 +346,7 @@
       };
 
       if (state === "ready") {
-        setText("subtitle", strings.pdfSignSubtitle);
+        setText("subtitle", wording("pdfSignSubtitle"));
         for (const identity of identities) {
           const option = document.createElement("option");
           option.value = identity.id;
@@ -351,10 +358,10 @@
         element("picker").hidden = false;
         element("signBtn").hidden = false;
       } else if (state === "noIdentities") {
-        showStatus(strings.pdfSignNoIdentities, "error");
+        showStatus(wording("pdfSignNoIdentities"), "error");
       } else if (state === "keychainUnavailable") {
         showStatus(
-          strings[params.get("stateMessage")] || strings[GENERIC_ERROR_KEY],
+          wording(params.get("stateMessage")) || strings[GENERIC_ERROR_KEY],
           "error",
         );
       } else {

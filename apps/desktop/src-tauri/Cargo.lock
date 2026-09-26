@@ -4757,6 +4757,8 @@ dependencies = [
  "sha2 0.11.0",
  "stella-desktop-macos",
  "stella-desktop-macos-signing",
+ "stella-desktop-signing-core",
+ "stella-desktop-windows-signing",
  "sys-locale",
  "tauri",
  "tauri-build",
@@ -4798,10 +4800,27 @@ name = "stella-desktop-macos-signing"
 version = "0.0.1"
 dependencies = [
  "core-foundation 0.10.1",
- "hex",
  "security-framework",
  "security-framework-sys",
+ "stella-desktop-signing-core",
+]
+
+[[package]]
+name = "stella-desktop-signing-core"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "ring",
  "sha2 0.11.0",
+]
+
+[[package]]
+name = "stella-desktop-windows-signing"
+version = "0.0.1"
+dependencies = [
+ "ring",
+ "stella-desktop-signing-core",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

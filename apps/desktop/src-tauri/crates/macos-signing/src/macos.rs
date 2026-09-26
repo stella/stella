@@ -11,21 +11,18 @@ use security_framework::key::{Algorithm, SecKey};
 use security_framework::policy::SecPolicy;
 use security_framework::trust::SecTrust;
 
-use crate::failure::{OS_STATUS_DOMAIN, SigningErrorCode, classify};
-use crate::identity::{
-  SigningError, SigningIdentity, SigningKeyType, certificate_fingerprint,
-  signing_identity,
+use stella_desktop_signing_core::{
+  SigningError, SigningErrorCode, SigningIdentity, SigningKeyType,
+  certificate_fingerprint, signing_identity, unix_now,
 };
+
+use crate::failure::{OS_STATUS_DOMAIN, classify};
 
 /// `errSecItemNotFound`: an empty keychain is a result, not a failure.
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 pub(crate) fn list_identities() -> Result<Vec<SigningIdentity>, SigningError> {
-  let now = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .map_or(0, |elapsed| {
-      i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
-    });
+  let now = unix_now();
   let mut identities = Vec::new();
   for identity in keychain_identities()? {
     let Ok(certificate) = identity.certificate() else {
