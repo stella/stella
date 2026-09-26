@@ -223,17 +223,18 @@ const requestChatTurnStop = async ({
   threadId: string;
   turnId: SafeId<"chatTurn">;
 }): Promise<Result<StopAnswer, Error>> => {
-  const sent = await Result.tryPromise(async () => {
-    const { data, error } = await api.chat
-      .threads({ threadId: toSafeId<"chatThread">(threadId) })
-      .turns({ turnId })
-      .cancel.post();
-    if (error) {
-      return Result.err(toAPIError(error));
-    }
-    const answer = data.turn.status === "running" ? "running" : "settled";
-    return Result.ok(answer);
-  });
+  const sent = await Result.tryPromise(
+    async (): Promise<Result<StopAnswer, APIError>> => {
+      const { data, error } = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadId) })
+        .turns({ turnId })
+        .cancel.post();
+      if (error) {
+        return Result.err(toAPIError(error));
+      }
+      return Result.ok(data.turn.status === "running" ? "running" : "settled");
+    },
+  );
   return Result.isError(sent)
     ? Result.err(toError(sent.error.cause))
     : sent.value;
