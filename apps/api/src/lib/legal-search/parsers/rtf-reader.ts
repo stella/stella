@@ -363,11 +363,14 @@ type ParagraphBuffer = {
  * Text accumulated for the run being written.
  *
  * Bytes and decoded characters are kept apart because they decode differently:
- * a `\'xx` byte is read against the document's code page, and a `\uN` escape
- * already names a code point. Joining them as bytes would put a `\uN`
- * character through the single-byte decoder.
+ * a `\'xx` byte is read against the code page in force when it was written,
+ * and a `\uN` escape already names a code point. Joining them as bytes would
+ * put a `\uN` character through the single-byte decoder. `label` is the code
+ * page every byte in `bytes` was written under: a byte written under another
+ * decodes the ones before it first, so no later font change, `\plain` or
+ * group close can reread them.
  */
-type PendingText = { bytes: number[]; text: string };
+type PendingText = { bytes: number[]; label: CodePageLabel; text: string };
 
 export type ReadRtfOptions = {
   /**
@@ -579,7 +582,7 @@ const readRtfInto = (
     [];
 
   let paragraph: ParagraphBuffer = { content: [], alignment: undefined };
-  let pending: PendingText = { bytes: [], text: "" };
+  let pending: PendingText = { bytes: [], label: codePageLabel, text: "" };
   let pendingFormatting: TextFormatting | undefined;
   let hasPendingRun = false;
 
@@ -596,13 +599,23 @@ const readRtfInto = (
    * the sentence.
    */
   const appendText = (text: string): void => {
-    pending.text += decodeBytes(pending.bytes, currentLabel()) + text;
+    pending.text += decodeBytes(pending.bytes, pending.label) + text;
     pending.bytes = [];
   };
 
+  /** A byte of text, read later against the code page in force now. */
+  const appendByte = (byte: number): void => {
+    const label = currentLabel();
+    if (label !== pending.label) {
+      appendText("");
+      pending.label = label;
+    }
+    pending.bytes.push(byte);
+  };
+
   const flushRun = (): void => {
-    const text = pending.text + decodeBytes(pending.bytes, currentLabel());
-    pending = { bytes: [], text: "" };
+    const text = pending.text + decodeBytes(pending.bytes, pending.label);
+    pending = { bytes: [], label: pending.label, text: "" };
     // A skipped destination is the writer's metadata: its text is not the
     // document's, and keeping it would print a colour table into the decision.
     if (text.length === 0 || state.destination.type === "skipped") {
@@ -755,8 +768,6 @@ const readRtfInto = (
           definingFont = parameter;
           return true;
         }
-        // Bytes read so far were written in the font before this one.
-        appendText("");
         state.character.font = parameter;
         return true;
       case "fcharset": {
@@ -992,7 +1003,7 @@ const readRtfInto = (
       // Line endings between control words are the writer's formatting of the
       // file, never the document's text.
       if (byte !== 0x0d && byte !== 0x0a) {
-        pending.bytes.push(byte);
+        appendByte(byte);
       }
       cursor += 1;
       continue;
@@ -1006,7 +1017,7 @@ const readRtfInto = (
 
     // Escaped literals and the `\'xx` byte.
     if (after === 0x5c || after === 0x7b || after === 0x7d) {
-      pending.bytes.push(after);
+      appendByte(after);
       cursor += 2;
       continue;
     }
@@ -1014,7 +1025,7 @@ const readRtfInto = (
       const high = String.fromCodePoint(source[cursor + 2] ?? 0);
       const low = String.fromCodePoint(source[cursor + 3] ?? 0);
       if (HEX_DIGITS.includes(high) && HEX_DIGITS.includes(low)) {
-        pending.bytes.push(Number.parseInt(`${high}${low}`, 16));
+        appendByte(Number.parseInt(`${high}${low}`, 16));
         cursor += 4;
         continue;
       }
