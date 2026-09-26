@@ -750,12 +750,19 @@ describe("requestManualOcrHandler", () => {
 });
 
 /**
- * The connection a manual OCR request runs on is always named by its caller.
- * Each directive below is the assertion: if the helper regains a default
- * connection or the handler a default persister, the directive is unused and
- * the typecheck fails.
+ * These directives pin requiredness: the helper's `db` and the handler's
+ * `persistRun` are required inputs, so omitting either fails the typecheck.
+ * They do not rule out a default, since a destructuring default behind a
+ * still-required type would pass them. That is held elsewhere: restoring
+ * `db = rootDb` is a parameter default that the
+ * `implicit-root-connection-shapes` ratchet counts, and
+ * `document-processing-request.ts` no longer has a baseline entry there.
+ * Swapping the route's door for another
+ * root-bound persister needs a new `rootDb` import, which the
+ * `direct-root-connection-imports` ratchet and the door's import confinement
+ * reject.
  */
-describe("the manual OCR request names its connection", () => {
+describe("the manual OCR request's connection is a required input", () => {
   const source = {
     entityId,
     entityVersionId,
@@ -763,23 +770,24 @@ describe("the manual OCR request names its connection", () => {
     sourceFileId: "00000000-0000-4000-8000-000000000001",
     sourceSha256Hex: "a".repeat(64),
   };
+  const persistOptions = (options: PersistManualOcrRunOptions) => options;
+  const handlerProps = (props: Parameters<typeof requestManualOcrHandler>[0]) =>
+    props;
 
-  test("the helper takes no default connection", () => {
-    // @ts-expect-error `db` is required; the owner connection is never implied
-    const options: PersistManualOcrRunOptions = {
+  test("the helper requires its connection", () => {
+    // @ts-expect-error `db` is a required option
+    persistOptions({
       organizationId,
       recordAuditEvent,
       source,
       userId,
       workspaceId,
-    };
-
-    expect(Object.keys(options)).not.toContain("db");
+    });
   });
 
-  test("the handler persists only through the persister it is given", () => {
-    // @ts-expect-error the route passes the request door; nothing is implied
-    const props: Parameters<typeof requestManualOcrHandler>[0] = {
+  test("the handler requires its persister", () => {
+    // @ts-expect-error `persistRun` is a required prop
+    handlerProps({
       entityId,
       fieldId,
       organizationId,
@@ -787,8 +795,6 @@ describe("the manual OCR request names its connection", () => {
       safeDb: createSafeDb(null),
       userId,
       workspaceId,
-    };
-
-    expect(Object.keys(props)).not.toContain("persistRun");
+    });
   });
 });
