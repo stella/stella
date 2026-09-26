@@ -118,6 +118,10 @@ const ADAPTER_JURISDICTIONS = {
     country: "SVK",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.SVK,
   },
+  USA: {
+    country: "USA",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.USA,
+  },
 } as const satisfies {
   readonly [TJurisdiction in CaseLawJurisdiction]: Extract<
     AdapterJurisdictionDeclaration,

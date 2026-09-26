@@ -511,6 +511,7 @@ export const PROVISION_CITATION_GRAMMARS = {
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
   SVK: unsupported("SVK"),
+  USA: unsupported("USA"),
 } as const satisfies {
   readonly [
     TJurisdiction in CaseLawJurisdiction

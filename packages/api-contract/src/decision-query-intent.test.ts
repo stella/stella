@@ -170,6 +170,21 @@ describe("the hits that are the named decision", () => {
     ).toEqual([hit("G 1/2099")]);
   });
 
+  test("a United States docket number is identity, not a sheet", () => {
+    const hits = [hit("21-123"), hit("21-456")];
+    expect(exactDecisionMatches("21-123", hits)).toEqual([hit("21-123")]);
+    expect(exactDecisionMatches("No. 21-456", hits)).toEqual([hit("21-456")]);
+    expect(exactDecisionMatches("21-789", hits)).toEqual([]);
+    expect(
+      parseDecisionQuery("No. 21-123", {
+        grammar: DECISION_DOCKET_GRAMMARS.USA,
+      }),
+    ).toEqual({ type: "identifier", kind: "docket", value: "No. 21-123" });
+    expect(
+      parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
+    ).toEqual({ type: "text", text: "2079" });
+  });
+
   test("a Polish division split across tokens keeps the same identity", () => {
     expect(
       exactDecisionMatches("III AUa 999999/99", [hit("III A Ua 999999/99")]),

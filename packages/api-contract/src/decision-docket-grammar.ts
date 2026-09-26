@@ -498,6 +498,63 @@ const AUT_DOCKET_PATTERNS = [
   /^[a-z]{1,3}\/\d{1,8}\/\d{4}$/iu,
 ] as const;
 
+/**
+ * The docket numbers the Supreme Court of the United States assigns, each with
+ * the key its form compares under.
+ *
+ * - `21-123`: the term year, then the case's number in that term's docket.
+ * - `20A87`: an application, numbered per term.
+ * - `22O141`: an original-jurisdiction case, in the electronic form.
+ * - `No. 8, Orig.`: the same, as the Court prints it.
+ * - `No. 1`: a number with no term, as older dockets were written. The `No.`
+ *   is required here, because a bare number is not a docket.
+ *
+ * A leading `No.` is optional on the other forms and never part of the key.
+ * Every digit is: `21-123` and `21-456` are two cases, so the sheet-number
+ * strip the other grammars apply to a trailing `-digits` never runs here.
+ */
+type UnitedStatesDocketParts = {
+  /** The two-digit term year, or empty for a form that carries none. */
+  readonly term: string;
+  readonly number: string;
+};
+
+const USA_DOCKET_FORMS = [
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})-(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}-${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})a(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}a${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}o${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => `${number} orig`,
+  },
+  {
+    pattern: /^no\.? ?(?<number>\d{1,5})$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => number,
+  },
+] as const;
+
+const USA_DOCKET_PATTERNS = USA_DOCKET_FORMS.map(({ pattern }) => pattern);
+
+const canonicalUnitedStatesDocketKey = (formatted: string): string => {
+  for (const { key, pattern } of USA_DOCKET_FORMS) {
+    const groups = pattern.exec(formatted)?.groups;
+    const number = groups?.["number"];
+    if (number !== undefined) {
+      return key({ number, term: groups?.["term"] ?? "" }).toLowerCase();
+    }
+  }
+  return panic("Accepted United States docket matches no declared form");
+};
+
 const canonicalSlovakDocketKey = (formatted: string): string => {
   const groups = SVK_DOCKET_RE.exec(formatted)?.groups;
   const senate = groups?.["senate"];
@@ -589,6 +646,11 @@ export const DECISION_DOCKET_GRAMMARS = {
     canonicalize: canonicalSlovakDocketKey,
     jurisdiction: "SVK",
     patterns: SVK_DOCKET_PATTERNS,
+  }),
+  USA: createDecisionDocketGrammar({
+    canonicalize: canonicalUnitedStatesDocketKey,
+    jurisdiction: "USA",
+    patterns: USA_DOCKET_PATTERNS,
   }),
 } as const satisfies {
   readonly [

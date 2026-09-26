@@ -1,5 +1,7 @@
 /**
- * Online repair behind migration 20260902100000_case_law_decision_date_ceiling.
+ * Online repair behind migration 20260902100000_case_law_decision_date_ceiling,
+ * and behind 20260926100200_case_law_decision_date_floor_by_jurisdiction,
+ * which swaps the same CHECK for a per-jurisdiction floor the same way.
  *
  * The migration swaps the CHECK on `case_law_decisions.decision_date` for one
  * with a stricter ceiling and leaves it NOT VALID. The data work runs here,

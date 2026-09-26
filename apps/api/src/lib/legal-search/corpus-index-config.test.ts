@@ -4,6 +4,7 @@ import {
   CASE_LAW_JURISDICTIONS,
   type CaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
+import { US_COURTS } from "@stll/api-contract/us-courts";
 
 import { CASE_LAW_INDEX_GROUPS } from "@/api/lib/legal-search/case-law-index-groups";
 import {
@@ -107,6 +108,8 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
  *   Najwyższy, NSA, Trybunał Konstytucyjny and the voivodeship
  *   administrative courts.
  * - SVK: Ústavný súd, NS, NSS, the krajské courts, and the okresné courts.
+ * - USA: the enrolled court directory in `us-courts.ts`, one canonical name
+ *   per court, and no court outside it resolves.
  */
 const COURT_DOMAIN_BOUND = {
   AUT: 200,
@@ -115,6 +118,7 @@ const COURT_DOMAIN_BOUND = {
   HUN: 200,
   POL: 400,
   SVK: 200,
+  USA: US_COURTS.length,
 } as const satisfies Record<CaseLawJurisdiction, number>;
 
 // A tag field whose values outgrow the engine's per-split limit stops being

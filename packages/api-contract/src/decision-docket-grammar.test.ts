@@ -6,6 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
+  canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
   formatDecisionDocket,
@@ -128,6 +129,17 @@ const canonicalDocketArbitraries = {
       fc.integer({ min: 1900, max: 2099 }),
     )
     .map(([senate, ordinal, year]) => `${senate}Xyz/${ordinal}/${year}`),
+  USA: fc
+    .tuple(
+      fc.integer({ min: 0, max: 99 }),
+      fc.integer({ min: 1, max: 9999 }),
+      fc.constantFrom("-", "A", "O"),
+      fc.boolean(),
+    )
+    .map(
+      ([term, number, separator, labelled]) =>
+        `${labelled ? "No. " : ""}${term.toString().padStart(2, "0")}${separator}${number}`,
+    ),
 } as const satisfies Record<DecisionDocketJurisdiction, Arbitrary<string>>;
 
 describe("declared decision docket grammars", () => {
@@ -205,6 +217,63 @@ describe("declared decision docket grammars", () => {
       expect(
         DECISION_DOCKET_GRAMMARS.CZE.parse(`8 As 287/2020${dash}33`),
       ).toEqual(canonical);
+    }
+  });
+
+  test("a United States docket keeps every digit of its number", () => {
+    const canonicalOf = (docket: string) => {
+      const parsed = DECISION_DOCKET_GRAMMARS.USA.parse(docket);
+      expect(parsed, docket).not.toBeNull();
+      return parsed === null ? null : canonicalDecisionDocket(parsed);
+    };
+    expect(canonicalOf("21-123")).toBe("21-123");
+    expect(canonicalOf("21-123")).not.toBe(canonicalOf("21-456"));
+    expect(canonicalOf("20A87")).not.toBe(canonicalOf("20A870"));
+    expect(canonicalOf("No. 8, Orig.")).not.toBe(canonicalOf("No. 8"));
+    // The generic key other identifiers compare under is unchanged: it still
+    // reads a trailing number as a sheet.
+    expect(canonicalDecisionIdentifierKey("21-123")).toBe("21");
+  });
+
+  test("a bare number or prose is not a United States docket", () => {
+    for (const text of [
+      "1",
+      "2079",
+      "123-45",
+      "1-2",
+      "2021-123",
+      "21 123",
+      "A87",
+      "Orig.",
+      "No.",
+      "the 21-123 case",
+    ]) {
+      expect(DECISION_DOCKET_GRAMMARS.USA.parse(text), text).toBeNull();
+    }
+  });
+
+  test("no other jurisdiction's docket reads as a United States one", () => {
+    // Unscoped parsing takes the first grammar that accepts, so a new grammar
+    // must not reach a docket another jurisdiction already reads.
+    for (const [jurisdiction, fixtures] of Object.entries(
+      DECISION_DOCKET_GRAMMAR_FIXTURES,
+    )) {
+      if (jurisdiction === "USA") {
+        continue;
+      }
+      for (const { canonical, variants } of fixtures) {
+        for (const docket of [canonical, ...variants]) {
+          const claimed = parseDecisionDocket(docket)?.jurisdiction;
+          expect([docket, claimed !== undefined && claimed !== "USA"]).toEqual([
+            docket,
+            true,
+          ]);
+          expect([docket, DECISION_DOCKET_GRAMMARS.USA.parse(docket)]).toEqual([
+            docket,
+            null,
+          ]);
+        }
+      }
     }
   });
 

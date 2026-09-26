@@ -89,6 +89,8 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // workers write to without pause, in transactions that outlast a short
   // wait.
   "20260902100000_case_law_decision_date_ceiling/migration.sql:d799f99eb97532f1f3819aae3e325fcc65d123f2a3bc7b98d4e9f41e417f8491",
+  // The same tiered retry around the swap to a per-jurisdiction floor.
+  "20260926100200_case_law_decision_date_floor_by_jurisdiction/migration.sql:c300312bf7d8af42fb76119b2f09fd4a372d9d836809e69198f5de811b2bb4f4",
   // Acquires the two hot corpus tables in writer order before installing the
   // citation-count triggers. The static body retries only lock_not_available
   // under a bounded statement budget and changes no rows.
