@@ -6,8 +6,8 @@
  * the trust anchors, as PEM text or a path to a PEM file. An anchor may be a
  * root or intermediate CA, or a timestamp authority's own certificate to pin
  * exactly that authority. With no anchor configured, or a token whose chain
- * reaches none, the timestamp is still embedded but not counted as trusted
- * time. No anchors ship with stella: trust lists differ by jurisdiction.
+ * reaches none (see `certificationPathReachesAnchor`), the timestamp is
+ * still embedded but not counted as trusted time. No anchors ship with stella: trust lists differ by jurisdiction.
  */
 
 import { readFileSync } from "node:fs";
@@ -44,14 +44,3 @@ export const configuredTimestampTrustAnchors = (
     return [];
   }
 };
-
-/** Whether any certificate of `chain` is one of `anchors`. */
-export const reachesTrustAnchor = (
-  chain: readonly Uint8Array[],
-  anchors: readonly Uint8Array[],
-) =>
-  chain.some((certificate) =>
-    anchors.some((anchor) =>
-      Buffer.from(anchor).equals(Buffer.from(certificate)),
-    ),
-  );

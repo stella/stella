@@ -17,6 +17,7 @@ const CA_ISSUERS_OID = "1.3.6.1.5.5.7.48.2";
 const OCSP_OID = "1.3.6.1.5.5.7.48.1";
 const GENERAL_NAME_URI = 6;
 const EXTENDED_KEY_USAGE_OID = "2.5.29.37";
+const KEY_USAGE_OID = "2.5.29.15";
 
 const RSA_KEY = {
   name: "RSASSA-PKCS1-v1_5",
@@ -39,6 +40,10 @@ type TestCertificateOptions = {
   extendedKeyUsages?: string[];
   /** Mark the extended key usage extension critical. */
   extendedKeyUsagesCritical?: boolean;
+  /** KeyUsage first byte (e.g. 0x04 keyCertSign); omitted leaves it out. */
+  keyUsage?: number;
+  /** basicConstraints pathLenConstraint for a CA. */
+  pathLength?: number;
   isCa?: boolean;
   /** Omitted: self-signed. */
   issuer?: TestCertificate;
@@ -70,6 +75,8 @@ export const createTestCertificate = async ({
   extendedKeyUsages,
   extendedKeyUsagesCritical = false,
   isCa = false,
+  keyUsage,
+  pathLength,
   issuer,
   notAfter = new Date(Date.now() + 86_400_000),
   notBefore = new Date(Date.now() - 60_000),
@@ -92,7 +99,10 @@ export const createTestCertificate = async ({
     new pkijs.Extension({
       extnID: BASIC_CONSTRAINTS_OID,
       critical: true,
-      extnValue: new pkijs.BasicConstraints({ cA: isCa })
+      extnValue: new pkijs.BasicConstraints({
+        cA: isCa,
+        ...(pathLength !== undefined && { pathLenConstraint: pathLength }),
+      })
         .toSchema()
         .toBER(false),
     }),
@@ -136,6 +146,18 @@ export const createTestCertificate = async ({
         })
           .toSchema()
           .toBER(false),
+      }),
+    );
+  }
+  if (keyUsage !== undefined) {
+    extensions.push(
+      new pkijs.Extension({
+        extnID: KEY_USAGE_OID,
+        critical: true,
+        extnValue: new asn1js.BitString({
+          unusedBits: 0,
+          valueHex: new Uint8Array([keyUsage]).buffer,
+        }).toBER(false),
       }),
     );
   }

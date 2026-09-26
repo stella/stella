@@ -448,6 +448,30 @@ describe("two-phase PDF signing", () => {
       ]);
     });
 
+    test("never trusts a timestamp key minted under an ordinary certificate", async () => {
+      const root = await createTestCertificate({
+        commonName: "Root",
+        isCa: true,
+      });
+      const ordinary = await createTestCertificate({
+        commonName: "Ordinary holder",
+        issuer: root,
+      });
+      // A timestamping key issued by a certificate that is not a CA: it
+      // chains to the configured root by name and signature only.
+      const minted = await createTestTimestampCertificate({ issuer: ordinary });
+      const { applied } = await signUnderIssuingCa({
+        chainComplete: true,
+        timestampAnchors: () => [root.der],
+        timestampSigner: minted,
+      });
+
+      expect(applied.level).toBe("B-B");
+      expect(applied.warnings.map(({ code }) => code)).toContain(
+        "TIMESTAMP_UNTRUSTED",
+      );
+    });
+
     test("refuses to embed a signature whose certificate is revoked", async () => {
       const refused = await signUnderIssuingCa({
         chainComplete: true,
