@@ -67,6 +67,16 @@ describe("orders are decisions of their own class", () => {
       "The petition for a writ of certiorari is denied.",
     ],
     ["a summary affirmance", "The judgment is summarily affirmed."],
+    ["a bare disposition without a period", "Affirmed"],
+    ["a vacatur and remand", "Vacated and Remanded"],
+    [
+      "adjacent motion dispositions without a space",
+      "Motion for leave to appeal denied.Motion for poor person relief dismissed as academic.",
+    ],
+    [
+      "a certification petition naming a report",
+      "The petition of the plaintiffs for certification for appeal from the Appellate Court, 1 Conn. App. 417, is denied.",
+    ],
   ])("%s published as a lead opinion is an order", (_name, body) => {
     const classification = classify(["020lead"], parsed(body));
 
@@ -130,14 +140,59 @@ describe("orders are decisions of their own class", () => {
   });
 });
 
+describe("supporting sentences", () => {
+  test.each([
+    ["a vote note", "Justice White would grant certiorari."],
+    ["a report of the decision below", "Reported below: 123 F.3d 456."],
+    [
+      "a recusal",
+      "Justice Kennedy took no part in the consideration or decision of this petition.",
+    ],
+  ])("%s alone is not an order", (_name, body) => {
+    for (const types of [["010combined"], ["040dissent"]] as const) {
+      const classification = classify(types, parsed(body));
+
+      expect(classification.kind).toBe("unclassified");
+      expect(classification.evidence.matchedPatterns).toEqual([]);
+    }
+  });
+
+  test("a dissent-only principal is not an order; an order with a dissent is", () => {
+    const dissentOnly = classify(
+      ["040dissent"],
+      parsed("Justice White would grant certiorari."),
+    );
+    const withDissent = classify(
+      ["020lead", "040dissent"],
+      parsed("Certiorari denied. Justice White would grant certiorari."),
+    );
+
+    expect(dissentOnly.decisionType).toBe("decision");
+    expect(withDissent.decisionType).toBe("order");
+    expect(withDissent.evidence.matchedPatterns).toEqual([
+      "certiorari-disposition",
+      "justice-vote-note",
+    ]);
+  });
+});
+
 describe("opinions", () => {
-  test("an opinion type or publisher structure makes an opinion once no order rule holds", () => {
-    expect(
-      classify(
-        ["020lead"],
-        parsed("The judgment of the Court of Appeals is reversed."),
-      ).kind,
-    ).toBe("opinion");
+  test("a short body the order sentences miss is never an opinion by row type or wrapper", () => {
+    const body = "The judgment of the Court of Appeals is reversed.";
+
+    for (const types of [
+      ["020lead"],
+      ["015unamimous"],
+      ["040dissent"],
+    ] as const) {
+      expect(classify(types, parsed(body)).kind).toBe("unclassified");
+      expect(
+        classify(types, parsed(body, { structuralOpinion: true })).kind,
+      ).toBe("unclassified");
+    }
+  });
+
+  test("an opinion type or publisher structure makes a long body an opinion once no order rule holds", () => {
     expect(classify(["030concurrence"], parsed(LONG_REASONING)).kind).toBe(
       "opinion",
     );

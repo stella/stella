@@ -50,19 +50,30 @@ const COURT_BELOW =
 
 const JUSTICES = `(?:The Chief Justice|Justices? [A-Z]${TAIL})`;
 
-/** Complete sentences an order consists of, each without its final period. */
-const ORDER_PATTERNS = {
+/**
+ * Sentences that dispose of the matter. An order has at least one; without
+ * one, no amount of supporting text makes a body an order.
+ */
+const OPERATIVE_PATTERNS = {
   "certiorari-petition": `(?:The )?[Pp]etition for (?:a )?writ of certiorari(?: to ${TAIL})? (?:is )?(?:granted|denied)`,
   "certiorari-disposition": `(?:${COURT_BELOW})?Certiorari (?:granted|denied)(?: limited to ${TAIL})?`,
   "certiorari-granted-vacated-remanded": `(?:${COURT_BELOW})?Certiorari granted, judgment vacated,? and (?:the )?case remanded(?: ${TAIL})?`,
   "rehearing-disposition": `(?:The )?(?:[Pp]etition for r|R)ehearing (?:is )?(?:granted|denied)`,
-  "motion-disposition": `(?:The )?[Mm]otions?(?: ${TAIL})? (?:is |are )?(?:granted|denied)`,
+  "petition-disposition": `(?:The )?[Pp]etitions?(?: ${TAIL})? (?:is |are )?(?:granted|denied|dismissed)`,
+  "motion-disposition": `(?:The )?[Mm]otions?(?: ${TAIL})? (?:is |are )?(?:granted|denied|dismissed(?: as (?:academic|moot))?)`,
   "appeal-dismissed": `(?:${COURT_BELOW})?(?:The )?[Aa]ppeals?(?: from ${TAIL})? (?:is |are )?dismissed(?: for want of ${TAIL})?`,
   "judgment-summarily-disposed": `(?:The )?[Jj]udgment (?:is )?summarily (?:affirmed|vacated)`,
+  "bare-disposition": `(?:(?:The )?(?:[Jj]udgment|[Oo]rder|[Dd]ecree) (?:is )?(?:affirmed|reversed|vacated)|Affirmed|Reversed|Vacated|Dismissed)(?:,? and [Rr]emanded)?`,
+} as const;
+
+/** Sentences that may accompany an operative disposition, never replace it. */
+const ANCILLARY_PATTERNS = {
   "lower-court-report": `Reported below: ${TAIL}`,
   "justice-vote-note": `${JUSTICES} would (?:grant|deny|dismiss)(?: ${TAIL})?`,
   "justice-recusal-note": `${JUSTICES} took no part in the (?:consideration or decision|decision) of ${TAIL}`,
 } as const;
+
+const ORDER_PATTERNS = { ...OPERATIVE_PATTERNS, ...ANCILLARY_PATTERNS };
 
 type OrderPatternName = keyof typeof ORDER_PATTERNS;
 
@@ -70,13 +81,18 @@ const ORDER_PATTERN_NAMES = Object.keys(ORDER_PATTERNS).filter(
   (name): name is OrderPatternName => Object.hasOwn(ORDER_PATTERNS, name),
 );
 
+const isOperative = (name: OrderPatternName): boolean =>
+  Object.hasOwn(OPERATIVE_PATTERNS, name);
+
 // A sentence ends at a period followed by the opening of another order
-// sentence or by the end of the text. Each sentence is matched once, left to
-// right: a tail never backtracks across a sentence it already closed, so the
-// scan stays linear in the number of sentences.
-const OPENING =
-  "(?:(?:The|Petition|Certiorari|Rehearing|Motions?|Appeals?|Judgment|Justices?|Reported)\\b|[A-Z][a-z]{0,6}\\.)";
-const SENTENCE_END = `\\.(?= ${OPENING}|$) ?`;
+// sentence, or at the end of the text with or without a period. A word
+// opening may follow the period directly (`denied.Motion`); an abbreviated
+// court only after a space, so `500 U.S. 1` is not split at `U.`. Each
+// sentence is matched once, left to right: a tail never backtracks across a
+// sentence it already closed, so the scan stays linear in the sentences.
+const WORD_OPENING =
+  "(?:The|Petition|Petitions|Certiorari|Rehearing|Motions?|Appeals?|Judgment|Order|Decree|Justices?|Reported|Affirmed|Reversed|Vacated|Dismissed)\\b";
+const SENTENCE_END = `(?:\\.(?= ?${WORD_OPENING}| [A-Z][a-z]{0,6}\\.|$) ?|$)`;
 
 const SENTENCE_PATTERNS = ORDER_PATTERN_NAMES.map(
   (name) =>
@@ -103,7 +119,7 @@ const orderSentencesOf = (text: string): OrderPatternName[] | null => {
     matched.push(name);
     position = pattern.lastIndex;
   }
-  return matched;
+  return matched.some(isOperative) ? matched : null;
 };
 
 /** Visible principal text, whitespace collapsed; its length is in code points. */
@@ -177,23 +193,23 @@ export const classifyCourtListenerDecision = ({
   if (wording.matchedPatterns.length > 0) {
     return decide("order", "short-order-wording");
   }
+  // A short body the order sentences miss may be a disposition they do not
+  // know or a brief reasoned opinion; a row type or a generic publisher
+  // wrapper cannot tell the two apart.
+  if (wording.length <= SHORT_ORDER_MAX_CHARACTERS) {
+    return decide("unclassified", "short-body-without-order-wording");
+  }
   if (principal.structuralOpinion) {
     return decide("opinion", "structural-opinion");
   }
   if (signals("opinion")) {
     return decide("opinion", "opinion-type");
   }
-  const long = wording.length > SHORT_ORDER_MAX_CHARACTERS;
-  if (long && scdbPresent) {
+  if (scdbPresent) {
     return decide("opinion", "long-body-with-scdb");
   }
-  if (long && principal.singleOpinionBody) {
+  if (principal.singleOpinionBody) {
     return decide("opinion", "long-body-single-opinion");
   }
-  return decide(
-    "unclassified",
-    long
-      ? "long-body-without-corroboration"
-      : "short-body-without-order-wording",
-  );
+  return decide("unclassified", "long-body-without-corroboration");
 };
