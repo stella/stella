@@ -102,6 +102,35 @@ describe("placing a stamp drawn on the displayed page", () => {
     expect(placed.status).toBe("placed");
   });
 
+  test("measures the size limits in physical points on a page with a UserUnit", async () => {
+    // Each user unit is 10 points: a 600x800 page is 6000x8000 points, and
+    // turned by 90 it displays 800 units wide and 600 high.
+    const created = PDF.create();
+    const page = created.addPage({ width: 600, height: 800 });
+    page.dict.set("UserUnit", PdfNumber.of(10));
+    page.dict.set("Rotate", PdfNumber.of(90));
+    const pdf = await PDF.load(await created.save());
+    const reason = (widthUnits: number, heightUnits: number) => {
+      const placed = placeStamp({
+        box: {
+          x: 0.1,
+          y: 0.1,
+          width: widthUnits / 800,
+          height: heightUnits / 600,
+        },
+        pageIndex: 0,
+        pdf,
+      });
+      return placed.status === "rejected" ? placed.reason : placed.status;
+    };
+
+    // 72x24 units would be 720x240 points: far past the physical maximum.
+    expect(reason(72, 24)).toBe("too_large");
+    // 7.2x2.4 units is exactly the physical minimum of 72x24 points.
+    expect(reason(7.2, 2.4)).toBe("placed");
+    expect(reason(7, 2.4)).toBe("too_small");
+  });
+
   test("refuses a box off the page, too small, too large or on a missing page", async () => {
     const pdf = await PDF.load(await buildPage(0));
     const reason = (candidate: Parameters<typeof placeStamp>[0]) => {
