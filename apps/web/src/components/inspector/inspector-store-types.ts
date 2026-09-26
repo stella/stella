@@ -63,7 +63,8 @@ export type ChatTab = {
   activeLegalKey?: LegalDocumentChatKey | undefined;
   activeSkill?:
     | {
-        skillId: string;
+        /** Absent for a built-in skill, which has no row: `skillName` names it. */
+        skillId?: string | undefined;
         skillName: string;
       }
     | undefined;
@@ -114,17 +115,46 @@ export const isSkillResourceOrigin = (
 ): value is SkillResourceOrigin =>
   typeof value === "string" && Object.hasOwn(SKILL_RESOURCE_ORIGINS, value);
 
-export type SkillResourceTab = {
+export const BUILT_IN_SKILL_ORIGIN = "built-in";
+
+/**
+ * Where a skill resource comes from: a skill row (edited, proposed against and
+ * access-checked by its id) or a built-in skill shipped with Stella, which has
+ * no row and is read-only.
+ */
+export type SkillResourceSource =
+  | { origin: typeof BUILT_IN_SKILL_ORIGIN; skillId: null }
+  | { origin: SkillResourceOrigin; skillId: string };
+
+export const parseSkillResourceSource = (
+  skillId: unknown,
+  origin: unknown,
+): SkillResourceSource | undefined => {
+  if (origin === BUILT_IN_SKILL_ORIGIN) {
+    return skillId === null ? { origin, skillId } : undefined;
+  }
+  if (isSkillResourceOrigin(origin) && typeof skillId === "string") {
+    return { origin, skillId };
+  }
+  return undefined;
+};
+
+type SkillResourceTabFields = {
   type: "skill-resource";
   id: SkillResourceTabId;
   label: string;
   skillName: string;
-  skillId: string;
-  origin: SkillResourceOrigin;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;
   content: string;
+};
+
+export type SkillResourceTab = SkillResourceTabFields & SkillResourceSource;
+
+export type InstalledSkillResourceTab = SkillResourceTabFields & {
+  origin: SkillResourceOrigin;
+  skillId: string;
 };
 
 export type GenericTab = {
@@ -305,12 +335,11 @@ export type InspectorTabsActions = {
     color?: string | null | undefined;
   }) => void;
   openSkillResourceTab: (
-    tab: Omit<SkillResourceTab, "type" | "id" | "target"> & {
-      refreshContent?: boolean | undefined;
-      skillName: string;
-      resourcePath: string;
-      target?: SkillResourceTab["target"];
-    },
+    tab: Omit<SkillResourceTabFields, "type" | "id" | "target"> &
+      SkillResourceSource & {
+        refreshContent?: boolean | undefined;
+        target?: SkillResourceTab["target"];
+      },
   ) => void;
   updateSkillResourceTabContent: (
     tabId: SkillResourceTabId,

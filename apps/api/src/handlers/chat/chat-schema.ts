@@ -216,7 +216,8 @@ export const resolveBrowserClientCapability = (
     : undefined;
 
 export const activeSkillSchema = activeContextSchema({
-  skillId: tSafeId("agentSkill"),
+  // A built-in skill has no row: `skillName` alone names it.
+  skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
 

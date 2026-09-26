@@ -3142,6 +3142,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Vstavané zručnosti",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
       "disableSkill": "Vypnúť zručnosť",

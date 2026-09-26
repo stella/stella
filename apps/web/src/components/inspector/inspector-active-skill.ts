@@ -1,3 +1,4 @@
+import { BUILT_IN_SKILL_ORIGIN } from "@/components/inspector/inspector-store-types";
 import type {
   ChatTab,
   InspectorTab,
@@ -59,7 +60,9 @@ export const getActiveSkillChatContext = (
   catalogueEntries?: readonly ActiveSkillCatalogueEntry[],
 ): ActiveSkillChatContext | undefined => {
   if (tab?.type === "skill-resource") {
-    return { skillId: tab.skillId, skillName: tab.skillName };
+    return tab.origin === BUILT_IN_SKILL_ORIGIN
+      ? { skillName: tab.skillName }
+      : { skillId: tab.skillId, skillName: tab.skillName };
   }
 
   if (tab?.type === "chat") {

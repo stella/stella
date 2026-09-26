@@ -287,8 +287,7 @@ describe("available active chat skills", () => {
       status: "found",
       content: "team resource",
       kind: "knowledge",
-      origin: "authored",
-      skillId: activeTeamSkillId,
+      skill: { source: "installed", id: activeTeamSkillId, origin: "authored" },
     });
   });
 });

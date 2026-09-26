@@ -3142,6 +3142,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Vestavěné dovednosti",
       "deleteFile": "Smazat soubor",
       "deleteFileConfirm": "Smazat soubor? Tuto akci nelze vrátit zpět.",
       "disableSkill": "Vypnout dovednost",

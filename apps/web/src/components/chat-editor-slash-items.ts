@@ -2,8 +2,11 @@ import { panic } from "better-result";
 
 import { AGENT_SKILLS_CHAT_METADATA_MAX } from "@stll/api-contract";
 
-import type { SlashItem } from "@/components/chat/prompt-slash-extension";
-import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
+import type {
+  SlashItem,
+  SlashSkillScope,
+} from "@/components/chat/prompt-slash-extension";
+import type { ChatPrompt } from "@/lib/prompts/types";
 import { getReservedChatCommands } from "@/lib/reserved-chat-commands";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -20,7 +23,7 @@ type SlashSkillRow = {
   enabled: boolean;
   id: string;
   name: string;
-  scope: PromptScope;
+  scope: SlashSkillScope;
   slug: string;
   /**
    * Optional slash-command handle. Installed skills with a command
@@ -28,11 +31,13 @@ type SlashSkillRow = {
    * commandSkills feed; we filter them out of the skill section so
    * the same skill doesn't render twice (once as `/command` prompt
    * insert, once as `#stella-skill-ref` skill chip).
+   * Built-in skills never carry a command.
    */
   command?: string | null;
 };
 
 type SlashSkillPage = {
+  builtIn: readonly SlashSkillRow[];
   installed: readonly SlashSkillRow[];
 };
 
@@ -40,7 +45,8 @@ type SlashSkillPage = {
  * Which skills a prompt input offers as chips: everything the caller can use
  * (chat, template fields) or the organization's team skills alone, for a
  * prompt whose output is shared matter data (property prompts) and so must
- * not depend on one member's private skill.
+ * not depend on one member's private skill. Built-in skills ship with
+ * Stella for every member, so the team catalog keeps them.
  */
 export const SKILL_CHIP_CATALOG = {
   caller: "caller",
@@ -104,9 +110,26 @@ export const buildChatSlashItems = ({
     },
   }));
 
-  const skillItems: SlashItem[] = getChatVisibleInstalledSkillRows(
-    skillPages,
-  ).map((row) => ({
+  const {
+    visibleRows: installedSkillRows,
+    shadowSlugs: enabledInstalledSlugs,
+  } = getChatVisibleInstalledSkillRows(skillPages);
+  // Shadow the built-in row whenever an installed skill claims the
+  // same slug, even if the installed row is omitted from the skill
+  // list because it has a command. The backend `load-skill` resolves
+  // by slug and would return the installed skill, so showing the
+  // built-in description here would mislead the user about what the
+  // slash item actually inserts.
+  const firstSkillPage = skillPages?.at(0);
+  const builtInSkillRows = firstSkillPage
+    ? firstSkillPage.builtIn.filter(
+        (row) => row.enabled && !enabledInstalledSlugs.has(row.slug),
+      )
+    : [];
+  const skillItems: SlashItem[] = [
+    ...builtInSkillRows,
+    ...installedSkillRows,
+  ].map((row) => ({
     kind: "skill" as const,
     skill: {
       id: row.id,
@@ -132,6 +155,9 @@ export const commandShortcutRowsFromSkillPages = (
     if (!row.enabled || !row.command || row.body === null || !row.body) {
       continue;
     }
+    if (row.scope === "built-in") {
+      continue;
+    }
     rows.push({
       id: row.id,
       scope: row.scope,
@@ -146,20 +172,23 @@ export const commandShortcutRowsFromSkillPages = (
 
 const getChatVisibleInstalledSkillRows = (
   skillPages: readonly SlashSkillPage[] | undefined,
-): SlashSkillRow[] => {
+): { visibleRows: SlashSkillRow[]; shadowSlugs: Set<string> } => {
   const installedRows = skillPages
     ? skillPages.flatMap((page) => page.installed)
     : [];
   const visibleRows: SlashSkillRow[] = [];
   const seenSlugs = new Set<string>();
   // Apply the chat-metadata cap to enabled installed rows before
-  // dropping command-bearing ones, so the window matches what the
-  // backend `load-skill` sees: rows beyond the cap are invisible to
-  // the model and must not appear as skill chips.
+  // building either set, so the window matches what the backend
+  // `load-skill` sees: rows beyond the cap are invisible to the model,
+  // so they must not shadow built-ins or appear as skill chips.
   const chatVisibleEnabled = installedRows
     .filter((row) => row.enabled)
     .toSorted(compareChatInstalledSkillRows)
     .slice(0, AGENT_SKILLS_CHAT_METADATA_MAX);
+  // Every chat-visible installed slug shadows the built-in entry of
+  // the same name, including ones that carry a command.
+  const shadowSlugs = new Set(chatVisibleEnabled.map((row) => row.slug));
   // Command-bearing installed skills are surfaced as prompt slash
   // items by the commandSkills feed; drop them from the skill-chip
   // list so the same skill doesn't appear twice in the menu.
@@ -173,7 +202,7 @@ const getChatVisibleInstalledSkillRows = (
     visibleRows.push(row);
   }
 
-  return visibleRows;
+  return { visibleRows, shadowSlugs };
 };
 
 const compareChatInstalledSkillRows = (
@@ -184,15 +213,19 @@ const compareChatInstalledSkillRows = (
   compareString(left.slug, right.slug) ||
   compareString(left.id, right.id);
 
-const compareSkillScope = (left: PromptScope, right: PromptScope): number =>
-  scopePriority(left) - scopePriority(right);
+const compareSkillScope = (
+  left: SlashSkillScope,
+  right: SlashSkillScope,
+): number => scopePriority(left) - scopePriority(right);
 
-const scopePriority = (scope: PromptScope): number => {
+const scopePriority = (scope: SlashSkillScope): number => {
   switch (scope) {
     case "private":
       return 0;
     case "team":
       return 1;
+    case "built-in":
+      return 2;
     default:
       scope satisfies never;
       return panic(`Unhandled scope: ${String(scope)}`);

@@ -54,11 +54,46 @@ describe("buildChatSlashItems", () => {
     ).toEqual(["new"]);
   });
 
+  test("includes built-in skills when no installed skill shadows them", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Review a clause.",
+              enabled: true,
+              id: "review-clause",
+              name: "review-clause",
+              scope: "built-in",
+              slug: "review-clause",
+            },
+          ],
+          installed: [],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "skill",
+        skill: {
+          description: "Review a clause.",
+          id: "review-clause",
+          name: "review-clause",
+          scope: "built-in",
+          slug: "review-clause",
+        },
+      },
+    ]);
+  });
+
   test("includes installed skills from every fetched page", () => {
     const items = buildChatSlashItems({
       shortcuts: [],
       skillPages: [
         {
+          builtIn: [],
           installed: [
             {
               description: "First page.",
@@ -71,6 +106,7 @@ describe("buildChatSlashItems", () => {
           ],
         },
         {
+          builtIn: [],
           installed: [
             {
               description: "Second page.",
@@ -101,6 +137,14 @@ describe("buildChatSlashItems", () => {
       shortcuts: [],
       skillPages: [
         {
+          builtIn: [
+            skillRow({
+              description: "Built-in fallback.",
+              id: "zz-over-limit",
+              scope: "built-in",
+              slug: "zz-over-limit",
+            }),
+          ],
           installed: [
             ...visibleInstalled,
             skillRow({
@@ -119,7 +163,16 @@ describe("buildChatSlashItems", () => {
           item.kind === "skill" && item.skill.id === "installed-over-limit",
       ),
     ).toBe(false);
-    expect(items).toHaveLength(visibleInstalled.length);
+    expect(items).toContainEqual({
+      kind: "skill",
+      skill: {
+        description: "Built-in fallback.",
+        id: "zz-over-limit",
+        name: "zz-over-limit",
+        scope: "built-in",
+        slug: "zz-over-limit",
+      },
+    });
   });
 
   test("uses the private installed skill when private and team skills share a slug", () => {
@@ -127,6 +180,7 @@ describe("buildChatSlashItems", () => {
       shortcuts: [],
       skillPages: [
         {
+          builtIn: [],
           installed: [
             skillRow({
               description: "Team version.",
@@ -159,9 +213,102 @@ describe("buildChatSlashItems", () => {
     ]);
   });
 
+  test("hides built-in skills shadowed by enabled installed skills", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Built-in.",
+              enabled: true,
+              id: "summarize",
+              name: "summarize",
+              scope: "built-in",
+              slug: "summarize",
+            },
+          ],
+          installed: [
+            {
+              description: "Team override.",
+              enabled: true,
+              id: "installed-summarize",
+              name: "Summarize",
+              scope: "team",
+              slug: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "skill",
+      skill: { id: "installed-summarize", slug: "summarize" },
+    });
+  });
+
+  test("command-bearing installed skill still shadows a same-slug built-in", () => {
+    // Without shadowing, the built-in row would render its own
+    // description while load-skill resolves the slug to the installed
+    // (custom) skill — misleading the user about what they invoke.
+    const items = buildChatSlashItems({
+      shortcuts: [
+        {
+          id: "summarize-default",
+          scope: "private",
+          name: "Custom summarise",
+          command: "summarize",
+          prompt: "Custom body…",
+        },
+      ],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Built-in summarise.",
+              enabled: true,
+              id: "summarize",
+              name: "summarize",
+              scope: "built-in",
+              slug: "summarize",
+            },
+          ],
+          installed: [
+            {
+              description: "Custom summarise — shadows the built-in.",
+              enabled: true,
+              id: "summarize-default",
+              name: "Custom summarise",
+              scope: "private",
+              slug: "summarize",
+              command: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items.some((item) => item.kind === "skill")).toBe(false);
+    expect(items).toEqual([
+      {
+        kind: "prompt",
+        prompt: {
+          id: "summarize-default",
+          scope: "private",
+          name: "Custom summarise",
+          command: "summarize",
+          body: "Custom body…",
+        },
+      },
+    ]);
+  });
+
   test("derives prompt rows from command-bearing skill pages", () => {
     const rows = commandShortcutRowsFromSkillPages([
       {
+        builtIn: [],
         installed: [
           skillRow({
             body: "Summarise this document.",
@@ -212,6 +359,7 @@ describe("buildChatSlashItems", () => {
       ],
       skillPages: [
         {
+          builtIn: [],
           installed: [
             {
               description: "Same skill that backs /summarize.",
@@ -241,31 +389,63 @@ describe("buildChatSlashItems", () => {
     ]);
   });
 
-  test("omits disabled installed skills", () => {
+  test("keeps built-in skills shadowed only by disabled installed skills", () => {
     const items = buildChatSlashItems({
       shortcuts: [],
       skillPages: [
         {
+          builtIn: [
+            {
+              description: "Built-in.",
+              enabled: true,
+              id: "draft",
+              name: "draft",
+              scope: "built-in",
+              slug: "draft",
+            },
+          ],
           installed: [
-            skillRow({ enabled: false, id: "installed-draft", slug: "draft" }),
+            {
+              description: "Disabled override.",
+              enabled: false,
+              id: "installed-draft",
+              name: "Draft",
+              scope: "private",
+              slug: "draft",
+            },
           ],
         },
       ],
     });
 
-    expect(items).toEqual([]);
+    expect(items).toEqual([
+      {
+        kind: "skill",
+        skill: {
+          description: "Built-in.",
+          id: "draft",
+          name: "draft",
+          scope: "built-in",
+          slug: "draft",
+        },
+      },
+    ]);
   });
 });
 
 describe("skillPagesForChips", () => {
   const chipPages = () => [
     {
+      builtIn: [
+        skillRow({ id: "bundled", slug: "bundled", scope: "built-in" }),
+      ],
       installed: [
         skillRow({ id: "mine", slug: "mine", scope: "private" }),
         skillRow({ id: "shared", slug: "shared", scope: "team" }),
       ],
     },
     {
+      builtIn: [],
       installed: [
         skillRow({
           command: "summary",
@@ -277,7 +457,7 @@ describe("skillPagesForChips", () => {
     },
   ];
 
-  test("a team-only prompt offers team skill chips alone", () => {
+  test("a team-only prompt offers team and built-in skill chips alone", () => {
     const items = buildChatSlashItems({
       shortcuts: [],
       skillPages: skillPagesForChips(chipPages(), SKILL_CHIP_CATALOG.team),
@@ -285,7 +465,7 @@ describe("skillPagesForChips", () => {
 
     expect(
       items.map((item) => (item.kind === "skill" ? item.skill.slug : "")),
-    ).toEqual(["shared"]);
+    ).toEqual(["bundled", "shared"]);
   });
 
   test("a caller-catalog prompt offers every skill the caller has", () => {
@@ -302,7 +482,7 @@ type SkillRowInput = {
   enabled?: boolean;
   id: string;
   name?: string;
-  scope?: "private" | "team";
+  scope?: "built-in" | "private" | "team";
   slug: string;
 };
 

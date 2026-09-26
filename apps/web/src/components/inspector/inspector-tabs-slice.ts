@@ -493,44 +493,38 @@ export const createInspectorTabsSlice = (
 
   openSkillResourceTab: ({
     skillName,
-    skillId,
-    origin,
     resourcePath,
     label,
     mimeType,
     content,
     refreshContent = false,
     target = "resource",
+    ...source
   }) =>
     set((state) => {
       const id = buildSkillResourceTabId({ skillName, resourcePath });
-      const existing = state.tabs.find((tab) => tab.id === id);
-      if (!existing) {
-        state.tabs.push({
-          type: "skill-resource",
-          id,
-          label,
-          skillName,
-          skillId,
-          origin,
-          target,
-          resourcePath,
-          mimeType,
-          content,
-        });
-      } else if (existing.type === "skill-resource") {
+      const index = state.tabs.findIndex((tab) => tab.id === id);
+      const existing = state.tabs.at(index);
+      const fields = {
+        type: "skill-resource",
+        id,
+        label,
+        skillName,
+        target,
+        resourcePath,
+        mimeType,
+      } as const;
+      if (index === -1) {
+        state.tabs.push({ ...fields, ...source, content });
+      } else if (existing?.type === "skill-resource") {
         const sourceChanged =
-          existing.skillId !== skillId || existing.origin !== origin;
-        existing.label = label;
-        existing.skillName = skillName;
-        existing.skillId = skillId;
-        existing.origin = origin;
-        existing.target = target;
-        existing.resourcePath = resourcePath;
-        existing.mimeType = mimeType;
-        if (sourceChanged || refreshContent) {
-          existing.content = content;
-        }
+          existing.skillId !== source.skillId ||
+          existing.origin !== source.origin;
+        state.tabs[index] = {
+          ...fields,
+          ...source,
+          content: sourceChanged || refreshContent ? content : existing.content,
+        };
       }
       activateInspectorTab(state, id);
       state.activationSeq += 1;

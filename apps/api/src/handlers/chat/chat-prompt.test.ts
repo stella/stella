@@ -68,6 +68,7 @@ const SKILL_METADATA = [
   {
     name: "custom-research-skill",
     description: "Apply a user-authored research workflow.",
+    source: "installed",
     version: "1.0",
   },
 ] as const;
@@ -644,6 +645,7 @@ describe("chat prompt builders", () => {
           description: "Use the Acme acquisition playbook.",
           displayName: "Acme Acquisition Review",
           name: "acme-acquisition-review",
+          source: "installed",
           version: null,
         },
       ],
@@ -659,6 +661,25 @@ describe("chat prompt builders", () => {
     expect(prompt.fullPrompt).toContain("acme-acquisition-review");
   });
 
+  test("keeps built-in skill metadata in the cache-stable prefix", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: [
+        {
+          description: "Shipped review workflow.",
+          name: "shipped-review",
+          source: "built-in",
+          version: null,
+        },
+      ],
+      userContext: null,
+    });
+
+    expect(prompt.cacheStablePrefix).toContain(
+      "- shipped-review: Shipped review workflow.",
+    );
+    expect(prompt.untrustedSuffix).not.toContain("shipped-review");
+  });
+
   test("active skill section anchors this skill and its editable files", () => {
     const activeSkill = {
       body: "# Skill body\nUse the active workflow.",
@@ -668,6 +689,7 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      source: "installed",
       toolName: "active-workflow",
       version: "1.0",
     } satisfies ActiveChatSkillContext;
@@ -695,6 +717,7 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       resources: [],
+      source: "installed",
       toolName: "active-workflow",
       version: null,
     } satisfies ActiveChatSkillContext;

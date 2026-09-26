@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { isOrganizationManagementRole } from "@stll/permissions";
+import { listSkillMetadata, listSkillResources } from "@stll/skills";
 
 import {
   agentSkills,
@@ -37,7 +38,8 @@ const config = {
   description:
     "List the agent skills visible to you, the organization's team skills " +
     "plus your own private ones, enabled first and then by scope and name, " +
-    "with cursor pagination. Instruction bodies come back only for skills that carry a slash " +
+    "with cursor pagination, alongside the skills shipped with stella " +
+    "(`builtIn`). Instruction bodies come back only for skills that carry a slash " +
     "command; read one skill in full with skills.get. Also reports whether " +
     "you may manage team skills.",
   permissions: { chat: ["create"] },
@@ -178,6 +180,19 @@ const listSkills = createSafeRootHandler(
 
     return Result.ok({
       canManageTeam: isOrganizationManagementRole(memberRole.role),
+      builtIn: listSkillMetadata().map((skill) => ({
+        id: skill.name,
+        scope: "built-in" as const,
+        origin: "built-in" as const,
+        slug: skill.name,
+        name: skill.name,
+        description: skill.description,
+        version: skill.version,
+        license: skill.license ?? null,
+        compatibility: skill.compatibility ?? null,
+        enabled: true,
+        resourceCount: listSkillResources(skill.name).length,
+      })),
       installed: installedPage.items,
       limit: installedPage.limit,
       nextCursor: installedPage.nextCursor,

@@ -23,8 +23,8 @@ import {
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
 import {
-  isSkillResourceOrigin,
-  type SkillResourceOrigin,
+  parseSkillResourceSource,
+  type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
@@ -150,8 +150,7 @@ type SkillResourceOutput = {
   path: string;
   content: string;
   mimeType: string;
-  skillId: string;
-  origin: SkillResourceOrigin;
+  source: SkillResourceSource;
   target?: SkillResourceTarget | undefined;
 };
 
@@ -177,16 +176,17 @@ const getSkillResourceOutput = (
   const path = getStringProperty(output, "path");
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
-  const skillId = getStringProperty(output, "skillId");
-  const originRaw: unknown = Reflect.get(output, "origin");
+  const source = parseSkillResourceSource(
+    Reflect.get(output, "skillId"),
+    Reflect.get(output, "origin"),
+  );
   const targetRaw: unknown = Reflect.get(output, "target");
   if (
     skillName === undefined ||
     path === undefined ||
     content === undefined ||
     mimeType === undefined ||
-    skillId === undefined ||
-    !isSkillResourceOrigin(originRaw)
+    source === undefined
   ) {
     return undefined;
   }
@@ -195,8 +195,7 @@ const getSkillResourceOutput = (
     path,
     content,
     mimeType,
-    skillId,
-    origin: originRaw,
+    source,
     ...(isSkillResourceTarget(targetRaw) ? { target: targetRaw } : {}),
   };
 };
@@ -461,9 +460,8 @@ export const ToolCallCard = ({
           onClick={() => {
             if (skillResourceOutput) {
               useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceOutput.source,
                 skillName: skillResourceOutput.skillName,
-                skillId: skillResourceOutput.skillId,
-                origin: skillResourceOutput.origin,
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,

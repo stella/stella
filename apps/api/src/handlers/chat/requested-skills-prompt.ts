@@ -37,7 +37,7 @@ export const loadRequestedSkillsPrompt = async ({
           .join("\n");
   const requested = await resolveRequestedSkills({
     ...options,
-    activeSkillId: activeSkillContext?.id,
+    activeSkillId: activeSkillContext?.id ?? undefined,
     messageText,
   });
   return requested.map(buildRequestedSkillsSection);

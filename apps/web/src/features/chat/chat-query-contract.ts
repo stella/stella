@@ -69,7 +69,8 @@ type ActiveExternalContext = {
 };
 
 export type ActiveSkillContext = {
-  skillId: string;
+  /** Absent for a built-in skill, which has no row: `skillName` names it. */
+  skillId?: string | undefined;
   skillName: string;
 };
 

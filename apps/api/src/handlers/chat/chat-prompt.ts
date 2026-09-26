@@ -74,6 +74,8 @@ import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
+  type AvailableChatSkill,
+  CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
   resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
@@ -346,6 +348,7 @@ export type UserContext = IncomingUserContext;
 
 type PromptSkillMetadata = SkillMetadata & {
   displayName?: string | undefined;
+  source: AvailableChatSkill["source"];
 };
 
 const chatCacheStablePrefixSchema = v.pipe(
@@ -2468,6 +2471,7 @@ const mergeActiveSkillMetadata = ({
     description: activeSkillContext.description,
     displayName: activeSkillContext.displayName,
     name: activeSkillContext.toolName,
+    source: activeSkillContext.source,
     version: activeSkillContext.version,
   };
   const activeSkillIndex = skillMetadata.findIndex(
@@ -2656,12 +2660,22 @@ const buildPromptParts = ({
   toolAvailability,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
+  // Built-in skills ship with stella, so their names and descriptions are
+  // server-authored and join the cache-stable prefix; installed ones are
+  // user-configured text and stay in the untrusted suffix.
+  const builtInSkillMetadata = skillMetadata.filter(
+    (skill) => skill.source === CHAT_SKILL_SOURCE.builtIn,
+  );
+  const installedSkillMetadata = skillMetadata.filter(
+    (skill) => skill.source === CHAT_SKILL_SOURCE.installed,
+  );
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
       ...buildCoreRuleSections({
         skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
         toolAvailability,
       }),
+      buildSkillCatalogSection(builtInSkillMetadata),
       CHAT_CODE_MODE_SYSTEM_PROMPT,
     ]),
   );
@@ -2677,14 +2691,14 @@ const buildPromptParts = ({
   const safePrompt = brandChatSafePrompt(joinPromptSections(safeSections));
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. Skill names/descriptions are
+  // text into the prompt. Installed skill names/descriptions are
   // user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
   // anonymizer in anonymized mode.
   const untrustedSections: string[] = [
-    buildSkillCatalogSection(skillMetadata),
+    buildSkillCatalogSection(installedSkillMetadata),
     ...requestContextSections,
   ];
   const userContextBlock = buildUserContextBlock(userContext);

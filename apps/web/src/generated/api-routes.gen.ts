@@ -4768,7 +4768,7 @@ export type WebRoutes = {
                     fileName: string;
                   } | {
                     type: "agent_skill";
-                    skillId: T8ff9f6d126;
+                    skillId: T352ed14c79;
                     name: string;
                     version: string;
                     skippedFiles: Array<Td56234f3f1>;
@@ -7300,21 +7300,21 @@ export type WebRoutes = {
       post: {
         body: {
           context: Array<Te8eee0ded7>;
-          data: T97b6e5d995;
+          data: T100aa166c2;
           state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: T97b6e5d995;
+          forwardedProps: T100aa166c2;
           tools: Array<Te8d0e5a977>;
         } | {
           context: Array<Te8eee0ded7>;
-          data: T2dc5e98509;
+          data: T8da773c09a;
           state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: T2dc5e98509;
+          forwardedProps: T8da773c09a;
           tools: Array<Te8d0e5a977>;
           parentRunId: string;
           resume: Array<Tacbaeed0d6>;
@@ -20869,8 +20869,21 @@ export type WebRoutes = {
         response: {
           200: {
             canManageTeam: Tfddd645dc8;
+            builtIn: Array<{
+              id: string;
+              scope: "built-in";
+              origin: "built-in";
+              slug: string;
+              name: string;
+              description: string;
+              version: Tbe0400fa4c;
+              license: Tbe0400fa4c;
+              compatibility: Tbe0400fa4c;
+              enabled: Tfddd645dc8;
+              resourceCount: number;
+            }>;
             installed: Array<{
-              id: T8ff9f6d126;
+              id: T352ed14c79;
               scope: T7906e8b72f;
               origin: T10a86d9f45;
               slug: string;
@@ -20922,7 +20935,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: Array<{
-              id: T8ff9f6d126;
+              id: T352ed14c79;
               scope: T7906e8b72f;
               name: string;
               description: string;
@@ -20958,7 +20971,7 @@ export type WebRoutes = {
         get: {
           body: Record<never, never>;
           params: {
-            skillId: T8ff9f6d126;
+            skillId: T352ed14c79;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
@@ -20971,7 +20984,7 @@ export type WebRoutes = {
                 sizeBytes: number;
                 content: string;
               }>;
-              id: T8ff9f6d126;
+              id: T352ed14c79;
               scope: T7906e8b72f;
               origin: T10a86d9f45;
               userId: string;
@@ -21026,7 +21039,7 @@ export type WebRoutes = {
         headers: Record<never, never>;
         response: {
           200: {
-            id: T8ff9f6d126;
+            id: T352ed14c79;
           };
           400: T9a51b7d2bc;
           401: T9a51b7d2bc;
@@ -21063,7 +21076,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              id: T8ff9f6d126;
+              id: T352ed14c79;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -21102,7 +21115,7 @@ export type WebRoutes = {
           response: {
             200: {
               skippedFiles: Array<Td56234f3f1>;
-              id: T8ff9f6d126;
+              id: T352ed14c79;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -21141,7 +21154,7 @@ export type WebRoutes = {
           response: {
             200: {
               skippedFiles: Array<Td56234f3f1>;
-              id: T8ff9f6d126;
+              id: T352ed14c79;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -21341,13 +21354,13 @@ export type WebRoutes = {
             command?: null | string;
           };
           params: {
-            skillId: T8ff9f6d126;
+            skillId: T352ed14c79;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              id: T8ff9f6d126;
+              id: T352ed14c79;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -21382,14 +21395,14 @@ export type WebRoutes = {
               content: string;
             };
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
               200: {
                 id: T32a2c3700a;
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 path: string;
                 kind: Tc18269d27b;
                 content: string;
@@ -21430,14 +21443,14 @@ export type WebRoutes = {
               content: string;
             };
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
               200: {
                 id: T32a2c3700a;
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 path: string;
                 kind: Tc18269d27b;
                 content: string;
@@ -21476,7 +21489,7 @@ export type WebRoutes = {
               path: string;
             };
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -21519,14 +21532,14 @@ export type WebRoutes = {
                 newPath: string;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
                 200: {
                   id: T32a2c3700a;
-                  skillId: T8ff9f6d126;
+                  skillId: T352ed14c79;
                   path: string;
                   kind: Tc18269d27b;
                   content: string;
@@ -21568,14 +21581,14 @@ export type WebRoutes = {
                 file: File;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
                 200: {
                   id: T32a2c3700a;
-                  skillId: T8ff9f6d126;
+                  skillId: T352ed14c79;
                   path: string;
                   kind: Tc18269d27b;
                   content: string;
@@ -21617,7 +21630,7 @@ export type WebRoutes = {
                 prompt: string;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -21658,7 +21671,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -21705,7 +21718,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 revisionId: T6e37e01eb4;
               };
               query: Record<never, never>;
@@ -21713,7 +21726,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   id: T6e37e01eb4;
-                  skillId: T8ff9f6d126;
+                  skillId: T352ed14c79;
                   revisionNumber: number;
                   body: string;
                   contentHash: string;
@@ -21753,7 +21766,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -21805,7 +21818,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 proposalId: T06c45cc300;
               };
               query: Record<never, never>;
@@ -21814,7 +21827,7 @@ export type WebRoutes = {
                 200: {
                   baseIsCurrent: Tfddd645dc8;
                   id: T06c45cc300;
-                  skillId: T8ff9f6d126;
+                  skillId: T352ed14c79;
                   baseRevisionId: T6e37e01eb4;
                   body: string;
                   summary: string;
@@ -21862,7 +21875,7 @@ export type WebRoutes = {
               summary?: string;
             };
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -21905,7 +21918,7 @@ export type WebRoutes = {
                 commentIds?: Array<Tf42adc792b>;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -21951,7 +21964,7 @@ export type WebRoutes = {
                 summary?: string;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 proposalId: T06c45cc300;
               };
               query: Record<never, never>;
@@ -21997,7 +22010,7 @@ export type WebRoutes = {
                   decision: Tdce31e5530;
                 };
                 params: {
-                  skillId: T8ff9f6d126;
+                  skillId: T352ed14c79;
                   proposalId: T06c45cc300;
                 };
                 query: Record<never, never>;
@@ -22042,7 +22055,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 proposalId: T06c45cc300;
               };
               query: Record<never, never>;
@@ -22083,7 +22096,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -22140,7 +22153,7 @@ export type WebRoutes = {
               rangeEnd: number;
             };
             params: {
-              skillId: T8ff9f6d126;
+              skillId: T352ed14c79;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -22182,7 +22195,7 @@ export type WebRoutes = {
                 resolved: Tfddd645dc8;
               };
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 commentId: Tf42adc792b;
               };
               query: Record<never, never>;
@@ -22224,7 +22237,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                skillId: T8ff9f6d126;
+                skillId: T352ed14c79;
                 commentId: Tf42adc792b;
               };
               query: Record<never, never>;
@@ -22264,13 +22277,13 @@ export type WebRoutes = {
         delete: {
           body: Record<never, never>;
           params: {
-            skillId: T8ff9f6d126;
+            skillId: T352ed14c79;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              id: T8ff9f6d126;
+              id: T352ed14c79;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -32790,6 +32803,36 @@ type T0ef90f0d9a = {
   output?: unknown;
 } & T4d73965770;
 
+type T100aa166c2 = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: T42a50d3ca2;
+  activeFile?: T088b2f68ca;
+  activeTemplate?: T9bf573e525;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Teec166880c;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: Tbc3d04c5ab;
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
+};
+
 type T1060343604 = {
   readonly input: any;
   readonly output: any;
@@ -33665,38 +33708,6 @@ type T2dbe0476e0 = {
   output?: unknown;
 } & T4d73965770;
 
-type T2dc5e98509 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T42a50d3ca2;
-  activeFile?: T088b2f68ca;
-  activeTemplate?: T9bf573e525;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: T369422441d;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: "assistant";
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-  parentRunId: string;
-  resume: Array<Tacbaeed0d6>;
-};
-
 type T2df478253f = "draft" | "approved" | "ephemeral";
 
 type T2e1b9ec514 = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
@@ -33965,6 +33976,10 @@ type T350a170d52 = {
   approvalSchema: undefined;
 };
 
+type T352ed14c79 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkill";
+};
+
 type T353d98c95e = {
   action: "open";
   url: string;
@@ -34007,11 +34022,6 @@ type T3582432480 = {
 type T367a10cc51 = {
   readonly input: T466db84340;
   readonly output: T27875dbd24;
-};
-
-type T369422441d = {
-  skillId: T8ff9f6d126;
-  skillName: string;
 };
 
 type T373044b8de = "workspace" | "download";
@@ -36554,6 +36564,38 @@ type T8d27901f72 = {
   decisionInstanceProvisioned: Tfddd645dc8;
 };
 
+type T8da773c09a = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: T42a50d3ca2;
+  activeFile?: T088b2f68ca;
+  activeTemplate?: T9bf573e525;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Teec166880c;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: "assistant";
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
+  parentRunId: string;
+  resume: Array<Tacbaeed0d6>;
+};
+
 type T8da97ce6b5 = {
   required?: undefined | false | true;
   minLength?: undefined | number;
@@ -36623,10 +36665,6 @@ type T8f7cd2c7c4 = {
 type T8fd3506feb = {
   readonly input: T1dec1d0a87;
   readonly output: Te384930758;
-};
-
-type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkill";
 };
 
 type T9021211256 = null | Tb86085a330;
@@ -36793,36 +36831,6 @@ type T973f0d36bf = {
 } | {
   type: "person";
   version: 1;
-};
-
-type T97b6e5d995 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T42a50d3ca2;
-  activeFile?: T088b2f68ca;
-  activeTemplate?: T9bf573e525;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: T369422441d;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: Tbc3d04c5ab;
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
 };
 
 type T97fca5e74e = {
@@ -38988,6 +38996,11 @@ type Tee12b2a0c6 = {
 type Tee36eb0f81 = {
   key: string;
   labelKey: T7a0a473ce3;
+};
+
+type Teec166880c = {
+  skillId?: T352ed14c79;
+  skillName: string;
 };
 
 type Tef6a8c50b8 = {

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
+import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -135,9 +136,9 @@ describe("MCP gateway skill tools", () => {
     const tools = await loadVisibleSkillTools({ context });
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.id).toBe(
-      toSafeId<"agentSkill">("skill_private_shared"),
-    );
+    expect(tools.at(0)).toMatchObject({
+      id: toSafeId<"agentSkill">("skill_private_shared"),
+    });
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
@@ -170,6 +171,7 @@ describe("MCP gateway skill tools", () => {
         displayName: `Skill ${String(i)}`,
         id: toSafeId<"agentSkill">(`skill_${String(i)}`),
         name: `skill-${String(i)}`,
+        source: CHAT_SKILL_SOURCE.installed,
         version: null,
       }),
     );

@@ -12,7 +12,7 @@ import "@/components/inspector/inspector-persistence-references";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
   FILE_FACETS,
-  isSkillResourceOrigin,
+  parseSkillResourceSource,
   type ChatTab,
   type FileTab,
   type InspectorTab,
@@ -272,7 +272,7 @@ const isActiveSkillContext = (
   return (
     isRecord(value) &&
     typeof value["skillName"] === "string" &&
-    typeof value["skillId"] === "string"
+    isOptionalString(value["skillId"])
   );
 };
 
@@ -371,8 +371,7 @@ const isInspectorSkillResourceTab = (
   return (
     typeof label === "string" &&
     typeof value["skillName"] === "string" &&
-    typeof value["skillId"] === "string" &&
-    isSkillResourceOrigin(value["origin"]) &&
+    parseSkillResourceSource(value["skillId"], value["origin"]) !== undefined &&
     (target === undefined || target === "body" || target === "resource") &&
     typeof value["resourcePath"] === "string" &&
     typeof value["mimeType"] === "string" &&

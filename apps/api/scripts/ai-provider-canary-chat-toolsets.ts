@@ -82,6 +82,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   id: skillId,
   origin: "authored",
   resources: [{ kind: "knowledge", path: "knowledge/canary.md" }],
+  source: "installed",
   toolName: "provider-schema-canary",
   version: null,
 };

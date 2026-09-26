@@ -22,6 +22,7 @@ import type { TranslationKey } from "@/i18n/types";
 const SECTION_LABEL_KEYS = {
   private: "chat.skills.scope.private",
   team: "chat.skills.scope.team",
+  "built-in": "knowledge.agentSkills.builtInSection",
   commands: "chat.commandsSection",
 } as const satisfies Record<SlashSectionKey, TranslationKey>;
 

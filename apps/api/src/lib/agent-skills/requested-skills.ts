@@ -91,7 +91,7 @@ export const resolveRequestedSkills = async ({
       reads: loaded.map((skill) => ({
         outcome: SKILL_READ_OUTCOME.success,
         path: null,
-        skillId: skill.id,
+        skill,
         slug: skill.name,
         surface: SKILL_READ_SURFACE.chat,
       })),

@@ -24,6 +24,23 @@ describe("getActiveSkillChatContext", () => {
     });
   });
 
+  test("names a built-in skill resource tab without a skill id", () => {
+    const tab = {
+      type: "skill-resource",
+      id: "skill-resource:summarize/SKILL.md",
+      label: "SKILL.md",
+      skillName: "summarize",
+      skillId: null,
+      origin: "built-in",
+      target: "body",
+      resourcePath: "SKILL.md",
+      mimeType: "text/markdown",
+      content: "# Summarize",
+    } satisfies InspectorTab;
+
+    expect(getActiveSkillChatContext(tab)).toEqual({ skillName: "summarize" });
+  });
+
   test("extracts active skill context from a skill catalogue detail tab", () => {
     const tab = {
       type: "view",

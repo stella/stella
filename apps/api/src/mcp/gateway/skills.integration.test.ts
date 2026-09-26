@@ -285,7 +285,7 @@ describe("MCP skill tools against the database", () => {
       context,
       toolName: `skill__${slug}`,
     });
-    if (resolved?.id !== privateSkillId) {
+    if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {
       throw new TypeError("expected the private skill to shadow the team one");
     }
 
