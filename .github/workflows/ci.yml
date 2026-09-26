@@ -262,7 +262,7 @@ jobs:
             # inputs, the files the Dockerfile and the smoke read from the
             # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/init.sql|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/init.sql|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -278,7 +278,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/retry.sh)
+              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/pull-base-images.sh|scripts/retry.sh)
                 agent_sandbox_docker_required=true
                 ;;
             esac
@@ -314,7 +314,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -339,7 +339,7 @@ jobs:
             # ordinary app-source changes are covered by web-build's cheaper
             # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              VERSION|apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              VERSION|apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|scripts/pull-base-images.sh|scripts/retry.sh|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac
@@ -485,6 +485,9 @@ jobs:
 
       - name: Run protocol and malformed-stream tests
         run: bun --filter @stll/agent-engine test
+
+      - name: Pull sandbox base images
+        run: bash scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
 
       - name: Build pinned sandbox image
         run: >-
@@ -1270,6 +1273,7 @@ jobs:
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
           scripts/check-release-upload-retry.test.ts
+          scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
@@ -1303,6 +1307,9 @@ jobs:
 
       - name: Test retry script
         run: bash scripts/retry.test.sh
+
+      - name: Test base image pull script
+        run: bash scripts/pull-base-images.test.sh
 
       # Both guards decide whether a change may reach a live database or the
       # default branch, and both fail open if their comparison logic breaks:
@@ -2174,6 +2181,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Pull web base images
+        run: bash scripts/pull-base-images.sh apps/web/Dockerfile
+
       - name: Build runner image
         run: >-
           docker build
@@ -2877,6 +2887,9 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Pull API base images
+        run: bash scripts/pull-base-images.sh apps/api/Dockerfile
+
       - name: Build final API release image
         run: |
           set -euo pipefail
@@ -3046,6 +3059,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Pull legal-atlas-runner base images
+        run: bash scripts/pull-base-images.sh --buildx linux/amd64 apps/legal-atlas-runner/Dockerfile
 
       - name: Build legal-atlas-runner image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

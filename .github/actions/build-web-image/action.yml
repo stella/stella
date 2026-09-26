@@ -139,6 +139,13 @@ runs:
         username: ${{ github.actor }}
         password: ${{ github.token }}
 
+    - name: Pull web base images
+      shell: bash
+      env:
+        DOCKERFILE: ${{ inputs.source-path }}/apps/web/Dockerfile
+        TOOLING_PATH: ${{ inputs.tooling-path }}
+      run: bash "${TOOLING_PATH}/scripts/pull-base-images.sh" --buildx linux/arm64 "$DOCKERFILE"
+
     - name: Build and push web image
       id: build
       uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0

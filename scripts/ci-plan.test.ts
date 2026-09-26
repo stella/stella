@@ -82,6 +82,23 @@ test("Docker context changes require both final image smokes", () => {
   expect(imageSmokePlan([".dockerignore"])).toEqual(["true", "true"]);
 });
 
+test("base image pull changes require every image build", () => {
+  for (const file of ["scripts/pull-base-images.sh", "scripts/retry.sh"]) {
+    expect(
+      runSelector(
+        [file],
+        [
+          "api_image_smoke_required",
+          "web_image_smoke_required",
+          "legal_atlas_image_required",
+          "agent_sandbox_docker_required",
+        ],
+      ),
+      file,
+    ).toEqual(["true", "true", "true", "true"]);
+  }
+});
+
 test("unrelated paths do not schedule final image smokes", () => {
   expect(imageSmokePlan([])).toEqual(["false", "false"]);
   fc.assert(
