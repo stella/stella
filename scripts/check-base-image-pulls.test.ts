@@ -20,6 +20,13 @@ const DOCKER_BUILD = /(?:^|[\s;&|(])docker\s+(?:buildx\s+)?build\b/u;
  * scan stopped finding them, not that they stopped existing.
  */
 const MINIMUM_BUILD_SITES = 9;
+const RETRY_SCRIPT = "scripts/retry.sh";
+const DOCKER_PULL = /(?:^|[\s;&|(])docker\s+pull\b/u;
+/** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…`. */
+const WRAPPED_PULL =
+  /\bbash\s+(?:[\w.\-/]+\/)?scripts\/retry\.sh\s+docker\s+pull\b/u;
+/** The registry pulls the workflows run today, counted like the builds. */
+const MINIMUM_PULL_SITES = 3;
 
 const Scalars = v.record(
   v.string(),
@@ -106,17 +113,23 @@ const pullsFor = (step: Step, site: BuildSite) => {
   );
 };
 
+type ScriptRevisionArgs = { steps: Step[]; index: number; script: string };
+
 /**
- * A job may build an older source than the workflow's; the pull script must
- * still come from the workflow's revision, where it is known to exist.
+ * A job may check out an older source than the workflow's; the helper scripts
+ * must still come from the workflow's revision, where they are known to exist.
  */
-const scriptFromWorkflowRevision = (steps: Step[], pullIndex: number) => {
-  const script =
-    commandLine(steps[pullIndex] ?? {})
+const scriptFromWorkflowRevision = ({
+  steps,
+  index,
+  script,
+}: ScriptRevisionArgs) => {
+  const invoked =
+    commandLine(steps[index] ?? {})
       .split(" ")
-      .find((word) => word.endsWith(PULL_SCRIPT)) ?? "";
-  const directory = script
-    .slice(0, -PULL_SCRIPT.length)
+      .find((word) => word.endsWith(script)) ?? "";
+  const directory = invoked
+    .slice(0, -script.length)
     .replace(/^\.\//u, "")
     .replace(/\/$/u, "");
   // An expression (`${{ inputs.tooling-path }}`): a composite action receives
@@ -125,7 +138,7 @@ const scriptFromWorkflowRevision = (steps: Step[], pullIndex: number) => {
     return true;
   }
   const checkout = steps
-    .slice(0, pullIndex)
+    .slice(0, index)
     .findLast(
       (step) =>
         step.uses?.startsWith(CHECKOUT_ACTION) &&
@@ -139,7 +152,7 @@ const scriptFromWorkflowRevision = (steps: Step[], pullIndex: number) => {
   );
 };
 
-describe("image builds", () => {
+describe("image builds and pulls", () => {
   test("every image build first pulls its base images with retries", async () => {
     const problems: string[] = [];
     let sites = 0;
@@ -162,7 +175,13 @@ describe("image builds", () => {
           problems.push(
             `${label}\n    add an earlier step: bash ${expectedPull(site)}`,
           );
-        } else if (!scriptFromWorkflowRevision(steps, pullIndex)) {
+        } else if (
+          !scriptFromWorkflowRevision({
+            steps,
+            index: pullIndex,
+            script: PULL_SCRIPT,
+          })
+        ) {
           problems.push(
             `${label}\n    run ${PULL_SCRIPT} from a checkout of github.workflow_sha`,
           );
@@ -171,6 +190,41 @@ describe("image builds", () => {
     }
 
     expect(sites).toBeGreaterThanOrEqual(MINIMUM_BUILD_SITES);
+    expect(problems.join("\n")).toBe("");
+  });
+
+  test("every docker pull retries", async () => {
+    const problems: string[] = [];
+    let sites = 0;
+    for (const { source, steps } of await collectStepLists()) {
+      for (const [index, step] of steps.entries()) {
+        const pulls = (step.run ?? "")
+          .split("\n")
+          .filter(
+            (line) =>
+              DOCKER_PULL.test(line) && !line.trimStart().startsWith("#"),
+          );
+        if (pulls.length === 0) {
+          continue;
+        }
+        sites += pulls.length;
+        const label = `.github/${source}: ${step.name ?? "unnamed step"}`;
+        for (const line of pulls.filter((pull) => !WRAPPED_PULL.test(pull))) {
+          problems.push(
+            `${label}: ${line.trim()}\n    wrap it: bash ${RETRY_SCRIPT} docker pull …`,
+          );
+        }
+        if (
+          !scriptFromWorkflowRevision({ steps, index, script: RETRY_SCRIPT })
+        ) {
+          problems.push(
+            `${label}\n    run ${RETRY_SCRIPT} from a checkout of github.workflow_sha`,
+          );
+        }
+      }
+    }
+
+    expect(sites).toBeGreaterThanOrEqual(MINIMUM_PULL_SITES);
     expect(problems.join("\n")).toBe("");
   });
 });

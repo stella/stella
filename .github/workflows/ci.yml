@@ -1955,7 +1955,7 @@ jobs:
       - name: Pull the promoted release's API image
         env:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
-        run: docker pull --quiet "$BASE_IMAGE"
+        run: bash scripts/retry.sh docker pull --quiet "$BASE_IMAGE"
 
       - name: Drop the registry credential
         run: docker logout ghcr.io
