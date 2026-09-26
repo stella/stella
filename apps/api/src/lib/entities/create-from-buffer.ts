@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -44,11 +45,6 @@ import {
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
 import { withTimeout } from "@/api/lib/with-timeout";
-
-const toSafeDb =
-  (scopedDb: ScopedDb): SafeDb =>
-  async <T>(run: (tx: Transaction) => Promise<T>) =>
-    await Result.tryPromise(async () => await scopedDb(run));
 
 const ENTITY_BUFFER_INTENT_TELEMETRY = {
   abandon: "buffer-entity-intent-abandon",
@@ -202,7 +198,7 @@ export const createEntityFromBuffer = async ({
   const entityId = createSafeId<"entity">();
   const entityVersionId = createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
-  const safeDb = toSafeDb(scopedDb);
+  const safeDb = safeDbFromScoped(scopedDb);
 
   // Durably reserve this exact file id before publishing. A hard death after
   // the S3 write can therefore be distinguished from a committed entity and

@@ -10,10 +10,11 @@
  * options here (see `requiredFields`).
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -69,9 +70,14 @@ import type {
   TemplateManifest,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 import {
   collectRawTemplateInputSources,
@@ -111,7 +117,7 @@ type FillRejection<TUsageRejection> =
   | { usageRejection: TUsageRejection };
 
 /**
- * An already-resolved DOCX to fill: the loaded bytes plus display metadata.
+ * An already-resolved DOCX to fill: the scanned file plus display metadata.
  * A stored template also carries its `templateId`, which enables clause-slot
  * resolution and use recording; a built-in / in-memory template (e.g. the
  * report layout) omits it — it has no linked clauses and no row to increment.
@@ -119,7 +125,7 @@ type FillRejection<TUsageRejection> =
 export type FillTemplateSource = {
   name: string;
   fileName: string;
-  buffer: Buffer;
+  file: ScannedFile;
   templateId?: SafeId<"template"> | undefined;
   /** The template's declared document languages. The aiAdapt rewriter
    *  conjugates its per-occurrence rendering in them, so a caller that builds
@@ -128,9 +134,10 @@ export type FillTemplateSource = {
 };
 
 /**
- * Resolve a stored template into a fill source: its row plus the DOCX bytes
- * from S3. Null when no such template exists for the caller, which every
- * boundary reports as not found.
+ * Resolve a stored template into a fill source: its row plus its scanned DOCX
+ * (see `stored-template-file.ts`). A 404 when no such template exists for the
+ * caller; a 422 when its file fails the scan and a 503 when the scanner is
+ * unavailable, so an unscanned file never reaches the fill.
  *
  * The organization predicate is redundant with RLS on `scopedDb` and stays
  * anyway: tenant isolation on a cross-tenant-addressable id should not rest on
@@ -145,26 +152,58 @@ export const loadStoredTemplateSource = async ({
   templateId: SafeId<"template">;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
-}): Promise<FillTemplateSource | null> => {
+}): Promise<
+  Result<FillTemplateSource, HandlerError<404 | 422 | 500 | 503>>
+> => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
       where: {
         id: { eq: templateId },
         organizationId: { eq: organizationId },
       },
-      columns: { name: true, fileName: true, s3Key: true, languages: true },
+      columns: {
+        ...STORED_TEMPLATE_FILE_COLUMNS,
+        name: true,
+        fileName: true,
+        languages: true,
+      },
     }),
   );
   if (!template) {
-    return null;
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
-  const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
-  return {
+  const file = await readStoredTemplateFile({
+    safeDb: safeDbFromScoped(scopedDb),
+    organizationId,
+    row: template,
+    fileName: template.fileName,
+  });
+  if (Result.isError(file)) {
+    return Result.err(file.error);
+  }
+  return Result.ok({
     name: template.name,
     fileName: template.fileName,
-    buffer,
+    file: file.value,
     templateId,
     documentLanguages: template.languages,
+  });
+};
+
+/** A failed stored-template load as the `{ error }` the text results carry. */
+const storedTemplateLoadError = (
+  error: HandlerError<404 | 422 | 500 | 503>,
+): { error: string } => {
+  if (error.status === 404) {
+    return { error: "Template not found." };
+  }
+  return {
+    error:
+      error.hint === undefined
+        ? error.message
+        : `${error.message} ${error.hint}`,
   };
 };
 
@@ -377,16 +416,17 @@ export const describeStoredTemplate = async ({
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 }): Promise<DescribeTemplateResult> => {
-  const loaded = await loadStoredTemplateSource({
+  const load = await loadStoredTemplateSource({
     templateId,
     organizationId,
     scopedDb,
   });
-  if (!loaded) {
-    return { error: "Template not found." };
+  if (Result.isError(load)) {
+    return storedTemplateLoadError(load.error);
   }
+  const loaded = load.value;
 
-  const discovered = await discoverTemplate(loaded.buffer);
+  const discovered = await discoverTemplate(loaded.file);
   const manifest = deriveManifest(discovered);
   const arrays = collectDescribedArrayGroups(discovered.fields);
   // Formula fields are derived at fill time, never user-submitted, so they
@@ -507,7 +547,8 @@ type FillServiceOptions<TRejection = never> = {
 type FilledDocx = {
   templateName: string;
   fileName: string;
-  buffer: Buffer;
+  /** The filled document, derived from the scanned template. */
+  file: ScannedFile;
   unmatchedPlaceholders: string[];
   unusedValues: string[];
   structureErrors: Awaited<ReturnType<typeof fillTemplate>>["structureErrors"];
@@ -558,11 +599,11 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 > => {
   const loaded = source;
   const { templateId } = source;
-  const manifest = await deriveManifestFromDocx(loaded.buffer);
+  const manifest = await deriveManifestFromDocx(loaded.file);
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
-    const discovered = await discoverTemplate(loaded.buffer);
+    const discovered = await discoverTemplate(loaded.file);
     strictInputPlaceholders = discovered.placeholders.map(
       (placeholder) => placeholder.name,
     );
@@ -619,7 +660,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   const slots =
-    templateId !== undefined ? await discoverClauseSlots(loaded.buffer) : [];
+    templateId !== undefined ? await discoverClauseSlots(loaded.file) : [];
   if (templateId !== undefined && slots.length > 0) {
     const patches = await resolveClauseSlots(
       templateId,
@@ -694,7 +735,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   const documentText = await documentTextForAiFields(
-    new Uint8Array(loaded.buffer),
+    loaded.file,
     manifest.fields,
   );
   const drafted = await resolveAiFields({
@@ -717,12 +758,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // the stub stays in `record` so uncovered occurrences still get the
   // plain global substitution below.
   const adapted = await adaptAiFields({
-    buffer: loaded.buffer,
+    file: loaded.file,
     fields: manifest.fields,
     values: record,
     adapt: adaptAiValue,
   });
-  const fillBuffer = adapted.buffer;
+  const fillSource = adapted.file;
   const adaptedPaths = adapted.adaptedPaths;
 
   const optionalDefaults =
@@ -742,7 +783,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   }
 
-  const result = await fillTemplate(fillBuffer, record);
+  const result = await fillTemplate(fillSource, record);
 
   if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
@@ -753,7 +794,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   return {
     templateName: loaded.name,
     fileName: loaded.fileName,
-    buffer: result.buffer,
+    file: result.file,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     // Adapted stubs no longer match a marker (each occurrence was already
     // substituted), so they are not "unused" in any user-meaningful sense.
@@ -813,11 +854,11 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
     organizationId: options.organizationId,
     scopedDb: options.scopedDb,
   });
-  if (!loaded) {
-    return { error: "Template not found." };
+  if (Result.isError(loaded)) {
+    return storedTemplateLoadError(loaded.error);
   }
 
-  return await fillTemplateDocx({ ...options, source: loaded });
+  return await fillTemplateDocx({ ...options, source: loaded.value });
 };
 
 export type FillTemplateResult =
@@ -842,7 +883,7 @@ export type FillTemplateWithDocxResult =
   | {
       templateName: string;
       fileName: string;
-      buffer: Buffer;
+      file: ScannedFile;
       text: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
@@ -861,11 +902,11 @@ type FilledTemplateWithText = Exclude<
 const withExtractedText = async (
   filled: FilledDocx,
 ): Promise<FilledTemplateWithText> => {
-  const { paragraphs } = await extractDocxDocument(filled.buffer);
+  const { paragraphs } = await extractDocxDocument(filled.file);
   return {
     templateName: filled.templateName,
     fileName: filled.fileName,
-    buffer: filled.buffer,
+    file: filled.file,
     text: paragraphs
       .map((paragraph) => paragraph.text)
       .join("\n")
@@ -910,12 +951,12 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
     organizationId: options.organizationId,
     scopedDb: options.scopedDb,
   });
-  if (!loaded) {
-    return { error: "Template not found." };
+  if (Result.isError(loaded)) {
+    return storedTemplateLoadError(loaded.error);
   }
   const filled = await fillTemplateDocxStrict({
     ...options,
-    source: loaded,
+    source: loaded.value,
   });
   if (
     "usageRejection" in filled ||
@@ -947,7 +988,7 @@ export const fillStoredTemplate = async (
     return filled;
   }
 
-  const { paragraphs } = await extractDocxDocument(filled.buffer);
+  const { paragraphs } = await extractDocxDocument(filled.file);
 
   return {
     text: paragraphs

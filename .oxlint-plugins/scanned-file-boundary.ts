@@ -1,6 +1,8 @@
 // Parsers take a `ScannedFile`, and a `ScannedFile` can only be minted by
 // scanning bytes or by reading them back from a `FileKey`. Types enforce the
-// rest; this rule closes the ways around them:
+// rest (the template and style-set parsers, `discoverTemplate` and
+// `fillTemplate` among them, take a `ScannedFile` too); this rule closes the
+// ways around them:
 //
 //   bytes as ScannedFile                   // forged proof of a scan
 //   key as unknown as FileKey              // staging key passed off as stored
@@ -10,6 +12,7 @@
 //   bytes as LocalAlias                    // `type LocalAlias = ScannedFile`
 //   v.parse(fileKeySchema, stagingKey)     // the brand's own schema, reused
 //   mintScannedFile({ ... })               // the mint, reused
+//   storedObject({ key, scanState })       // a row's scan state, trusted
 //   Object.create(ScannedFile.prototype)   // instance without the constructor
 //   import { parseDocx } from "@stll/folio-core/server"  // parser on raw bytes
 //   FolioDocxReviewer.fromBuffer(bytes)    // the same, through the reviewer
@@ -21,8 +24,14 @@
 // its other parses re-read its own serializer output). Tests are exempt.
 //
 // Neither brand needs a cast: `FileKey` is a valibot brand and `ScannedFile` a
-// class with a private constructor, so casts are banned everywhere. The mint
-// and the key schema may only be imported by the modules listed below.
+// class with a private constructor, so casts are banned everywhere. The mint,
+// the key schema, the derived-file wrapper, and the stored-row reader may only
+// be imported by the modules listed below.
+//
+// `derivedScannedFile` owners rewrite a `ScannedFile` and hand the result on
+// (folio re-serialization, template fill, field configuration, AI adaptation
+// and preparation); `storedObject` owners are the modules whose rows record
+// a stored file's scan state (templates, style sets).
 //
 // Casts are matched against local bindings: the canonical names, their import
 // aliases, namespace imports of the owning modules, and same-file type aliases
@@ -82,7 +91,10 @@ const RESTRICTED_IMPORTS = new Map([
     {
       name: "fileKeySchema",
       messageId: "schemaImport",
-      owners: ["apps/api/src/tests/helpers/file-key.ts"],
+      owners: [
+        "apps/api/src/lib/file-scan/stored-object.ts",
+        "apps/api/src/tests/helpers/file-key.ts",
+      ],
     },
   ],
   [
@@ -104,7 +116,13 @@ const RESTRICTED_IMPORTS = new Map([
     {
       name: "derivedScannedFile",
       messageId: "derivedImport",
-      owners: ["apps/api/src/lib/document-translation/docx-review.ts"],
+      owners: [
+        "apps/api/src/lib/document-translation/docx-review.ts",
+        "apps/api/src/lib/docx/adapt-ai-fields.ts",
+        "apps/api/src/lib/docx/patch-template.ts",
+        "apps/api/src/lib/docx/write-field-filters.ts",
+        "apps/api/src/handlers/templates/prepare-template.ts",
+      ],
     },
   ],
   [
@@ -113,6 +131,17 @@ const RESTRICTED_IMPORTS = new Map([
       name: "publisherDocument",
       messageId: "publisherImport",
       owners: ["apps/api/src/handlers/case-law/ingestion/adapters/"],
+    },
+  ],
+  [
+    "@/api/lib/file-scan/stored-object",
+    {
+      name: "storedObject",
+      messageId: "storedObjectImport",
+      owners: [
+        "apps/api/src/lib/templates/stored-template-file.ts",
+        "apps/api/src/lib/style-sets.ts",
+      ],
     },
   ],
 ]);
@@ -134,7 +163,11 @@ export default eslintCompatPlugin({
             "Do not import mintScannedFile; use scanUpload or readStoredFile.",
           derivedImport:
             "Do not import derivedScannedFile; folio output comes back as a " +
-            "ScannedFile from the document-parsers wrappers.",
+            "ScannedFile from the document-parsers wrappers, and template " +
+            "rewrites from the template parsers.",
+          storedObjectImport:
+            "Do not import storedObject; read stored templates with " +
+            "readStoredTemplateFile and style sets with readStyleSetPackage.",
           publisherImport:
             "publisherDocument is for case-law adapters' publisher downloads; " +
             "scan other bytes with scanUpload.",

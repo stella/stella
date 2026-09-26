@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { extractStyleSetBuffer } from "@/api/lib/style-sets";
+import { extractStyleSetFile } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({
@@ -70,8 +70,8 @@ export default createSafeRootHandler(
       );
     }
 
-    const buffer = yield* Result.await(
-      extractStyleSetBuffer(body.styleSource, existing.name),
+    const file = yield* Result.await(
+      extractStyleSetFile(body.styleSource, existing.name),
     );
     const row = yield* Result.await(
       replaceStoredStyleSet({
@@ -79,7 +79,7 @@ export default createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         styleSetId: params.styleSetId,
         replacementName: { type: "preserve" },
-        buffer,
+        file,
         recordAuditEvent,
       }),
     );

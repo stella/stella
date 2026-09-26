@@ -222,24 +222,26 @@ type DerivedManifestFieldsOptions = Pick<
 >;
 
 /**
- * The fields the document declares, read out of its bytes: what a row stored
- * before the manifest cache was written carries instead of a manifest. Null
- * when the template is gone, which the caller reports as not found.
+ * The fields the document declares, read out of its file: what a row stored
+ * before the manifest cache was written carries instead of a manifest. Fails
+ * as the stored template's load does (gone, or its file refused by the scan).
  */
 const derivedManifestFields = async ({
   templateId,
   organizationId,
   scopedDb,
-}: DerivedManifestFieldsOptions): Promise<FieldMeta[] | null> => {
+}: DerivedManifestFieldsOptions): Promise<
+  ResultType<FieldMeta[], HandlerError<404 | 422 | 500 | 503>>
+> => {
   const source = await loadStoredTemplateSource({
     templateId,
     organizationId,
     scopedDb,
   });
-  if (!source) {
-    return null;
+  if (Result.isError(source)) {
+    return Result.err(source.error);
   }
-  return (await deriveManifestFromDocx(source.buffer)).fields;
+  return Result.ok((await deriveManifestFromDocx(source.value.file)).fields);
 };
 
 /**
@@ -262,7 +264,7 @@ export const templateDecideConditionsLogic = async ({
   client,
   usageMetering,
 }: TemplateDecideConditionsProps): Promise<
-  ResultType<TemplateConditionDecisions, HandlerError<404>>
+  ResultType<TemplateConditionDecisions, HandlerError<404 | 422 | 500 | 503>>
 > => {
   // The organization predicate is redundant with RLS on `scopedDb` and stays
   // anyway, for the reason `loadStoredTemplateSource` states: a cross-tenant
@@ -282,13 +284,17 @@ export const templateDecideConditionsLogic = async ({
     );
   }
 
-  const fields =
-    template.manifest?.fields ??
-    (await derivedManifestFields({ templateId, organizationId, scopedDb }));
-  if (fields === null) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Template not found" }),
-    );
+  let fields = template.manifest?.fields;
+  if (fields === undefined) {
+    const derived = await derivedManifestFields({
+      templateId,
+      organizationId,
+      scopedDb,
+    });
+    if (Result.isError(derived)) {
+      return Result.err(derived.error);
+    }
+    fields = derived.value;
   }
 
   // A template with no AI-decided condition asks nothing, so it neither reads

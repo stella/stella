@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 /**
  * Seed templates & clauses (Knowledge section).
@@ -37,7 +38,9 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2476,23 +2479,30 @@ export async function seedTemplates(
 
     // Generate DOCX with body content, then write each field's configuration
     // into the marker that declares it: the document is the template.
-    const bare = await createTemplateDocx(t.name, t.bodyXml);
-    const { buffer: docxBuffer } = await writeFieldFilters(
-      bare,
+    // Stored like any template: scanned before it is written.
+    const bare = await scanUpload({
+      bytes: await createTemplateDocx(t.name, t.bodyXml),
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: t.fileName,
+    });
+    if (Result.isError(bare)) {
+      panic(`Seed template ${t.name} failed the upload scan`, bare.error);
+    }
+    const { file } = await writeFieldFilters(
+      bare.value,
       [...t.fields, ...conditionFields].map((field) => ({
         path: field.path,
         filters: filtersFromFieldConfig(field),
       })),
     );
-    const manifest = await deriveManifestFromDocx(docxBuffer);
+    const manifest = await deriveManifestFromDocx(file);
 
-    const sizeBytes = docxBuffer.length;
+    const sizeBytes = file.bytes.byteLength;
 
     // Upload to S3
-    const s3Key = `${ORG_ID}/templates/${templateId}.docx`;
-    await writeS3ObjectWithRetry({
-      data: new Uint8Array(docxBuffer),
-      key: s3Key,
+    const { object: stored } = await writeScannedObject({
+      file,
+      key: `${ORG_ID}/templates/${templateId}.docx`,
     });
 
     // Insert template
@@ -2506,7 +2516,8 @@ export async function seedTemplates(
             categoryId: scopedSeedId(t.catLabel),
             name: t.name,
             fileName: t.fileName,
-            s3Key,
+            s3Key: stored.key,
+            scanState: stored.scanState,
             sizeBytes,
             manifest,
             fieldCount: t.fields.length,
@@ -2517,10 +2528,9 @@ export async function seedTemplates(
     );
 
     // Insert version v1
-    const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
-    await writeS3ObjectWithRetry({
-      data: new Uint8Array(docxBuffer),
-      key: versionS3Key,
+    const { object: storedVersion } = await writeScannedObject({
+      file,
+      key: `${ORG_ID}/templates/${templateId}/v1.docx`,
     });
 
     await db.transaction(
@@ -2532,7 +2542,8 @@ export async function seedTemplates(
             organizationId: ORG_ID,
             templateId,
             version: 1,
-            s3Key: versionS3Key,
+            s3Key: storedVersion.key,
+            scanState: storedVersion.scanState,
             manifest,
             fieldCount: t.fields.length,
             createdBy: pickAuthor(authorIds, i),

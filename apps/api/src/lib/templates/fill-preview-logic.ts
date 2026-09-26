@@ -62,7 +62,7 @@ export const fillPreviewLogic = async ({
   templateId,
   body: { values: parsed },
 }: FillPreviewLogicProps): Promise<
-  ResultType<FillPreviewResult, HandlerError<400 | 402 | 404 | 500>>
+  ResultType<FillPreviewResult, HandlerError<400 | 402 | 404 | 422 | 500 | 503>>
 > => {
   if (Object.values(parsed).some(containsNull)) {
     return Result.err(
@@ -73,16 +73,15 @@ export const fillPreviewLogic = async ({
     );
   }
 
-  const source = await loadStoredTemplateSource({
+  const loaded = await loadStoredTemplateSource({
     templateId,
     organizationId,
     scopedDb,
   });
-  if (!source) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Template not found" }),
-    );
+  if (Result.isError(loaded)) {
+    return Result.err(loaded.error);
   }
+  const source = loaded.value;
 
   const result = await fillTemplateDocx({
     source,
@@ -128,7 +127,7 @@ export const fillPreviewLogic = async ({
     return Result.err(new HandlerError({ status: 400, message: result.error }));
   }
 
-  const { paragraphs, charCount } = await extractDocxDocument(result.buffer);
+  const { paragraphs, charCount } = await extractDocxDocument(result.file);
 
   return Result.ok({
     paragraphs,
