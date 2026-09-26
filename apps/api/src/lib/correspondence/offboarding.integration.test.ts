@@ -364,8 +364,9 @@ describe("correspondence offboarding", () => {
                 await tx.execute(
                   sql`DROP POLICY ${sql.identifier(policy.name)} ON ${table}`,
                 );
-                for (const statement of statements)
-                  {await tx.execute(sql.raw(statement));}
+                for (const statement of statements) {
+                  await tx.execute(sql.raw(statement));
+                }
               }
             }
           }
@@ -395,7 +396,9 @@ describe("correspondence offboarding", () => {
           tx.rollback();
         });
       } catch (error) {
-        if (error instanceof TransactionRollbackError) {return;}
+        if (error instanceof TransactionRollbackError) {
+          return;
+        }
         throw error;
       }
       throw new Error("Expected integration transaction rollback");
