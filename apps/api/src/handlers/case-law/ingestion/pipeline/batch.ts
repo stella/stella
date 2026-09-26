@@ -6,8 +6,10 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
+  prepareCaseLawIngestionBatch,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import type {
+  AdmittedDecisions,
   BoundedCaseLawIngestionBatch,
   CaseLawBatchFailureReason,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
@@ -57,6 +59,16 @@ const REPORTED_IDENTITY_LENGTH = 256;
 
 const failureRecordsNotWritten = failureSink({
   event: "case_law.ingestion.failure_records_not_written",
+  expected: [],
+});
+
+/**
+ * Grades why a decision was not applied. The failure itself is logged and
+ * captured where it is met; the grade separates a record at fault from a
+ * database condition that a retry clears.
+ */
+const decisionNotApplied = failureSink({
+  event: "case_law.ingestion.decision_failed",
   expected: [],
 });
 
@@ -212,6 +224,8 @@ type BatchTally = {
   failureStreak: number;
   settlements: RecordSettlement[];
   failures: IngestionFailureRow[];
+  /** The records whose failure rows are in `failures`. */
+  ledgerIndexes: number[];
 };
 
 type BatchLogContext = {
@@ -273,7 +287,9 @@ type RejectDecisionOptions = {
 
 /**
  * A decision that raised: logged, and recorded for the ledger unless the
- * database timed out, which holds the batch instead.
+ * database timed out, which holds the batch instead. A transient database
+ * condition is recorded the same way, and settles as transient rather than
+ * as a rejection of the record.
  */
 const rejectDecision = ({
   tally,
@@ -312,6 +328,7 @@ const rejectDecision = ({
     return { type: "timeout", error };
   }
 
+  tally.ledgerIndexes.push(tally.settlements.length);
   tally.failures.push({
     sourceId,
     caseNumber: input.caseNumber,
@@ -323,7 +340,11 @@ const rejectDecision = ({
   tally.skipped++;
   tally.settlements.push({
     type: "unsettled",
-    reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+    reason:
+      gradeFailure(readEvidence(error), decisionNotApplied).grade ===
+      "transient"
+        ? CASE_LAW_BATCH_FAILURE.TRANSIENT
+        : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
@@ -350,8 +371,8 @@ const unsettlePayload = (tally: BatchTally, index: number): void => {
 };
 
 /**
- * Fold the pack's answer into the records that queued payloads. A decision
- * the pack did not answer for has not settled either.
+ * Fold the pack's answer into the records that queued payloads, checking
+ * every queued decision rather than only those the pack answered for.
  */
 const settlePack = ({
   tally,
@@ -381,11 +402,8 @@ const settlePack = ({
   }
   for (const [decisionId, indexes] of queued) {
     const outcome = flushed.value.get(decisionId);
-    const settlement =
-      outcome === undefined
-        ? PROCESS_DECISION_STATUS.RETRYABLE
-        : processResultForCorpusOutcome(outcome, { decisionId }).status;
-    if (settlement === PROCESS_DECISION_STATUS.RETRYABLE) {
+    const settlement = processResultForCorpusOutcome(outcome, { decisionId });
+    if (settlement.status === PROCESS_DECISION_STATUS.RETRYABLE) {
       tally.corpusWriteFailures++;
       for (const index of indexes) {
         unsettlePayload(tally, index);
@@ -409,7 +427,7 @@ type DecisionBatchObservation = {
 };
 
 type ApplyDecisionBatchOptions = {
-  decisions: readonly IngestionResult[];
+  batch: AdmittedDecisions;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;
   observation: DecisionBatchObservation;
@@ -433,7 +451,7 @@ type ApplyDecisionBatchOptions = {
  * what it reached.
  */
 export const applyDecisionBatch = async ({
-  decisions,
+  batch: { decisions },
   sourceId,
   scopedDb,
   observation,
@@ -453,6 +471,7 @@ export const applyDecisionBatch = async ({
     failureStreak,
     settlements: [],
     failures: [],
+    ledgerIndexes: [],
   };
   const pack = openCorpusPackBatch({
     scopedDb,
@@ -535,6 +554,15 @@ export const applyDecisionBatch = async ({
       adapterKey: context.adapterKey,
     });
   }
+  if (failureLedger.type !== "written") {
+    // Not recorded, so not a settled rejection either.
+    for (const index of tally.ledgerIndexes) {
+      tally.settlements[index] = {
+        type: "unsettled",
+        reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
+      };
+    }
+  }
   return {
     inserted: tally.inserted,
     skipped: tally.skipped,
@@ -594,57 +622,55 @@ const underSourceLease = async <T>(
   throw error;
 };
 
-const haltFailure = (halt: DecisionBatchHalt): CaseLawBatchFailureReason => {
-  switch (halt.type) {
+/** A stop that no reached record's own settlement accounts for. */
+const stopFailure = (
+  stop: DecisionBatchHalt | null,
+): CaseLawBatchFailureReason | null => {
+  if (stop === null) {
+    return null;
+  }
+  switch (stop.type) {
     case "retryable":
-      return RETRY_FAILURE[halt.reason];
     case "timeout":
-      return CASE_LAW_BATCH_FAILURE.TIMEOUT;
+    case "failure-streak":
+      // The record that stopped the batch carries the reason.
+      return null;
     case "aborted":
       return CASE_LAW_BATCH_FAILURE.ABORTED;
-    case "failure-streak":
-      return CASE_LAW_BATCH_FAILURE.RECORD_REJECTED;
     case "insert-limit":
       return panic("A prepared batch carries no insert limit");
     default:
-      halt satisfies never;
-      return panic(`Unhandled batch halt: ${String(halt)}`);
+      stop satisfies never;
+      return panic(`Unhandled batch stop: ${String(stop)}`);
   }
 };
 
-const ledgerFailure = (
-  ledger: FailureLedgerWrite,
-): CaseLawBatchFailureReason | null => {
-  switch (ledger.type) {
-    case "written":
-      return null;
-    case "timeout":
-    case "transient":
-    case "rejected":
-      return CASE_LAW_BATCH_FAILURE.FAILURE_WRITE;
-    default:
-      ledger satisfies never;
-      return panic(`Unhandled ledger write: ${String(ledger)}`);
-  }
-};
+type UnsettledRecord = { index: number; reason: CaseLawBatchFailureReason };
 
 /**
  * Why an applied batch cannot be certified, or null once every record has
- * settled. What stopped the batch outranks an unwritten ledger, which
- * outranks the first record that did not settle.
+ * settled. An unwritten ledger comes first, then what stopped the batch,
+ * then any reason a retry can clear; a rejection the ledger holds is named
+ * only when it is all that is wrong.
  */
 const batchFailure = (
   decisions: readonly IngestionResult[],
-  { halt, failureLedger, settlements }: DecisionBatchApplication,
+  { halt, settlements }: DecisionBatchApplication,
 ): CaseLawBatchApplyError | null => {
-  const unsettled = settlements.flatMap((settlement, index) =>
-    settlement.type === "unsettled"
-      ? [{ index, reason: settlement.reason }]
-      : [],
+  const unsettled: UnsettledRecord[] = settlements.flatMap(
+    (settlement, index) =>
+      settlement.type === "unsettled"
+        ? [{ index, reason: settlement.reason }]
+        : [],
   );
+  const reasonWhere = (
+    matches: (reason: CaseLawBatchFailureReason) => boolean,
+  ): CaseLawBatchFailureReason | null =>
+    unsettled.find(({ reason }) => matches(reason))?.reason ?? null;
   const reason =
-    (halt === null ? null : haltFailure(halt)) ??
-    ledgerFailure(failureLedger) ??
+    reasonWhere((found) => found === CASE_LAW_BATCH_FAILURE.FAILURE_WRITE) ??
+    stopFailure(halt) ??
+    reasonWhere((found) => found !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED) ??
     unsettled.at(0)?.reason ??
     null;
   const settled = settlements.length - unsettled.length;
@@ -696,12 +722,12 @@ type CaseLawBatchReceipt = {
  * any payload it queued settled in the pack. Anything short of that is an
  * error naming why; applying the same batch again converges.
  *
- * Order: lease renewal, one source observation for the batch, the records,
- * the pack and the failure ledger, then a last lease renewal before the
- * receipt.
+ * Order: an owned copy of the records admitted again, lease renewal, one
+ * source observation for the batch, the records, the pack and the failure
+ * ledger, then a last lease renewal before the receipt.
  */
 export const applyCaseLawIngestionBatch = async ({
-  batch: { decisions },
+  batch,
   sourceLease,
   scopedDb,
   signal,
@@ -715,11 +741,26 @@ export const applyCaseLawIngestionBatch = async ({
     return Result.err(
       uncertifiedBatch(
         CASE_LAW_BATCH_FAILURE.ABORTED,
-        decisions,
+        batch.decisions,
         "Batch aborted before it was ordered",
       ),
     );
   }
+  // An owned copy, admitted again: the prepared batch holds the caller's
+  // records, which may have changed since they were measured.
+  const owned = prepareCaseLawIngestionBatch({
+    decisions: structuredClone(batch.decisions),
+  });
+  if (Result.isError(owned)) {
+    return Result.err(
+      uncertifiedBatch(
+        CASE_LAW_BATCH_FAILURE.OUT_OF_BOUNDS,
+        batch.decisions,
+        owned.error.message,
+      ),
+    );
+  }
+  const { decisions } = owned.value;
   // Ordered once the records exist and before any write, as a crawl orders
   // a page after its response: the row guards compare this order.
   const ordered = await underSourceLease(decisions, async () => {
@@ -735,7 +776,7 @@ export const applyCaseLawIngestionBatch = async ({
   }
   const observation = { order: ordered.value, observedAt: new Date() };
   const application = await applyDecisionBatch({
-    decisions,
+    batch: owned.value,
     sourceId: source.id,
     scopedDb,
     observation,

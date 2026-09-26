@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 
@@ -35,15 +35,22 @@ export const CASE_LAW_BATCH_FAILURE = {
   /** The source lease was not held when the batch ordered or settled. */
   LEASE_LOST: "lease-lost",
   ABORTED: "aborted",
+  /** The records no longer fit the bounds they were prepared under. */
+  OUT_OF_BOUNDS: "out-of-bounds",
   /** A database operation exceeded its deadline. */
   TIMEOUT: "timeout",
+  /**
+   * A database condition that passes on a retry: a serialization failure, a
+   * deadlock, a lost connection. The record is not at fault.
+   */
+  TRANSIENT: "transient",
   /** A concurrent writer moved a decision; its reconciliation did not settle. */
   CONTENTION: "contention",
   RAW_WRITE: "raw-write",
   PACK_WRITE: "pack-write",
   /** The record could not be applied; its failure is in the ingestion ledger. */
   RECORD_REJECTED: "record-rejected",
-  /** A rejected record's ledger row could not be written. */
+  /** A record's failure could not be written to the ingestion ledger. */
   FAILURE_WRITE: "failure-write",
 } as const;
 
@@ -62,6 +69,10 @@ export class CaseLawBatchApplyError extends TaggedError(
   "CaseLawBatchApplyError",
 )<{
   message: string;
+  /**
+   * `record-rejected` only when every unsettled record is a rejection the
+   * ledger holds; anything retryable, or an unwritten ledger, outranks it.
+   */
   reason: CaseLawBatchFailureReason;
   /** Records that did not settle, including any the batch never reached. */
   unsettled: number;
@@ -69,27 +80,146 @@ export class CaseLawBatchApplyError extends TaggedError(
   records: readonly UnsettledBatchRecord[];
 }> {}
 
-/** Module-private, so a bounded batch is constructible only below. */
-const BOUNDED: unique symbol = Symbol("boundedCaseLawIngestionBatch");
-
-export type BoundedCaseLawIngestionBatch = {
-  readonly [BOUNDED]: true;
-  readonly decisions: readonly IngestionResult[];
-  readonly encodedBytes: number;
-};
-
-/** Text as UTF-8 plus binary payloads at their length. */
-const encodedIngestionResultBytes = (decision: IngestionResult): number => {
-  let binaryBytes = 0;
-  const text = JSON.stringify(decision, (_key, value: unknown) => {
-    if (value instanceof Uint8Array) {
-      binaryBytes += value.byteLength;
-      return undefined;
+/**
+ * Text as UTF-8, a number or boolean as its text, and a binary payload (any
+ * typed-array view, `Buffer` included) at its byte length. Walked rather than
+ * serialized, so a view is never measured through its own `toJSON`.
+ */
+const encodedValueBytes = (value: unknown, ancestors: Set<object>): number => {
+  switch (typeof value) {
+    case "string":
+      return Buffer.byteLength(value, "utf-8");
+    case "number":
+    case "boolean":
+    case "bigint":
+      return String(value).length;
+    case "object":
+      break;
+    default:
+      return 0;
+  }
+  if (value === null) {
+    return 0;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return value.byteLength;
+  }
+  if (ancestors.has(value)) {
+    return panic("An ingestion record contains itself");
+  }
+  ancestors.add(value);
+  let bytes = 0;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      bytes += encodedValueBytes(item, ancestors);
     }
-    return typeof value === "bigint" ? value.toString() : value;
-  });
-  return Buffer.byteLength(text, "utf-8") + binaryBytes;
+  } else {
+    for (const [key, child] of Object.entries(value)) {
+      bytes += Buffer.byteLength(key, "utf-8");
+      bytes += encodedValueBytes(child, ancestors);
+    }
+  }
+  ancestors.delete(value);
+  return bytes;
 };
+
+export const encodedIngestionResultBytes = (
+  decision: IngestionResult,
+): number => encodedValueBytes(decision, new Set());
+
+export const DECISION_ADMISSION = {
+  WITHIN_BOUNDS: "within-bounds",
+  /** One record that alone exceeds the byte bound, admitted by itself. */
+  OVERSIZED_RECORD: "oversized-record",
+} as const;
+
+/** Module-private, so admitted records are constructible only below. */
+const ADMITTED: unique symbol = Symbol("admittedCaseLawDecisions");
+
+/** Records admitted for one application, measured when admitted. */
+export type AdmittedDecisions =
+  | {
+      readonly [ADMITTED]: true;
+      readonly admission: typeof DECISION_ADMISSION.WITHIN_BOUNDS;
+      readonly decisions: readonly IngestionResult[];
+      readonly encodedBytes: number;
+    }
+  | {
+      readonly [ADMITTED]: true;
+      readonly admission: typeof DECISION_ADMISSION.OVERSIZED_RECORD;
+      readonly decisions: readonly [IngestionResult];
+      readonly encodedBytes: number;
+    };
+
+export type BoundedCaseLawIngestionBatch = Extract<
+  AdmittedDecisions,
+  { admission: typeof DECISION_ADMISSION.WITHIN_BOUNDS }
+>;
+
+type AdmittedPart = {
+  /** Position of the part's first record in the input. */
+  start: number;
+  admitted: AdmittedDecisions;
+};
+
+/**
+ * Split records into parts in input order: each within the record and byte
+ * bounds, except a record over the byte bound on its own, which is a part of
+ * its own and says so.
+ */
+const admitParts = (decisions: readonly IngestionResult[]): AdmittedPart[] => {
+  const { records, encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
+  const parts: AdmittedPart[] = [];
+  let run: IngestionResult[] = [];
+  let runStart = 0;
+  let runBytes = 0;
+  const closeRun = (): void => {
+    if (run.length > 0) {
+      parts.push({
+        start: runStart,
+        admitted: {
+          [ADMITTED]: true,
+          admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+          decisions: run,
+          encodedBytes: runBytes,
+        },
+      });
+    }
+    run = [];
+    runBytes = 0;
+  };
+  for (const [index, decision] of decisions.entries()) {
+    const bytes = encodedIngestionResultBytes(decision);
+    if (bytes > encodedBytes) {
+      closeRun();
+      parts.push({
+        start: index,
+        admitted: {
+          [ADMITTED]: true,
+          admission: DECISION_ADMISSION.OVERSIZED_RECORD,
+          decisions: [decision],
+          encodedBytes: bytes,
+        },
+      });
+      continue;
+    }
+    if (run.length >= records || runBytes + bytes > encodedBytes) {
+      closeRun();
+    }
+    if (run.length === 0) {
+      runStart = index;
+    }
+    run.push(decision);
+    runBytes += bytes;
+  }
+  closeRun();
+  return parts;
+};
+
+/** A page's records as admitted parts, applied one after another. */
+export const admitPageDecisions = (
+  decisions: readonly IngestionResult[],
+): AdmittedDecisions[] => admitParts(decisions).map(({ admitted }) => admitted);
 
 const boundsError = (
   reason: CaseLawBatchBoundsReason,
@@ -104,7 +234,8 @@ type PrepareCaseLawIngestionBatchOptions = {
 
 /**
  * Admit records into one batch, or refuse them before any write: at least
- * one record, at most the record bound, and at most the byte bound in all.
+ * one record, at most the record bound, no record over the byte bound, and
+ * at most the byte bound in all.
  */
 export const prepareCaseLawIngestionBatch = ({
   decisions,
@@ -125,59 +256,32 @@ export const prepareCaseLawIngestionBatch = ({
       `A batch holds at most ${records} records, not ${decisions.length}`,
     );
   }
-  let total = 0;
-  for (const [index, decision] of decisions.entries()) {
-    const bytes = encodedIngestionResultBytes(decision);
-    if (bytes > encodedBytes) {
-      return boundsError(
-        CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
-        `Record ${index} encodes to ${bytes} bytes, over the ${encodedBytes}-byte bound`,
-        index,
-      );
-    }
-    total += bytes;
+  const parts = admitParts(decisions);
+  const oversized = parts.find(
+    ({ admitted }) =>
+      admitted.admission === DECISION_ADMISSION.OVERSIZED_RECORD,
+  );
+  if (oversized !== undefined) {
+    return boundsError(
+      CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
+      `Record ${oversized.start} encodes to ${oversized.admitted.encodedBytes} bytes, over the ${encodedBytes}-byte bound`,
+      oversized.start,
+    );
   }
-  if (total > encodedBytes) {
+  const [only, ...rest] = parts;
+  if (
+    only === undefined ||
+    rest.length > 0 ||
+    only.admitted.admission !== DECISION_ADMISSION.WITHIN_BOUNDS
+  ) {
+    const total = parts.reduce(
+      (sum, { admitted }) => sum + admitted.encodedBytes,
+      0,
+    );
     return boundsError(
       CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_BYTES,
       `A batch encodes to at most ${encodedBytes} bytes, not ${total}`,
     );
   }
-  const batch: BoundedCaseLawIngestionBatch = {
-    [BOUNDED]: true,
-    decisions: [...decisions],
-    encodedBytes: total,
-  };
-  return Result.ok(batch);
-};
-
-/**
- * Split a page into runs within the batch bounds, in page order. A record
- * over the byte bound on its own runs alone rather than being refused: a
- * page's records are applied whatever their size.
- */
-export const partitionWithinBatchBounds = (
-  decisions: readonly IngestionResult[],
-): IngestionResult[][] => {
-  const { records, encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
-  const runs: IngestionResult[][] = [];
-  let run: IngestionResult[] = [];
-  let runBytes = 0;
-  for (const decision of decisions) {
-    const bytes = encodedIngestionResultBytes(decision);
-    if (
-      run.length > 0 &&
-      (run.length >= records || runBytes + bytes > encodedBytes)
-    ) {
-      runs.push(run);
-      run = [];
-      runBytes = 0;
-    }
-    run.push(decision);
-    runBytes += bytes;
-  }
-  if (run.length > 0) {
-    runs.push(run);
-  }
-  return runs;
+  return Result.ok(only.admitted);
 };
