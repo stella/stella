@@ -107,6 +107,11 @@ export const pdfSigningSessions = p.pgTable(
     ).$type<PdfSigningCertificateChain | null>(),
     signingTime: timestamptz("signing_time"),
     digestHex: p.varchar("digest_hex", { length: 64 }),
+    /**
+     * Bytes reserved for the signature in phase 1. Part of the hashed byte
+     * range, so phase 2 must reuse it rather than recompute it.
+     */
+    placeholderSize: p.integer("placeholder_size"),
     keyType: p.text("key_type", { enum: PDF_SIGNING_KEY_TYPES }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")

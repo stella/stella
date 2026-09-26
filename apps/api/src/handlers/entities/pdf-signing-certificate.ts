@@ -14,7 +14,9 @@ import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
 import {
   captureSigningDigest,
   PdfSigningCertifiedDocumentError,
+  signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
+import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -140,6 +142,12 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       certificate,
     });
 
+    const timestamped = configuredTimestampAuthorities().length > 0;
+    const placeholderSize = signaturePlaceholderSize({
+      certificate,
+      certificateChain: signerChain,
+      timestamped,
+    });
     const captured = await Result.tryPromise({
       try: async () =>
         await captureSigningDigest({
@@ -148,7 +156,9 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
           certificateChain: signerChain,
           keyType: inspection.keyType,
           location: session.location,
+          placeholderSize,
           reason: session.reason,
+          reserveTimestamp: timestamped,
           signatureAlgorithm: inspection.signatureAlgorithm,
           signingTime,
         }),
@@ -180,7 +190,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
         }),
       );
     }
-    const digestHex = captured.value;
+    const { digestHex } = captured.value;
 
     yield* Result.await(
       session.safeDb(async (tx) => {
@@ -192,6 +202,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
           .set({
             digestHex,
             keyType: inspection.keyType,
+            placeholderSize,
             signerCertificateChain: signerChain.map((der) =>
               Buffer.from(der).toString("base64"),
             ),
