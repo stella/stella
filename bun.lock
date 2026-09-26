@@ -103,6 +103,7 @@
         "@stll/infosoud": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
+        "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
@@ -840,6 +841,20 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/mojibake": {
+      "name": "@stll/mojibake",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "cldr-misc-full": "catalog:",
+        "fast-check": "catalog:",
+      },
+    },
     "packages/money": {
       "name": "@stll/money",
       "version": "0.2.2",
@@ -1225,6 +1240,7 @@
     "better-auth": "1.7.5",
     "better-result": "3.0.1",
     "bun-types": "1.4.2",
+    "cldr-misc-full": "48.2.0",
     "diff": "9.0.0",
     "disposable-email-domains-js": "1.25.0",
     "drizzle-kit": "1.0.0-rc.4",
@@ -2768,6 +2784,8 @@
 
     "@stll/mobile": ["@stll/mobile@workspace:apps/mobile"],
 
+    "@stll/mojibake": ["@stll/mojibake@workspace:packages/mojibake"],
+
     "@stll/money": ["@stll/money@workspace:packages/money"],
 
     "@stll/oxlint-config": ["@stll/oxlint-config@0.7.0", "", { "peerDependencies": { "oxlint": ">=1.80.0 <2", "oxlint-tsgolint": ">=7.0.2001 <8" } }, "sha512-USieO469Q1aZVpE+sB14uaq0V6FxQ/BAdT0yWN9tmGbOy9xYWjQ85Avhp6VmjcyjGmwANeUjY8C++xSd5kXk6Q=="],
@@ -3595,6 +3613,10 @@
     "citty": ["citty@0.2.2", "", {}, "sha512-+6vJA3L98yv+IdfKGZHBNiGW5KHn22e/JwID0Strsz8h4S/csAu/OuICwxrg44k5MRiZHWIo8XXuJgQTriRP4w=="],
 
     "class-variance-authority": ["class-variance-authority@0.7.1", "", { "dependencies": { "clsx": "^2.1.1" } }, "sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg=="],
+
+    "cldr-core": ["cldr-core@48.2.0", "", {}, "sha512-zfmLothncSwfv2jlevoSrgI2VGgH8SDGHXst6jUEotHA8nq9Igeg9jzdJDFtBso9pgJuG89DK16TzrmZDdo2Bg=="],
+
+    "cldr-misc-full": ["cldr-misc-full@48.2.0", "", { "peerDependencies": { "cldr-core": "48.2.0" } }, "sha512-dSc2Tr53dQcUGwsTinamEeoP2YXOhQrIZ+SyeuUrv4MzJOSjT/Q0qkSmX11ZwfcTbYSkIqbrgALQLhAm1yf5fA=="],
 
     "cli-boxes": ["cli-boxes@3.0.0", "", {}, "sha512-/lzGpEWL/8PfI0BmBOPRwp0c/wFNX1RdUML3jK/RcSBA9T8mZDdQpqYBKtCFTOfQbwPqWEOpjqW+Fnayc0969g=="],
 
