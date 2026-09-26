@@ -28,7 +28,7 @@ import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
 import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
 import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { createCorrespondence } from "@/api/lib/correspondence/create";
+import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -41,7 +41,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const migration = readFileSync(
   new URL(
-    "../../../drizzle/20260926190000_correspondence_core/migration.sql",
+    "../../../../drizzle/20260926190000_correspondence_core/migration.sql",
     import.meta.url,
   ),
   "utf-8",

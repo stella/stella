@@ -9,8 +9,8 @@ import { correspondence, workspaceMembers } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { readCorrespondenceProvenance } from "@/api/lib/correspondence/provenance";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const HANDLING_STATE_SCHEMA_VALUES = [

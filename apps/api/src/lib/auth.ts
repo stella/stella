@@ -66,7 +66,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
-import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/correspondence/offboarding";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
@@ -74,6 +73,7 @@ import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
+import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import {
   isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,

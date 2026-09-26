@@ -71,13 +71,13 @@ import {
 } from "@/api/lib/auth-artifacts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
-import { clearCorrespondenceAssignmentsForOffboarding } from "@/api/lib/correspondence/offboarding";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
   consumeInBatches,
   createS3DeletionEffectChunks,
 } from "@/api/lib/destructive-effect-chunks";
+import { clearCorrespondenceAssignmentsForOffboarding } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
