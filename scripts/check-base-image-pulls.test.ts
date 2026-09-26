@@ -5,6 +5,14 @@ import * as v from "valibot";
 const GITHUB_URL = new URL("../.github/", import.meta.url);
 const PULL_SCRIPT = "scripts/pull-base-images.sh";
 const BUILD_PUSH_ACTION = "docker/build-push-action@";
+const CHECKOUT_ACTION = "actions/checkout@";
+/** Checkout ref expressions that are the running workflow's own revision. */
+const WORKFLOW_REVISION_REFS = new Set([
+  "github.workflow_sha",
+  "github.sha",
+  "github.event.repository.default_branch",
+]);
+const EXPRESSION = /^\$\{\{\s*(.+?)\s*\}\}$/u;
 /** A command, not a message that names one (`${lines:-docker build failed}`). */
 const DOCKER_BUILD = /(?:^|[\s;&|(])docker\s+(?:buildx\s+)?build\b/u;
 /**
@@ -98,6 +106,39 @@ const pullsFor = (step: Step, site: BuildSite) => {
   );
 };
 
+/**
+ * A job may build an older source than the workflow's; the pull script must
+ * still come from the workflow's revision, where it is known to exist.
+ */
+const scriptFromWorkflowRevision = (steps: Step[], pullIndex: number) => {
+  const script =
+    commandLine(steps[pullIndex] ?? {})
+      .split(" ")
+      .find((word) => word.endsWith(PULL_SCRIPT)) ?? "";
+  const directory = script
+    .slice(0, -PULL_SCRIPT.length)
+    .replace(/^\.\//u, "")
+    .replace(/\/$/u, "");
+  // An expression (`${{ inputs.tooling-path }}`): a composite action receives
+  // its tooling checkout from the caller.
+  if (directory.endsWith("}}")) {
+    return true;
+  }
+  const checkout = steps
+    .slice(0, pullIndex)
+    .findLast(
+      (step) =>
+        step.uses?.startsWith(CHECKOUT_ACTION) &&
+        String(step.with?.["path"] ?? "") === directory,
+    );
+  const ref = checkout?.with?.["ref"];
+  const expression = EXPRESSION.exec(String(ref ?? ""))?.at(1) ?? "";
+  return (
+    checkout !== undefined &&
+    (ref === undefined || WORKFLOW_REVISION_REFS.has(expression))
+  );
+};
+
 describe("image builds", () => {
   test("every image build first pulls its base images with retries", async () => {
     const problems: string[] = [];
@@ -114,9 +155,16 @@ describe("image builds", () => {
           problems.push(`${label}: name the Dockerfile and the platforms`);
           continue;
         }
-        if (!steps.slice(0, index).some((prior) => pullsFor(prior, site))) {
+        const pullIndex = steps
+          .slice(0, index)
+          .findIndex((prior) => pullsFor(prior, site));
+        if (pullIndex === -1) {
           problems.push(
             `${label}\n    add an earlier step: bash ${expectedPull(site)}`,
+          );
+        } else if (!scriptFromWorkflowRevision(steps, pullIndex)) {
+          problems.push(
+            `${label}\n    run ${PULL_SCRIPT} from a checkout of github.workflow_sha`,
           );
         }
       }

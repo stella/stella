@@ -85,8 +85,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The selected source may predate the pull script, so it runs from the
+      # workflow revision; the copy is removed before it can enter the build
+      # context.
+      - name: Checkout workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/pull-base-images.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       - name: Pull API base images
-        run: bash scripts/pull-base-images.sh --buildx linux/arm64 apps/api/Dockerfile
+        run: |
+          bash .workflow-tooling/scripts/pull-base-images.sh --buildx linux/arm64 apps/api/Dockerfile
+          rm -rf .workflow-tooling
 
       - name: Build and push image
         id: build
