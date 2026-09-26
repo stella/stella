@@ -1627,8 +1627,7 @@ const PerspectivePickerSkeleton = () => {
   );
 };
 
-const PERSPECTIVE_CHIP_CLASS =
-  "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150";
+const PERSPECTIVE_CHIP_CLASS = "min-h-8 rounded-full border px-3 text-xs";
 const PERSPECTIVE_CHIP_CHECKED_CLASS =
   "border-foreground bg-foreground text-background";
 const PERSPECTIVE_CHIP_IDLE_CLASS =
@@ -1835,7 +1834,7 @@ const NotComparedDisclosure = ({
       <span aria-hidden="true">{SUMMARY_SEPARATOR.trim()}</span>
       <button
         aria-expanded={open}
-        className="hover:text-foreground transition-colors"
+        className="hover:text-foreground"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
@@ -1961,7 +1960,7 @@ const PlaybookPicker = ({
                   <button
                     aria-checked={checked}
                     className={cn(
-                      "hover:bg-muted/50 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-start transition-colors duration-150",
+                      "hover:bg-muted/50 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-start",
                       checked && "bg-muted",
                     )}
                     onClick={() => onSelect(checked ? null : playbook.id)}
@@ -2112,7 +2111,7 @@ const ReferenceFilePicker = ({
       {/* The full search (content, previews, every matter) is the picker;
           a document from another matter is the usual case, not the edge. */}
       <button
-        className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-start text-xs transition-colors duration-150 disabled:pointer-events-none disabled:opacity-60"
+        className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-start text-xs disabled:pointer-events-none disabled:opacity-60"
         disabled={atLimit}
         onClick={() => setPickerOpen(true)}
         type="button"
@@ -2149,7 +2148,7 @@ const ReferenceFilePicker = ({
                   aria-label={t("inspector.review.addReference", {
                     name: source.name,
                   })}
-                  className="hover:bg-muted/50 group flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-start transition-colors duration-150"
+                  className="hover:bg-muted/50 group flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-start"
                   onClick={() =>
                     selectReference({
                       ...source,
@@ -3006,7 +3005,7 @@ const ReviewHistorySection = ({
       <div className="flex items-center gap-2">
         <button
           aria-expanded={open}
-          className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs transition-colors"
+          className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs"
           onClick={() => setOpen((current) => !current)}
           type="button"
         >
@@ -3074,7 +3073,7 @@ const ReviewHistoryRow = ({
     <button
       aria-current={shown}
       className={cn(
-        "hover:bg-muted/60 flex min-h-11 w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-start transition-colors",
+        "hover:bg-muted/60 flex min-h-11 w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-start",
         shown && "bg-muted",
       )}
       onClick={onSelect}
@@ -3592,7 +3591,7 @@ const ReviewFlagFilterChips = ({
                 aria-label={label}
                 aria-pressed={active}
                 className={cn(
-                  "text-muted-foreground flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-xs tabular-nums transition-colors",
+                  "text-muted-foreground flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-xs tabular-nums",
                   active
                     ? "border-border bg-muted text-foreground"
                     : "hover:bg-muted/70 border-transparent",
@@ -3747,7 +3746,7 @@ const ReviewResultCard = ({
         aria-controls={detailId}
         aria-expanded={expanded}
         className={cn(
-          "hover:bg-muted/70 w-full rounded-t-lg transition-colors",
+          "hover:bg-muted/70 w-full rounded-t-lg",
           // Negative offset by the list's own padding, so the stuck header
           // sits flush with the panel edge instead of a padding-high gap.
           expanded && "bg-card sticky -top-2 z-10 rounded-b-none shadow-xs",
@@ -3943,7 +3942,7 @@ const WhyDisclosure = ({
       <button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs transition-colors"
+        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs"
         onClick={() => setOpen(!open)}
         type="button"
       >
@@ -4835,7 +4834,7 @@ const ChatSuggestionCard = ({
       data-suggestion-id={change.id}
     >
       <button
-        className="hover:bg-muted/70 w-full transition-colors"
+        className="hover:bg-muted/70 w-full"
         onClick={onFocus}
         type="button"
       >

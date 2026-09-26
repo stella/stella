@@ -525,7 +525,7 @@ const DocxFinalizeButton = ({
   const t = useTranslations();
   return (
     <Button
-      className={cn("transition-colors", isCollaborating && "min-h-11")}
+      className={cn(isCollaborating && "min-h-11")}
       disabled={isCollaborating && !isCollaborationPublishable}
       onClick={() => {
         const finalize = docxActionsRef.current.get(tabId)?.finalize();

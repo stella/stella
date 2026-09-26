@@ -455,16 +455,13 @@ const EntityMetadataContent = ({
     if (handleJustifyClick) {
       return (
         <div
-          className={cn(
-            "rounded-md transition-colors",
-            isActive && "bg-accent",
-          )}
+          className={cn("rounded-md", isActive && "bg-accent")}
           key={field.id + field.propertyId}
         >
           <button
             aria-pressed={isActive}
             className={cn(
-              "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors",
+              "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start",
               !isActive && "hover:bg-accent",
             )}
             onClick={handleJustifyClick}
@@ -661,7 +658,7 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
           // The `before` box widens the hit area without growing the chip;
           // it stays narrower horizontally so it cannot swallow clicks meant
           // for the row's other content.
-          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring text-2xs relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono transition-colors outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
+          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring text-2xs relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
           onClick={() => {
             detached(copy(), "entity-metadata-panel.copy-document-reference");
           }}

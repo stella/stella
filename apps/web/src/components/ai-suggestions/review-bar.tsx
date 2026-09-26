@@ -501,7 +501,7 @@ const ChangeLabel = ({ change, onActivate }: ChangeLabelProps) => {
 
   return (
     <button
-      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start transition-colors outline-none focus-visible:ring-2 @max-[24rem]/review-bar:hidden"
+      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start outline-none focus-visible:ring-2 @max-[24rem]/review-bar:hidden"
       onClick={onActivate}
       title={heading}
       type="button"

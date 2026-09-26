@@ -1036,7 +1036,7 @@ const OrganizerTreePreview = ({
   return (
     <div
       className={cn(
-        "border-border rounded-md border transition-colors",
+        "border-border rounded-md border",
         isRootOver && "border-primary/40 bg-primary/4",
       )}
       ref={containerRef}
@@ -1159,7 +1159,7 @@ const OrganizerFolderNode = ({
     <li>
       <div
         className={cn(
-          "text-foreground flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium transition-colors",
+          "text-foreground flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium",
           isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
         )}
         ref={headerRef}

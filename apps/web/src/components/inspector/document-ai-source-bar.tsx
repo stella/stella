@@ -531,7 +531,7 @@ const useFolioBlockPage = (
 };
 
 const SOURCE_CITATION_CHIP_CLASS =
-  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-2xs font-medium tracking-tight transition-colors";
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-2xs font-medium tracking-tight";
 
 // Unverified: no border, no hover affordance, dashed underline so it
 // reads as plain text the reader must not trust as a source anchor.

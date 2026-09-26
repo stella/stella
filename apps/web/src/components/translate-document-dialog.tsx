@@ -620,7 +620,7 @@ const RadioCard = ({
 }: RadioCardProps) => (
   <label
     aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
   >
     <input
       checked={checked}

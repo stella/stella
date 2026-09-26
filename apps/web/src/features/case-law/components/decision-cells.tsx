@@ -606,7 +606,7 @@ export const HeadnoteProse = ({
           <button
             aria-expanded={showingWhole}
             // The vertical padding extends the hit area without growing the row.
-            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2 transition-colors"
+            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2"
             onClick={onActivate}
             type="button"
           >

@@ -654,7 +654,7 @@ const OrganizerPageCard = ({
       <article
         aria-label={pageLabel}
         className={cn(
-          "bg-card group relative overflow-hidden rounded-lg border p-2 shadow-xs transition",
+          "bg-card group relative overflow-hidden rounded-lg border p-2 shadow-xs",
           isSelected && "border-primary ring-primary/30 ring-2",
         )}
         dir="ltr"

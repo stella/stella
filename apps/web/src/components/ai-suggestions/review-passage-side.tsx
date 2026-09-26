@@ -284,10 +284,7 @@ const PassageParagraph = ({
   return (
     <button
       aria-label={t("inspector.review.showInDocument")}
-      className={cn(
-        PASSAGE_PROSE_CLASS,
-        "hover:bg-muted/60 rounded-sm transition-colors duration-150",
-      )}
+      className={cn(PASSAGE_PROSE_CLASS, "hover:bg-muted/60 rounded-sm")}
       onClick={() => {
         onActivate(paragraph.blockId);
       }}

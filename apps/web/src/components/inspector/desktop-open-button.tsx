@@ -59,7 +59,6 @@ export const DesktopOpenButton = ({
     <Button
       aria-label={label}
       className={cn(
-        "transition-[color,background-color,box-shadow]",
         attentionSequence !== null &&
           "bg-primary/10 text-primary ring-primary/60 animate-[pulse_700ms_ease-in-out_3] ring-2 motion-reduce:animate-none",
       )}
