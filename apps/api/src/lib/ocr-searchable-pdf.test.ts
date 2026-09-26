@@ -3,6 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
+import {
+  createEncryptedPdf,
+  createSignedPdf,
+  readSignatureIntegrity,
+} from "@/api/tests/helpers/signed-pdf";
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer;
 
@@ -135,5 +140,89 @@ describe("searchable PDF derivatives", () => {
     const extracted = derivative.getPages().at(0)?.extractText().text ?? "";
     expect(extracted).toContain("Searchable Latin text");
     expect(extracted).not.toContain("法律");
+  });
+
+  const scanPayload: DocumentOcrPayload = {
+    version: 1,
+    pages: [
+      {
+        width: 1200,
+        height: 1600,
+        lines: [
+          {
+            box: [80, 160, 680, 240],
+            confidence: 0.99,
+            text: "Kupní smlouva podepsaná",
+          },
+        ],
+      },
+    ],
+  };
+
+  test.each([
+    { name: "an approval-signed scan", options: {} },
+    { name: "a certified scan", options: { certify: 2 } },
+    {
+      name: "a scan whose later revision hides its signature",
+      options: { hidingRevision: "remove-signature-field", xrefStream: true },
+    },
+  ] as const)("stores $name unchanged", async ({ options }) => {
+    const source = await createSignedPdf(options);
+    const integrity = await readSignatureIntegrity(source);
+    expect(integrity.length).toBeGreaterThan(0);
+    expect(integrity.every(({ digestMatches }) => digestMatches)).toBe(true);
+
+    const result = await createOcrSearchablePdf(
+      toArrayBuffer(source),
+      scanPayload,
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      return;
+    }
+    expect(result.value).toEqual(source);
+  });
+
+  test.each([
+    { name: "an owner password", userPassword: undefined },
+    { name: "a user password", userPassword: "fixture-user" },
+  ])(
+    "stores a scan encrypted with $name unchanged",
+    async ({ userPassword }) => {
+      const source = await createEncryptedPdf(userPassword);
+
+      const result = await createOcrSearchablePdf(
+        toArrayBuffer(source),
+        scanPayload,
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isErr()) {
+        return;
+      }
+      expect(result.value).toEqual(source);
+    },
+  );
+
+  test("adds the text layer to an unsigned scan of the same shape", async () => {
+    const created = PDF.create();
+    created.addPage({ width: 600, height: 800 });
+    const source = await created.save();
+
+    const result = await createOcrSearchablePdf(
+      toArrayBuffer(source),
+      scanPayload,
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      return;
+    }
+    expect(result.value).not.toEqual(source);
+    const derivative = await PDF.load(result.value);
+    expect(derivative.getPages().at(0)?.extractText().text).toContain(
+      "Kupní smlouva podepsaná",
+    );
   });
 });
