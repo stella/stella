@@ -439,6 +439,79 @@ describe("chat thread messages", () => {
     expect(html).toContain("Before searching, list the sources.");
   });
 
+  const askUserInput = {
+    analysis: "The matter decides the template.",
+    questions: [{ question: "Which matter?", reason: "Picks the template." }],
+  };
+  const askUserMessages = (): ChatUIMessage[] => [
+    {
+      id: "message-user",
+      parts: [{ type: "text", content: "Create the document" }],
+      role: "user",
+    },
+    {
+      id: "message-ask",
+      parts: [
+        {
+          arguments: JSON.stringify(askUserInput),
+          id: "tool-call-ask",
+          input: askUserInput,
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    },
+  ];
+
+  test("offers the form of the user-input card the conversation waits on", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={askUserMessages()}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("<form");
+    expect(html).toContain("Which matter?");
+  });
+
+  // The same supersession withdraws a user-input card: the runtime has no
+  // interrupt left to answer it, and the server rejects a late answer.
+  test("withdraws the user-input form once a later message supersedes the turn", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={[
+          ...askUserMessages(),
+          {
+            id: "message-user-2",
+            parts: [{ type: "text", content: "Use the Acme matter." }],
+            role: "user",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("Which matter?");
+    expect(html).toContain("Use the Acme matter.");
+  });
+
   test("folds process steps across invisible tool results into one disclosure", () => {
     const chatMessages: ChatUIMessage[] = [
       {

@@ -727,16 +727,29 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
   return message.parts.some(isRunningToolPart);
 };
 
+type PersistedChatPart = PersistedChatMessage["parts"][number];
+
+const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+  part.type === "tool-call" && part.state === "approval-requested";
+
+/** A part only the user can answer: an approval request, or a user-input
+ *  card whose questions have fully arrived. */
+const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
+  isApprovalRequestPart(part) ||
+  (part.type === "tool-call" &&
+    part.state === "input-complete" &&
+    Object.hasOwn(USER_INPUT_TOOL_NAMES, part.name));
+
 /**
- * The assistant message whose approval cards the conversation still waits
- * on, or null. Only the latest assistant message can be waited on, and only
- * until a later user message supersedes its turn: the runtime appends that
+ * The latest assistant message, if it holds a part `isAwaitedPart` accepts
+ * and no later user message supersedes its turn: the runtime appends that
  * message before the new stream starts, and the server cancels the awaited
- * approvals when it accepts it, so the cards stop being answerable at the
+ * interaction when it accepts it, so the cards stop being answerable at the
  * same moment their answers stop being accepted.
  */
-export const getCurrentApprovalPendingMessageId = (
+const findAwaitedAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
+  isAwaitedPart: (part: PersistedChatPart) => boolean,
 ): string | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages.at(index);
@@ -746,15 +759,24 @@ export const getCurrentApprovalPendingMessageId = (
     if (message.role !== "assistant") {
       continue;
     }
-    return message.parts.some(
-      (part) =>
-        part.type === "tool-call" && part.state === "approval-requested",
-    )
-      ? message.id
-      : null;
+    return message.parts.some(isAwaitedPart) ? message.id : null;
   }
   return null;
 };
+
+/** The assistant message whose approval cards the conversation still waits
+ *  on, or null. */
+export const getCurrentApprovalPendingMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null =>
+  findAwaitedAssistantMessageId(messages, isApprovalRequestPart);
+
+/** The assistant message the conversation still waits on the user to answer,
+ *  through an approval card or a user-input card, or null. */
+export const getAwaitedAssistantMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null =>
+  findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or

@@ -4,6 +4,7 @@ import {
   consumeDocumentDeletionToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
+  getAwaitedAssistantMessageId,
   getCurrentApprovalPendingMessageId,
   getApprovalToolName,
   getToolApprovalGrant,
@@ -1383,6 +1384,75 @@ describe("getCurrentApprovalPendingMessageId", () => {
         {
           id: "assistant-2",
           parts: [{ type: "text", content: "Two titles." }],
+          role: "assistant",
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  const askUserMessage = (
+    state: "complete" | "input-complete",
+  ): PersistedChatMessage => {
+    const input = { questions: [{ question: "Which matter?" }] };
+    return {
+      id: "assistant-ask",
+      parts: [
+        {
+          arguments: JSON.stringify(input),
+          id: "tool-call-ask",
+          input,
+          name: "ask-user",
+          type: "tool-call",
+          ...(state === "complete"
+            ? { output: { answers: [] }, state }
+            : { state }),
+        },
+      ],
+      role: "assistant",
+    };
+  };
+
+  test("an approval is not the only wait: an open user-input card is one too", () => {
+    const messages = [userMessage("user-1"), askUserMessage("input-complete")];
+
+    expect(getCurrentApprovalPendingMessageId(messages)).toBeNull();
+    expect(getAwaitedAssistantMessageId(messages)).toBe("assistant-ask");
+  });
+
+  test("an answered user-input card is not waited on", () => {
+    expect(
+      getAwaitedAssistantMessageId([
+        userMessage("user-1"),
+        askUserMessage("complete"),
+      ]),
+    ).toBeNull();
+  });
+
+  test("a later user message supersedes an open user-input card", () => {
+    expect(
+      getAwaitedAssistantMessageId([
+        userMessage("user-1"),
+        askUserMessage("input-complete"),
+        userMessage("user-2"),
+      ]),
+    ).toBeNull();
+  });
+
+  test("a client-executed call awaiting no user is not waited on", () => {
+    expect(
+      getAwaitedAssistantMessageId([
+        {
+          id: "assistant-read",
+          parts: [
+            {
+              arguments: "{}",
+              id: "tool-call-read",
+              input: {},
+              name: "read_document",
+              state: "input-complete",
+              type: "tool-call",
+            },
+          ],
           role: "assistant",
         },
       ]),

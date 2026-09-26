@@ -30,6 +30,13 @@ type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
 
 type AskUserCardProps = {
   part: AskUserPart;
+  /**
+   * Whether the conversation still waits on this card. False once a later
+   * user message superseded the turn: the server stores the call as an error
+   * without its questions when it accepts that message, so an unanswered card
+   * shows only its heading, live as after a reload, and offers no form.
+   */
+  isAwaitingUser: boolean;
   onSubmit: (toolCallId: string, output: AskUserOutput) => void;
   /**
    * Optional re-run callback. When provided, an answered card
@@ -136,6 +143,7 @@ const renderAnonPills = (
 
 export const AskUserCard = ({
   part,
+  isAwaitingUser,
   onSubmit,
   onEditAndRerun,
   onEditingChange,
@@ -214,6 +222,7 @@ export const AskUserCard = ({
   const canRerun = onEditAndRerun !== undefined;
   const isAnswered = answeredOutput !== null || submitted;
   const isDone = isAnswered && !isEditing;
+  const isWithdrawn = !isAnswered && !isAwaitingUser;
 
   // Mirror local edit-mode to the parent: a reopened answered card is a live
   // clarification again, so the parent can suppress competing affordances.
@@ -327,7 +336,7 @@ export const AskUserCard = ({
     [handleRerun, handleSubmit, isEditing],
   );
 
-  if (!input) {
+  if (!input || isWithdrawn) {
     return (
       <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
         <div className="flex items-center gap-2 px-3 py-2">

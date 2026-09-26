@@ -64,6 +64,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
@@ -136,6 +137,10 @@ export const ChatThreadMessages = ({
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
   const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
+  const awaitedAssistantMessageId = useMemo(
+    () => getAwaitedAssistantMessageId(messages),
+    [messages],
+  );
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -263,8 +268,8 @@ export const ChatThreadMessages = ({
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
-              approvalPendingMessageId={approvalPendingMessageId}
               assistantTextDensity={assistantTextDensity}
+              isAwaitingUser={awaitedAssistantMessageId === message.id}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -1286,7 +1291,6 @@ const QueuedUserMessages = ({
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
   | "activeFileName"
-  | "approvalPendingMessageId"
   | "onAskUserEditAndRerun"
   | "onAskUserEditingChange"
   | "onAskUserSubmit"
@@ -1298,6 +1302,9 @@ type AssistantMessagePartsProps = Pick<
 > & {
   activeOrganizationId: string;
   assistantTextDensity: "compact" | "default";
+  /** Whether the conversation still waits on this message's cards; see
+   *  `getAwaitedAssistantMessageId`. */
+  isAwaitingUser: boolean;
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: ChatUIMessage;
@@ -1469,8 +1476,8 @@ const toAssistantPartRenderGroups = (
 const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
-  approvalPendingMessageId,
   assistantTextDensity,
+  isAwaitingUser,
   isGenerating,
   isLatestAssistantMessage,
   message,
@@ -1490,7 +1497,6 @@ const AssistantMessageParts = ({
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
-  const isAwaitingUser = approvalPendingMessageId === message.id;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
@@ -1556,6 +1562,7 @@ const AssistantMessageParts = ({
       return (
         <AskUserCard
           discardsDownstream={!isLatestAssistantMessage}
+          isAwaitingUser={isAwaitingUser}
           key={part.id}
           {...(onAskUserEditAndRerun && {
             onEditAndRerun: (toolCallId, output) => {

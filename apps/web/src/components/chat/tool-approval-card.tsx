@@ -407,6 +407,9 @@ type ToolApprovalCardProps = {
    * user message superseded the turn (the server cancels the approval when it
    * accepts that message) or when the card belongs to an earlier turn; the
    * request then shows without controls and is never answered automatically.
+   * Independent of `isTurnActive`: a card is awaited while its request
+   * streams in and while its answer is being submitted, and neither once the
+   * turn ended.
    */
   isAwaitingUser: boolean;
   /** Whether the turn this card belongs to is still running. */
