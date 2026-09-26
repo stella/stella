@@ -19,6 +19,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { zstdDecompressToString } from "@/api/lib/compression";
 import { isRecord } from "@/api/lib/type-guards";
+import { coverageMatcher } from "@/api/scripts/citation-probe-coverage";
 
 const JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
@@ -372,26 +373,7 @@ const probeKey = async (
     };
   }
   const extracted = extractCitations([{ index: 0, text }]);
-  // Both sides normalize (prefix stripped, whitespace collapsed) before
-  // the containment check: the extractor dedups sp. zn. and č. j.
-  // spellings of one case number to a single entry, and the surviving
-  // prefix must not decide coverage.
-  const stripCitePrefix = (value: string): string =>
-    value
-      .replace(
-        /^(?:sp\.\s{0,3}zn\.:?|sen\.\s{0,3}zn\.:?|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}/iu,
-        "",
-      )
-      .replaceAll(/\s+/gu, " ")
-      .toLowerCase()
-      .trim();
-  const extractedKeys = extracted.map((c) => stripCitePrefix(c.citationText));
-  const covered = (candidate: string): boolean => {
-    const candidateKey = stripCitePrefix(candidate);
-    return extractedKeys.some(
-      (have) => candidateKey.includes(have) || have.includes(candidateKey),
-    );
-  };
+  const covered = coverageMatcher(extracted.map((c) => c.citationText));
   const residuals = new Set<string>();
   for (const detector of DETECTORS) {
     detector.lastIndex = 0;
