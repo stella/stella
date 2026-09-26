@@ -444,7 +444,7 @@ export const finishRefreshedRowTx = async (
   const {
     observedAt,
     shape: { incomingCarriesDocument },
-    plan: { citationRows },
+    plan: { citations },
   } = write;
   if (
     replacedState !== null &&
@@ -468,7 +468,7 @@ export const finishRefreshedRowTx = async (
   await lockCitationGraph(tx);
   await writeDecisionCitations(tx, {
     decisionId: existing.id,
-    rows: citationRows,
+    citations,
     observedAt,
     stored: true,
   });

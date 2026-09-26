@@ -74,6 +74,10 @@
  * ids and decision ids are both uuidv7, so walking citations in citing-
  * decision order reads the decisions table in insertion order rather than at
  * random.
+ *
+ * `citations/reference-resolution.ts` states the same doctrine as a function
+ * of one reference's holders; `reference-resolution.db.test.ts` holds the two
+ * to one outcome, rule and target. A rule changed here changes there.
  */
 
 import { panic } from "better-result";
@@ -142,20 +146,31 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
  * the key. Both are matched by concatenation rather than a pattern built from
  * the column, so the sheet travels as a bind parameter; the column's CHECK
  * keeps it to digits, which carry no `LIKE` metacharacter.
+ *
+ * `holder` is the candidate decision's alias and `sheetNumber` the printed
+ * sheet.
  */
-const sheetMatchSql = sql`
-  b.cited_sheet_number IS NOT NULL
+export const holderAnswersSheetSql = (
+  holder: SQL,
+  sheetNumber: SQL,
+): SQL => sql`
+  ${sheetNumber} IS NOT NULL
   AND (
-        k.ecli LIKE ('%.' || b.cited_sheet_number)
+        ${holder}.ecli LIKE ('%.' || ${sheetNumber})
      OR EXISTS (
           SELECT 1
           FROM ${caseLawDecisionIdentifiers} sheet_identifier
-          WHERE sheet_identifier.decision_id = k.id
+          WHERE sheet_identifier.decision_id = ${holder}.id
             AND sheet_identifier.type = 'case-number'
             AND sheet_identifier.normalized_value
-                  LIKE ('%-' || b.cited_sheet_number)
+                  LIKE ('%-' || ${sheetNumber})
         )
       )`;
+
+const sheetMatchSql = holderAnswersSheetSql(
+  sql.raw("k"),
+  sql.raw("b.cited_sheet_number"),
+);
 
 /**
  * The hint vocabulary as a CTE, one row per family: which stored

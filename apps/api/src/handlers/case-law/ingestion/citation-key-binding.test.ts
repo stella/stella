@@ -55,7 +55,7 @@ test("the value that reaches a citation_key column comes from one helper", () =>
   // A module added to this list is a module that decided for itself what an
   // uncanonicalizable text stores, which is the decision that drifted.
   expect(modulesCalling("citationKeyOf(")).toEqual([
-    "handlers/case-law/ingestion/pipeline/citations.ts",
+    "handlers/case-law/citations/decision-references.ts",
     "handlers/case-law/ingestion/pipeline/decision-plan.ts",
     "scripts/backfill-citation-keys.ts",
   ]);
