@@ -41,8 +41,8 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 const isEntityRequest = (url: URL): boolean =>
   url.pathname.startsWith("/rpo/v1/entity/");
 
-const errorOf = async (
-  pending: Promise<Result<unknown, RpoClientError>>,
+const errorOf = async <T>(
+  pending: Promise<Result<T, RpoClientError>>,
 ): Promise<RpoClientError | null> => {
   const result = await pending;
   return result.isErr() ? result.error : null;
@@ -85,10 +85,10 @@ describe("lookupByIco", () => {
   test("asks for historical data in the historical view", async () => {
     const search = await readFixture<unknown>("search-by-ico-eset.json");
     const entity = await readFixture<unknown>("entity-eset-historical.json");
-    let entityUrl: URL | null = null;
+    const entityUrls: URL[] = [];
     restore = installFetchStub(async (url) => {
       if (isEntityRequest(url)) {
-        entityUrl = url;
+        entityUrls.push(url);
         return jsonResponse(entity);
       }
       return jsonResponse(search);
@@ -98,7 +98,9 @@ describe("lookupByIco", () => {
       await lookupByIco("31333532", { view: "historical" })
     ).unwrap();
 
-    expect(entityUrl?.searchParams.get("showHistoricalData")).toBe("true");
+    expect(
+      entityUrls.map((url) => url.searchParams.get("showHistoricalData")),
+    ).toEqual(["true"]);
     expect(
       result?.statutoryBodies.some(({ validTo }) => validTo !== null),
     ).toBe(true);

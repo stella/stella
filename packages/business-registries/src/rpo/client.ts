@@ -73,15 +73,11 @@ const isRpoEntity = (value: unknown): value is RpoRawEntity =>
 
 // The guards check the record structure; a payload whose leaf fields break the
 // parser still surfaces as an upstream error, never an internal one.
-const parseUpstream = <T>(parse: () => T): Result<T, RpoAPIError> =>
-  Result.try({
-    try: parse,
-    catch: (cause) =>
-      new RpoAPIError({
-        message: "RPO 200: unexpected JSON payload shape",
-        httpStatus: 200,
-        cause,
-      }),
+const unexpectedPayload = (cause: unknown): RpoAPIError =>
+  new RpoAPIError({
+    message: "RPO 200: unexpected JSON payload shape",
+    httpStatus: 200,
+    cause,
   });
 
 // The shared request and body helpers reject with the adapter errors built
@@ -277,17 +273,19 @@ export const lookupByIco = async (
   // The current view drops closed records, and a terminated entity has only
   // closed names and seats. The search row always carries the full name and
   // seat history, so it supplies both in that view.
-  const parsed = parseUpstream(() =>
-    parseEntity(
-      current
-        ? {
-            ...record,
-            fullNames: hit.fullNames ?? record.fullNames ?? [],
-            addresses: hit.addresses ?? record.addresses ?? [],
-          }
-        : record,
-    ),
-  );
+  const parsed = Result.try({
+    try: () =>
+      parseEntity(
+        current
+          ? {
+              ...record,
+              fullNames: hit.fullNames ?? record.fullNames ?? [],
+              addresses: hit.addresses ?? record.addresses ?? [],
+            }
+          : record,
+      ),
+    catch: unexpectedPayload,
+  });
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
@@ -345,7 +343,10 @@ export const searchByName = async (
   if (hits.isErr()) {
     return Result.err(hits.error);
   }
-  const parsed = parseUpstream(() => hits.value.map(parseSearchHit));
+  const parsed = Result.try({
+    try: () => hits.value.map(parseSearchHit),
+    catch: unexpectedPayload,
+  });
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }

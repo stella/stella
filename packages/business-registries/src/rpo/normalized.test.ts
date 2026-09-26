@@ -21,10 +21,8 @@ describe("RPO normalized projection", () => {
     }
     const normalized = toNormalizedEntity(entity);
 
-    expect(normalized.registryId).toEqual({
-      scheme: "SK-ICO",
-      value: "31333532",
-    });
+    expect(normalized.registryId.scheme).toBe("SK-ICO");
+    expect(String(normalized.registryId.value)).toBe("31333532");
     expect(normalized.registryRecord).toEqual({
       availability: "available",
       value: {
@@ -84,7 +82,7 @@ describe("RPO normalized projection", () => {
       status: { type: "terminated", terminatedAt: "1992-12-31" },
     });
 
-    expect(result.registryId.value).toBe("11111111");
+    expect(String(result.registryId.value)).toBe("11111111");
     expect(result.status).toEqual({
       availability: "available",
       value: { type: "dissolved" },
