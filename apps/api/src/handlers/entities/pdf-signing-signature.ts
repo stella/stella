@@ -227,89 +227,113 @@ const config = {
   params: permissiveRouteSchema({ keys: ["sessionId"] }),
 } satisfies TokenHandlerConfig;
 
-const submitPdfSigningSignature = createSafeTokenHandler(
-  config,
-  async function* ({ body, params, request, server }) {
-    const credentials = yield* Result.await(
-      authorizePdfSigningFinalizeCredentials({
-        sessionId: params.sessionId,
-        sessionToken: body?.sessionToken,
-      }),
-    );
-    if (credentials.kind === "finalized") {
-      return Result.ok({
-        versionId: credentials.versionId,
-        versionNumber: credentials.versionNumber,
+/**
+ * The two collaborators that reach outside the handler: authorizing the
+ * token and running phase 2. Injectable so a test can drive the retry
+ * contract against a real session row without a document store.
+ */
+export type SubmitPdfSigningSignatureDependencies = {
+  authorize: typeof authorizePdfSigningFinalizeCredentials;
+  finalize: typeof finalizeSignature;
+};
+
+const DEFAULT_DEPENDENCIES: SubmitPdfSigningSignatureDependencies = {
+  authorize: authorizePdfSigningFinalizeCredentials,
+  finalize: finalizeSignature,
+};
+
+export const createSubmitPdfSigningSignatureHandler = ({
+  authorize,
+  finalize,
+}: SubmitPdfSigningSignatureDependencies = DEFAULT_DEPENDENCIES) =>
+  createSafeTokenHandler(
+    config,
+    async function* ({ body, params, request, server }) {
+      const credentials = yield* Result.await(
+        authorize({
+          sessionId: params.sessionId,
+          sessionToken: body?.sessionToken,
+        }),
+      );
+      if (credentials.kind === "finalized") {
+        return Result.ok({
+          versionId: credentials.versionId,
+          versionNumber: credentials.versionNumber,
+        });
+      }
+      const { session } = credentials;
+
+      const payload = validatePostAuth(signaturePayloadSchema, body);
+      if (!payload.ok) {
+        return Result.err(
+          new HandlerError({ status: 400, message: payload.message }),
+        );
+      }
+      const signature = decodeBase64(payload.value.signature);
+      if (signature === null) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "The signature could not be read.",
+          }),
+        );
+      }
+
+      const prepared = preparedState(session);
+      if (prepared === null) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            code: "pdf_signing_certificate_missing",
+            message: "Post the signing certificate before the signature.",
+          }),
+        );
+      }
+
+      const context: SessionContext = {
+        recordAuditEvent: createAuditRecorder({
+          organizationId: session.organizationId,
+          workspaceId: session.workspaceId,
+          userId: session.userId,
+          request,
+          server,
+        }),
+        session,
+      };
+
+      yield* Result.await(acceptSignature(context, prepared, signature));
+      const attempt = yield* Result.await(claimAttempt(context));
+
+      const finalized = await finalize({
+        ...context,
+        prepared,
+        signature,
       });
-    }
-    const { session } = credentials;
+      if (Result.isOk(finalized)) {
+        return Result.ok(finalized.value);
+      }
 
-    const payload = validatePostAuth(signaturePayloadSchema, body);
-    if (!payload.ok) {
-      return Result.err(
-        new HandlerError({ status: 400, message: payload.message }),
-      );
-    }
-    const signature = decodeBase64(payload.value.signature);
-    if (signature === null) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "The signature could not be read.",
-        }),
-      );
-    }
+      const failure = finalized.error;
+      if (failure.kind === "retryable" && attempt < MAX_FINALIZE_ATTEMPTS) {
+        yield* Result.await(
+          session.safeDb(
+            async (tx) =>
+              await releaseFinalizeAttempt({
+                sessionId: session.sessionId,
+                tx,
+              }),
+          ),
+        );
+        return Result.err(failure.error);
+      }
+      // A terminal failure, or the last attempt failing: either way no retry
+      // is left, so the exchange closes rather than waiting out its TTL.
+      return failure.kind === "terminal"
+        ? await closeAndFail(context, failure.closeReason, failure.error)
+        : await closeAndFail(context, "signing_failed", attemptsExhausted());
+    },
+  );
 
-    const prepared = preparedState(session);
-    if (prepared === null) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          code: "pdf_signing_certificate_missing",
-          message: "Post the signing certificate before the signature.",
-        }),
-      );
-    }
-
-    const context: SessionContext = {
-      recordAuditEvent: createAuditRecorder({
-        organizationId: session.organizationId,
-        workspaceId: session.workspaceId,
-        userId: session.userId,
-        request,
-        server,
-      }),
-      session,
-    };
-
-    yield* Result.await(acceptSignature(context, prepared, signature));
-    const attempt = yield* Result.await(claimAttempt(context));
-
-    const finalized = await finalizeSignature({
-      ...context,
-      prepared,
-      signature,
-    });
-    if (Result.isOk(finalized)) {
-      return Result.ok(finalized.value);
-    }
-
-    const failure = finalized.error;
-    if (failure.kind === "retryable" && attempt < MAX_FINALIZE_ATTEMPTS) {
-      yield* Result.await(
-        session.safeDb(
-          async (tx) =>
-            await releaseFinalizeAttempt({ sessionId: session.sessionId, tx }),
-        ),
-      );
-      return Result.err(failure.error);
-    }
-    // A terminal failure, or the last attempt failing: either way no retry
-    // is left, so the exchange closes rather than waiting out its TTL.
-    return failure.kind === "terminal"
-      ? await closeAndFail(context, failure.closeReason, failure.error)
-      : await closeAndFail(context, "signing_failed", attemptsExhausted());
-  },
-);
+const submitPdfSigningSignature = createSubmitPdfSigningSignatureHandler();
 
 export default submitPdfSigningSignature;
