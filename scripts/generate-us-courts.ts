@@ -189,6 +189,12 @@ const HISTORICAL_REGIONS = new Set<string>(
 );
 const SCOPE_REGIONS = new Set<string>(US_SCOPE_REGIONS);
 
+const isUsCourtRegion = (region: string): region is UsCourtRegion =>
+  STATE_REGIONS.has(region) ||
+  TERRITORY_REGIONS.has(region) ||
+  HISTORICAL_REGIONS.has(region) ||
+  SCOPE_REGIONS.has(region);
+
 /** A place a court sits in, as opposed to a reach. */
 const isPlace = (region: string): boolean => !SCOPE_REGIONS.has(region);
 
@@ -197,7 +203,10 @@ const isPlace = (region: string): boolean => !SCOPE_REGIONS.has(region);
  * override's evidence. A historical territory is matched only by a name that
  * says territory or zone, never by the bare state or country name.
  */
-const REGION_NAMES: ReadonlyMap<string, readonly string[]> = new Map([
+const REGION_NAMES: ReadonlyMap<string, readonly string[]> = new Map<
+  string,
+  readonly string[]
+>([
   ...Object.entries(US_STATE_REGIONS).map(
     ([code, name]) => [code, [name]] as const,
   ),
@@ -251,6 +260,10 @@ const regionAllowed = (
     case "federal":
     case "military":
       return REGION_NAMES.has(region) || SCOPE_REGIONS.has(region);
+    default: {
+      system satisfies never;
+      return panic(`Unhandled court system: ${String(system)}`);
+    }
   }
 };
 
@@ -401,7 +414,16 @@ const renderTsv = (
 
 const parseCourtListenerProjection = (text: string): SourceCourt[] =>
   parseTsv(text, COURTLISTENER_COLUMNS, COURTLISTENER_FILE).map(
-    (row) => row as SourceCourt,
+    (row): SourceCourt => ({
+      id: row["id"] ?? "",
+      jurisdiction: row["jurisdiction"] ?? "",
+      full_name: row["full_name"] ?? "",
+      short_name: row["short_name"] ?? "",
+      in_use: row["in_use"] ?? "",
+      start_date: row["start_date"] ?? "",
+      end_date: row["end_date"] ?? "",
+      parent_court_id: row["parent_court_id"] ?? "",
+    }),
   );
 
 const parseCourtsDbProjection = (text: string): ReadonlyMap<string, string> =>
@@ -869,7 +891,9 @@ const acceptedEntry = (
     classification,
     system,
     // Every region the resolver keeps passed `regionAllowed`.
-    region: region as UsCourtRegion,
+    region: isUsCourtRegion(region)
+      ? region
+      : panic(`${source.id}: region ${JSON.stringify(region)} is not a region`),
     tier,
     startDate,
     endDate,
