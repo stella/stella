@@ -38,15 +38,45 @@ const PACKAGE_JSON = path.join(ROOT, "package.json");
 const STATE_FILE = path.join(ROOT, ".cache", "tanstack-drift.json");
 const REGISTRY = "https://registry.npmjs.org";
 
-/** The suites whose results the report gives, run from apps/api. */
-const SUITES = [
-  "src/lib/tanstack-ai-provider-wire.test.ts",
-  "src/handlers/chat/provider-wire-replay.integration.test.ts",
-  "src/handlers/chat/approval-settlement.integration.test.ts",
-  "src/handlers/chat/live-reload-parity.integration.test.ts",
-  "src/handlers/chat/recorded-conversations.integration.test.ts",
-  "src/handlers/chat/tool-call-end-arguments.test.ts",
-] as const;
+type Suite = { command: readonly string[]; directory: string; file: string };
+
+const apiSuite = (file: string): Suite => ({
+  command: ["bun", "run", "test", file],
+  directory: "apps/api",
+  file,
+});
+
+/**
+ * The suites whose results the report gives: the API's provider-wire and chat
+ * oracle suites, and the web half of the recorded-conversation oracle, the one
+ * that loads @tanstack/ai-client and @tanstack/ai-react.
+ */
+const SUITES: readonly Suite[] = [
+  apiSuite("src/lib/tanstack-ai-provider-wire.test.ts"),
+  apiSuite("src/handlers/chat/provider-wire-replay.integration.test.ts"),
+  apiSuite("src/handlers/chat/approval-settlement.integration.test.ts"),
+  apiSuite("src/handlers/chat/live-reload-parity.integration.test.ts"),
+  apiSuite("src/handlers/chat/recorded-conversations.integration.test.ts"),
+  apiSuite("src/handlers/chat/tool-call-end-arguments.test.ts"),
+  {
+    command: [
+      "bun",
+      "test",
+      "--isolate",
+      "src/components/chat/recorded-conversations.dom.test.tsx",
+    ],
+    directory: "apps/web",
+    file: "src/components/chat/recorded-conversations.dom.test.tsx",
+  },
+];
+
+/**
+ * The install step's outcome, from the workflow. A latest package set that
+ * does not install is drift too; the report says so instead of running the
+ * suites against whatever the failed install left behind.
+ */
+const INSTALL_OUTCOME_ENV = "TANSTACK_DRIFT_INSTALL_OUTCOME";
+const INSTALL_SUCCEEDED = "success";
 
 type PatchVerdict = "applies" | "upstream" | "conflicts" | "unknown";
 
@@ -117,7 +147,22 @@ const publishedOf = async (
     : panic(`No tarball for ${name}`);
 };
 
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/u;
+/** The highest version of `name` published on the registry that `range` admits. */
+const highestSatisfying = async (
+  name: string,
+  range: string,
+): Promise<string> => {
+  const response = await fetch(`${REGISTRY}/${name}`);
+  const body: unknown = await response.json();
+  const versions = isRecord(body) ? body["versions"] : undefined;
+  if (!isRecord(versions)) {
+    return panic(`No published versions for ${name}`);
+  }
+  const admitted = Object.keys(versions)
+    .filter((version) => Bun.semver.satisfies(version, range))
+    .toSorted(Bun.semver.order);
+  return admitted.at(-1) ?? panic(`No ${name} version satisfies ${range}`);
+};
 
 const run = (command: string[], cwd: string) => {
   const result = Bun.spawnSync(command, {
@@ -192,12 +237,15 @@ const writePackage = async (): Promise<void> => {
     }
   }
   // A patched package outside the catalog (a transitive one) is installed at
-  // the version its latest dependents pin, when they pin one exactly.
-  const installedVersionOf = (name: string): string | undefined => {
+  // the highest version its latest dependents' spec admits, exact or a range,
+  // which is what `bun install` resolves on a fresh lockfile.
+  const installedVersionOf = async (
+    name: string,
+  ): Promise<string | undefined> => {
     for (const release of published.values()) {
       const spec = release.dependencies[name];
-      if (spec !== undefined && EXACT_VERSION.test(spec)) {
-        return spec;
+      if (spec !== undefined) {
+        return highestSatisfying(name, spec);
       }
     }
     return published.get(name)?.version;
@@ -212,7 +260,7 @@ const writePackage = async (): Promise<void> => {
       patched[key] = file;
       continue;
     }
-    const target = installedVersionOf(name);
+    const target = await installedVersionOf(name);
     const latest = await publishedOf(name, target);
     const verdict = await verdictFor(latest.tarball, file);
     patches.push({
@@ -261,27 +309,31 @@ const report = (): void => {
         `| ${path.basename(file)} | ${pinned} | ${latest} | ${verdict} |`,
     ),
     "",
-    "| suite | result |",
-    "| --- | --- |",
   ];
-  for (const suite of SUITES) {
-    const { ok, output } = run(
-      ["bun", "run", "test", suite],
-      path.join(ROOT, "apps/api"),
-    );
-    const counts = [...output.matchAll(/^ (\d+) (pass|fail)$/gmu)]
-      .map(([, count = "", kind = ""]) => `${count} ${kind}`)
-      .join(", ");
-    lines.push(`| ${suite} | ${ok ? "pass" : "FAIL"} (${counts}) |`);
-    if (!ok) {
-      const failures = output
-        .split("\n")
-        .filter(
-          (line) => line.startsWith("(fail)") || line.includes('"oracle"'),
-        )
-        .slice(0, 20);
-      console.log(`--- ${suite}\n${failures.join("\n")}`);
+  const installOutcome = process.env[INSTALL_OUTCOME_ENV] ?? INSTALL_SUCCEEDED;
+  if (installOutcome === INSTALL_SUCCEEDED) {
+    lines.push("| suite | result |", "| --- | --- |");
+    for (const { command, directory, file } of SUITES) {
+      const { ok, output } = run([...command], path.join(ROOT, directory));
+      const counts = [...output.matchAll(/^ (\d+) (pass|fail)$/gmu)]
+        .map(([, count = "", kind = ""]) => `${count} ${kind}`)
+        .join(", ");
+      const suite = `${directory}/${file}`;
+      lines.push(`| ${suite} | ${ok ? "pass" : "FAIL"} (${counts}) |`);
+      if (!ok) {
+        const failures = output
+          .split("\n")
+          .filter(
+            (line) => line.startsWith("(fail)") || line.includes('"oracle"'),
+          )
+          .slice(0, 20);
+        console.log(`--- ${suite}\n${failures.join("\n")}`);
+      }
     }
+  } else {
+    lines.push(
+      `The latest TanStack AI packages did not install (${installOutcome}); no suite ran.`,
+    );
   }
   const summary = `${lines.join("\n")}\n`;
   console.log(summary);

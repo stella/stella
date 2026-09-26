@@ -133,9 +133,14 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Move to the latest TanStack AI and check each patch
+        id: write-package
         run: bun scripts/tanstack-drift.ts --write-package
 
+      # A latest set that does not install is drift too: the report step
+      # still runs and says so.
       - name: Install the latest TanStack AI
+        id: install
+        continue-on-error: true
         run: bash scripts/retry.sh bun install --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -144,6 +149,11 @@ jobs:
         run: |
           cd ./apps/api
           cp .env.example .env
+          cd ../web
+          cp .env.example .env
 
       - name: Report drift
+        if: ${{ !cancelled() && steps.write-package.outcome == 'success' }}
         run: bun scripts/tanstack-drift.ts --report
+        env:
+          TANSTACK_DRIFT_INSTALL_OUTCOME: ${{ steps.install.outcome }}
