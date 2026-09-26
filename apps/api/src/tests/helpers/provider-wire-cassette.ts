@@ -272,8 +272,11 @@ export const loadProviderWireCassettes = (): ProviderWireCassette[] => {
 export const findMissingCassettes = (
   cassettes: readonly ProviderWireCassette[],
 ): string[] => {
+  // A variant sits beside its main cassette; it does not stand in for one.
   const present = new Set(
-    cassettes.map(({ provider, scenario }) => `${provider}/${scenario}`),
+    cassettes
+      .filter(({ variant }) => variant === undefined)
+      .map(({ provider, scenario }) => `${provider}/${scenario}`),
   );
   return PROVIDER_WIRE_PROVIDERS.flatMap((provider) =>
     SCENARIO_NAMES.filter(

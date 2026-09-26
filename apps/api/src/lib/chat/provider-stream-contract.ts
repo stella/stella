@@ -4,7 +4,7 @@ import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -55,6 +55,15 @@ const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
 const INCOMPLETE_RESPONSE_CODE = "incomplete";
 const OUTPUT_CEILING_REASON = "max_output_tokens";
 
+// These upstream variants use string-literal discriminants rather than
+// EventType members. Named, checked literals keep Oxlint's exhaustiveness
+// analysis aligned with the SDK union.
+const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
+const TOOL_CALL_END_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_END" satisfies StreamChunk["type"];
+const TOOL_CALL_START_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_START" satisfies StreamChunk["type"];
+
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
   chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
   (chunk.code === INCOMPLETE_RESPONSE_CODE &&
@@ -83,34 +92,67 @@ export const readOutputCeilingStopAsLength = async function* (
   let runIdentity: { runId: string; threadId: string } | undefined;
   let held: RunFinishedChunk | undefined;
   for await (const chunk of chunks) {
-    if (chunk.type === EventType.RUN_STARTED) {
-      runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
-    }
-    if (
-      chunk.type === EventType.RUN_ERROR &&
-      held === undefined &&
-      runIdentity !== undefined &&
-      isOutputCeilingStop(chunk)
-    ) {
-      held = {
-        type: EventType.RUN_FINISHED,
-        finishReason: "length",
-        runId: runIdentity.runId,
-        threadId: runIdentity.threadId,
-        ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
-        ...(chunk.model === undefined ? {} : { model: chunk.model }),
-        ...(chunk.timestamp === undefined
-          ? {}
-          : { timestamp: chunk.timestamp }),
-        ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
-      };
-      continue;
-    }
-    if (held !== undefined && chunk.type === EventType.RUN_FINISHED) {
-      if (held.usage === undefined && chunk.usage !== undefined) {
-        held = { ...held, usage: chunk.usage };
+    switch (chunk.type) {
+      case EventType.RUN_STARTED: {
+        runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+        break;
       }
-      continue;
+      case EventType.RUN_ERROR: {
+        if (
+          held !== undefined ||
+          runIdentity === undefined ||
+          !isOutputCeilingStop(chunk)
+        ) {
+          break;
+        }
+        held = {
+          type: EventType.RUN_FINISHED,
+          finishReason: "length",
+          runId: runIdentity.runId,
+          threadId: runIdentity.threadId,
+          ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+          ...(chunk.model === undefined ? {} : { model: chunk.model }),
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
+          ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+        };
+        continue;
+      }
+      case EventType.RUN_FINISHED: {
+        if (held === undefined) {
+          break;
+        }
+        if (held.usage === undefined && chunk.usage !== undefined) {
+          held = { ...held, usage: chunk.usage };
+        }
+        continue;
+      }
+      case EventType.TEXT_MESSAGE_START:
+      case EventType.TEXT_MESSAGE_CONTENT:
+      case EventType.TEXT_MESSAGE_END:
+      case TOOL_CALL_START_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_ARGS:
+      case TOOL_CALL_END_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_RESULT:
+      case EventType.STEP_STARTED:
+      case EventType.STEP_FINISHED:
+      case EventType.MESSAGES_SNAPSHOT:
+      case EventType.STATE_SNAPSHOT:
+      case EventType.STATE_DELTA:
+      case CUSTOM_STREAM_CHUNK_TYPE:
+      case EventType.REASONING_START:
+      case EventType.REASONING_MESSAGE_START:
+      case EventType.REASONING_MESSAGE_CONTENT:
+      case EventType.REASONING_MESSAGE_END:
+      case EventType.REASONING_END:
+      case EventType.REASONING_ENCRYPTED_VALUE: {
+        break;
+      }
+      default: {
+        chunk satisfies never;
+        panic(`Unhandled chunk: ${String(chunk)}`);
+      }
     }
     yield chunk;
   }
