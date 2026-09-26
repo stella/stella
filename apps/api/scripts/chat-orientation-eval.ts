@@ -14,7 +14,8 @@
  *
  * Prerequisites:
  *  - Local dev stack running: `bun run dev` (API on 3001, web origin 3000).
- *  - Seeded test user: `bun --filter @stll/api db:seed-test-user`
+ *  - Seeded test user:
+ *    `NODE_ENV=development STELLA_LOCAL_DEV=1 bun --filter @stll/api db:seed-test-user`
  *    (default email test@stella.dev, override with --email).
  *  - The OTP is read from the dev-only endpoint `GET /dev-public/last-otp`,
  *    so this only works against a dev API.

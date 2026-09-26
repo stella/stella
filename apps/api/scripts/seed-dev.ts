@@ -86,6 +86,7 @@ import type {
   Position,
   PositionSeverity,
 } from "@/api/lib/workflow/playbook-positions";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
@@ -5451,6 +5452,7 @@ export const seedPlaybooks = async (
 // ─── Main ───────────────────────────────────────────────
 
 export async function seed(organizationId?: string, userId?: string) {
+  requireLocalDevOpen("Seeding");
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
   let USER_ID = userId ?? DEFAULT_USER_ID;
   let resolvedSeedUserIds: readonly string[] | undefined;
@@ -5571,10 +5573,6 @@ export async function seed(organizationId?: string, userId?: string) {
           .where(sql`${contacts.id} IN ${allSeedContactIds}`),
     );
   };
-
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to run in production.");
-  }
 
   // Ensure referenced users exist in the target org before seeding matters,
   // billing, and analytics data; then clear deterministic IDs for replay.
