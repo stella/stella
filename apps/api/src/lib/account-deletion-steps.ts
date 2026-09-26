@@ -285,7 +285,7 @@ export const clearWorkspaceLeadRole = async (
 
 export type ReassignActiveTaskAssignmentsParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   deletionRequestId: SafeId<"accountDeletionRequest">;
   reassignments:
     | readonly {
@@ -548,7 +548,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     }
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       updates.map((item) => {
         const assignment = assignmentByEntityId.get(item.entityId);
         if (!assignment) {
@@ -687,7 +687,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     );
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       ownedMutableWork.map((work) => {
         const nextOwnerUserId =
           obligationOwnerByEntityId.get(work.entityId) ?? null;
