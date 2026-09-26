@@ -19,6 +19,7 @@ import {
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
 } from "@stll/api-contract/search";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -654,7 +655,7 @@ const searchPostgresDecisions = async (
     body,
     parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
-      jurisdiction: body.country,
+      reporters: decisionReporterGrammarForJurisdiction(body.country),
     }),
   );
 
@@ -1689,7 +1690,7 @@ export const searchCorpusIndexDecisions = async (
   const grammar = decisionDocketGrammarForCountry(body.country);
   const intent = parseDecisionQuery(body.query, {
     grammar,
-    jurisdiction: body.country,
+    reporters: decisionReporterGrammarForJurisdiction(body.country),
   });
   const interpretation = interpretDecisionQuery(body, intent);
   const queryClass = decisionQueryClass(intent);

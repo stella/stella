@@ -7,6 +7,7 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -190,7 +191,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     // An identifier is matched as written, so there is nothing to expand.
     const intent = parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(country),
-      jurisdiction: country,
+      reporters: decisionReporterGrammarForJurisdiction(country),
     });
     if (intent.type === "identifier") {
       return Result.ok(NO_ALTERNATIVES);
