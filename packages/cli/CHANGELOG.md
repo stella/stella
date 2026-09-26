@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 2.0.2
+
+### Patch Changes
+
+- [#3873](https://github.com/stella/stella/pull/3873) [`0fc08ad`](https://github.com/stella/stella/commit/0fc08ad1ea1badd2e9c1f044acc0b3905436b2b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `catalogue install` requires the skill-create permission instead of organization settings access, so a member can install a catalogue skill at private scope. Team scope still requires an owner or admin.
+
+- [#3873](https://github.com/stella/stella/pull/3873) [`0fc08ad`](https://github.com/stella/stella/commit/0fc08ad1ea1badd2e9c1f044acc0b3905436b2b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills seed` is gone: a member's default skills are installed when the membership is created.
+
+- [#3888](https://github.com/stella/stella/pull/3888) [`718d19d`](https://github.com/stella/stella/commit/718d19d57206fea56a6ae6773e3b2221bb7bf084) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The legislation read help states that full text is returned only when the parsed structure is missing or unusable.
+
 ## 2.0.1
 
 ### Patch Changes

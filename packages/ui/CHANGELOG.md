@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.34.6
+
+### Patch Changes
+
+- [#3893](https://github.com/stella/stella/pull/3893) [`9a272b8`](https://github.com/stella/stella/commit/9a272b879e97db76224c82ceff72705678001d77) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Component hover, focus and selection colours, borders and shadows change instantly; remaining component motion animates transform and opacity only.
+
 ## 0.34.5
 
 ### Patch Changes
