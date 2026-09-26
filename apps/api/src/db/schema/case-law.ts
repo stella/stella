@@ -70,6 +70,8 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  corpusSampleReaderDecisionPolicies,
+  corpusSampleReaderPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -798,6 +800,7 @@ export const caseLawDecisions = p.pgTable(
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderPolicies(),
+    ...corpusSampleReaderDecisionPolicies(),
   ],
 );
 
@@ -1312,6 +1315,7 @@ export const caseLawCorpusTombstones = p.pgTable(
     ...publicLawReaderPolicies(),
     ...caseLawAnalysisWriterReadPolicies(),
     ...caseLawAnalysisReaderPolicies(),
+    ...corpusSampleReaderPolicies(),
   ],
 );
 
@@ -1708,6 +1712,7 @@ export const caseLawCitations = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisReaderPolicies(),
+    ...corpusSampleReaderPolicies(),
   ],
 );
 
