@@ -2720,6 +2720,7 @@ describe("chat runtime identity across query refetch", () => {
       key: { scope: "global", threadId: toChatThreadId("thread-shared") },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     }),
     olderCursor: null as string | null,
     contextMatterIds: [] as string[],
@@ -2768,7 +2769,6 @@ describe("chat runtime identity across query refetch", () => {
       activeOrganizationId: "org-A",
       key: { scope: "global", threadId: toChatThreadId("thread-opts") },
       context: { allowMissingThread: true },
-      reloadThread: () => {},
     });
 
     // Guards the known requirement: this query keeps

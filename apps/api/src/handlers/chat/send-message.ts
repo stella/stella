@@ -581,6 +581,62 @@ class ChatSendLifecycle {
   }
 }
 
+/**
+ * Renew the lease immediately before provider dispatch. Connector discovery
+ * and prompt assembly can take meaningful time, so the renewal, not the
+ * earlier claim, makes the owner cover the entire provider timeout. A stop
+ * recorded during preflight ends the turn here, before any provider call.
+ * Throws the send's refusal.
+ */
+const renewBeforeDispatch = async ({
+  execution,
+  lifecycle,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  lifecycle: ChatSendLifecycle;
+  safeDb: SafeDb;
+}): Promise<void> => {
+  const leaseRenewal = await renewChatTurnExecutionLease({
+    execution,
+    safeDb,
+  });
+  if (Result.isError(leaseRenewal)) {
+    throw new HandlerError({
+      status: 500,
+      message: "Failed to renew chat execution lease",
+      cause: leaseRenewal.error,
+    });
+  }
+  switch (leaseRenewal.value) {
+    case "owned":
+      return;
+    case "stop-requested": {
+      const stopped = await lifecycle.stopCurrentTurn();
+      if (Result.isError(stopped)) {
+        throw new HandlerError({
+          status: 500,
+          message: "Failed to store the stopped chat turn",
+          cause: stopped.error,
+        });
+      }
+      throw new HandlerError({
+        code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+        status: 409,
+        message: "Chat turn was stopped",
+      });
+    }
+    case "lost":
+      throw new HandlerError({
+        status: 409,
+        message: "Chat turn lost its durable execution owner",
+      });
+    default:
+      leaseRenewal.value satisfies never;
+      return panic(`Unhandled standing: ${String(leaseRenewal.value)}`);
+  }
+};
+
 type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
@@ -2198,50 +2254,11 @@ export const createSendMessage = (
                   });
                 }
 
-                // Connector discovery and prompt assembly can take meaningful
-                // time. Renew immediately before provider dispatch so the
-                // durable owner covers the entire provider timeout, rather than
-                // only the earlier preflight window.
-                const leaseRenewal = await renewChatTurnExecutionLease({
+                await renewBeforeDispatch({
                   execution: turnExecution,
+                  lifecycle,
                   safeDb,
                 });
-                if (Result.isError(leaseRenewal)) {
-                  throw new HandlerError({
-                    status: 500,
-                    message: "Failed to renew chat execution lease",
-                    cause: leaseRenewal.error,
-                  });
-                }
-                switch (leaseRenewal.value) {
-                  case "owned":
-                    break;
-                  case "stop-requested": {
-                    // The user stopped the turn during preflight: it ends
-                    // here, before any provider call.
-                    const stopped = await lifecycle.stopCurrentTurn();
-                    if (Result.isError(stopped)) {
-                      throw new HandlerError({
-                        status: 500,
-                        message: "Failed to store the stopped chat turn",
-                        cause: stopped.error,
-                      });
-                    }
-                    throw new HandlerError({
-                      code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
-                      status: 409,
-                      message: "Chat turn was stopped",
-                    });
-                  }
-                  case "lost":
-                    throw new HandlerError({
-                      status: 409,
-                      message: "Chat turn lost its durable execution owner",
-                    });
-                  default:
-                    leaseRenewal.value satisfies never;
-                    panic(`Unhandled standing: ${String(leaseRenewal.value)}`);
-                }
 
                 // Snapshot what the registry has observed before streaming.
                 // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
