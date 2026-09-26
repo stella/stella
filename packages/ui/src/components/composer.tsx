@@ -30,8 +30,7 @@ export const COMPOSER_CONTROL_BUTTON_SIZE = "icon-sm" as const;
  *  radius is the docked bar's original `rounded-2xl`: at the compact row's
  *  stature it reads as a soft pill, which is the shape the composers were
  *  meant to unify on. */
-export const COMPOSER_BOX_CLASS =
-  "bg-background rounded-2xl border transition-colors";
+export const COMPOSER_BOX_CLASS = "bg-background rounded-2xl border";
 
 /** The box's focus ring in its default (non-anonymized) treatment. */
 export const COMPOSER_BOX_FOCUS_CLASS = "focus-within:border-ring";
@@ -103,7 +102,7 @@ export const COMPOSER_SEND_BUTTON_CLASS =
  * the row stays subordinate to the box above it.
  */
 export const COMPOSER_PICKER_TRIGGER_CLASS =
-  "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs transition-colors";
+  "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs";
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */

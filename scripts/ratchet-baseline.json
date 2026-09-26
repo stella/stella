@@ -15,7 +15,7 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 233,
+    "count": 198,
     "files": {
       "apps/desktop/src/mainview/index.css": 2,
       "apps/landing/src/components/react/ProductShowcase.tsx": 3,
@@ -138,32 +138,7 @@
       "apps/web/src/routes/onboarding/-components/steps/download-step.tsx": 2,
       "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx": 1,
       "apps/web/src/routes/tools/-components/public-tools-shell.tsx": 1,
-      "apps/web/src/routes/tools/-components/toggle-chip.tsx": 1,
-      "packages/ui/src/components/application-rail.tsx": 1,
-      "packages/ui/src/components/breadcrumb.tsx": 1,
-      "packages/ui/src/components/button.tsx": 1,
-      "packages/ui/src/components/checkbox.tsx": 1,
-      "packages/ui/src/components/color-picker.tsx": 3,
-      "packages/ui/src/components/combobox.tsx": 1,
-      "packages/ui/src/components/composer.tsx": 2,
-      "packages/ui/src/components/date-picker-popover.tsx": 5,
-      "packages/ui/src/components/input-control.ts": 1,
-      "packages/ui/src/components/input-group.tsx": 1,
-      "packages/ui/src/components/input-otp.tsx": 1,
-      "packages/ui/src/components/landing.tsx": 3,
-      "packages/ui/src/components/menu.tsx": 1,
-      "packages/ui/src/components/scroll-area.tsx": 1,
-      "packages/ui/src/components/select.tsx": 1,
-      "packages/ui/src/components/table.tsx": 1,
-      "packages/ui/src/components/textarea.tsx": 1,
-      "packages/ui/src/components/toast.tsx": 1,
-      "packages/ui/src/inspector/chrome.tsx": 2,
-      "packages/ui/src/inspector/dock.tsx": 1,
-      "packages/ui/src/inspector/facet-bar.tsx": 1,
-      "packages/ui/src/kanban/card-shell.tsx": 1,
-      "packages/ui/src/kanban/column-band-header.tsx": 1,
-      "packages/ui/src/kanban/subgroup-board.tsx": 1,
-      "packages/ui/src/kanban/virtual-cell.tsx": 1
+      "apps/web/src/routes/tools/-components/toggle-chip.tsx": 1
     }
   },
   "super-linear-regexes": {

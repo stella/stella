@@ -74,7 +74,7 @@ export const ApplicationRailButton = ({
 }: React.ComponentProps<"button">) => (
   <button
     className={cn(
-      "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground flex shrink-0 items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
+      "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground flex shrink-0 items-center justify-center rounded-md outline-hidden focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
       APPLICATION_RAIL_BUTTON_SIZE,
       className,
     )}

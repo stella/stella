@@ -142,7 +142,7 @@ export const KanbanCardShell = ({
         className={cn(
           CARD_CLASS,
           appearance === "proposal" && "border-dashed",
-          "cursor-pointer transition-shadow hover:shadow-md",
+          "cursor-pointer hover:shadow-md",
           active && ACTIVE_CLASS,
           className,
         )}

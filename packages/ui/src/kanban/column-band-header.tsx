@@ -75,7 +75,7 @@ export const KanbanColumnBandHeader = ({
       aria-expanded={!collapsed}
       aria-label={toggleLabel}
       className={cn(
-        "hover:bg-muted/60 text-muted-foreground hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-[background-color]",
+        "hover:bg-muted/60 text-muted-foreground hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md",
         KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
       )}
       // A keyboard activation reports no click count, so the board can tell a

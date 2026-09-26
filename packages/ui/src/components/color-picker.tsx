@@ -164,7 +164,7 @@ const ColorSwatch = ({
       className={cn(
         presentation === "inline"
           ? "ring-offset-popover relative grid size-11 shrink-0 place-items-center rounded-full border ring-offset-2 transition-transform outline-none hover:scale-105 focus-visible:ring-2"
-          : "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-[transform,border-color] hover:scale-115 sm:size-5",
+          : "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-transform hover:scale-115 sm:size-5",
         selectionClassName,
         isLight && !selected && "border-border",
       )}
@@ -409,7 +409,7 @@ const ColorPickerContent = ({
           render={
             <button
               aria-label="No color"
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground text-2xs flex h-6 w-full items-center gap-1.5 rounded px-1 transition-colors"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground text-2xs flex h-6 w-full items-center gap-1.5 rounded px-1"
               onClick={onClear}
               type="button"
             />
@@ -446,7 +446,7 @@ const ColorPickerContent = ({
       {/* Expand / custom color */}
       {!expanded ? (
         <button
-          className="text-muted-foreground hover:text-foreground text-2xs flex items-center justify-center gap-1 py-0.5 transition-colors"
+          className="text-muted-foreground hover:text-foreground text-2xs flex items-center justify-center gap-1 py-0.5"
           onClick={() => setExpanded(true)}
           type="button"
         >
