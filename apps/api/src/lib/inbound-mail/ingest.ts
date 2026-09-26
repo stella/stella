@@ -67,6 +67,7 @@ export class InboundIngestError extends TaggedError("InboundIngestError")<{
   reason:
     | "invalid-envelope"
     | "verification-unavailable"
+    | "scan-unavailable"
     | "persistence-unavailable";
 }> {}
 
@@ -190,12 +191,33 @@ export const ingestInboundMail = async ({
         }),
       );
     }
-    if (!hasAlignedAuthentication(authenticated.value, outerSender)) {
+    const aligned = hasAlignedAuthentication(authenticated.value, outerSender);
+    if (
+      !aligned &&
+      (authenticated.value.dmarc === "temperror" ||
+        authenticated.value.spf.result === "temperror" ||
+        authenticated.value.dkim.some(({ result }) => result === "temperror"))
+    ) {
+      return Result.err(
+        new InboundIngestError({
+          message: "Inbound verification is unavailable",
+          reason: "verification-unavailable",
+        }),
+      );
+    }
+    if (!aligned) {
       delivery = {
         status: "drop",
         sender: outerSender,
         reason: "authentication_failed",
       };
+    } else if (scan === "unavailable") {
+      return Result.err(
+        new InboundIngestError({
+          message: "Inbound scanning is unavailable",
+          reason: "scan-unavailable",
+        }),
+      );
     } else if (scan !== "pass") {
       delivery = {
         status: "drop",
@@ -228,7 +250,10 @@ export const ingestInboundMail = async ({
       };
     }
   }
-  const deliveryKey = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
+  const deliveryKey = new Bun.CryptoHasher("sha256")
+    .update(String(raw.byteLength))
+    .update(raw.subarray(0, INBOUND_MAIL_LIMITS.rawBytes))
+    .digest("hex");
   const outcomes: InboundDeliveryOutcome[] = [];
   for (const token of tokens) {
     const persisted = await Result.tryPromise({

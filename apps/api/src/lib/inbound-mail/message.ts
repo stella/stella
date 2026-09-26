@@ -313,7 +313,18 @@ const checkedAttachments = (email: Email): InboundAttachment[] => {
     }
     attachments.push({ fileName, mimeType, bytes });
   }
-  return attachments;
+  // Content dedup ignores MIME part order, so ordinal attachment links must
+  // use the same canonical order when different deliveries resume a filing.
+  return attachments
+    .map((attachment) => ({
+      attachment,
+      key: JSON.stringify([
+        attachment.mimeType,
+        new Bun.CryptoHasher("sha256").update(attachment.bytes).digest("hex"),
+      ]),
+    }))
+    .toSorted((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)))
+    .map(({ attachment }) => attachment);
 };
 
 const contentHash = (

@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
 
 import { matterInboundAddresses, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -8,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
 
 const config = {
   description:
@@ -27,7 +27,7 @@ const createMatterInboundAddress = createSafeHandler(
         }),
       );
     }
-    const token = randomBytes(32).toString("base64url");
+    const token = generateInboundAddressToken();
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

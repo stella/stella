@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { dkimSign } from "mailauth";
+import { generateKeyPairSync } from "node:crypto";
 
 import {
   domainsAlign,
@@ -137,10 +139,15 @@ test("local verification uses SMTP envelope and DNS, ignoring forged authenticat
   let cancelled = 0;
   const verifier = createLocalMailVerifier(() => ({
     resolve: async (domain, rrtype) => {
-      if (rrtype !== "TXT") {return [];}
-      if (domain === "example.com") {return [["v=spf1 ip4:192.0.2.1 -all"]];}
-      if (domain === "_dmarc.example.com")
-        {return [["v=DMARC1; p=reject; aspf=s"]];}
+      if (rrtype !== "TXT") {
+        return [];
+      }
+      if (domain === "example.com") {
+        return [["v=spf1 ip4:192.0.2.1 -all"]];
+      }
+      if (domain === "_dmarc.example.com") {
+        return [["v=DMARC1; p=reject; aspf=s"]];
+      }
       return [];
     },
     cancel: () => {
@@ -162,10 +169,119 @@ test("local verification uses SMTP envelope and DNS, ignoring forged authenticat
       },
     });
     expect(auth.isOk()).toBe(true);
-    if (auth.isErr()) {continue;}
+    if (auth.isErr()) {
+      continue;
+    }
     expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
       remoteIp === "192.0.2.1",
     );
   }
   expect(cancelled).toBe(2);
+});
+
+test("local verification validates DKIM bytes, alignment, and DMARC policy", async () => {
+  const { createLocalMailVerifier } =
+    await import("@/api/lib/inbound-mail/authentication");
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const publicKeyRecord = publicKey
+    .export({ type: "spki", format: "der" })
+    .toString("base64");
+  const privateKeyPem = privateKey
+    .export({ type: "pkcs8", format: "pem" })
+    .toString();
+  const unsigned = Buffer.from(
+    "From: member@example.com\r\nTo: recipient@example.net\r\nSubject: local DKIM check\r\n\r\nOriginal body\r\n",
+  );
+  const makeSignedMessage = async (signingDomain: string) => {
+    const signed = await dkimSign(unsigned, {
+      signTime: 1_800_000_000,
+      signatureData: [
+        {
+          signingDomain,
+          selector: "local-test",
+          privateKey: privateKeyPem,
+        },
+      ],
+    });
+    expect(signed.errors).toEqual([]);
+    return Buffer.concat([Buffer.from(signed.signatures), unsigned]);
+  };
+  const verify = (raw: Uint8Array) =>
+    createLocalMailVerifier(() => ({
+      resolve: async (domain, rrtype) => {
+        if (rrtype !== "TXT") {
+          return [];
+        }
+        if (domain === "example.com") {
+          return [["v=spf1 -all"]];
+        }
+        if (domain === "_dmarc.example.com") {
+          return [["v=DMARC1; p=reject; aspf=s; adkim=s"]];
+        }
+        if (
+          domain === "local-test._domainkey.example.com" ||
+          domain === "local-test._domainkey.attacker.example.net"
+        ) {
+          return [[`v=DKIM1; k=rsa; p=${publicKeyRecord}`]];
+        }
+        return [];
+      },
+      cancel: () => {},
+    }))({
+      raw,
+      fromAddress: "member@example.com",
+      envelope: {
+        mailFrom: "member@example.com",
+        recipients: ["token@inbound.example.com"],
+        remoteIp: "192.0.2.99",
+        helo: "mail.example.com",
+      },
+    });
+
+  const aligned = await makeSignedMessage("example.com");
+  const accepted = await verify(aligned);
+  expect(accepted.isOk()).toBe(true);
+  if (accepted.isOk()) {
+    expect(accepted.value.spf.result).toBe("fail");
+    expect(accepted.value.dkim).toContainEqual({
+      result: "pass",
+      domain: "example.com",
+      alignment: "strict",
+    });
+    expect(accepted.value.dmarc).toBe("pass");
+    expect(hasAlignedAuthentication(accepted.value, "member@example.com")).toBe(
+      true,
+    );
+  }
+
+  const tampered = Buffer.from(aligned);
+  tampered[tampered.length - 2] = 0x58;
+  const rejectedBody = await verify(tampered);
+  expect(rejectedBody.isOk()).toBe(true);
+  if (rejectedBody.isOk()) {
+    expect(
+      rejectedBody.value.dkim.some(({ result }) => result === "pass"),
+    ).toBe(false);
+    expect(rejectedBody.value.dmarc).toBe("fail");
+    expect(
+      hasAlignedAuthentication(rejectedBody.value, "member@example.com"),
+    ).toBe(false);
+  }
+
+  const unaligned = await makeSignedMessage("attacker.example.net");
+  const rejectedAlignment = await verify(unaligned);
+  expect(rejectedAlignment.isOk()).toBe(true);
+  if (rejectedAlignment.isOk()) {
+    expect(rejectedAlignment.value.dkim).toContainEqual({
+      result: "pass",
+      domain: "attacker.example.net",
+      alignment: "strict",
+    });
+    expect(rejectedAlignment.value.dmarc).toBe("fail");
+    expect(
+      hasAlignedAuthentication(rejectedAlignment.value, "member@example.com"),
+    ).toBe(false);
+  }
 });
