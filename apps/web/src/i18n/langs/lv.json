@@ -1923,6 +1923,41 @@
       "person": "Persona"
     }
   },
+  "correspondence": {
+    "addressTitle": "Lietas e-pasta adrese",
+    "assertedOriginal": "Sākotnējās galvenes (pēc pārsūtītāja norādītā)",
+    "authResults": {
+      "fail": "Neizdevās",
+      "pass": "Izdevās",
+      "unknown": "Nav noteikts"
+    },
+    "backToList": "Atpakaļ uz saraksti",
+    "createAddress": "Izveidot adresi",
+    "deliveredBy": "Piegādāja <address>{sender}</address>",
+    "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
+    "deliveryAuthentication": "Piegādes autentifikācija",
+    "empty": "Sarakstes vēl nav.",
+    "filers": "Iesniedzēji",
+    "forwardedBy": "Pārsūtīja <address>{sender}</address>",
+    "forwardedByAuthenticated": "Pārsūtīja <address>{sender}</address> · autentificēts",
+    "inboundNotConfigured": "Ienākošais e-pasts nav konfigurēts. Lūdziet administratoram konfigurēt ienākošā pasta domēnu.",
+    "markHandled": "Atzīmēt kā izskatītu",
+    "markNew": "Atzīmēt kā jaunu",
+    "noAddress": "Nav aktīvas e-pasta adreses.",
+    "originalSender": "Sākotnējais sūtītājs",
+    "originalSenderUnverified": "Sākotnējais sūtītājs (norādīts, nav pārbaudīts)",
+    "originalSignatureVerified": "Sākotnējais paraksts pārbaudīts (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Saņemts",
+    "revokeAddress": "Atsaukt adresi",
+    "rotateAddress": "Mainīt adresi",
+    "sentAt": "Nosūtīts",
+    "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "states": {
+      "handled": "Izskatīts"
+    },
+    "title": "Sarakste",
+    "unknownApprover": "Nezināms apstiprinātājs"
+  },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
     "acceptAllConfirmDescription": "Tādējādi dokumentam vienlaikus tiek lietoti {count} ieteikumi.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatizācija",
+          "correspondence": "sarakste",
           "court": "tiesas ieraksts",
           "document": "dokuments",
           "documentReview": "dokumenta pārbaude",

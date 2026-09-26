@@ -1923,6 +1923,41 @@
       "person": "Persona"
     }
   },
+  "correspondence": {
+    "addressTitle": "Dirección de correo del asunto",
+    "assertedOriginal": "Cabeceras originales (según quien reenvía)",
+    "authResults": {
+      "fail": "Fallida",
+      "pass": "Correcta",
+      "unknown": "Sin determinar"
+    },
+    "backToList": "Volver a correspondencia",
+    "createAddress": "Crear dirección",
+    "deliveredBy": "Entregado por <address>{sender}</address>",
+    "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
+    "deliveryAuthentication": "Autenticación de la entrega",
+    "empty": "Todavía no hay correspondencia.",
+    "filers": "Remitentes",
+    "forwardedBy": "Reenviado por <address>{sender}</address>",
+    "forwardedByAuthenticated": "Reenviado por <address>{sender}</address> · autenticado",
+    "inboundNotConfigured": "El correo entrante no está configurado. Pida al administrador que configure el dominio de correo entrante.",
+    "markHandled": "Marcar como tramitado",
+    "markNew": "Marcar como nuevo",
+    "noAddress": "No hay ninguna dirección de correo activa.",
+    "originalSender": "Remitente original",
+    "originalSenderUnverified": "Remitente original (según lo indicado, sin verificar)",
+    "originalSignatureVerified": "Firma original verificada (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Recibido",
+    "revokeAddress": "Revocar dirección",
+    "rotateAddress": "Cambiar dirección",
+    "sentAt": "Enviado el",
+    "sharedMailboxFiler": "Buzón compartido {address}, aprobado por {approver}",
+    "states": {
+      "handled": "Tramitado"
+    },
+    "title": "Correspondencia",
+    "unknownApprover": "Aprobador desconocido"
+  },
   "docxReview": {
     "acceptAll": "Aceptar todo",
     "acceptAllConfirmDescription": "Esto aplica {count} sugerencias al documento de una sola vez.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatización",
+          "correspondence": "correspondencia",
           "court": "registro judicial",
           "document": "documento",
           "documentReview": "revisión de documento",

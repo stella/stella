@@ -1923,6 +1923,41 @@
       "person": "Asmuo"
     }
   },
+  "correspondence": {
+    "addressTitle": "Bylos el. pašto adresas",
+    "assertedOriginal": "Pradinės antraštės (pagal persiuntėją)",
+    "authResults": {
+      "fail": "Nepavyko",
+      "pass": "Pavyko",
+      "unknown": "Nenustatyta"
+    },
+    "backToList": "Grįžti į korespondenciją",
+    "createAddress": "Sukurti adresą",
+    "deliveredBy": "Pristatė <address>{sender}</address>",
+    "deliveredByAuthenticated": "Pristatė <address>{sender}</address> · autentiškumas patvirtintas",
+    "deliveryAuthentication": "Pristatymo autentiškumo patvirtinimas",
+    "empty": "Korespondencijos dar nėra.",
+    "filers": "Pateikėjai",
+    "forwardedBy": "Persiuntė <address>{sender}</address>",
+    "forwardedByAuthenticated": "Persiuntė <address>{sender}</address> · autentiškumas patvirtintas",
+    "inboundNotConfigured": "Gaunamas el. paštas nesukonfigūruotas. Paprašykite administratoriaus sukonfigūruoti gaunamo pašto domeną.",
+    "markHandled": "Pažymėti kaip sutvarkytą",
+    "markNew": "Pažymėti kaip naują",
+    "noAddress": "Aktyvaus el. pašto adreso nėra.",
+    "originalSender": "Pradinis siuntėjas",
+    "originalSenderUnverified": "Pradinis siuntėjas (nurodytas, nepatvirtintas)",
+    "originalSignatureVerified": "Pradinis parašas patvirtintas (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Gauta",
+    "revokeAddress": "Atšaukti adresą",
+    "rotateAddress": "Pakeisti adresą",
+    "sentAt": "Išsiųsta",
+    "sharedMailboxFiler": "Bendra pašto dėžutė {address}, patvirtino {approver}",
+    "states": {
+      "handled": "Sutvarkyta"
+    },
+    "title": "Korespondencija",
+    "unknownApprover": "Nežinomas tvirtintojas"
+  },
   "docxReview": {
     "acceptAll": "Priimti visus",
     "acceptAllConfirmDescription": "Taip dokumentui iškart pritaikoma {count} pasiūlymų.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatizavimas",
+          "correspondence": "korespondencija",
           "court": "teismo įrašas",
           "document": "dokumentas",
           "documentReview": "dokumento peržiūra",

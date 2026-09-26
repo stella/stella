@@ -30,6 +30,7 @@ import {
   accountDeletionRequests,
   agentSkills,
   chatThreads,
+  correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
@@ -76,6 +77,7 @@ import {
   consumeInBatches,
   createS3DeletionEffectChunks,
 } from "@/api/lib/destructive-effect-chunks";
+import { clearCorrespondenceAssignmentsForOffboarding } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -283,7 +285,7 @@ export const clearWorkspaceLeadRole = async (
 
 export type ReassignActiveTaskAssignmentsParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   deletionRequestId: SafeId<"accountDeletionRequest">;
   reassignments:
     | readonly {
@@ -343,6 +345,7 @@ export const selectActiveTaskAssignments = async (
     .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
+  correspondence,
   taskAssignees,
   workObligations,
   member,
@@ -369,6 +372,13 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
+  // Assignment validation locks organization membership before matter
+  // membership. Match that order before deleting either membership.
+  await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(eq(member.userId, currentUserId))
+    .for("update");
   // Delegation locks a requested workspace membership before locking its
   // obligation. Hold the departing user's membership rows first so a
   // concurrent delegation either lands before this cleanup and is cleared,
@@ -538,7 +548,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     }
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       updates.map((item) => {
         const assignment = assignmentByEntityId.get(item.entityId);
         if (!assignment) {
@@ -677,7 +687,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     );
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       ownedMutableWork.map((work) => {
         const nextOwnerUserId =
           obligationOwnerByEntityId.get(work.entityId) ?? null;
@@ -709,6 +719,14 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       }),
     );
   }
+
+  // Account deletion anonymizes the user row, so the assignee FK's SET NULL
+  // never fires. Historical filer and approver references remain intact.
+  await clearCorrespondenceAssignmentsForOffboarding({
+    tx,
+    userId: currentUserId,
+    scope: { type: "account" },
+  });
 
   await tx.delete(member).where(eq(member.userId, currentUserId));
   await tx

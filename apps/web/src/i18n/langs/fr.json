@@ -1923,6 +1923,41 @@
       "person": "Personne"
     }
   },
+  "correspondence": {
+    "addressTitle": "Adresse e-mail du dossier",
+    "assertedOriginal": "En-têtes d’origine (selon l’expéditeur du transfert)",
+    "authResults": {
+      "fail": "Échec",
+      "pass": "Réussie",
+      "unknown": "Indéterminé"
+    },
+    "backToList": "Retour à la correspondance",
+    "createAddress": "Créer une adresse",
+    "deliveredBy": "Distribué par <address>{sender}</address>",
+    "deliveredByAuthenticated": "Distribué par <address>{sender}</address> · authentifié",
+    "deliveryAuthentication": "Authentification de la distribution",
+    "empty": "Aucune correspondance pour le moment.",
+    "filers": "Déposants",
+    "forwardedBy": "Transféré par <address>{sender}</address>",
+    "forwardedByAuthenticated": "Transféré par <address>{sender}</address> · authentifié",
+    "inboundNotConfigured": "La réception des e-mails n’est pas configurée. Demandez à votre administrateur de configurer le domaine de réception.",
+    "markHandled": "Marquer comme traité",
+    "markNew": "Marquer comme nouveau",
+    "noAddress": "Aucune adresse e-mail active.",
+    "originalSender": "Expéditeur d’origine",
+    "originalSenderUnverified": "Expéditeur d’origine (déclaré, non vérifié)",
+    "originalSignatureVerified": "Signature d’origine vérifiée (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Reçu",
+    "revokeAddress": "Révoquer l’adresse",
+    "rotateAddress": "Renouveler l’adresse",
+    "sentAt": "Envoyé le",
+    "sharedMailboxFiler": "Boîte partagée {address}, approuvée par {approver}",
+    "states": {
+      "handled": "Traité"
+    },
+    "title": "Correspondance",
+    "unknownApprover": "Approbateur inconnu"
+  },
   "docxReview": {
     "acceptAll": "Tout accepter",
     "acceptAllConfirmDescription": "Cela applique {count} suggestions au document en une seule fois.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatisation",
+          "correspondence": "correspondance",
           "court": "dossier judiciaire",
           "document": "fichier",
           "documentReview": "révision de document",

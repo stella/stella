@@ -271,6 +271,18 @@ const auditReviewDocumentName = () => sql<string | null>`case
   else null
 end`;
 
+const auditCorrespondenceSubject = () => sql<string | null>`case
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.CORRESPONDENCE}
+    then coalesce(
+      ${auditLogs.metadata} ->> 'subject',
+      ${auditLogs.changes} -> 'subject' ->> 'new',
+      ${auditLogs.changes} -> 'subject' ->> 'old',
+      ${auditLogs.changes} -> 'created' -> 'new' ->> 'subject',
+      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'subject'
+    )
+  else null
+end`;
+
 const teamContactIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
     then coalesce(
@@ -376,6 +388,8 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
       );
     case "automation":
       return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN);
+    case "correspondence":
+      return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.CORRESPONDENCE);
     default: {
       category satisfies never;
       return panic(`Unhandled category: ${String(category)}`);
@@ -408,6 +422,7 @@ type ActivityTarget = {
     | EntityTargetKind
     | "automation"
     | "court"
+    | "correspondence"
     | "documentReviewRun"
     | "matter"
     | "playbook"
@@ -596,6 +611,7 @@ export const readOverviewActivityPage = async ({
           .select({
             action: sql<VisibleActivityAction>`${auditLogs.action}`,
             activityCategory: auditLogs.activityCategory,
+            correspondenceSubjectSnapshot: auditCorrespondenceSubject(),
             approvalStatus: auditLogs.approvalStatus,
             approvedByUserId: auditLogs.approvedByUserId,
             createdAt: auditLogs.createdAt,
@@ -879,6 +895,7 @@ export const readOverviewActivityPage = async ({
           }),
           target: targetForRow({
             category,
+            correspondenceSubjectSnapshot: row.correspondenceSubjectSnapshot,
             entityMap,
             entityIdSnapshot: row.entityIdSnapshot,
             entityKindSnapshot: row.legacyKind,
@@ -947,6 +964,7 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
 
 type TargetForRowOptions = {
   category: ActivityCategory;
+  correspondenceSubjectSnapshot: string | null;
   entityMap: Map<string, EntityTarget>;
   entityIdSnapshot: string | null;
   entityKindSnapshot: string | null;
@@ -965,6 +983,7 @@ type TargetForRowOptions = {
 
 const targetForRow = ({
   category,
+  correspondenceSubjectSnapshot,
   entityMap,
   entityIdSnapshot,
   entityKindSnapshot,
@@ -1038,6 +1057,13 @@ const targetForRow = ({
         id: resourceId,
         kind: "court",
         name: null,
+      });
+    case "correspondence":
+      return genericTarget({
+        color: null,
+        id: resourceId,
+        kind: "correspondence",
+        name: correspondenceSubjectSnapshot,
       });
     case "documentReviewRun": {
       // The row is about the reviewed document: it carries the document's

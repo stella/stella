@@ -14,6 +14,9 @@ export const organizationSettingsQueryRoot = () =>
 export const billingCodesQueryRoot = (workspaceId: string) =>
   ["billingCodes", workspaceId] as const;
 
+export const correspondenceQueryRoot = (workspaceId: string) =>
+  ["correspondence", workspaceId] as const;
+
 export const expensesQueryRoot = (workspaceId: string) =>
   ["expenses", workspaceId] as const;
 

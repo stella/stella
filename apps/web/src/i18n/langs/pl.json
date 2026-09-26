@@ -1923,6 +1923,41 @@
       "person": "Osoba"
     }
   },
+  "correspondence": {
+    "addressTitle": "Adres e-mail sprawy",
+    "assertedOriginal": "Pierwotne nagłówki (według przekazującego)",
+    "authResults": {
+      "fail": "Niepowodzenie",
+      "pass": "Zaliczono",
+      "unknown": "Nieustalone"
+    },
+    "backToList": "Wróć do korespondencji",
+    "createAddress": "Utwórz adres",
+    "deliveredBy": "Dostarczone przez <address>{sender}</address>",
+    "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
+    "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
+    "empty": "Brak korespondencji.",
+    "filers": "Nadawcy",
+    "forwardedBy": "Przekazane przez <address>{sender}</address>",
+    "forwardedByAuthenticated": "Przekazane przez <address>{sender}</address> · uwierzytelniono",
+    "inboundNotConfigured": "Poczta przychodząca nie jest skonfigurowana. Poproś administratora o skonfigurowanie domeny poczty przychodzącej.",
+    "markHandled": "Oznacz jako obsłużone",
+    "markNew": "Oznacz jako nowe",
+    "noAddress": "Brak aktywnego adresu e-mail.",
+    "originalSender": "Pierwotny nadawca",
+    "originalSenderUnverified": "Pierwotny nadawca (podany, niezweryfikowany)",
+    "originalSignatureVerified": "Pierwotny podpis zweryfikowany (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Odebrano",
+    "revokeAddress": "Unieważnij adres",
+    "rotateAddress": "Zmień adres",
+    "sentAt": "Wysłano",
+    "sharedMailboxFiler": "Wspólna skrzynka {address}, zatwierdzona przez {approver}",
+    "states": {
+      "handled": "Obsłużone"
+    },
+    "title": "Korespondencja",
+    "unknownApprover": "Nieznany zatwierdzający"
+  },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
     "acceptAllConfirmDescription": "Spowoduje to zastosowanie {count} sugestii do dokumentu naraz.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatyzacja",
+          "correspondence": "korespondencja",
           "court": "wpis sądowy",
           "document": "dokument",
           "documentReview": "przegląd dokumentu",

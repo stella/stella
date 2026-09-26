@@ -119,6 +119,17 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
+  // Correspondence is matter-scoped; it has no portable ResourceRef kind.
+  correspondence: { type: "non_resource", reason: "subresource" },
+  correspondenceFiler: { type: "non_resource", reason: "association" },
+  correspondenceAttachment: { type: "non_resource", reason: "association" },
+  matterInboundAddress: { type: "non_resource", reason: "credential" },
+  correspondenceAllowedSender: { type: "non_resource", reason: "policy" },
+  correspondenceAllowedSenderMatter: {
+    type: "non_resource",
+    reason: "association",
+  },
+  correspondenceDropLog: { type: "non_resource", reason: "event" },
   contactExtractionUpload: { type: "non_resource", reason: "workflow" },
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },

@@ -29,6 +29,7 @@ const MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES = [
   "matter",
   "team",
   "court",
+  "correspondence",
   "automation",
 ] as const satisfies typeof MATTER_ACTIVITY_CATEGORIES;
 
@@ -56,6 +57,7 @@ export const matterActivityFilterQueryProperties = {
       t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[4]),
       t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[5]),
       t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[6]),
+      t.Literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[7]),
     ]),
   ),
   from: t.Optional(t.String({ format: "date-time" })),

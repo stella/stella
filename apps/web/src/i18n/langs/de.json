@@ -1923,6 +1923,41 @@
       "person": "Person"
     }
   },
+  "correspondence": {
+    "addressTitle": "E-Mail-Adresse der Akte",
+    "assertedOriginal": "Ursprüngliche Kopfzeilen (laut Weiterleitung)",
+    "authResults": {
+      "fail": "Fehlgeschlagen",
+      "pass": "Bestanden",
+      "unknown": "Nicht ermittelt"
+    },
+    "backToList": "Zurück zur Korrespondenz",
+    "createAddress": "Adresse erstellen",
+    "deliveredBy": "Zugestellt von <address>{sender}</address>",
+    "deliveredByAuthenticated": "Zugestellt von <address>{sender}</address> · authentifiziert",
+    "deliveryAuthentication": "Authentifizierung der Zustellung",
+    "empty": "Noch keine Korrespondenz.",
+    "filers": "Einreicher",
+    "forwardedBy": "Weitergeleitet von <address>{sender}</address>",
+    "forwardedByAuthenticated": "Weitergeleitet von <address>{sender}</address> · authentifiziert",
+    "inboundNotConfigured": "Der E-Mail-Empfang ist nicht eingerichtet. Bitten Sie Ihre Administration, die Domain für eingehende E-Mails einzurichten.",
+    "markHandled": "Als erledigt markieren",
+    "markNew": "Als neu markieren",
+    "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
+    "originalSender": "Ursprünglicher Absender",
+    "originalSenderUnverified": "Ursprünglicher Absender (laut Angabe, nicht verifiziert)",
+    "originalSignatureVerified": "Ursprüngliche Signatur verifiziert (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Empfangen",
+    "revokeAddress": "Adresse widerrufen",
+    "rotateAddress": "Adresse erneuern",
+    "sentAt": "Gesendet am",
+    "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
+    "states": {
+      "handled": "Erledigt"
+    },
+    "title": "Korrespondenz",
+    "unknownApprover": "Unbekannte genehmigende Person"
+  },
   "docxReview": {
     "acceptAll": "Alle annehmen",
     "acceptAllConfirmDescription": "Dadurch werden {count} Vorschläge auf einmal auf das Dokument angewendet.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "Automatisierung",
+          "correspondence": "Korrespondenz",
           "court": "Gerichtseintrag",
           "document": "Dokument",
           "documentReview": "Dokumentenprüfung",

@@ -1926,6 +1926,41 @@ type Messages = {
       "person": "Person";
     };
   };
+  "correspondence": {
+    "addressTitle": "Matter email address";
+    "assertedOriginal": "Original headers (as stated by the forwarder)";
+    "authResults": {
+      "fail": "Fail";
+      "pass": "Pass";
+      "unknown": "Not determined";
+    };
+    "backToList": "Back to correspondence";
+    "createAddress": "Create address";
+    "deliveredBy": "Delivered by <address>{sender}</address>";
+    "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
+    "deliveryAuthentication": "Delivery authentication";
+    "empty": "No correspondence yet.";
+    "filers": "Filers";
+    "forwardedBy": "Forwarded by <address>{sender}</address>";
+    "forwardedByAuthenticated": "Forwarded by <address>{sender}</address> · authenticated";
+    "inboundNotConfigured": "Incoming email is not configured. Ask your administrator to set up the inbound mail domain.";
+    "markHandled": "Mark handled";
+    "markNew": "Mark new";
+    "noAddress": "No email address is active.";
+    "originalSender": "Original sender";
+    "originalSenderUnverified": "Original sender (as stated, not verified)";
+    "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
+    "receivedAt": "Received";
+    "revokeAddress": "Revoke address";
+    "rotateAddress": "Rotate address";
+    "sentAt": "Sent on";
+    "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "states": {
+      "handled": "Handled";
+    };
+    "title": "Correspondence";
+    "unknownApprover": "Unknown approver";
+  };
   "docxReview": {
     "acceptAll": "Accept all";
     "acceptAllConfirmDescription": "This applies {count} suggestions to the document at once.";
@@ -5356,6 +5391,7 @@ type Messages = {
         };
         "targets": {
           "automation": "automation";
+          "correspondence": "correspondence";
           "court": "court record";
           "document": "document";
           "documentReview": "document review";

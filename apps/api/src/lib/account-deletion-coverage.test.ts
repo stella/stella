@@ -61,6 +61,18 @@ type KnownGap = {
  */
 const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
   {
+    table: "correspondence_filers",
+    column: "filed_by_user_id",
+    onDelete: "restrict",
+    note: "Retain — historical attribution. Matter correspondence keeps the original filer reference after account anonymization; readers present the retained user as a deleted account.",
+  },
+  {
+    table: "correspondence_allowed_senders",
+    column: "approved_by",
+    onDelete: "restrict",
+    note: "Retain — historical attribution. Shared-mailbox approval records preserve who approved filing after account anonymization; readers present the retained user as a deleted account.",
+  },
+  {
     table: "account_deletion_requests",
     column: "user_id",
     onDelete: "restrict",

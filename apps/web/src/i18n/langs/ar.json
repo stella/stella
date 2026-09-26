@@ -1923,6 +1923,41 @@
       "person": "شخص"
     }
   },
+  "correspondence": {
+    "addressTitle": "عنوان البريد الإلكتروني للملف",
+    "assertedOriginal": "الترويسات الأصلية (كما أوردها مُعيد التوجيه)",
+    "authResults": {
+      "fail": "فاشل",
+      "pass": "ناجح",
+      "unknown": "غير محدد"
+    },
+    "backToList": "العودة إلى المراسلات",
+    "createAddress": "إنشاء عنوان",
+    "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
+    "deliveredByAuthenticated": "تم التسليم بواسطة <address>{sender}</address> · تمت المصادقة",
+    "deliveryAuthentication": "مصادقة التسليم",
+    "empty": "لا توجد مراسلات بعد.",
+    "filers": "مقدمو المراسلات",
+    "forwardedBy": "تمت إعادة التوجيه بواسطة <address>{sender}</address>",
+    "forwardedByAuthenticated": "تمت إعادة التوجيه بواسطة <address>{sender}</address> · تمت المصادقة",
+    "inboundNotConfigured": "لم يتم إعداد البريد الوارد. اطلب من المسؤول إعداد نطاق البريد الوارد.",
+    "markHandled": "تحديد كمُعالج",
+    "markNew": "تحديد كجديد",
+    "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",
+    "originalSender": "المرسل الأصلي",
+    "originalSenderUnverified": "المرسل الأصلي (كما ورد، غير متحقق منه)",
+    "originalSignatureVerified": "تم التحقق من التوقيع الأصلي (<identifier>d={domain}</identifier>)",
+    "receivedAt": "تاريخ الاستلام",
+    "revokeAddress": "إلغاء العنوان",
+    "rotateAddress": "تغيير العنوان",
+    "sentAt": "أُرسل في",
+    "sharedMailboxFiler": "صندوق بريد مشترك {address}، وافق عليه {approver}",
+    "states": {
+      "handled": "مُعالج"
+    },
+    "title": "المراسلات",
+    "unknownApprover": "موافق غير معروف"
+  },
   "docxReview": {
     "acceptAll": "قبول الكل",
     "acceptAllConfirmDescription": "يطبّق ذلك {count} اقتراحًا على المستند دفعة واحدة.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "الأتمتة",
+          "correspondence": "المراسلة",
           "court": "سجل المحكمة",
           "document": "مستند",
           "documentReview": "مراجعة المستند",

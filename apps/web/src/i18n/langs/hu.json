@@ -1923,6 +1923,41 @@
       "person": "Személy"
     }
   },
+  "correspondence": {
+    "addressTitle": "Ügy e-mail-címe",
+    "assertedOriginal": "Eredeti fejlécek (a továbbító közlése szerint)",
+    "authResults": {
+      "fail": "Sikertelen",
+      "pass": "Sikeres",
+      "unknown": "Nem megállapított"
+    },
+    "backToList": "Vissza a levelezéshez",
+    "createAddress": "Cím létrehozása",
+    "deliveredBy": "Kézbesítette: <address>{sender}</address>",
+    "deliveredByAuthenticated": "Kézbesítette: <address>{sender}</address> · hitelesítve",
+    "deliveryAuthentication": "Kézbesítés hitelesítése",
+    "empty": "Még nincs levelezés.",
+    "filers": "Benyújtók",
+    "forwardedBy": "Továbbította: <address>{sender}</address>",
+    "forwardedByAuthenticated": "Továbbította: <address>{sender}</address> · hitelesítve",
+    "inboundNotConfigured": "A bejövő levelezés nincs beállítva. Kérje meg a rendszergazdát a bejövő levelek domainjének beállítására.",
+    "markHandled": "Megjelölés elintézettként",
+    "markNew": "Megjelölés újként",
+    "noAddress": "Nincs aktív e-mail-cím.",
+    "originalSender": "Eredeti feladó",
+    "originalSenderUnverified": "Eredeti feladó (közölt, nem ellenőrzött)",
+    "originalSignatureVerified": "Eredeti aláírás ellenőrizve (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Érkezett",
+    "revokeAddress": "Cím visszavonása",
+    "rotateAddress": "Cím cseréje",
+    "sentAt": "Elküldve",
+    "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "states": {
+      "handled": "Elintézett"
+    },
+    "title": "Levelezés",
+    "unknownApprover": "Ismeretlen jóváhagyó"
+  },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
     "acceptAllConfirmDescription": "Ez egyszerre {count} javaslatot alkalmaz a dokumentumon.",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatizálás",
+          "correspondence": "levelezés",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
           "documentReview": "dokumentumellenőrzés",

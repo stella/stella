@@ -126,6 +126,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "HOSTED_USAGE_PROVIDER",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
+  "INBOUND_MAIL_DOMAIN",
   "LEGAL_CORPUS_S3_BUCKET",
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
@@ -183,6 +184,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_SSLMODE: "require",
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
+  INBOUND_MAIL_DOMAIN: "inbound.example.com",
   EDGAR_USER_AGENT: "stella admin@example.com",
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
@@ -291,6 +293,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
+  INBOUND_MAIL_DOMAIN:
+    "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
@@ -528,7 +532,7 @@ const sectionFor = (name: string) => {
   ) {
     return "Authentication";
   }
-  if (/^(EMAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
+  if (/^(EMAIL|INBOUND_MAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
     return "Email and feedback";
   }
   if (
