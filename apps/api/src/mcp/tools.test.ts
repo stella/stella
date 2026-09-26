@@ -73,8 +73,10 @@ const wireSchemaValidator = createWireSchemaValidator();
 /**
  * Every call here runs the real dispatcher, which parses a result through the
  * tool's executable output source. The schema a client is shown is a
- * projection of that source, so each successful result is also read against
- * the advertised output schema by an independent validator.
+ * projection of that source, so each successful result of a tool with an
+ * output contract must carry structured content, and that content is read
+ * against the advertised output schema by an independent validator. A relayed
+ * third-party tool resolves no contract and is exempt.
  */
 const handleMcpToolCall = async (
   call: Parameters<typeof dispatchMcpToolCall>[0],
@@ -84,11 +86,11 @@ const handleMcpToolCall = async (
     call.toolName,
     call.mode,
   )?.outputSchema;
-  if (
-    result.isError !== true &&
-    result.structuredContent !== undefined &&
-    outputSchema !== undefined
-  ) {
+  if (result.isError !== true && outputSchema !== undefined) {
+    expect(
+      result.structuredContent,
+      `${call.toolName} succeeded without structured content`,
+    ).toBeDefined();
     const validate = wireSchemaValidator.compile(outputSchema);
     expect(
       validate(result.structuredContent),
