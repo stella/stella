@@ -3,12 +3,13 @@
  * exactly once, and authorizing every later call from the session token.
  *
  * Both tokens are opaque and stored only as SHA-256 hex, so a lookup by hash
- * is the constant-time comparison. The handoff is single-use: redemption is
- * one conditional UPDATE that both consumes it and installs the session
- * token, so two desktops racing the same deep link cannot both win.
+ * is the constant-time comparison. The handoff is single-use: redemption
+ * locks its row and consumes it in one transaction, so two desktops racing
+ * the same deep link cannot both win.
  */
 
-import { and, eq, gt, isNull, lte } from "drizzle-orm";
+import { TaggedError } from "better-result";
+import { and, eq, lte } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -128,53 +129,68 @@ export type RedeemedPdfSigningSession = {
 };
 
 /**
- * Consume a handoff token and mint the session token in the same statement.
+ * The creator's live access, read with `FOR SHARE` so a revocation of the
+ * `member` or `workspace_members` row waits for the redemption holding the
+ * lock to commit, and a revocation that committed first is seen.
+ */
+export const lockedCreatorAccess = (
+  tx: Pick<Transaction, "select">,
+  {
+    createdBy,
+    organizationId,
+    workspaceId,
+  }: {
+    createdBy: string;
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace">;
+  },
+) => ({
+  membership: tx
+    .select({ id: workspaceMembers.id })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.userId, createdBy),
+        eq(workspaceMembers.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("share"),
+  role: tx
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.userId, createdBy),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("share"),
+});
+
+/** Thrown inside the redemption transaction to undo it. */
+class RedemptionRefusedError extends TaggedError("RedemptionRefusedError")<{
+  message: string;
+}> {}
+
+/**
+ * Redeem a handoff: check the creator's access, consume the handoff, mint
+ * the session token and read the descriptor, all in one transaction.
  *
- * `handoff_consumed_at IS NULL` plus the TTL are part of the UPDATE's WHERE,
- * so the row itself arbitrates the race: the loser updates zero rows and gets
- * the same answer as an unknown token.
+ * The session row is locked first, then the creator's access rows (see
+ * {@link lockedCreatorAccess}), so a redemption and a revocation are
+ * ordered: either the revocation lands first and the handoff is refused, or
+ * the redemption commits first and the revocation closes the session at its
+ * next use. `afterConsume` runs just before commit; a throw there undoes
+ * the whole redemption (tests use it to prove that).
  */
 export const redeemPdfSigningHandoff = async (
   handoffToken: string,
   db: PdfSigningDatabase = rootDb,
+  { afterConsume }: { afterConsume?: () => Promise<void> } = {},
 ): Promise<RedeemedPdfSigningSession | null> => {
   if (!isPdfSigningTokenShape(handoffToken)) {
-    return null;
-  }
-
-  // The creator's access is re-read before the handoff is spent: the link
-  // may have been minted just before access was withdrawn, and redemption
-  // hands back document and matter names.
-  const creators = await db
-    .select({
-      organizationRole: member.role,
-      workspaceMemberId: workspaceMembers.id,
-    })
-    .from(pdfSigningSessions)
-    .innerJoin(workspaces, eq(pdfSigningSessions.workspaceId, workspaces.id))
-    .leftJoin(
-      member,
-      and(
-        eq(member.userId, pdfSigningSessions.createdBy),
-        eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
-        eq(workspaceMembers.workspaceId, pdfSigningSessions.workspaceId),
-      ),
-    )
-    .where(
-      eq(
-        pdfSigningSessions.handoffTokenHash,
-        hashPdfSigningToken(handoffToken),
-      ),
-    )
-    .limit(1);
-  const creator = creators.at(0);
-  if (!creator || !canWriteWorkspaceEntities(creator)) {
     return null;
   }
 
@@ -182,66 +198,107 @@ export const redeemPdfSigningHandoff = async (
   const sessionToken = createPdfSigningToken();
   const expiresAt = computePdfSigningSessionExpiresAt();
 
-  const redeemed = await db
-    .update(pdfSigningSessions)
-    .set({
-      handoffConsumedAt: now,
-      sessionTokenHash: hashPdfSigningToken(sessionToken),
-      tokenExpiresAt: expiresAt,
-    })
-    .where(
-      and(
-        eq(
-          pdfSigningSessions.handoffTokenHash,
-          hashPdfSigningToken(handoffToken),
-        ),
-        eq(pdfSigningSessions.status, "open"),
-        isNull(pdfSigningSessions.handoffConsumedAt),
-        gt(pdfSigningSessions.handoffExpiresAt, now),
-      ),
-    )
-    .returning({
-      baseVersionId: pdfSigningSessions.baseVersionId,
-      entityId: pdfSigningSessions.entityId,
-      id: pdfSigningSessions.id,
-      workspaceId: pdfSigningSessions.workspaceId,
+  try {
+    return await db.transaction(async (tx) => {
+      const sessions = await tx
+        .select({
+          baseVersionId: pdfSigningSessions.baseVersionId,
+          createdBy: pdfSigningSessions.createdBy,
+          entityId: pdfSigningSessions.entityId,
+          handoffConsumedAt: pdfSigningSessions.handoffConsumedAt,
+          handoffExpiresAt: pdfSigningSessions.handoffExpiresAt,
+          id: pdfSigningSessions.id,
+          organizationId: workspaces.organizationId,
+          status: pdfSigningSessions.status,
+          workspaceId: pdfSigningSessions.workspaceId,
+        })
+        .from(pdfSigningSessions)
+        .innerJoin(
+          workspaces,
+          eq(pdfSigningSessions.workspaceId, workspaces.id),
+        )
+        .where(
+          eq(
+            pdfSigningSessions.handoffTokenHash,
+            hashPdfSigningToken(handoffToken),
+          ),
+        )
+        .limit(1)
+        .for("update", { of: pdfSigningSessions });
+      const session = sessions.at(0);
+      if (
+        !session ||
+        session.status !== "open" ||
+        session.handoffConsumedAt !== null ||
+        session.handoffExpiresAt <= now
+      ) {
+        return null;
+      }
+
+      const access = lockedCreatorAccess(tx, session);
+      const [roles, memberships] = await Promise.all([
+        access.role,
+        access.membership,
+      ]);
+      if (
+        !canWriteWorkspaceEntities({
+          organizationRole: roles.at(0)?.role ?? null,
+          workspaceMemberId: memberships.at(0)?.id ?? null,
+        })
+      ) {
+        return null;
+      }
+
+      await tx
+        .update(pdfSigningSessions)
+        .set({
+          handoffConsumedAt: now,
+          sessionTokenHash: hashPdfSigningToken(sessionToken),
+          tokenExpiresAt: expiresAt,
+        })
+        .where(eq(pdfSigningSessions.id, session.id));
+
+      const descriptors = await tx
+        .select({
+          documentName: entities.name,
+          versionNumber: entityVersions.versionNumber,
+          workspaceName: workspaces.name,
+        })
+        .from(entities)
+        .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
+        .innerJoin(entityVersions, eq(entityVersions.id, session.baseVersionId))
+        .where(
+          and(
+            eq(entities.id, session.entityId),
+            eq(entities.workspaceId, session.workspaceId),
+          ),
+        )
+        .limit(1);
+      const descriptor = descriptors.at(0);
+      if (!descriptor) {
+        // Nothing to show the desktop: keep the handoff unspent.
+        throw new RedemptionRefusedError({
+          message: "The handoff's document is gone.",
+        });
+      }
+
+      await afterConsume?.();
+
+      return {
+        documentName: descriptor.documentName,
+        expiresAt,
+        sessionId: session.id,
+        sessionToken,
+        versionNumber: descriptor.versionNumber,
+        workspaceName: descriptor.workspaceName,
+      };
     });
-
-  const session = redeemed.at(0);
-  if (!session) {
-    return null;
+  } catch (error) {
+    if (RedemptionRefusedError.is(error)) {
+      return null;
+    }
+    throw error;
   }
-
-  const descriptors = await db
-    .select({
-      documentName: entities.name,
-      versionNumber: entityVersions.versionNumber,
-      workspaceName: workspaces.name,
-    })
-    .from(entities)
-    .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
-    .innerJoin(entityVersions, eq(entityVersions.id, session.baseVersionId))
-    .where(
-      and(
-        eq(entities.id, session.entityId),
-        eq(entities.workspaceId, session.workspaceId),
-      ),
-    )
-    .limit(1);
-
-  const descriptor = descriptors.at(0);
-  if (!descriptor) {
-    return null;
-  }
-
-  return {
-    documentName: descriptor.documentName,
-    expiresAt,
-    sessionId: session.id,
-    sessionToken,
-    versionNumber: descriptor.versionNumber,
-    workspaceName: descriptor.workspaceName,
-  };
 };
 
 export type AuthorizedPdfSigningSession = {
