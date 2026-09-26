@@ -365,6 +365,8 @@ const normalizeMessage = (email: Email): NormalizedInboundMessage => {
   const text = normalizeText(email.text);
   const html = sanitizeBodyHtml(email);
   if (
+    text.length > INBOUND_MAIL_LIMITS.bodyCharacters ||
+    (html !== null && html.length > INBOUND_MAIL_LIMITS.bodyCharacters) ||
     new TextEncoder().encode(text).byteLength > INBOUND_MAIL_LIMITS.bodyBytes ||
     (html &&
       new TextEncoder().encode(html).byteLength > INBOUND_MAIL_LIMITS.bodyBytes)

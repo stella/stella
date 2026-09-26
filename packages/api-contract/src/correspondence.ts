@@ -1,5 +1,10 @@
 import type { SafeId } from "./safe-id";
 
+export const CORRESPONDENCE_LIMITS = {
+  attachments: 25,
+  bodyCharacters: 2_000_000,
+} as const;
+
 export const CORRESPONDENCE_CHANNELS = ["email"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
 

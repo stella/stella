@@ -361,3 +361,7 @@ export const brandDerivedCorrespondenceDropId = (
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`,
   );
 };
+
+export const brandPersistedCorrespondenceDropId = (
+  id: string,
+): SafeId<"correspondenceDropLog"> => toSafeId<"correspondenceDropLog">(id);

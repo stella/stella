@@ -17,7 +17,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
 import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
 import type {
@@ -30,6 +30,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import {
+  createScopedQuery,
   getTestDb,
   releaseTestDb,
   type TestDatabase,
@@ -41,16 +42,21 @@ const memberA = mintAuthProviderId<"user">();
 const unverifiedA = mintAuthProviderId<"user">();
 const memberB = mintAuthProviderId<"user">();
 const adminA = mintAuthProviderId<"user">();
+const aliasOwner = mintAuthProviderId<"user">();
+const mailboxUser = mintAuthProviderId<"user">();
 const wsA1 = createSafeId<"workspace">();
 const wsA2 = createSafeId<"workspace">();
 const wsB1 = createSafeId<"workspace">();
 const memberAWorkspaceId = createSafeId<"workspaceMember">();
+const aliasOwnerWorkspaceId = createSafeId<"workspaceMember">();
+const aliasOwnerOrganizationMemberId = mintAuthProviderIdValue();
 const tokenA1 = generateInboundAddressToken();
 const tokenA2 = generateInboundAddressToken();
 const tokenB1 = generateInboundAddressToken();
 const matterMailboxId = createSafeId<"correspondenceAllowedSender">();
 const organizationMailboxId = createSafeId<"correspondenceAllowedSender">();
 const foreignMailboxId = createSafeId<"correspondenceAllowedSender">();
+const aliasId = createSafeId<"correspondenceAllowedSender">();
 const correspondenceId = createSafeId<"correspondence">();
 const receivedAt = "2026-09-26T12:00:00.000Z";
 
@@ -145,6 +151,18 @@ beforeAll(async () => {
       email: "admin@example.test",
       emailVerified: true,
     },
+    {
+      id: aliasOwner,
+      name: "Alias owner",
+      email: "alias-owner@example.test",
+      emailVerified: true,
+    },
+    {
+      id: mailboxUser,
+      name: "Mailbox user",
+      email: "shared-matter@example.test",
+      emailVerified: true,
+    },
   ]);
   await db.insert(organization).values([
     {
@@ -189,6 +207,20 @@ beforeAll(async () => {
       role: "member",
       createdAt: new Date(),
     },
+    {
+      id: aliasOwnerOrganizationMemberId,
+      organizationId: orgA,
+      userId: aliasOwner,
+      role: "member",
+      createdAt: new Date(),
+    },
+    {
+      id: mintAuthProviderIdValue(),
+      organizationId: orgA,
+      userId: mailboxUser,
+      role: "member",
+      createdAt: new Date(),
+    },
   ]);
   await db.insert(workspaces).values([
     { id: wsA1, organizationId: orgA, name: "Matter A1", reference: "A1" },
@@ -206,6 +238,12 @@ beforeAll(async () => {
       id: createSafeId<"workspaceMember">(),
       workspaceId: wsB1,
       userId: memberB,
+    },
+    { id: aliasOwnerWorkspaceId, workspaceId: wsA1, userId: aliasOwner },
+    {
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: wsA1,
+      userId: mailboxUser,
     },
   ]);
   await db.insert(matterInboundAddresses).values([
@@ -253,13 +291,29 @@ beforeAll(async () => {
       scope: "organization",
       approvedBy: memberB,
     },
+    {
+      id: aliasId,
+      organizationId: orgA,
+      address: "verified-alias@example.test",
+      kind: "verified_alias",
+      scope: "matters",
+      ownerUserId: aliasOwner,
+    },
   ]);
-  await db.insert(correspondenceAllowedSenderMatters).values({
-    id: createSafeId<"correspondenceAllowedSenderMatter">(),
-    organizationId: orgA,
-    workspaceId: wsA1,
-    allowedSenderId: matterMailboxId,
-  });
+  await db.insert(correspondenceAllowedSenderMatters).values([
+    {
+      id: createSafeId<"correspondenceAllowedSenderMatter">(),
+      organizationId: orgA,
+      workspaceId: wsA1,
+      allowedSenderId: matterMailboxId,
+    },
+    {
+      id: createSafeId<"correspondenceAllowedSenderMatter">(),
+      organizationId: orgA,
+      workspaceId: wsA1,
+      allowedSenderId: aliasId,
+    },
+  ]);
   filings = [];
   persist = createInboundMailStore({
     database: db,
@@ -305,7 +359,16 @@ afterAll(async () => {
   await db.delete(organization).where(inArray(organization.id, [orgA, orgB]));
   await db
     .delete(user)
-    .where(inArray(user.id, [memberA, unverifiedA, memberB, adminA]));
+    .where(
+      inArray(user.id, [
+        memberA,
+        unverifiedA,
+        memberB,
+        adminA,
+        aliasOwner,
+        mailboxUser,
+      ]),
+    );
   await releaseTestDb();
 });
 
@@ -378,6 +441,58 @@ describe("inbound delivery store", () => {
     expect(filings).toHaveLength(1);
   });
 
+  test("a verified alias follows its owner's current organization and matter membership", async () => {
+    const sender = "verified-alias@example.test";
+    expect(await deliver({ sender })).toMatchObject({ status: "filed" });
+    expect(filings.at(0)?.filer).toEqual({
+      type: "user",
+      userId: aliasOwner,
+      filedAt: receivedAt,
+    });
+    await db
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, aliasOwnerWorkspaceId));
+    expect(await deliver({ sender })).toEqual({
+      status: "dropped",
+      reason: "unauthorized_sender",
+    });
+    await db.insert(workspaceMembers).values({
+      id: aliasOwnerWorkspaceId,
+      workspaceId: wsA1,
+      userId: aliasOwner,
+    });
+    await db
+      .delete(member)
+      .where(eq(member.id, aliasOwnerOrganizationMemberId));
+    expect(await deliver({ sender })).toEqual({
+      status: "dropped",
+      reason: "unauthorized_sender",
+    });
+    expect(filings).toHaveLength(1);
+  });
+
+  test("an active shared-mailbox approval retains mailbox provenance over a matching primary user", async () => {
+    const sender = "shared-matter@example.test";
+    expect(await deliver({ sender })).toMatchObject({ status: "filed" });
+    expect(filings.at(0)?.filer).toEqual({
+      type: "shared_mailbox",
+      allowedSenderId: matterMailboxId,
+      address: sender,
+      approvedBy: adminA,
+      filedAt: receivedAt,
+    });
+    await db
+      .update(correspondenceAllowedSenders)
+      .set({ revokedAt: new Date() })
+      .where(eq(correspondenceAllowedSenders.id, matterMailboxId));
+    expect(await deliver({ sender })).toMatchObject({ status: "filed" });
+    expect(filings.at(1)?.filer).toEqual({
+      type: "user",
+      userId: mailboxUser,
+      filedAt: receivedAt,
+    });
+  });
+
   test("organization-scoped shared mailbox files across matters until revoked", async () => {
     for (const token of [tokenA1, tokenA2]) {
       expect(
@@ -439,5 +554,52 @@ describe("inbound delivery store", () => {
     expect(rows).toHaveLength(1);
     expect(rows.at(0)?.reason).toBe("unauthorized_sender");
     expect(filings).toHaveLength(0);
+  });
+
+  test("drop logs are isolated by matter and organization under RLS", async () => {
+    const senderA = "rls-a@outside.test";
+    const senderB = "rls-b@outside.test";
+    expect(await deliver({ sender: senderA, token: tokenA1 })).toMatchObject({
+      status: "dropped",
+    });
+    expect(await deliver({ sender: senderB, token: tokenB1 })).toMatchObject({
+      status: "dropped",
+    });
+    const scopedQuery = createScopedQuery(db);
+    const readPair = async ({
+      workspaceId,
+      organizationId,
+      userId,
+    }: {
+      workspaceId: SafeId<"workspace">;
+      organizationId: SafeId<"organization">;
+      userId: SafeId<"user">;
+    }) =>
+      await scopedQuery(
+        [workspaceId],
+        organizationId,
+        async (tx) =>
+          await tx
+            .select({ senderAddress: correspondenceDropLogs.senderAddress })
+            .from(correspondenceDropLogs)
+            .where(
+              inArray(correspondenceDropLogs.senderAddress, [senderA, senderB]),
+            ),
+        userId,
+      );
+    expect(
+      await readPair({
+        workspaceId: wsA1,
+        organizationId: orgA,
+        userId: memberA,
+      }),
+    ).toEqual([{ senderAddress: senderA }]);
+    expect(
+      await readPair({
+        workspaceId: wsB1,
+        organizationId: orgB,
+        userId: memberB,
+      }),
+    ).toEqual([{ senderAddress: senderB }]);
   });
 });
