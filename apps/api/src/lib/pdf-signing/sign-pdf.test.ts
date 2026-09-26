@@ -499,20 +499,31 @@ describe("two-phase PDF signing", () => {
       expect(await PDF.load(applied.bytes)).toBeDefined();
     });
 
-    test("signs without a timestamp when the token outgrows the reservation", async () => {
-      // A well-formed BER value far larger than any reserve: LibPDF accepts
-      // it as a token and only fails once it has to fit `/Contents`.
-      const oversized = new Uint8Array([
-        0x04,
-        0x83,
-        0x01,
-        0x00,
-        0x00,
-        ...new Uint8Array(65_536),
-      ]);
+    test("never counts a token about another signature as trusted time", async () => {
       const applied = await signWith([
         {
-          authority: { timestamp: async () => oversized },
+          authority: await createTestTimestampAuthority({
+            misbehaviour: { imprint: new Uint8Array(32).fill(3) },
+          }),
+          url: "https://tsa.example/",
+        },
+      ]);
+
+      expect(applied.level).toBe("B-B");
+      expect(applied.timestampAuthorityUrl).toBe(null);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "TIMESTAMP_UNAVAILABLE",
+      ]);
+    });
+
+    test("signs without a timestamp when the token outgrows the reservation", async () => {
+      // A valid token, but one carrying far more certificates than the
+      // reservation phase 1 made room for.
+      const applied = await signWith([
+        {
+          authority: await createTestTimestampAuthority({
+            misbehaviour: { padding: 60 },
+          }),
           url: "https://tsa.example/",
         },
       ]);
