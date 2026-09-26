@@ -1,5 +1,6 @@
 import { PDF, PdfDict } from "@libpdf/core";
 import type { PdfRef } from "@libpdf/core";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -169,13 +170,13 @@ describe("PDF rewrites", () => {
     // save by rewriting the whole file.
     pdf.setProtection({ ownerPassword: "owner" });
 
-    const refused = await appendSigningRevision(pdf).catch(
-      (error: unknown) => error,
+    const refused = await appendSigningRevision(pdf);
+    expect(Result.isError(refused) && refused.error).toBeInstanceOf(
+      PdfRevisionAppendError,
     );
-    expect(refused).toBeInstanceOf(PdfRevisionAppendError);
 
     const untouched = await PDF.load(signed);
-    const appended = await appendSigningRevision(untouched);
+    const appended = (await appendSigningRevision(untouched)).unwrap();
     expect(
       Buffer.from(appended.subarray(0, signed.byteLength)).equals(
         Buffer.from(signed),

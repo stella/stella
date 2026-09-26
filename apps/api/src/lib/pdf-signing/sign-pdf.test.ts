@@ -14,6 +14,7 @@ import {
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import { settled } from "@/api/tests/helpers/settled";
 import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
 import {
   createTestCertificate,
@@ -65,7 +66,7 @@ const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
 const digestOf = async (
   invocation: Parameters<typeof captureSigningDigest>[0],
-) => (await captureSigningDigest(invocation)).digestHex;
+) => (await settled(captureSigningDigest(invocation))).digestHex;
 
 const buildInvocation = async () => {
   const { der, privateKey } = await createSelfSignedCertificate({
@@ -103,13 +104,15 @@ describe("two-phase PDF signing", () => {
     expect(digestHex).toMatch(/^[0-9a-f]{64}$/u);
 
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
-    const { bytes: signed } = await applySignature({
-      ...invocation,
-      expectedDigestHex: digestHex,
-      signature,
-      certificateChainComplete: true,
-      timestampAuthorities: [],
-    });
+    const { bytes: signed } = await settled(
+      applySignature({
+        ...invocation,
+        expectedDigestHex: digestHex,
+        signature,
+        certificateChainComplete: true,
+        timestampAuthorities: [],
+      }),
+    );
 
     // Phase 2 only returns bytes when LibPDF asked it to sign exactly the
     // digest phase 1 published: the two phases agreeing is the invariant.
@@ -188,13 +191,15 @@ describe("two-phase PDF signing", () => {
       .digest("hex");
     expect(otherDigestHex).not.toBe(digestHex);
 
-    const rejected = await applySignature({
-      ...invocation,
-      expectedDigestHex: otherDigestHex,
-      signature,
-      certificateChainComplete: true,
-      timestampAuthorities: [],
-    }).catch((error: unknown) => error);
+    const rejected = await settled(
+      applySignature({
+        ...invocation,
+        expectedDigestHex: otherDigestHex,
+        signature,
+        certificateChainComplete: true,
+        timestampAuthorities: [],
+      }),
+    ).catch((error: unknown) => error);
     expect(rejected).toBeInstanceOf(PdfSigningDigestMismatchError);
   });
 
@@ -225,24 +230,26 @@ describe("two-phase PDF signing", () => {
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
     const working = await createTestTimestampAuthority();
 
-    const applied = await applySignature({
-      ...invocation,
-      expectedDigestHex: digestHex,
-      signature,
-      certificateChainComplete: true,
-      timestampAuthorities: [
-        {
-          authority: {
-            timestamp: async () => {
-              throw new Error("authority unreachable");
+    const applied = await settled(
+      applySignature({
+        ...invocation,
+        expectedDigestHex: digestHex,
+        signature,
+        certificateChainComplete: true,
+        timestampAuthorities: [
+          {
+            authority: {
+              timestamp: async () => {
+                throw new Error("authority unreachable");
+              },
             },
+            url: "https://tsa-down.example/",
           },
-          url: "https://tsa-down.example/",
-        },
-        { authority: working, url: "https://tsa-up.example/" },
-      ],
-      timestampTrustAnchors: [working.signer.der],
-    });
+          { authority: working, url: "https://tsa-up.example/" },
+        ],
+        timestampTrustAnchors: [working.signer.der],
+      }),
+    );
 
     // The timestamp is phase 2's alone: adding it did not change the digest
     // phase 1 published, or the signer above would have refused.
@@ -332,19 +339,21 @@ describe("two-phase PDF signing", () => {
         { preconnect: globalFetch.preconnect },
       );
       try {
-        const applied = await applySignature({
-          ...invocation,
-          certificateChainComplete: chainComplete,
-          expectedDigestHex: digestHex,
-          revocationProvider,
-          signature,
-          timestampAuthorities: [
-            { authority: tsa, url: "https://tsa.example/" },
-          ],
-          timestampTrustAnchors: (
-            timestampAnchors ?? ((signer) => [signer.der])
-          )(tsa.signer),
-        });
+        const applied = await settled(
+          applySignature({
+            ...invocation,
+            certificateChainComplete: chainComplete,
+            expectedDigestHex: digestHex,
+            revocationProvider,
+            signature,
+            timestampAuthorities: [
+              { authority: tsa, url: "https://tsa.example/" },
+            ],
+            timestampTrustAnchors: (
+              timestampAnchors ?? ((signer) => [signer.der])
+            )(tsa.signer),
+          }),
+        );
         return {
           applied,
           basePdf: invocation.basePdf,
@@ -510,10 +519,12 @@ describe("two-phase PDF signing", () => {
       ),
     );
 
-    const refused = await captureSigningDigest({
-      ...invocation,
-      basePdf: repaired,
-    }).catch((error: unknown) => error);
+    const refused = await settled(
+      captureSigningDigest({
+        ...invocation,
+        basePdf: repaired,
+      }),
+    ).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(PdfSigningWouldBreakSignaturesError);
 
     // The same repair on an unsigned file breaks nothing, so it signs.
@@ -553,13 +564,15 @@ describe("two-phase PDF signing", () => {
     expect(await digestOf(noId)).toBe(digestHex);
     // And phase 2 reproduces it.
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
-    const applied = await applySignature({
-      ...noId,
-      certificateChainComplete: true,
-      expectedDigestHex: digestHex,
-      signature,
-      timestampAuthorities: [],
-    });
+    const applied = await settled(
+      applySignature({
+        ...noId,
+        certificateChainComplete: true,
+        expectedDigestHex: digestHex,
+        signature,
+        timestampAuthorities: [],
+      }),
+    );
     expect(applied.level).toBe("B-B");
   });
 
@@ -590,10 +603,12 @@ describe("two-phase PDF signing", () => {
     test("an undersized placeholder is refused in phase 1, before anything is signed", async () => {
       const { invocation } = await buildInvocation();
 
-      const refused = await captureSigningDigest({
-        ...invocation,
-        placeholderSize: 2048,
-      }).catch((error: unknown) => error);
+      const refused = await settled(
+        captureSigningDigest({
+          ...invocation,
+          placeholderSize: 2048,
+        }),
+      ).catch((error: unknown) => error);
 
       expect(refused).toBeInstanceOf(PdfSigningPlaceholderTooSmallError);
     });
@@ -615,11 +630,13 @@ describe("two-phase PDF signing", () => {
           reserveTimestamp: false,
         }),
       ).toMatch(/^[0-9a-f]{64}$/u);
-      const refused = await captureSigningDigest({
-        ...invocation,
-        placeholderSize: withoutTimestamp,
-        reserveTimestamp: true,
-      }).catch((error: unknown) => error);
+      const refused = await settled(
+        captureSigningDigest({
+          ...invocation,
+          placeholderSize: withoutTimestamp,
+          reserveTimestamp: true,
+        }),
+      ).catch((error: unknown) => error);
       expect(refused).toBeInstanceOf(PdfSigningPlaceholderTooSmallError);
     });
   });
@@ -633,13 +650,15 @@ describe("two-phase PDF signing", () => {
       const { invocation, privateKey } = await buildInvocation();
       const digestHex = await digestOf(invocation);
       const signature = await signDigestLikeAKeychain(privateKey, digestHex);
-      return await applySignature({
-        ...invocation,
-        certificateChainComplete: true,
-        expectedDigestHex: digestHex,
-        signature,
-        timestampAuthorities,
-      });
+      return await settled(
+        applySignature({
+          ...invocation,
+          certificateChainComplete: true,
+          expectedDigestHex: digestHex,
+          signature,
+          timestampAuthorities,
+        }),
+      );
     };
 
     test("signs without a timestamp and says so when every authority fails", async () => {

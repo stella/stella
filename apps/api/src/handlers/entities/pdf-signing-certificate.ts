@@ -216,22 +216,18 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       certificateChain: signerChain,
       timestamped,
     });
-    const captured = await Result.tryPromise({
-      try: async () =>
-        await captureSigningDigest({
-          basePdf,
-          certificate,
-          certificateChain: signerChain,
-          keyType: inspection.keyType,
-          location: session.location,
-          placeholderSize,
-          reason: session.reason,
-          reserveTimestamp: timestamped,
-          signatureAlgorithm: inspection.signatureAlgorithm,
-          signingTime,
-          stamp: session.stamp,
-        }),
-      catch: (cause) => cause,
+    const captured = await captureSigningDigest({
+      basePdf,
+      certificate,
+      certificateChain: signerChain,
+      keyType: inspection.keyType,
+      location: session.location,
+      placeholderSize,
+      reason: session.reason,
+      reserveTimestamp: timestamped,
+      signatureAlgorithm: inspection.signatureAlgorithm,
+      signingTime,
+      stamp: session.stamp,
     });
     if (Result.isError(captured)) {
       // Preparing is deterministic over the stored bytes, so a document that

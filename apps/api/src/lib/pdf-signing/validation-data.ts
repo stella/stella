@@ -12,8 +12,10 @@
 
 import { PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import type { PDF, PdfObject, PdfRef } from "@libpdf/core";
+import type { Result } from "better-result";
 
 import { appendSigningRevision } from "@/api/lib/files/pdf-signatures";
+import type { PdfRevisionAppendError } from "@/api/lib/files/pdf-signatures";
 import { parseCertificate } from "@/api/lib/pdf-signing/certificate-chain";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 
@@ -132,7 +134,7 @@ export const gatherValidationData = async ({
 export const embedValidationData = async (
   pdf: PDF,
   material: ValidationMaterial,
-): Promise<Uint8Array> => {
+): Promise<Result<Uint8Array, PdfRevisionAppendError>> => {
   const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
   const catalog = pdf.getCatalog();
   const existing = catalog.getDict("DSS", resolve);

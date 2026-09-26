@@ -25,6 +25,7 @@ import type {
   SignatureStamp,
   StampRotation,
 } from "@/api/lib/pdf-signing/stamp";
+import { settled } from "@/api/tests/helpers/settled";
 import { readSignatureIntegrity } from "@/api/tests/helpers/signed-pdf";
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
 
@@ -245,8 +246,8 @@ const signWithStamp = async (
     signingTime: SIGNING_TIME,
     stamp: stampOn(rotation, placed.rect),
   };
-  const first = await captureSigningDigest(invocation);
-  const second = await captureSigningDigest(invocation);
+  const first = await settled(captureSigningDigest(invocation));
+  const second = await settled(captureSigningDigest(invocation));
   const key = crypto.createPrivateKey({
     key: Buffer.from(await crypto.subtle.exportKey("pkcs8", signer.privateKey)),
     format: "der",
@@ -261,14 +262,16 @@ const signWithStamp = async (
   );
   // Phase 2 rebuilds the stamp from the same inputs; the signer below only
   // returns the signature when LibPDF asks for exactly phase 1's digest.
-  const applied = await applySignature({
-    ...invocation,
-    certificateChainComplete: true,
-    expectedDigestHex: first.digestHex,
-    signature: new Uint8Array(signature),
-    timestampAuthorities: [],
-    timestampTrustAnchors: [],
-  });
+  const applied = await settled(
+    applySignature({
+      ...invocation,
+      certificateChainComplete: true,
+      expectedDigestHex: first.digestHex,
+      signature: new Uint8Array(signature),
+      timestampAuthorities: [],
+      timestampTrustAnchors: [],
+    }),
+  );
   return { applied, first, placed, second };
 };
 

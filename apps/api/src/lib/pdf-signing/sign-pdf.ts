@@ -32,9 +32,10 @@ import type {
   SignWarning,
   TimestampAuthority,
 } from "@libpdf/core";
-import { TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
 import {
@@ -42,6 +43,7 @@ import {
   completeCertificateChain,
 } from "@/api/lib/pdf-signing/certificate-chain";
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
+import { settleForLibpdf } from "@/api/lib/pdf-signing/libpdf-callbacks";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import {
@@ -226,9 +228,9 @@ const pinFileIdentifier = (pdf: PDF, source: Uint8Array) => {
 const prepareSignatureField = async (
   pdf: PDF,
   invocation: SigningInvocation,
-): Promise<string | undefined> =>
+): Promise<Result<string | undefined, PdfSigningStampError>> =>
   invocation.stamp === null
-    ? undefined
+    ? Result.ok(undefined)
     : addSignatureStamp({
         fontBytes: await loadStampFont(),
         lines: stampLines({
@@ -293,6 +295,36 @@ export type CapturedSigningDigest = {
   signedAttributes: Uint8Array;
 };
 
+export type CaptureSigningDigestError =
+  | PdfSigningCertifiedDocumentError
+  | PdfSigningError
+  | PdfSigningPlaceholderTooSmallError
+  | PdfSigningStampError
+  | PdfSigningWouldBreakSignaturesError
+  | TimeoutError;
+
+/** What phase 1 reports for a failure that is none of its own refusals. */
+const captureFailure = (cause: unknown): CaptureSigningDigestError => {
+  if (
+    TimeoutError.is(cause) ||
+    PdfSigningStampError.is(cause) ||
+    PdfSigningPlaceholderTooSmallError.is(cause)
+  ) {
+    return cause;
+  }
+  if (cause instanceof PlaceholderError) {
+    return new PdfSigningPlaceholderTooSmallError({
+      message: "The signature would not fit the space reserved for it.",
+      availableBytes: cause.availableSize,
+      requiredBytes: cause.requiredSize,
+    });
+  }
+  return new PdfSigningError({
+    message: "Preparing the PDF signature failed.",
+    cause,
+  });
+};
+
 /**
  * Phase 1: the CMS signed attributes and their SHA-256, which is what the
  * desktop's keychain key signs. `reserveTimestamp` sizes the stand-in
@@ -300,7 +332,7 @@ export type CapturedSigningDigest = {
  */
 export const captureSigningDigest = async (
   invocation: SigningInvocation & { reserveTimestamp: boolean },
-): Promise<CapturedSigningDigest> => {
+): Promise<Result<CapturedSigningDigest, CaptureSigningDigestError>> => {
   const captured: CapturedSigningDigest[] = [];
   const standIn = new Uint8Array(
     SIGNATURE_VALUE_MAX_BYTES +
@@ -323,63 +355,65 @@ export const captureSigningDigest = async (
     },
   };
 
-  await withTimeout(
-    async () => {
-      const pdf = await PDF.load(invocation.basePdf);
-      // Checked here, before any digest exists, so the desktop never asks
-      // for a PIN on a document the signature would invalidate.
-      // A signature is appended as a new revision; where LibPDF would
-      // rewrite the file instead (a linearized or repaired file), existing
-      // signatures would no longer cover their bytes.
-      if (
-        isSignedPdf({ pdf, source: invocation.basePdf }) &&
-        pdf.canSaveIncrementally() !== null
-      ) {
-        throw new PdfSigningWouldBreakSignaturesError({
+  const prepare = async (): Promise<
+    Result<void, CaptureSigningDigestError>
+  > => {
+    const pdf = await PDF.load(invocation.basePdf);
+    // Checked here, before any digest exists, so the desktop never asks for
+    // a PIN on a document the signature would invalidate.
+    // A signature is appended as a new revision; where LibPDF would rewrite
+    // the file instead (a linearized or repaired file), existing signatures
+    // would no longer cover their bytes.
+    if (
+      isSignedPdf({ pdf, source: invocation.basePdf }) &&
+      pdf.canSaveIncrementally() !== null
+    ) {
+      return Result.err(
+        new PdfSigningWouldBreakSignaturesError({
           message:
             "Signing this PDF would invalidate the signatures it already carries.",
-        });
-      }
-      if (readDocMdpPermission({ pdf, source: invocation.basePdf }) === 1) {
-        throw new PdfSigningCertifiedDocumentError({
+        }),
+      );
+    }
+    if (readDocMdpPermission({ pdf, source: invocation.basePdf }) === 1) {
+      return Result.err(
+        new PdfSigningCertifiedDocumentError({
           message:
             "This PDF is certified and its certification forbids changes.",
-        });
-      }
-      try {
-        pinFileIdentifier(pdf, invocation.basePdf);
-        const fieldName = await prepareSignatureField(pdf, invocation);
-        await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName));
-      } catch (error) {
-        if (PdfSigningStampError.is(error)) {
-          throw error;
-        }
-        if (error instanceof PlaceholderError) {
-          throw new PdfSigningPlaceholderTooSmallError({
-            message: "The signature would not fit the space reserved for it.",
-            availableBytes: error.availableSize,
-            requiredBytes: error.requiredSize,
-          });
-        }
-        throw new PdfSigningError({
-          message: "Preparing the PDF signature failed.",
-          cause: error,
-        });
-      }
-    },
-    {
-      label: "pdf-signing.capture-digest",
-      timeoutMs: PDF_SIGNING_PREPARE_TIMEOUT_MS,
-    },
-  );
+        }),
+      );
+    }
+    pinFileIdentifier(pdf, invocation.basePdf);
+    const fieldName = await prepareSignatureField(pdf, invocation);
+    if (Result.isError(fieldName)) {
+      return fieldName;
+    }
+    await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName.value));
+    return Result.ok(undefined);
+  };
+
+  const prepared = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(prepare, {
+        label: "pdf-signing.capture-digest",
+        timeoutMs: PDF_SIGNING_PREPARE_TIMEOUT_MS,
+      }),
+    catch: captureFailure,
+  });
+  const settled = Result.isError(prepared) ? prepared : prepared.value;
+  if (Result.isError(settled)) {
+    return settled;
+  }
 
   const digest = captured.at(0);
   if (digest === undefined) {
-    throw new PdfSigningError({
-      message: "LibPDF produced no signed attributes to sign.",
-    });
+    return Result.err(
+      new PdfSigningError({
+        message: "LibPDF produced no signed attributes to sign.",
+      }),
+    );
   }
-  return digest;
+  return Result.ok(digest);
 };
 
 type ApplySignatureInvocation = SigningInvocation & {
@@ -458,182 +492,222 @@ const isTimestampFailure = (error: unknown) =>
   PdfSigningTimestampUnavailableError.is(error) ||
   error instanceof PlaceholderError;
 
+export type ApplySignatureError =
+  | PdfSigningCertificateRevokedError
+  | PdfSigningDigestMismatchError
+  | PdfSigningError
+  | TimeoutError;
+
 /**
- * Phase 2: the signed PDF. Throws {@link PdfSigningDigestMismatchError} when
- * LibPDF asks to sign anything other than what phase 1 published, so a
+ * What phase 2 reports for a failure: its own refusals and running out of
+ * time as they are, anything else as the embedding having failed.
+ */
+const embeddingFailure = (cause: unknown): ApplySignatureError =>
+  TimeoutError.is(cause) ||
+  PdfSigningDigestMismatchError.is(cause) ||
+  PdfSigningCertificateRevokedError.is(cause) ||
+  PdfSigningError.is(cause)
+    ? cause
+    : new PdfSigningError({
+        message: "Embedding the PDF signature failed.",
+        cause,
+      });
+
+type SignedOnce = { bytes: Uint8Array; pdf: PDF; warnings: SignWarning[] };
+
+/**
+ * Phase 2: the signed PDF. Refuses with {@link PdfSigningDigestMismatchError}
+ * when LibPDF asks to sign anything other than what phase 1 published, so a
  * signature can never end up over bytes the desktop did not see.
  */
 export const applySignature = async (
   invocation: ApplySignatureInvocation,
-): Promise<AppliedSignature> => {
+): Promise<Result<AppliedSignature, ApplySignatureError>> => {
+  const matchingSignature = async (
+    data: Uint8Array,
+  ): Promise<Result<Uint8Array, PdfSigningDigestMismatchError>> =>
+    (await signedAttributesDigestHex(data)) === invocation.expectedDigestHex
+      ? Result.ok(invocation.signature)
+      : Result.err(
+          new PdfSigningDigestMismatchError({
+            message:
+              "The prepared signature no longer matches this document. Start signing again.",
+          }),
+        );
   const signer: Signer = {
     certificate: invocation.certificate,
     certificateChain: invocation.certificateChain,
     keyType: invocation.keyType,
     signatureAlgorithm: invocation.signatureAlgorithm,
-    sign: async (data) => {
-      if (
-        (await signedAttributesDigestHex(data)) !== invocation.expectedDigestHex
-      ) {
-        throw new PdfSigningDigestMismatchError({
-          message:
-            "The prepared signature no longer matches this document. Start signing again.",
-        });
-      }
-      return invocation.signature;
-    },
+    sign: async (data) => await settleForLibpdf(matchingSignature(data)),
   };
 
-  const signOnce = async (trust: TrustOptions) => {
-    const pdf = await PDF.load(invocation.basePdf);
-    pinFileIdentifier(pdf, invocation.basePdf);
-    const fieldName = await prepareSignatureField(pdf, invocation);
-    const { bytes, warnings } = await pdf.sign(
-      buildSignOptions(invocation, signer, trust, fieldName),
-    );
-    return { bytes, pdf, warnings };
-  };
-
-  return await withTimeout(
-    async () => {
-      try {
-        const warnings: PdfSigningWarning[] = [];
-        const timestampAuthority = createFallbackTimestampAuthority(
-          invocation.timestampAuthorities,
+  /** One LibPDF pass; what it rejects with is the caller's to classify. */
+  const signOnce = async (
+    trust: TrustOptions,
+  ): Promise<Result<SignedOnce, unknown>> => {
+    const passed = await Result.tryPromise({
+      try: async (): Promise<Result<SignedOnce, PdfSigningStampError>> => {
+        const pdf = await PDF.load(invocation.basePdf);
+        pinFileIdentifier(pdf, invocation.basePdf);
+        const fieldName = await prepareSignatureField(pdf, invocation);
+        if (Result.isError(fieldName)) {
+          return fieldName;
+        }
+        const { bytes, warnings } = await pdf.sign(
+          buildSignOptions(invocation, signer, trust, fieldName.value),
         );
-        const provider =
-          invocation.revocationProvider ?? createTrackedRevocationProvider();
-        const signerChain = [
-          invocation.certificate,
-          ...invocation.certificateChain,
-        ];
-        // Gathered before anything is embedded: validation data is only
-        // needed with trusted time, and a revocation it turns up must stop
-        // the signature, not just be stored beside it. Phase 1 made the same
-        // check before the PIN; this one covers the minutes in between.
-        const signerRevocation =
-          invocation.timestampAuthorities.length > 0
-            ? await findRevokedCertificates({ provider, signerChain })
-            : null;
-        if (signerRevocation !== null && signerRevocation.revoked.length > 0) {
-          throw new PdfSigningCertificateRevokedError({
-            message: "A certificate of the signer's chain is revoked.",
-          });
-        }
-        const timestamped =
-          invocation.timestampAuthorities.length > 0
-            ? await signOnce({ timestampAuthority }).catch((error: unknown) => {
-                if (!isTimestampFailure(error)) {
-                  throw error;
-                }
-                // The desktop's signature is already spent; a signature
-                // without trusted time beats none, and the level and the
-                // warning below say exactly what it lacks.
-                warnings.push({
-                  code: "TIMESTAMP_UNAVAILABLE",
-                  message: describeError(error),
-                });
-                return null;
-              })
-            : null;
-        const signed = timestamped ?? (await signOnce({}));
-        warnings.push(...libpdfWarnings(signed.warnings));
+        return Result.ok({ bytes, pdf, warnings });
+      },
+      catch: (cause) => cause,
+    });
+    return Result.isError(passed) ? passed : passed.value;
+  };
 
-        const timestamp = timestampAuthority.used();
-        if (
-          timestamped === null ||
-          timestamp === null ||
-          signerRevocation === null
-        ) {
-          return {
-            bytes: signed.bytes,
-            level: "B-B",
-            timestampAuthorityUrl: null,
-            warnings: boundWarnings(warnings),
-          } satisfies AppliedSignature;
-        }
-
-        // The chain is phase 1's completed one, so what is left to gather is
-        // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
-        // the store lands in one more incremental update after them.
-        // The timestamp's own chain, completed like the signer's: what the
-        // token carries, then its issuers' AIA URLs through the guard.
-        const timestampIssuers = await completeCertificateChain({
-          candidates: [
-            ...timestamp.certificates,
-            ...invocation.timestampTrustAnchors,
-          ],
-          certificate: timestamp.signerCertificate,
+  const embed = async (): Promise<
+    Result<AppliedSignature, ApplySignatureError>
+  > => {
+    const warnings: PdfSigningWarning[] = [];
+    const timestampAuthority = createFallbackTimestampAuthority(
+      invocation.timestampAuthorities,
+    );
+    const provider =
+      invocation.revocationProvider ?? createTrackedRevocationProvider();
+    const signerChain = [
+      invocation.certificate,
+      ...invocation.certificateChain,
+    ];
+    // Gathered before anything is embedded: validation data is only
+    // needed with trusted time, and a revocation it turns up must stop
+    // the signature, not just be stored beside it. Phase 1 made the same
+    // check before the PIN; this one covers the minutes in between.
+    const signerRevocation =
+      invocation.timestampAuthorities.length > 0
+        ? await findRevokedCertificates({ provider, signerChain })
+        : null;
+    if (signerRevocation !== null && signerRevocation.revoked.length > 0) {
+      return Result.err(
+        new PdfSigningCertificateRevokedError({
+          message: "A certificate of the signer's chain is revoked.",
+        }),
+      );
+    }
+    let timestamped: SignedOnce | null = null;
+    if (invocation.timestampAuthorities.length > 0) {
+      const attempt = await signOnce({ timestampAuthority });
+      if (Result.isOk(attempt)) {
+        timestamped = attempt.value;
+      } else if (isTimestampFailure(attempt.error)) {
+        // The desktop's signature is already spent; a signature without
+        // trusted time beats none, and the level and the warning below
+        // say exactly what it lacks.
+        warnings.push({
+          code: "TIMESTAMP_UNAVAILABLE",
+          message: describeError(attempt.error),
         });
-        const timestampTrusted = await certificationPathReachesAnchor({
-          anchors: invocation.timestampTrustAnchors,
-          at: timestamp.genTime,
-          chain: [timestamp.signerCertificate, ...timestampIssuers.chain],
-        });
-        const validation = await gatherValidationData({
-          provider,
-          signer: signerRevocation.material,
-          signerChain,
-          timestampChain: [
-            timestamp.signerCertificate,
-            ...timestampIssuers.chain,
-          ],
-        });
-        if (!invocation.certificateChainComplete) {
-          warnings.push({
-            code: "CHAIN_INCOMPLETE",
-            message:
-              "The signer's certificate chain does not reach a root certificate.",
-          });
-        }
-        if (!timestampTrusted) {
-          warnings.push({
-            code: "TIMESTAMP_UNTRUSTED",
-            message:
-              "The timestamp authority's chain reaches no configured trust anchor; its time is embedded but not relied on.",
-          });
-        }
-        if (!timestampIssuers.complete) {
-          warnings.push({
-            code: "TIMESTAMP_CHAIN_INCOMPLETE",
-            message:
-              "The timestamp authority's certificate chain does not reach a root certificate.",
-          });
-        }
-        if (validation.uncovered.length > 0) {
-          warnings.push({
-            code: "REVOCATION_UNAVAILABLE",
-            message: `No revocation data for ${validation.uncovered.length} certificate(s) in the signer's or the timestamp authority's chain.`,
-          });
-        }
-        return {
-          bytes: await embedValidationData(signed.pdf, validation.material),
-          level: achievedLevel({
-            longTermValidated:
-              invocation.certificateChainComplete &&
-              timestampIssuers.complete &&
-              validation.uncovered.length === 0,
-            timestampTrusted,
-          }),
-          timestampAuthorityUrl: timestampAuthority.usedUrl(),
-          warnings: boundWarnings(warnings),
-        } satisfies AppliedSignature;
-      } catch (error) {
-        if (
-          PdfSigningDigestMismatchError.is(error) ||
-          PdfSigningCertificateRevokedError.is(error)
-        ) {
-          throw error;
-        }
-        throw new PdfSigningError({
-          message: "Embedding the PDF signature failed.",
-          cause: error,
-        });
+      } else {
+        return Result.err(embeddingFailure(attempt.error));
       }
-    },
-    {
-      label: "pdf-signing.apply-signature",
-      timeoutMs: PDF_SIGNING_APPLY_TIMEOUT_MS,
-    },
-  );
+    }
+    const untimestamped = timestamped === null ? await signOnce({}) : null;
+    if (untimestamped !== null && Result.isError(untimestamped)) {
+      return Result.err(embeddingFailure(untimestamped.error));
+    }
+    const signed = timestamped ?? untimestamped?.value;
+    if (signed === undefined) {
+      return panic("a signing pass produced neither a result nor an error");
+    }
+    warnings.push(...libpdfWarnings(signed.warnings));
+
+    const timestamp = timestampAuthority.used();
+    if (
+      timestamped === null ||
+      timestamp === null ||
+      signerRevocation === null
+    ) {
+      return Result.ok({
+        bytes: signed.bytes,
+        level: "B-B",
+        timestampAuthorityUrl: null,
+        warnings: boundWarnings(warnings),
+      } satisfies AppliedSignature);
+    }
+
+    // The chain is phase 1's completed one, so what is left to gather is
+    // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
+    // the store lands in one more incremental update after them.
+    // The timestamp's own chain, completed like the signer's: what the
+    // token carries, then its issuers' AIA URLs through the guard.
+    const timestampIssuers = await completeCertificateChain({
+      candidates: [
+        ...timestamp.certificates,
+        ...invocation.timestampTrustAnchors,
+      ],
+      certificate: timestamp.signerCertificate,
+    });
+    const timestampTrusted = await certificationPathReachesAnchor({
+      anchors: invocation.timestampTrustAnchors,
+      at: timestamp.genTime,
+      chain: [timestamp.signerCertificate, ...timestampIssuers.chain],
+    });
+    const validation = await gatherValidationData({
+      provider,
+      signer: signerRevocation.material,
+      signerChain,
+      timestampChain: [timestamp.signerCertificate, ...timestampIssuers.chain],
+    });
+    if (!invocation.certificateChainComplete) {
+      warnings.push({
+        code: "CHAIN_INCOMPLETE",
+        message:
+          "The signer's certificate chain does not reach a root certificate.",
+      });
+    }
+    if (!timestampTrusted) {
+      warnings.push({
+        code: "TIMESTAMP_UNTRUSTED",
+        message:
+          "The timestamp authority's chain reaches no configured trust anchor; its time is embedded but not relied on.",
+      });
+    }
+    if (!timestampIssuers.complete) {
+      warnings.push({
+        code: "TIMESTAMP_CHAIN_INCOMPLETE",
+        message:
+          "The timestamp authority's certificate chain does not reach a root certificate.",
+      });
+    }
+    if (validation.uncovered.length > 0) {
+      warnings.push({
+        code: "REVOCATION_UNAVAILABLE",
+        message: `No revocation data for ${validation.uncovered.length} certificate(s) in the signer's or the timestamp authority's chain.`,
+      });
+    }
+    const embedded = await embedValidationData(signed.pdf, validation.material);
+    if (Result.isError(embedded)) {
+      return Result.err(embeddingFailure(embedded.error));
+    }
+    return Result.ok({
+      bytes: embedded.value,
+      level: achievedLevel({
+        longTermValidated:
+          invocation.certificateChainComplete &&
+          timestampIssuers.complete &&
+          validation.uncovered.length === 0,
+        timestampTrusted,
+      }),
+      timestampAuthorityUrl: timestampAuthority.usedUrl(),
+      warnings: boundWarnings(warnings),
+    } satisfies AppliedSignature);
+  };
+
+  const applied = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(embed, {
+        label: "pdf-signing.apply-signature",
+        timeoutMs: PDF_SIGNING_APPLY_TIMEOUT_MS,
+      }),
+    catch: embeddingFailure,
+  });
+  return Result.isError(applied) ? applied : applied.value;
 };
