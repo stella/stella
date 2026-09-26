@@ -189,6 +189,9 @@ const PUBLIC_DECISION_READ_GATES = {
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {
@@ -214,6 +217,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law-public-read-db.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The read handle the gated reads run through.",
+  },
+  "apps/api/src/lib/case-law/decision-court-id-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The court-id CHECK fragment and the jurisdictions it covers; no query.",
   },
   "apps/api/src/lib/case-law/decision-row-columns.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
