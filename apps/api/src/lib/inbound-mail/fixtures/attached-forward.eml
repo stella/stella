@@ -1,0 +1,25 @@
+From: Member <member@example.test>
+To: Matter <matter@example.test>
+Subject: Fwd: Original subject
+Date: Sat, 26 Sep 2026 12:00:00 +0000
+Message-ID: <forward-wrapper@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: text/plain; charset=UTF-8
+
+Please file this message.
+--outer
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="original.eml"
+
+From: Author <author@outside.test>
+To: Member <member@example.test>
+Subject: Original subject
+Date: Fri, 25 Sep 2026 11:00:00 +0000
+Message-ID: <original@outside.test>
+Content-Type: text/plain; charset=UTF-8
+
+Original body.
+--outer--
