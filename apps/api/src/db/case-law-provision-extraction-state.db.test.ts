@@ -885,9 +885,8 @@ describe("privileges", () => {
       return (await tx.execute(query)).rows;
     });
 
-  test.each(APPLICATION_ROLES)(
-    "%s can neither insert state nor read scope rows",
-    async (role) => {
+  for (const role of APPLICATION_ROLES) {
+    test(`${role} can neither insert state nor read scope rows`, async () => {
       const id = await insertDecision();
       await run(
         sql`DELETE FROM case_law_provision_extractions WHERE decision_id = ${id}`,
@@ -910,8 +909,8 @@ describe("privileges", () => {
           ),
         ),
       ).toMatch(/permission denied/u);
-    },
-  );
+    });
+  }
 
   test("ingestion's decision writes and calls still create state through the owner-run functions", async () => {
     const id = createSafeId<"caseLawDecision">();

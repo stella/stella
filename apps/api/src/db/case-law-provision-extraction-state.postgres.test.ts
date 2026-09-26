@@ -14,6 +14,7 @@ import { describe, expect, test } from "bun:test";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,10 +26,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
-const databaseUrl =
-  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true"
-    ? process.env["DATABASE_URL"]
-    : undefined;
+const databaseUrl = process.env["DATABASE_URL"];
+const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const COUNTRY = "ZZP";
 
@@ -88,7 +87,7 @@ const withFixture = async (
     fixture: Fixture;
   }) => Promise<void>,
 ) => {
-  if (databaseUrl === undefined) {
+  if (!databaseUrl || !runPostgresTests) {
     return;
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -115,7 +114,7 @@ const stateOf = async (observer: SQL, id: string) =>
     `
   ).at(0);
 
-if (databaseUrl === undefined) {
+if (!databaseUrl || !runPostgresTests) {
   describe.skip("provision extraction state (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
       expect(true).toBe(true);
@@ -244,6 +243,33 @@ if (databaseUrl === undefined) {
           ),
           rawHash: "provision-state-1",
           parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
+          documentAst: {
+            version: 1,
+            source: {
+              system: ADAPTER_KEYS.CZ_NS,
+              documentId: "provision-state",
+              webUrl: "https://example.test/web",
+              printUrl: "https://example.test/print",
+            },
+            metadata: {
+              caseNumber: null,
+              ecli: null,
+              court: null,
+              decisionDate: null,
+              decisionType: null,
+              keywords: [],
+              statutes: [],
+            },
+            blocks: [
+              {
+                id: "b1",
+                anchorId: "p1",
+                type: "paragraph",
+                inlines: [{ type: "text", text: "Text." }],
+                plainText: "Text.",
+              },
+            ],
+          } satisfies DocumentAst,
         };
         const ingest = async (
           observationOrder: bigint,
