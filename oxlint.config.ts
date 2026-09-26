@@ -256,6 +256,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
   ]),
+  fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
+    "no-direct-pdf-save/no-direct-pdf-save",
+  ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
   ]),
