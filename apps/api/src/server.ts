@@ -31,7 +31,6 @@ import {
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -223,6 +222,18 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
 
 const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
 
+// Local development routes exist only in an open runtime. The module is
+// imported on demand because it loads seeding and search maintenance; the
+// browser contract names the routes in eden-contract.ts.
+const localDevPublicRoutes = new Elysia();
+const localDevVersionedRoutes = new Elysia();
+if (isLocalDevOpen()) {
+  const { devPublicRoute, devRoute } =
+    await import("@/api/handlers/dev/routes");
+  localDevPublicRoutes.use(devPublicRoute);
+  localDevVersionedRoutes.use(devRoute);
+}
+
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
@@ -368,7 +379,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
-  .use(devPublicRoute)
+  .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)
   .mount(getAuth().handler)
@@ -488,7 +499,7 @@ const api = new Elysia()
       .use(workObligationsRoute)
       .use(myWorkRoute)
       .use(meRoute)
-      .use(devRoute)
+      .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),
   )
   // Mounted after the versioned group on purpose: a route added before it

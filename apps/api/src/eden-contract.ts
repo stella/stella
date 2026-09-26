@@ -5,6 +5,7 @@ import type {
   ChatSourceDocument,
   ChatUITools,
 } from "@/api/handlers/chat/types";
+import type { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import type { memoriesRoute } from "@/api/handlers/memories/routes";
 import type { PositionDecisionSummary } from "@/api/lib/document-review/position-decisions";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
@@ -38,22 +39,28 @@ type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+// Registered only in an open runtime (server.ts), so the inferred app type
+// does not carry them; the browser's local Dev menu still calls them.
+type LocalDevPublicRoutes = (typeof devPublicRoute)["~Routes"];
+type LocalDevV1Routes = (typeof devRoute)["~Routes"];
 
 /**
  * Main browser Eden route tree. Routes whose addition would breach the
  * recursive type-cost budget use their own small, typed Eden client instead.
  */
-type WebRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
-    entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
-      ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
-        entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
-          ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
+type WebRoutes = Omit<ApiRoutes, "v1"> &
+  LocalDevPublicRoutes & {
+    v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> &
+      LocalDevV1Routes & {
+        entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
+          ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
+            entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
+              ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
+            };
+          };
         };
       };
-    };
   };
-};
 
 /**
  * Every API type apps/web consumes. apps/web never compiles the API: each
