@@ -10,6 +10,7 @@ import {
   recordedClusters,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
 
 import {
@@ -70,7 +71,14 @@ const asDocument = (blocks: readonly Block[]) => ({
   blocks: [...blocks],
 });
 
-const RECORDED = ["380339", "5094940", "5804213", "10742675"] as const;
+const RECORDED = [
+  "380339",
+  "2099017",
+  "5094940",
+  "5804213",
+  "10637146",
+  "10742675",
+] as const;
 
 describe("which column becomes an opinion's text", () => {
   // Each supported structure is reached first as the winner and then as the
@@ -320,8 +328,8 @@ describe("recorded opinions", () => {
       }
     }
     // Harvard XML twice (its own column and the citation column's copy) for
-    // two opinions, the preformatted body and two plain texts.
-    expect(checked).toBe(7);
+    // three opinions, two preformatted bodies and three plain texts.
+    expect(checked).toBe(11);
   });
 
   test("scope every opinion block exactly once and form a valid document", () => {
@@ -446,15 +454,236 @@ describe("principal text for the order classifier", () => {
     expect(classification.kind).toBe("unclassified");
   });
 
-  test("takes a single trial court row as one proven opinion body", () => {
+  // Cluster 10742675: a district court's "OPINION AND ORDER" in plain text.
+  test("proves no opinion body from one trial court row of layout text", () => {
     const { classification, outcome } = classify(fixture("10742675"));
     expect(outcome.principal).toMatchObject({
+      orderHeading: false,
       structuralOpinion: false,
-      singleOpinionBody: true,
+      singleOpinionBody: false,
     });
     expect(classification).toMatchObject({
-      kind: "opinion",
-      rule: "long-body-single-opinion",
+      kind: "unclassified",
+      rule: "long-body-without-corroboration",
     });
   });
+
+  // Cluster 10637146: a long trial court order whose caption names it an
+  // ORDER in a caption column, not as a title of its own; it stays
+  // unclassified rather than become an opinion or an order on layout.
+  test("leaves a long trial order titled only in its caption unclassified", () => {
+    const { classification, outcome } = classify(fixture("10637146"));
+    expect(outcome.principal).toMatchObject({
+      orderHeading: false,
+      singleOpinionBody: false,
+    });
+    expect(classification.kind).toBe("unclassified");
+  });
+
+  // Cluster 2099017: a per curiam order whose markup opens with an ORDER
+  // title before its author line.
+  test("reads a root ORDER title as order evidence and keeps it out of the body", () => {
+    const { classification, outcome } = classify(fixture("2099017"));
+    expect(outcome.principal.orderHeading).toBe(true);
+    expect(outcome.principal.body).toStartWith(
+      "AND NOW, this 23rd day of June, 2010",
+    );
+    expect(classification).toMatchObject({
+      kind: "order",
+      rule: "order-heading",
+    });
+  });
+
+  test("does not read an ORDER heading later in an opinion as a root title", () => {
+    const text = "The claims fail for the reasons given. ".repeat(20);
+    const { classification, outcome } = classify([
+      {
+        row: opinionRow({
+          id: "1",
+          xml_harvard: `<opinion type="majority"><p>${text}</p><p>ORDER</p><p>The motion is denied.</p></opinion>`,
+        }),
+        type: "020lead",
+      },
+    ]);
+    expect(outcome.principal.orderHeading).toBe(false);
+    expect(classification.kind).toBe("opinion");
+  });
+
+  // Synthetic rows: the row types that prove no class need markup to prove
+  // an opinion; a long body alone leaves them unclassified.
+  const unproven = "The report is adopted and the action is dismissed. ".repeat(
+    15,
+  );
+  const provenCases = [
+    [
+      "a long trial order in plain text",
+      "100trialcourt",
+      { xml_harvard: "", plain_text: unproven },
+      "unclassified",
+    ],
+    [
+      "an addendum",
+      "050addendum",
+      { xml_harvard: `<opinion><p>${unproven}</p></opinion>` },
+      "unclassified",
+    ],
+    [
+      "a trial opinion its markup calls a majority opinion",
+      "100trialcourt",
+      { xml_harvard: `<opinion type="majority"><p>${unproven}</p></opinion>` },
+      "opinion",
+    ],
+  ] as const;
+
+  for (const [name, type, columns, kind] of provenCases) {
+    test(`classifies ${name} as ${kind}`, () => {
+      const { classification } = classify([
+        { row: opinionRow({ id: "1", type, ...columns }), type },
+      ]);
+      expect(classification.kind).toBe(kind);
+    });
+  }
+
+  test("keeps a unit whose row and markup disagree out of the principal text", () => {
+    const { outcome } = classify([
+      {
+        row: opinionRow({
+          id: "1",
+          type: "040dissent",
+          xml_harvard:
+            '<opinion type="majority"><p>The judgment is affirmed.</p></opinion>',
+        }),
+        type: "040dissent",
+      },
+    ]);
+    expect(outcome.opinions[0]?.classConflicts).toBe(1);
+    expect(outcome.principal.body).toBe("");
+    expect(outcome.blocks[0]).toMatchObject({ role: "unknown" });
+  });
+
+  test("keeps a nested dissent out of the principal text", () => {
+    const dissent =
+      "I would grant the petition for reasons discussed here. ".repeat(15);
+    const { classification, outcome } = classify([
+      {
+        row: opinionRow({
+          id: "1",
+          xml_harvard: `<opinion type="majority"><p>Certiorari denied.</p><opinion type="dissent"><author>Justice White, dissenting.</author><p>${dissent}</p></opinion></opinion>`,
+        }),
+        type: "020lead",
+      },
+    ]);
+    expect(outcome.principal.body).toBe("Certiorari denied.");
+    expect(classification).toMatchObject({
+      kind: "order",
+      rule: "short-order-wording",
+    });
+    expect(outcome.blocks.at(-1)).toMatchObject({ role: "dissent" });
+    expect(outcome.citationScopes.map(({ opinionId }) => opinionId)).toEqual([
+      "cl-opinion:1",
+      "cl-opinion:1/2",
+    ]);
+  });
+
+  test("keeps a nested concurrence and a conflicting unit out of the principal text", () => {
+    const concurrence =
+      "I join the opinion of the Court and write to add a point. ".repeat(12);
+    const { outcome } = classify([
+      {
+        row: opinionRow({
+          id: "1",
+          xml_harvard: `<casebody><opinion type="majority"><p>The judgment is affirmed.</p><opinion type="concurrence"><p>${concurrence}</p></opinion></opinion><opinion type="dissent"><p>I dissent.</p></opinion></casebody>`,
+        }),
+        type: "020lead",
+      },
+    ]);
+    expect(outcome.principal.body).toBe("The judgment is affirmed.");
+    expect(outcome.opinions[0]?.classConflicts).toBe(1);
+    const roles = outcome.blocks.map((block) =>
+      block.type === "paragraph" ? block.role : null,
+    );
+    expect(roles).toEqual(["argumentation", "argumentation", "unknown"]);
+  });
+});
+
+describe("short forms across unproven note boundaries", () => {
+  const idTarget = (outcome: CourtListenerTextOutcome) => {
+    const { blocks, citationScopes } = parsed(outcome);
+    const extracted = extractDecisionCitations({
+      country: "USA",
+      documentAst: asDocument(blocks),
+      citationScopes,
+      sections: [],
+    });
+    if (extracted.isErr()) {
+      throw new Error(`extraction rejected: ${extracted.error.message}`);
+    }
+    const { citations, occurrences } = extracted.value;
+    return {
+      full: citations.map(({ identifierValue }) => identifierValue),
+      id: occurrences
+        .filter(({ form }) => form === "id")
+        .map(({ target }) => target),
+    };
+  };
+
+  // One opinion, three renderings. Its markup says the middle paragraph is a
+  // note, so the body's Id. skips it; layout says nothing of the kind, so the
+  // same Id. must not resolve through the note's citation.
+  const holding = "The holding follows 410 U.S. 113.";
+  const exception = "The exception follows 347 U.S. 483.";
+  const pin = "Id. at 120 controls the holding.";
+
+  test("markup that marks the note resolves the body's Id. past it", () => {
+    const { full, id } = idTarget(
+      composeCourtListenerText([
+        {
+          row: opinionRow({
+            id: "1",
+            xml_harvard: `<opinion type="majority"><p>${holding}</p><footnote label="1"><p>${exception}</p></footnote><p>${pin}</p></opinion>`,
+          }),
+          type: "020lead",
+        },
+      ]),
+    );
+    expect(full).toEqual(["410 U.S. 113", "347 U.S. 483"]);
+    expect(id).toEqual([
+      {
+        status: "identified",
+        identifiers: [{ type: "reporter-citation", value: "410 U.S. 113" }],
+      },
+    ]);
+  });
+
+  for (const [name, columns] of [
+    [
+      "plain text",
+      {
+        xml_harvard: "",
+        plain_text: `${holding}\n\n1. ${exception}\n\n${pin}`,
+      },
+    ],
+    [
+      "a preformatted body",
+      {
+        xml_harvard: "",
+        html_with_citations: `<pre class="inline">${holding}\n\n1. ${exception}\n\n${pin}</pre>`,
+      },
+    ],
+    [
+      "layout text running the note into the next page",
+      { xml_harvard: "", plain_text: `${holding}\n1. ${exception}\f${pin}` },
+    ],
+  ] as const) {
+    test(`${name} keeps every full citation and resolves no Id. through the note`, () => {
+      const { full, id } = idTarget(
+        composeCourtListenerText([
+          { row: opinionRow({ id: "1", ...columns }), type: "020lead" },
+        ]),
+      );
+      expect(full).toEqual(["410 U.S. 113", "347 U.S. 483"]);
+      expect(id).toHaveLength(1);
+      expect(id[0]?.status).toBe("unresolved");
+    });
+  }
 });

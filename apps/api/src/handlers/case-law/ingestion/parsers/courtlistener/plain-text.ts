@@ -5,6 +5,11 @@
  * layout's own: blank lines and a first-line indent open a paragraph, and
  * every other line break stays a line break. No heading is inferred from a
  * line's wording or capitals, and no page is inferred from a `*123`.
+ *
+ * Layout proves no body and note runs: a page's notes print as ordinary
+ * paragraphs at its foot. So a printed page break always ends a paragraph,
+ * which keeps one page's notes and the next page's body apart, and every
+ * paragraph is scoped alone.
  */
 
 import * as cheerio from "cheerio";
@@ -13,7 +18,7 @@ import { type AnyNode, isTag, isText } from "domhandler";
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import { createUnitBuilder } from "./blocks";
+import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
 import { unitClass } from "./opinion-class";
 import {
@@ -37,29 +42,42 @@ const FORM_FEED = /\f/gu;
 const indentOf = (line: string): number =>
   line.length - line.trimStart().length;
 
-type Line = { readonly text: string; readonly gapBefore: number };
+type Line = {
+  readonly text: string;
+  readonly gapBefore: number;
+  /** A printed page break (a form feed) falls before this line. */
+  readonly pageBreakBefore: boolean;
+};
 
+/** Non-blank lines; a form feed is a page break and a line boundary. */
 const linesOf = (text: string): Line[] => {
   const lines: Line[] = [];
   let gap = 0;
-  for (const line of text.split("\n")) {
-    if (line.trim() === "") {
-      gap += 1;
-      continue;
+  let pageBreak = false;
+  for (const [index, line] of text.split(FORM_FEED).entries()) {
+    pageBreak ||= index > 0;
+    for (const part of line.split("\n")) {
+      if (part.trim() === "") {
+        gap += 1;
+        continue;
+      }
+      lines.push({
+        text: part.trimEnd(),
+        gapBefore: lines.length === 0 ? 0 : gap,
+        pageBreakBefore: pageBreak,
+      });
+      gap = 0;
+      pageBreak = false;
     }
-    lines.push({
-      text: line.trimEnd(),
-      gapBefore: lines.length === 0 ? 0 : gap,
-    });
-    gap = 0;
   }
   return lines;
 };
 
 /**
- * Paragraphs as the layout shows them. A paragraph opens at a paragraph gap,
- * or where a line is indented past a previous line sitting at the
- * paragraph's own margin: the first-line indent of the next paragraph.
+ * Paragraphs as the layout shows them. A paragraph opens at a printed page
+ * break, at a paragraph gap, or where a line is indented past a previous
+ * line sitting at the paragraph's own margin: the first-line indent of the
+ * next paragraph.
  */
 export const paragraphsOf = (text: string): string[][] => {
   const lines = linesOf(text);
@@ -76,7 +94,8 @@ export const paragraphsOf = (text: string): string[][] => {
     const previous = current.at(-1);
     const opens =
       previous !== undefined &&
-      (line.gapBefore >= paragraphGap ||
+      (line.pageBreakBefore ||
+        line.gapBefore >= paragraphGap ||
         (indentOf(line.text) > indentOf(previous) &&
           indentOf(previous) === margin));
     if (opens) {
@@ -116,10 +135,8 @@ const parseLayoutText = (
     visibleText,
   }: { publisherLinks: number; visibleText: string },
 ): FormatParse => {
-  const normalized = source.replace(/\r\n?/gu, "\n");
-  const paginationCharacters = normalized.match(FORM_FEED)?.length ?? 0;
-  // A form feed is a printed page break with no label: a line boundary.
-  const text = normalized.replace(FORM_FEED, "\n");
+  const text = source.replace(/\r\n?/gu, "\n");
+  const paginationCharacters = text.match(FORM_FEED)?.length ?? 0;
   if (text.trim() === "") {
     return {
       status: "unusable",
@@ -128,8 +145,9 @@ const parseLayoutText = (
   }
   const builder = createUnitBuilder({
     prefix,
-    bodyRole: (domType) => unitClass(rowType, domType).body,
+    bodyRole: (domType, position) => unitClass(rowType, domType, position).body,
     blockAllowance: blockAllowance(budget),
+    boundaries: "layout",
   });
   builder.enterOpinion(null);
   for (const lines of paragraphsOf(text)) {
@@ -139,6 +157,12 @@ const parseLayoutText = (
   const { notes, overLimit, pageAnchors, units } = builder.finish();
   if (overLimit) {
     return { status: "over-limit", limit: "BLOCKS" };
+  }
+  if (!conservesText(text, units)) {
+    return {
+      status: "unusable",
+      reason: TEXT_CANDIDATE_UNUSABLE.TEXT_NOT_CONSERVED,
+    };
   }
   return {
     status: "parsed",
@@ -198,9 +222,9 @@ export const parsePreformatted = (input: FormatInput): FormatParse => {
   if (limit !== null) {
     return { status: "over-limit", limit };
   }
-  const images = $("img").length;
-  if (images > 0) {
-    return { status: "requires-assets", images };
+  const graphics = graphicsIn(root);
+  if (Object.keys(graphics).length > 0) {
+    return { status: "requires-assets", graphics };
   }
   const parts = $.root().children().toArray();
   const foreign = parts.find(

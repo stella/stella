@@ -66,42 +66,72 @@ const domClass = (domType: string | null): ClassDeclaration | null =>
 
 type UnitClass = {
   readonly body: BodyClass;
-  readonly separate: boolean;
   /** The element states a class of its own. */
   readonly structural: boolean;
   /** Row and element state different classes; the body stays unknown. */
   readonly conflict: boolean;
+  /** The unit may be read as the principal text, not a separate opinion. */
+  readonly principal: boolean;
 };
+
+/** Where a unit sits: the row's own opinion, or one nested inside it. */
+export type UnitPosition = "row" | "nested";
 
 /**
  * The class of one structural unit of a row. The element refines a row that
  * proves nothing (a combined row's `majority`); where both state a class and
- * they differ, neither is trusted.
+ * they differ, neither is trusted and the unit is not principal text. An
+ * opinion nested inside another is its own container: its class is the
+ * element's alone, and it is never the principal text.
  */
 export const unitClass = (
   rowType: OpinionType,
   domType: string | null,
+  position: UnitPosition,
 ): UnitClass => {
-  const row: ClassDeclaration = ROW_CLASS[rowType];
   const dom = domClass(domType);
+  if (position === "nested") {
+    return {
+      body: dom?.body ?? "unknown",
+      structural: dom !== null,
+      conflict: false,
+      principal: false,
+    };
+  }
+  const row: ClassDeclaration = ROW_CLASS[rowType];
   if (dom === null) {
-    return { ...row, structural: false, conflict: false };
+    return {
+      body: row.body,
+      structural: false,
+      conflict: false,
+      principal: !row.separate,
+    };
   }
   if (row.body === "unknown") {
-    return { ...dom, structural: true, conflict: false };
+    return {
+      body: dom.body,
+      structural: true,
+      conflict: false,
+      principal: !dom.separate,
+    };
   }
   const conflict = row.body !== dom.body || row.separate !== dom.separate;
-  return conflict
-    ? { body: "unknown", separate: row.separate, structural: true, conflict }
-    : { ...dom, structural: true, conflict };
+  return {
+    body: conflict ? "unknown" : dom.body,
+    structural: true,
+    conflict,
+    principal: !conflict && !dom.separate,
+  };
 };
 
 /**
- * A combined row whose element states no class has no proven opinion
+ * A combined row whose own element states no class has no proven opinion
  * boundary: its blocks are scoped one by one, so no short form resolves
  * across a boundary nobody established.
  */
 export const hasUnprovenBoundaries = (
   rowType: OpinionType,
   domType: string | null,
-): boolean => rowType === "010combined" && domClass(domType) === null;
+  position: UnitPosition,
+): boolean =>
+  position === "row" && rowType === "010combined" && domClass(domType) === null;

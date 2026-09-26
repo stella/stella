@@ -111,19 +111,29 @@ const blockGroups = (blocks: readonly Block[]): Block[][] => {
   return groups;
 };
 
+/** A unit that may be read as the principal text, with what proves it. */
+type PrincipalUnit = {
+  readonly unit: TextUnit;
+  /** The class the row and markup prove; `unknown` proves no opinion. */
+  readonly body: ReturnType<typeof unitClass>["body"];
+  readonly structural: boolean;
+};
+
 type ScopedRow = {
   readonly scopes: CitationOpinionScope[];
   readonly coverage: "opinion" | "block-only";
   readonly classConflicts: number;
-  readonly principalUnits: TextUnit[];
-  readonly structuralPrincipal: boolean;
+  readonly principal: PrincipalUnit[];
 };
 
 /**
- * Scopes for one row: the first proven opinion unit is `cl-opinion:<id>`,
- * each further one `cl-opinion:<id>/<n>`, and every block of an unproven one
- * its own `cl-opinion:<id>/block-<n>`. Text outside every opinion element is
- * in no scope.
+ * Scopes for one row. A unit whose markup proves its boundaries is one
+ * scope: the row's first is `cl-opinion:<id>`, each further one
+ * `cl-opinion:<id>/<n>`. A unit whose boundaries are not proven (layout
+ * text, where notes are not marked, or a combined row without a stated
+ * class) scopes each block, or each whole note, alone as
+ * `cl-opinion:<id>/block-<n>`. Text outside every opinion element is in no
+ * scope.
  */
 const scopeRow = (
   { row, type }: CourtListenerTextOpinion,
@@ -131,23 +141,27 @@ const scopeRow = (
 ): ScopedRow => {
   const base = `cl-opinion:${row.id}`;
   const scopes: CitationOpinionScope[] = [];
-  const principalUnits: TextUnit[] = [];
+  const principal: PrincipalUnit[] = [];
   let proven = 0;
   let unproven = 0;
   let classConflicts = 0;
-  let structuralPrincipal = false;
   for (const unit of units) {
     if (unit.kind === "outside") {
       continue;
     }
-    const unitType = unitClass(type, unit.domType);
+    const unitType = unitClass(type, unit.domType, unit.position);
     classConflicts += unitType.conflict ? 1 : 0;
-    if (!unitType.separate) {
-      principalUnits.push(unit);
-      structuralPrincipal ||=
-        unitType.structural && unitType.body === "argumentation";
+    if (unitType.principal) {
+      principal.push({
+        unit,
+        body: unitType.body,
+        structural: unitType.structural,
+      });
     }
-    if (hasUnprovenBoundaries(type, unit.domType)) {
+    if (
+      unit.boundaries === "layout" ||
+      hasUnprovenBoundaries(type, unit.domType, unit.position)
+    ) {
       for (const group of blockGroups(unit.blocks)) {
         unproven += 1;
         scopes.push({
@@ -167,8 +181,7 @@ const scopeRow = (
     scopes,
     coverage: unproven > 0 ? "block-only" : "opinion",
     classConflicts,
-    principalUnits,
-    structuralPrincipal,
+    principal,
   };
 };
 
@@ -231,9 +244,7 @@ export const composeCourtListenerText = (
 
   const blocks: Block[] = [];
   const citationScopes: CitationOpinionScope[] = [];
-  const principalUnits: TextUnit[] = [];
-  const principalCoverage: ScopedRow["coverage"][] = [];
-  let structuralOpinion = false;
+  const principal: PrincipalUnit[] = [];
   const reports = selected.map(({ opinion, selection }) => {
     if (selection.status !== "parsed") {
       return report(opinion, selection, null);
@@ -244,11 +255,7 @@ export const composeCourtListenerText = (
       blocks.push(...unit.blocks);
     }
     citationScopes.push(...scoped.scopes);
-    principalUnits.push(...scoped.principalUnits);
-    if (scoped.principalUnits.length > 0) {
-      principalCoverage.push(scoped.coverage);
-    }
-    structuralOpinion ||= scoped.structuralPrincipal;
+    principal.push(...scoped.principal);
     return report(opinion, selection, scoped);
   });
 
@@ -261,23 +268,35 @@ export const composeCourtListenerText = (
     };
   }
 
+  const [first] = principal;
+  const titles = new Set(
+    principal.flatMap(({ unit }) =>
+      unit.orderTitleBlockId === null ? [] : [unit.orderTitleBlockId],
+    ),
+  );
   return {
     status: "parsed",
     blocks,
     citationScopes,
     principal: {
       status: "parsed",
-      // No format read here marks an order heading on the root document.
-      orderHeading: false,
-      body: principalUnits
-        .flatMap((unit) => unit.blocks.filter(isPrincipalBody))
+      // The principal text opens with a root `ORDER` title of its own.
+      orderHeading:
+        first !== undefined && first.unit.orderTitleBlockId !== null,
+      body: principal
+        .flatMap(({ unit }) => unit.blocks)
+        .filter((block) => isPrincipalBody(block) && !titles.has(block.id))
         .map(({ plainText }) => plainText)
         .join("\n"),
-      structuralOpinion,
+      structuralOpinion: principal.some(
+        ({ body, structural }) => structural && body === "argumentation",
+      ),
+      // One scope of source text is not one proven opinion: the unit must
+      // also be of a class the row or markup states.
       singleOpinionBody:
-        principalUnits.length === 1 &&
-        principalCoverage.length === 1 &&
-        principalCoverage[0] === "opinion",
+        principal.length === 1 &&
+        first !== undefined &&
+        first.body !== "unknown",
     },
     opinions: reports,
   };

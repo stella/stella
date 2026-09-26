@@ -89,16 +89,29 @@ describe("paragraphs of unmarked text", () => {
     ]);
   });
 
-  test("reads a form feed as a line boundary and counts it as pagination", () => {
+  test("reads a form feed as a page break and counts it as pagination", () => {
     const parsed = parsePlainText(input("end of page\fstart of next"));
     expect(blocksOf(parsed).map(({ plainText }) => plainText)).toEqual([
-      "end of page\nstart of next",
+      "end of page",
+      "start of next",
     ]);
     expect(
       parsed.status === "parsed"
         ? parsed.text.counts.paginationCharacters
         : null,
     ).toBe(1);
+  });
+
+  test("ends a paragraph at a page break, so a page's notes meet no body", () => {
+    expect(
+      paragraphsOf(
+        "Body ends\n1 A note.\fBody resumes\nand ends.\n\n\fNew page.",
+      ),
+    ).toEqual([
+      ["Body ends", "1 A note."],
+      ["Body resumes", "and ends."],
+      ["New page."],
+    ]);
   });
 
   test("refuses blank text", () => {
@@ -139,6 +152,14 @@ describe("preformatted bodies", () => {
       status: "unsupported",
       structure: "html:div",
     });
+  });
+
+  test("holds a body with a graphic for its asset", () => {
+    expect(
+      parsePreformatted(
+        input('<pre class="inline">See the map.</pre><img src="map.png"/>'),
+      ),
+    ).toEqual({ status: "requires-assets", graphics: { img: 1 } });
   });
 
   test("refuses a script-only body", () => {
@@ -195,7 +216,14 @@ describe("recorded unmarked opinions", () => {
       "Hines v. Williams, 2018 WL 2435551 (Del. May 29, 2018).",
     );
     expect(outcome.blocks.every(({ type }) => type === "paragraph")).toBe(true);
-    // No proven boundary inside a combined row: one scope per block.
+    // A page break ends a paragraph: the page's last note and the next
+    // page's first words are separate blocks, each scoped alone.
+    expect(raw).toContain(
+      "Hines v. Williams, 2018 WL 2435551 (Del. May 29, 2018).",
+    );
+    expect(raw).toContain(
+      "rather than interlocutory, when it “leaves nothing for future determination or\nconsideration.”3",
+    );
     expect(outcome.citationScopes).toEqual(
       outcome.blocks.map(({ id }, index) => ({
         opinionId: `cl-opinion:4912325/block-${index + 1}`,
@@ -207,7 +235,7 @@ describe("recorded unmarked opinions", () => {
 
   // Opinion 11209260 (South Carolina district court) is plain text only, a
   // single-spaced order whose paragraphs are not separated by blank lines.
-  test("parses a plain-text trial court opinion as one proven opinion", () => {
+  test("scopes a plain-text trial court document block by block", () => {
     const { outcome } = composed("10742675");
     expect(outcome.status).toBe("parsed");
     if (outcome.status !== "parsed") {
@@ -216,14 +244,14 @@ describe("recorded unmarked opinions", () => {
     expect(outcome.opinions[0]).toMatchObject({
       format: "plain_text",
       structure: "plain",
-      coverage: "opinion",
+      coverage: "block-only",
     });
-    expect(outcome.citationScopes).toEqual([
-      {
-        opinionId: "cl-opinion:11209260",
-        blockIds: outcome.blocks.map(({ id }) => id),
-      },
-    ]);
+    expect(outcome.citationScopes).toEqual(
+      outcome.blocks.map(({ id }, index) => ({
+        opinionId: `cl-opinion:11209260/block-${index + 1}`,
+        blockIds: [id],
+      })),
+    );
     const texts = outcome.blocks.map(({ plainText }) => plainText);
     expect(texts[0]).toBe("IN THE DISTRICT COURT OF THE UNITED STATES");
     expect(texts.at(-1)).toStartWith(

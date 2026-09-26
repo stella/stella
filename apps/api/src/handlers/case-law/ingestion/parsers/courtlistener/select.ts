@@ -87,7 +87,8 @@ export type OpinionTextSelection =
       readonly status: "requires-assets";
       /** `xml_scan` when a scan layout was the only representation left. */
       readonly format: CourtListenerTextFormat | "xml_scan";
-      readonly images: number;
+      /** Graphic constructs by element name; none for a scan layout. */
+      readonly graphics: Readonly<Record<string, number>>;
       readonly attempts: readonly CandidateAttempt[];
     }
   | {
@@ -188,7 +189,7 @@ export const selectOpinionText = ({
         return {
           status: "requires-assets",
           format,
-          images: parsed.images,
+          graphics: parsed.graphics,
           attempts,
         };
       case "unsupported":
@@ -208,5 +209,5 @@ export const selectOpinionText = ({
   }
   return row.xml_scan.trim() === ""
     ? { status: "no-usable-text", attempts }
-    : { status: "requires-assets", format: "xml_scan", images: 0, attempts };
+    : { status: "requires-assets", format: "xml_scan", graphics: {}, attempts };
 };

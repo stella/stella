@@ -11,21 +11,21 @@
 
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import {
-  type AnyNode,
-  type Element,
-  hasChildren,
-  isTag,
-  isText,
-} from "domhandler";
+import { type Element, isTag } from "domhandler";
 import * as slimdom from "slimdom";
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type BodyVocabulary,
+  cdataAsText,
+  conservesText,
   createUnitBuilder,
+  graphicsIn,
   type PageAnchor,
+  sourceTextOf,
+  textOf,
   walkBody,
 } from "./blocks";
 import { unitClass } from "./opinion-class";
@@ -52,13 +52,6 @@ const DOCUMENT_TYPE = /<!(?:DOCTYPE|ENTITY)/iu;
 export const withoutXmlDeclaration = (text: string): string =>
   text.replace(XML_DECLARATION, "");
 
-const textOf = (node: AnyNode): string => {
-  if (isText(node)) {
-    return node.data;
-  }
-  return hasChildren(node) ? node.children.map(textOf).join("") : "";
-};
-
 const classesOf = (element: Element): readonly string[] =>
   (element.attribs["class"] ?? "").split(/\s+/u);
 
@@ -69,9 +62,6 @@ const attribute = (element: Element, name: string): string | undefined => {
   const value = element.attribs[name]?.trim();
   return value === undefined || value === "" ? undefined : value;
 };
-
-/** Printed page markers: Harvard's element and the two classed variants. */
-const PAGE_MARKERS = "page-number, span.star-pagination, a.page-label";
 
 /** The attribute a page marker states its page in, or `null` for no marker. */
 const pageLabelAttribute = (element: Element): string | null => {
@@ -185,23 +175,6 @@ const isWellFormedFragment = (body: string): boolean => {
   );
 };
 
-/**
- * The source as the retention check reads it, with the declared removals
- * taken out: printed page labels (now anchors) and note backlinks (now the
- * note's label).
- */
-const validationSource = (body: string) => {
-  const $ = cheerio.load(body);
-  const paginationCharacters = $(PAGE_MARKERS)
-    .toArray()
-    .reduce((sum, element) => sum + $(element).text().trim().length, 0);
-  $(PAGE_MARKERS).remove();
-  const backlinks = $("div.footnote > a.footnote");
-  const backlinkCharacters = backlinks.text().trim().length;
-  backlinks.remove();
-  return { html: $.html(), paginationCharacters, backlinkCharacters };
-};
-
 export const parseHarvardXml = ({
   budget,
   prefix,
@@ -235,15 +208,17 @@ export const parseHarvardXml = ({
       reason: TEXT_CANDIDATE_UNUSABLE.MISSING_OPINION,
     };
   }
-  const images = $("img").length;
-  if (images > 0) {
-    return { status: "requires-assets", images };
+  const graphics = graphicsIn(root);
+  if (Object.keys(graphics).length > 0) {
+    return { status: "requires-assets", graphics };
   }
+  cdataAsText(root);
 
   const builder = createUnitBuilder({
     prefix,
-    bodyRole: (domType) => unitClass(rowType, domType).body,
+    bodyRole: (domType, position) => unitClass(rowType, domType, position).body,
     blockAllowance: blockAllowance(budget),
+    boundaries: "markup",
   });
   const { unknownConstructs } = walkBody({
     $,
@@ -261,7 +236,15 @@ export const parseHarvardXml = ({
       reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
     };
   }
-  const validation = validationSource(body);
+  // The source text is read by its own walk over the XML tree, with XML's
+  // semantics: CDATA is text, and nothing is reparsed as HTML.
+  const source = sourceTextOf(root, HARVARD_VOCABULARY);
+  if (!conservesText(source.paragraphs.join(" "), units)) {
+    return {
+      status: "unusable",
+      reason: TEXT_CANDIDATE_UNUSABLE.TEXT_NOT_CONSERVED,
+    };
+  }
   return {
     status: "parsed",
     text: {
@@ -272,11 +255,13 @@ export const parseHarvardXml = ({
         publisherLinks:
           $("a[href]").not(".footnote, .page-label").length +
           $("extracted-citation").length,
-        paginationCharacters: validation.paginationCharacters,
-        backlinkCharacters: validation.backlinkCharacters,
+        paginationCharacters: source.paginationCharacters,
+        backlinkCharacters: source.backlinkCharacters,
         unknownConstructs,
       },
-      validationHtml: validation.html,
+      validationHtml: buildValidationHtml(
+        source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),
+      ),
     },
   };
 };

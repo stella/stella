@@ -12,6 +12,8 @@ import type { AnyNode } from "domhandler";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 
+import type { UnitPosition } from "./opinion-class";
+
 /**
  * Named bounds on one cluster's text. Past any, the cluster is held whole;
  * nothing is truncated.
@@ -43,6 +45,8 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   NO_VISIBLE_TEXT: "no-visible-text",
   CONTENT_LOSS: "content-loss",
   MARKUP_RESIDUE: "markup-residue",
+  /** Some source text did not reach the blocks, in order and in full. */
+  TEXT_NOT_CONSERVED: "text-not-conserved",
 } as const;
 
 export type TextCandidateUnusable =
@@ -56,7 +60,16 @@ export type TextUnit = {
   readonly kind: "opinion" | "outside";
   /** The publisher's type attribute on the opinion element, as written. */
   readonly domType: string | null;
+  /** The row's own opinion, or an opinion nested inside another. */
+  readonly position: UnitPosition;
+  /**
+   * How the blocks were told apart: by the publisher's markup, which marks
+   * notes, or by layout alone, which proves no body and note runs.
+   */
+  readonly boundaries: "markup" | "layout";
   readonly blocks: readonly Block[];
+  /** The block that is the unit's root `ORDER` title, when it opens with one. */
+  readonly orderTitleBlockId: string | null;
 };
 
 /** Counts a reader of the parse can check against the source. */
@@ -86,7 +99,12 @@ export type ParsedOpinionText = {
 export type FormatParse =
   | { readonly status: "parsed"; readonly text: ParsedOpinionText }
   | { readonly status: "unusable"; readonly reason: TextCandidateUnusable }
-  | { readonly status: "requires-assets"; readonly images: number }
+  | {
+      readonly status: "requires-assets";
+      readonly images: number;
+      /** Graphic constructs found, by element name. */
+      readonly graphics: Readonly<Record<string, number>>;
+    }
   | { readonly status: "unsupported"; readonly structure: string }
   | { readonly status: "over-limit"; readonly limit: CourtListenerTextLimit };
 

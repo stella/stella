@@ -108,7 +108,11 @@ const isDeclaredRemoval = (element: slimdom.Element): boolean => {
 };
 
 const xmlText = (node: slimdom.Node): string => {
-  if (node.nodeType === slimdom.Node.TEXT_NODE) {
+  // CDATA is text in XML; an oracle skipping it certifies its loss.
+  if (
+    node.nodeType === slimdom.Node.TEXT_NODE ||
+    node.nodeType === slimdom.Node.CDATA_SECTION_NODE
+  ) {
     return node.nodeValue ?? "";
   }
   if (

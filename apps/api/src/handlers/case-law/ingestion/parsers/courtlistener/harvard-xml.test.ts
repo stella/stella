@@ -1,13 +1,22 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import {
+  type Block,
+  type Inline,
+  plainTextOf,
+} from "@/api/handlers/case-law/document-ast";
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
+import { conservesText } from "./blocks";
 import { composeCourtListenerText } from "./compose";
 import { parseHarvardXml } from "./harvard-xml";
-import { createTextBudget, type FormatParse } from "./outcome";
-import { recordedOpinionClusters } from "./test-oracle";
+import { createTextBudget, type FormatParse, type TextUnit } from "./outcome";
+import {
+  recordedOpinionClusters,
+  sourceWords,
+  wordDifference,
+} from "./test-oracle";
 
 const parse = (text: string, rowType: OpinionType = "020lead") =>
   parseHarvardXml({
@@ -104,15 +113,207 @@ describe("Harvard XML well-formedness", () => {
     ]);
   });
 
-  test("holds a body image for its asset", () => {
+  // Synthetic mutations: a figure beside text, a figure alone, and graphic
+  // forms other than an image element. Each holds the opinion for its asset
+  // instead of publishing the text around a picture nothing captured.
+  const graphicCases = [
+    [
+      "an image beside text",
+      '<opinion><p>See figure.</p><img src="fig.png" alt="Map"/></opinion>',
+      { img: 1 },
+    ],
+    [
+      "an image alone",
+      '<opinion><p><img src="fig.png"/></p></opinion>',
+      { img: 1 },
+    ],
+    [
+      "an inline SVG diagram",
+      '<opinion type="majority"><p>As shown in the controlling diagram.</p><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L20 20"/></svg></opinion>',
+      { svg: 1 },
+    ],
+    [
+      "a prefixed SVG with its own text",
+      '<opinion xmlns:svg="http://www.w3.org/2000/svg"><p>Map:</p><svg:svg><svg:text>Lot 4</svg:text></svg:svg></opinion>',
+      { svg: 1 },
+    ],
+    [
+      "embedded objects and a formula",
+      '<opinion><p>See <object data="a.pdf"/> and <embed src="b.png"/> where <math><mi>x</mi></math>.</p></opinion>',
+      { object: 1, embed: 1, math: 1 },
+    ],
+  ] as const;
+
+  for (const [name, text, graphics] of graphicCases) {
+    test(`holds ${name} for its asset`, () => {
+      expect(parse(text)).toEqual({ status: "requires-assets", graphics });
+    });
+  }
+});
+
+/** Every text run between tags, rewritten as a CDATA section. */
+const asCdata = (xml: string): string =>
+  xml.replace(/>([^<]+)</gu, (_, text: string) => {
+    const decoded = text
+      .replaceAll("&lt;", "<")
+      .replaceAll("&gt;", ">")
+      .replaceAll("&quot;", '"')
+      .replaceAll("&apos;", "'")
+      .replaceAll("&amp;", "&");
+    return `><![CDATA[${decoded}]]><`;
+  });
+
+const rawTexts = (parsed: FormatParse): string[] =>
+  blocksOf(parsed).map((block) =>
+    "inlines" in block ? plainTextOf(block.inlines) : block.plainText,
+  );
+
+describe("Harvard XML CDATA", () => {
+  test("reads CDATA at the block level as text", () => {
+    expect(
+      rawTexts(
+        parse(
+          '<opinion type="majority"><p><![CDATA[The judgment is reversed.]]></p><p>Costs awarded.</p></opinion>',
+        ),
+      ),
+    ).toEqual(["The judgment is reversed.", "Costs awarded."]);
+  });
+
+  test("reads CDATA mixed with text and emphasis inside a paragraph", () => {
+    const [block] = blocksOf(
+      parse(
+        "<opinion><p>The <em><![CDATA[judgment]]></em> is <![CDATA[reversed & <remanded>]]>, costs <![CDATA[to]]> appellee.</p></opinion>",
+      ),
+    );
+    expect(
+      block !== undefined && "inlines" in block ? block.inlines : null,
+    ).toEqual([
+      { type: "text", text: "The " },
+      { type: "italic", children: [{ type: "text", text: "judgment" }] },
+      { type: "text", text: " is reversed & <remanded>, costs to appellee." },
+    ]);
+  });
+
+  test("a recorded opinion reads the same with every text run as CDATA", () => {
+    const [opinion] = recordedOpinionClusters().get("5804213") ?? [];
+    const xml = opinion?.row.xml_harvard ?? "";
+    const cdata = asCdata(xml);
+    expect(cdata).not.toBe(xml);
+    expect(cdata).toContain("<![CDATA[");
+    expect(rawTexts(parse(cdata))).toEqual(rawTexts(parse(xml)));
+    expect(
+      wordDifference(sourceWords("xml", cdata), sourceWords("xml", xml)),
+    ).toEqual({ missing: [], extra: [] });
+  });
+});
+
+describe("text conservation", () => {
+  const unit = (...texts: string[]): TextUnit => ({
+    kind: "opinion",
+    domType: null,
+    position: "row",
+    boundaries: "markup",
+    orderTitleBlockId: null,
+    blocks: texts.map((plainText, index) => ({
+      id: `b${index}`,
+      anchorId: `p${index}`,
+      type: "paragraph",
+      inlines: [{ type: "text", text: plainText }],
+      plainText,
+    })),
+  });
+
+  test("holds when every visible character is kept in order, whatever the spacing", () => {
+    expect(
+      conservesText("The  judgment\n is affirmed.", [
+        unit("The judgment", "is affirmed."),
+      ]),
+    ).toBe(true);
+  });
+
+  const mutations = [
+    ["a lost word", unit("The judgment is.")],
+    ["a repeated paragraph", unit("The judgment", "The judgment is affirmed.")],
+    ["paragraphs out of order", unit("is affirmed.", "The judgment")],
+    ["one changed character", unit("The judgment is affirmed!")],
+  ] as const;
+
+  for (const [name, parsed] of mutations) {
+    test(`fails on ${name}`, () => {
+      expect(conservesText("The judgment is affirmed.", [parsed])).toBe(false);
+    });
+  }
+});
+
+describe("Harvard XML conservation", () => {
+  test("refuses a page marker holding more than its printed page", () => {
     expect(
       parse(
-        '<opinion><p>See figure.</p><img src="fig.png" alt="Map"/></opinion>',
+        '<opinion><p>See<page-number label="5">*5 the omitted clause</page-number> here.</p></opinion>',
       ),
-    ).toEqual({
-      status: "requires-assets",
-      images: 1,
-    });
+    ).toEqual({ status: "unusable", reason: "text-not-conserved" });
+  });
+
+  test("counts only the printed page of a marker as pagination", () => {
+    const parsed = parse(
+      '<opinion><p>Shrin<page-number label="114">*114</page-number>ers</p></opinion>',
+    );
+    expect(
+      parsed.status === "parsed"
+        ? parsed.text.counts.paginationCharacters
+        : null,
+    ).toBe(4);
+  });
+});
+
+describe("Harvard XML tables", () => {
+  const substantial = "The court considers all evidence in the record. ".repeat(
+    20,
+  );
+
+  test("keeps a caption beside its grid, in document order", () => {
+    const blocks = blocksOf(
+      parse(
+        `<opinion type="majority"><p>${substantial}</p><table><caption>Damages are VACATED.</caption><tr><td>Affirmed.</td></tr></table></opinion>`,
+      ),
+    );
+    expect(blocks.map(({ plainText, type }) => [type, plainText])).toEqual([
+      ["paragraph", substantial.trim()],
+      ["paragraph", "Damages are VACATED."],
+      ["table", "Affirmed."],
+    ]);
+  });
+
+  test("keeps text between rows and around the grid where it stands", () => {
+    const blocks = blocksOf(
+      parse(
+        '<opinion><table><thead><tr><th>Count</th><th>Result</th></tr></thead>Note: counts merged.<tbody><tr><td>I</td><td>Affirmed</td></tr></tbody><tfoot><tr><td colspan="2">Total</td></tr></tfoot></table></opinion>',
+      ),
+    );
+    expect(blocks.map(({ plainText, type }) => [type, plainText])).toEqual([
+      ["table", "Count\tResult"],
+      ["paragraph", "Note: counts merged."],
+      ["table", "I\tAffirmed\nTotal"],
+    ]);
+    expect(
+      blocks[0]?.type === "table" ? blocks[0].rows[0]?.[0]?.header : null,
+    ).toBe(true);
+    expect(
+      blocks[2]?.type === "table" ? blocks[2].rows[1]?.[0]?.colSpan : null,
+    ).toBe(2);
+  });
+
+  test("keeps paragraphs and nested tables in a cell apart", () => {
+    const [table] = blocksOf(
+      parse(
+        "<opinion><table><tr><td><p>First part.</p><p>Second part.</p></td><td><table><tr><td>Inner A</td><td>Inner B</td></tr></table></td></tr></table></opinion>",
+      ),
+    );
+    expect(
+      table?.type === "table"
+        ? table.rows[0]?.map(({ inlines }) => plainTextOf(inlines))
+        : null,
+    ).toEqual(["First part.\nSecond part.", "Inner A\nInner B"]);
   });
 });
 
@@ -165,6 +366,27 @@ describe("Harvard XML structure", () => {
       { type: "footnote", label: "2", noteId: "o1-fn2" },
     ]);
     expect(blocks[0]?.plainText).toBe("Held.1");
+  });
+
+  test("gives a nested opinion its own class, not the row's", () => {
+    const parsed = parse(
+      '<opinion type="majority"><p>Held.</p><opinion type="dissent"><p>I dissent.</p></opinion><opinion><p>Unmarked.</p></opinion></opinion>',
+    );
+    expect(
+      parsed.status === "parsed"
+        ? parsed.text.units.map(({ blocks, domType, position }) => [
+            position,
+            domType,
+            blocks.map((block) =>
+              block.type === "paragraph" ? block.role : null,
+            ),
+          ])
+        : null,
+    ).toEqual([
+      ["row", "majority", ["argumentation"]],
+      ["nested", "dissent", ["dissent"]],
+      ["nested", null, ["unknown"]],
+    ]);
   });
 
   test("never reads a concurrence as a dissent", () => {

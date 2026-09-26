@@ -8,13 +8,17 @@
  * opinion containers. A format declares its vocabulary; the walk is one.
  */
 
+import { panic } from "better-result";
 import type * as cheerio from "cheerio";
 import {
   type AnyNode,
   type Element,
+  hasChildren,
+  isCDATA,
   isTag,
   isText,
   type ParentNode,
+  Text,
 } from "domhandler";
 
 import {
@@ -22,6 +26,7 @@ import {
   hasInlineChildren,
   type Inline,
   type ParagraphRole,
+  plainTextOf,
   projectPlainText,
   type TableCell,
 } from "@/api/handlers/case-law/document-ast";
@@ -30,6 +35,7 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
+import type { UnitPosition } from "./opinion-class";
 import type { TextUnit } from "./outcome";
 
 export type PageAnchor = Extract<Inline, { type: "page-anchor" }>;
@@ -136,9 +142,30 @@ type Frame = {
   readonly id: number;
   readonly kind: TextUnit["kind"];
   readonly domType: string | null;
+  readonly position: UnitPosition;
 };
 
+/** A root title that makes the document an order, as printed alone. */
+const ORDER_TITLE = /^ORDER\.?$/u;
+
 type UnitBuilder = ReturnType<typeof createUnitBuilder>;
+
+const outsideFrame = (id: number): Frame => ({
+  id,
+  kind: "outside",
+  domType: null,
+  position: "row",
+});
+
+/** The first block, when it is `ORDER` alone. */
+const orderTitleOf = (blocks: readonly Block[]): string | null => {
+  const [first] = blocks;
+  return first !== undefined &&
+    "inlines" in first &&
+    ORDER_TITLE.test(plainTextOf(first.inlines).trim())
+    ? first.id
+    : null;
+};
 
 /**
  * Numbers one opinion row's blocks under `prefix` and groups them into units:
@@ -152,18 +179,23 @@ type UnitBuilder = ReturnType<typeof createUnitBuilder>;
 export const createUnitBuilder = ({
   blockAllowance,
   bodyRole,
+  boundaries,
   prefix,
 }: {
   readonly prefix: string;
   /** The role of body text under an opinion element of this DOM type. */
-  readonly bodyRole: (domType: string | null) => ParagraphRole;
+  readonly bodyRole: (
+    domType: string | null,
+    position: UnitPosition,
+  ) => ParagraphRole;
   /** Blocks this row may still emit; past it the row is over the limit. */
   readonly blockAllowance: number;
+  readonly boundaries: TextUnit["boundaries"];
 }) => {
   const units: { frame: Frame; blocks: Block[] }[] = [];
   const frames: Frame[] = [];
   let nextFrame = 0;
-  let outside: Frame = { id: nextFrame, kind: "outside", domType: null };
+  let outside = outsideFrame(nextFrame);
   let blockNumber = 0;
   let overLimit = false;
   let noteNumber = 0;
@@ -203,7 +235,7 @@ export const createUnitBuilder = ({
   };
 
   const resolve = (role: DraftRole): ParagraphRole =>
-    role === "body" ? bodyRole(current().domType) : role;
+    role === "body" ? bodyRole(current().domType, current().position) : role;
 
   const paragraph = (source: Inline[], role: DraftRole) => {
     const plainText = projectPlainText(source);
@@ -252,14 +284,19 @@ export const createUnitBuilder = ({
   return {
     enterOpinion: (domType: string | null) => {
       nextFrame += 1;
-      frames.push({ id: nextFrame, kind: "opinion", domType });
+      frames.push({
+        id: nextFrame,
+        kind: "opinion",
+        domType,
+        position: frames.length === 0 ? "row" : "nested",
+      });
     },
     exitOpinion: () => {
       frames.pop();
       if (frames.length === 0) {
         // Text after the last opinion is a new outside run, not the caption.
         nextFrame += 1;
-        outside = { id: nextFrame, kind: "outside", domType: null };
+        outside = outsideFrame(nextFrame);
       }
     },
     /** A heading inside a note is one of its paragraphs. */
@@ -328,11 +365,19 @@ export const createUnitBuilder = ({
         counts.pageAnchors += pending.length;
         pending = [];
       }
+      // Only the row's own first opinion can open with its root title.
+      const root = units.find(({ frame }) => frame.kind === "opinion");
       return {
         units: units.map(({ blocks, frame }) => ({
           kind: frame.kind,
           domType: frame.domType,
+          position: frame.position,
+          boundaries,
           blocks,
+          orderTitleBlockId:
+            root?.frame.id === frame.id && frame.position === "row"
+              ? orderTitleOf(blocks)
+              : null,
         })),
         ...counts,
         overLimit,
@@ -362,9 +407,355 @@ export type BodyVocabulary = {
   readonly pageAnchor: (element: Element) => PageAnchor | undefined;
 };
 
-const nameOf = (element: Element): string => element.name.toLowerCase();
+/** An element's name without its namespace prefix, lower-cased. */
+const nameOf = (element: Element): string =>
+  (element.name.split(":").at(-1) ?? element.name).toLowerCase();
 
 const IGNORED = new Set(["script", "style"]);
+
+/** The parts of a table below the table itself. */
+const TABLE_PARTS = new Set([
+  "caption",
+  "col",
+  "colgroup",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+]);
+
+/** A row's cell elements. */
+const CELLS = new Set(["td", "th"]);
+
+/** A table's row groups. */
+const ROW_GROUPS = new Set(["tbody", "tfoot", "thead"]);
+
+/**
+ * Elements that render a picture, a formula or embedded content rather than
+ * text. None is declared decorative, so each holds the opinion for its asset.
+ */
+const GRAPHICS = new Set([
+  "canvas",
+  "embed",
+  "iframe",
+  "image",
+  "img",
+  "math",
+  "object",
+  "picture",
+  "svg",
+  "video",
+]);
+
+/** A node's text with no markup, CDATA included. */
+export const textOf = (node: AnyNode): string => {
+  if (isText(node)) {
+    return node.data;
+  }
+  return hasChildren(node) ? node.children.map(textOf).join("") : "";
+};
+
+/**
+ * Replaces every CDATA section below `root` with a text node of its
+ * content, so every walk reads it where it stands: CDATA is text in XML.
+ */
+export const cdataAsText = (root: ParentNode): void => {
+  const stack: ParentNode[] = [root];
+  while (stack.length > 0) {
+    const parent = stack.pop();
+    if (parent === undefined) {
+      break;
+    }
+    for (const [index, child] of parent.children.entries()) {
+      if (isCDATA(child)) {
+        const text = new Text(textOf(child));
+        text.parent = parent;
+        text.prev = child.prev;
+        text.next = child.next;
+        if (child.prev !== null) {
+          child.prev.next = text;
+        }
+        if (child.next !== null) {
+          child.next.prev = text;
+        }
+        parent.children[index] = text;
+      } else if (hasChildren(child)) {
+        stack.push(child);
+      }
+    }
+  }
+};
+
+/** The graphic constructs below `root`, by element name. */
+export const graphicsIn = (root: ParentNode): Record<string, number> => {
+  const found: Record<string, number> = {};
+  const stack: AnyNode[] = [...root.children];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === undefined) {
+      break;
+    }
+    if (isTag(node) && GRAPHICS.has(nameOf(node))) {
+      const name = nameOf(node);
+      found[name] = (found[name] ?? 0) + 1;
+    }
+    if (hasChildren(node)) {
+      for (const child of node.children) {
+        stack.push(child);
+      }
+    }
+  }
+  return found;
+};
+
+/**
+ * The source's visible text, read from the markup without the block walk:
+ * every text node in document order less script, style and the declared
+ * removals (printed page labels, note backlinks), broken into paragraphs at
+ * every element that is not inline.
+ */
+export const sourceTextOf = (
+  root: ParentNode,
+  vocabulary: BodyVocabulary,
+): {
+  readonly paragraphs: readonly string[];
+  readonly paginationCharacters: number;
+  readonly backlinkCharacters: number;
+} => {
+  const paragraphs: string[] = [];
+  let current = "";
+  let paginationCharacters = 0;
+  let backlinkCharacters = 0;
+  const close = () => {
+    if (current.trim() !== "") {
+      paragraphs.push(current);
+    }
+    current = "";
+  };
+  const visit = (node: AnyNode, inNote: boolean) => {
+    if (isText(node) || isCDATA(node)) {
+      current += textOf(node);
+      return;
+    }
+    if (!isTag(node) || IGNORED.has(nameOf(node))) {
+      return;
+    }
+    const anchor = vocabulary.pageAnchor(node);
+    if (anchor !== undefined) {
+      // Only the printed page (`*123`) leaves the text: anything more a
+      // marker holds stays in the source, where the block walk has lost it.
+      const printed = textOf(node).replace(/\s+/gu, "");
+      const label = `*${anchor.label}`;
+      const rest = printed.startsWith(label)
+        ? printed.slice(label.length)
+        : printed.replace(/^\*?/u, "").replace(anchor.label, "");
+      paginationCharacters += printed.length - rest.length;
+      current += ` ${rest} `;
+      return;
+    }
+    if (inNote && vocabulary.backlink(node)) {
+      backlinkCharacters += textOf(node).trim().length;
+      return;
+    }
+    const name = nameOf(node);
+    if (name === "br") {
+      current += " ";
+      return;
+    }
+    const inline = vocabulary.inlines.has(name);
+    if (!inline) {
+      close();
+    }
+    const note = vocabulary.footnote(node) !== null;
+    for (const child of node.children) {
+      visit(child, note);
+    }
+    if (!inline) {
+      close();
+    }
+  };
+  for (const child of root.children) {
+    visit(child, false);
+  }
+  close();
+  return { paragraphs, paginationCharacters, backlinkCharacters };
+};
+
+const blockText = (block: Block): string => {
+  switch (block.type) {
+    case "table":
+      return block.rows
+        .flat()
+        .map(({ inlines }) => plainTextOf(inlines))
+        .join(" ");
+    case "image":
+      return block.plainText;
+    case "heading":
+    case "paragraph":
+      return plainTextOf(block.inlines);
+    default: {
+      block satisfies never;
+      return panic(`Unhandled block: ${String(block)}`);
+    }
+  }
+};
+
+const VISIBLE = /\S/gu;
+
+/**
+ * Whether the blocks hold exactly the source's visible characters, in the
+ * source's order. Whitespace is layout and not compared; a character lost,
+ * repeated or moved anywhere fails it, however small against the rest.
+ */
+export const conservesText = (
+  source: string,
+  units: readonly TextUnit[],
+): boolean =>
+  (source.match(VISIBLE) ?? []).join("") ===
+  (
+    units
+      .flatMap(({ blocks }) => blocks.map(blockText))
+      .join(" ")
+      .match(VISIBLE) ?? []
+  ).join("");
+
+/**
+ * Walks tables into `builder`: each grid as table blocks, and everything
+ * else visible in a table (a caption, text between rows) as paragraphs
+ * beside the grid, in document order.
+ */
+const createTableWalker = ({
+  builder,
+  isBlock,
+  readRun,
+  vocabulary,
+}: {
+  readonly builder: UnitBuilder;
+  readonly isBlock: (element: Element) => boolean;
+  readonly readRun: (nodes: readonly AnyNode[]) => Inline[];
+  readonly vocabulary: BodyVocabulary;
+}) => {
+  /**
+   * An element's text as one inline run, with a line break wherever a block
+   * inside it ends: a cell holding paragraphs or a nested table keeps its
+   * parts apart instead of welding their words together.
+   */
+  const flowInlines = (element: Element): Inline[] => {
+    const parts: Inline[][] = [];
+    let run: AnyNode[] = [];
+    const flush = () => {
+      if (run.length > 0) {
+        parts.push(readRun(run));
+        run = [];
+      }
+    };
+    for (const child of element.children) {
+      if (isText(child)) {
+        run.push(child);
+        continue;
+      }
+      if (!isTag(child) || IGNORED.has(nameOf(child))) {
+        continue;
+      }
+      if (vocabulary.pageAnchor(child) !== undefined || !isBlock(child)) {
+        run.push(child);
+        continue;
+      }
+      flush();
+      parts.push(flowInlines(child));
+    }
+    flush();
+    const flowed: Inline[] = [];
+    for (const part of parts) {
+      if (part.length === 0) {
+        continue;
+      }
+      if (flowed.length > 0) {
+        flowed.push({ type: "line-break" });
+      }
+      flowed.push(...part);
+    }
+    return flowed;
+  };
+
+  const cellOf = (cell: AnyNode): TableCell | null => {
+    if (isText(cell)) {
+      const inlines = collapseMarkupWhitespace([
+        { type: "text", text: cell.data },
+      ]);
+      return inlines.length === 0
+        ? null
+        : { inlines, plainText: projectPlainText(inlines) };
+    }
+    if (!isTag(cell) || IGNORED.has(nameOf(cell))) {
+      return null;
+    }
+    const inlines = flowInlines(cell);
+    const colSpan = Number(cell.attribs["colspan"] ?? "1");
+    const rowSpan = Number(cell.attribs["rowspan"] ?? "1");
+    return {
+      inlines,
+      plainText: projectPlainText(inlines),
+      ...(Number.isInteger(colSpan) && colSpan > 1 ? { colSpan } : {}),
+      ...(Number.isInteger(rowSpan) && rowSpan > 1 ? { rowSpan } : {}),
+      ...(nameOf(cell) === "th" ? { header: true as const } : {}),
+    };
+  };
+
+  /**
+   * A table's grid as table blocks, and everything else visible in it (a
+   * caption, text between rows) as paragraphs beside the grid, in document
+   * order. Text a row holds outside its cells becomes a cell of its own.
+   */
+  const walkTable = (table: Element, inherited: DraftRole) => {
+    let rows: TableCell[][] = [];
+    const flushRows = () => {
+      if (rows.length > 0) {
+        builder.table(rows);
+        rows = [];
+      }
+    };
+    const visitRows = (container: Element) => {
+      for (const child of container.children) {
+        if (isText(child)) {
+          if (child.data.trim() !== "") {
+            flushRows();
+            builder.paragraph(readRun([child]), inherited);
+          }
+          continue;
+        }
+        if (!isTag(child) || IGNORED.has(nameOf(child))) {
+          continue;
+        }
+        const name = nameOf(child);
+        if (name === "tr") {
+          rows.push(
+            child.children.flatMap((cell) => {
+              const read = cellOf(cell);
+              return read === null ? [] : [read];
+            }),
+          );
+        } else if (ROW_GROUPS.has(name)) {
+          visitRows(child);
+        } else if (name === "caption") {
+          flushRows();
+          builder.paragraph(flowInlines(child), inherited);
+        } else if (!CELLS.has(name) && textOf(child).trim() === "") {
+          // Column declarations and other empty parts carry no text.
+        } else {
+          flushRows();
+          builder.paragraph(flowInlines(child), inherited);
+        }
+      }
+    };
+    visitRows(table);
+    flushRows();
+  };
+
+  return walkTable;
+};
 
 /**
  * Walks `root`'s children into `builder`. Every visible element contributes
@@ -409,7 +800,9 @@ export const walkBody = ({
   };
 
   const isKnown = (element: Element): boolean =>
-    isInline(element) || isKnownBlock(element);
+    isInline(element) ||
+    isKnownBlock(element) ||
+    TABLE_PARTS.has(nameOf(element));
 
   /** Whether a declared block element sits anywhere below `element`. */
   const holdsBlocks = (element: Element): boolean => {
@@ -496,37 +889,12 @@ export const walkBody = ({
     builder.endNote();
   };
 
-  const readTable = (element: Element): TableCell[][] =>
-    $(element)
-      .find("tr")
-      .toArray()
-      .filter((row) => $(row).closest("table").get(0) === element)
-      .map((row) =>
-        $(row)
-          .children("td, th")
-          .toArray()
-          .flatMap((cell) => {
-            if (!isTag(cell)) {
-              return [];
-            }
-            const inlines = readInlines(cell);
-            const colSpan = Number($(cell).attr("colspan") ?? "1");
-            const rowSpan = Number($(cell).attr("rowspan") ?? "1");
-            return [
-              {
-                inlines,
-                plainText: projectPlainText(inlines),
-                ...(Number.isInteger(colSpan) && colSpan > 1
-                  ? { colSpan }
-                  : {}),
-                ...(Number.isInteger(rowSpan) && rowSpan > 1
-                  ? { rowSpan }
-                  : {}),
-                ...(nameOf(cell) === "th" ? { header: true as const } : {}),
-              },
-            ];
-          }),
-      );
+  const walkTable = createTableWalker({
+    builder,
+    isBlock,
+    readRun,
+    vocabulary,
+  });
 
   const walkBlock = (element: Element, inherited: DraftRole) => {
     const name = nameOf(element);
@@ -543,7 +911,7 @@ export const walkBody = ({
       return;
     }
     if (name === "table") {
-      builder.table(readTable(element));
+      walkTable(element, inherited);
       return;
     }
     if (vocabulary.headings.has(name) && !holdsBlocks(element)) {
