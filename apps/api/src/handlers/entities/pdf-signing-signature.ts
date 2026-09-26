@@ -100,13 +100,18 @@ type SessionContext = {
   session: AuthorizedPdfSigningSession;
 };
 
-/** End the exchange for a failure no retry can fix, then report it. */
+/**
+ * End the exchange for a failure no retry can fix, then report it. After a
+ * claim, `attempt` fences the close to the attempt that still holds it.
+ */
 const closeAndFail = async (
   { recordAuditEvent, session }: SessionContext,
   closeReason: PdfSigningSessionCloseReason,
   error: HandlerError,
+  attempt?: number,
 ): Promise<Result<never, HandlerError>> => {
   const closed = await closePdfSigningSession({
+    attempt,
     closeReason,
     recordAuditEvent,
     safeDb: session.safeDb,
@@ -306,6 +311,7 @@ export const createSubmitPdfSigningSignatureHandler = ({
 
       const finalized = await finalize({
         ...context,
+        attempt,
         prepared,
         signature,
       });
@@ -319,6 +325,7 @@ export const createSubmitPdfSigningSignatureHandler = ({
           session.safeDb(
             async (tx) =>
               await releaseFinalizeAttempt({
+                attempt,
                 sessionId: session.sessionId,
                 tx,
               }),
@@ -329,8 +336,18 @@ export const createSubmitPdfSigningSignatureHandler = ({
       // A terminal failure, or the last attempt failing: either way no retry
       // is left, so the exchange closes rather than waiting out its TTL.
       return failure.kind === "terminal"
-        ? await closeAndFail(context, failure.closeReason, failure.error)
-        : await closeAndFail(context, "signing_failed", attemptsExhausted());
+        ? await closeAndFail(
+            context,
+            failure.closeReason,
+            failure.error,
+            attempt,
+          )
+        : await closeAndFail(
+            context,
+            "signing_failed",
+            attemptsExhausted(),
+            attempt,
+          );
     },
   );
 

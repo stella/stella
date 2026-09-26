@@ -142,6 +142,8 @@ const signatureSource = ({
 });
 
 type FinalizeOptions = {
+  /** The claimed attempt; only it may finalize the exchange. */
+  attempt: number;
   prepared: PreparedSigningState;
   recordAuditEvent: AuditRecorder;
   session: AuthorizedPdfSigningSession;
@@ -230,7 +232,7 @@ const embed = async (
  * the version it names, nor the reverse.
  */
 const writeSignedVersion = async (
-  { prepared, recordAuditEvent, session }: FinalizeOptions,
+  { attempt, prepared, recordAuditEvent, session }: FinalizeOptions,
   applied: AppliedSignature,
   fileName: string,
 ) =>
@@ -269,11 +271,13 @@ const writeSignedVersion = async (
               and(
                 eq(pdfSigningSessions.id, session.sessionId),
                 eq(pdfSigningSessions.status, "open"),
+                eq(pdfSigningSessions.finalizeAttempts, attempt),
               ),
             )
             .returning({ id: pdfSigningSessions.id });
-          // Cancelled while this attempt ran: throwing rolls the version
-          // back with it, so a cancelled exchange never gains one.
+          // Cancelled, or superseded by a later attempt after this one's
+          // lease lapsed: throwing rolls the version back with it, so only
+          // the attempt holding the exchange can finalize it.
           if (!finalized.at(0)) {
             throw new PdfSigningSessionClosedError({
               message: "The signing session closed before it finalized.",

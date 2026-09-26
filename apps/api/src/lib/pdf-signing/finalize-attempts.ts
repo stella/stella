@@ -125,6 +125,7 @@ export const claimFinalizeAttempt = async ({
   const rows = await tx
     .select({
       attempts: pdfSigningSessions.finalizeAttempts,
+      lease: pdfSigningSessions.finalizeLeaseExpiresAt,
       status: pdfSigningSessions.status,
     })
     .from(pdfSigningSessions)
@@ -134,16 +135,27 @@ export const claimFinalizeAttempt = async ({
   if (row?.status !== "open") {
     return { status: "closed" };
   }
+  // A live lease means the last attempt may still land: it is in progress,
+  // not exhausted, whatever the count says.
+  if (row.lease !== null && row.lease > now) {
+    return { status: "in-progress" };
+  }
   return row.attempts >= MAX_FINALIZE_ATTEMPTS
     ? { status: "exhausted" }
     : { status: "in-progress" };
 };
 
-/** Give the lease back after a retryable failure, so a retry may start. */
+/**
+ * Give the lease back after a retryable failure, so a retry may start.
+ * Fenced by `attempt`: an attempt that outlived its lease cannot release
+ * the lease a later attempt now holds.
+ */
 export const releaseFinalizeAttempt = async ({
+  attempt,
   sessionId,
   tx,
 }: {
+  attempt: number;
   sessionId: SafeId<"pdfSigningSession">;
   tx: Store;
 }) => {
@@ -155,6 +167,7 @@ export const releaseFinalizeAttempt = async ({
       and(
         eq(pdfSigningSessions.id, sessionId),
         eq(pdfSigningSessions.status, "open"),
+        eq(pdfSigningSessions.finalizeAttempts, attempt),
       ),
     );
 };

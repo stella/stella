@@ -10,6 +10,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ClosePdfSigningSessionOptions = {
+  /**
+   * The finalize attempt closing it, if any. Fences the close: an attempt a
+   * later one has superseded cannot end the exchange under it.
+   */
+  attempt?: number;
   closeReason: PdfSigningSessionCloseReason;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -25,6 +30,7 @@ type ClosePdfSigningSessionOptions = {
  * transition.
  */
 export const closePdfSigningSession = async ({
+  attempt,
   closeReason,
   recordAuditEvent,
   safeDb,
@@ -38,6 +44,9 @@ export const closePdfSigningSession = async ({
         and(
           eq(pdfSigningSessions.id, sessionId),
           eq(pdfSigningSessions.status, "open"),
+          attempt === undefined
+            ? undefined
+            : eq(pdfSigningSessions.finalizeAttempts, attempt),
         ),
       )
       .returning({ id: pdfSigningSessions.id });
