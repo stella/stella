@@ -6,6 +6,8 @@
 
 import { panic } from "better-result";
 
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+
 /** Poll cadence while the desktop app holds the signing dialog open. */
 export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
 
@@ -112,6 +114,23 @@ export const decidePdfSigningPoll = ({
     }
   }
 };
+
+/**
+ * What a finalized signature makes stale. The signed PDF is a new current
+ * version, so the version history is not enough: the entity detail decides
+ * which file field the open viewer shows. Realtime refreshes both too; this
+ * covers a client whose socket is asleep.
+ */
+export const pdfSigningFinalizedQueryKeys = ({
+  entityId,
+  workspaceId,
+}: {
+  entityId: string;
+  workspaceId: string;
+}) => [
+  entitiesKeys.detail(workspaceId, entityId),
+  entitiesKeys.versions(workspaceId, entityId),
+];
 
 /**
  * Narrow the API's refusal to the codes the browser explains in its own

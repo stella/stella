@@ -18,10 +18,10 @@ import {
 } from "@/lib/pdf-signing";
 import {
   type PdfSigningCloseReason,
+  pdfSigningFinalizedQueryKeys,
   pdfSigningStartErrorCode,
   type PdfSigningStartErrorCode,
 } from "@/lib/pdf-signing.logic";
-import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
@@ -157,15 +157,12 @@ export const useDesktopPdfSign = (target: PdfSigningTarget) => {
           title: t("workspaces.files.pdfSigning.signedTitle"),
           type: "success",
         });
-        // Workspace realtime already refreshes the panel; the explicit
-        // invalidation makes the signed version show up for a client whose
-        // socket is asleep.
-        await queryClient.invalidateQueries({
-          queryKey: entityVersionsKeys.all({
-            entityId: target.entityId,
-            workspaceId: target.workspaceId,
-          }),
-        });
+        await Promise.all(
+          pdfSigningFinalizedQueryKeys(target).map(
+            async (queryKey) =>
+              await queryClient.invalidateQueries({ queryKey }),
+          ),
+        );
         return;
       }
     }
