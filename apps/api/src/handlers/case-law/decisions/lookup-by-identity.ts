@@ -40,7 +40,7 @@ import {
 } from "@/api/db/schema";
 import {
   bareCitationKey,
-  normalizeDecisionIdentifierValue,
+  normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -111,6 +111,8 @@ type LookupDecisionsByIdentityOptions = {
 const IDENTITY_CANDIDATE_SCAN_MAX = LIMITS.caseLawSearchPageSizeMax;
 
 type IdentifierRowMatchOptions = {
+  /** Whose key the column holds: the jurisdiction the reference is read in. */
+  jurisdiction: string | undefined;
   tx: CaseLawPublicReadTransaction;
   type: DecisionIdentifierType;
   /** As the reference spells it; normalized here for the column. */
@@ -125,6 +127,7 @@ type IdentifierRowMatchOptions = {
  * whole table.
  */
 const identifierRowDecisionIds = ({
+  jurisdiction,
   tx,
   type,
   value,
@@ -137,7 +140,7 @@ const identifierRowDecisionIds = ({
         eq(caseLawDecisionIdentifiers.type, type),
         eq(
           caseLawDecisionIdentifiers.normalizedValue,
-          normalizeDecisionIdentifierValue(type, value),
+          normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
         ),
       ),
     );
@@ -186,6 +189,7 @@ export const decisionIdsNamedBy = ({
   tx: CaseLawPublicReadTransaction;
 }) => {
   const published = identifierRowDecisionIds({
+    jurisdiction: country,
     tx,
     type: IDENTIFIER_TYPE_OF_LOCATOR_KIND[locator.kind],
     value: locator.value,

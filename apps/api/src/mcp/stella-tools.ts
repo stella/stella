@@ -1990,7 +1990,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery(
         body,
-        parseDecisionQuery(query, { grammar }),
+        parseDecisionQuery(query, { grammar, jurisdiction: publicCountry }),
       ),
     };
   });
@@ -2582,7 +2582,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         // The sheet number names a page of the court file, not the decision,
         // so it is dropped before the grammars see the reference.
         const { caseNumber } = splitCaseReference(identifier);
-        const intent = parseDecisionQuery(caseNumber, { grammar });
+        const intent = parseDecisionQuery(caseNumber, {
+          grammar,
+          jurisdiction: publicCountry,
+        });
         if (intent.type !== "identifier") {
           return [identifier, { type: "not_an_identifier" }];
         }

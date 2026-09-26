@@ -26,6 +26,7 @@ import {
   isSelfCitation,
   normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
+  normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
@@ -3358,5 +3359,64 @@ describe("Constitutional Court rulings by their collection numbers", () => {
     expect(entry("N 53/26 SbNU 73")).not.toBe(entry("N 5/326 SbNU 73"));
     expect(entry("N 53/26 SbNU 73")).not.toBe(entry("U 53/26 SbNU 73"));
     expect(entry("N 53/26 SbNU 73")).toBe(entry("N 53/26 SbNU"));
+  });
+});
+
+describe("identifier keys by jurisdiction", () => {
+  const reporterKey = (jurisdiction: string | undefined, value: string) =>
+    normalizeDecisionIdentifierValueIn(
+      jurisdiction,
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value,
+    );
+
+  test("outside the reporter jurisdiction every stored key stays as it was", () => {
+    // Keys as rows already hold them; a changed key would orphan the row.
+    const pinned = [
+      ["10 Atl. 5", "10atl5"],
+      ["347 U.S. 483, 495", "347us483495"],
+      ["Rc 55/2013", "rc552013"],
+      ["98 Law. Ed. 873", "98lawed873"],
+    ] as const;
+    for (const jurisdiction of ["CZE", "HUN", "POL", undefined]) {
+      for (const [value, key] of pinned) {
+        expect(reporterKey(jurisdiction, value)).toBe(key);
+      }
+    }
+  });
+
+  test("in the reporter jurisdiction a variant, a pin and case name one key", () => {
+    const key = reporterKey("USA", "347 U.S. 483");
+    for (const value of [
+      "347 U. S. 483",
+      "347 U.S. Rep. 483",
+      "347 u.s. 483, 495",
+      "347 U.S. 483 at 495",
+    ]) {
+      expect(reporterKey("USA", value)).toBe(key);
+    }
+    expect(reporterKey("USA", "10 Atl. 5")).toBe(reporterKey("USA", "10 A. 5"));
+  });
+
+  test("a spelling several reporters share is not merged into one key", () => {
+    const circuit = reporterKey("USA", "1 Wall. C.C 1");
+    const supreme = reporterKey("USA", "1 Wall. S.C. 1");
+    const bare = reporterKey("USA", "1 Wall. 1");
+    expect(new Set([circuit, supreme, bare]).size).toBe(3);
+  });
+
+  test("only reporter citations are read by the jurisdiction", () => {
+    expect(
+      normalizeDecisionIdentifierValueIn(
+        "USA",
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        "21-123",
+      ),
+    ).toBe(
+      normalizeDecisionIdentifierValue(
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        "21-123",
+      ),
+    );
   });
 });

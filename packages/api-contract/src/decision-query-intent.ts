@@ -8,7 +8,10 @@ import {
   parseDecisionDocket,
 } from "./decision-docket-grammar";
 import type { DecisionDocketGrammar } from "./decision-docket-grammar";
-import { canonicalUsReporterCitation } from "./us-reporter-citation";
+import {
+  canonicalUsReporterCitation,
+  readsUsReporterCitations,
+} from "./us-reporter-citation";
 
 /**
  * The kinds of reference that name a decision outright. A neutral citation is
@@ -38,11 +41,17 @@ const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 
 type ParseDecisionQueryOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
+  /**
+   * The corpus jurisdiction the entry is read in. Reporter citations are read
+   * only in the jurisdiction whose reporters the edition table carries; any
+   * other entry, and an unscoped one, reads as it always did.
+   */
+  readonly jurisdiction?: string | null | undefined;
 };
 
 export const parseDecisionQuery = (
   raw: string,
-  { grammar }: ParseDecisionQueryOptions = {},
+  { grammar, jurisdiction }: ParseDecisionQueryOptions = {},
 ): DecisionQueryIntent => {
   const text = raw.trim();
   if (text.length === 0) {
@@ -52,10 +61,11 @@ export const parseDecisionQuery = (
   if (ECLI_RE.test(folded)) {
     return { type: "identifier", kind: "ecli", value: folded };
   }
-  // Before the docket fallback. Only a whole entry of volume, an edition the
-  // reporter table carries, and a page is claimed, so no docket grammar's
-  // spelling is taken from it.
-  const reporter = canonicalUsReporterCitation(folded);
+  // Before the docket fallback: only a whole entry of volume, a reporter the
+  // edition table settles on, and a page is claimed.
+  const reporter = readsUsReporterCitations(jurisdiction)
+    ? canonicalUsReporterCitation(folded)
+    : null;
   if (reporter !== null) {
     return { type: "identifier", kind: "reporter", value: reporter };
   }

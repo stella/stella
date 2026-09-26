@@ -654,6 +654,7 @@ const searchPostgresDecisions = async (
     body,
     parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
+      jurisdiction: body.country,
     }),
   );
 
@@ -1686,7 +1687,10 @@ export const searchCorpusIndexDecisions = async (
   let facetMs = 0;
   let scanAndFacetsMs = 0;
   const grammar = decisionDocketGrammarForCountry(body.country);
-  const intent = parseDecisionQuery(body.query, { grammar });
+  const intent = parseDecisionQuery(body.query, {
+    grammar,
+    jurisdiction: body.country,
+  });
   const interpretation = interpretDecisionQuery(body, intent);
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {

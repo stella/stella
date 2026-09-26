@@ -123,22 +123,41 @@ const fetchText = async (url: string): Promise<string> => {
   return await response.text();
 };
 
+/** Must match the parser's folding, which reads the same keys. */
+const foldedKey = (key: string): string => key.toLocaleLowerCase("und");
+
+/**
+ * One reporter record publishing under one edition: the edition and the
+ * record's position in that edition's list, or null for a reporter the table
+ * does not carry.
+ */
+type Candidate = readonly [edition: string, record: number | null];
+
+const candidateId = ([edition, record]: Candidate): string =>
+  `${edition}\u0000${String(record)}`;
+
 const addTo = (
-  map: Map<string, Set<string>>,
+  map: Map<string, Map<string, Candidate>>,
   key: string,
-  value: string,
+  candidate: Candidate,
 ): void => {
-  const existing = map.get(key);
-  if (existing === undefined) {
-    map.set(key, new Set([value]));
-  } else {
-    existing.add(value);
-  }
+  const existing = map.get(key) ?? new Map<string, Candidate>();
+  existing.set(candidateId(candidate), candidate);
+  map.set(key, existing);
 };
+
+const compareCandidates = (left: Candidate, right: Candidate): number =>
+  compareText(left[0], right[0]) || (left[1] ?? -1) - (right[1] ?? -1);
+
+const compareRecords = (left: EditionRecord, right: EditionRecord): number =>
+  compareText(left.name, right.name) ||
+  (left.start ?? 0) - (right.start ?? 0) ||
+  (left.end ?? 0) - (right.end ?? 0);
 
 type Table = {
   readonly editions: ReadonlyMap<string, readonly EditionRecord[]>;
-  readonly spellings: ReadonlyMap<string, readonly string[]>;
+  readonly spellings: ReadonlyMap<string, readonly Candidate[]>;
+  readonly foreignFolds: readonly string[];
 };
 
 const buildTable = (
@@ -154,75 +173,125 @@ const buildTable = (
       }
     }
   }
+  const allRecords = Object.values(reporters).flat();
 
-  // Resolution runs over the whole database, not the selection: a spelling
-  // that is an edition of a reporter outside the table must not be read as a
-  // variation of one inside it.
-  const editionRecords = new Map<string, EditionRecord[]>();
-  const exactBySpelling = new Map<string, Set<string>>();
-  const variationBySpelling = new Map<string, Set<string>>();
-  for (const records of Object.values(reporters)) {
-    for (const record of records) {
-      for (const [edition, dates] of Object.entries(record.editions)) {
-        addTo(exactBySpelling, spellingKey(edition), edition);
-        if (selectedEditions.has(edition)) {
-          const list = editionRecords.get(edition) ?? [];
-          list.push({
+  // Every record publishing under a selected edition, wherever the database
+  // files it, in a stable order that numbers them.
+  const editionRecords = new Map<
+    string,
+    { record: UpstreamReporter; entry: EditionRecord }[]
+  >();
+  for (const record of allRecords) {
+    for (const [edition, dates] of Object.entries(record.editions)) {
+      if (selectedEditions.has(edition)) {
+        const list = editionRecords.get(edition) ?? [];
+        list.push({
+          record,
+          entry: {
             name: record.name,
             start: yearOf(dates.start),
             end: yearOf(dates.end),
-          });
-          editionRecords.set(edition, list);
+          },
+        });
+        editionRecords.set(edition, list);
+      }
+    }
+  }
+  const sortedEditionRecords = new Map(
+    [...editionRecords].map(([edition, list]) => {
+      const sorted = list.toSorted((left, right) =>
+        compareRecords(left.entry, right.entry),
+      );
+      for (const [index, item] of sorted.entries()) {
+        const next = sorted[index + 1];
+        if (
+          next !== undefined &&
+          compareRecords(item.entry, next.entry) === 0
+        ) {
+          panic(`Two indistinguishable records publish ${edition}`);
         }
       }
-      for (const [variation, edition] of Object.entries(
-        record.variations ?? {},
-      )) {
-        addTo(variationBySpelling, spellingKey(variation), edition);
-      }
-    }
-  }
+      return [edition, sorted] as const;
+    }),
+  );
+  const candidateOf = (
+    record: UpstreamReporter,
+    edition: string,
+  ): Candidate => {
+    const index = sortedEditionRecords
+      .get(edition)
+      ?.findIndex((item) => item.record === record);
+    return [edition, index === undefined || index < 0 ? null : index];
+  };
 
-  const spellings = new Map<string, readonly string[]>();
-  const candidateKeys = new Set([
-    ...[...selectedEditions].map(spellingKey),
-    ...[...variationBySpelling]
-      .filter(([, editions]) =>
-        [...editions].some((edition) => selectedEditions.has(edition)),
-      )
-      .map(([key]) => key),
-  ]);
-  for (const key of candidateKeys) {
-    const resolved = exactBySpelling.get(key) ?? variationBySpelling.get(key);
-    const editions = [...(resolved ?? [])].toSorted(compareText);
-    if (editions.some((edition) => selectedEditions.has(edition))) {
-      spellings.set(key, editions);
+  // Resolution runs over the whole database, not the selection: a spelling
+  // that is an edition of a reporter outside the table must not be read as a
+  // variation of one inside it. Each candidate is a reporter record, not an
+  // edition spelling, so two reporters sharing a spelling stay two.
+  const exactBySpelling = new Map<string, Map<string, Candidate>>();
+  const variationBySpelling = new Map<string, Map<string, Candidate>>();
+  for (const record of allRecords) {
+    for (const edition of Object.keys(record.editions)) {
+      addTo(
+        exactBySpelling,
+        spellingKey(edition),
+        candidateOf(record, edition),
+      );
+    }
+    for (const [variation, edition] of Object.entries(
+      record.variations ?? {},
+    )) {
+      addTo(
+        variationBySpelling,
+        spellingKey(variation),
+        candidateOf(record, edition),
+      );
     }
   }
+  const resolve = (key: string): readonly Candidate[] => [
+    ...(
+      exactBySpelling.get(key) ??
+      variationBySpelling.get(key) ??
+      new Map()
+    ).values(),
+  ];
+  const inTable = (candidates: readonly Candidate[]): boolean =>
+    candidates.some(([, record]) => record !== null);
+
+  const spellings = new Map<string, readonly Candidate[]>();
+  const foreignFolds = new Set<string>();
+  for (const key of new Set([
+    ...exactBySpelling.keys(),
+    ...variationBySpelling.keys(),
+  ])) {
+    const candidates = resolve(key);
+    if (inTable(candidates)) {
+      spellings.set(key, candidates.toSorted(compareCandidates));
+    } else {
+      foreignFolds.add(foldedKey(key));
+    }
+  }
+  const tableFolds = new Set([...spellings.keys()].map(foldedKey));
 
   return {
     editions: new Map(
-      [...editionRecords]
+      [...sortedEditionRecords]
         .map(
-          ([edition, records]) =>
-            [
-              edition,
-              records.toSorted(
-                (left, right) =>
-                  compareText(left.name, right.name) ||
-                  (left.start ?? 0) - (right.start ?? 0),
-              ),
-            ] as const,
+          ([edition, list]) =>
+            [edition, list.map(({ entry }) => entry)] as const,
         )
         .toSorted(([left], [right]) => compareText(left, right)),
     ),
     spellings: new Map(
       [...spellings].toSorted(([left], [right]) => compareText(left, right)),
     ),
+    foreignFolds: [...foreignFolds]
+      .filter((fold) => tableFolds.has(fold))
+      .toSorted(compareText),
   };
 };
 
-const renderTable = ({ editions, spellings }: Table): string => {
+const renderTable = ({ editions, foreignFolds, spellings }: Table): string => {
   const lines = [
     "// Generated by scripts/generate-us-reporters.ts from",
     `// https://github.com/${UPSTREAM_REPO} at ${UPSTREAM_COMMIT}.`,
@@ -257,18 +326,44 @@ const renderTable = ({ editions, spellings }: Table): string => {
     "};",
     "",
     "/**",
-    " * Every accepted spelling, whitespace removed, to the canonical editions it",
-    " * names. An exact edition name wins over a variation; more than one edition",
+    " * A reporter record a spelling can name: its canonical edition and its",
+    " * position in `US_REPORTER_EDITIONS[edition]`, or null for a reporter the",
+    " * table does not carry.",
+    " */",
+    "export type UsReporterSpellingCandidate = readonly [",
+    "  edition: string,",
+    "  record: number | null,",
+    "];",
+    "",
+    "/**",
+    " * Every accepted spelling, whitespace removed, to the reporter records it",
+    " * names. An exact edition name wins over a variation; more than one record",
     " * is a spelling the database leaves ambiguous.",
     " */",
     "export const US_REPORTER_SPELLINGS: Readonly<",
-    "  Record<string, readonly [string, ...string[]]>",
+    "  Record<",
+    "    string,",
+    "    readonly [UsReporterSpellingCandidate, ...UsReporterSpellingCandidate[]]",
+    "  >",
     "> = {",
     ...[...spellings].map(
       ([spelling, candidates]) =>
-        `  ${JSON.stringify(spelling)}: [${candidates.map((candidate) => JSON.stringify(candidate)).join(", ")}],`,
+        `  ${JSON.stringify(spelling)}: [${candidates
+          .map(
+            ([edition, record]) =>
+              `[${JSON.stringify(edition)}, ${String(record)}]`,
+          )
+          .join(", ")}],`,
     ),
     "};",
+    "",
+    "/**",
+    " * Case-folded spellings that a reporter outside the table also answers to,",
+    " * so a spelling typed in another case is not read as one inside it.",
+    " */",
+    "export const US_REPORTER_FOREIGN_FOLDED_SPELLINGS: readonly string[] = [",
+    ...foreignFolds.map((fold) => `  ${JSON.stringify(fold)},`),
+    "];",
     "",
   ];
   return lines.join("\n");
