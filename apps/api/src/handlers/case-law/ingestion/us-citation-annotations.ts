@@ -335,6 +335,15 @@ const runKey = (blockId: string, cell: UsCitationOccurrence["cell"]): string =>
     ? blockId
     : `${blockId}\u0000${String(cell.row)}:${String(cell.column)}`;
 
+/** A run holds occurrences only where one was found; the rest hold none. */
+const occurrencesIn = (
+  byRun: ReadonlyMap<string, UsCitationOccurrence[]>,
+  key: string,
+): readonly UsCitationOccurrence[] => {
+  const run = byRun.get(key);
+  return run === undefined ? [] : run;
+};
+
 const annotateBlock = (
   budget: CitationWorkBudget,
   block: Block,
@@ -348,7 +357,7 @@ const annotateBlock = (
         inlines: annotateRun(
           budget,
           block.inlines,
-          byRun.get(runKey(block.id, undefined)) ?? [],
+          occurrencesIn(byRun, runKey(block.id, undefined)),
         ),
       };
     case "table":
@@ -360,7 +369,7 @@ const annotateBlock = (
             inlines: annotateRun(
               budget,
               cell.inlines,
-              byRun.get(runKey(block.id, { row, column })) ?? [],
+              occurrencesIn(byRun, runKey(block.id, { row, column })),
             ),
           })),
         ),

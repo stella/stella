@@ -34,8 +34,7 @@
 
 import { panic } from "better-result";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -62,6 +61,10 @@ import type {
   UsCourtTier,
   UsRejectedCourtRow,
 } from "../packages/api-contract/src/us-court-vocabulary";
+import {
+  formattedLikeRepository,
+  writeOrCheckArtifacts,
+} from "./generated-artifacts";
 
 /** Bumped when the rendering or the resolution rules change. */
 const GENERATOR_VERSION = 2;
@@ -77,7 +80,6 @@ const COURTS_DB_FILE = "courts-db-locations.tsv";
 const OVERRIDES_FILE = "overrides.json";
 const PROVENANCE_FILE = "provenance.json";
 const COURTS_DB_NOTICE_FILE = "courts-db.LICENSE";
-const FORMATTER_CONFIG = path.join(REPO_ROOT, ".oxfmtrc.json");
 
 /** The CourtListener export the projection is taken from. */
 const COURTLISTENER_EXPORT = {
@@ -1145,28 +1147,6 @@ export const inputsFromFiles = (files: InputFiles): UsCourtInputs => ({
   overrides: parseOverrides(files.overrides),
 });
 
-/** `source` as the repository formatter lays it out. */
-const formatted = async (
-  source: string,
-  extension: string,
-): Promise<string> => {
-  const workDir = await mkdtemp(path.join(os.tmpdir(), "us-courts-"));
-  try {
-    const file = path.join(workDir, `output.${extension}`);
-    await writeFile(file, source, "utf-8");
-    const result = Bun.spawnSync(
-      [process.execPath, "--bun", "oxfmt", "-c", FORMATTER_CONFIG, file],
-      { cwd: REPO_ROOT, stderr: "inherit", stdout: "ignore" },
-    );
-    if (result.exitCode !== 0) {
-      return panic(`oxfmt failed on the generated ${extension} file`);
-    }
-    return await readFile(file, "utf-8");
-  } finally {
-    await rm(workDir, { force: true, recursive: true });
-  }
-};
-
 const fetchBytes = async (url: string): Promise<Uint8Array> => {
   const response = await fetch(url);
   if (!response.ok) {
@@ -1315,44 +1295,21 @@ const main = async (): Promise<number> => {
   );
   // The directory is compared without the formatter (its test does the
   // same), so the renderer has to produce the formatted text itself.
-  if ((await formatted(directory, "ts")) !== directory) {
+  if ((await formattedLikeRepository(directory, "ts")) !== directory) {
     return panic("oxfmt changes the generated directory; fix the renderer");
   }
   const artifacts = [
     { path: DIRECTORY_PATH, contents: directory },
     {
       path: path.join(DATA_DIR, PROVENANCE_FILE),
-      contents: await formatted(renderProvenance(files), "json"),
+      contents: await formattedLikeRepository(renderProvenance(files), "json"),
     },
   ];
 
-  if (process.argv.includes("--write")) {
-    await Promise.all(
-      artifacts.map(
-        async ({ contents, path: file }) =>
-          await writeFile(file, contents, "utf-8"),
-      ),
-    );
-    console.log(`wrote ${String(artifacts.length)} files`);
-    return 0;
-  }
-
-  const drifted: string[] = [];
-  for (const { contents, path: file } of artifacts) {
-    const committed = await readFile(file, "utf-8").catch(() => null);
-    if (committed !== contents) {
-      drifted.push(path.relative(REPO_ROOT, file));
-    }
-  }
-  for (const file of drifted) {
-    console.error(`drifted: ${file}`);
-  }
-  if (drifted.length > 0) {
-    console.error("Run with --write.");
-    return 1;
-  }
-  console.log(`${String(artifacts.length)} files match their inputs`);
-  return 0;
+  return await writeOrCheckArtifacts(artifacts, {
+    write: process.argv.includes("--write"),
+    matched: "their inputs",
+  });
 };
 
 if (import.meta.main) {

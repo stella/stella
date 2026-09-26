@@ -25,10 +25,13 @@
  */
 
 import { panic } from "better-result";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import {
+  formattedLikeRepository,
+  writeOrCheckArtifacts,
+} from "./generated-artifacts";
 
 const UPSTREAM_REPO = "freelawproject/reporters-db";
 const UPSTREAM_COMMIT = "e095e6bf914ffd0a7b272f3764179cf3dbdf246c";
@@ -38,7 +41,6 @@ const REPO_ROOT = path.join(import.meta.dir, "..");
 const OUTPUT_DIR = path.join(REPO_ROOT, "packages/api-contract/src");
 const TABLE_PATH = path.join(OUTPUT_DIR, "us-reporter-editions.generated.ts");
 const LICENSE_PATH = path.join(OUTPUT_DIR, "us-reporters.LICENSE");
-const FORMATTER_CONFIG = path.join(REPO_ROOT, ".oxfmtrc.json");
 
 /**
  * The upstream abbreviations whose editions the table carries: the national,
@@ -380,25 +382,6 @@ const renderLicense = (license: string): string =>
     "",
   ].join("\n");
 
-/** The committed table is formatted like every other source file. */
-const formatted = async (source: string): Promise<string> => {
-  const workDir = await mkdtemp(path.join(os.tmpdir(), "us-reporters-"));
-  try {
-    const file = path.join(workDir, "table.ts");
-    await writeFile(file, source, "utf-8");
-    const result = Bun.spawnSync(
-      [process.execPath, "--bun", "oxfmt", "-c", FORMATTER_CONFIG, file],
-      { cwd: REPO_ROOT, stderr: "inherit", stdout: "inherit" },
-    );
-    if (result.exitCode !== 0) {
-      return panic("oxfmt failed on the generated table");
-    }
-    return await readFile(file, "utf-8");
-  } finally {
-    await rm(workDir, { force: true, recursive: true });
-  }
-};
-
 const main = async (): Promise<number> => {
   const write = process.argv.includes("--write");
   const [json, license] = await Promise.all([
@@ -409,38 +392,18 @@ const main = async (): Promise<number> => {
   const artifacts = [
     {
       path: TABLE_PATH,
-      contents: await formatted(renderTable(buildTable(reporters))),
+      contents: await formattedLikeRepository(
+        renderTable(buildTable(reporters)),
+        "ts",
+      ),
     },
     { path: LICENSE_PATH, contents: renderLicense(license) },
   ];
 
-  if (write) {
-    await Promise.all(
-      artifacts.map(
-        async ({ contents, path: file }) =>
-          await writeFile(file, contents, "utf-8"),
-      ),
-    );
-    console.log(`wrote ${String(artifacts.length)} files`);
-    return 0;
-  }
-
-  const drifted: string[] = [];
-  for (const { contents, path: file } of artifacts) {
-    const committed = await readFile(file, "utf-8").catch(() => null);
-    if (committed !== contents) {
-      drifted.push(path.relative(REPO_ROOT, file));
-    }
-  }
-  for (const file of drifted) {
-    console.error(`drifted: ${file}`);
-  }
-  if (drifted.length > 0) {
-    console.error("Run with --write.");
-    return 1;
-  }
-  console.log(`${String(artifacts.length)} files match ${UPSTREAM_COMMIT}`);
-  return 0;
+  return await writeOrCheckArtifacts(artifacts, {
+    write,
+    matched: UPSTREAM_COMMIT,
+  });
 };
 
 process.exit(await main());
