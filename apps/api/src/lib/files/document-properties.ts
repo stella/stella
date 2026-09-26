@@ -26,6 +26,7 @@ import type {
 } from "@stll/api-contract";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
+import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -882,12 +883,10 @@ const scrubPdf = async (
   bytes: ArrayBuffer,
   scrubbedAt: Date,
 ): Promise<ScrubDocumentPropertiesResult> => {
-  const pdf = await PDF.load(new Uint8Array(bytes));
+  const source = new Uint8Array(bytes);
+  const pdf = await PDF.load(source);
   if (pdf.isEncrypted) {
     return { status: "password-protected" };
-  }
-  if (pdf.getForm()?.properties.hasSignatures === true) {
-    return { status: "signed" };
   }
 
   // Overwrite through the document API rather than deleting the trailer's
@@ -912,8 +911,20 @@ const scrubPdf = async (
 
   // A full save, never `{ incremental: true }`: an incremental update appends
   // the cleared state while the originals stay physically present earlier in
-  // the file, which for a scrub is no removal at all.
-  return { status: "scrubbed", bytes: await pdf.save() };
+  // the file, which for a scrub is no removal at all. A signed PDF is
+  // refused rather than rewritten.
+  const saved = await savePdfRewrite({ pdf, source });
+  switch (saved.status) {
+    case "saved":
+      return { status: "scrubbed", bytes: saved.bytes };
+    case "encrypted":
+      return { status: "password-protected" };
+    case "signed":
+      return { status: "signed" };
+    default:
+      saved satisfies never;
+      return panic(`Unhandled PDF rewrite result: ${String(saved)}`);
+  }
 };
 
 type ScrubDocumentPropertiesOptions = {
