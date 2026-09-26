@@ -488,7 +488,6 @@ const ORIGINAL_QUOTE_MARKER =
   /^-{2,}\s*(?:original message|původní zpráva|ursprüngliche nachricht)\s*-{2,}$/iu;
 const FORWARD_SUBJECT_PREFIX =
   /^\s*(?:(?:fw|fwd|wg|přep|tr|transféré)\s*:|přeposlaná zpráva(?:\s*:|\s*$))/iu;
-const REPLY_SUBJECT_PREFIX = /^\s*(?:re|aw|sv|odp|rép)\s*:/iu;
 const HEADER_KIND = {
   from: "from",
   von: "from",
@@ -642,7 +641,7 @@ export const parseInboundMessage = async (
   const message = normalizeMessage(outerEmail, outerDate);
   if (
     (message.inReplyTo !== null || message.references.length > 0) &&
-    REPLY_SUBJECT_PREFIX.test(message.subject ?? "")
+    !FORWARD_SUBJECT_PREFIX.test(message.subject ?? "")
   ) {
     return { outerSender, message, forwardSource: "none" };
   }
