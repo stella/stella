@@ -1936,6 +1936,20 @@
     "deliveredBy": "Doručil <address>{sender}</address>",
     "deliveredByAuthenticated": "Doručil <address>{sender}</address> · ověřeno",
     "deliveryAuthentication": "Ověření doručení",
+    "drops": {
+      "authenticationHint": "Požádejte správce e-mailu odesílatele o nastavení <protocol>SPF</protocol>, <protocol>DKIM</protocol> a <protocol>DMARC</protocol> pro odesílající doménu.",
+      "reason": "Důvod",
+      "reasons": {
+        "attachmentRejected": "Příloha byla odmítnuta",
+        "authenticationFailed": "Ověření doručení selhalo",
+        "malformedMessage": "Zprávu se nepodařilo přečíst",
+        "messageTooLarge": "Zpráva je příliš velká",
+        "revokedAddress": "E-mailová adresa byla zrušena",
+        "unauthorizedSender": "Odesílatel nemá oprávnění",
+        "unknownRecipient": "Neznámý příjemce"
+      },
+      "title": "Odmítnutá doručení"
+    },
     "empty": "Zatím žádná korespondence.",
     "filers": "Podavatelé",
     "forwardedBy": "Přeposlal <address>{sender}</address>",

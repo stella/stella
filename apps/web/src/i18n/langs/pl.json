@@ -1936,6 +1936,20 @@
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
     "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
+    "drops": {
+      "authenticationHint": "Poproś administratora poczty nadawcy o skonfigurowanie <protocol>SPF</protocol>, <protocol>DKIM</protocol> i <protocol>DMARC</protocol> dla domeny nadawczej.",
+      "reason": "Powód",
+      "reasons": {
+        "attachmentRejected": "Załącznik został odrzucony",
+        "authenticationFailed": "Uwierzytelnienie dostarczenia nie powiodło się",
+        "malformedMessage": "Nie udało się odczytać wiadomości",
+        "messageTooLarge": "Wiadomość jest zbyt duża",
+        "revokedAddress": "Adres e-mail został unieważniony",
+        "unauthorizedSender": "Nadawca nie ma uprawnień",
+        "unknownRecipient": "Nieznany odbiorca"
+      },
+      "title": "Odrzucone wiadomości"
+    },
     "empty": "Brak korespondencji.",
     "filers": "Nadawcy",
     "forwardedBy": "Przekazane przez <address>{sender}</address>",

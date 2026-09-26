@@ -1936,6 +1936,20 @@
     "deliveredBy": "Piegādāja <address>{sender}</address>",
     "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
     "deliveryAuthentication": "Piegādes autentifikācija",
+    "drops": {
+      "authenticationHint": "Lūdziet sūtītāja e-pasta administratoram konfigurēt <protocol>SPF</protocol>, <protocol>DKIM</protocol> un <protocol>DMARC</protocol> sūtīšanas domēnam.",
+      "reason": "Iemesls",
+      "reasons": {
+        "attachmentRejected": "Pielikums noraidīts",
+        "authenticationFailed": "Piegādes autentifikācija neizdevās",
+        "malformedMessage": "Ziņojumu neizdevās nolasīt",
+        "messageTooLarge": "Ziņojums ir pārāk liels",
+        "revokedAddress": "E-pasta adrese ir atsaukta",
+        "unauthorizedSender": "Sūtītājam nav atļaujas",
+        "unknownRecipient": "Nezināms saņēmējs"
+      },
+      "title": "Noraidītās piegādes"
+    },
     "empty": "Sarakstes vēl nav.",
     "filers": "Iesniedzēji",
     "forwardedBy": "Pārsūtīja <address>{sender}</address>",

@@ -1936,6 +1936,20 @@
     "deliveredBy": "Distribué par <address>{sender}</address>",
     "deliveredByAuthenticated": "Distribué par <address>{sender}</address> · authentifié",
     "deliveryAuthentication": "Authentification de la distribution",
+    "drops": {
+      "authenticationHint": "Demandez à l’administrateur de la messagerie de l’expéditeur de configurer <protocol>SPF</protocol>, <protocol>DKIM</protocol> et <protocol>DMARC</protocol> pour le domaine d’envoi.",
+      "reason": "Motif",
+      "reasons": {
+        "attachmentRejected": "Pièce jointe rejetée",
+        "authenticationFailed": "Échec de l’authentification de la distribution",
+        "malformedMessage": "Impossible de lire le message",
+        "messageTooLarge": "Message trop volumineux",
+        "revokedAddress": "Adresse e-mail révoquée",
+        "unauthorizedSender": "Expéditeur non autorisé",
+        "unknownRecipient": "Destinataire inconnu"
+      },
+      "title": "Messages rejetés"
+    },
     "empty": "Aucune correspondance pour le moment.",
     "filers": "Déposants",
     "forwardedBy": "Transféré par <address>{sender}</address>",

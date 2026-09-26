@@ -1936,6 +1936,20 @@
     "deliveredBy": "Entregado por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticación de la entrega",
+    "drops": {
+      "authenticationHint": "Pida al administrador del correo del remitente que configure <protocol>SPF</protocol>, <protocol>DKIM</protocol> y <protocol>DMARC</protocol> para el dominio de envío.",
+      "reason": "Motivo",
+      "reasons": {
+        "attachmentRejected": "Archivo adjunto rechazado",
+        "authenticationFailed": "Error de autenticación de la entrega",
+        "malformedMessage": "No se pudo leer el mensaje",
+        "messageTooLarge": "Mensaje demasiado grande",
+        "revokedAddress": "Dirección de correo revocada",
+        "unauthorizedSender": "Remitente no autorizado",
+        "unknownRecipient": "Destinatario desconocido"
+      },
+      "title": "Entregas rechazadas"
+    },
     "empty": "Todavía no hay correspondencia.",
     "filers": "Remitentes",
     "forwardedBy": "Reenviado por <address>{sender}</address>",

@@ -1936,6 +1936,20 @@
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
     "deliveredByAuthenticated": "تم التسليم بواسطة <address>{sender}</address> · تمت المصادقة",
     "deliveryAuthentication": "مصادقة التسليم",
+    "drops": {
+      "authenticationHint": "اطلب من مسؤول البريد الإلكتروني لدى المرسل إعداد <protocol>SPF</protocol> و<protocol>DKIM</protocol> و<protocol>DMARC</protocol> لنطاق الإرسال.",
+      "reason": "السبب",
+      "reasons": {
+        "attachmentRejected": "تم رفض المرفق",
+        "authenticationFailed": "فشلت مصادقة التسليم",
+        "malformedMessage": "تعذّرت قراءة الرسالة",
+        "messageTooLarge": "الرسالة كبيرة جدًا",
+        "revokedAddress": "تم إلغاء عنوان البريد الإلكتروني",
+        "unauthorizedSender": "المرسل غير مخوّل",
+        "unknownRecipient": "مستلم غير معروف"
+      },
+      "title": "الرسائل المرفوضة"
+    },
     "empty": "لا توجد مراسلات بعد.",
     "filers": "مقدمو المراسلات",
     "forwardedBy": "تمت إعادة التوجيه بواسطة <address>{sender}</address>",

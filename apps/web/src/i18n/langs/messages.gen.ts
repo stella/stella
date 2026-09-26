@@ -1939,6 +1939,20 @@ type Messages = {
     "deliveredBy": "Delivered by <address>{sender}</address>";
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
     "deliveryAuthentication": "Delivery authentication";
+    "drops": {
+      "authenticationHint": "Ask the sender’s email administrator to configure <protocol>SPF</protocol>, <protocol>DKIM</protocol>, and <protocol>DMARC</protocol> for the sending domain.";
+      "reason": "Reason";
+      "reasons": {
+        "attachmentRejected": "Attachment rejected";
+        "authenticationFailed": "Delivery authentication failed";
+        "malformedMessage": "Message could not be read";
+        "messageTooLarge": "Message too large";
+        "revokedAddress": "Email address revoked";
+        "unauthorizedSender": "Sender not authorized";
+        "unknownRecipient": "Unknown recipient";
+      };
+      "title": "Rejected deliveries";
+    };
     "empty": "No correspondence yet.";
     "filers": "Filers";
     "forwardedBy": "Forwarded by <address>{sender}</address>";
