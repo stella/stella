@@ -25,6 +25,8 @@ import {
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
+import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
 export const Route = createFileRoute(
@@ -52,6 +54,7 @@ function CorrespondenceDetailPage() {
     correspondenceByIdOptions(workspaceId, correspondenceId),
   );
   const { record, filers, attachments } = data;
+  const provenance = correspondenceProvenancePresentation(record);
   const { data: members = [] } = useQuery(workspaceMembersOptions(workspaceId));
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
@@ -79,9 +82,9 @@ function CorrespondenceDetailPage() {
               update.mutate({
                 workspaceId,
                 correspondenceId,
+                type: "set_handling",
                 handlingState:
                   record.handlingState === "new" ? "handled" : "new",
-                assigneeId: record.assigneeId,
               })
             }
             size="sm"
@@ -95,8 +98,40 @@ function CorrespondenceDetailPage() {
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
+          <section className="space-y-3 rounded-lg border p-4">
+            <h2 className="text-sm font-medium">
+              {t("correspondence.deliveryAuthentication")}
+            </h2>
+            <CorrespondenceProvenance record={record} />
+            <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              {(["spf", "dkim", "dmarc"] as const).map((check) => (
+                <bdi dir="ltr" key={check}>
+                  {check.toUpperCase()}:{" "}
+                  {t(
+                    CORRESPONDENCE_AUTH_LABEL_KEYS[
+                      record.authenticatedSender[check]
+                    ],
+                  )}
+                </bdi>
+              ))}
+            </span>
+          </section>
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            <DetailField label={t("emailViewer.from")}>
+            {record.intake !== "direct" && (
+              <h2 className="text-sm font-medium sm:col-span-2">
+                {t("correspondence.assertedOriginal")}
+              </h2>
+            )}
+            {record.intake !== "direct" && (
+              <DetailField
+                label={t("inspector.metadata.documentProperties.keys.subject")}
+              >
+                <bdi dir="auto">
+                  {record.subject || t("emailViewer.noSubject")}
+                </bdi>
+              </DetailField>
+            )}
+            <DetailField label={t(provenance.originalSenderLabel)}>
               <Address name={record.from.name} address={record.from.address} />
             </DetailField>
             <DetailField label={t("emailViewer.to")}>
@@ -107,12 +142,6 @@ function CorrespondenceDetailPage() {
                 <AddressList addresses={record.cc} />
               </DetailField>
             )}
-            <DetailField label={t("correspondence.receivedAt")}>
-              {format.dateTime(new Date(record.receivedAt), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </DetailField>
             {record.sentAt && (
               <DetailField label={t("correspondence.sentAt")}>
                 {format.dateTime(new Date(record.sentAt), {
@@ -121,6 +150,14 @@ function CorrespondenceDetailPage() {
                 })}
               </DetailField>
             )}
+          </section>
+          <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+            <DetailField label={t("correspondence.receivedAt")}>
+              {format.dateTime(new Date(record.receivedAt), {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </DetailField>
             <DetailField label={t("common.assignee")}>
               {canUpdate ? (
                 <Select
@@ -129,7 +166,7 @@ function CorrespondenceDetailPage() {
                     update.mutate({
                       workspaceId,
                       correspondenceId,
-                      handlingState: record.handlingState,
+                      type: "assign",
                       assigneeId: value === "unassigned" ? null : value,
                     })
                   }
@@ -162,20 +199,6 @@ function CorrespondenceDetailPage() {
                 (members.find((member) => member.userId === record.assigneeId)
                   ?.user?.name ?? tCommon("unassigned"))
               )}
-            </DetailField>
-            <DetailField label={t("correspondence.authentication")}>
-              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                {(["spf", "dkim", "dmarc"] as const).map((check) => (
-                  <bdi dir="ltr" key={check}>
-                    {check.toUpperCase()}:{" "}
-                    {t(
-                      CORRESPONDENCE_AUTH_LABEL_KEYS[
-                        record.authentication[check]
-                      ],
-                    )}
-                  </bdi>
-                ))}
-              </span>
             </DetailField>
           </section>
 
@@ -260,20 +283,23 @@ function CorrespondenceDetailPage() {
                           {t("correspondence.sharedMailboxFiler", {
                             address: filer.address,
                             approver:
-                              filer.approvedByName ??
-                              t("correspondence.unknownApprover"),
+                              filer.approvedByStatus === "deleted"
+                                ? t("tasks.deletedAccount")
+                                : (filer.approvedByName ??
+                                  t("correspondence.unknownApprover")),
                           })}
                         </bdi>
                       </li>
                     );
                   }
 
-                  const user = members.find(
-                    (member) => member.userId === filer.userId,
-                  )?.user;
                   return (
                     <li key={`${filer.type}-${filer.userId}`}>
-                      <bdi>{user?.name ?? user?.email ?? filer.userId}</bdi>
+                      <bdi>
+                        {filer.userStatus === "deleted"
+                          ? t("tasks.deletedAccount")
+                          : (filer.userName ?? t("common.unknownUser"))}
+                      </bdi>
                     </li>
                   );
                 })}

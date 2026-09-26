@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CorrespondenceHandlingState } from "@stll/api-contract/correspondence";
@@ -13,9 +14,10 @@ import { correspondenceKeys } from "@/lib/workspaces/queries/correspondence";
 type UpdateCorrespondenceVars = {
   workspaceId: string;
   correspondenceId: string;
-  handlingState: CorrespondenceHandlingState;
-  assigneeId: string | null;
-};
+} & (
+  | { type: "set_handling"; handlingState: CorrespondenceHandlingState }
+  | { type: "assign"; assigneeId: string | null }
+);
 
 export const useUpdateCorrespondence = () => {
   const analytics = useAnalytics();
@@ -28,15 +30,28 @@ export const useUpdateCorrespondence = () => {
       correspondenceId,
       ...body
     }: UpdateCorrespondenceVars) => {
-      const response = await api
+      const endpoint = api
         .workspaces({ workspaceId })
-        .correspondence({ correspondenceId })
-        .patch({
-          handlingState: body.handlingState,
-          assigneeId:
-            body.assigneeId === null ? null : toSafeId<"user">(body.assigneeId),
-        });
-      return unwrapEden(response);
+        .correspondence({ correspondenceId });
+      switch (body.type) {
+        case "set_handling":
+          return unwrapEden(
+            await endpoint.patch({ handlingState: body.handlingState }),
+          );
+        case "assign":
+          return unwrapEden(
+            await endpoint.patch({
+              assigneeId:
+                body.assigneeId === null
+                  ? null
+                  : toSafeId<"user">(body.assigneeId),
+            }),
+          );
+        default: {
+          body satisfies never;
+          return panic("Unhandled correspondence update command");
+        }
+      }
     },
     onSuccess: async (_result, { workspaceId }) => {
       await queryClient.invalidateQueries({

@@ -95,9 +95,9 @@ type ValidateContentOptions = Pick<
 const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   if (
     !/^[0-9a-f]{64}$/u.test(parsed.contentHash) ||
-    parsed.authentication.dmarc !== "pass" ||
-    (parsed.authentication.spf !== "pass" &&
-      parsed.authentication.dkim !== "pass")
+    parsed.authenticatedSender.dmarc !== "pass" ||
+    (parsed.authenticatedSender.spf !== "pass" &&
+      parsed.authenticatedSender.dkim !== "pass")
   ) {
     return { type: "invalid_authentication" as const };
   }
@@ -117,13 +117,12 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
 };
 
 export const correspondenceDedupKey = ({
+  intake,
   messageId,
   contentHash,
-}: Pick<ParsedCorrespondence, "messageId" | "contentHash">) =>
+}: Pick<ParsedCorrespondence, "intake" | "messageId" | "contentHash">) =>
   createHash("sha256")
-    .update(
-      JSON.stringify([messageId?.trim().toLowerCase() ?? null, contentHash]),
-    )
+    .update(JSON.stringify([intake, messageId?.trim() ?? null, contentHash]))
     .digest("hex");
 
 type AuthorizeFilerOptions = Pick<
@@ -258,6 +257,9 @@ export const createCorrespondence = async ({
         workspaceId,
         direction: parsed.direction,
         channel: parsed.channel,
+        intake: parsed.intake,
+        authenticatedSenderAddress: parsed.authenticatedSender.address,
+        originalSignature: parsed.originalSignature,
         messageId: parsed.messageId,
         contentHash: parsed.contentHash,
         dedupKey,
@@ -274,10 +276,10 @@ export const createCorrespondence = async ({
           parsed.bodyHtml === null
             ? null
             : sanitizeEmailBodyHtml(parsed.bodyHtml),
-        spf: parsed.authentication.spf,
-        dkim: parsed.authentication.dkim,
-        dmarc: parsed.authentication.dmarc,
-        alignedIdentifier: parsed.authentication.alignedIdentifier,
+        spf: parsed.authenticatedSender.spf,
+        dkim: parsed.authenticatedSender.dkim,
+        dmarc: parsed.authenticatedSender.dmarc,
+        alignedIdentifier: parsed.authenticatedSender.alignedIdentifier,
       })
       .onConflictDoNothing({
         target: [correspondence.workspaceId, correspondence.dedupKey],

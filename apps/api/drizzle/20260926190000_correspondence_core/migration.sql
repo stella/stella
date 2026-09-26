@@ -47,6 +47,7 @@ CREATE TABLE "correspondence" (
 CREATE UNIQUE INDEX "correspondence_ws_dedup_uidx" ON "correspondence" ("workspace_id", "dedup_key");--> statement-breakpoint
 CREATE INDEX "correspondence_ws_received_idx" ON "correspondence" ("workspace_id", "received_at" DESC, "id" DESC);--> statement-breakpoint
 CREATE INDEX "correspondence_ws_assignee_idx" ON "correspondence" ("workspace_id", "assignee_id", "handling_state");--> statement-breakpoint
+CREATE INDEX "correspondence_assignee_org_idx" ON "correspondence" ("assignee_id", "organization_id", "id") WHERE "assignee_id" IS NOT NULL;--> statement-breakpoint
 
 CREATE TABLE "correspondence_filers" (
   "id" uuid PRIMARY KEY NOT NULL,
@@ -154,6 +155,10 @@ CREATE INDEX "correspondence_drop_logs_ws_received_idx" ON "correspondence_drop_
 -- access aligned with the authorized workspace set.
 ALTER TABLE "correspondence" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "correspondence" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+-- Offboarding owns only the departing user's current assignments. The helper
+-- grants this scope transaction-locally and clears it immediately after UPDATE.
+CREATE POLICY "correspondence_owner_offboarding_select" ON "correspondence" FOR SELECT TO CURRENT_USER USING (("assignee_id" = nullif(current_setting('app.correspondence_offboarding_user_id', true), '') OR ("assignee_id" IS NULL AND "id" = ANY(nullif(current_setting('app.correspondence_offboarding_record_ids', true), '')::uuid[]))) AND (current_setting('app.correspondence_offboarding_scope', true) = 'account' OR (current_setting('app.correspondence_offboarding_scope', true) = 'organization' AND "organization_id" = current_setting('app.correspondence_offboarding_organization_id', true))));--> statement-breakpoint
+CREATE POLICY "correspondence_owner_offboarding_update" ON "correspondence" FOR UPDATE TO CURRENT_USER USING ("assignee_id" = nullif(current_setting('app.correspondence_offboarding_user_id', true), '') AND (current_setting('app.correspondence_offboarding_scope', true) = 'account' OR (current_setting('app.correspondence_offboarding_scope', true) = 'organization' AND "organization_id" = current_setting('app.correspondence_offboarding_organization_id', true)))) WITH CHECK ("assignee_id" IS NULL AND (current_setting('app.correspondence_offboarding_scope', true) = 'account' OR (current_setting('app.correspondence_offboarding_scope', true) = 'organization' AND "organization_id" = current_setting('app.correspondence_offboarding_organization_id', true))));--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "correspondence" TO "stella";--> statement-breakpoint
 CREATE POLICY "correspondence_workspace_select" ON "correspondence" FOR SELECT TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "correspondence_workspace_insert" ON "correspondence" FOR INSERT TO "stella" WITH CHECK (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
@@ -204,3 +209,20 @@ CREATE POLICY "correspondence_drop_logs_workspace_select" ON "correspondence_dro
 CREATE POLICY "correspondence_drop_logs_workspace_insert" ON "correspondence_drop_logs" FOR INSERT TO "stella" WITH CHECK (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "correspondence_drop_logs_workspace_update" ON "correspondence_drop_logs" FOR UPDATE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "correspondence_drop_logs_workspace_delete" ON "correspondence_drop_logs" FOR DELETE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
+
+CREATE INDEX "correspondence_filers_user_history_idx" ON "correspondence_filers" ("filed_by_user_id", "organization_id", "workspace_id") WHERE "filed_by_user_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "correspondence_filers_sender_history_idx" ON "correspondence_filers" ("filed_by_allowed_sender_id", "organization_id", "workspace_id") WHERE "filed_by_allowed_sender_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "correspondence_allowed_senders_approver_idx" ON "correspondence_allowed_senders" ("approved_by", "organization_id", "id") WHERE "approved_by" IS NOT NULL;--> statement-breakpoint
+
+CREATE POLICY "auth_user_correspondence_history_select" ON "user" FOR SELECT TO "stella" USING (EXISTS (
+  SELECT 1 FROM public.correspondence_filers cf
+  WHERE cf.filed_by_user_id = "user".id
+    AND cf.organization_id = (SELECT current_setting('app.organization_id', true))
+    AND (cf.workspace_id = ANY(COALESCE(NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR cf.workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw))
+) OR EXISTS (
+  SELECT 1 FROM public.correspondence_allowed_senders approved
+  JOIN public.correspondence_filers cf ON cf.filed_by_allowed_sender_id = approved.id AND cf.organization_id = approved.organization_id
+  WHERE approved.approved_by = "user".id
+    AND approved.organization_id = (SELECT current_setting('app.organization_id', true))
+    AND (cf.workspace_id = ANY(COALESCE(NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR cf.workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw))
+));--> statement-breakpoint

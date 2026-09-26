@@ -4,24 +4,26 @@ import { t } from "elysia";
 
 import { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspondence";
 
+import { member } from "@/api/db/auth-schema";
 import { correspondence, workspaceMembers } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { readCorrespondenceProvenance } from "@/api/lib/correspondence/provenance";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
-    "Set the handling state and assignee of a matter correspondence record.",
+    "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "correspondence" },
   params: workspaceParams({ correspondenceId: tSafeId("correspondence") }),
   body: t.Object({
-    handlingState: t.Union(
-      CORRESPONDENCE_HANDLING_STATES.map((state) => t.Literal(state)),
+    handlingState: t.Optional(
+      t.Union(CORRESPONDENCE_HANDLING_STATES.map((state) => t.Literal(state))),
     ),
-    assigneeId: t.Nullable(tSafeId("user")),
+    assigneeId: t.Optional(t.Nullable(tSafeId("user"))),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -32,11 +34,26 @@ const updateCorrespondence = createSafeHandler(
     params: { correspondenceId },
     safeDb,
     workspaceId,
+    session,
     recordAuditEvent,
   }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        if (body.assigneeId !== null) {
+        if (body.assigneeId !== undefined && body.assigneeId !== null) {
+          const [organizationMember] = await tx
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, session.activeOrganizationId),
+                eq(member.userId, body.assigneeId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (organizationMember === undefined) {
+            return { type: "invalid_assignee" as const };
+          }
           const [assignee] = await tx
             .select({ userId: workspaceMembers.userId })
             .from(workspaceMembers)
@@ -46,7 +63,8 @@ const updateCorrespondence = createSafeHandler(
                 eq(workspaceMembers.userId, body.assigneeId),
               ),
             )
-            .limit(1);
+            .limit(1)
+            .for("update");
           if (assignee === undefined) {
             return { type: "invalid_assignee" as const };
           }
@@ -104,6 +122,9 @@ const updateCorrespondence = createSafeHandler(
           });
         }
         const {
+          intake,
+          originalSignature,
+          authenticatedSenderAddress,
           spf,
           dkim,
           dmarc,
@@ -118,7 +139,15 @@ const updateCorrespondence = createSafeHandler(
           type: "ok" as const,
           record: {
             ...publicRecord,
-            authentication: { spf, dkim, dmarc, alignedIdentifier },
+            ...readCorrespondenceProvenance({
+              intake,
+              originalSignature,
+              authenticatedSenderAddress,
+              spf,
+              dkim,
+              dmarc,
+              alignedIdentifier,
+            }),
           },
         };
       }),
