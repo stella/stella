@@ -1932,6 +1932,40 @@ type Messages = {
       "person": "Person";
     };
   };
+  "correspondence": {
+    "addressTitle": "Matter email address";
+    "attachments": "Attachments";
+    "authResults": {
+      "fail": "Fail";
+      "none": "None";
+      "pass": "Pass";
+      "unknown": "Unknown";
+    };
+    "authentication": "Email authentication";
+    "backToList": "Back to correspondence";
+    "ccLabel": "Cc";
+    "createAddress": "Create address";
+    "empty": "No correspondence yet.";
+    "filers": "Filers";
+    "fromLabel": "From";
+    "markHandled": "Mark handled";
+    "markNew": "Mark new";
+    "message": "Message";
+    "noAddress": "No email address is active.";
+    "noSubject": "(No subject)";
+    "receivedAt": "Received";
+    "revokeAddress": "Revoke address";
+    "rotateAddress": "Rotate address";
+    "sentAt": "Sent";
+    "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "states": {
+      "handled": "Handled";
+      "new": "New";
+    };
+    "title": "Correspondence";
+    "toLabel": "To";
+    "unknownApprover": "Unknown approver";
+  };
   "docxReview": {
     "acceptAll": "Accept all";
     "acceptAllConfirmDescription": "This applies {count} suggestions to the document at once.";
@@ -5331,6 +5365,7 @@ type Messages = {
         "filters": {
           "all": "All activity";
           "automation": "Automation";
+          "correspondence": "Correspondence";
           "court": "Court records";
           "documents": "Documents and files";
           "matter": "Matter details";
@@ -5362,6 +5397,7 @@ type Messages = {
         };
         "targets": {
           "automation": "automation";
+          "correspondence": "correspondence";
           "court": "court record";
           "document": "document";
           "documentReview": "document review";
