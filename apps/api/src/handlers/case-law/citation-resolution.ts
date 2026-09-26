@@ -167,6 +167,15 @@ export const holderAnswersSheetSql = (
         )
       )`;
 
+/**
+ * A candidate's stored decision type as the type rules compare it: folded by
+ * the database's own `lower()`, under the column's collation, and matched
+ * against the lowercase spellings of `citation-decision-type-hint.ts` and the
+ * merits/procedural lists.
+ */
+export const decisionTypeKeySql = (holder: SQL): SQL =>
+  sql`lower(${holder}.decision_type)`;
+
 const sheetMatchSql = holderAnswersSheetSql(
   sql.raw("k"),
   sql.raw("b.cited_sheet_number"),
@@ -555,10 +564,10 @@ const classificationCtes = (batch: SQL): SQL => sql`
                (array_agg(k.id))[1] AS sole_id,
                count(DISTINCT k.court)::int AS courts,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
                )::int AS hinted_n,
                (array_agg(k.id) FILTER (
-                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
                ))[1] AS hinted_id,
                count(*) FILTER (
                  WHERE b.cited_court_hint IS NOT NULL
@@ -583,13 +592,13 @@ const classificationCtes = (batch: SQL): SQL => sql`
                    AND k.decision_date = b.cited_decision_date
                ))[1] AS date_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
                (array_agg(k.id) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                ))[1] AS merits_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
             ${citationMatchingHoldersSql({
