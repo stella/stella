@@ -1,16 +1,15 @@
 /**
- * A jurisdiction profile: everything the citation engine needs to know about a
- * legal culture, as data.
+ * A jurisdiction profile: what a citation reader needs to know about a legal
+ * culture, as data.
  *
- * The engine has no branch on a country. A profile declares the vocabulary
- * (section terms, subdivision terms, connectors, collections), the act tables
- * (aliases and titles), and the publisher's anchor scheme. Adding a
- * jurisdiction is a profile plus fixtures; it is never a code path, because a
- * code path is where the next jurisdiction's grammar gets bolted onto the last
- * one's.
+ * A profile declares the vocabulary (section terms, subdivision terms,
+ * connectors, collections), the act tables (aliases and titles), and the
+ * publisher's anchor scheme, so a reader that consumes it needs no branch on
+ * a country: adding a jurisdiction is a profile plus fixtures.
  *
- * Every list is ordered by the engine (longest spelling first) before it is
- * compiled, so a profile may list its terms in whatever order reads best.
+ * Lists are in no significant order. A consumer that matches spellings orders
+ * them itself (longest first), so a profile may list its terms in whatever
+ * order reads best.
  */
 
 /** Which top-level unit a number names. Acts use one or the other, not both. */
@@ -86,14 +85,15 @@ export type CollectionSpec = {
 };
 
 /**
- * When an entry applies, by the citing decision's date.
+ * The citing dates an entry is the default reading for.
  *
- * A recodification reuses a title: `občanský zákoník` is 40/1964 Sb. in a 2011
- * judgment and 89/2012 Sb. in a 2016 one. Both entries exist, each with its
- * window, so the wrong act is a lookup miss rather than a silent mis-binding.
- * Both bounds are half-open ISO dates. An entry never applies before the
- * year its act was issued, whatever its window leaves open; within that, an
- * entry without bounds always applies.
+ * A recodification reuses a title: `občanský zákoník` defaults to 40/1964 Sb.
+ * in a decision dated before 2014 and to 89/2012 Sb. from then. A window is a
+ * default, not proof of identity: a later decision may discuss the earlier
+ * law, so a consumer lets a citation that names its act (number, year) take
+ * precedence over it. Both bounds are half-open ISO dates; an entry without
+ * bounds applies at any date. A consumer should not apply an entry to a
+ * decision dated before the year its act was issued.
  */
 export type CitedWindow = {
   citedFrom?: string;
@@ -102,7 +102,7 @@ export type CitedWindow = {
 
 /**
  * The unit an act numbers its provisions by, `section` when an entry leaves
- * it out. A citation in the other unit (`§ 5 Listiny`) opens nothing.
+ * it out. A citation in the other unit (`§ 5 Listiny`) does not name it.
  */
 type ActUnit = { unit?: SectionUnit };
 
@@ -129,9 +129,10 @@ type SuccessionOptions = {
 };
 
 /**
- * A name two acts bore in turn: the older until the newer took effect, the
- * newer from then. A citation that names its act outright (`z roku 1965`,
- * `č. 65/1965 Sb.`) still opens the older one after the switch.
+ * A name two acts bore in turn: the older is the default reading until the
+ * newer took effect, the newer from then. A citation that names its act
+ * outright (`z roku 1965`, `č. 65/1965 Sb.`) identifies the older one after
+ * the switch regardless.
  */
 export const succession = ({
   newer,
