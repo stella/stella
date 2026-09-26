@@ -236,6 +236,31 @@ describe("revocation data for long-term validation", () => {
       expect(byOther.covers(leaf.der)).toBe(false);
     });
 
+    test("ignores a delegated responder whose own certificate has expired", async () => {
+      const { leaf, root } = await buildLeaf();
+      const day = 86_400_000;
+      // Correctly issued and authorized for OCSP, but no longer valid: its
+      // key may have been retired, so what it signs proves nothing now.
+      const expired = await createTestCertificate({
+        commonName: "Root OCSP responder",
+        extendedKeyUsages: ["1.3.6.1.5.5.7.3.9"],
+        issuer: root,
+        notAfter: new Date(Date.now() - day),
+        notBefore: new Date(Date.now() - 30 * day),
+      });
+      const provider = serve(
+        await createTestOcspResponse({
+          issuer: root,
+          responder: expired,
+          status: "good",
+          subject: leaf,
+        }),
+      );
+
+      expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
+      expect(provider.covers(leaf.der)).toBe(false);
+    });
+
     test("ignores a CRL past its next update", async () => {
       const { leaf, root } = await buildLeaf();
       const day = 86_400_000;

@@ -103,19 +103,31 @@ const allowsOcspSigning = (certificate: pkijs.Certificate) => {
   }
 };
 
+/** Whether a certificate is inside its validity window at `at`. */
+const isValidAt = (certificate: pkijs.Certificate, at: Date) =>
+  certificate.notBefore.value.getTime() <= at.getTime() + MAX_CLOCK_SKEW_MS &&
+  certificate.notAfter.value.getTime() >= at.getTime() - MAX_CLOCK_SKEW_MS;
+
 /**
  * Whether the response is signed by the issuer itself, or by a responder
- * certificate it carries that the issuer signed and authorized for OCSP.
+ * certificate it carries that the issuer signed, authorized for OCSP and
+ * that is valid both when the response was produced and now. A delegate's
+ * own revocation is not fetched: RFC 6960 4.2.2.2.1 leaves that to its
+ * short lifetime (id-pkix-ocsp-nocheck), which is why its validity window
+ * is the check that matters.
  */
 const signedByAuthorizedResponder = async (
   basic: pkijs.BasicOCSPResponse,
   issuer: pkijs.Certificate,
+  now: Date,
 ) => {
   const engine = pkijs.getCrypto(true);
   const delegates: pkijs.Certificate[] = [];
   for (const candidate of basic.certs ?? []) {
     if (
       allowsOcspSigning(candidate) &&
+      isValidAt(candidate, now) &&
+      isValidAt(candidate, basic.tbsResponseData.producedAt) &&
       candidate.issuer.isEqual(issuer.subject) &&
       (await settlesTrue(candidate.verify(issuer)))
     ) {
@@ -155,7 +167,7 @@ const ocspStatus = async (
       return null;
     }
     const basic = pkijs.BasicOCSPResponse.fromBER(new Uint8Array(encoded));
-    if (!(await signedByAuthorizedResponder(basic, issuer))) {
+    if (!(await signedByAuthorizedResponder(basic, issuer, now))) {
       return null;
     }
     const engine = pkijs.getCrypto(true);
