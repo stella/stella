@@ -20,31 +20,40 @@ const auth = {
 } satisfies MailAuthentication;
 
 describe("inbound acceptance", () => {
-  test.each(["primary", "verified-alias", "shared-mailbox"] as const)(
-    "accepts a current authorized %s",
-    (source) => {
-      const membership = {
-        status: "allowed",
-        filerId: "member-id",
-        source,
-      } satisfies SenderMembership;
-      expect(
-        evaluateInboundAcceptance({
-          outerSender: "member@example.com",
-          authentication: auth,
-          membership,
-          scan: "pass",
-        }),
-      ).toEqual({ status: "accept", filerId: "member-id" });
+  test.each([
+    { type: "user", userId: "member-id", filedAt: "2026-09-26T12:00:00Z" },
+    {
+      type: "shared_mailbox",
+      allowedSenderId: "mailbox-id",
+      address: "office@example.com",
+      approvedBy: "admin-id",
+      filedAt: "2026-09-26T12:00:00Z",
     },
-  );
+  ] as const)("retains the authorized filer provenance: %j", (filer) => {
+    const membership = { status: "allowed", filer } satisfies SenderMembership;
+    expect(
+      evaluateInboundAcceptance({
+        outerSender: "member@example.com",
+        authentication: auth,
+        membership,
+        scan: "pass",
+      }),
+    ).toEqual({ status: "accept", filer });
+  });
 
   test("membership, authentication, and scan approval are all necessary", () => {
     for (const memberAllowed of [true, false]) {
       for (const authenticated of [true, false]) {
         for (const scan of ["pass", "fail", "unavailable"] as const) {
           const membership: SenderMembership = memberAllowed
-            ? { status: "allowed", filerId: "member-id", source: "primary" }
+            ? {
+                status: "allowed",
+                filer: {
+                  type: "user",
+                  userId: "member-id",
+                  filedAt: "2026-09-26T12:00:00Z",
+                },
+              }
             : { status: "denied" };
           const result = evaluateInboundAcceptance({
             outerSender: "member@example.com",
