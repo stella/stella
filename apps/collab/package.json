@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "bun build --target=bun --packages=external --outfile dist/index.js src/index.ts",
+    "build": "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --packages=external --outfile dist/index.js src/index.ts",
     "dev": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
