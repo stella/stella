@@ -69,7 +69,8 @@ export type CzInsolvencyFinding = {
   court: string | null;
   /**
    * `ongoing` when the register lists the proceeding as pending, `ended`
-   * otherwise, `unverified` when the pending-only query failed.
+   * otherwise, `unverified` when the pending-only query failed or returned
+   * only part of its matches.
    */
   phase: (typeof CZ_INSOLVENCY_PHASES)[number];
   /** Register state code (druhStavKonkursu), e.g. "KONKURS", "ODDLUŽENÍ". */
@@ -309,8 +310,12 @@ const queryIsir = async ({
   return body.andThen(parseIsirAnswer);
 };
 
+// File numbers are court-local, so a proceeding is its court and file number.
+const isSameProceeding = (a: IsirRecord, b: IsirRecord): boolean =>
+  a.fileNumber === b.fileNumber && a.finding.court === b.finding.court;
+
 const phaseOf = (
-  fileNumber: string,
+  record: IsirRecord,
   pending: Result<IsirAnswer, EntityCheckUnavailableError>,
 ): CzInsolvencyFinding["phase"] => {
   if (pending.isErr()) {
@@ -319,10 +324,12 @@ const phaseOf = (
   if (pending.value.type === "empty") {
     return "ended";
   }
-  return pending.value.records.some(
-    (record) => record.fileNumber === fileNumber,
-  )
-    ? "ongoing"
+  if (pending.value.records.some((entry) => isSameProceeding(entry, record))) {
+    return "ongoing";
+  }
+  // A capped page of pending proceedings cannot show that this one ended.
+  return pending.value.totalMatches > pending.value.records.length
+    ? "unverified"
     : "ended";
 };
 
@@ -359,19 +366,17 @@ export const checkCzInsolvency = async (
     });
     const pending = yield* settlePending(pendingQuery);
 
-    const [first, ...rest] = matched.map(
-      ({ fileNumber, finding }): CzInsolvencyFinding => ({
-        fileNumber,
-        court: finding.court,
-        phase: phaseOf(fileNumber, pending),
-        stateCode: finding.stateCode,
-        matchedBy: all.matchedBy,
-        debtor: finding.debtor,
-        insolvencyDeclaredOn: finding.insolvencyDeclaredOn,
-        insolvencyEndedOn: finding.insolvencyEndedOn,
-        url: finding.url,
-      }),
-    );
+    const [first, ...rest] = matched.map((record): CzInsolvencyFinding => ({
+      fileNumber: record.fileNumber,
+      court: record.finding.court,
+      phase: phaseOf(record, pending),
+      stateCode: record.finding.stateCode,
+      matchedBy: all.matchedBy,
+      debtor: record.finding.debtor,
+      insolvencyDeclaredOn: record.finding.insolvencyDeclaredOn,
+      insolvencyEndedOn: record.finding.insolvencyEndedOn,
+      url: record.finding.url,
+    }));
     if (first === undefined) {
       return yield* malformed("ISIR returned only co-debtors of other debtors");
     }

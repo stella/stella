@@ -140,6 +140,46 @@ describe("Czech insolvency check", () => {
     expect(result.status === "found" && result.findings[0].phase).toBe("ended");
   });
 
+  test("matches a pending proceeding by court as well as file number", async () => {
+    const pending = await fixture("isir-company-found-pending.xml");
+    stubFetch([
+      { body: await fixture("isir-company-found.xml") },
+      {
+        body: pending.replace(
+          "<nazevOrganizace>Krajský soud v Ostravě</nazevOrganizace>",
+          "<nazevOrganizace>Krajský soud v Brně</nazevOrganizace>",
+        ),
+      },
+    ]);
+    const result = await check({
+      kind: "cz-insolvency",
+      subject: INSOLVENT_COMPANY,
+    });
+    expect(result.status === "found" && result.findings[0].phase).toBe("ended");
+  });
+
+  test("leaves the phase unverified when the pending-only page is capped", async () => {
+    const pending = await fixture("isir-company-found-pending.xml");
+    stubFetch([
+      { body: await fixture("isir-company-found.xml") },
+      {
+        body: pending
+          .replace("<bcVec>10525</bcVec>", "<bcVec>99999</bcVec>")
+          .replace(
+            "<pocetVysledku>1</pocetVysledku>",
+            "<pocetVysledku>60</pocetVysledku>",
+          ),
+      },
+    ]);
+    const result = await check({
+      kind: "cz-insolvency",
+      subject: INSOLVENT_COMPANY,
+    });
+    expect(result.status === "found" && result.findings[0].phase).toBe(
+      "unverified",
+    );
+  });
+
   test("keeps the findings when the pending-only query fails", async () => {
     stubFetch([
       { body: await fixture("isir-company-found.xml") },
