@@ -1,6 +1,6 @@
 {
   "generator": "scripts/generate-us-courts.ts",
-  "generatorVersion": 1,
+  "generatorVersion": 2,
   "courtListener": {
     "object": "bulk-data/courts-2026-06-30.csv.bz2",
     "url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/courts-2026-06-30.csv.bz2",
