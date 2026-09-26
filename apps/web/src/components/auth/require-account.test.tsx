@@ -69,7 +69,7 @@ describe("account gate", () => {
       Object.entries(ACCOUNT_GATE_FOR_SESSION)
         .filter(([, outcome]) => outcome === ACCOUNT_GATE_OUTCOME.asking)
         .map(([status]) => status),
-    ).toEqual(["anonymous"]);
+    ).toEqual(["anonymous", "unavailable"]);
   });
 });
 

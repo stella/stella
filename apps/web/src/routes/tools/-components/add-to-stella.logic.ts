@@ -1,4 +1,8 @@
+import { panic } from "better-result";
+
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
+
+import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
 
 type OrganizationCatalogueEntry = {
   kind: LoadedCatalogueEntry["kind"];
@@ -17,7 +21,7 @@ export type AddToStellaState =
   | { type: "install" };
 
 type ResolveAddToStellaStateOptions = {
-  authStatus: "checking" | "anonymous" | "authenticated";
+  authStatus: ClientAuthStatus["status"];
   canInstall: boolean | "error" | undefined;
   entry: Pick<LoadedCatalogueEntry, "kind" | "slug">;
   organizationEntries: readonly OrganizationCatalogueEntry[] | undefined;
@@ -29,11 +33,18 @@ export const resolveAddToStellaState = ({
   entry,
   organizationEntries,
 }: ResolveAddToStellaStateOptions): AddToStellaState => {
-  if (authStatus === "checking") {
-    return { type: "checking" };
-  }
-  if (authStatus === "anonymous") {
-    return { type: "sign-in" };
+  switch (authStatus) {
+    case "checking":
+      return { type: "checking" };
+    // Signing in is also how an unreadable session recovers.
+    case "anonymous":
+    case "unavailable":
+      return { type: "sign-in" };
+    case "authenticated":
+      break;
+    default:
+      authStatus satisfies never;
+      return panic(`Unhandled session status: ${String(authStatus)}`);
   }
   if (canInstall === "error") {
     return { type: "role-error" };

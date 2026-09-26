@@ -25,8 +25,9 @@ export const FEEDBACK_CHANNELS = {
 export type FeedbackChannel =
   (typeof FEEDBACK_CHANNELS)[keyof typeof FEEDBACK_CHANNELS];
 
-/** The channel for a session state, or `null` while the session is still
- *  resolving: guessing early would file a member's report anonymously. */
+/** The channel for a session state, or `null` while the session is unknown
+ *  (still resolving, or the read failed): guessing would file a member's
+ *  report anonymously, so only a confirmed visitor gets the public intake. */
 export const resolveFeedbackChannel = (
   session: ClientAuthStatus["status"],
 ): FeedbackChannel | null => {
@@ -36,6 +37,7 @@ export const resolveFeedbackChannel = (
     case "anonymous":
       return FEEDBACK_CHANNELS.public;
     case "checking":
+    case "unavailable":
       return null;
     default:
       session satisfies never;

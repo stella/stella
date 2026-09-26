@@ -30,8 +30,9 @@ describe("feedback channel for the session", () => {
     expect(resolveFeedbackChannel("anonymous")).toBe(FEEDBACK_CHANNELS.public);
   });
 
-  test("offers no channel while the session is unresolved", () => {
+  test("offers no channel while the session is unresolved or unreadable", () => {
     expect(resolveFeedbackChannel("checking")).toBeNull();
+    expect(resolveFeedbackChannel("unavailable")).toBeNull();
   });
 });
 

@@ -26,4 +26,7 @@ export const ACCOUNT_GATE_FOR_SESSION = {
   anonymous: ACCOUNT_GATE_OUTCOME.asking,
   authenticated: ACCOUNT_GATE_OUTCOME.allowed,
   checking: ACCOUNT_GATE_OUTCOME.checking,
+  // The session read failed and will not settle by waiting; signing in is
+  // the one way to re-establish it, and nothing is filed without identity.
+  unavailable: ACCOUNT_GATE_OUTCOME.asking,
 } as const satisfies Record<ClientAuthStatus["status"], AccountGateOutcome>;

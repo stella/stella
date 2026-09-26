@@ -346,7 +346,9 @@ const PublicSidebar = ({
           {feedbackChannel !== null && (
             <FeedbackSidebarItem channel={feedbackChannel} />
           )}
-          {authStatus.status === "anonymous" && (
+          {/* Signing in is also how an unreadable session recovers. */}
+          {(authStatus.status === "anonymous" ||
+            authStatus.status === "unavailable") && (
             <SidebarMenuItem>
               <Tooltip
                 content={isCollapsed ? t("auth.signIn") : null}
