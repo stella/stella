@@ -46,6 +46,7 @@ import {
   stampLines,
 } from "@/api/lib/pdf-signing/stamp";
 import type { SignatureStamp } from "@/api/lib/pdf-signing/stamp";
+import { loadStampFont } from "@/api/lib/pdf-signing/stamp-font";
 import {
   createFallbackTimestampAuthority,
   PdfSigningTimestampUnavailableError,
@@ -176,13 +177,14 @@ type SigningInvocation = SigningIdentity & {
  * to sign into. Runs on a freshly loaded document in both phases; the stamp
  * is built from persisted inputs only, so both produce the same bytes.
  */
-const prepareSignatureField = (
+const prepareSignatureField = async (
   pdf: PDF,
   invocation: SigningInvocation,
-): string | undefined =>
+): Promise<string | undefined> =>
   invocation.stamp === null
     ? undefined
     : addSignatureStamp({
+        fontBytes: await loadStampFont(),
         lines: stampLines({
           location: invocation.location,
           reason: invocation.reason,
@@ -287,7 +289,7 @@ export const captureSigningDigest = async (
         });
       }
       try {
-        const fieldName = prepareSignatureField(pdf, invocation);
+        const fieldName = await prepareSignatureField(pdf, invocation);
         await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName));
       } catch (error) {
         if (error instanceof PlaceholderError) {
@@ -422,7 +424,7 @@ export const applySignature = async (
 
   const signOnce = async (trust: TrustOptions) => {
     const pdf = await PDF.load(invocation.basePdf);
-    const fieldName = prepareSignatureField(pdf, invocation);
+    const fieldName = await prepareSignatureField(pdf, invocation);
     const { bytes, warnings } = await pdf.sign(
       buildSignOptions(invocation, signer, trust, fieldName),
     );
