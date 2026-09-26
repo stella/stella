@@ -327,7 +327,9 @@ const StampDocument = ({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <Label htmlFor={selectId}>{t("common.page")}</Label>
+        <Label htmlFor={selectId}>
+          {t("workspaces.files.pdfSigning.placementPageLabel")}
+        </Label>
         <Select
           onValueChange={(value) => {
             if (value === null || value === selectedPage) {
