@@ -11,6 +11,7 @@ use security_framework::key::{Algorithm, SecKey};
 use security_framework::policy::SecPolicy;
 use security_framework::trust::SecTrust;
 
+use crate::failure::{OS_STATUS_DOMAIN, SigningErrorCode, classify};
 use crate::identity::{
   SigningError, SigningIdentity, SigningKeyType, certificate_fingerprint,
   signing_identity,
@@ -54,9 +55,13 @@ pub(crate) fn sign_digest(
     SigningKeyType::Rsa => Algorithm::RSASignatureDigestPKCS1v15SHA256,
     SigningKeyType::Ec => Algorithm::ECDSASignatureDigestX962SHA256,
   };
-  key
-    .create_signature(algorithm, digest)
-    .map_err(|error| SigningError::SignatureFailed(error.to_string()))
+  key.create_signature(algorithm, digest).map_err(|error| {
+    SigningError::SignatureFailed {
+      code: classify(&error.domain().to_string(), error.code() as i64)
+        .unwrap_or(SigningErrorCode::SigningFailed),
+      detail: error.description().to_string(),
+    }
+  })
 }
 
 fn private_key_for(identity_id: &str) -> Result<SecKey, SigningError> {
@@ -69,7 +74,10 @@ fn private_key_for(identity_id: &str) -> Result<SecKey, SigningError> {
     }
     return identity
       .private_key()
-      .map_err(|error| SigningError::SignatureFailed(error.to_string()));
+      .map_err(|error| SigningError::SignatureFailed {
+        code: os_status_code(&error).unwrap_or(SigningErrorCode::SigningFailed),
+        detail: describe(error),
+      });
   }
   Err(SigningError::IdentityNotFound)
 }
@@ -83,7 +91,12 @@ fn keychain_identities() -> Result<Vec<SecIdentity>, SigningError> {
   {
     Ok(results) => results,
     Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => Vec::new(),
-    Err(error) => return Err(SigningError::KeychainUnavailable(describe(error))),
+    Err(error) => {
+      return Err(SigningError::KeychainUnavailable {
+        code: os_status_code(&error).unwrap_or(SigningErrorCode::KeychainUnavailable),
+        detail: describe(error),
+      });
+    }
   };
 
   Ok(
@@ -139,6 +152,10 @@ fn issuer_chain_der(certificate: &SecCertificate, leaf_der: &[u8]) -> Vec<Vec<u8
     }
   }
   chain
+}
+
+fn os_status_code(error: &SecError) -> Option<SigningErrorCode> {
+  classify(OS_STATUS_DOMAIN, i64::from(error.code()))
 }
 
 fn describe(error: SecError) -> String {

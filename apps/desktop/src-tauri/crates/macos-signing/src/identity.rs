@@ -6,6 +6,7 @@ use std::fmt;
 use sha2::{Digest, Sha256};
 
 use crate::certificate::{can_sign_documents, certificate_facts, iso_date};
+use crate::failure::SigningErrorCode;
 use crate::spki::key_type_from_certificate;
 
 /// How many leading characters of the fingerprint stand in for a certificate
@@ -53,17 +54,39 @@ pub struct SigningIdentity {
   pub key_type: SigningKeyType,
 }
 
+/// A failure from the keychain. `code` is what the user is told; `detail` is
+/// the keychain's own description, for the log only.
 #[derive(Debug)]
 pub enum SigningError {
   /// Signing needs Security.framework; this build does not run on macOS.
   UnsupportedPlatform,
   /// The keychain could not be searched at all.
-  KeychainUnavailable(String),
+  KeychainUnavailable {
+    code: SigningErrorCode,
+    detail: String,
+  },
   /// No identity in the keychain has this fingerprint any more.
   IdentityNotFound,
   /// The keychain refused to sign: a denied consent prompt, a locked
   /// keychain, a removed smart card.
-  SignatureFailed(String),
+  SignatureFailed {
+    code: SigningErrorCode,
+    detail: String,
+  },
+}
+
+impl SigningError {
+  /// What the dialog tells the user.
+  #[must_use]
+  pub const fn code(&self) -> SigningErrorCode {
+    match self {
+      Self::UnsupportedPlatform => SigningErrorCode::UnsupportedPlatform,
+      Self::IdentityNotFound => SigningErrorCode::KeyNotFound,
+      Self::KeychainUnavailable { code, .. } | Self::SignatureFailed { code, .. } => {
+        *code
+      }
+    }
+  }
 }
 
 impl fmt::Display for SigningError {
@@ -72,14 +95,22 @@ impl fmt::Display for SigningError {
       Self::UnsupportedPlatform => {
         f.write_str("PDF signing is available on macOS only")
       }
-      Self::KeychainUnavailable(error) => {
-        write!(f, "the keychain could not be read: {error}")
+      Self::KeychainUnavailable { code, detail } => {
+        write!(
+          f,
+          "the keychain could not be read ({}): {detail}",
+          code.as_str()
+        )
       }
       Self::IdentityNotFound => {
         f.write_str("the selected certificate is no longer in the keychain")
       }
-      Self::SignatureFailed(error) => {
-        write!(f, "the keychain did not sign the document: {error}")
+      Self::SignatureFailed { code, detail } => {
+        write!(
+          f,
+          "the keychain did not sign the document ({}): {detail}",
+          code.as_str()
+        )
       }
     }
   }
