@@ -22,6 +22,7 @@ import { panic } from "better-result";
 
 import {
   resolveUsCourt,
+  US_COURT_BY_CANONICAL_NAME,
   US_COURT_PARTITION_COUNT,
   US_COURT_PARTITION_KEY_PREFIX,
   US_COURT_PARTITIONS,
@@ -307,6 +308,32 @@ export const corpusIndexGroupConfig = (
   contract: CorpusIndexGroupContract,
 ): CorpusIndexConfig =>
   corpusIndexConfigWithId(contract.indexConfig, contract.indexId);
+
+/**
+ * The partitions a court filter adds as a pruning predicate beside its exact
+ * court clause, or undefined where it adds none.
+ *
+ * Only a read whose one target index is court-partitioned may name the
+ * partition field: a generation-wide read (`contract` null) spans indexes
+ * whose mapping has no such field, and an index created under its manifest's
+ * contract does not map it either. The partition never replaces the exact
+ * court clause, it only lets the engine skip splits; every document of the
+ * court carries it (`requireCourtPartitionIdentity`), so the two clauses match
+ * exactly what the court clause alone matches. A name the directory does not
+ * carry adds no guessed partition and keeps its exact filter.
+ */
+export const courtPartitionsForCourtFilter = (
+  contract: CorpusIndexGroupContract | null,
+  court: string | undefined,
+): readonly UsCourtPartition[] | undefined => {
+  if (court === undefined || contract?.type !== "court_partition_v1") {
+    return undefined;
+  }
+  const directoryCourt = US_COURT_BY_CANONICAL_NAME.get(court);
+  return directoryCourt === undefined
+    ? undefined
+    : [directoryCourt.courtPartition];
+};
 
 export type CourtPartitionIdentity = {
   courtId: string;

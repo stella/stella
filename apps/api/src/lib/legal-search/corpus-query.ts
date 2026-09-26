@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
@@ -560,6 +561,12 @@ export const corpusFreeTextClause = (
  */
 export type CaseLawCorpusFilters = {
   court?: string | undefined;
+  /**
+   * Partitions the court filter's documents all carry, added beside the
+   * exact court clause so the engine can skip splits; never alone
+   * (`courtPartitionsForCourtFilter`).
+   */
+  courtPartitions?: readonly string[] | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
   documentType?: string | undefined;
@@ -623,6 +630,17 @@ export const caseLawCorpusQuery = ({
   }
   if (filters.court) {
     clauses.push(`court:${quoteCorpusValue(filters.court)}`);
+    const partitions = filters.courtPartitions ?? [];
+    if (partitions.length > 0) {
+      clauses.push(
+        `(${partitions
+          .map(
+            (partition) =>
+              `${COURT_PARTITION_FIELD}:${quoteCorpusValue(partition)}`,
+          )
+          .join(" OR ")})`,
+      );
+    }
   }
   if (filters.dateFrom || filters.dateTo) {
     clauses.push(

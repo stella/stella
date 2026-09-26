@@ -15,6 +15,7 @@ import {
   COURT_PARTITION_FIELD,
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
+  courtPartitionsForCourtFilter,
   enrolledCorpusIndexGroupContracts,
   requireCourtPartitionIdentity,
   resolveCorpusIndexGroupContract,
@@ -26,6 +27,7 @@ import {
   corpusIndexIdFromManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 
 const CASE_LAW_MANIFESTS = [
   CORPUS_INDEX_MANIFESTS.case_law_v5,
@@ -228,4 +230,68 @@ test("a court-partitioned document is written only under its exact directory ide
       courtId: "scotus",
     }),
   ).toThrow("does not match the directory");
+});
+
+test("a court filter with its pruning predicate matches exactly what the court clause alone matches", () => {
+  // A court's documents are written under its canonical name and the
+  // partition of its id. The filter names the partition it derives from that
+  // same name, so every document the exact court clause matches carries it:
+  // the predicate removes splits, never results. Names are unique, so no name
+  // can stand for two partitions.
+  expect(
+    new Set(US_COURTS.map(({ canonicalName }) => canonicalName)).size,
+  ).toBe(US_COURTS.length);
+  for (const manifest of CASE_LAW_MANIFESTS) {
+    const contract = courtPartitionContract(manifest);
+    const mismatched = US_COURTS.filter((court) => {
+      const written = requireCourtPartitionIdentity({
+        court: court.canonicalName,
+        courtId: court.id,
+      }).courtPartition;
+      const filtered = courtPartitionsForCourtFilter(
+        contract,
+        court.canonicalName,
+      );
+      return filtered?.length !== 1 || filtered.at(0) !== written;
+    });
+    expect(mismatched).toEqual([]);
+  }
+  // A name the directory does not carry keeps its exact filter only.
+  expect(
+    courtPartitionsForCourtFilter(
+      courtPartitionContract(CORPUS_INDEX_MANIFESTS.case_law_v7),
+      "supreme court of the united states",
+    ),
+  ).toBeUndefined();
+});
+
+test("a read that reaches any index without the partition field never names it", () => {
+  const names = [
+    ...US_COURTS.slice(0, 50).map(({ canonicalName }) => canonicalName),
+    "Supreme Court of the United States",
+    "Nejvyšší soud",
+  ];
+  for (const manifest of CASE_LAW_MANIFESTS) {
+    const legacy = CASE_LAW_INDEX_GROUP_NAMES.flatMap((indexGroup) => {
+      const contract = resolveCorpusIndexGroupContract({
+        manifest,
+        indexGroup,
+      });
+      return contract.type === "base" ? [contract] : [];
+    });
+    // A generation-wide read spans every group, legacy ones included, so it
+    // is a `null` target: only a read of one court-partitioned index prunes.
+    for (const target of [null, ...legacy]) {
+      for (const court of names) {
+        const courtPartitions = courtPartitionsForCourtFilter(target, court);
+        expect(courtPartitions).toBeUndefined();
+        expect(
+          caseLawCorpusQuery({
+            text: "contract",
+            filters: { court, courtPartitions, jurisdiction: "USA" },
+          }),
+        ).not.toContain(COURT_PARTITION_FIELD);
+      }
+    }
+  }
 });

@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 
 import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
-import type { UsCourtTier } from "@stll/api-contract/us-courts";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { RANK, US_TIER_RANK } from "@/api/lib/case-law/court-ranks";
 import {
   compareCourtWeightPrecedence,
   flattenCourtWeightEntries,
@@ -29,37 +29,6 @@ export type CourtWeightSeedRow = {
   tierLabel: string;
   weight: number;
 };
-
-/**
- * The ranks a court can hold, declared once: a tier and its weight belong
- * to the label, not to the jurisdiction, so two countries cannot spell the
- * same rank with different numbers.
- */
-const RANK = {
-  constitutional: { tier: 4, tierLabel: "constitutional", weight: 10 },
-  supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
-  regional: { tier: 2, tierLabel: "regional", weight: 4 },
-  appeal: { tier: 2, tierLabel: "appeal", weight: 5 },
-  "procurement-review": { tier: 1, tierLabel: "procurement-review", weight: 3 },
-  district: { tier: 1, tierLabel: "district", weight: 2 },
-  "administrative-labour": {
-    tier: 1,
-    tierLabel: "administrative-labour",
-    weight: 3,
-  },
-  special: { tier: 1, tierLabel: "special", weight: 3 },
-} as const satisfies Record<
-  string,
-  Pick<CourtWeightSeedRow, "tier" | "tierLabel" | "weight">
->;
-
-/** The rank each United States directory tier is seeded at. */
-const US_TIER_RANK = {
-  supreme: RANK.supreme,
-  appellate: RANK.appeal,
-  trial: RANK.district,
-  special: RANK.special,
-} as const satisfies Record<UsCourtTier, (typeof RANK)[keyof typeof RANK]>;
 
 /**
  * The widest pattern a seed row may carry: the registry's `court_pattern`

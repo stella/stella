@@ -20,6 +20,7 @@ import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
+import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -175,7 +176,7 @@ const searchResult = async (
     );
   }
 
-  const { serving, manifest } = await caseLawPublicReadDb(
+  const { serving, manifest, contract } = await caseLawPublicReadDb(
     async (tx) =>
       await readServingCorpusIndexTargetTx(tx, {
         family,
@@ -207,6 +208,7 @@ const searchResult = async (
         text: query.query,
         filters: {
           court: query.court,
+          courtPartitions: courtPartitionsForCourtFilter(contract, query.court),
           dateFrom: query.dateFrom,
           dateTo: query.dateTo,
           documentType: query.documentType,
