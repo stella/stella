@@ -1324,6 +1324,43 @@ const prepareValidatedIncomingMessage = async ({
     });
   });
 
+type AssembleTurnSystemPromptOptions = {
+  chatContext: {
+    systemSafe: ChatSafePrompt;
+    systemUntrusted: ChatUntrustedPromptSuffix;
+  };
+  externalMcpTools: LoadedExternalMcpTools | undefined;
+  requestedSkillsPrompt: string;
+  sendMode: ChatSendMode;
+};
+
+// The "safe" half is whatever the prompt builder declared safe. The
+// anonymized-mode hint is a fixed assembler-owned addition, so callers cannot
+// brand arbitrary strings as safe. The external MCP catalog is
+// organization/user-configured text and requested skill bodies are
+// user-authored, so both ride with the dynamic suffix and cross the boundary
+// in anonymized mode.
+const assembleTurnSystemPrompt = ({
+  chatContext,
+  externalMcpTools,
+  requestedSkillsPrompt,
+  sendMode,
+}: AssembleTurnSystemPromptOptions) => ({
+  systemSafe:
+    sendMode === CHAT_SEND_MODE.anonymized
+      ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
+      : chatContext.systemSafe,
+  systemUntrusted: extendChatUntrustedPromptSuffix(
+    chatContext.systemUntrusted,
+    [
+      buildExternalMcpSystemHint(
+        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
+      ),
+      requestedSkillsPrompt,
+    ],
+  ),
+});
+
 export type SendMessageDependencies = {
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
@@ -2015,19 +2052,6 @@ export const createSendMessage = (
               : restrictChatToolsToScope(chatTools, body.toolScope),
         });
 
-        const externalMcpSystemHint = buildExternalMcpSystemHint(
-          externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-        );
-        // The "safe" half is whatever the prompt builder declared
-        // safe. The anonymized-mode hint is a fixed assembler-owned
-        // addition, so callers cannot brand arbitrary strings as safe.
-        // The external MCP catalog is organization/user-configured text,
-        // so it rides with the dynamic suffix and crosses the boundary in
-        // anonymized mode.
-        const systemSafe =
-          body.sendMode === CHAT_SEND_MODE.anonymized
-            ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
-            : chatContext.systemSafe;
         const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
           activeSkillContext: chatContext.activeSkillContext,
           catalog: chatContext.skillMetadata,
@@ -2041,10 +2065,12 @@ export const createSendMessage = (
           await lifecycle.failCurrentTurn("internal", true);
           return Result.err(requestedSkillsPrompt.error);
         }
-        const systemUntrusted = extendChatUntrustedPromptSuffix(
-          chatContext.systemUntrusted,
-          [externalMcpSystemHint, requestedSkillsPrompt.value],
-        );
+        const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
+          chatContext,
+          externalMcpTools,
+          requestedSkillsPrompt: requestedSkillsPrompt.value,
+          sendMode: body.sendMode,
+        });
 
         // A normal chat hands loaded clients to the stream. Agent runs leave
         // this false so the outer finally closes any validation-only load.

@@ -236,8 +236,9 @@ describe("default skills for memberships that predate seeding at creation", () =
           eq(agentSkills.userId, unseeded.userId),
         ),
       );
-    expect(backfilled.map(({ command }) => command).toSorted()).toEqual(
-      DEFAULT_COMMANDS,
+    expect(backfilled).toHaveLength(DEFAULT_COMMANDS.length);
+    expect(new Set(backfilled.map(({ command }) => command))).toEqual(
+      new Set(DEFAULT_COMMANDS),
     );
     for (const {
       body,
@@ -266,8 +267,9 @@ describe("default skills for memberships that predate seeding at creation", () =
     }
 
     const kept = await memberSkills(seeded);
-    expect(kept.map(({ command }) => command).toSorted()).toEqual(
-      DEFAULT_COMMANDS.filter((command) => command !== "summarize"),
+    expect(kept).toHaveLength(DEFAULT_COMMANDS.length - 1);
+    expect(new Set(kept.map(({ command }) => command))).toEqual(
+      new Set(DEFAULT_COMMANDS.filter((command) => command !== "summarize")),
     );
   });
 });
