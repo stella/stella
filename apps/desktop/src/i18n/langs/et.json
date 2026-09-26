@@ -60,6 +60,8 @@
     "deny": "Keela",
     "pdfSignCertificate": "Allkirjastamissertifikaat",
     "pdfSignDocument": "Dokument",
+    "pdfSignExpires": "Kehtib kuni",
+    "pdfSignIssuer": "Väljastaja",
     "pdfSignMatter": "Toimik",
     "pdfSignNoIdentities": "Teie võtmehoidlas pole ühtegi allkirjastamissertifikaati.",
     "pdfSignRetry": "Proovi uuesti",

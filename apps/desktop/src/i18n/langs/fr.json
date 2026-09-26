@@ -60,6 +60,8 @@
     "deny": "Refuser",
     "pdfSignCertificate": "Certificat de signature",
     "pdfSignDocument": "Document",
+    "pdfSignExpires": "Valide jusqu’au",
+    "pdfSignIssuer": "Émis par",
     "pdfSignMatter": "Dossier",
     "pdfSignNoIdentities": "Aucun certificat de signature n’est disponible dans votre trousseau.",
     "pdfSignRetry": "Réessayer",

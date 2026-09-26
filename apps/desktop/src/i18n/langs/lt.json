@@ -60,6 +60,8 @@
     "deny": "Neleisti",
     "pdfSignCertificate": "Pasirašymo sertifikatas",
     "pdfSignDocument": "Dokumentas",
+    "pdfSignExpires": "Galioja iki",
+    "pdfSignIssuer": "Išdavė",
     "pdfSignMatter": "Byla",
     "pdfSignNoIdentities": "Raktinėje nėra nė vieno pasirašymo sertifikato.",
     "pdfSignRetry": "Bandyti dar kartą",

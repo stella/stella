@@ -21,6 +21,7 @@
 // were gated away.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
+mod certificate;
 mod identity;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -28,9 +29,12 @@ mod spki;
 
 pub use identity::{SigningError, SigningIdentity, SigningKeyType};
 
-/// Every keychain identity (certificate plus private key) that can produce a
-/// signature, in keychain order. An identity whose key type is neither RSA nor
-/// EC is left out: there is no PDF signature algorithm to pair it with.
+/// Every keychain identity (certificate plus private key) that can sign a
+/// document now, in keychain order. Left out: a key type that is neither RSA
+/// nor EC (no PDF signature algorithm pairs with it), a certificate outside
+/// its validity window, one whose KeyUsage permits neither digitalSignature
+/// nor nonRepudiation, and one whose extended key usages are all for
+/// something else (servers, code, VPN endpoints).
 ///
 /// Reading identities never touches key material, so this does not prompt.
 #[cfg(target_os = "macos")]
