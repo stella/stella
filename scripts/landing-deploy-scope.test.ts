@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   decide,
@@ -164,4 +172,58 @@ test("the repository declares the landing build's outside reads", () => {
   expect(lock && landingClosure(lock)?.workspaceDirectories).toContain(
     "apps/landing",
   );
+});
+
+test("the command compares two commits and fails towards a deploy", () => {
+  const script = path.join(import.meta.dirname, "landing-deploy-scope.ts");
+  const repo = mkdtempSync(path.join(tmpdir(), "landing-deploy-scope-"));
+  const run = (command: readonly string[]) =>
+    Bun.spawnSync([...command], {
+      cwd: repo,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "test",
+        GIT_AUTHOR_EMAIL: "test@example.com",
+        GIT_COMMITTER_NAME: "test",
+        GIT_COMMITTER_EMAIL: "test@example.com",
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+  const commit = (file: string, content: string): string => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), content);
+    run(["git", "add", "--all"]);
+    run(["git", "commit", "--quiet", "--no-verify", "--message", file]);
+    return run(["git", "rev-parse", "HEAD"]).stdout.toString().trim();
+  };
+  const scope = (base: string, head: string): string =>
+    run(["bun", script, "--base", base, "--head", head])
+      .stdout.toString()
+      .trim();
+
+  try {
+    run(["git", "init", "--quiet"]);
+    writeFileSync(path.join(repo, "bun.lock"), JSON.stringify(lockfile()));
+    writeFileSync(
+      path.join(repo, "turbo.json"),
+      JSON.stringify({
+        tasks: {
+          "@stll/landing#build": { inputs: ["$TURBO_ROOT$/docs/changelog/**"] },
+        },
+      }),
+    );
+    const base = commit("apps/web/src/main.tsx", "1");
+    const unrelated = commit("apps/web/src/main.tsx", "2");
+    const changelog = commit("docs/changelog/v1.0.0.md", "notes");
+    const landing = commit("apps/landing/src/index.astro", "page");
+
+    expect(scope(base, unrelated)).toBe("false");
+    expect(scope(base, changelog)).toBe("true");
+    expect(scope(changelog, landing)).toBe("true");
+    expect(scope("0".repeat(40), landing)).toBe("true");
+    expect(scope("f".repeat(40), landing)).toBe("true");
+  } finally {
+    rmSync(repo, { force: true, recursive: true });
+  }
 });

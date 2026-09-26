@@ -130,8 +130,49 @@ jobs:
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # Builds finish in any order, so this job can start after a deploy for a
+      # newer push. When main has since moved on by a commit that changes the
+      # site, that newer push deploys it, and this older build must not
+      # replace it. Anything that cannot be decided deploys; the deploy side
+      # still refuses a build older than the live site.
+      - name: Check whether a newer deploy covers this one
+        id: covered
+        run: |
+          covered=false
+          if ! git fetch --quiet --filter=blob:none origin main; then
+            echo "::warning::Could not fetch main; deploying."
+          else
+            main_sha="$(git rev-parse FETCH_HEAD)"
+            if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
+              if affected="$(
+                bun scripts/landing-deploy-scope.ts --base "$GITHUB_SHA" --head "$main_sha"
+              )"; then
+                if [[ "$affected" == "true" ]]; then
+                  covered=true
+                  echo "::notice::main moved to ${main_sha} with site changes; its deploy covers ${GITHUB_SHA}."
+                fi
+              else
+                echo "::warning::Could not scope ${GITHUB_SHA}..${main_sha}; deploying."
+              fi
+            fi
+          fi
+          echo "covered=${covered}" >> "$GITHUB_OUTPUT"
+
       - name: Mint App token for the private workflows repo
         id: app-token
+        if: steps.covered.outputs.covered != 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -142,6 +183,7 @@ jobs:
           permission-contents: read
 
       - name: Dispatch and watch deploy-landing.yml
+        if: steps.covered.outputs.covered != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PRIVATE_WORKFLOWS_REPO: ${{ github.repository_owner }}/private-workflows
@@ -269,6 +311,7 @@ jobs:
         # gitleaks generic-api-key match below is a false positive.
         # IndexNow is a best-effort SEO notification; a failure here must
         # not fail the deploy, which has already succeeded by this point.
+        if: steps.covered.outputs.covered != 'true'
         continue-on-error: true
         env:
           INDEXNOW_KEY: 4a9799deb8f64ac9be5f9b9e140407ca # gitleaks:allow
