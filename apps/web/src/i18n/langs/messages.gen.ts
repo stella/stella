@@ -1132,6 +1132,7 @@ type Messages = {
     "sendErrorProviderCredentialsRejected": "The AI provider rejected the configured credentials. Ask your workspace admin to check the API key in organization settings.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
+    "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
     "sendPrompt": "Send message";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {

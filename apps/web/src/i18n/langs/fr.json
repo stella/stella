@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "Le fournisseur d’IA a rejeté les identifiants configurés. Demandez à l’administrateur de l’espace de travail de vérifier la clé API dans les paramètres de l’organisation.",
     "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessayez dans un instant.",
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
+    "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendPrompt": "Envoyer le message",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "skills": {

@@ -112,6 +112,28 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('disabled=""');
   });
 
+  test("says a reply cut off before it finished can be tried again", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        error={new Error("provider_stream_incomplete")}
+        isGenerating={false}
+        messages={[]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        showThinkingIndicator={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.sendErrorStreamIncomplete);
+    expect(html).toContain(messages.chat.resend);
+  });
+
   test("shows a copy action at the end of assistant responses", () => {
     const chatMessages: ChatUIMessage[] = [
       {

@@ -42,6 +42,7 @@ const AI_ERROR_RETRYABLE = {
   model_unavailable: false,
   provider_billing: false,
   provider_credentials_rejected: false,
+  provider_stream_incomplete: true,
   provider_unavailable: true,
   quota_exhausted: true,
   unknown: true,

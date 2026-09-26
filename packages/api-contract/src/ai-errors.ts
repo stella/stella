@@ -4,6 +4,7 @@ export const AI_ERROR_KINDS = [
   "provider_credentials_rejected",
   "model_unavailable",
   "provider_unavailable",
+  "provider_stream_incomplete",
   "loop_detected",
   "empty_completion",
   "unknown",

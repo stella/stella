@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "DI teikėjas atmetė sukonfigūruotus prisijungimo duomenis. Paprašykite darbo srities administratoriaus patikrinti API raktą organizacijos nustatymuose.",
     "sendErrorProviderUnavailable": "DI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
+    "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendPrompt": "Siųsti pranešimą",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {

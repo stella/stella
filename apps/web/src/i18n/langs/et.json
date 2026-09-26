@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "AI-teenusepakkuja lükkas seadistatud mandaadi tagasi. Palu töökoha administraatoril kontrollida API-võtit organisatsiooni seadetes.",
     "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
     "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
+    "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendPrompt": "Saada sõnum",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
     "skills": {
