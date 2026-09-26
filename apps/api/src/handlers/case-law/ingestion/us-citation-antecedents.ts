@@ -318,11 +318,13 @@ const unresolved = (reason: CitationUnresolvedReason): Resolution => ({
 const missing = (registry: ScopeRegistry): Resolution =>
   unresolved(registry.known ? "missing-antecedent" : "scope-unknown");
 
-type Candidates = { roots: Set<number>; saturated: boolean };
+/** `incomplete` when entries were left uninspected, so `roots` may be short. */
+type Candidates = { roots: Set<number>; incomplete: boolean };
 
 /**
- * The distinct entities filed under some keys now, up to `enough` of them;
- * saturated once the inspection limit is reached first.
+ * The distinct entities filed under some keys now. Stops at `enough` of them
+ * or at the inspection limit; either way, entries left behind make the set
+ * incomplete, and an incomplete set never proves a candidate unique.
  */
 const candidatesIn = (
   { budget, graph }: AntecedentContext,
@@ -333,25 +335,25 @@ const candidatesIn = (
   let inspected = 0;
   for (const entries of filed) {
     for (const entry of entries) {
-      if (roots.size >= enough) {
-        return { roots, saturated: false };
-      }
-      if (inspected >= US_CITATION_ANTECEDENT_INSPECTION_LIMIT) {
-        return { roots, saturated: true };
+      if (
+        roots.size >= enough ||
+        inspected >= US_CITATION_ANTECEDENT_INSPECTION_LIMIT
+      ) {
+        return { roots, incomplete: true };
       }
       inspected += 1;
       chargeWork(budget, 1);
       roots.add(graph.root(entry));
     }
   }
-  return { roots, saturated: false };
+  return { roots, incomplete: false };
 };
 
 const settleOn = (
-  { roots, saturated }: Candidates,
+  { incomplete, roots }: Candidates,
   none: Resolution,
 ): Resolution => {
-  if (saturated || roots.size > 1) {
+  if (incomplete || roots.size > 1) {
     return unresolved("ambiguous-antecedent");
   }
   const [only] = roots;
@@ -427,10 +429,14 @@ const resolveVolume = (
     [nameIndex(registry, name)],
     US_CITATION_ANTECEDENT_INSPECTION_LIMIT,
   );
+  // A name filed under nothing matches nothing, however long the volume.
+  if (!named.incomplete && named.roots.size === 0) {
+    return unresolved("missing-antecedent");
+  }
   return settleOn(
     {
       roots: new Set([...inVolume.roots].filter((at) => named.roots.has(at))),
-      saturated: inVolume.saturated || named.saturated,
+      incomplete: inVolume.incomplete || named.incomplete,
     },
     unresolved("missing-antecedent"),
   );
