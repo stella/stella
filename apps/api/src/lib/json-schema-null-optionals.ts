@@ -20,6 +20,11 @@ const admitsNull = (schema: unknown): boolean => {
   if (!isRecord(schema)) {
     return true;
   }
+  // `nullable` is the OpenAPI spelling a provider-safe projection (Gemini)
+  // gives a null union.
+  if (schema["nullable"] === true) {
+    return true;
+  }
   const type = schema["type"];
   if (type === "null" || (isUnknownArray(type) && type.includes("null"))) {
     return true;
@@ -178,10 +183,28 @@ const isRejectedNull: AbsentPlaceholderTest = (value, schema) =>
   value === null && !admitsNull(schema);
 
 /**
+ * JSON Schema string formats that no empty string satisfies. An unlisted
+ * format is an annotation a validator may ignore, so it decides nothing.
+ */
+const EMPTY_REJECTING_FORMATS: ReadonlySet<string> = new Set([
+  "date",
+  "date-time",
+  "time",
+  "duration",
+  "email",
+  "hostname",
+  "ipv4",
+  "ipv6",
+  "uri",
+  "uuid",
+]);
+
+/**
  * Whether a schema refuses the empty string: a declared type other than
- * string, a string with a minimum length or a pattern "" does not match, or
- * an enum or constant without "". A union refuses it only when every branch
- * does. A schema that declares no type accepts it.
+ * string, a string with a minimum length, a format "" cannot satisfy or a
+ * pattern "" does not match, or an enum or constant without "". A union
+ * refuses it only when every branch does. A schema that declares no type
+ * accepts it.
  */
 const rejectsEmptyString = (schema: unknown): boolean => {
   if (!isRecord(schema)) {
@@ -212,6 +235,10 @@ const rejectsEmptyString = (schema: unknown): boolean => {
   }
   const minLength = schema["minLength"];
   if (typeof minLength === "number" && minLength > 0) {
+    return true;
+  }
+  const format = schema["format"];
+  if (typeof format === "string" && EMPTY_REJECTING_FORMATS.has(format)) {
     return true;
   }
   const pattern = schema["pattern"];

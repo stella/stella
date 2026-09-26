@@ -51,6 +51,34 @@ describe("a model's placeholder in an optional field", () => {
     ).toEqual({ name: "draft", note: "null" });
   });
 
+  test('"" is omitted where the field\'s format refuses it', () => {
+    const formatted = {
+      type: "object",
+      properties: {
+        id: { type: "string", format: "uuid" },
+        on: { type: "string", format: "date" },
+        tag: { type: "string", format: "x-free-text" },
+      },
+    };
+    expect(
+      withModelPlaceholdersOmitted(formatted, { id: "", on: "", tag: "" }),
+    ).toEqual({ tag: "" });
+  });
+
+  test("an OpenAPI nullable field keeps its null", () => {
+    const projected = {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        note: { type: "string", nullable: true },
+      },
+      required: ["name"],
+    };
+    expect(
+      withModelPlaceholdersOmitted(projected, { name: "draft", note: null }),
+    ).toEqual({ name: "draft", note: null });
+  });
+
   test("a pattern that does not compile leaves the value as sent", () => {
     const loose = {
       type: "object",
