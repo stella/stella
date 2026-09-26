@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
-  findExemptRootOperations,
   findRootConnectionShapes,
+  findStaleRootOperations,
   ROOT_CONNECTION_SHAPE,
   ROOT_OPERATION_RESULTS,
 } from "./root-connection-shapes";
@@ -452,16 +452,12 @@ describe("awaiting a call does not make its value explicit", () => {
   });
 });
 
-describe("the listed owner operations", () => {
-  // The list may only shrink: an entry whose site was removed or rewritten
-  // must go, or it would exempt the next call that takes its name.
-  test.each(Object.entries(ROOT_OPERATION_RESULTS))(
-    "%s still names an awaited site in its file",
-    (operation, { file }) => {
-      const content = readFileSync(path.join(REPO_ROOT, file), "utf-8");
-      expect(findExemptRootOperations(content, file)).toContain(operation);
-    },
-  );
+test("every listed owner operation still names an awaited site in its file", () => {
+  expect(
+    findStaleRootOperations((file) =>
+      readFileSync(path.join(REPO_ROOT, file), "utf-8"),
+    ),
+  ).toEqual([]);
 });
 
 describe("explicit uses are not shapes", () => {

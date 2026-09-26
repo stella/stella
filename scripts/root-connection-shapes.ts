@@ -557,11 +557,21 @@ export const findRootConnectionShapes = (
   file: string,
 ): RootConnectionShapeHit[] => scanFile(content, file).hits;
 
-/** The listed operations `file` was exempted for, one per exempt site. */
-export const findExemptRootOperations = (
-  content: string,
-  file: string,
-): RootOperationName[] => scanFile(content, file).exemptOperations;
+/**
+ * Listed operations with no exempt site left in their file. The list may only
+ * shrink: a stale entry would exempt the next call that takes its name.
+ */
+export const findStaleRootOperations = (
+  readSource: (file: string) => string,
+): RootOperationName[] =>
+  Object.keys(ROOT_OPERATION_RESULTS)
+    .filter(isRootOperationName)
+    .filter((operation) => {
+      const { file } = ROOT_OPERATION_RESULTS[operation];
+      return !scanFile(readSource(file), file).exemptOperations.includes(
+        operation,
+      );
+    });
 
 export const countRootConnectionShapes = (
   content: string,
