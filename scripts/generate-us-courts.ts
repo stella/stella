@@ -330,6 +330,11 @@ const overridesSchema = v.strictObject({
         v.strictObject({ fullName: reasonSchema }),
         v.strictObject({ note: reasonSchema }),
       ]),
+      /**
+       * Present when the reviewed evidence supports the region without
+       * settling it; the region stands until better source evidence exists.
+       */
+      certainty: v.optional(v.literal("reviewed-uncertain")),
     }),
   ),
   canonicalNames: v.array(

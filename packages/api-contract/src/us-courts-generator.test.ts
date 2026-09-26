@@ -41,6 +41,15 @@ describe("the committed court directory", () => {
     });
   });
 
+  test("marks the one region its evidence does not settle", async () => {
+    const { overrides } = inputsFromFiles(await readInputFiles());
+    expect(
+      overrides.regions
+        .filter(({ certainty }) => certainty === "reviewed-uncertain")
+        .map(({ id, region }) => [id, region]),
+    ).toEqual([["coregsalina", "CO"]]);
+  });
+
   test("gives every source jurisdiction code a disposition", async () => {
     const { courts, overrides } = inputsFromFiles(await readInputFiles());
     const recoded = new Set(overrides.jurisdictionCodes.map(({ id }) => id));

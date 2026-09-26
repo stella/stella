@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { US_COURT_TIERS, US_COURTS } from "@stll/api-contract/us-courts";
+import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
 import type { UsCourtTier } from "@stll/api-contract/us-courts";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -67,91 +67,35 @@ const US_TIER_RANK = {
  */
 export const COURT_PATTERN_MAX_LENGTH = 512;
 
-/** The most court names one United States pattern alternates between. */
-export const US_PATTERN_MAX_NAMES = 64;
-
 /**
- * A literal court name as a pattern fragment that means the same text as a
- * JavaScript `u`-flag RegExp and as a PostgreSQL ARE: every metacharacter
- * either runtime gives a meaning is escaped, and nothing else, since the
- * `u` flag rejects needless escapes.
+ * A court's canonical name as an anchored, case-folded pattern that means the
+ * same text as a JavaScript `u`-flag RegExp and as a PostgreSQL ARE: every
+ * metacharacter either runtime gives a meaning is escaped, and nothing else,
+ * since the `u` flag rejects needless escapes.
  */
-const escapeCourtName = (name: string): string =>
-  name.toLowerCase().replace(/[$()*+.?[\\\]^{|}]/gu, "\\$&");
-
-const exactCourtPattern = (names: readonly string[]): string =>
-  names.length === 1
-    ? `^${escapeCourtName(names[0] ?? "")}$`
-    : `^(?:${names.map(escapeCourtName).join("|")})$`;
-
-/**
- * Consecutive names, in order, packed into as few anchored alternations as
- * the name and length bounds allow.
- */
-const chunkedCourtPatterns = (names: readonly string[]): string[] => {
-  const patterns: string[] = [];
-  let chunk: string[] = [];
-  for (const name of names) {
-    if (exactCourtPattern([name]).length > COURT_PATTERN_MAX_LENGTH) {
-      return panic(`court name too long for one pattern: ${name}`);
-    }
-    const widened = [...chunk, name];
-    if (
-      chunk.length > 0 &&
-      (widened.length > US_PATTERN_MAX_NAMES ||
-        exactCourtPattern(widened).length > COURT_PATTERN_MAX_LENGTH)
-    ) {
-      patterns.push(exactCourtPattern(chunk));
-      chunk = [name];
-    } else {
-      chunk = widened;
-    }
-  }
-  return chunk.length === 0
-    ? patterns
-    : [...patterns, exactCourtPattern(chunk)];
-};
-
-const compareCodeUnits = (left: string, right: string): number => {
-  if (left === right) {
-    return 0;
-  }
-  return left < right ? -1 : 1;
+const exactCourtPattern = (name: string): string => {
+  const pattern = `^${name.toLowerCase().replace(/[$()*+.?[\\\]^{|}]/gu, "\\$&")}$`;
+  return pattern.length <= COURT_PATTERN_MAX_LENGTH
+    ? pattern
+    : panic(`court name too long for one pattern: ${name}`);
 };
 
 /**
- * The United States rows, rendered from the court directory: each accepted
- * court's canonical name, exactly and anchored, at the rank of its directory
- * tier. The Supreme Court of the United States keeps a pattern of its own;
- * every other name is packed with the names of its rank into alternations of
- * at most `US_PATTERN_MAX_NAMES` names and one column width, so the registry
- * holds a few hundred rows rather than one per court. Decisions are stored
- * under these canonical names, so no pattern matches words that other
- * courts' names share.
+ * The United States rows, rendered from the court directory: one exact,
+ * anchored pattern per writable court (`US_WRITABLE_COURT_IDS`), at the rank
+ * of its directory tier. Only a writable court's name can be stored, so the
+ * rows grow with write enrollment rather than with the directory.
  */
-const usCourtWeightRows = (): CourtWeightSeedRow[] => {
-  const scotus =
-    US_COURTS.find(({ id }) => id === "scotus") ??
-    panic("the court directory has no scotus");
-  const rows: CourtWeightSeedRow[] = [
-    {
+const usCourtWeightRows = (): CourtWeightSeedRow[] =>
+  US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id)).map(
+    ({ canonicalName, tier }) => ({
       country: "USA",
-      courtPattern: exactCourtPattern([scotus.canonicalName]),
-      ...US_TIER_RANK[scotus.tier],
-    },
-  ];
-  for (const tier of US_COURT_TIERS) {
-    const names = US_COURTS.filter(
-      (court) => court.tier === tier && court.id !== scotus.id,
-    )
-      .map(({ canonicalName }) => canonicalName.toLowerCase())
-      .toSorted(compareCodeUnits);
-    for (const courtPattern of chunkedCourtPatterns(names)) {
-      rows.push({ country: "USA", courtPattern, ...US_TIER_RANK[tier] });
-    }
-  }
-  return rows;
-};
+      courtPattern: exactCourtPattern(canonicalName),
+      tier: US_TIER_RANK[tier].tier,
+      tierLabel: US_TIER_RANK[tier].tierLabel,
+      weight: US_TIER_RANK[tier].weight,
+    }),
+  );
 
 export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // Czech Republic
@@ -294,8 +238,9 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     courtPattern: "general court",
     ...RANK.supreme,
   },
-  // United States: rendered from the court directory (`us-courts.ts`). No
-  // court of this jurisdiction holds the constitutional rank.
+  // United States: the writable courts of the court directory
+  // (`us-courts.ts`). No court of this jurisdiction holds the constitutional
+  // rank.
   ...usCourtWeightRows(),
 ];
 
