@@ -13,7 +13,7 @@ import {
 import { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   citationKeyOf,
-  normalizeDecisionIdentifierValue,
+  normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -44,19 +44,26 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
 
+/** A row as ingestion writes it for a decision of `jurisdiction`. */
 const identifierRow = ({
   decisionId,
+  jurisdiction = "CZE",
   type,
   value,
 }: {
   decisionId: (typeof caseLawDecisionIdentifiers.$inferInsert)["decisionId"];
+  jurisdiction?: string;
   type: DecisionIdentifierType;
   value: string;
 }) => ({
   decisionId,
   type,
   value,
-  normalizedValue: normalizeDecisionIdentifierValue(type, value),
+  normalizedValue: normalizeDecisionIdentifierValueIn(
+    jurisdiction,
+    type,
+    value,
+  ),
 });
 
 beforeAll(
@@ -150,7 +157,7 @@ beforeAll(
         caseNumber: "1",
         citationKey: citationKeyOf("1"),
         court: "Supreme Court",
-        country: "CZE",
+        country: "USA",
         decisionDate: "1954-05-17",
         language: "cs",
         languageGroupKey: "lookup-reported",
@@ -188,18 +195,27 @@ beforeAll(
       // neutral citation.
       identifierRow({
         decisionId: reportedId,
+        jurisdiction: "USA",
         type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
         value: "347 U. S. 483",
       }),
       identifierRow({
         decisionId: reportedId,
+        jurisdiction: "USA",
         type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
         value: "98 Law. Ed. 873",
       }),
       identifierRow({
         decisionId: reportedId,
+        jurisdiction: "USA",
         type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
         value: "[1954] SC 7",
+      }),
+      // A reporter-type identifier of another jurisdiction keeps its own key.
+      identifierRow({
+        decisionId: administrativeId,
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "10 Atl. 5",
       }),
     ]);
   },
@@ -283,10 +299,13 @@ test("a reporter citation resolves however the query spaces or abbreviates it, p
     "347 U. S. 483, 495",
     "98 L. Ed. 873",
     "98 L.Ed. 873, at 880",
+    "347 u.s. 483",
+    "347 U.S. 483, 495, 497",
+    "347 U.S. 483 at 495",
   ]) {
     const rows = await lookupDecisionsByIdentity({
       caseLawDb,
-      country: "CZE",
+      country: "USA",
       locator: { kind: "reporter", value },
     });
     expect(rows.map(({ id }) => id)).toEqual([reportedId]);
@@ -295,25 +314,39 @@ test("a reporter citation resolves however the query spaces or abbreviates it, p
   // The first page is identity; the next page is another decision.
   const neighbour = await lookupDecisionsByIdentity({
     caseLawDb,
-    country: "CZE",
+    country: "USA",
     locator: { kind: "reporter", value: "347 U.S. 484" },
   });
   expect(neighbour).toEqual([]);
 });
 
-test("a reporter citation another publisher stored still resolves", async () => {
+test("a reporter-type identifier elsewhere keeps the key it always had", async () => {
   const rows = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "CZE",
     locator: { kind: "reporter", value: "Rc 55/2013" },
   });
   expect(rows.map(({ id }) => id)).toEqual([supremeId]);
+
+  // Read as written there: not rewritten into another jurisdiction's edition.
+  const asWritten = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "reporter", value: "10 Atl. 5" },
+  });
+  expect(asWritten.map(({ id }) => id)).toEqual([administrativeId]);
+  const asCanonicalEdition = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: { kind: "reporter", value: "10 A. 5" },
+  });
+  expect(asCanonicalEdition).toEqual([]);
 });
 
 test("a typed reference resolves only through identifiers of its own type", async () => {
   const neutral = await lookupDecisionsByIdentity({
     caseLawDb,
-    country: "CZE",
+    country: "USA",
     locator: { kind: "neutral", value: "[1954] sc 7" },
   });
   expect(neutral.map(({ id }) => id)).toEqual([reportedId]);
@@ -330,14 +363,14 @@ test("a typed reference resolves only through identifiers of its own type", asyn
 
   const neutralAsReporter = await lookupDecisionsByIdentity({
     caseLawDb,
-    country: "CZE",
+    country: "USA",
     locator: { kind: "reporter", value: "[1954] SC 7" },
   });
   expect(neutralAsReporter).toEqual([]);
 
   const reporterAsDocket = await lookupDecisionsByIdentity({
     caseLawDb,
-    country: "CZE",
+    country: "USA",
     locator: { kind: "docket", value: "347 U.S. 483" },
   });
   expect(reporterAsDocket).toEqual([]);

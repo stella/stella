@@ -15,7 +15,10 @@ import {
   polishConstitutionalDocketKey,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
-import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
+import {
+  canonicalUsReporterCitation,
+  readsUsReporterCitations,
+} from "@stll/api-contract/us-reporter-citation";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
@@ -1508,14 +1511,11 @@ export const normalizeDecisionIdentifier = (
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
-      // A volume-edition-page citation is read into its canonical edition,
-      // pin dropped, by the same function lookup and search read it with.
       return normalizeStructuredDecisionIdentifier({
         type: identifier.type,
         value:
           hungarianConstitutionalDesignation(identifier.value) ??
           czechConstitutionalDesignation(identifier.value) ??
-          canonicalUsReporterCitation(identifier.value) ??
           identifier.value,
       });
     default: {
@@ -1544,6 +1544,38 @@ export const normalizeDecisionIdentifierValue = (
     }
   }
 };
+
+/**
+ * An identifier's stored key in the jurisdiction that holds it. Decision
+ * identifier rows are written through it, by ingestion and by the backfill,
+ * and exact lookup and search read through it, so writer and reader agree.
+ * In the reporter jurisdiction a reporter citation is keyed by its canonical
+ * volume, reporter and first page, so a variant abbreviation or a pin names
+ * the same decision. Everywhere else, and for every other type, the key is
+ * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ */
+export const normalizeDecisionIdentifierIn = (
+  jurisdiction: string | undefined,
+  identifier: DecisionIdentifier,
+): string =>
+  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
+  readsUsReporterCitations(jurisdiction)
+    ? normalizeStructuredDecisionIdentifier({
+        type: identifier.type,
+        value:
+          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
+      })
+    : normalizeDecisionIdentifier(identifier);
+
+/** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
+export const normalizeDecisionIdentifierValueIn = (
+  jurisdiction: string | undefined,
+  type: DecisionIdentifierType,
+  value: string,
+): string =>
+  type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+    ? normalizeDecisionIdentifierIn(jurisdiction, { type, value })
+    : normalizeDecisionIdentifierValue(type, value);
 
 /**
  * Check whether a citation text refers to the same decision that

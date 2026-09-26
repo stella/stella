@@ -15,7 +15,7 @@ import {
 import { findDecisionIdsByIdentity } from "@/api/handlers/case-law/decisions/search";
 import {
   citationKeyOf,
-  normalizeDecisionIdentifierValue,
+  normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,7 +34,9 @@ const plenaryId = createSafeId<"caseLawDecision">();
 const supremeId = createSafeId<"caseLawDecision">();
 const reportedId = createSafeId<"caseLawDecision">();
 
+/** A row as ingestion writes it for a decision of `jurisdiction`. */
 const identifierRow = (
+  jurisdiction: string,
   decisionId: SafeId<"caseLawDecision">,
   type: DecisionIdentifierType,
   value: string,
@@ -42,7 +44,11 @@ const identifierRow = (
   decisionId,
   type,
   value,
-  normalizedValue: normalizeDecisionIdentifierValue(type, value),
+  normalizedValue: normalizeDecisionIdentifierValueIn(
+    jurisdiction,
+    type,
+    value,
+  ),
 });
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
@@ -103,7 +109,7 @@ beforeAll(
         caseNumber: "1",
         citationKey: citationKeyOf("1"),
         court: "Supreme Court",
-        country: "CZE",
+        country: "USA",
         language: "cs",
         languageGroupKey: "identity-reported",
       },
@@ -112,19 +118,22 @@ beforeAll(
       .insert(caseLawDecisionIdentifiers)
       .values([
         identifierRow(
+          "CZE",
           supremeId,
           DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           "23 Cdo 1572/2012",
         ),
         identifierRow(
+          "CZE",
           supremeId,
           DECISION_IDENTIFIER_TYPES.ECLI,
           "ECLI:CZ:NS:2012:23.CDO.1572.2012.1",
         ),
         identifierRow(
+          "USA",
           reportedId,
           DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-          "347 U. S. 483",
+          "347 U. S. Rep. 483",
         ),
       ]);
   },
@@ -202,7 +211,9 @@ test("a docket or ECLI held in both the row and its identifiers is one hit", asy
 
 test("a reporter citation resolves through the typed identifiers", async () => {
   // The entry as the query box reads it, spaced differently from the row.
-  const intent = parseDecisionQuery("347 U.S. 483, 495");
+  const intent = parseDecisionQuery("347 U. S. 483, 495", {
+    jurisdiction: "USA",
+  });
   if (intent.type !== "identifier") {
     return panic(`Read as ${intent.type}, not as an identifier`);
   }
@@ -210,15 +221,22 @@ test("a reporter citation resolves through the typed identifiers", async () => {
 
   const ids = await findDecisionIdsByIdentity({
     caseLawDb,
-    country: "CZE",
+    country: "USA",
     identity: intent,
   });
   expect(ids).toEqual([reportedId]);
 
   const elsewhere = await findDecisionIdsByIdentity({
     caseLawDb,
-    country: "SVK",
+    country: "CZE",
     identity: intent,
   });
   expect(elsewhere).toEqual([]);
+});
+
+test("a reporter-shaped entry elsewhere stays text", () => {
+  expect(parseDecisionQuery("347 U.S. 483", { jurisdiction: "CZE" })).toEqual({
+    type: "text",
+    text: "347 U.S. 483",
+  });
 });

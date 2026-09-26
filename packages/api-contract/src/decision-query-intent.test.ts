@@ -141,18 +141,20 @@ describe("reading a case-law box entry", () => {
 });
 
 describe("reading a reporter citation entry", () => {
-  test("a reporter citation is an identifier in its canonical spelling", () => {
-    expect(parseDecisionQuery("347 U.S. 483")).toEqual({
+  const inUsa = { jurisdiction: "USA" } as const;
+
+  test("in the reporter jurisdiction a reporter citation is an identifier in its canonical spelling", () => {
+    expect(parseDecisionQuery("347 U.S. 483", inUsa)).toEqual({
       type: "identifier",
       kind: "reporter",
       value: "347 U.S. 483",
     });
-    expect(parseDecisionQuery("  163 U. S. 537 ")).toEqual({
+    expect(parseDecisionQuery("  163 U. S. 537 ", inUsa)).toEqual({
       type: "identifier",
       kind: "reporter",
       value: "163 U.S. 537",
     });
-    expect(parseDecisionQuery("87 A. 2d 862")).toEqual({
+    expect(parseDecisionQuery("87 a. 2d 862", inUsa)).toEqual({
       type: "identifier",
       kind: "reporter",
       value: "87 A.2d 862",
@@ -160,30 +162,43 @@ describe("reading a reporter citation entry", () => {
   });
 
   test("a pin does not change which decision the entry names", () => {
-    expect(parseDecisionQuery("347 U.S. 483, 495")).toEqual(
-      parseDecisionQuery("347 U.S. 483"),
-    );
-    expect(parseDecisionQuery("347 U. S. 483, at 494-495")).toEqual(
-      parseDecisionQuery("347 U.S. 483"),
-    );
+    for (const entry of [
+      "347 U.S. 483, 495",
+      "347 U. S. 483, at 494-495",
+      "347 U.S. 483 at 495",
+      "347 U.S. 483, 495, 497",
+    ]) {
+      expect(parseDecisionQuery(entry, inUsa)).toEqual(
+        parseDecisionQuery("347 U.S. 483", inUsa),
+      );
+    }
   });
 
-  test("a reporter citation is read whatever grammar the jurisdiction uses", () => {
-    expect(
-      parseDecisionQuery("347 U.S. 483", {
-        grammar: DECISION_DOCKET_GRAMMARS.POL,
-      }),
-    ).toMatchObject({ type: "identifier", kind: "reporter" });
+  test("elsewhere, and unscoped, a reporter-shaped entry reads as it always did", () => {
+    for (const entry of ["347 U.S. 483", "10 S. Ct. 3", "347 U.S. 483, 495"]) {
+      for (const options of [
+        {},
+        { jurisdiction: "CZE" },
+        { grammar: DECISION_DOCKET_GRAMMARS.CZE, jurisdiction: "CZE" },
+        { grammar: DECISION_DOCKET_GRAMMARS.POL, jurisdiction: "POL" },
+      ]) {
+        expect(parseDecisionQuery(entry, options)).toEqual({
+          type: "text",
+          text: entry,
+        });
+      }
+    }
   });
 
-  test("a statute, a short form and an unknown reporter are not citations of a decision", () => {
+  test("a statute, a short form, a shared spelling and an unknown reporter are not citations of a decision", () => {
     for (const text of [
       "28 U.S.C. § 1253",
       "42 U.S.C. 1983",
       "347 U.S., at 495",
+      "1 Wall. 1",
       "12 Xyz. 34",
     ]) {
-      expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+      expect(parseDecisionQuery(text, inUsa)).toEqual({ type: "text", text });
     }
   });
 
@@ -192,7 +207,7 @@ describe("reading a reporter citation entry", () => {
       fc.property(
         fc.constantFrom(...canonicalDockets).chain(spellingOf),
         (entry) => {
-          expect(parseDecisionQuery(entry)).not.toMatchObject({
+          expect(parseDecisionQuery(entry, inUsa)).not.toMatchObject({
             kind: "reporter",
           });
         },

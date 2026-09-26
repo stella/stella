@@ -190,6 +190,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     // An identifier is matched as written, so there is nothing to expand.
     const intent = parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(country),
+      jurisdiction: country,
     });
     if (intent.type === "identifier") {
       return Result.ok(NO_ALTERNATIVES);
