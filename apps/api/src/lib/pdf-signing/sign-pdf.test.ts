@@ -249,8 +249,10 @@ describe("two-phase PDF signing", () => {
 
     const signUnderIssuingCa = async ({
       chainComplete,
+      crlServed = true,
     }: {
       chainComplete: boolean;
+      crlServed?: boolean;
     }) => {
       const root = await createTestCertificate({
         commonName: "Root",
@@ -273,7 +275,7 @@ describe("two-phase PDF signing", () => {
       const revocationProvider = createTrackedRevocationProvider(
         async ({ url }) => {
           fetched.push(url);
-          return url === CRL_URL ? crl : null;
+          return url === CRL_URL && crlServed ? crl : null;
         },
       );
 
@@ -340,6 +342,7 @@ describe("two-phase PDF signing", () => {
       ).toBe(true);
 
       expect(applied.level).toBe("B-LT");
+      expect(applied.warnings).toEqual([]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
       // The CRL lands in the document security store verbatim.
@@ -354,8 +357,23 @@ describe("two-phase PDF signing", () => {
       // Revocation data was still gathered for what is there, through the
       // guarded provider; only the level claim stops at trusted time.
       expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "CHAIN_INCOMPLETE",
+      ]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
+    });
+
+    test("claims only trusted time when revocation data is unavailable", async () => {
+      const { applied } = await signUnderIssuingCa({
+        chainComplete: true,
+        crlServed: false,
+      });
+
+      expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "REVOCATION_UNAVAILABLE",
+      ]);
     });
   });
 
@@ -417,6 +435,69 @@ describe("two-phase PDF signing", () => {
         reserveTimestamp: true,
       }).catch((error: unknown) => error);
       expect(refused).toBeInstanceOf(PdfSigningPlaceholderTooSmallError);
+    });
+  });
+
+  describe("when trusted time cannot be had", () => {
+    const signWith = async (
+      timestampAuthorities: Parameters<
+        typeof applySignature
+      >[0]["timestampAuthorities"],
+    ) => {
+      const { invocation, privateKey } = await buildInvocation();
+      const digestHex = await digestOf(invocation);
+      const signature = await signDigestLikeAKeychain(privateKey, digestHex);
+      return await applySignature({
+        ...invocation,
+        certificateChainComplete: true,
+        expectedDigestHex: digestHex,
+        signature,
+        timestampAuthorities,
+      });
+    };
+
+    test("signs without a timestamp and says so when every authority fails", async () => {
+      const applied = await signWith([
+        {
+          authority: {
+            timestamp: async () => {
+              throw new Error("authority unreachable");
+            },
+          },
+          url: "https://tsa.example/",
+        },
+      ]);
+
+      expect(applied.level).toBe("B-B");
+      expect(applied.timestampAuthorityUrl).toBe(null);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "TIMESTAMP_UNAVAILABLE",
+      ]);
+      expect(await PDF.load(applied.bytes)).toBeDefined();
+    });
+
+    test("signs without a timestamp when the token outgrows the reservation", async () => {
+      // A well-formed BER value far larger than any reserve: LibPDF accepts
+      // it as a token and only fails once it has to fit `/Contents`.
+      const oversized = new Uint8Array([
+        0x04,
+        0x83,
+        0x01,
+        0x00,
+        0x00,
+        ...new Uint8Array(65_536),
+      ]);
+      const applied = await signWith([
+        {
+          authority: { timestamp: async () => oversized },
+          url: "https://tsa.example/",
+        },
+      ]);
+
+      expect(applied.level).toBe("B-B");
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "TIMESTAMP_UNAVAILABLE",
+      ]);
     });
   });
 });
