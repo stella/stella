@@ -33,6 +33,13 @@ export const ADAPTER_KEYS = {
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 
+/** Import discovery is owned by callers, never the crawl scheduler. */
+export const IMPORT_SOURCE_KEYS = {
+  COURTLISTENER: "us-courtlistener",
+} as const;
+export type ImportSourceKey =
+  (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];
+
 /**
  * Parser output version for each source.
  *

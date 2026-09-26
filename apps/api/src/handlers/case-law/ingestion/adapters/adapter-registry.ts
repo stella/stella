@@ -1,6 +1,9 @@
-import { panic } from "better-result";
+import type { Result } from "better-result";
 
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -33,7 +36,10 @@ import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
+  type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+
+import { courtListenerImport } from "./courtlistener/import";
 
 /**
  * The Slovak document walk's gated fetch, carried here because the registry is
@@ -77,25 +83,52 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.PL_UOKIK]: plUokikAdapter,
 } as const satisfies AdapterRegistry;
 
-const adapterKeyFromString = (key: string): AdapterKey | undefined =>
-  Object.values(ADAPTER_KEYS).find((candidate) => candidate === key);
+type SourceImport = Pick<
+  SourceAdapter,
+  "name" | "country" | "language" | "sourceFields" | "sourceSurfaces"
+> & {
+  readonly key: ImportSourceKey;
+  readonly mapRecord: (input: unknown) => Result<IngestionResult, unknown>;
+  readonly reparseStoredRaw: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+};
+
+const IMPORT_REGISTRY = {
+  [courtListenerImport.key]: courtListenerImport,
+} as const satisfies Record<ImportSourceKey, SourceImport>;
+
+const SOURCE_REGISTRATIONS = [
+  ...Object.values(ADAPTER_REGISTRY).map(
+    (source) => ({ capability: "crawl", source }) as const,
+  ),
+  ...Object.values(IMPORT_REGISTRY).map(
+    (source) => ({ capability: "import", source }) as const,
+  ),
+];
+
+export type SourceRegistration = (typeof SOURCE_REGISTRATIONS)[number];
+export type SourceRegistrationKey = SourceRegistration["source"]["key"];
+
+/** Both importers and crawlers participate in inventory and surface conformance. */
+export const listSourceRegistrations = (): readonly SourceRegistration[] =>
+  SOURCE_REGISTRATIONS;
+
+export const getSourceRegistration = (
+  key: string,
+): SourceRegistration | undefined =>
+  SOURCE_REGISTRATIONS.find(({ source }) => source.key === key);
 
 /** Look up an adapter by its key. */
 export const getAdapter = (key: string): SourceAdapter | undefined => {
-  const adapterKey = adapterKeyFromString(key);
-  if (adapterKey === undefined) {
-    return undefined;
-  }
-  const adapter = ADAPTER_REGISTRY[adapterKey];
-  return adapter.key === adapterKey
-    ? adapter
-    : panic(`Adapter registry key mismatch for ${adapterKey}`);
+  const registration = getSourceRegistration(key);
+  return registration?.capability === "crawl" ? registration.source : undefined;
 };
 
 /** List all registered adapters. */
 export const listAdapters = (): readonly AdapterRegistry[AdapterKey][] =>
-  Object.values(ADAPTER_KEYS).map((key) => ADAPTER_REGISTRY[key]);
+  SOURCE_REGISTRATIONS.flatMap((registration) =>
+    registration.capability === "crawl" ? [registration.source] : [],
+  );
 
 /** List all registered adapter keys. */
 export const listAdapterKeys = (): readonly AdapterKey[] =>
-  Object.values(ADAPTER_KEYS);
+  listAdapters().map(({ key }) => key);

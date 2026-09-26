@@ -27,7 +27,6 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -35,8 +34,13 @@ import type {
   SourceFieldTarget,
   SourceRawParts,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  getSourceRegistration,
+  listSourceRegistrations,
+  type SourceRegistrationKey,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import {
   atFindokFixture,
   atRisFixture,
@@ -60,6 +64,9 @@ import {
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
+import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
+import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
+
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -74,6 +81,7 @@ afterEach(() => {
  * does not compile.
  */
 const ADAPTER_INVENTORY_COVERAGE = {
+  [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
   [ADAPTER_KEYS.CZ_NS]: czNsFixture,
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
@@ -103,12 +111,18 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
-} as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
+} as const satisfies Record<
+  SourceRegistrationKey,
+  () => EnrolledAdapterFixture
+>;
 
-const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);
+const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
+  ({ source }) => source.key,
+);
 
-const adapterFor = (key: AdapterKey) =>
-  getAdapter(key) ?? panic(`${key} is declared but not registered`);
+const adapterFor = (key: SourceRegistrationKey) =>
+  getSourceRegistration(key)?.source ??
+  panic(`${key} is declared but not registered`);
 
 // ── Reading a stored field back ──────────────────────────
 
@@ -128,6 +142,11 @@ const storedValueOf = (
   target: SourceFieldTarget,
 ): unknown => {
   switch (target.type) {
+    case "raw":
+      return readSourceRawField(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {},
+        target,
+      );
     case "metadata":
       return decision.metadata[target.key];
     case "textField":
@@ -150,6 +169,8 @@ const storedValueOf = (
 
 const describeTarget = (target: SourceFieldTarget): string => {
   switch (target.type) {
+    case "raw":
+      return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":
       return `metadata.${target.key}`;
     case "textField":
@@ -169,7 +190,7 @@ const describeTarget = (target: SourceFieldTarget): string => {
 
 /** The envelope a decision was stored under, which is what the reader sees. */
 const storedPartsOf = (
-  key: AdapterKey,
+  key: SourceRegistrationKey,
   decision: IngestionResult,
 ): SourceRawParts => {
   const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
@@ -189,7 +210,8 @@ describe("every adapter accounts for the fields its source states", () => {
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
-      const decision = await fixture().buildDecision();
+      const evidence = fixture();
+      const decision = await evidence.buildDecision();
       const parts = storedPartsOf(key, decision);
 
       const stated = await sourceFields.listSourceFields(parts);
@@ -236,6 +258,18 @@ describe("every adapter accounts for the fields its source states", () => {
         const disposition: SourceFieldDisposition | undefined =
           sourceFields.fields[field];
         if (disposition?.disposition !== "stored") {
+          return [];
+        }
+        if (disposition.target.type === "raw") {
+          expect(disposition.target.reason.trim().length).toBeGreaterThan(0);
+          expect(
+            Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+            `${key}: missing source value oracle for ${field}`,
+          ).toBe(true);
+          expect(
+            storedValueOf(decision, disposition.target),
+            `${key}: raw field ${field} changed`,
+          ).toEqual(evidence.rawFieldValues?.[field]);
           return [];
         }
         return isPresent(storedValueOf(decision, disposition.target))
