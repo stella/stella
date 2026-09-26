@@ -8,6 +8,8 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { withNullOptionalsOmitted } from "@/api/lib/json-schema-null-optionals";
+
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
 // `RUN_ERROR`), last, and never by throwing. Adapters differ at the edges:
@@ -119,6 +121,40 @@ export const readOutputCeilingStopAsLength = async function* (
 
 type ChatStreamOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
 
+// Each tool call's input as its tool declares it. A strict provider spells an
+// optional field it is not setting as `null`, and a model on any provider may
+// write one; the optional-null rule reads it as omitted, so the input checked,
+// stored and shown is the declared shape on every provider.
+async function* withDeclaredToolInput(
+  chunks: AsyncIterable<StreamChunk>,
+  options: ChatStreamOptions,
+): AsyncIterable<StreamChunk> {
+  const schemas = new Map<string, unknown>();
+  for (const tool of options.tools ?? []) {
+    const toolName: unknown = tool.name;
+    if (typeof toolName === "string") {
+      schemas.set(toolName, tool.inputSchema);
+    }
+  }
+  const names = new Map<string, string>();
+  for await (const chunk of chunks) {
+    if (chunk.type === EventType.TOOL_CALL_START) {
+      names.set(chunk.toolCallId, chunk.toolCallName);
+    }
+    if (chunk.type !== EventType.TOOL_CALL_END || chunk.input === undefined) {
+      yield chunk;
+      continue;
+    }
+    const endName: unknown = Reflect.get(chunk, "toolCallName");
+    const name =
+      typeof endName === "string" ? endName : names.get(chunk.toolCallId);
+    const schema = name === undefined ? undefined : schemas.get(name);
+    yield schema === undefined
+      ? chunk
+      : { ...chunk, input: withNullOptionalsOmitted(schema, chunk.input) };
+  }
+}
+
 async function* withOneTerminalEvent(
   chunks: AsyncIterable<StreamChunk>,
   options: ChatStreamOptions,
@@ -186,7 +222,10 @@ export const withProviderStreamContract = (
 ): AnyTextAdapter => {
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
     withOneTerminalEvent(
-      readOutputCeilingStopAsLength(adapter.chatStream(options)),
+      withDeclaredToolInput(
+        readOutputCeilingStopAsLength(adapter.chatStream(options)),
+        options,
+      ),
       options,
     );
   return new Proxy(adapter, {
