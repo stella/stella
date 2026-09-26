@@ -90,16 +90,20 @@ describe("correspondence delivery and original provenance", () => {
     }
   });
 
-  test("verified attachment signatures name their domain independently of delivery authentication", () => {
-    const presentation = correspondenceProvenancePresentation({
+  test("a verified signing domain does not authenticate an unrelated original From", () => {
+    const signedUnrelated = {
       intake: "forwarded_attachment",
       authenticatedSender,
-      originalSignature: { status: "verified", domain: "court.example" },
-    });
+      originalSignature: { status: "verified", domain: "sender.example" },
+      from: { address: "judge@court.example", name: "Asserted judge" },
+    } as const satisfies CorrespondenceProvenance &
+      Pick<ParsedCorrespondence, "from">;
+    expect(signedUnrelated.from.address).not.toContain("sender.example");
+    const presentation = correspondenceProvenancePresentation(signedUnrelated);
     expect(presentation.originalSenderLabel).toBe(
-      "correspondence.originalSender",
+      "correspondence.originalSenderUnverified",
     );
-    expect(presentation.signatureDomain).toBe("court.example");
+    expect(presentation.signatureDomain).toBe("sender.example");
     expect(presentation.deliverySender).toBe("member@firm.example");
     const t = createTranslator({ locale: "en", messages: en });
     expect(
@@ -107,7 +111,7 @@ describe("correspondence delivery and original provenance", () => {
         domain: presentation.signatureDomain ?? "",
         identifier: (chunks) => chunks,
       }),
-    ).toBe("Original signature verified (d=court.example)");
+    ).toBe("Original signature verified (d=sender.example)");
   });
 
   test("direct deliveries have no asserted original or original signature", () => {
