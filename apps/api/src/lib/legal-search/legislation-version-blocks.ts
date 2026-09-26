@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
@@ -17,6 +18,10 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
+  canonicalLegislationAstSource,
+  canonicalLegislationTextSource,
+} from "@/api/lib/legal-search/legislation-canonical-source";
+import {
   derivedAiLegislationVersion,
   redistributableLegislationVersion,
 } from "@/api/lib/legal-search/legislation-redistribution";
@@ -31,18 +36,9 @@ export type LegislationVersionAstRow = {
 };
 
 /**
- * Whether a version's payload (AST or text) comes from object storage rather
- * than from the Postgres copy. The projections and the readers below all
- * decide from this one predicate, so a row can never be projected without the
- * payload the reader then asks for.
- */
-export const versionPayloadFromObjectStorage = (
-  mode: CorpusStorageMode,
-  storedKey: string | null,
-): storedKey is string => mode !== "off" && storedKey !== null;
-
-/**
- * The columns `readVersionAst` reads, for a caller's own select.
+ * The columns `readVersionAst` reads, for a caller's own select. The `CASE`
+ * is `canonicalLegislationAstSource` in SQL; the page-read test holds the two
+ * to the same answer for every mode and key state.
  *
  * `document_ast` holds a whole consolidated statute, so it is projected only
  * for the rows that will be parsed out of it. For a row object storage serves,
@@ -62,8 +58,9 @@ export const versionAstColumns = versionAstColumnsFor(corpusStorageMode);
 
 /**
  * The columns `readVersionText` reads, for a caller's own select. The same
- * rule as {@link versionAstColumnsFor}: `fulltext` runs to megabytes for a
- * large code, so only a row object storage does not serve carries it.
+ * rule as {@link versionAstColumnsFor}, as `canonicalLegislationTextSource`:
+ * `fulltext` runs to megabytes for a large code, so only a row object storage
+ * does not serve carries it.
  */
 export const versionTextColumnsFor = (mode: CorpusStorageMode) => ({
   textS3Key: legislationDocuments.textS3Key,
@@ -152,17 +149,29 @@ export const readVersionText = async ({
   row: { id, textS3Key, fulltext },
   legislationDb,
   step,
-}: ReadVersionTextOptions): Promise<string | null> =>
-  versionPayloadFromObjectStorage(corpusStorageMode, textS3Key)
-    ? await readCorpusPayloadOrFallback({
+}: ReadVersionTextOptions): Promise<string | null> => {
+  const source = canonicalLegislationTextSource(
+    { textS3Key },
+    corpusStorageMode,
+  );
+  switch (source.type) {
+    case "database":
+      return fulltext;
+    case "object_storage":
+      return await readCorpusPayloadOrFallback({
         documentId: id,
-        key: textS3Key,
+        key: source.key,
         step,
-        read: async () => await readCorpusText(textS3Key),
+        read: async () => await readCorpusText(source.key),
         fallback: async () =>
           await readStoredVersionText({ legislationDb, id }),
-      })
-    : fulltext;
+      });
+    default: {
+      source satisfies never;
+      return panic("Unhandled legislation payload source");
+    }
+  }
+};
 
 /**
  * Consolidations a read has parsed, shared across requests. See
@@ -197,20 +206,26 @@ export const readVersionAst = async ({
   step,
   purpose = "reader",
 }: ReadVersionAstOptions): Promise<DocumentAst | EmptyAst | null> => {
-  const { astS3Key } = row;
-
-  return versionPayloadFromObjectStorage(corpusStorageMode, astS3Key)
-    ? await readCorpusPayloadOrFallback({
+  const source = canonicalLegislationAstSource(row, corpusStorageMode);
+  switch (source.type) {
+    case "database":
+      return parsePersistedCorpusAst(row.documentAst);
+    case "object_storage":
+      return await readCorpusPayloadOrFallback({
         documentId: row.id,
-        key: astS3Key,
+        key: source.key,
         step,
-        read: async () => await versionAstCache.read(astS3Key),
+        read: async () => await versionAstCache.read(source.key),
         fallback: async () =>
           parsePersistedCorpusAst(
             await readStoredVersionAst({ legislationDb, id: row.id, purpose }),
           ),
-      })
-    : parsePersistedCorpusAst(row.documentAst);
+      });
+    default: {
+      source satisfies never;
+      return panic("Unhandled legislation payload source");
+    }
+  }
 };
 
 /** One version's parsed blocks; see {@link readVersionAst}. */

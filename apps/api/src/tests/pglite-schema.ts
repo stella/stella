@@ -40,6 +40,11 @@ const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   "20260911150000_statute_citation_counts",
   "migration.sql",
 );
+const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926150000_legislation_payload_revision",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -297,6 +302,28 @@ export const installPgliteCorpusProjectionRevisionFence = async (
     for (const statement of statements) {
       await db.execute(sql.raw(statement));
     }
+  }
+};
+
+const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
+  'ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the triggers and forced row security that schema push omits. */
+export const installPgliteLegislationPayloadRevision = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };
 

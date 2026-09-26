@@ -8,9 +8,12 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
+  canonicalLegislationAstSource,
+  canonicalLegislationTextSource,
+} from "@/api/lib/legal-search/legislation-canonical-source";
+import {
   readStoredVersionAst,
   versionAstColumnsFor,
-  versionPayloadFromObjectStorage,
   versionTextColumnsFor,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type {
@@ -120,10 +123,8 @@ test.each([...CORPUS_STORAGE_MODES])(
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      const servedFromObjectStorage = versionPayloadFromObjectStorage(
-        mode,
-        row.astS3Key,
-      );
+      const servedFromObjectStorage =
+        canonicalLegislationAstSource(row, mode).type === "object_storage";
       // Both halves in one assertion: the AST is present for exactly the rows
       // the reader parses it from, and it arrives as the parsed document
       // rather than as text the reader would reject.
@@ -144,10 +145,8 @@ test.each([...CORPUS_STORAGE_MODES])(
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      const servedFromObjectStorage = versionPayloadFromObjectStorage(
-        mode,
-        row.textS3Key,
-      );
+      const servedFromObjectStorage =
+        canonicalLegislationTextSource(row, mode).type === "object_storage";
       expect({ id: row.id, fulltext: row.fulltext }).toEqual({
         id: row.id,
         fulltext: servedFromObjectStorage ? null : FULLTEXT,
