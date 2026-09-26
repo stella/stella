@@ -30,6 +30,7 @@ import * as pkijs from "pkijs";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
+import { stampTextCheck } from "@/api/lib/pdf-signing/stamp-text";
 
 /** The stamp cannot be put on the document it was placed for. */
 export class PdfSigningStampError extends TaggedError("PdfSigningStampError")<{
@@ -411,6 +412,14 @@ export const addSignatureStamp = ({
   const width = turned ? y2 - y1 : x2 - x1;
   const height = turned ? x2 - x1 : y2 - y1;
 
+  // Never draw a blank glyph or a misordered script: see `stamp-text.ts`.
+  const check = stampTextCheck(fontBytes);
+  if (!lines.every((line) => check.canDraw(line))) {
+    throw new PdfSigningStampError({
+      message:
+        "The stamp's text cannot be shown in a visible stamp. Sign invisibly instead.",
+    });
+  }
   const font = pdf.embedFont(fontBytes);
   // Font sizes and padding are physical points; in this page's user space
   // they are that many points divided by its unit.
