@@ -60,6 +60,8 @@
     "deny": "الرفض",
     "pdfSignCertificate": "شهادة التوقيع",
     "pdfSignDocument": "المستند",
+    "pdfSignExpires": "صالح حتى",
+    "pdfSignIssuer": "صادر عن",
     "pdfSignMatter": "ملف قانوني",
     "pdfSignNoIdentities": "لا تتوفر أي شهادة توقيع في سلسلة المفاتيح.",
     "pdfSignRetry": "إعادة المحاولة",

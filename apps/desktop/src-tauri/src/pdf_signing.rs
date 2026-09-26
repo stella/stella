@@ -47,7 +47,7 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-const DIALOG_HEIGHT: f64 = 340.0;
+const DIALOG_HEIGHT: f64 = 390.0;
 
 const DIGEST_ALGORITHM: &str = "SHA-256";
 const DIGEST_BYTES: usize = 32;
@@ -69,7 +69,9 @@ struct DialogBridge {
 
 /// What the dialog's buttons mean to the flow.
 pub enum DialogChoice {
-  Sign { identity_id: String },
+  Sign {
+    identity_id: String,
+  },
   /// Finalize again with the signature already made: no new PIN.
   Retry,
   Cancel,
@@ -97,10 +99,15 @@ pub enum PdfSignDialogResponse {
 )]
 pub enum PdfSignResult {
   Cancelled,
-  Signed { version_number: i64 },
+  Signed {
+    version_number: i64,
+  },
   /// `retryable`: the API kept the session and the signature, so the dialog
   /// offers to finalize again instead of only closing.
-  Failed { message: String, retryable: bool },
+  Failed {
+    message: String,
+    retryable: bool,
+  },
 }
 
 /// Why the dialog opened at all: what it can offer the user.
@@ -116,9 +123,13 @@ enum DialogState {
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DialogIdentity<'a> {
   id: &'a str,
   label: &'a str,
+  issuer: Option<&'a str>,
+  /// `YYYY-MM-DD`; the dialog formats it in the app's language.
+  expires_on: &'a str,
 }
 
 /// Everything the dialog renders. The session token is deliberately absent:
@@ -712,6 +723,8 @@ fn open_dialog(
     .map(|identity| DialogIdentity {
       id: &identity.id,
       label: &identity.label,
+      issuer: identity.issuer.as_deref(),
+      expires_on: &identity.expires_on,
     })
     .collect();
   // Everything the dialog renders travels in the hash, the session token
@@ -845,6 +858,8 @@ mod tests {
     let encoded = encode_json(&[DialogIdentity {
       id: "abc",
       label: "Kancelář & Co #2 \"Praha\"",
+      issuer: Some("CA #1 & Co"),
+      expires_on: "2030-01-31",
     }])
     .unwrap();
 
@@ -852,6 +867,20 @@ mod tests {
       encoded
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || "-._~%".contains(ch))
+    );
+  }
+
+  #[test]
+  fn an_identity_reaches_the_dialog_with_its_issuer_and_expiry() {
+    assert_eq!(
+      serde_json::to_string(&DialogIdentity {
+        id: "abc",
+        label: "Jane Counsel",
+        issuer: Some("Test Issuing CA"),
+        expires_on: "2030-01-31",
+      })
+      .unwrap(),
+      r#"{"id":"abc","label":"Jane Counsel","issuer":"Test Issuing CA","expiresOn":"2030-01-31"}"#
     );
   }
 

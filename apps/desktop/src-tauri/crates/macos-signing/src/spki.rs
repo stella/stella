@@ -10,12 +10,12 @@
 use crate::identity::SigningKeyType;
 
 /// DER tags, from X.690.
-const TAG_INTEGER: u8 = 0x02;
-const TAG_BIT_STRING: u8 = 0x03;
-const TAG_OID: u8 = 0x06;
-const TAG_SEQUENCE: u8 = 0x30;
+pub(crate) const TAG_INTEGER: u8 = 0x02;
+pub(crate) const TAG_BIT_STRING: u8 = 0x03;
+pub(crate) const TAG_OID: u8 = 0x06;
+pub(crate) const TAG_SEQUENCE: u8 = 0x30;
 /// `[0] EXPLICIT`: the optional version at the head of a TBSCertificate.
-const TAG_CONTEXT_0: u8 = 0xA0;
+pub(crate) const TAG_CONTEXT_0: u8 = 0xA0;
 const LONG_FORM_LENGTH: u8 = 0x80;
 const LONG_FORM_BYTE_COUNT: u8 = 0x7F;
 /// A length no certificate needs, and past what a `usize` shift stays sane at.
@@ -28,13 +28,13 @@ const OID_RSA_ENCRYPTION: &[u8] =
 const OID_EC_PUBLIC_KEY: &[u8] = &[0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01];
 
 /// One TLV: its contents, and what follows it.
-struct Element<'a> {
-  tag: u8,
-  contents: &'a [u8],
-  rest: &'a [u8],
+pub(crate) struct Element<'a> {
+  pub(crate) tag: u8,
+  pub(crate) contents: &'a [u8],
+  pub(crate) rest: &'a [u8],
 }
 
-fn read_element(input: &[u8]) -> Option<Element<'_>> {
+pub(crate) fn read_element(input: &[u8]) -> Option<Element<'_>> {
   let (tag, after_tag) = input.split_first()?;
   let (first_length_byte, after_first) = after_tag.split_first()?;
 
@@ -60,13 +60,13 @@ fn read_element(input: &[u8]) -> Option<Element<'_>> {
   })
 }
 
-fn read_tagged(input: &[u8], tag: u8) -> Option<Element<'_>> {
+pub(crate) fn read_tagged(input: &[u8], tag: u8) -> Option<Element<'_>> {
   let element = read_element(input)?;
   (element.tag == tag).then_some(element)
 }
 
 /// Skip one element, whatever it is.
-fn skip(input: &[u8]) -> Option<&[u8]> {
+pub(crate) fn skip(input: &[u8]) -> Option<&[u8]> {
   Some(read_element(input)?.rest)
 }
 

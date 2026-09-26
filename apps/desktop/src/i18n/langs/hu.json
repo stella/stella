@@ -60,6 +60,8 @@
     "deny": "Elutasítás",
     "pdfSignCertificate": "Aláírási tanúsítvány",
     "pdfSignDocument": "Dokumentum",
+    "pdfSignExpires": "Érvényes eddig:",
+    "pdfSignIssuer": "Kiállító:",
     "pdfSignMatter": "Ügy",
     "pdfSignNoIdentities": "A kulcskarikán nincs elérhető aláírási tanúsítvány.",
     "pdfSignRetry": "Újra",

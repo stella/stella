@@ -62,6 +62,8 @@
     "deny": "Deny",
     "pdfSignCertificate": "Signing certificate",
     "pdfSignDocument": "Document",
+    "pdfSignExpires": "Valid until",
+    "pdfSignIssuer": "Issued by",
     "pdfSignMatter": "Matter",
     "pdfSignNoIdentities": "No signing certificate is available in your keychain.",
     "pdfSignRetry": "Try again",

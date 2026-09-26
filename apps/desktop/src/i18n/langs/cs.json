@@ -60,6 +60,8 @@
     "deny": "Odepřít",
     "pdfSignCertificate": "Podpisový certifikát",
     "pdfSignDocument": "Dokument",
+    "pdfSignExpires": "Platný do",
+    "pdfSignIssuer": "Vydal",
     "pdfSignMatter": "Spis",
     "pdfSignNoIdentities": "V klíčence není k dispozici žádný podpisový certifikát.",
     "pdfSignRetry": "Zkusit znovu",

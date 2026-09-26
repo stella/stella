@@ -60,6 +60,8 @@
     "deny": "Ablehnen",
     "pdfSignCertificate": "Signaturzertifikat",
     "pdfSignDocument": "Dokument",
+    "pdfSignExpires": "Gültig bis",
+    "pdfSignIssuer": "Ausgestellt von",
     "pdfSignMatter": "Akte",
     "pdfSignNoIdentities": "In Ihrem Schlüsselbund ist kein Signaturzertifikat verfügbar.",
     "pdfSignRetry": "Erneut versuchen",
