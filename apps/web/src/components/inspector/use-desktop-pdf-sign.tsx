@@ -39,6 +39,8 @@ const CLOSE_REASON_KEYS = {
   certified_document:
     "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   digest_mismatch: "workspaces.files.pdfSigning.cancelledDigestDescription",
+  signature_invalid:
+    "workspaces.files.pdfSigning.cancelledSignatureDescription",
   signing_failed: "workspaces.files.pdfSigning.cancelledFailedDescription",
   unsupported_platform:
     "workspaces.files.pdfSigning.cancelledPlatformDescription",

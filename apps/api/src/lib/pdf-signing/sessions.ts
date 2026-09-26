@@ -169,6 +169,7 @@ export type AuthorizedPdfSigningSession = {
   reason: string | null;
   safeDb: SafeDb;
   sessionId: SafeId<"pdfSigningSession">;
+  signedAttributes: Uint8Array | null;
   signerCertificateChain: string[] | null;
   signerCertificateDer: Uint8Array | null;
   signingTime: Date | null;
@@ -220,6 +221,7 @@ export const authorizePdfSigningSession = async (
       reason: pdfSigningSessions.reason,
       sessionStatus: pdfSigningSessions.status,
       sessionTokenHash: pdfSigningSessions.sessionTokenHash,
+      signedAttributes: pdfSigningSessions.signedAttributes,
       signerCertificateChain: pdfSigningSessions.signerCertificateChain,
       signerCertificateDer: pdfSigningSessions.signerCertificateDer,
       signingTime: pdfSigningSessions.signingTime,
@@ -289,6 +291,7 @@ export const authorizePdfSigningSession = async (
         workspaceIds: [session.workspaceId],
       }),
       sessionId,
+      signedAttributes: session.signedAttributes,
       signerCertificateChain: session.signerCertificateChain,
       signerCertificateDer: session.signerCertificateDer,
       signingTime: session.signingTime,

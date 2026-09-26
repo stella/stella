@@ -45,6 +45,7 @@ export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
   "unsupported_platform",
   "certificate_rejected",
   "certified_document",
+  "signature_invalid",
   "signing_failed",
 ] as const;
 
@@ -107,6 +108,11 @@ export const pdfSigningSessions = p.pgTable(
     ).$type<PdfSigningCertificateChain | null>(),
     signingTime: timestamptz("signing_time"),
     digestHex: p.varchar("digest_hex", { length: 64 }),
+    /**
+     * The DER CMS signed attributes `digest_hex` hashes. Kept so the
+     * desktop's signature can be verified before anything is embedded.
+     */
+    signedAttributes: p.bytea("signed_attributes"),
     /**
      * Bytes reserved for the signature in phase 1. Part of the hashed byte
      * range, so phase 2 must reuse it rather than recompute it.
