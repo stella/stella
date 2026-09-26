@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Paraksts neatbilda sagatavotajam dokumentam. Mēģiniet parakstīt vēlreiz.",
         "cancelledFailedDescription": "Parakstu neizdevās pievienot šim PDF.",
         "cancelledPlatformDescription": "Parakstīšana ar sistēmas atslēgu saišķa sertifikātu pagaidām darbojas macOS.",
+        "cancelledSignatureDescription": "stella desktop paraksts neatbilda izvēlētajam sertifikātam. Mēģiniet parakstīt vēlreiz.",
         "cancelledTitle": "Parakstīšana atcelta",
         "cancelledUserDescription": "Parakstīšana tika atcelta lietotnē stella desktop.",
         "encryptedDescription": "Šis PDF ir aizsargāts ar paroli. Pirms parakstīšanas noņemiet aizsardzību.",

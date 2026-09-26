@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "A assinatura não correspondeu ao documento preparado. Tente assinar novamente.",
         "cancelledFailedDescription": "Não foi possível adicionar a assinatura a este PDF.",
         "cancelledPlatformDescription": "Assinar com um certificado do chaveiro do sistema funciona, por enquanto, no macOS.",
+        "cancelledSignatureDescription": "A assinatura do stella desktop não correspondeu ao certificado escolhido. Tente assinar novamente.",
         "cancelledTitle": "Assinatura cancelada",
         "cancelledUserDescription": "A assinatura foi cancelada no stella desktop.",
         "encryptedDescription": "Este PDF está protegido por senha. Remova a proteção antes de assinar.",

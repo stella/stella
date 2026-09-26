@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "La signature ne correspondait pas au document préparé. Réessayez.",
         "cancelledFailedDescription": "La signature n’a pas pu être ajoutée à ce PDF.",
         "cancelledPlatformDescription": "La signature avec un certificat du trousseau système fonctionne pour l’instant sur macOS.",
+        "cancelledSignatureDescription": "La signature de stella desktop ne correspondait pas au certificat choisi. Réessayez.",
         "cancelledTitle": "Signature annulée",
         "cancelledUserDescription": "La signature a été annulée dans stella desktop.",
         "encryptedDescription": "Ce PDF est protégé par mot de passe. Retirez la protection avant de signer.",

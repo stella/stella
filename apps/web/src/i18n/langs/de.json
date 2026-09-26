@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Die Signatur passte nicht zum vorbereiteten Dokument. Versuchen Sie es erneut.",
         "cancelledFailedDescription": "Die Signatur konnte diesem PDF nicht hinzugefügt werden.",
         "cancelledPlatformDescription": "Das Signieren mit einem Zertifikat aus dem Systemschlüsselbund funktioniert vorerst unter macOS.",
+        "cancelledSignatureDescription": "Die Signatur aus stella desktop passte nicht zum gewählten Zertifikat. Versuchen Sie es erneut.",
         "cancelledTitle": "Signieren abgebrochen",
         "cancelledUserDescription": "Das Signieren wurde in stella desktop abgebrochen.",
         "encryptedDescription": "Dieses PDF ist passwortgeschützt. Entfernen Sie den Schutz vor dem Signieren.",

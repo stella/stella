@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "La firma no coincidía con el documento preparado. Inténtalo de nuevo.",
         "cancelledFailedDescription": "No se pudo añadir la firma a este PDF.",
         "cancelledPlatformDescription": "Firmar con un certificado del llavero del sistema funciona por ahora en macOS.",
+        "cancelledSignatureDescription": "La firma de stella desktop no coincidía con el certificado elegido. Inténtalo de nuevo.",
         "cancelledTitle": "Firma cancelada",
         "cancelledUserDescription": "La firma se canceló en stella desktop.",
         "encryptedDescription": "Este PDF está protegido con contraseña. Quita la protección antes de firmar.",
