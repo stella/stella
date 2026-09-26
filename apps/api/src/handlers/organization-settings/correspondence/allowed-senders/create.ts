@@ -30,12 +30,17 @@ const config = {
 
 const createAllowedSender = createSafeRootHandler(
   config,
-  async function* ({ body, safeDb, session, user, recordAuditEvent }) {
-    const address = body.address.trim().toLowerCase();
-    const workspaceIds = body.matterIds ?? [];
+  async function* ({
+    body: { address: senderAddress, scope, matterIds: workspaceIds = [] },
+    safeDb,
+    session,
+    user,
+    recordAuditEvent,
+  }) {
+    const address = senderAddress.trim().toLowerCase();
     if (
-      (body.scope === "organization" && workspaceIds.length > 0) ||
-      (body.scope === "matters" && workspaceIds.length === 0)
+      (scope === "organization" && workspaceIds.length > 0) ||
+      (scope === "matters" && workspaceIds.length === 0)
     ) {
       return Result.err(
         new HandlerError({
@@ -70,7 +75,7 @@ const createAllowedSender = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             address,
             kind: "shared_mailbox",
-            scope: body.scope,
+            scope,
             approvedBy: user.id,
           })
           .onConflictDoNothing()
@@ -97,7 +102,7 @@ const createAllowedSender = createSafeRootHandler(
             field: "correspondenceAllowedSender",
             allowedSenderId: inserted.id,
             kind: "shared_mailbox",
-            scope: body.scope,
+            scope,
           },
         });
         return { kind: "created" as const, id: inserted.id };
@@ -125,7 +130,7 @@ const createAllowedSender = createSafeRootHandler(
       id: created.id,
       address,
       kind: "shared_mailbox" as const,
-      scope: body.scope,
+      scope,
       matterIds: workspaceIds,
     });
   },

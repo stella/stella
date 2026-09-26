@@ -8,6 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { correspondenceKeys } from "@/lib/workspaces/queries/correspondence";
 
@@ -61,7 +62,7 @@ export const useUpdateCorrespondence = () => {
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
-        title: error instanceof Error ? error.message : t("common.error"),
+        title: userErrorFromThrown(error, t("common.error")),
         type: "error",
       });
     },
@@ -88,7 +89,7 @@ export const useRotateCorrespondenceAddress = () => {
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
-        title: error instanceof Error ? error.message : t("common.error"),
+        title: userErrorFromThrown(error, t("common.error")),
         type: "error",
       });
     },
@@ -115,7 +116,7 @@ export const useRevokeCorrespondenceAddress = () => {
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
-        title: error instanceof Error ? error.message : t("common.error"),
+        title: userErrorFromThrown(error, t("common.error")),
         type: "error",
       });
     },
