@@ -192,6 +192,10 @@
           <span class="label" id="workspaceLabel"></span>
           <span class="value" id="workspaceName"></span>
         </p>
+        <p>
+          <span class="label" id="serverLabel"></span>
+          <span class="value" id="apiOrigin"></span>
+        </p>
       </div>
       <label class="picker" hidden id="picker">
         <span class="label" id="certificateLabel"></span>
@@ -229,6 +233,7 @@
       setText("documentLabel", strings.pdfSignDocument);
       setText("versionLabel", strings.pdfSignVersion);
       setText("workspaceLabel", strings.pdfSignMatter);
+      setText("serverLabel", strings.pdfSignServer);
       setText("certificateLabel", strings.pdfSignCertificate);
       setText("cancelBtn", strings.cancel);
       setText("signBtn", strings.pdfSignSign);
@@ -240,6 +245,7 @@
         ["documentName", params.get("documentName")],
         ["versionNumber", params.get("versionNumber")],
         ["workspaceName", params.get("workspaceName")],
+        ["apiOrigin", params.get("apiOrigin")],
       ]) {
         const node = element(id);
         node.dir = "auto";
