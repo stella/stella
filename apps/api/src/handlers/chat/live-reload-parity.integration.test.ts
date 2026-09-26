@@ -1569,6 +1569,53 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
+  test.each(["after-tool-end", "before-tool-end"] as const)(
+    "ends a stopped turn on the page with one Stop (%s)",
+    async (quietAt) => {
+      const conversation = await openConversation();
+      const { real } = conversation;
+      try {
+        real.harness.streamLive(real.threadId);
+        real.harness.script(real.threadId, [
+          {
+            quietUntilAborted: quietAt,
+            text: "Checking the register",
+            toolCalls: [
+              {
+                arguments: PLAIN_TOOL_ARGUMENTS,
+                toolCallId: "call-1",
+                toolName: PLAIN_TOOL_NAME,
+              },
+            ],
+            type: "step",
+          },
+        ]);
+        await real.client.startUserMessage(
+          Bun.randomUUIDv7(),
+          "Check the register",
+          (messages) =>
+            messages.some(({ parts }) =>
+              parts.some(({ type }) => type === "tool-call"),
+            ),
+        );
+        await real.client.stop();
+        const web = await loadWebChat();
+        const messages = real.client.messages();
+        expect(
+          web.isChatTurnGenerating({
+            hasError: false,
+            messages,
+            requestActive: real.client.runtimeState().requestActive,
+            sessionGenerating: false,
+          }),
+        ).toBe(false);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
   test(
     "bounds every model call of a turn by the model's catalog output limit",
     async () => {

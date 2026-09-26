@@ -331,6 +331,15 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
+  /** Set by `stop()` until the next request starts: the stopped turn's
+   *  running tool calls stay ended. */
+  let stoppedTurnOpen = false;
+  const settleStoppedTurn = (messages: PersistedChatMessage[]) => {
+    const sanitized = sanitizeRunningToolCalls(messages, "cancel");
+    client.setMessagesManually(sanitized);
+    setSnapshot({ messages: sanitized });
+  };
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
@@ -350,13 +359,29 @@ export const createChatRuntime = ({
       onFinish();
     },
     onInterruptStateChange: observeInterruptSubmission,
-    onLoadingChange: (isLoading) =>
+    onLoadingChange: (isLoading) => {
+      if (isLoading) {
+        stoppedTurnOpen = false;
+      }
       setSnapshot({
         isLoading,
         ...(isLoading ? { turnAbandoned: false } : {}),
-      }),
-    onMessagesChange: (messages) =>
-      setSnapshot({ messages: toPersistedChatMessages(messages) }),
+      });
+    },
+    onMessagesChange: (messages) => {
+      const persisted = toPersistedChatMessages(messages);
+      // A stopped run's chunks that TanStack had already read still reach
+      // its messages after `stop()`, and can put a tool call back into a
+      // running state; the stopped turn keeps its calls ended.
+      if (
+        stoppedTurnOpen &&
+        hasRunningToolCallInLatestAssistantMessage({ messages: persisted })
+      ) {
+        settleStoppedTurn(persisted);
+        return;
+      }
+      setSnapshot({ messages: persisted });
+    },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
@@ -622,6 +647,7 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         });
       client.stop();
+      stoppedTurnOpen = true;
       // `client.stop()` aborts the live request but never rewrites message
       // parts, so a tool-call part caught mid-run stays in a running state and
       // keeps `hasRunningToolCallInLatestAssistantMessage` — and thus
@@ -634,9 +660,7 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         })
       ) {
-        const sanitized = sanitizeRunningToolCalls(snapshot.messages, "cancel");
-        client.setMessagesManually(sanitized);
-        setSnapshot({ messages: sanitized });
+        settleStoppedTurn(snapshot.messages);
       }
       if (turnWasActive) {
         setSnapshot({ turnAbandoned: true });
