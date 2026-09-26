@@ -10,6 +10,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { correspondenceUserHasAccess } from "@/api/lib/email/correspondence/access";
 import type { SenderMembership } from "@/api/lib/email/inbound/acceptance";
+import { brandNullablePersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 export type InboundTransaction = Pick<
   Transaction,
@@ -92,15 +93,17 @@ export const resolveInboundSender = async ({
       return panic("Unhandled sender approval scope");
     }
   }
+  const ownerUserId = brandNullablePersistedUserId(approval.ownerUserId);
+  const approvedBy = brandNullablePersistedUserId(approval.approvedBy);
   switch (approval.kind) {
     case "verified_alias":
       if (
-        !approval.ownerUserId ||
+        !ownerUserId ||
         !(await correspondenceUserHasAccess({
           tx,
           organizationId,
           workspaceId,
-          userId: approval.ownerUserId,
+          userId: ownerUserId,
         }))
       ) {
         return { status: "denied" };
@@ -109,12 +112,12 @@ export const resolveInboundSender = async ({
         status: "allowed",
         filer: {
           type: "user",
-          userId: approval.ownerUserId,
+          userId: ownerUserId,
           filedAt: receivedAt,
         },
       };
     case "shared_mailbox":
-      if (!approval.approvedBy) {
+      if (!approvedBy) {
         return { status: "denied" };
       }
       return {
@@ -123,7 +126,7 @@ export const resolveInboundSender = async ({
           type: "shared_mailbox",
           allowedSenderId: approval.id,
           address: approval.address,
-          approvedBy: approval.approvedBy,
+          approvedBy,
           filedAt: receivedAt,
         },
       };
@@ -158,5 +161,5 @@ export const lookupInboundPrimaryAccount = async ({
     .where(and(eq(user.email, sender), eq(user.emailVerified, true)))
     .limit(1)
     .for("share", { of: user });
-  return primary.at(0)?.id ?? null;
+  return brandNullablePersistedUserId(primary.at(0)?.id ?? null);
 };

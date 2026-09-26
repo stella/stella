@@ -15,7 +15,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
@@ -91,7 +91,7 @@ const deliver = async (
       database: db,
       scopedDbForMatter: (scope) =>
         createScopedDb(
-          db,
+          markRlsDatabase(db),
           [scope.workspaceId],
           scope.organizationId,
           scope.userId,
@@ -251,7 +251,7 @@ if (!databaseUrl || !runPostgresTests) {
         database: db,
         scopedDbForMatter: (scope) =>
           createScopedDb(
-            db,
+            markRlsDatabase(db),
             [scope.workspaceId],
             scope.organizationId,
             scope.userId,
@@ -581,7 +581,7 @@ if (!databaseUrl || !runPostgresTests) {
         database: db,
         scopedDbForMatter: (scope) =>
           createScopedDb(
-            db,
+            markRlsDatabase(db),
             [scope.workspaceId],
             scope.organizationId,
             scope.userId,

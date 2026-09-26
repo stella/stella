@@ -324,6 +324,7 @@ export const ingestInboundMail = async ({
     };
   } else {
     const { outerSender, message } = parsed.value;
+    const from = parsed.value.message.from;
     const authenticated = await verify({
       raw,
       envelope,
@@ -395,8 +396,8 @@ export const ingestInboundMail = async ({
         message: {
           ...provenance.value,
           channel: "email",
-          direction: message.from === outerSender ? "out" : "in",
-          from: { address: message.from, name: null },
+          direction: from === outerSender ? "out" : "in",
+          from: { address: from, name: null },
           to: message.to.map((address) => ({ address, name: null })),
           cc: message.cc.map((address) => ({ address, name: null })),
           subject: message.subject ?? "",

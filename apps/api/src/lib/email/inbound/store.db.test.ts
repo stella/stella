@@ -11,7 +11,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
@@ -629,7 +629,7 @@ if (!databaseUrl || !runPostgresTests) {
         userId: SafeId<"user">;
       }) =>
         await createScopedDb(
-          db,
+          markRlsDatabase(db),
           [workspaceId],
           organizationId,
           userId,
