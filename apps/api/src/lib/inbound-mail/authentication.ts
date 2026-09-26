@@ -455,6 +455,13 @@ export const createOriginalSignatureVerifier =
       verify: async (resolver) =>
         await dkimVerify(Buffer.from(raw), { resolver }),
     });
+    if (verified.isErr()) {
+      // Original signatures are optional provenance, not delivery admission.
+      // Unavailable proof stays visibly unverified, including exhausted budgets.
+      return Result.ok({
+        status: "unverified",
+      } as const satisfies CorrespondenceOriginalSignature);
+    }
     return verified.map(({ results }) => {
       for (const signature of results) {
         if (signature.status.result !== "pass" || signature.status.underSized) {

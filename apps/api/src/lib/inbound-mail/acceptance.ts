@@ -8,10 +8,13 @@ import {
 } from "@/api/lib/inbound-mail/authentication";
 
 export type InboundFiler = {
-  user: Extract<CorrespondenceFiler, { type: "user" }>;
-  shared_mailbox: Omit<
+  user: Pick<
+    Extract<CorrespondenceFiler, { type: "user" }>,
+    "type" | "userId" | "filedAt"
+  >;
+  shared_mailbox: Pick<
     Extract<CorrespondenceFiler, { type: "shared_mailbox" }>,
-    "approvedByName"
+    "type" | "allowedSenderId" | "address" | "approvedBy" | "filedAt"
   >;
 }[CorrespondenceFiler["type"]];
 
