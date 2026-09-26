@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Podpis nezodpovedal pripravenému dokumentu. Skúste podpísať znova.",
         "cancelledFailedDescription": "Podpis sa do tohto PDF nepodarilo vložiť.",
         "cancelledPlatformDescription": "Podpisovanie certifikátom zo systémovej kľúčenky zatiaľ funguje na macOS.",
+        "cancelledRevokedDescription": "Vybraný certifikát alebo certifikát, ktorý ho vydal, bol zrušený. Zvoľte platný certifikát.",
         "cancelledSignatureDescription": "Podpis zo stella desktop nezodpovedal vybranému certifikátu. Skúste podpísať znova.",
         "cancelledTitle": "Podpisovanie zrušené",
         "cancelledUserDescription": "Podpisovanie bolo zrušené v stella desktop.",

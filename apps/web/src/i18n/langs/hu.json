@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Az aláírás nem illeszkedett az előkészített dokumentumhoz. Próbáld meg újra.",
         "cancelledFailedDescription": "Az aláírást nem sikerült hozzáadni ehhez a PDF-hez.",
         "cancelledPlatformDescription": "A rendszer kulcskarikáján tárolt tanúsítvánnyal való aláírás egyelőre macOS rendszeren működik.",
+        "cancelledRevokedDescription": "A kiválasztott tanúsítványt vagy a kiállítóját visszavonták. Válassz érvényes tanúsítványt.",
         "cancelledSignatureDescription": "A stella desktop aláírása nem egyezett a kiválasztott tanúsítvánnyal. Próbáld meg újra.",
         "cancelledTitle": "Aláírás megszakítva",
         "cancelledUserDescription": "Az aláírást megszakították a stella desktop alkalmazásban.",

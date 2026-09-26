@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "لم يطابق التوقيع المستند المُعدّ. حاول التوقيع مرة أخرى.",
         "cancelledFailedDescription": "تعذّرت إضافة التوقيع إلى ملف PDF هذا.",
         "cancelledPlatformDescription": "التوقيع بشهادة من سلسلة مفاتيح النظام يعمل حاليًا على macOS.",
+        "cancelledRevokedDescription": "أُلغيت الشهادة المختارة أو الشهادة التي أصدرتها. اختر شهادة صالحة.",
         "cancelledSignatureDescription": "لم يطابق التوقيع الوارد من stella desktop الشهادة المختارة. حاول التوقيع مرة أخرى.",
         "cancelledTitle": "تم إلغاء التوقيع",
         "cancelledUserDescription": "تم إلغاء التوقيع في تطبيق stella لسطح المكتب.",

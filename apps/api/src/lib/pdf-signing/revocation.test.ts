@@ -4,9 +4,11 @@ import * as pkijs from "pkijs";
 
 import type { PkiFetcher } from "@/api/lib/pdf-signing/pki-fetch";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
+import { findRevokedCertificates } from "@/api/lib/pdf-signing/validation-data";
 import {
   createTestCertificate,
   createTestCrl,
+  createTestOcspResponse,
 } from "@/api/tests/helpers/test-pki";
 
 const CRL_URL = "http://crl.example/issuing.crl";
@@ -44,7 +46,7 @@ describe("revocation data for long-term validation", () => {
     };
 
     const provider = createTrackedRevocationProvider(fetcher);
-    expect(await provider.getOCSP?.(leaf.der, root.der)).toBe(null);
+    expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
 
     expect(requests).toEqual([
       {
@@ -64,21 +66,97 @@ describe("revocation data for long-term validation", () => {
     const provider = createTrackedRevocationProvider(fetcher);
 
     // A responder that answered "try later" is not revocation data.
-    expect(await provider.getOCSP?.(leaf.der, root.der)).toBe(null);
+    expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
     expect(provider.covers(leaf.der)).toBe(false);
 
-    expect(await provider.getCRL?.(leaf.der)).toEqual(crl);
+    expect(await provider.getCRL(leaf.der, root.der)).toEqual(crl);
     expect(provider.covers(leaf.der)).toBe(true);
     expect(provider.covers(root.der)).toBe(false);
   });
 
   test("ignores a distribution point that serves something other than a CRL", async () => {
-    const { leaf } = await buildLeaf();
+    const { leaf, root } = await buildLeaf();
     const provider = createTrackedRevocationProvider(async () =>
       new TextEncoder().encode("<html>maintenance</html>"),
     );
 
-    expect(await provider.getCRL?.(leaf.der)).toBe(null);
+    expect(await provider.getCRL(leaf.der, root.der)).toBe(null);
     expect(provider.covers(leaf.der)).toBe(false);
+  });
+
+  test("reads a revoked OCSP answer as revoked, never as covered", async () => {
+    const { leaf, root } = await buildLeaf();
+    const revoked = await createTestOcspResponse({
+      issuer: root,
+      status: "revoked",
+      subject: leaf,
+    });
+    const provider = createTrackedRevocationProvider(async () => revoked);
+
+    expect(await provider.getOCSP(leaf.der, root.der)).toEqual(revoked);
+    expect(provider.isRevoked(leaf.der)).toBe(true);
+    expect(provider.covers(leaf.der)).toBe(false);
+  });
+
+  test("reads a good OCSP answer as covered", async () => {
+    const { leaf, root } = await buildLeaf();
+    const good = await createTestOcspResponse({
+      issuer: root,
+      status: "good",
+      subject: leaf,
+    });
+    const provider = createTrackedRevocationProvider(async () => good);
+
+    await provider.getOCSP(leaf.der, root.der);
+    expect(provider.covers(leaf.der)).toBe(true);
+    expect(provider.isRevoked(leaf.der)).toBe(false);
+  });
+
+  test("ignores an OCSP answer about another certificate", async () => {
+    const { leaf, root } = await buildLeaf();
+    const other = await createTestCertificate({
+      commonName: "Someone else",
+      issuer: root,
+    });
+    const aboutOther = await createTestOcspResponse({
+      issuer: root,
+      status: "revoked",
+      subject: other,
+    });
+    const provider = createTrackedRevocationProvider(async () => aboutOther);
+
+    expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
+    expect(provider.isRevoked(leaf.der)).toBe(false);
+  });
+
+  test("only trusts a CRL the issuer signed", async () => {
+    const { leaf, root } = await buildLeaf();
+    const impostor = await createTestCertificate({
+      commonName: "Root",
+      isCa: true,
+    });
+    // Same issuer name, wrong key: it must not revoke, nor count as data.
+    const forged = await createTestCrl(impostor, [leaf]);
+    const provider = createTrackedRevocationProvider(async ({ url }) =>
+      url === CRL_URL ? forged : null,
+    );
+
+    expect(await provider.getCRL(leaf.der, root.der)).toBe(null);
+    expect(provider.isRevoked(leaf.der)).toBe(false);
+    expect(provider.covers(leaf.der)).toBe(false);
+  });
+
+  test("finds every revoked certificate of a signer chain", async () => {
+    const { leaf, root } = await buildLeaf();
+    const crl = await createTestCrl(root, [leaf]);
+
+    const { revoked } = await findRevokedCertificates({
+      provider: createTrackedRevocationProvider(async ({ url }) =>
+        url === CRL_URL ? crl : null,
+      ),
+      signerChain: [leaf.der, root.der],
+    });
+
+    expect(revoked).toEqual([leaf.der]);
   });
 });

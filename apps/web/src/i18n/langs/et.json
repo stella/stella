@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Allkiri ei sobinud ettevalmistatud dokumendiga. Proovi uuesti allkirjastada.",
         "cancelledFailedDescription": "Allkirja ei õnnestunud sellele PDF-ile lisada.",
         "cancelledPlatformDescription": "Süsteemi võtmehoidla sertifikaadiga allkirjastamine töötab praegu macOS-is.",
+        "cancelledRevokedDescription": "Valitud sertifikaat või selle väljastanud sertifikaat on tühistatud. Vali kehtiv sertifikaat.",
         "cancelledSignatureDescription": "stella desktopi allkiri ei sobinud valitud sertifikaadiga. Proovi uuesti allkirjastada.",
         "cancelledTitle": "Allkirjastamine tühistatud",
         "cancelledUserDescription": "Allkirjastamine tühistati rakenduses stella desktop.",
