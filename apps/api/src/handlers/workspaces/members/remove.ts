@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -64,6 +65,36 @@ const defaultRemoveWorkspaceMemberDependencies = {
   closeSessionConnections,
   revokeWorkspaceSseAccess,
 } satisfies RemoveWorkspaceMemberDependencies;
+
+type ReadMemberWorkToUnassignOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+};
+
+const readMemberWorkToUnassign = ({
+  tx,
+  workspaceId,
+  userId,
+}: ReadMemberWorkToUnassignOptions) =>
+  tx
+    .select({
+      entityId: workObligations.entityId,
+      status: workObligations.status,
+    })
+    .from(workObligations)
+    .where(
+      and(
+        eq(workObligations.workspaceId, workspaceId),
+        eq(workObligations.ownerUserId, userId),
+        inArray(workObligations.status, [
+          WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+          WORK_OBLIGATION_STATUS.ACTIVE,
+        ]),
+      ),
+    )
+    .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
+    .for("update");
 
 // Shared remove-member logic reused by the HTTP handler and the
 // `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
@@ -144,24 +175,11 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
-      const ownedWork = await tx
-        .select({
-          entityId: workObligations.entityId,
-          status: workObligations.status,
-        })
-        .from(workObligations)
-        .where(
-          and(
-            eq(workObligations.workspaceId, workspaceId),
-            eq(workObligations.ownerUserId, userId),
-            inArray(workObligations.status, [
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-              WORK_OBLIGATION_STATUS.ACTIVE,
-            ]),
-          ),
-        )
-        .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
-        .for("update");
+      const ownedWork = await readMemberWorkToUnassign({
+        tx,
+        workspaceId,
+        userId,
+      });
 
       if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
         throw new HandlerError({

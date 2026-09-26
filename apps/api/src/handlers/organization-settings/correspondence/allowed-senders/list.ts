@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -44,7 +45,9 @@ const listAllowedSenders = createSafeRootHandler(
     const rawCursor = cursorParts?.at(0);
     if (
       query.cursor &&
-      (!isUuidPaginationCursorPart(rawCursor) || cursorParts.length !== 1)
+      (cursorParts === null ||
+        !isUuidPaginationCursorPart(rawCursor) ||
+        cursorParts.length !== 1)
     ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
@@ -118,7 +121,10 @@ const listAllowedSenders = createSafeRootHandler(
     if (result.matterRows.length > PAGE_SIZE_MAX * MAX_MATTERS_PER_SENDER) {
       return panic("Allowed sender matter scope exceeds the bounded page");
     }
-    const workspaceIdsBySender = new Map<string, string[]>();
+    const workspaceIdsBySender = new Map<
+      SafeId<"correspondenceAllowedSender">,
+      SafeId<"workspace">[]
+    >();
     for (const row of result.matterRows) {
       const workspaceIds = workspaceIdsBySender.get(row.allowedSenderId) ?? [];
       workspaceIds.push(row.workspaceId);

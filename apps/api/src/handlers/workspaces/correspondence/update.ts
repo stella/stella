@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspondence";
+import type { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspondence";
 
 import { member } from "@/api/db/auth-schema";
 import { correspondence, workspaceMembers } from "@/api/db/schema";
@@ -13,6 +13,11 @@ import { readCorrespondenceProvenance } from "@/api/lib/correspondence/provenanc
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+const HANDLING_STATE_SCHEMA_VALUES = [
+  "new",
+  "handled",
+] as const satisfies typeof CORRESPONDENCE_HANDLING_STATES;
+
 const config = {
   description:
     "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
@@ -21,7 +26,10 @@ const config = {
   params: workspaceParams({ correspondenceId: tSafeId("correspondence") }),
   body: t.Object({
     handlingState: t.Optional(
-      t.Union(CORRESPONDENCE_HANDLING_STATES.map((state) => t.Literal(state))),
+      t.Union([
+        t.Literal(HANDLING_STATE_SCHEMA_VALUES[0]),
+        t.Literal(HANDLING_STATE_SCHEMA_VALUES[1]),
+      ]),
     ),
     assigneeId: t.Optional(t.Nullable(tSafeId("user"))),
   }),
