@@ -890,6 +890,17 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/runtime-mode": {
+      "name": "@stll/runtime-mode",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/scripts": {
       "name": "@stll/scripts",
       "version": "0.0.0",
@@ -2795,6 +2806,8 @@
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 
     "@stll/scripts": ["@stll/scripts@workspace:packages/scripts"],
 
