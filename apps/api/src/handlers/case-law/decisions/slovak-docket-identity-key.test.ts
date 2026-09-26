@@ -12,7 +12,7 @@ const constitutionalSpelling = fc.record({
   gap: fc.constantFrom("", " "),
   join: fc.constantFrom("", " ", "  ", "/", " / "),
   lower: fc.boolean(),
-  mark: fc.constantFrom("ÚS", "US", "ús", "us"),
+  mark: fc.constantFrom("ÚS", "US", "ús", "us", "ÚS"),
   ordinal: fc.integer({ min: 1, max: 99_999 }),
   senate: fc.constantFrom("I", "II", "III", "IV", "PL", "Pl"),
   year: fc.constantFrom("98", "04", "2017"),
@@ -47,6 +47,32 @@ test("a Slovak Constitutional Court docket keys as ingestion stores it", () => {
         if (bareCitationKey(typed) === stored && !gluedToMark) {
           expect(parsed?.canonical, typed).toBe(stored);
         }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+/**
+ * The converse: a publisher stores the case number in any spelling the grammar
+ * reads (the court's case lists print it compact, `II.ÚS55/98`), and the
+ * identity lookup keys the grammar's formatted docket. Ingestion's key of the
+ * stored spelling must be the lookup's key, or the row is unreachable by its
+ * own docket.
+ */
+test("a Slovak Constitutional Court docket stored in any accepted spelling is found by its formatted query", () => {
+  fc.assert(
+    fc.property(
+      constitutionalSpelling,
+      ({ dot, gap, join, lower, mark, ordinal, senate, year }) => {
+        const stored = `${lower ? senate.toLowerCase() : senate}${dot}${gap}${mark}${join}${ordinal}/${year}`;
+        const parsed = DECISION_DOCKET_GRAMMARS.SVK.parse(stored);
+        if (parsed === null) {
+          return;
+        }
+        expect(bareCitationKey(stored), stored).toBe(
+          bareCitationKey(parsed.formatted),
+        );
       },
     ),
     propertyConfig(),
