@@ -488,6 +488,7 @@ const AUDIT_IGNORE_FILES = new Set([
   "packages/property-testing/src/ci-gate-coverage.test.ts",
   "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
+  "scripts/pull-base-images.test.sh",
   "scripts/retry.test.sh",
 ]);
 const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
