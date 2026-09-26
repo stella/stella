@@ -8,6 +8,7 @@ import {
   ingestInboundMail,
   type PersistInboundDeliveryOptions,
 } from "./ingest";
+import { INBOUND_MAIL_LIMITS } from "./limits";
 import { parseInboundMessage } from "./message";
 
 const original = Buffer.from(
@@ -183,6 +184,36 @@ test("verifies only a complete DKIM signature over the exact attached original b
   expect(partialSignature?.status.underSized).toBeGreaterThan(0);
   const partialVerdict = await verify(partial);
   expect(partialVerdict.isOk() && partialVerdict.value).toEqual({
+    status: "unverified",
+  });
+
+  const signatureHeader = signed
+    .subarray(0, signed.length - original.length)
+    .toString();
+  expect(signatureHeader).toMatch(/\bs=case\b/u);
+  const signatures = Array.from(
+    { length: INBOUND_MAIL_LIMITS.dnsQueries + 1 },
+    (_, index) =>
+      signatureHeader.replace(/\bs=case\b/u, () => `s=case${index}`),
+  );
+  const dnsExhausted = Buffer.concat([
+    Buffer.from(signatures.join("")),
+    original,
+  ]);
+  let dnsLookups = 0;
+  const verifyWithBudget = createOriginalSignatureVerifier(() => ({
+    resolve: async (domain: string, rrtype: string) => {
+      if (rrtype === "TXT" && domain.endsWith("._domainkey.outside.test")) {
+        dnsLookups += 1;
+        return [[`v=DKIM1; k=rsa; p=${publicKeyRecord}`]];
+      }
+      return [];
+    },
+    cancel: () => {},
+  }));
+  const exhaustedVerdict = await verifyWithBudget(dnsExhausted);
+  expect(dnsLookups).toBe(INBOUND_MAIL_LIMITS.dnsQueries);
+  expect(exhaustedVerdict.isOk() && exhaustedVerdict.value).toEqual({
     status: "unverified",
   });
 });
