@@ -672,7 +672,7 @@ type ParseDecisionDocketOptions = {
 export const parseDecisionDocket = (
   raw: string,
   { grammar }: ParseDecisionDocketOptions = {},
-): ParsedDecisionDocket | null => {
+): ParsedDecisionDocket<DecisionDocketJurisdiction> | null => {
   if (grammar === null) {
     return null;
   }
