@@ -30,6 +30,9 @@ const sb = (number: number, year: number): WorkIdentifier => ({
 /** The day 89/2012 Sb. replaced 40/1964 Sb. */
 const RECODIFICATION = "2014-01-01";
 
+/** The day 134/2016 Sb. replaced 137/2006 Sb. */
+const PUBLIC_PROCUREMENT_RECODIFICATION = "2016-10-01";
+
 /**
  * A short title `zákon o …` in every case a citing sentence puts it in, plus
  * the `zák. o …` shorthand. Listing the forms by hand is how one of them goes
@@ -335,9 +338,16 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(128, 2000),
     },
+    // 199/1994 Sb. carried the same title until 134/2016 Sb. took effect.
+    {
+      spellings: actTitleForms("o zadávání veřejných zakázek"),
+      identifier: sb(199, 1994),
+      citedUntil: PUBLIC_PROCUREMENT_RECODIFICATION,
+    },
     {
       spellings: actTitleForms("o zadávání veřejných zakázek"),
       identifier: sb(134, 2016),
+      citedFrom: PUBLIC_PROCUREMENT_RECODIFICATION,
     },
     {
       spellings: [
