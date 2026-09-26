@@ -284,16 +284,8 @@ export default eslintCompatPlugin({
             }
           },
           TaggedTemplateExpression(node) {
-            const quasis = isAstNode(node.quasi)
-              ? node.quasi.quasis
-              : undefined;
-            const head = Array.isArray(quasis) ? quasis.at(0) : undefined;
-            const value = isAstNode(head) ? head.value : undefined;
-            const cooked =
-              typeof value === "object" && value !== null && "cooked" in value
-                ? value.cooked
-                : undefined;
-            if (isCommandText(cooked)) {
+            // The command is the template's first literal chunk.
+            if (isCommandText(node.quasi.quasis.at(0)?.value.cooked)) {
               context.report({ node, messageId: "otherWriter" });
             }
           },
