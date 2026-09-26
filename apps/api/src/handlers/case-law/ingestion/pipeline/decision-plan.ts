@@ -14,7 +14,7 @@ import {
   normalizeDecisionIdentifierIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
-import { buildCitationRows } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import { planDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   caseLawCanonicalPayload,
   decisionSections,
@@ -363,8 +363,8 @@ type PlanDecisionWriteOptions = {
 
 /**
  * Everything the row write needs, computed before its transaction opens:
- * the payload and where it is stored, the identifiers, and the citation
- * rows read out of the document.
+ * the payload and where it is stored, the identifiers, and the references
+ * read out of the document.
  */
 export const planDecisionWrite = async ({
   result,
@@ -470,7 +470,7 @@ export const planDecisionWrite = async ({
     // lock across that read. The citing row is either the one identity
     // resolution found or the one this attempt is about to insert under
     // the id it already reserved.
-    citationRows: await buildCitationRows({
+    citations: await planDecisionCitations({
       citations,
       citingDecisionId: existing?.id ?? decisionId,
       language: result.language,

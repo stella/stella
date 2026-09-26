@@ -5,34 +5,31 @@ import type { PgInsertValue } from "drizzle-orm/pg-core";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
-import {
-  CITATION_KIND,
-  classifyCitation,
-} from "@/api/handlers/case-law/citation-kind";
+import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
+import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
+import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  citationKeyOf,
-  normalizeDecisionIdentifierValue,
-} from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import { applyCitationReviews } from "@/api/handlers/case-law/polarity/reviews";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
-import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import type {
+  CitationPolarityVerdict,
+  RuleCache,
+} from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-type BuildCitationRowsOptions = {
+type PlanDecisionCitationsOptions = {
   citations: readonly ReturnType<typeof extractCitations>[number][];
   citingDecisionId: SafeId<"caseLawDecision">;
   /** The citing decision's language; it chooses the polarity rule set. */
@@ -43,10 +40,22 @@ type BuildCitationRowsOptions = {
   sections: { index: number; text: string }[];
 };
 
+/** One reference and the rule tier's reading of its treatment. */
+type ReadReference = {
+  reference: DecisionReference;
+  verdict: CitationPolarityVerdict | null;
+};
+
+/** A decision's references as the writer publishes them. */
+type DecisionCitations = {
+  citingDecisionId: SafeId<"caseLawDecision">;
+  references: readonly ReadReference[];
+};
+
 /**
- * Every citation row for one decision: what the citation is doing (invoking
- * authority, or naming the case's own procedural history) and, where it
- * invokes one, how the citing court treats it.
+ * Every reference of one decision (see `deriveDecisionReferences`: what each
+ * names and what it is doing) and, where it invokes authority, how the citing
+ * court treats it.
  *
  * Both are read off the surrounding text, which only the pipeline holds, and
  * both are written when the row is published. Polarity used to be left to the
@@ -67,7 +76,7 @@ type BuildCitationRowsOptions = {
  * cache, one per decision otherwise, and none at all for a decision that
  * cites nothing. Never one per citation.
  */
-export const buildCitationRows = async ({
+export const planDecisionCitations = async ({
   citations,
   citingDecisionId,
   language,
@@ -75,49 +84,52 @@ export const buildCitationRows = async ({
   proceduralKeys,
   scopedDb,
   sections,
-}: BuildCitationRowsOptions): Promise<
-  (typeof caseLawCitations.$inferInsert)[]
-> => {
-  if (citations.length === 0) {
-    return [];
+}: PlanDecisionCitationsOptions): Promise<DecisionCitations> => {
+  const { references } = deriveDecisionReferences({
+    citingDecisionId,
+    citations,
+    proceduralKeys,
+    sections,
+  });
+  if (references.length === 0) {
+    return { citingDecisionId, references: [] };
   }
   const rules = await loadRules(language, scopedDb, polarityRules);
-  return citations.map((citation) => {
-    const citationKey = citationKeyOf(citation.citationText);
-    const windows = extractContexts(
-      sections,
-      citation.citationText,
-      citation.sectionIndex,
-    );
-    const kind = classifyCitation({
-      citationText: citation.citationText,
-      citationKey,
-      proceduralKeys,
-      context: windows?.contexts[0] ?? null,
-    });
-    const match =
-      kind === CITATION_KIND.PRECEDENT && windows !== null
-        ? selectCitationPolarity(rules, windows.mentions)
-        : null;
-    return {
-      citingDecisionId,
-      citationText: citation.citationText,
-      citationKey,
-      identifierType: citation.identifierType,
-      normalizedIdentifierValue: normalizeDecisionIdentifierValue(
-        citation.identifierType,
-        citation.identifierValue,
-      ),
-      citedDecisionTypeHint: citation.citedDecisionTypeHint,
-      citedCourtHint: citation.citedCourtHint,
-      citedSheetNumber: citation.citedSheetNumber,
-      citedDecisionDate: citation.citedDecisionDate,
-      kind,
-      sectionIndex: citation.sectionIndex,
-      polarity: match?.polarity ?? null,
-      polarityRuleId: match?.ruleId ?? null,
-    };
-  });
+  return {
+    citingDecisionId,
+    references: references.map((reference) => ({
+      reference,
+      verdict:
+        reference.polarityMentions === null
+          ? null
+          : selectCitationPolarity(rules, reference.polarityMentions),
+    })),
+  };
+};
+
+type CitationRow = typeof caseLawCitations.$inferInsert;
+
+/** The row a reference is stored as, before it is settled. */
+const citationRowOf = (
+  citingDecisionId: SafeId<"caseLawDecision">,
+  { reference, verdict }: ReadReference,
+): CitationRow => {
+  const [identifier] = reference.identifiers;
+  return {
+    citingDecisionId,
+    citationText: reference.printed,
+    citationKey: reference.citationKey,
+    identifierType: identifier.type,
+    normalizedIdentifierValue: identifier.normalizedValue,
+    citedDecisionTypeHint: reference.hints.decisionType,
+    citedCourtHint: reference.hints.court,
+    citedSheetNumber: reference.hints.sheetNumber,
+    citedDecisionDate: reference.hints.decisionDate,
+    kind: reference.kind,
+    sectionIndex: reference.sectionIndex,
+    polarity: verdict?.polarity ?? null,
+    polarityRuleId: verdict?.ruleId ?? null,
+  };
 };
 
 /** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
@@ -133,7 +145,7 @@ const executedRows = (result: unknown): unknown[] => {
 
 /** Each rule that labelled one of these citations, and how many it labelled. */
 const polarityMatchesByRule = (
-  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  rows: readonly CitationRow[],
 ): Map<string, number> => {
   const matches = new Map<string, number>();
   for (const { polarityRuleId } of rows) {
@@ -172,9 +184,9 @@ const polarityMatchesByRule = (
  */
 const settleRuleVerdicts = async (
   tx: Transaction,
-  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  rows: readonly CitationRow[],
   observedAt: Date,
-): Promise<(typeof caseLawCitations.$inferInsert)[]> => {
+): Promise<CitationRow[]> => {
   // audit: skip — background polarity rule match counters; public case-law data
   const matches = polarityMatchesByRule(rows);
   if (matches.size === 0) {
@@ -207,8 +219,6 @@ const settleRuleVerdicts = async (
       : row,
   );
 };
-
-type CitationRow = typeof caseLawCitations.$inferInsert;
 
 const textOrNull = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
@@ -271,17 +281,20 @@ export const writeDecisionCitations = async (
   tx: Transaction,
   {
     decisionId,
-    rows,
+    citations,
     observedAt,
     stored,
   }: {
     decisionId: SafeId<"caseLawDecision">;
-    rows: readonly CitationRow[];
+    citations: DecisionCitations;
     observedAt: Date;
     /** Whether the decision may already hold citation rows. */
     stored: boolean;
   },
 ): Promise<void> => {
+  const rows = citations.references.map((reference) =>
+    citationRowOf(citations.citingDecisionId, reference),
+  );
   const unmatched = new Map<string, SafeId<"caseLawCitation">[]>();
   if (stored) {
     // Read as text, so the comparison sees the values as the writer spells
@@ -407,9 +420,9 @@ export const writeDecisionCitations = async (
  */
 const settleCitationPolarity = async (
   tx: Transaction,
-  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  rows: readonly CitationRow[],
   observedAt: Date,
-): Promise<(typeof caseLawCitations.$inferInsert)[]> =>
+): Promise<CitationRow[]> =>
   await settleRuleVerdicts(
     tx,
     await applyCitationReviews(tx, rows),

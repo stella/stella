@@ -105,13 +105,13 @@ const finishInsertedRowTx = async (
 ): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
-    plan: { citationRows, identifierRows },
+    plan: { citations, identifierRows },
   } = write;
   await writeDecisionJudges(tx, write, insertedId);
 
   await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
 
-  if (citationRows.length > 0) {
+  if (citations.references.length > 0) {
     // Settled as they are written, in the transaction that writes them.
     // One indexed lookup per citation against the fetch and parse this
     // page already paid for; without it every new citation waits for the
@@ -119,7 +119,7 @@ const finishInsertedRowTx = async (
     await lockCitationGraph(tx);
     await writeDecisionCitations(tx, {
       decisionId: insertedId,
-      rows: citationRows,
+      citations,
       observedAt,
       stored: false,
     });
