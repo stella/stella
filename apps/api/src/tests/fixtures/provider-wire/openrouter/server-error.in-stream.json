@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "server-error",
+  "variant": "in-stream",
+  "source": "synthetic",
+  "basis": "OpenRouter Chat Completions streaming reference: data-only SSE chat.completion.chunk events with comment keep-alives, a final usage chunk and [DONE]",
+  "model": "openai/gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": ": OPENROUTER PROCESSING\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The cass\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"error\":{\"code\":502,\"message\":\"Provider returned error\",\"metadata\":{\"error_type\":\"provider_unavailable\",\"provider_code\":\"502\"}},\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":\"error\",\"native_finish_reason\":\"error\"}]}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}
