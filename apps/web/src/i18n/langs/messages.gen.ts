@@ -1943,6 +1943,7 @@ type Messages = {
     "filers": "Filers";
     "forwardedBy": "Forwarded by <address>{sender}</address>";
     "forwardedByAuthenticated": "Forwarded by <address>{sender}</address> · authenticated";
+    "inboundNotConfigured": "Incoming email is not configured. Ask your administrator to set up the inbound mail domain.";
     "markHandled": "Mark handled";
     "markNew": "Mark new";
     "noAddress": "No email address is active.";

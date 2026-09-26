@@ -1940,6 +1940,7 @@
     "filers": "Odosielatelia",
     "forwardedBy": "Preposlal <address>{sender}</address>",
     "forwardedByAuthenticated": "Preposlal <address>{sender}</address> · overené",
+    "inboundNotConfigured": "Prichádzajúci e-mail nie je nastavený. Požiadajte správcu o nastavenie domény pre prichádzajúcu poštu.",
     "markHandled": "Označiť ako vybavené",
     "markNew": "Označiť ako nové",
     "noAddress": "Nie je aktívna žiadna e-mailová adresa.",

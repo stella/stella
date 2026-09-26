@@ -1940,6 +1940,7 @@
     "filers": "Remetentes",
     "forwardedBy": "Encaminhado por <address>{sender}</address>",
     "forwardedByAuthenticated": "Encaminhado por <address>{sender}</address> · autenticado",
+    "inboundNotConfigured": "O recebimento de e-mails não está configurado. Peça ao administrador para configurar o domínio de recebimento.",
     "markHandled": "Marcar como resolvido",
     "markNew": "Marcar como novo",
     "noAddress": "Nenhum endereço de e-mail está ativo.",

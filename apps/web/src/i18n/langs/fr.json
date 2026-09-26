@@ -1940,6 +1940,7 @@
     "filers": "Déposants",
     "forwardedBy": "Transféré par <address>{sender}</address>",
     "forwardedByAuthenticated": "Transféré par <address>{sender}</address> · authentifié",
+    "inboundNotConfigured": "La réception des e-mails n’est pas configurée. Demandez à votre administrateur de configurer le domaine de réception.",
     "markHandled": "Marquer comme traité",
     "markNew": "Marquer comme nouveau",
     "noAddress": "Aucune adresse e-mail active.",

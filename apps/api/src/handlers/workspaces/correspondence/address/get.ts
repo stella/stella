@@ -16,30 +16,29 @@ const config = {
 const getMatterInboundAddress = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId }) {
-    if (env.INBOUND_MAIL_DOMAIN === undefined) {
-      return Result.ok({
-        address: null,
-        setupHint: "Inbound mail domain is not configured",
-      });
-    }
-    const [row] = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx
-            .select({ token: matterInboundAddresses.token })
-            .from(matterInboundAddresses)
-            .where(
-              and(
-                eq(matterInboundAddresses.workspaceId, workspaceId),
-                isNull(matterInboundAddresses.revokedAt),
-              ),
-            )
-            .limit(1),
-      ),
-    );
+    const domain = env.INBOUND_MAIL_DOMAIN;
+    const [row] =
+      domain === undefined
+        ? []
+        : yield* Result.await(
+            safeDb(
+              async (tx) =>
+                await tx
+                  .select({ token: matterInboundAddresses.token })
+                  .from(matterInboundAddresses)
+                  .where(
+                    and(
+                      eq(matterInboundAddresses.workspaceId, workspaceId),
+                      isNull(matterInboundAddresses.revokedAt),
+                    ),
+                  )
+                  .limit(1),
+            ),
+          );
     return Result.ok({
-      address:
-        row === undefined ? null : `${row.token}@${env.INBOUND_MAIL_DOMAIN}`,
+      address: row === undefined ? null : `${row.token}@${domain}`,
+      setupHint:
+        domain === undefined ? "Inbound mail domain is not configured" : null,
     });
   },
 );

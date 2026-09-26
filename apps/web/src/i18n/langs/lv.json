@@ -1940,6 +1940,7 @@
     "filers": "Iesniedzēji",
     "forwardedBy": "Pārsūtīja <address>{sender}</address>",
     "forwardedByAuthenticated": "Pārsūtīja <address>{sender}</address> · autentificēts",
+    "inboundNotConfigured": "Ienākošais e-pasts nav konfigurēts. Lūdziet administratoram konfigurēt ienākošā pasta domēnu.",
     "markHandled": "Atzīmēt kā izskatītu",
     "markNew": "Atzīmēt kā jaunu",
     "noAddress": "Nav aktīvas e-pasta adreses.",

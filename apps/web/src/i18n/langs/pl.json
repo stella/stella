@@ -1940,6 +1940,7 @@
     "filers": "Nadawcy",
     "forwardedBy": "Przekazane przez <address>{sender}</address>",
     "forwardedByAuthenticated": "Przekazane przez <address>{sender}</address> · uwierzytelniono",
+    "inboundNotConfigured": "Poczta przychodząca nie jest skonfigurowana. Poproś administratora o skonfigurowanie domeny poczty przychodzącej.",
     "markHandled": "Oznacz jako obsłużone",
     "markNew": "Oznacz jako nowe",
     "noAddress": "Brak aktywnego adresu e-mail.",

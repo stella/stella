@@ -77,7 +77,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   );
   const rotate = useRotateCorrespondenceAddress();
   const revoke = useRevokeCorrespondenceAddress();
-  const address = data?.address ?? null;
+  const address = data?.status === "configured" ? data.address : null;
 
   const copyAddress = async () => {
     if (!address) {
@@ -93,7 +93,11 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
 
   let addressStatus = (
     <p className="text-muted-foreground mt-1 text-sm">
-      {t("correspondence.noAddress")}
+      {t(
+        data?.status === "unconfigured"
+          ? "correspondence.inboundNotConfigured"
+          : "correspondence.noAddress",
+      )}
     </p>
   );
   if (address) {
@@ -146,7 +150,11 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={
-              rotate.isPending || revoke.isPending || isPending || isError
+              rotate.isPending ||
+              revoke.isPending ||
+              isPending ||
+              isError ||
+              data?.status === "unconfigured"
             }
             onClick={() => rotate.mutate({ workspaceId })}
             size="sm"

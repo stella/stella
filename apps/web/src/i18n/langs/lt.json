@@ -1940,6 +1940,7 @@
     "filers": "Pateikėjai",
     "forwardedBy": "Persiuntė <address>{sender}</address>",
     "forwardedByAuthenticated": "Persiuntė <address>{sender}</address> · autentiškumas patvirtintas",
+    "inboundNotConfigured": "Gaunamas el. paštas nesukonfigūruotas. Paprašykite administratoriaus sukonfigūruoti gaunamo pašto domeną.",
     "markHandled": "Pažymėti kaip sutvarkytą",
     "markNew": "Pažymėti kaip naują",
     "noAddress": "Aktyvaus el. pašto adreso nėra.",

@@ -88,9 +88,27 @@ export const correspondenceByIdOptions = (
     },
   });
 
+type CorrespondenceAddressResponse = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof api.workspaces>["correspondence"]["address"]["get"]
+    >
+  >["data"]
+>;
+
+export const correspondenceAddressState = (
+  data: CorrespondenceAddressResponse,
+) => {
+  if (data.setupHint !== null) {
+    return { status: "unconfigured" } as const;
+  }
+  return { status: "configured", address: data.address } as const;
+};
+
 export const correspondenceAddressOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: correspondenceKeys.address(workspaceId),
+    select: correspondenceAddressState,
     queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId })

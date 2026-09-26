@@ -1940,6 +1940,7 @@
     "filers": "مقدمو المراسلات",
     "forwardedBy": "تمت إعادة التوجيه بواسطة <address>{sender}</address>",
     "forwardedByAuthenticated": "تمت إعادة التوجيه بواسطة <address>{sender}</address> · تمت المصادقة",
+    "inboundNotConfigured": "لم يتم إعداد البريد الوارد. اطلب من المسؤول إعداد نطاق البريد الوارد.",
     "markHandled": "تحديد كمُعالج",
     "markNew": "تحديد كجديد",
     "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",

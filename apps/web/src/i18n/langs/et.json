@@ -1940,6 +1940,7 @@
     "filers": "Esitajad",
     "forwardedBy": "Edasi saatis <address>{sender}</address>",
     "forwardedByAuthenticated": "Edasi saatis <address>{sender}</address> · autenditud",
+    "inboundNotConfigured": "Saabuv e-post pole seadistatud. Paluge administraatoril seadistada saabuva posti domeen.",
     "markHandled": "Märgi käsitletuks",
     "markNew": "Märgi uueks",
     "noAddress": "Aktiivset e-posti aadressi pole.",

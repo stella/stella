@@ -1940,6 +1940,7 @@
     "filers": "Benyújtók",
     "forwardedBy": "Továbbította: <address>{sender}</address>",
     "forwardedByAuthenticated": "Továbbította: <address>{sender}</address> · hitelesítve",
+    "inboundNotConfigured": "A bejövő levelezés nincs beállítva. Kérje meg a rendszergazdát a bejövő levelek domainjének beállítására.",
     "markHandled": "Megjelölés elintézettként",
     "markNew": "Megjelölés újként",
     "noAddress": "Nincs aktív e-mail-cím.",

@@ -1940,6 +1940,7 @@
     "filers": "Einreicher",
     "forwardedBy": "Weitergeleitet von <address>{sender}</address>",
     "forwardedByAuthenticated": "Weitergeleitet von <address>{sender}</address> · authentifiziert",
+    "inboundNotConfigured": "Der E-Mail-Empfang ist nicht eingerichtet. Bitten Sie Ihre Administration, die Domain für eingehende E-Mails einzurichten.",
     "markHandled": "Als erledigt markieren",
     "markNew": "Als neu markieren",
     "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
