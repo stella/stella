@@ -125,6 +125,24 @@ describe("UTF-8 punctuation read as windows-1252", () => {
       ),
     ).toEqual(["“Final”", "‘no’", "€5…", "§", "°C"]);
   });
+
+  // A restored mark is its own signature: no lowercase word need vouch for
+  // it, unlike a restored letter, which capitals spell by accident.
+  test.each([
+    ["cs", "Â§ 1, Â§ 2", "§"],
+    ["en", "20Â°C 30Â°C", "°C"],
+    ["de", "Â§Â§ 3 UND 4, Â§ 5", "§§"],
+  ])("is found in %s %s, with no lowercase word", (language, text, first) => {
+    expect(
+      findingOf(text, language, "utf8-read-as-single-byte")?.samples.at(0)
+        ?.repaired,
+    ).toBe(first);
+  });
+
+  test("letters restored in capitals alone are no signature", () => {
+    // Slovak "ÄŽ" is C4 8E: the UTF-8 bytes of "Ď".
+    expect(checkTextEncoding("ÄŽ ÄŽ ÄŽ", "sk")).toEqual({ status: "clean" });
+  });
 });
 
 describe("work on a long text of distinct words", () => {

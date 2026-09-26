@@ -310,7 +310,24 @@ const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
   return nativeLetter ? "native" : "neutral";
 };
 
-type UndoneWord = { text: string; failed: boolean };
+type UndoneWord = {
+  text: string;
+  failed: boolean;
+  /** A run read back into a punctuation mark or sign (`isRestoredPunctuation`). */
+  restoredPunctuation: boolean;
+};
+
+/**
+ * Punctuation and signs whose UTF-8 bytes read as windows-1252 are "â€"
+ * or "Â" followed by more punctuation ("â€™" for ’, "â€”" for —, "Â§" for
+ * §). No pair of letters reads back into one (a letter byte after C2 or E2
+ * spells a control, a letter or a mathematical sign), so unlike a restored
+ * letter a restored mark needs no alphabet to be told from a capital.
+ */
+const RESTORED_PUNCTUATION = /^[\u00A0-\u00BF\u2000-\u206F\u20AC\u2122]$/u;
+
+const isRestoredPunctuation = (char: string): boolean =>
+  !isLetter(char) && RESTORED_PUNCTUATION.test(char);
 
 /**
  * One word with the pair undone. A character the assumed charset cannot
@@ -326,6 +343,7 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
   let text = "";
   let run = "";
   let failed = false;
+  let restoredPunctuation = false;
   const flush = () => {
     if (run.length === 0) {
       return;
@@ -335,6 +353,8 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
       failed ||= NON_ASCII.test(run);
       text += run;
     } else {
+      restoredPunctuation ||=
+        undone !== run && Array.from(undone).some(isRestoredPunctuation);
       text += undone;
     }
     run = "";
@@ -349,7 +369,7 @@ const undoWord = (word: string, pair: DecodingPair): UndoneWord => {
     }
   }
   flush();
-  return { text, failed };
+  return { text, failed, restoredPunctuation };
 };
 
 type WordRepair =
@@ -712,18 +732,6 @@ const UTF8_SEQUENCE_READ_AS_SINGLE_BYTE = new RegExp(
  * it; where it is not, it must at least stay in one script.
  */
 /**
- * Punctuation and signs whose UTF-8 bytes read as windows-1252 are "â€"
- * or "Â" followed by more punctuation ("â€™" for ’, "â€”" for —, "Â§" for
- * §). No pair of letters reads back into one (a letter byte after C2 or E2
- * spells a control, a letter or a mathematical sign), so unlike a restored
- * letter a restored mark needs no alphabet to be told from a capital.
- */
-const RESTORED_PUNCTUATION = /^[\u00A0-\u00BF\u2000-\u206F\u20AC\u2122]$/u;
-
-const isRestoredPunctuation = (char: string): boolean =>
-  !isLetter(char) && RESTORED_PUNCTUATION.test(char);
-
-/**
  * Whether a word read back as UTF-8 reads as something a person wrote:
  * its restored marks are punctuation, and its restored letters, if any,
  * read natively in the language (or, where it is not known, stay in one
@@ -760,7 +768,7 @@ const utf8Signature = (
   alphabet: Alphabet | null,
 ): Extract<EncodingFinding, { kind: "utf8-read-as-single-byte" }> | null => {
   let occurrences = 0;
-  let beyondCapitals = false;
+  let signed = false;
   const samples: RepairedSpan[] = [];
   for (const { word, stat } of words) {
     if (!UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(word)) {
@@ -773,14 +781,15 @@ const utf8Signature = (
       continue;
     }
     occurrences += stat.count;
-    beyondCapitals ||= !CAPITALS_ONLY.test(word);
+    signed ||= repaired.restoredPunctuation || !CAPITALS_ONLY.test(word);
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });
     }
   }
   // Capitals are where a writer's letters spell UTF-8 by accident (Slovak
-  // "ÄŽ" is C4 8E, "Ď"): words in capitals alone are no signature.
-  return beyondCapitals && occurrences >= MIN_UTF8_SIGNATURE_OCCURRENCES
+  // "ÄŽ" is C4 8E, "Ď"): letters restored in capitals alone are no
+  // signature. A restored mark is one wherever it stands ("Â§ 1", "20Â°C").
+  return signed && occurrences >= MIN_UTF8_SIGNATURE_OCCURRENCES
     ? { kind: "utf8-read-as-single-byte", occurrences, samples }
     : null;
 };

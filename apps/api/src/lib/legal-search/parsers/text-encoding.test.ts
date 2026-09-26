@@ -82,6 +82,17 @@ describe("a stored text read through the wrong charset", () => {
     });
   });
 
+  test("UTF-8 signs read as windows-1252 are reported without a lowercase word", () => {
+    for (const [text, language] of [
+      ["Â§ 1, Â§ 2", "cs"],
+      ["20Â°C 30Â°C", "en"],
+    ] as const) {
+      expect(textMisdecodedFields(text, language)?.encodingKinds).toBe(
+        "utf8-read-as-single-byte",
+      );
+    }
+  });
+
   test("lost bytes are reported without a pair", () => {
     const lost = WRITTEN.replaceAll("ľ", "�");
     expect(textMisdecodedFields(lost, "sk")?.encodingKinds).toBe(

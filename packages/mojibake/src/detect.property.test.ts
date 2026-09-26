@@ -277,34 +277,64 @@ describe("typographic punctuation in otherwise ASCII text", () => {
         marked.filter((word) => /[^\p{ASCII}]/u.test(word)).length >= 2,
     )
     .map((marked) => marked.join(" "));
+  // Section signs standing apart and units against numbers or capitals,
+  // with no lowercase word anywhere: statute references, measurements.
+  const signs = fc
+    .array(
+      fc.oneof(
+        fc.constantFrom("§", "§§"),
+        fc
+          .tuple(
+            fc.stringMatching(/^(?:\d{1,3}|[A-Z]{1,4})$/u),
+            fc.constantFrom("°C", "°F", "°", "²", "³", "‰"),
+          )
+          .map(([base, unit]) => `${base}${unit}`),
+        fc.stringMatching(/^(?:\d{1,3}|[A-Z]{1,6})$/u),
+      ),
+      { minLength: 2, maxLength: 40 },
+    )
+    .filter(
+      (tokens) =>
+        tokens.filter((token) => /[^\p{ASCII}]/u.test(token)).length >= 2,
+    )
+    .map((tokens) => tokens.join(" "));
+  const TEXTS = [
+    ["words with marks", text],
+    ["signs and units without lowercase", signs],
+  ] as const;
 
-  test("read correctly, it is clean", () => {
+  test.each(TEXTS)("%s, read correctly, is clean", (_, texts) => {
     fc.assert(
-      fc.property(text, (written) => {
+      fc.property(texts, (written) => {
         expect(checkTextEncoding(written, "en")).toEqual({ status: "clean" });
       }),
       config(300),
     );
   });
 
-  test("written in UTF-8 and read as windows-1252 or Latin-1, it is reported", () => {
-    fc.assert(
-      fc.property(
-        text,
-        fc.constantFrom<DecodingPair>(
-          { actual: "utf-8", assumed: "windows-1252" },
-          { actual: "utf-8", assumed: "iso-8859-1" },
+  test.each(TEXTS)(
+    "%s, written in UTF-8 and read as windows-1252 or Latin-1, is reported",
+    (_, texts) => {
+      fc.assert(
+        fc.property(
+          texts,
+          fc.constantFrom<DecodingPair>(
+            { actual: "utf-8", assumed: "windows-1252" },
+            { actual: "utf-8", assumed: "iso-8859-1" },
+          ),
+          (written, pair) => {
+            const misread = misdecode(written, pair);
+            expect(misread).not.toBeNull();
+            expect(misread).not.toBe(written);
+            expect(checkTextEncoding(misread ?? "", "en").status).toBe(
+              "suspect",
+            );
+          },
         ),
-        (written, pair) => {
-          const misread = misdecode(written, pair);
-          expect(misread).not.toBeNull();
-          expect(misread).not.toBe(written);
-          expect(checkTextEncoding(misread ?? "", "en").status).toBe("suspect");
-        },
-      ),
-      config(300),
-    );
-  });
+        config(300),
+      );
+    },
+  );
 });
 
 describe("generated text", () => {
