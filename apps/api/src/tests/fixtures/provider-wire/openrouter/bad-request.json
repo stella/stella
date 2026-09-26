@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "bad-request",
+  "source": "synthetic",
+  "basis": "OpenRouter API errors reference: JSON { error: { code, message, metadata? } } bodies",
+  "model": "stella-cassette-no-such-model",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"stella-cassette-no-such-model is not a valid model ID\",\"code\":400},\"user_id\":\"user_cassette\"}"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}

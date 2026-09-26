@@ -1453,7 +1453,7 @@ const providerDetailFromRunErrorChunk = (chunk: RunErrorChunk): unknown => {
 const errorForRunErrorChunk = (chunk: RunErrorChunk): unknown =>
   providerDetailFromRunErrorChunk(chunk) ?? errorFromRunErrorChunk(chunk);
 
-const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
+export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
   const providerDetail = providerDetailFromRunErrorChunk(chunk);
   // Keep the stream's code on the outer error and the structured provider
   // body as its cause. The classifier understands both shapes and walks the

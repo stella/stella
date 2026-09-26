@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "server-error",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock Runtime API reference: restJson1 error, type in the x-amzn-errortype header, { message } body",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json",
+          "x-amzn-errortype": "ServiceUnavailableException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+          "x-amzn-requestid": "b4c2d8e1-6a5f-4e3b-8d9c-2a7f1e6b5c72"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"message\":\"Bedrock is unable to process your request.\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "rate-limit",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock Runtime API reference: restJson1 error, type in the x-amzn-errortype header, { message } body",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "x-amzn-errortype": "ThrottlingException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+          "x-amzn-requestid": "7a1e4c9b-3d2f-4b6a-9c8e-1f5d7a2b3c61"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"message\":\"Too many requests, please wait before trying again.\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "quota_exhausted"
+  }
+}

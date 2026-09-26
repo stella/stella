@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "anthropic",
+  "scenario": "bad-request",
+  "source": "synthetic",
+  "basis": "Anthropic Messages API errors reference: error object shape",
+  "model": "stella-cassette-no-such-model",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages?beta=true"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json",
+          "request-id": "req_011CassetteReplay00000002"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: stella-cassette-no-such-model\"},\"request_id\":\"req_011CassetteReplay00000002\"}"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "model_unavailable"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "provider": "google",
+  "scenario": "length",
+  "source": "synthetic",
+  "basis": "Gemini API streamGenerateContent?alt=sse reference: data-only SSE frames, each a GenerateContentResponse, CRLF separated",
+  "model": "gemini-3.8-flash",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream",
+          "content-disposition": "attachment",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "server-timing": "gfet4t7; dur=412"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"One, two,\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15,\"totalTokenCount\": 15,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" three, four,\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15,\"totalTokenCount\": 15,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" five, six\"}],\"role\": \"model\"},\"finishReason\": \"MAX_TOKENS\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 15,\"candidatesTokenCount\": 16,\"totalTokenCount\": 31,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 15}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "length",
+    "text": "One, two, three, four, five, six",
+    "usage": {
+      "promptTokens": 15,
+      "completionTokens": 16,
+      "totalTokens": 31
+    }
+  }
+}

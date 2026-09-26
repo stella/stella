@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "parallel-tool-calls",
+  "source": "synthetic",
+  "basis": "OpenRouter Chat Completions streaming reference: data-only SSE chat.completion.chunk events with comment keep-alives, a final usage chunk and [DONE]",
+  "model": "openai/gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": ": OPENROUTER PROCESSING\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_cassette_draft\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"na\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"me\\\":\\\"draft\\\"}\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":1,\"id\":\"call_cassette_memo\",\"type\":\"function\",\"function\":{\"name\":\"mcp__external__delete\",\"arguments\":\"\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"{\\\"name\\\":\\\"me\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"role\":\"assistant\",\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"mo\\\"}\"}}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"tool_calls\",\"native_finish_reason\":\"completed\"}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"service_tier\":\"default\",\"usage\":{\"prompt_tokens\":82,\"completion_tokens\":36,\"total_tokens\":118,\"cost\":0.0004625,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0,\"audio_tokens\":0,\"video_tokens\":0},\"cost_details\":{\"upstream_inference_cost\":null,\"upstream_inference_prompt_cost\":0.0001025,\"upstream_inference_completions_cost\":0.00036},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"image_tokens\":0,\"audio_tokens\":0}},\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"tool_calls\",\"native_finish_reason\":\"completed\"}]}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "tool_calls",
+    "toolCalls": [
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "draft"
+        }
+      },
+      {
+        "name": "mcp__external__delete",
+        "input": {
+          "name": "memo"
+        }
+      }
+    ],
+    "usage": {
+      "promptTokens": 82,
+      "completionTokens": 36,
+      "totalTokens": 118
+    }
+  }
+}

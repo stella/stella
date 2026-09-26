@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "provider": "mistral",
+  "scenario": "bad-request",
+  "source": "synthetic",
+  "basis": "Mistral API error reference: {object:error, message, type, param, code} JSON bodies",
+  "model": "stella-cassette-no-such-model",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"object\":\"error\",\"message\":\"Invalid model: stella-cassette-no-such-model\",\"type\":\"invalid_model\",\"param\":null,\"code\":\"1500\"}"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "provider": "openai",
+  "scenario": "length",
+  "source": "synthetic",
+  "basis": "OpenAI Responses API streaming reference: typed response.* server-sent events, strict function tools",
+  "model": "gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/responses"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_cassette\",\"object\":\"response\",\"created_at\":1790107367,\"status\":\"in_progress\",\"error\":null,\"incomplete_details\":null,\"model\":\"gpt-6-sol-2026-07-01\",\"output\":[],\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"usage\":null}}\n\nevent: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_cassette\",\"object\":\"response\",\"created_at\":1790107367,\"status\":\"in_progress\",\"error\":null,\"incomplete_details\":null,\"model\":\"gpt-6-sol-2026-07-01\",\"output\":[],\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"usage\":null}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"id\":\"msg_cassette\",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":3,\"item_id\":\"msg_cassette\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_cassette\",\"output_index\":0,\"content_index\":0,\"delta\":\"One, two,\",\"logprobs\":[]}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_cassette\",\"output_index\":0,\"content_index\":0,\"delta\":\" three, four,\",\"logprobs\":[]}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":6,\"item_id\":\"msg_cassette\",\"output_index\":0,\"content_index\":0,\"delta\":\" five, six\",\"logprobs\":[]}\n\nevent: response.incomplete\ndata: {\"type\":\"response.incomplete\",\"sequence_number\":7,\"response\":{\"id\":\"resp_cassette\",\"object\":\"response\",\"created_at\":1790107367,\"status\":\"incomplete\",\"error\":null,\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"model\":\"gpt-6-sol-2026-07-01\",\"output\":[{\"id\":\"msg_cassette\",\"type\":\"message\",\"status\":\"incomplete\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"One, two, three, four, five, six\"}]}],\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"usage\":{\"input_tokens\":22,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":16,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":38}}}\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "length",
+    "text": "One, two, three, four, five, six",
+    "usage": {
+      "promptTokens": 22,
+      "completionTokens": 16,
+      "totalTokens": 38
+    }
+  }
+}

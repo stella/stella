@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "provider": "google",
+  "scenario": "refusal",
+  "source": "synthetic",
+  "basis": "Gemini API streamGenerateContent?alt=sse reference: data-only SSE frames, each a GenerateContentResponse, CRLF separated",
+  "model": "gemini-3.8-flash",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream",
+          "content-disposition": "attachment",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "server-timing": "gfet4t7; dur=412"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"candidates\": [{\"finishReason\": \"SAFETY\",\"safetyRatings\": [{\"category\": \"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"probability\": \"NEGLIGIBLE\"},{\"category\": \"HARM_CATEGORY_HATE_SPEECH\",\"probability\": \"NEGLIGIBLE\"},{\"category\": \"HARM_CATEGORY_HARASSMENT\",\"probability\": \"NEGLIGIBLE\"},{\"category\": \"HARM_CATEGORY_DANGEROUS_CONTENT\",\"probability\": \"HIGH\",\"blocked\": true}],\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 24,\"totalTokenCount\": 24,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 24}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "content_filter",
+    "text": "",
+    "usage": {
+      "promptTokens": 24,
+      "completionTokens": 0,
+      "totalTokens": 24
+    }
+  }
+}

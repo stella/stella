@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "server-error",
+  "source": "synthetic",
+  "basis": "OpenRouter API errors reference: JSON { error: { code, message, metadata? } } bodies",
+  "model": "openai/gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"No allowed providers are available for the selected model.\",\"code\":503,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_cassette\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}

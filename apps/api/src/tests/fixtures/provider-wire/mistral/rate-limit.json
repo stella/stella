@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "mistral",
+  "scenario": "rate-limit",
+  "source": "synthetic",
+  "basis": "Mistral API error reference: {object:error, message, type, param, code} JSON bodies",
+  "model": "mistral-medium-latest",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions"
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"object\":\"error\",\"message\":\"Requests rate limit exceeded\",\"type\":\"rate_limited\",\"param\":null,\"code\":\"1300\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "quota_exhausted"
+  }
+}

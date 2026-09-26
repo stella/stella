@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "rate-limit",
+  "source": "synthetic",
+  "basis": "OpenRouter API errors reference: JSON { error: { code, message, metadata? } } bodies",
+  "model": "openai/gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"openai/gpt-6-sol is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"OpenAI\"}},\"user_id\":\"user_cassette\"}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "quota_exhausted"
+  }
+}

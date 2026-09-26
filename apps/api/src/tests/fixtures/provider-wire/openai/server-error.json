@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "provider": "openai",
+  "scenario": "server-error",
+  "source": "synthetic",
+  "basis": "OpenAI Responses API streaming reference: typed response.* server-sent events, strict function tools; error object shape",
+  "model": "gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/responses"
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\":{\"message\":\"The server had an error while processing your request. Sorry about that!\",\"type\":\"server_error\",\"param\":null,\"code\":null}}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "provider_unavailable"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "provider": "mistral",
+  "scenario": "malformed-chunk",
+  "source": "synthetic",
+  "basis": "Mistral chat completions streaming reference: data-only chat.completion.chunk SSE events, usage on the finishing chunk, then data: [DONE]",
+  "model": "mistral-medium-latest",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The cass\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ette pl\n\ndata: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ays.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"7c1e2b0f9a3d4e5f8b6a1c2d3e4f5a6b\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":24,\"total_tokens\":30,\"completion_tokens\":6}}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}
