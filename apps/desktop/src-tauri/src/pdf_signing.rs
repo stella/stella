@@ -47,7 +47,7 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-const DIALOG_HEIGHT: f64 = 390.0;
+const DIALOG_HEIGHT: f64 = 430.0;
 
 const DIGEST_ALGORITHM: &str = "SHA-256";
 const DIGEST_BYTES: usize = 32;
@@ -135,6 +135,8 @@ struct DialogIdentity<'a> {
 /// Everything the dialog renders. The session token is deliberately absent:
 /// it stays in Rust for the length of the flow.
 struct DialogContent<'a> {
+  /// The API asking for the signature, shown so the user sees who asks.
+  api_base_url: &'a str,
   document_name: &'a str,
   identities: &'a [SigningIdentity],
   state: DialogState,
@@ -277,6 +279,61 @@ fn api_kept_signature(status: reqwest::StatusCode) -> bool {
   status == reqwest::StatusCode::SERVICE_UNAVAILABLE
 }
 
+/// Whether `api_base_url` names a loopback host (`localhost`, 127.0.0.0/8,
+/// `::1`).
+fn is_loopback_api(api_base_url: &str) -> bool {
+  let Ok(parsed) = reqwest::Url::parse(api_base_url) else {
+    return false;
+  };
+  let Some(host) = parsed.host_str() else {
+    return false;
+  };
+  let host = host.trim_start_matches('[').trim_end_matches(']');
+  host.eq_ignore_ascii_case("localhost")
+    || host
+      .parse::<std::net::IpAddr>()
+      .is_ok_and(|address| address.is_loopback())
+}
+
+/// Whether an API origin may ask this desktop for a signature.
+///
+/// Stricter than opening a document: a signature is produced from whatever
+/// digest the API hands over, so a local process that merely listens on the
+/// development port must not be able to ask for one. Loopback APIs count
+/// only in development builds or once the user approved them explicitly as
+/// a self-hosted stella; everything else must be a built-in API or such an
+/// approved one.
+fn trusted_for_signing(
+  api_base_url: &str,
+  built_in: &std::collections::HashSet<String>,
+  approved_by_user: bool,
+  development_build: bool,
+) -> bool {
+  if approved_by_user {
+    return true;
+  }
+  if is_loopback_api(api_base_url) {
+    return development_build;
+  }
+  built_in.contains(api_base_url)
+}
+
+pub async fn api_trusted_for_signing(
+  manager: &Mutex<SessionManager>,
+  api_base_url: &str,
+) -> bool {
+  let approved_by_user = manager
+    .lock()
+    .await
+    .is_trusted_self_host_api_base_url(api_base_url);
+  trusted_for_signing(
+    api_base_url,
+    &config::resolve_trusted_api_base_urls(),
+    approved_by_user,
+    cfg!(debug_assertions),
+  )
+}
+
 /// Entry point from the deep-link handler.
 pub async fn redeem_and_sign(
   manager: Arc<Mutex<SessionManager>>,
@@ -301,12 +358,7 @@ pub async fn redeem_and_sign(
   let session_api_base_url =
     config::normalize_self_host_api_base_url(&redeemed.api_base_url)
       .map_err(|_| "Invalid PDF signing API URL.".to_string())?;
-  let trusted = {
-    let mgr = manager.lock().await;
-    config::resolve_trusted_api_base_urls().contains(&session_api_base_url)
-      || mgr.is_trusted_self_host_api_base_url(&session_api_base_url)
-  };
-  if !trusted {
+  if !api_trusted_for_signing(&manager, &session_api_base_url).await {
     return Err("PDF signing session names an untrusted API URL.".to_string());
   }
 
@@ -338,6 +390,7 @@ pub async fn redeem_and_sign(
   }
 
   let content = DialogContent {
+    api_base_url: &session.api_base_url,
     document_name: &redeemed.document_name,
     identities: &identities,
     state,
@@ -732,8 +785,9 @@ fn open_dialog(
   // strings of its own, so its wording rides along and it renders in the
   // language the rest of the app runs in.
   let hash = format!(
-    "state={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
+    "state={}&apiOrigin={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
     encode_json(&content.state)?,
+    percent_encode(content.api_base_url),
     percent_encode(content.document_name),
     content.version_number,
     percent_encode(content.workspace_name),
@@ -805,6 +859,52 @@ fn percent_encode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_release_build_does_not_let_a_local_api_ask_for_a_signature() {
+    let built_in: std::collections::HashSet<String> = [
+      "https://api.stll.app".to_string(),
+      "http://127.0.0.1:3001".to_string(),
+      "http://localhost:3001".to_string(),
+    ]
+    .into_iter()
+    .collect();
+
+    for local in [
+      "http://127.0.0.1:3001",
+      "http://localhost:3001",
+      "http://[::1]:3001",
+      "http://127.8.9.10:3001",
+    ] {
+      // Built in or not, a loopback API needs a development build...
+      assert!(
+        !trusted_for_signing(local, &built_in, false, false),
+        "{local}"
+      );
+      assert!(
+        trusted_for_signing(local, &built_in, false, true),
+        "{local}"
+      );
+      // ...or the user's explicit approval.
+      assert!(
+        trusted_for_signing(local, &built_in, true, false),
+        "{local}"
+      );
+    }
+
+    assert!(trusted_for_signing(
+      "https://api.stll.app",
+      &built_in,
+      false,
+      false
+    ));
+    assert!(!trusted_for_signing(
+      "https://evil.example",
+      &built_in,
+      false,
+      true
+    ));
+  }
 
   #[test]
   fn decodes_a_sha256_digest() {

@@ -65,6 +65,7 @@
     "pdfSignMatter": "ملف قانوني",
     "pdfSignNoIdentities": "لا تتوفر أي شهادة توقيع في سلسلة المفاتيح.",
     "pdfSignRetry": "إعادة المحاولة",
+    "pdfSignServer": "مطلوب من",
     "pdfSignSign": "توقيع",
     "pdfSignSigned": "تم التوقيع كإصدار {versionNumber}",
     "pdfSignSigning": "جارٍ التوقيع…",
