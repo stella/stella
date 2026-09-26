@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { isTimestampAuthorityUrlList } from "@/api/lib/pdf-signing/timestamp-authority-urls";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -200,10 +201,21 @@ export const envApiServerSchema = {
   GOTENBERG_PASSWORD: v.string(),
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
-   * RFC 3161 timestamp authority for PDF signing. Unset signs at PAdES B-B
-   * (no trusted time, no revocation data); set raises every signature to
-   * B-LT.
+   * RFC 3161 timestamp authorities for PDF signing, in preference order,
+   * separated by commas or whitespace. Signing falls back to the next one
+   * when an authority fails. Unset (with `PDF_SIGNING_TSA_URL` unset too)
+   * signs at PAdES B-B.
    */
+  PDF_SIGNING_TSA_URLS: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        isTimestampAuthorityUrlList,
+        "PDF_SIGNING_TSA_URLS must list http(s) URLs.",
+      ),
+    ),
+  ),
+  /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
   PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
 
   /**

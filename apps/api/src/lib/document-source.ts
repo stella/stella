@@ -41,6 +41,8 @@ export const documentSourceSchema = v.variant("kind", [
     certificateSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
     signingTime: v.pipe(v.string(), v.isoTimestamp()),
     level: v.picklist(["B-B", "B-T", "B-LT"]),
+    /** The authority whose trusted time the signature carries. */
+    timestampAuthorityUrl: v.nullable(v.pipe(v.string(), v.url())),
   }),
   v.strictObject({
     kind: v.literal("sharepoint"),

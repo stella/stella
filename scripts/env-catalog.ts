@@ -134,6 +134,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "POSTHOG_HOST",
   "POSTHOG_KEY",
   "PDF_SIGNING_TSA_URL",
+  "PDF_SIGNING_TSA_URLS",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -341,7 +342,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
   PDF_SIGNING_TSA_URL:
-    "RFC 3161 timestamp authority for PDF signing. Unset signs at PAdES B-B; set raises signatures to B-LT.",
+    "Single RFC 3161 timestamp authority for PDF signing, appended to PDF_SIGNING_TSA_URLS.",
+  PDF_SIGNING_TSA_URLS:
+    "RFC 3161 timestamp authorities for PDF signing in preference order, comma separated; the next one is tried when one fails. Unset signs at PAdES B-B.",
   PUBLIC_URL:
     "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
