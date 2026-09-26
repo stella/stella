@@ -177,7 +177,7 @@ describe("chat document-attachment capability", () => {
   // model/provider without wiring its document modality" into a test failure
   // rather than a latent crash: a new model defaults to not document-capable
   // (safe), and these properties pin that to the catalog.
-  test.each([...TANSTACK_AI_PROVIDERS])(
+  test.each(TANSTACK_AI_PROVIDERS)(
     "pins textual + PDF document capability for every offered %s model to the catalog",
     (provider) => {
       const textualCapable: readonly string[] =

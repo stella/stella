@@ -668,7 +668,7 @@ describe("environment doctor output", () => {
   // naming the dictionary they were built against, and a guard left behind
   // would keep the mode unreachable for no remaining reason. Driven by the
   // canonical list, so a mode added later cannot skip the doctor invariant.
-  test.each([...QUERY_EXPANSION_MODES])(
+  test.each(QUERY_EXPANSION_MODES)(
     "QUERY_EXPANSION_MODE=%p passes the runtime invariants",
     (mode) => {
       expect(

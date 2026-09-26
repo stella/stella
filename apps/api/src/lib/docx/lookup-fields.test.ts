@@ -1175,7 +1175,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     expect(lookupCalls).toBe(0);
   });
 
-  test.each([...BUSINESS_REGISTRY_SLUGS])(
+  test.each(BUSINESS_REGISTRY_SLUGS)(
     "resolves deployed %s without jurisdiction preferences",
     async (registry) => {
       let lookupCalls = 0;

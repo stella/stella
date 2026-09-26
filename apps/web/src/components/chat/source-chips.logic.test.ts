@@ -14,7 +14,7 @@ import {
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 
 describe("external source extraction from tool output", () => {
-  test.each([...BUSINESS_REGISTRY_SLUGS])(
+  test.each(BUSINESS_REGISTRY_SLUGS)(
     "preserves the company identity through nested source deduplication for %s",
     (registry) => {
       const sources: ExternalSourceEntry[] = [];
