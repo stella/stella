@@ -24,7 +24,7 @@ import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 import { getCenteredSearchMatchScrollTop } from "@/lib/search-match-navigation";
 
-export type PDFPageSearchMatch = {
+type PDFPageSearchMatch = {
   boxes: readonly PDFSearchBox[];
   matchIndex: number;
 };

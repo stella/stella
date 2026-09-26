@@ -385,7 +385,7 @@ export const templateDocxBufferOptions = (
 // both dedupe on one cache entry. Keyed on the stable template id (see the
 // `fillDiscover` key comment): the presigned URL and file name are runtime-only
 // context, never cache identity.
-export class TemplateDocumentFetchError extends TaggedError(
+class TemplateDocumentFetchError extends TaggedError(
   "TemplateDocumentFetchError",
 )<{
   message: string;
@@ -634,7 +634,7 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
 // every playbook; pickers that launch a playbook (review facet, files-table run
 // menu) need them all selectable rather than the first default page.
 export const PLAYBOOK_PICKER_LIMIT = 100;
-export const RECENT_PLAYBOOKS_LIMIT = 4;
+const RECENT_PLAYBOOKS_LIMIT = 4;
 
 export const playbooksOptions = (
   organizationId: string,

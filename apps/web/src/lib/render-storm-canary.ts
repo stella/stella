@@ -5,9 +5,9 @@
 
 export type RenderStormPhase = "mount" | "nested-update" | "update";
 
-export type RenderStormPhaseCounts = Record<RenderStormPhase, number>;
+type RenderStormPhaseCounts = Record<RenderStormPhase, number>;
 
-export const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
+const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
   mount: 0,
   "nested-update": 0,
   update: 0,
@@ -42,7 +42,7 @@ export const RENDER_STORM_SUSTAINED_WINDOWS_REQUIRED = 2;
 // The canary itself must not spam the console once a storm is underway:
 // one console.error per storm episode, then at most one more per this
 // interval for as long as the storm continues.
-export const RENDER_STORM_ERROR_RATE_LIMIT_MS = 10_000;
+const RENDER_STORM_ERROR_RATE_LIMIT_MS = 10_000;
 
 export type StormWindowResult = {
   consecutiveStormWindows: number;
@@ -83,7 +83,7 @@ export type RenderStormDetails = {
   regionCounts: readonly (readonly [region: string, commits: number])[];
 };
 
-export type RenderStormOnRender = (
+type RenderStormOnRender = (
   id: string,
   phase: RenderStormPhase,
   actualDuration: number,

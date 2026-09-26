@@ -7,7 +7,7 @@ import type { McpOAuthScope } from "@/lib/api-contract";
 // disclosure label here fails the build instead of silently skipping
 // disclosure. Shared by the consent screen and the connected-apps settings
 // card so both surfaces describe a scope identically.
-export const OAUTH_SCOPE_LABELS = {
+const OAUTH_SCOPE_LABELS = {
   "stella:search": "consent.scopeSearch",
   "stella:read": "consent.scopeRead",
   "stella:templates": "consent.scopeTemplates",
@@ -32,11 +32,11 @@ export const OAUTH_SCOPE_LABELS = {
   profile: "consent.scopeProfile",
 } as const satisfies Record<McpOAuthScope, TranslationKey>;
 
-export type OAuthScopeKey = keyof typeof OAUTH_SCOPE_LABELS;
+type OAuthScopeKey = keyof typeof OAUTH_SCOPE_LABELS;
 type OAuthScopeLabel = (typeof OAUTH_SCOPE_LABELS)[OAuthScopeKey];
 type OAuthScopeTranslator = (key: OAuthScopeLabel) => string;
 
-export const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
+const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
   scope in OAUTH_SCOPE_LABELS;
 
 export type OAuthScopeDisplayEntry =

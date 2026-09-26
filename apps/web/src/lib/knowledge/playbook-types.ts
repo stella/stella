@@ -21,13 +21,11 @@ import type {
 // payload stay in lockstep with it. Never hand-redefine the Position shape
 // here; derive from these instead.
 export type {
-  AskManual,
   DeterministicCheck,
   FallbackEntry,
   GradedPosition,
   IdealLanguage,
   Negotiation,
-  PlaybookScope,
   PlaybookTrigger,
   Position,
   PositionSeverity,
@@ -64,19 +62,17 @@ export type ExtractPosition = Extract<Position, { mode: "extract" }>;
 // How it should be, for one graded position: an authored tier ladder or the
 // passages of a reference document someone already negotiated. Grading
 // dispatches on `source`, and so does every editor below.
-export type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
+type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
 export type ReferenceStandard = Extract<
   PositionStandard,
   { source: "reference" }
 >;
 
 export type PositionTiers = TieredStandard["tiers"];
-export type GradedAskConfig = GradedPosition["ask"];
+type GradedAskConfig = GradedPosition["ask"];
 export type PositionAskContent = AskManual["content"];
 
-export type PlaybookListResponse = Awaited<
-  ReturnType<typeof api.playbooks.get>
->;
+type PlaybookListResponse = Awaited<ReturnType<typeof api.playbooks.get>>;
 
 type PlaybookListData = Exclude<
   NonNullable<Extract<PlaybookListResponse, { data: unknown }>["data"]>,
@@ -85,7 +81,7 @@ type PlaybookListData = Exclude<
 
 export type PlaybookListItem = PlaybookListData["items"][number];
 
-export type RecentPlaybookResponse = Awaited<
+type RecentPlaybookResponse = Awaited<
   ReturnType<typeof api.playbooks.recent.get>
 >;
 
@@ -96,7 +92,7 @@ type RecentPlaybookData = Exclude<
 
 export type RecentPlaybookItem = RecentPlaybookData["items"][number];
 
-export type PlaybookVersionsResponse = Awaited<
+type PlaybookVersionsResponse = Awaited<
   ReturnType<ReturnType<typeof api.playbooks>["versions"]["get"]>
 >;
 
@@ -127,7 +123,7 @@ const emptyTiers = (): PositionTiers => ({
   notAcceptable: { rules: [] },
 });
 
-export const emptyTieredStandard = (): PositionStandard => ({
+const emptyTieredStandard = (): PositionStandard => ({
   source: "tiers",
   tiers: emptyTiers(),
 });

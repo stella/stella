@@ -87,7 +87,7 @@ export const useDevStore = create<State & Actions>()(
 /** Artificial per-request delay (ms) injected into every API fetch while
  *  the "Simulate slow load" dev toggle is on, so loading screens stay
  *  visible long enough to inspect and restyle. */
-export const SIMULATE_SLOW_LOAD_DELAY_MS = 3000;
+const SIMULATE_SLOW_LOAD_DELAY_MS = 3000;
 
 /** Current artificial API delay, read outside React for the fetch layer.
  *  Returns 0 in production builds and during SSR so the delay only ever

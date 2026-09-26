@@ -6,7 +6,7 @@ import { toAPIError } from "@/lib/errors/api";
 
 // The binding catalog is the same static taxonomy for every org, so it carries
 // no params and a single global cache entry.
-export const bindingCatalogKeys = {
+const bindingCatalogKeys = {
   all: () => ["binding-catalog"] as const,
 };
 

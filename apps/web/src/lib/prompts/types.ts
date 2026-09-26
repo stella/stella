@@ -14,7 +14,7 @@
  * The chip + slash-menu components consume this shape directly;
  * the back end is just one source among several.
  */
-export const PROMPT_SCOPES = ["team", "private"] as const;
+const PROMPT_SCOPES = ["team", "private"] as const;
 
 export type PromptScope = (typeof PROMPT_SCOPES)[number];
 

@@ -25,7 +25,6 @@ export {
   type MatterActivityCategory,
   type MatterActivityFilters,
   workspacesKeys,
-  toMatterActivityQuery,
 } from "@/lib/workspaces/queries.logic";
 
 type WorkspaceActivityOptions = {

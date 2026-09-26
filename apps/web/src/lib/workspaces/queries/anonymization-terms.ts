@@ -5,7 +5,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { workspaceAnonymizationTermsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-export const anonymizationTermsKeys = {
+const anonymizationTermsKeys = {
   all: workspaceAnonymizationTermsQueryRoot,
 };
 

@@ -194,7 +194,7 @@ export const officeCitationOptions = ({
     retry: shouldRetryAPIRequest,
   });
 
-export const emailAttachmentPreviewUrl = ({
+const emailAttachmentPreviewUrl = ({
   attachmentId,
   fieldId,
   workspaceId,
@@ -286,7 +286,7 @@ export const saveEmailAttachment = async ({
  * deliberately lazy: it runs when the metadata panel is on screen, and the
  * answer then stays cached for the session.
  */
-export const readDocumentProperties = async ({
+const readDocumentProperties = async ({
   workspaceId,
   fieldId,
   signal,

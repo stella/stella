@@ -47,7 +47,7 @@ export type ShortcutBinding =
  * includes keys that require ICU arguments) lets `t(key)` resolve to the
  * no-values overload, and keeps the registry's type-instantiation cost small.
  */
-export type ShortcutCategoryKey = Extract<
+type ShortcutCategoryKey = Extract<
   TranslationKey,
   | "navigation.shortcutCategories.navigation"
   | "navigation.shortcutCategories.review"

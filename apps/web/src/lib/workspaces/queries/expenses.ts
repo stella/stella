@@ -31,7 +31,7 @@ type ExpensesListKey = {
   billable?: boolean | undefined;
 };
 
-export const expensesKeys = {
+const expensesKeys = {
   all: expensesQueryRoot,
   list: (workspaceId: string, key: ExpensesListKey) => [
     ...expensesKeys.all(workspaceId),
