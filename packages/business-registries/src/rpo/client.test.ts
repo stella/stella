@@ -130,6 +130,26 @@ describe("lookupByIco", () => {
     expect(result?.legalStatuses).toContain("Zaniknutá spoločnosť");
   });
 
+  test("keeps the record's name and seat when the search row has none", async () => {
+    const { results } = await readFixture<RpoRawSearchResponse>(
+      "search-by-ico-eset.json",
+    );
+    const row = results.at(0);
+    if (!row) {
+      throw new Error("ESET search fixture must hold a row");
+    }
+    const bare = { ...row, fullNames: [], addresses: [] };
+    const entity = await readFixture<unknown>("entity-eset.json");
+    restore = installFetchStub(async (url) =>
+      jsonResponse(isEntityRequest(url) ? entity : { results: [bare] }),
+    );
+
+    const result = (await lookupByIco("31333532")).unwrap();
+
+    expect(result?.name).toBe("ESET, spol. s r.o.");
+    expect(result?.address?.street).toBe("Einsteinova 24");
+  });
+
   test("prefers the record still in existence when an IČO has several", async () => {
     const { results } = await readFixture<RpoRawSearchResponse>(
       "search-by-ico-eset.json",

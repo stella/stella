@@ -217,6 +217,9 @@ const pickRecordForIco = (
     })
     .at(0) ?? null;
 
+const nonEmpty = <T>(records: T[] | undefined): T[] | undefined =>
+  records !== undefined && records.length > 0 ? records : undefined;
+
 export type LookupOptions = RegistryClientOptions & {
   /**
    * `historical` includes every superseded record (former statutory body
@@ -279,8 +282,8 @@ export const lookupByIco = async (
         current
           ? {
               ...record,
-              fullNames: hit.fullNames ?? record.fullNames ?? [],
-              addresses: hit.addresses ?? record.addresses ?? [],
+              fullNames: nonEmpty(hit.fullNames) ?? record.fullNames ?? [],
+              addresses: nonEmpty(hit.addresses) ?? record.addresses ?? [],
             }
           : record,
       ),
