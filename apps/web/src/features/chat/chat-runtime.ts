@@ -14,6 +14,7 @@ import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
@@ -25,11 +26,11 @@ import type {
 import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
-  sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -41,7 +42,7 @@ import type {
 } from "@/lib/chat-edit-mode";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -78,12 +79,22 @@ export type ChatRouteHandoffStart = {
   stream: Promise<void>;
 };
 
+/**
+ * The composer's Stop, as the server hears it: nothing asked, a stop the
+ * server has not answered yet, or one it refused (Stop stays available).
+ */
+type ChatStopState =
+  | { status: "idle" }
+  | { status: "pending"; turnId: SafeId<"chatTurn"> }
+  | { error: Error; status: "failed"; turnId: SafeId<"chatTurn"> };
+
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
+  stop: ChatStopState;
   turnAbandoned: boolean;
 };
 
@@ -147,11 +158,16 @@ export const sendThreadChatMessage = async (
 const getChatApiPath = () => apiUrl("/chat");
 
 type CreateChatRuntimeProps = {
+  /** The thread's turn not yet settled when the page loaded, which Stop
+   *  cancels until a request names a newer one. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   context: ChatThreadOptionsContext | undefined;
   initialMessages: PersistedChatMessage[];
   key: ChatThreadKey;
   onError: (error: Error) => void;
   onFinish: () => void;
+  /** The stopped turn is settled on the server: reload the thread from it. */
+  onTurnStopped: () => void;
 };
 
 type ActiveToolResultOperation = {
@@ -177,6 +193,44 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
   }
 
   return false;
+};
+
+/** How often, and how many times, a Stop the server accepted but has not
+ *  settled yet (its run lives on another instance) asks again. */
+const STOP_SETTLE_POLL_MS = 500;
+const STOP_SETTLE_POLL_ATTEMPTS = 20;
+
+const waitMs = async (ms: number): Promise<void> =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** Whether the stopped turn still runs (its owner settles it soon) or is
+ *  settled. */
+type StopAnswer = "running" | "settled";
+
+/** Ask the server to stop `turnId`: its answer is the turn as it stands. */
+const requestChatTurnStop = async ({
+  threadId,
+  turnId,
+}: {
+  threadId: string;
+  turnId: SafeId<"chatTurn">;
+}): Promise<Result<StopAnswer, Error>> => {
+  const sent = await Result.tryPromise(async () => {
+    const { data, error } = await api.chat
+      .threads({ threadId: toSafeId<"chatThread">(threadId) })
+      .turns({ turnId })
+      .cancel.post();
+    if (error) {
+      return Result.err(toAPIError(error));
+    }
+    const answer = data.turn.status === "running" ? "running" : "settled";
+    return Result.ok(answer);
+  });
+  return Result.isError(sent)
+    ? Result.err(toError(sent.error.cause))
+    : sent.value;
 };
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
@@ -206,11 +260,13 @@ const hasUserMessage = (
   );
 
 export const createChatRuntime = ({
+  activeTurnId,
   context,
   initialMessages,
   key,
   onError,
   onFinish,
+  onTurnStopped,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
@@ -221,7 +277,25 @@ export const createChatRuntime = ({
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
+    stop: { status: "idle" },
     turnAbandoned: false,
+  };
+  /** The server turn the latest request runs; null from a new message until
+   *  the server names its turn. */
+  let turnId = activeTurnId;
+  /** The turn the user last stopped. Its continuations never leave the page:
+   *  the server settles it, and a result for it would only be refused. */
+  let stoppedTurnId: SafeId<"chatTurn"> | null = null;
+  const isStoppedTurn = (): boolean =>
+    stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** A new message starts a new turn: until the server names it, Stop can
+   *  only close the request, and a stop of the previous turn is over. */
+  const startTurn = (): void => {
+    turnId = null;
+    stoppedTurnId = null;
+    if (snapshot.stop.status !== "idle") {
+      setSnapshot({ stop: { status: "idle" } });
+    }
   };
 
   const emit = () => {
@@ -305,10 +379,21 @@ export const createChatRuntime = ({
     }
   };
 
+  const turnObservingFetchClient = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await chatFetchClient(input, init);
+      const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
+      if (servedTurnId !== null) {
+        turnId = toSafeId<"chatTurn">(servedTurnId);
+      }
+      return response;
+    },
+    { preconnect: () => undefined },
+  ) satisfies typeof globalThis.fetch;
   const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    fetchClient: chatFetchClient,
+    fetchClient: turnObservingFetchClient,
   });
   const connection = {
     connect: (messages, data, abortSignal, runContext) => {
@@ -336,20 +421,17 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
-  /** Set by `stop()` until the next request starts: the stopped turn's
-   *  running tool calls stay ended. */
-  let stoppedTurnOpen = false;
-  const settleStoppedTurn = (messages: PersistedChatMessage[]) => {
-    const sanitized = sanitizeRunningToolCalls(messages, "cancel");
-    client.setMessagesManually(sanitized);
-    setSnapshot({ messages: sanitized });
-  };
-
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
     connection,
     onError: (error) => {
+      // A request of a turn the user stopped fails as the stop's own effect
+      // (a result the server no longer owns, a request closed): the server
+      // decides how the turn ends, and the page reloads that.
+      if (isStoppedTurn()) {
+        return;
+      }
       if (
         activeToolResultOperation !== undefined &&
         isRejectedChatContinuation(error)
@@ -359,33 +441,23 @@ export const createChatRuntime = ({
       onError(error);
       setSnapshot({ error });
     },
-    onErrorChange: (error) => setSnapshot({ error }),
+    onErrorChange: (error) => {
+      if (error === undefined || !isStoppedTurn()) {
+        setSnapshot({ error });
+      }
+    },
     onFinish: () => {
       onFinish();
     },
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
-      if (isLoading) {
-        stoppedTurnOpen = false;
-      }
       setSnapshot({
         isLoading,
         ...(isLoading ? { turnAbandoned: false } : {}),
       });
     },
     onMessagesChange: (messages) => {
-      const persisted = toPersistedChatMessages(messages);
-      // A stopped run's chunks that TanStack had already read still reach
-      // its messages after `stop()`, and can put a tool call back into a
-      // running state; the stopped turn keeps its calls ended.
-      if (
-        stoppedTurnOpen &&
-        hasRunningToolCallInLatestAssistantMessage({ messages: persisted })
-      ) {
-        settleStoppedTurn(persisted);
-        return;
-      }
-      setSnapshot({ messages: persisted });
+      setSnapshot({ messages: toPersistedChatMessages(messages) });
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
@@ -505,6 +577,7 @@ export const createChatRuntime = ({
       detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
       throw captureRuntimeError(new ChatMessageStartError(message.id));
     }
+    startTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -568,9 +641,62 @@ export const createChatRuntime = ({
     });
   };
 
+  /**
+   * The server's answer to a Stop of `stoppedTurn`. Until the turn settles the
+   * page keeps its request open: the server ends a run it can reach, and the
+   * request then closes by itself. An answer about a turn the page has since
+   * left is ignored, so it never stops or reloads a newer turn.
+   */
+  const settleStop = async (stoppedTurn: SafeId<"chatTurn">) => {
+    let answer = await requestChatTurnStop({
+      threadId: key.threadId,
+      turnId: stoppedTurn,
+    });
+    const isCurrent = () =>
+      turnId === stoppedTurn &&
+      snapshot.stop.status === "pending" &&
+      snapshot.stop.turnId === stoppedTurn;
+    if (!isCurrent()) {
+      return;
+    }
+    if (Result.isError(answer)) {
+      stoppedTurnId = null;
+      setSnapshot({
+        stop: { error: answer.error, status: "failed", turnId: stoppedTurn },
+        turnAbandoned: false,
+      });
+      return;
+    }
+    // The server holds the stop, so closing the request can no longer turn it
+    // into a dropped connection. A run on another instance settles once it
+    // sees the stop; the page reloads after that.
+    client.stop();
+    for (
+      let attempt = 0;
+      Result.isOk(answer) &&
+      answer.value === "running" &&
+      attempt < STOP_SETTLE_POLL_ATTEMPTS;
+      attempt += 1
+    ) {
+      await waitMs(STOP_SETTLE_POLL_MS);
+      answer = await requestChatTurnStop({
+        threadId: key.threadId,
+        turnId: stoppedTurn,
+      });
+    }
+    if (!isCurrent()) {
+      return;
+    }
+    setSnapshot({ stop: { status: "idle" } });
+    onTurnStopped();
+  };
+
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
     resolveToolApproval: async (response, options) => {
+      if (isStoppedTurn()) {
+        return;
+      }
       const pending = approvalAnswers.get(response.id);
       if (pending !== undefined) {
         await pending;
@@ -593,6 +719,9 @@ export const createChatRuntime = ({
       }
     },
     addToolResult: async (result, options) => {
+      if (isStoppedTurn()) {
+        return;
+      }
       await enqueueToolResult(async () => {
         const messagesBeforeResult = snapshot.messages;
         const errorBeforeResult = snapshot.error;
@@ -643,6 +772,7 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
+      startTurn();
       await withBody(
         {
           body: {
@@ -675,25 +805,31 @@ export const createChatRuntime = ({
         hasRunningToolCallInLatestAssistantMessage({
           messages: snapshot.messages,
         });
-      client.stop();
-      stoppedTurnOpen = true;
-      // `client.stop()` aborts the live request but never rewrites message
-      // parts, so a tool-call part caught mid-run stays in a running state and
-      // keeps `hasRunningToolCallInLatestAssistantMessage` — and thus
-      // `isGenerating` — stuck true, wedging the composer on Stop/spinner with
-      // the tool card spinning forever. When the aborted turn had a running
-      // tool call, finalize it the same way the hydration path does so the
-      // turn actually ends.
+      if (!turnWasActive) {
+        client.stop();
+        return;
+      }
+      // Shown stopped at once. The server decides how the turn ends, and the
+      // thread is reloaded from it once it has: a local rewrite of the
+      // stopped parts would differ from what a reload shows.
+      setSnapshot({ turnAbandoned: true });
+      const stoppedTurn = turnId;
+      if (stoppedTurn === null) {
+        // The server has not named the turn yet, so nothing has streamed:
+        // closing the request is all that can stop it.
+        client.stop();
+        onTurnStopped();
+        return;
+      }
       if (
-        hasRunningToolCallInLatestAssistantMessage({
-          messages: snapshot.messages,
-        })
+        snapshot.stop.status === "pending" &&
+        snapshot.stop.turnId === stoppedTurn
       ) {
-        settleStoppedTurn(snapshot.messages);
+        return;
       }
-      if (turnWasActive) {
-        setSnapshot({ turnAbandoned: true });
-      }
+      stoppedTurnId = stoppedTurn;
+      setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
+      detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
     subscribe: (listener) => {
       listeners.add(listener);

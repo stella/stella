@@ -21,8 +21,10 @@ import {
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   findLiveViewViolations,
@@ -33,6 +35,7 @@ import type { DeliveredInterrupt } from "@/api/tests/helpers/chat-live-reload-in
 import { relayLiveResponse } from "@/api/tests/helpers/chat-live-response";
 import {
   deliveredInterrupts,
+  loadReloadPage,
   loadReloadView,
   readClientStreamChunks,
 } from "@/api/tests/helpers/chat-live-view";
@@ -101,15 +104,16 @@ export type ApprovalCall = Extract<ChatPart, { type: "tool-call" }> & {
 /** A thread's first message page, as the messages endpoint serves it. */
 export type RecordedPage = Pick<
   ChatMessagePage,
-  "lastActivityAt" | "olderCursor"
+  "activeTurnId" | "lastActivityAt" | "olderCursor"
 > & { messages: unknown[] };
 
 /** One request a page sent on a recorded thread, as the route answered it. */
 export type RecordedExchange = {
-  /** Whether the page read the response to its end, the connection closed
-   *  first (the page stopped, or the connection dropped), or no response
-   *  came at all (the process serving it died). */
-  ended: "complete" | "connection-lost" | "disconnected";
+  /** Whether the page read the response to its end, the server ended it
+   *  once the page's Stop reached the server, the connection closed first
+   *  (the page closed it, or it dropped), or no response came at all (the
+   *  process serving it died). */
+  ended: "complete" | "connection-lost" | "disconnected" | "stopped";
   /** The thread's first message page once the request had settled. */
   page: RecordedPage;
   /** The JSON body the page posted. */
@@ -119,12 +123,16 @@ export type RecordedExchange = {
 };
 
 const CHAT_ROUTE_PATH = "/v1/chat";
+/** The Stop route: `/v1/chat/threads/:threadId/turns/:turnId/cancel`. */
+const CHAT_TURN_CANCEL_PATH =
+  /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
 const MAX_BARRIER_POLLS = 2000;
 /** The checks a hand-built send answers for: the stored thread's. */
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedTurnOutcome,
   CHAT_ORACLE.persistedTurnSettles,
 ]);
 
@@ -133,15 +141,16 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
   message: string;
 }> {}
 
-/** The HTTP answer the route gives a refused request, as the browser sees it. */
-const refusalResponse = (rejection: unknown): Response => {
+/** The HTTP answer a route's status response makes (a refusal, or a Stop's
+ *  answer), as the browser sees it. */
+const statusResponse = (answer: unknown): Response => {
   const status: unknown =
-    typeof rejection === "object" && rejection !== null
-      ? Reflect.get(rejection, "code")
+    typeof answer === "object" && answer !== null
+      ? Reflect.get(answer, "code")
       : undefined;
   const body: unknown =
-    typeof rejection === "object" && rejection !== null
-      ? Reflect.get(rejection, "response")
+    typeof answer === "object" && answer !== null
+      ? Reflect.get(answer, "response")
       : undefined;
   return new Response(JSON.stringify(body ?? { message: "Refused" }), {
     headers: { "Content-Type": "application/json" },
@@ -324,18 +333,61 @@ export const createApprovalHarness = ({
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
     await loadReloadView({ safeDb, threadId, userId: ids.userA1 });
+  const reloadPage = async (threadId: SafeId<"chatThread">) =>
+    await loadReloadPage({ safeDb, threadId, userId: ids.userA1 });
+
+  type CancelTurnCtx = Parameters<typeof cancelTurn.handler>[0];
+
+  /** The Stop route for a web client: the real handler, answered as the
+   *  route answers it. */
+  const postCancelTurn = async ({
+    threadId,
+    turnId,
+  }: {
+    threadId: string;
+    turnId: string;
+  }): Promise<Response> => {
+    const set = { headers: {}, status: 200 };
+    const answer: unknown = await cancelTurn.handler(
+      asTestRaw<CancelTurnCtx>({
+        memberRole: { role: "owner" },
+        params: {
+          threadId: toSafeId<"chatThread">(threadId),
+          turnId: toSafeId<"chatTurn">(turnId),
+        },
+        request: new Request(
+          `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
+          { method: "POST" },
+        ),
+        route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+        safeDb,
+        session: { activeOrganizationId: ids.orgA },
+        set,
+        user: { id: ids.userA1 },
+      }),
+    );
+    // A refusal is a status response; an answer is the body, with the status
+    // the handler set.
+    return typeof answer === "object" && answer !== null && "turn" in answer
+      ? Response.json(answer, { status: set.status })
+      : statusResponse(answer);
+  };
 
   const findPersistedViolations = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> => {
-    const { unownedPendingInteractions, unsettledToolCalls } =
-      await findThreadInvariantViolations({ db: testDb, threadId });
+    const {
+      turnOutcomeMismatches,
+      unownedPendingInteractions,
+      unsettledToolCalls,
+    } = await findThreadInvariantViolations({ db: testDb, threadId });
     return [
       ...violationsOf(
         CHAT_ORACLE.persistedPendingOwned,
         unownedPendingInteractions,
       ),
       ...violationsOf(CHAT_ORACLE.persistedCallsSettled, unsettledToolCalls),
+      ...violationsOf(CHAT_ORACLE.persistedTurnOutcome, turnOutcomeMismatches),
     ];
   };
 
@@ -415,6 +467,9 @@ export const createApprovalHarness = ({
   const liveThreads = new Set<string>();
   /** Per thread: drops the connection of the response still streaming. */
   const openConnections = new Map<string, () => void>();
+  /** Threads whose streaming response the page has asked the server to
+   *  stop. */
+  const stoppingThreads = new Set<string>();
   let inFlight = 0;
 
   /** Threads whose next web request is served by a process that then dies. */
@@ -432,7 +487,7 @@ export const createApprovalHarness = ({
     // The dying process never sees the page go away, so no signal reaches it.
     const result = await sendMessage.handler(contextFromBody(body));
     if (!(result instanceof Response && result.ok)) {
-      return refusalResponse(result);
+      return statusResponse(result);
     }
     // Reading the stream is what runs the turn; it stops at the stall.
     void drainResponse(result);
@@ -548,7 +603,13 @@ export const createApprovalHarness = ({
       const { ending, text } = await live.ended;
       signal?.removeEventListener("abort", onAbort);
       openConnections.delete(raw.threadId);
-      await afterResponse({ endRecord, ended: ending, raw, text });
+      const stopped = stoppingThreads.delete(raw.threadId);
+      await afterResponse({
+        endRecord,
+        ended: ending === "complete" && stopped ? "stopped" : ending,
+        raw,
+        text,
+      });
     };
     const done = settleResponse();
     return {
@@ -564,7 +625,7 @@ export const createApprovalHarness = ({
         { refused: Bun.inspect(rejection) },
       ]),
     );
-    const response = refusalResponse(rejection);
+    const response = statusResponse(rejection);
     await endRecord({
       ended: "complete",
       response: {
@@ -657,6 +718,25 @@ export const createApprovalHarness = ({
     init?: RequestInit,
   ): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);
+    const cancel = CHAT_TURN_CANCEL_PATH.exec(url.pathname)?.groups;
+    if (
+      cancel?.["threadId"] !== undefined &&
+      cancel["turnId"] !== undefined &&
+      init?.method === "POST"
+    ) {
+      if (openConnections.has(cancel["threadId"])) {
+        stoppingThreads.add(cancel["threadId"]);
+      }
+      inFlight += 1;
+      try {
+        return await postCancelTurn({
+          threadId: cancel["threadId"],
+          turnId: cancel["turnId"],
+        });
+      } finally {
+        inFlight -= 1;
+      }
+    }
     if (url.pathname !== CHAT_ROUTE_PATH || init?.method !== "POST") {
       return await originalFetch(input, init);
     }
@@ -689,7 +769,8 @@ export const createApprovalHarness = ({
     delivered.delete(threadId);
     return await createWebChatClient({
       inFlight: () => inFlight,
-      initialMessages: await reloadView(threadId),
+      page: await reloadPage(threadId),
+      reload: async () => await reloadPage(threadId),
       threadId,
     });
   };

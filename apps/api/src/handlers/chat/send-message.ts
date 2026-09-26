@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
@@ -36,6 +37,7 @@ import {
   persistFailedChatTurn,
   persistInterruptedChatTurn,
   persistMessage,
+  persistStoppedChatTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -80,7 +82,11 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  KEEPS_PARTIAL_TOOL_INPUT,
+  settleHistoryForRun,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import {
@@ -274,7 +280,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
-  permissions: { chat: ["create"] },
+  permissions: CHAT_TURN_PERMISSIONS,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
   requiresUsage: { actionType: "chat", laneRouting: true },
@@ -449,6 +455,11 @@ class ChatSendLifecycle {
     };
   }
 
+  /** Whether this send still holds a turn it has to settle. */
+  ownsTurn(): boolean {
+    return this.claimedTurn.status !== "unclaimed";
+  }
+
   handOffConnectors(loaded: boolean): void {
     this.connectorsHandedOff = loaded;
   }
@@ -487,6 +498,26 @@ class ChatSendLifecycle {
       return;
     }
     this.claimedTurn = { status: "unclaimed" };
+  }
+
+  /** The user stopped the turn before its provider call started. */
+  async stopCurrentTurn() {
+    if (this.claimedTurn.status === "unclaimed") {
+      return panic("Cannot stop a chat turn without durable ownership");
+    }
+    const settlementResult = await persistStoppedChatTurn({
+      execution: this.claimedTurn.execution,
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+      recordAuditEvent: this.options.recordAuditEvent,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+    });
+    if (Result.isOk(settlementResult)) {
+      this.claimedTurn = { status: "unclaimed" };
+    }
+    return settlementResult;
   }
 
   async interruptCurrentTurn() {
@@ -862,6 +893,7 @@ const acceptIncomingTurn = async ({
     if (turnExecution === null) {
       return Result.err(
         new HandlerError({
+          code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
           status: 409,
           message: "Chat turn has no durable execution owner",
         }),
@@ -2181,11 +2213,34 @@ export const createSendMessage = (
                     cause: leaseRenewal.error,
                   });
                 }
-                if (!leaseRenewal.value) {
-                  throw new HandlerError({
-                    status: 409,
-                    message: "Chat turn lost its durable execution owner",
-                  });
+                switch (leaseRenewal.value) {
+                  case "owned":
+                    break;
+                  case "stop-requested": {
+                    // The user stopped the turn during preflight: it ends
+                    // here, before any provider call.
+                    const stopped = await lifecycle.stopCurrentTurn();
+                    if (Result.isError(stopped)) {
+                      throw new HandlerError({
+                        status: 500,
+                        message: "Failed to store the stopped chat turn",
+                        cause: stopped.error,
+                      });
+                    }
+                    throw new HandlerError({
+                      code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+                      status: 409,
+                      message: "Chat turn was stopped",
+                    });
+                  }
+                  case "lost":
+                    throw new HandlerError({
+                      status: 409,
+                      message: "Chat turn lost its durable execution owner",
+                    });
+                  default:
+                    leaseRenewal.value satisfies never;
+                    panic(`Unhandled standing: ${String(leaseRenewal.value)}`);
                 }
 
                 // Snapshot what the registry has observed before streaming.
@@ -2198,6 +2253,7 @@ export const createSendMessage = (
 
                 const chatResponse = await dependencies.streamResponse({
                   abortSignal: createMeteredAIAbortSignal(),
+                  execution: turnExecution,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -2209,7 +2265,7 @@ export const createSendMessage = (
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
                   onFinish: async ({ outcome, responseMessage }) => {
                     const validatedToolParts = validateToolCallParts({
-                      allowPartialInput: outcome.type === "interrupted",
+                      allowPartialInput: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
                       message: responseMessage,
                       tools: streamingTools,
                     });
@@ -2282,14 +2338,15 @@ export const createSendMessage = (
                         cause: persistResult.error,
                       });
                     } else {
-                      const { persistencePlan } = persistResult.value;
+                      const { outcome: storedOutcome, persistencePlan } =
+                        persistResult.value;
                       const messagesAfterAssistantPersist =
                         applyAssistantPersistencePlan({
                           messages: latestMessagePlan.messages,
                           persistencePlan,
                         });
                       if (
-                        outcome.type === "completed" &&
+                        storedOutcome.type === "completed" &&
                         messagesAfterAssistantPersist !== null &&
                         body.sendMode !== CHAT_SEND_MODE.anonymized
                       ) {
@@ -2305,7 +2362,7 @@ export const createSendMessage = (
                       }
 
                       if (
-                        outcome.type === "completed" &&
+                        storedOutcome.type === "completed" &&
                         thread.type === "created" &&
                         body.sendMode !== CHAT_SEND_MODE.anonymized
                       ) {
@@ -2390,7 +2447,10 @@ export const createSendMessage = (
                 if (externalMcpTools !== undefined) {
                   await externalMcpTools.close();
                 }
-                await lifecycle.failCurrentTurn("internal", true);
+                // A stop settled the turn already.
+                if (lifecycle.ownsTurn()) {
+                  await lifecycle.failCurrentTurn("internal", true);
+                }
                 throw error;
               }
             },

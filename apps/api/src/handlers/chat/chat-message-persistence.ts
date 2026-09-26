@@ -15,9 +15,12 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
+  cancelAwaitingAssistantMessage,
+  ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
   settleChatTurnOnTx,
+  USER_STOP_OUTCOME,
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type {
@@ -112,13 +115,24 @@ const applyChatTurnWritesOnTx = async ({
   if (accepted?.type === "refused") {
     panic("Chat turn acceptance lost its reserved thread slot");
   }
-  if (
-    settlement !== undefined &&
-    !(await settleChatTurnOnTx({ ...settlement, tx }))
-  ) {
-    panic("Chat turn settlement lost execution ownership");
+  const writes = { superseded: accepted?.superseded };
+  if (settlement === undefined) {
+    return writes;
   }
-  return { superseded: accepted?.superseded };
+  const settled = await settleChatTurnOnTx({ ...settlement, tx });
+  switch (settled) {
+    case "settled":
+      return writes;
+    case "stop-requested":
+      throw new ChatTurnStopRequestedError({
+        message: "The user stopped the chat turn before it settled",
+      });
+    case "not-owned":
+      return panic("Chat turn settlement lost execution ownership");
+    default:
+      settled satisfies never;
+      return panic(`Unhandled settlement: ${String(settled)}`);
+  }
 };
 
 const reserveChatTurnAcceptanceOnTx = async ({
@@ -372,6 +386,73 @@ const settleTerminalAssistantMessage = (
     turnOutcome: outcome,
   });
 
+type TerminalSettlement = {
+  message: PersistableTerminalAssistantMessage;
+  outcome: ChatTurnOutcome;
+};
+
+/**
+ * What a turn stores once it ends. Normally its own outcome; when the user's
+ * stop committed first, the stop, with the message ended as a stop ends it:
+ * a turn that would have waited on the user ends like an awaiting turn the
+ * user stopped (`cancelAwaitingAssistantMessage`), any other keeps what it
+ * produced under the stop's settlement rules.
+ */
+const terminalSettlement = ({
+  outcome,
+  owningAssistantMessage,
+  responseMessage,
+  stopped,
+}: TerminalAssistantMessageProps & {
+  stopped: boolean;
+}): TerminalSettlement => {
+  if (!stopped) {
+    return {
+      message: settleTerminalAssistantMessage(
+        toTerminalAssistantMessage({
+          outcome,
+          owningAssistantMessage,
+          responseMessage,
+        }),
+        outcome,
+      ),
+      outcome,
+    };
+  }
+  const produced = toTerminalAssistantMessage({
+    outcome: USER_STOP_OUTCOME,
+    owningAssistantMessage,
+    responseMessage,
+  });
+  return {
+    message:
+      outcome.type === "awaiting-user"
+        ? cancelAwaitingAssistantMessage({
+            message: produced,
+            reason: USER_STOP_OUTCOME.reason,
+          })
+        : settleTerminalAssistantMessage(produced, USER_STOP_OUTCOME),
+    outcome: USER_STOP_OUTCOME,
+  };
+};
+
+const isStopRequested = (error: { cause?: unknown }): boolean =>
+  ChatTurnStopRequestedError.is(error.cause);
+
+/**
+ * Settle once as `outcome`; if the user's stop committed first, settle again
+ * as the stop. The stop request never disappears once recorded, so the
+ * second attempt cannot be refused for the same reason.
+ */
+const settleHonouringStop = async <T, E extends { cause?: unknown }>(
+  settle: (stopped: boolean) => Promise<Result<T, E>>,
+): Promise<Result<T, E>> => {
+  const settled = await settle(false);
+  return Result.isError(settled) && isStopRequested(settled.error)
+    ? await settle(true)
+    : settled;
+};
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -442,53 +523,58 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
-  const producedMessage = toTerminalAssistantMessage({
-    outcome,
-    owningAssistantMessage,
-    responseMessage,
-  });
-  const assistantMessage = settleTerminalAssistantMessage(
-    producedMessage,
-    outcome,
-  );
-  const persistencePlan = planAssistantFinishPersistence({
-    existingIds,
-    finishOutcome: outcome,
-    message: assistantMessage,
-  });
-
-  // A terminal stream always supplies an assistant message. Silently
-  // accepting `none` would acknowledge the stream while leaving its durable
-  // turn running forever.
-  if (persistencePlan.type === "none") {
-    panic("Assistant turn produced no persistence plan");
-  }
-
-  const persistResult = await persistMessage({
-    acceptedSendMode,
-    dataScopeExpansion,
-    persistencePlan,
-    recordAuditEvent,
-    safeDb,
-    threadId,
-    turnSettlement: {
-      assistantMessageId: assistantMessage.id,
-      execution,
+  const persistResult = await settleHonouringStop(async (stopped) => {
+    const settlement = terminalSettlement({
       outcome,
-    },
-    userId,
-    workspaceId,
-    indexThread,
+      owningAssistantMessage,
+      responseMessage,
+      stopped,
+    });
+    const persistencePlan = planAssistantFinishPersistence({
+      existingIds,
+      finishOutcome: settlement.outcome,
+      message: settlement.message,
+    });
+
+    // A terminal stream always supplies an assistant message. Silently
+    // accepting `none` would acknowledge the stream while leaving its durable
+    // turn running forever.
+    if (persistencePlan.type === "none") {
+      panic("Assistant turn produced no persistence plan");
+    }
+
+    const persisted = await persistMessage({
+      acceptedSendMode,
+      dataScopeExpansion,
+      persistencePlan,
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      turnSettlement: {
+        assistantMessageId: settlement.message.id,
+        execution,
+        outcome: settlement.outcome,
+      },
+      userId,
+      workspaceId,
+      indexThread,
+    });
+    return persisted.map(() => ({ persistencePlan, settlement }));
   });
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  const { persistencePlan, settlement } = persistResult.value;
   reportStoredTurnDefects({
     continued: owningAssistantMessage,
-    outcome: outcome.type,
-    stored: producedMessage,
+    outcome: settlement.outcome.type,
+    stored: toTerminalAssistantMessage({
+      outcome: settlement.outcome,
+      owningAssistantMessage,
+      responseMessage,
+    }),
   });
-  return Result.ok({ persistencePlan });
+  return Result.ok({ outcome: settlement.outcome, persistencePlan });
 };
 
 /**
@@ -567,42 +653,41 @@ const persistTerminalAssistantTurn = async ({
   threadId,
   userId,
   workspaceId,
-}: PersistTerminalAssistantTurnProps) => {
-  const assistantMessage = settleTerminalAssistantMessage(
-    toTerminalAssistantMessage({
+}: PersistTerminalAssistantTurnProps) =>
+  await settleHonouringStop(async (stopped) => {
+    const settlement = terminalSettlement({
       outcome,
       owningAssistantMessage,
       responseMessage: undefined,
-    }),
-    outcome,
-  );
-  return await persistMessage({
-    persistencePlan:
-      owningAssistantMessage === undefined
-        ? { type: "insert", message: assistantMessage }
-        : {
-            type: "update",
-            messageId: assistantMessage.id,
-            message: assistantMessage,
-          },
-    recordAuditEvent,
-    safeDb,
-    threadId,
-    turnSettlement: {
-      assistantMessageId: assistantMessage.id,
-      execution,
-      ...(failure === undefined
-        ? {}
-        : {
-            failureCode: failure.code,
-            failureRetryable: failure.retryable,
-          }),
-      outcome,
-    },
-    userId,
-    workspaceId,
+      stopped,
+    });
+    return await persistMessage({
+      persistencePlan:
+        owningAssistantMessage === undefined
+          ? { type: "insert", message: settlement.message }
+          : {
+              type: "update",
+              messageId: settlement.message.id,
+              message: settlement.message,
+            },
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      turnSettlement: {
+        assistantMessageId: settlement.message.id,
+        execution,
+        ...(failure === undefined || stopped
+          ? {}
+          : {
+              failureCode: failure.code,
+              failureRetryable: failure.retryable,
+            }),
+        outcome: settlement.outcome,
+      },
+      userId,
+      workspaceId,
+    });
   });
-};
 
 /**
  * A failure before the stream exists must still hydrate as the same terminal
@@ -665,6 +750,12 @@ export const persistInterruptedChatTurn = async ({
     userId,
     workspaceId,
   });
+
+/** Persist a turn the user stopped before its provider call started. */
+export const persistStoppedChatTurn = async (
+  props: Omit<PersistTerminalAssistantTurnProps, "failure" | "outcome">,
+) =>
+  await persistTerminalAssistantTurn({ ...props, outcome: USER_STOP_OUTCOME });
 
 const runPersistMessage = async ({
   acceptedSendMode = null,

@@ -2,13 +2,16 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The browser side of a chat thread is the web app's own code, loaded from
 // `apps/web`: `createChatRuntime` (TanStack's `ChatClient` over its SSE
 // adapter, with the web app's request body, native interrupt resolution,
 // rejected-continuation rollback and stop) and the page load's
-// `sanitizeRunningToolCalls`. Nothing here re-implements them.
+// `sanitizeRunningToolCalls`. Nothing here re-implements them. What the page
+// does around the runtime, reloading the thread once a stopped turn settles,
+// is the query layer's: `createWebChatClient` stands in for it.
 //
 // The web modules resolve their own `@/` imports through `apps/web`'s
 // tsconfig, which only the runtime honours, so they are imported by URL and
@@ -87,17 +90,16 @@ type WebChatModules = {
    *  rendered as a plain tool row. */
   isOpaquePersistedChatToolCallPart: (part: unknown) => boolean;
   createChatRuntime: (props: {
+    activeTurnId: SafeId<"chatTurn"> | null;
     context: undefined;
     initialMessages: UIMessage[];
     key: { scope: "global"; threadId: string };
     onError: (error: Error) => void;
     onFinish: () => void;
+    onTurnStopped: () => void;
   }) => WebChatRuntime;
   resetChatRequestStateForTests: () => void;
-  sanitizeRunningToolCalls: (
-    messages: readonly UIMessage[],
-    mode: "hydrate",
-  ) => UIMessage[];
+  sanitizeRunningToolCalls: (messages: readonly UIMessage[]) => UIMessage[];
   sendThreadChatMessage: (
     runtime: WebChatRuntime,
     message: { content: string; id: string },
@@ -281,41 +283,66 @@ export type WebChatClient = {
   takeErrors: () => Error[];
 };
 
+/** What a page load seeds the runtime with. */
+type WebChatPage = {
+  activeTurnId: SafeId<"chatTurn"> | null;
+  messages: readonly UIMessage[];
+};
+
 /**
- * A browser tab on `threadId`: the web runtime seeded with `initialMessages`,
- * as a page load seeds it. `inFlight` reports the harness's open requests, so
- * a step returns only once the runtime and the server are both idle.
+ * A browser tab on `threadId`: the web runtime seeded with `page`, as a page
+ * load seeds it. `inFlight` reports the harness's open requests, so a step
+ * returns only once the runtime and the server are both idle. Once a stopped
+ * turn settles the tab rebuilds its runtime from `reload`, as the page's
+ * thread query does when the runtime asks it to refetch.
  */
 export const createWebChatClient = async ({
   inFlight,
-  initialMessages,
+  page,
+  reload,
   threadId,
 }: {
   inFlight: () => number;
-  initialMessages: readonly UIMessage[];
+  page: WebChatPage;
+  reload: () => Promise<WebChatPage>;
   threadId: string;
 }): Promise<WebChatClient> => {
   const web = await loadWebChat();
   const errors: Error[] = [];
   let disposed = false;
-  const runtime = web.createChatRuntime({
-    context: undefined,
-    initialMessages: [...initialMessages],
-    key: { scope: "global", threadId },
-    onError: (error) => {
-      errors.push(error);
-    },
-    onFinish: () => undefined,
-  });
+  /** The page's reload after a stop, until its runtime is rebuilt. */
+  let reloading: Promise<void> | undefined;
+  const createRuntime = (seed: WebChatPage): WebChatRuntime =>
+    web.createChatRuntime({
+      activeTurnId: seed.activeTurnId,
+      context: undefined,
+      initialMessages: [...seed.messages],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        errors.push(error);
+      },
+      onFinish: () => undefined,
+      onTurnStopped: () => {
+        reloading = (async () => {
+          runtime = createRuntime(await reload());
+          reloading = undefined;
+        })();
+      },
+    });
+  let runtime = createRuntime(page);
 
   /** Waits until no request is open and the runtime is idle. */
   const settle = async () => {
     let quiet = 0;
     for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
       await nextTick();
+      if (reloading !== undefined) {
+        await reloading;
+      }
       const { isLoading, status } = runtime.getSnapshot();
       const busy =
         inFlight() > 0 ||
+        reloading !== undefined ||
         isLoading ||
         status === "submitted" ||
         status === "streaming";
@@ -376,9 +403,9 @@ export const createWebChatClient = async ({
       );
     },
     cards,
+    // Closing a tab drops its page; it asks the server for nothing.
     dispose: () => {
       disposed = true;
-      runtime.stop();
     },
     messages,
     resend: async () => {

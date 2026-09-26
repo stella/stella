@@ -98,12 +98,13 @@ afterAll(async () => {
 // --- Recordings ------------------------------------------------------------
 
 type RecordedPage = {
+  activeTurnId: string | null;
   lastActivityAt: string | null;
   messages: unknown[];
   olderCursor: string | null;
 };
 type RecordedExchange = {
-  ended: "complete" | "connection-lost" | "disconnected";
+  ended: "complete" | "connection-lost" | "disconnected" | "stopped";
   page: RecordedPage;
   request: Record<string, unknown>;
   response: { body: string; status: number };
@@ -172,7 +173,17 @@ const EXCHANGE_ENDINGS: readonly RecordedExchange["ended"][] = [
   "complete",
   "connection-lost",
   "disconnected",
+  "stopped",
 ];
+
+/**
+ * A response that stays open after what the page read: cut off, or ended by
+ * the server once the page's Stop reached it. The replay serves no Stop (the
+ * recording carries no turn id to stop), so the page closes the response
+ * itself, as it does when it stops a turn it cannot name.
+ */
+const staysOpen = (ended: RecordedExchange["ended"]): boolean =>
+  ended === "disconnected" || ended === "stopped";
 
 // --- The fake server -------------------------------------------------------
 
@@ -308,7 +319,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
             settle(exchange);
           }
           controller.enqueue(encoder.encode(event));
-          stalled = last && exchange.ended === "disconnected";
+          stalled = last && staysOpen(exchange.ended);
           return;
         }
         if (exchange.ended === "complete") {
@@ -1029,8 +1040,9 @@ const replay = async (scenario: string) => {
     }
     const where = `${scenario}, step ${String(index + 1)} (${action.type})`;
     const requests = finding(RENDER_ORACLE.requestsMatchRecorded, where);
+    const lastEnded = exchanges.at(-1)?.ended;
     const midStream =
-      exchanges.at(-1)?.ended === "disconnected" && next !== undefined;
+      lastEnded !== undefined && staysOpen(lastEnded) && next !== undefined;
     await waitFor(
       () => {
         expect(server.posted.length, requests).toBe(expectedPosts);
