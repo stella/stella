@@ -218,10 +218,9 @@ fn decode_string(tag: u8, contents: &[u8]) -> Option<String> {
       if !contents.len().is_multiple_of(2) {
         return None;
       }
-      let units: Vec<u16> = contents
-        .chunks_exact(2)
-        .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
-        .collect();
+      let (pairs, _) = contents.as_chunks::<2>();
+      let units: Vec<u16> =
+        pairs.iter().map(|pair| u16::from_be_bytes(*pair)).collect();
       String::from_utf16(&units).ok()
     }
     _ => None,
