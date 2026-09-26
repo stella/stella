@@ -27,8 +27,11 @@ export type PdfSigningCloseReason =
   | "expired"
   | "signature_invalid"
   | "signing_failed"
+  | "stamp_overflow"
+  | "stamp_unrenderable"
   | "unsupported_platform"
-  | "user_cancelled";
+  | "user_cancelled"
+  | "would_break_signatures";
 
 /**
  * The signing session as the browser reads it. The API response is bound to
@@ -154,6 +157,7 @@ export const pdfSigningStartErrorCode = (code: string | undefined) => {
     case "pdf_signing_stamp_time_zone":
     case "pdf_signing_stamp_too_large":
     case "pdf_signing_stamp_too_small":
+    case "pdf_signing_stamp_unrenderable":
     case "pdf_signing_too_large": {
       return code;
     }
