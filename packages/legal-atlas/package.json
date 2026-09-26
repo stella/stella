@@ -31,13 +31,25 @@
       "types": "./src/corpus.ts",
       "import": "./src/corpus.ts"
     },
+    "./cz-provision-citation-profile": {
+      "types": "./src/cz-provision-citation-profile.ts",
+      "import": "./src/cz-provision-citation-profile.ts"
+    },
     "./provision-citation-grammars": {
       "types": "./src/provision-citation-grammars.ts",
       "import": "./src/provision-citation-grammars.ts"
     },
+    "./provision-citation-profile": {
+      "types": "./src/provision-citation-profile.ts",
+      "import": "./src/provision-citation-profile.ts"
+    },
     "./runners/registry": {
       "types": "./src/runners/registry.ts",
       "import": "./src/runners/registry.ts"
+    },
+    "./sk-provision-citation-profile": {
+      "types": "./src/sk-provision-citation-profile.ts",
+      "import": "./src/sk-provision-citation-profile.ts"
     }
   },
   "scripts": {
