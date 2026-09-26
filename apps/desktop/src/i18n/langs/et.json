@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokument",
     "pdfSignMatter": "Toimik",
     "pdfSignNoIdentities": "Teie võtmehoidlas pole ühtegi allkirjastamissertifikaati.",
+    "pdfSignRetry": "Proovi uuesti",
     "pdfSignSign": "Allkirjasta",
     "pdfSignSigned": "Allkirjastatud versioonina {versionNumber}",
     "pdfSignSigning": "Allkirjastamine…",

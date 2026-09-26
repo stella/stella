@@ -31,6 +31,9 @@ CREATE TABLE "pdf_signing_sessions" (
   "digest_hex" varchar(64),
   "signed_attributes" bytea,
   "placeholder_size" integer,
+  "signature" bytea,
+  "finalize_attempts" integer DEFAULT 0 NOT NULL,
+  "finalize_lease_expires_at" timestamptz,
   "key_type" text,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -41,6 +44,8 @@ CREATE TABLE "pdf_signing_sessions" (
   -- what the browser branches on to explain the outcome.
   CONSTRAINT "pdf_signing_sessions_close_reason_check"
     CHECK ("close_reason" is null or "close_reason" in ('user_cancelled', 'base_version_diverged', 'digest_mismatch', 'unsupported_platform', 'certificate_rejected', 'certified_document', 'signature_invalid', 'signing_failed')),
+  CONSTRAINT "pdf_signing_sessions_finalize_attempts_check"
+    CHECK ("finalize_attempts" >= 0),
   CONSTRAINT "pdf_signing_sessions_key_type_check"
     CHECK ("key_type" is null or "key_type" in ('RSA', 'EC'))
 );--> statement-breakpoint

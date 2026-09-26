@@ -62,6 +62,7 @@
     "pdfSignDocument": "Documento",
     "pdfSignMatter": "Asunto",
     "pdfSignNoIdentities": "No hay ningún certificado de firma disponible en tu llavero.",
+    "pdfSignRetry": "Reintentar",
     "pdfSignSign": "Firmar",
     "pdfSignSigned": "Firmado como versión {versionNumber}",
     "pdfSignSigning": "Firmando…",

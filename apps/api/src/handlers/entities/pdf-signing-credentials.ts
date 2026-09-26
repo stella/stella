@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { AuthorizedPdfSigningSession } from "@/api/lib/pdf-signing/sessions";
+import type {
+  AuthorizedPdfSigningSession,
+  PdfSigningSessionAuthorization,
+} from "@/api/lib/pdf-signing/sessions";
 import { authorizePdfSigningSession } from "@/api/lib/pdf-signing/sessions";
 import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 
@@ -25,25 +29,10 @@ const credentialsSchema = t.Object({
 const pdfSigningSessionNotFoundError = () =>
   new HandlerError({ status: 404, message: "Signing session not found." });
 
-/**
- * Authorize a desktop-facing call.
- *
- * A malformed credential answers exactly like an unknown one, so a probe
- * cannot distinguish "wrong shape" from "no such session" from "already
- * closed".
- */
-export const authorizePdfSigningCredentials = async (
-  rawCredentials: unknown,
-): Promise<
-  Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>>
-> => {
-  const credentials = validatePostAuth(credentialsSchema, rawCredentials);
-  if (!credentials.ok) {
-    return Result.err(pdfSigningSessionNotFoundError());
-  }
-
-  const authorized = await authorizePdfSigningSession(credentials.value);
-  if (authorized.status === "missing") {
+const openSessionOrError = (
+  authorized: PdfSigningSessionAuthorization,
+): Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>> => {
+  if (authorized.status === "missing" || authorized.status === "finalized") {
     return Result.err(pdfSigningSessionNotFoundError());
   }
   if (authorized.status === "token-expired") {
@@ -66,4 +55,59 @@ export const authorizePdfSigningCredentials = async (
   }
 
   return Result.ok(authorized.value);
+};
+
+type FinalizeCredentials =
+  | { kind: "open"; session: AuthorizedPdfSigningSession }
+  | {
+      kind: "finalized";
+      versionId: SafeId<"entityVersion">;
+      versionNumber: number;
+    };
+
+/**
+ * Authorize the finalizing call. Unlike every other desktop call it also
+ * answers for an exchange this token already finalized, so a retry after a
+ * lost response learns the version instead of a bare 404.
+ */
+export const authorizePdfSigningFinalizeCredentials = async (
+  rawCredentials: unknown,
+): Promise<Result<FinalizeCredentials, HandlerError<401 | 403 | 404>>> => {
+  const credentials = validatePostAuth(credentialsSchema, rawCredentials);
+  if (!credentials.ok) {
+    return Result.err(pdfSigningSessionNotFoundError());
+  }
+  const authorized = await authorizePdfSigningSession(credentials.value);
+  if (authorized.status === "finalized") {
+    return Result.ok({
+      kind: "finalized",
+      versionId: authorized.versionId,
+      versionNumber: authorized.versionNumber,
+    });
+  }
+  const session = openSessionOrError(authorized);
+  return Result.isError(session)
+    ? Result.err(session.error)
+    : Result.ok({ kind: "open", session: session.value });
+};
+
+/**
+ * Authorize a desktop-facing call.
+ *
+ * A malformed credential answers exactly like an unknown one, so a probe
+ * cannot distinguish "wrong shape" from "no such session" from "already
+ * closed".
+ */
+export const authorizePdfSigningCredentials = async (
+  rawCredentials: unknown,
+): Promise<
+  Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>>
+> => {
+  const credentials = validatePostAuth(credentialsSchema, rawCredentials);
+  if (!credentials.ok) {
+    return Result.err(pdfSigningSessionNotFoundError());
+  }
+  return openSessionOrError(
+    await authorizePdfSigningSession(credentials.value),
+  );
 };

@@ -169,6 +169,7 @@ export type AuthorizedPdfSigningSession = {
   reason: string | null;
   safeDb: SafeDb;
   sessionId: SafeId<"pdfSigningSession">;
+  signature: Uint8Array | null;
   signedAttributes: Uint8Array | null;
   signerCertificateChain: string[] | null;
   signerCertificateDer: Uint8Array | null;
@@ -179,6 +180,11 @@ export type AuthorizedPdfSigningSession = {
 
 export type PdfSigningSessionAuthorization =
   | { status: "authorized"; value: AuthorizedPdfSigningSession }
+  | {
+      status: "finalized";
+      versionId: SafeId<"entityVersion">;
+      versionNumber: number;
+    }
   | { status: "missing" }
   | { status: "token-expired" }
   | { status: "permission-revoked" };
@@ -212,6 +218,8 @@ export const authorizePdfSigningSession = async (
       createdBy: pdfSigningSessions.createdBy,
       digestHex: pdfSigningSessions.digestHex,
       entityId: pdfSigningSessions.entityId,
+      finalizedVersionId: pdfSigningSessions.finalizedVersionId,
+      finalizedVersionNumber: entityVersions.versionNumber,
       keyType: pdfSigningSessions.keyType,
       location: pdfSigningSessions.location,
       organizationId: workspaces.organizationId,
@@ -221,6 +229,7 @@ export const authorizePdfSigningSession = async (
       reason: pdfSigningSessions.reason,
       sessionStatus: pdfSigningSessions.status,
       sessionTokenHash: pdfSigningSessions.sessionTokenHash,
+      signature: pdfSigningSessions.signature,
       signedAttributes: pdfSigningSessions.signedAttributes,
       signerCertificateChain: pdfSigningSessions.signerCertificateChain,
       signerCertificateDer: pdfSigningSessions.signerCertificateDer,
@@ -239,6 +248,10 @@ export const authorizePdfSigningSession = async (
       ),
     )
     .leftJoin(
+      entityVersions,
+      eq(entityVersions.id, pdfSigningSessions.finalizedVersionId),
+    )
+    .leftJoin(
       workspaceMembers,
       and(
         eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
@@ -251,10 +264,26 @@ export const authorizePdfSigningSession = async (
   const session = rows.at(0);
   if (
     !session ||
-    session.sessionStatus !== "open" ||
     session.sessionTokenHash === null ||
     session.sessionTokenHash !== hashPdfSigningToken(sessionToken)
   ) {
+    return { status: "missing" };
+  }
+
+  // The holder of the token may learn how its own exchange ended: a desktop
+  // whose finalize response was lost retries and gets the version it made.
+  if (
+    session.sessionStatus === "finalized" &&
+    session.finalizedVersionId !== null &&
+    session.finalizedVersionNumber !== null
+  ) {
+    return {
+      status: "finalized",
+      versionId: session.finalizedVersionId,
+      versionNumber: session.finalizedVersionNumber,
+    };
+  }
+  if (session.sessionStatus !== "open") {
     return { status: "missing" };
   }
 
@@ -291,6 +320,7 @@ export const authorizePdfSigningSession = async (
         workspaceIds: [session.workspaceId],
       }),
       sessionId,
+      signature: session.signature,
       signedAttributes: session.signedAttributes,
       signerCertificateChain: session.signerCertificateChain,
       signerCertificateDer: session.signerCertificateDer,

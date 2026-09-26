@@ -64,6 +64,7 @@
     "pdfSignDocument": "Document",
     "pdfSignMatter": "Matter",
     "pdfSignNoIdentities": "No signing certificate is available in your keychain.",
+    "pdfSignRetry": "Try again",
     "pdfSignSign": "Sign",
     "pdfSignSigned": "Signed as version {versionNumber}",
     "pdfSignSigning": "Signing…",

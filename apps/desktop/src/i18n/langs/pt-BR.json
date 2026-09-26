@@ -62,6 +62,7 @@
     "pdfSignDocument": "Documento",
     "pdfSignMatter": "Caso",
     "pdfSignNoIdentities": "Nenhum certificado de assinatura está disponível no seu conjunto de chaves.",
+    "pdfSignRetry": "Tentar novamente",
     "pdfSignSign": "Assinar",
     "pdfSignSigned": "Assinado como versão {versionNumber}",
     "pdfSignSigning": "Assinando…",

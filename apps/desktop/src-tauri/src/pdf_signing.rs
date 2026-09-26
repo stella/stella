@@ -41,6 +41,9 @@ const SIGNING_TIMEOUT: Duration = Duration::from_secs(180);
 /// How long the confirmed version number stays on screen before the dialog is
 /// taken down.
 const SIGNED_DIALOG_LINGER: Duration = Duration::from_secs(2);
+/// Finalizations the dialog offers before giving up. The API caps attempts
+/// at the same number and closes the session after the last one.
+const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
@@ -67,6 +70,8 @@ struct DialogBridge {
 /// What the dialog's buttons mean to the flow.
 pub enum DialogChoice {
   Sign { identity_id: String },
+  /// Finalize again with the signature already made: no new PIN.
+  Retry,
   Cancel,
 }
 
@@ -79,6 +84,7 @@ pub enum DialogChoice {
 )]
 pub enum PdfSignDialogResponse {
   Sign { identity_id: String },
+  Retry,
   Cancel,
 }
 
@@ -92,7 +98,9 @@ pub enum PdfSignDialogResponse {
 pub enum PdfSignResult {
   Cancelled,
   Signed { version_number: i64 },
-  Failed { message: String },
+  /// `retryable`: the API kept the session and the signature, so the dialog
+  /// offers to finalize again instead of only closing.
+  Failed { message: String, retryable: bool },
 }
 
 /// Why the dialog opened at all: what it can offer the user.
@@ -213,12 +221,14 @@ struct CancelRequest<'a> {
   reason: &'a str,
 }
 
-/// A failed step, and whether the session it failed in is still the desktop's
-/// to close.
+/// A failed step, and what is left of the session it failed in.
 #[derive(Debug)]
 struct StepError {
   message: String,
+  /// Still open, so the desktop must cancel it if it gives up.
   session_left_open: bool,
+  /// Still open with the signature kept: finalizing again may succeed.
+  retryable: bool,
 }
 
 impl StepError {
@@ -227,6 +237,17 @@ impl StepError {
     Self {
       message,
       session_left_open: true,
+      retryable: false,
+    }
+  }
+
+  /// The API may or may not have the signature; either way posting it again
+  /// is safe, since the API only ever accepts the one it verified first.
+  fn retryable(message: String) -> Self {
+    Self {
+      message,
+      session_left_open: true,
+      retryable: true,
     }
   }
 }
@@ -236,7 +257,13 @@ impl StepError {
 /// Anything else (a timeout, a gateway error) leaves the session open for the
 /// desktop to cancel.
 fn api_closed_session(status: reqwest::StatusCode) -> bool {
-  matches!(status.as_u16(), 404 | 409 | 410 | 422)
+  matches!(status.as_u16(), 404 | 409 | 410 | 413 | 422)
+}
+
+/// The status the API finalizes with when it kept the session open and the
+/// signature with it, for a retry.
+fn api_kept_signature(status: reqwest::StatusCode) -> bool {
+  status == reqwest::StatusCode::SERVICE_UNAVAILABLE
 }
 
 /// Entry point from the deep-link handler.
@@ -326,7 +353,9 @@ pub async fn redeem_and_sign(
 
   let identity_id = match choice {
     DialogChoice::Sign { identity_id } => identity_id,
-    DialogChoice::Cancel => {
+    // Nothing has been signed yet, so there is nothing to retry: a stray
+    // retry reads as the user walking away.
+    DialogChoice::Retry | DialogChoice::Cancel => {
       let reason = match state {
         DialogState::UnsupportedPlatform => REASON_UNSUPPORTED_PLATFORM,
         DialogState::NoIdentities | DialogState::Ready => REASON_USER_CANCELLED,
@@ -346,31 +375,87 @@ pub async fn redeem_and_sign(
     session.cancel(REASON_USER_CANCELLED).await;
     let _ = outcome_sender.send(PdfSignResult::Failed {
       message: message.clone(),
+      retryable: false,
     });
     return Err(message);
   };
 
-  match sign(&session, identity).await {
-    Ok(version_number) => {
-      let _ = outcome_sender.send(PdfSignResult::Signed { version_number });
-      // The dialog is the receipt: it stays up long enough to be read, then
-      // Rust takes it down. A webview cannot close a window it did not open.
-      tokio::time::sleep(SIGNED_DIALOG_LINGER).await;
-      let _ = window.close();
-    }
+  let signature = match prepare_signature(&session, &identity).await {
+    Ok(signature) => signature,
     Err(error) => {
-      if error.session_left_open {
-        session.cancel(REASON_USER_CANCELLED).await;
+      report_failure(&session, error, outcome_sender).await;
+      return Ok(());
+    }
+  };
+
+  let mut outcome_sender = outcome_sender;
+  let mut attempt = 1;
+  loop {
+    let error = match finalize(&session, &signature).await {
+      Ok(version_number) => {
+        let _ = outcome_sender.send(PdfSignResult::Signed { version_number });
+        // The dialog is the receipt: it stays up long enough to be read,
+        // then Rust takes it down. A webview cannot close a window it did
+        // not open.
+        tokio::time::sleep(SIGNED_DIALOG_LINGER).await;
+        let _ = window.close();
+        return Ok(());
       }
-      tracing::warn!(error = %error.message, "PDF signing failed");
-      // A failed flow leaves the window up with its message; the dialog's
-      // remaining button closes it through `pdf_sign_respond`.
-      let _ = outcome_sender.send(PdfSignResult::Failed {
-        message: error.message,
-      });
+      Err(error) => error,
+    };
+    if !error.retryable || attempt >= MAX_FINALIZE_ATTEMPTS {
+      report_failure(&session, error, outcome_sender).await;
+      return Ok(());
+    }
+
+    // The next choice needs a bridge before the dialog learns it may retry,
+    // or a quick click would find nothing waiting for it.
+    let (choice_sender, choice_receiver) = oneshot::channel();
+    let (next_outcome_sender, next_outcome_receiver) = oneshot::channel();
+    if reserve_dialog(DialogBridge {
+      choice: choice_sender,
+      outcome: next_outcome_receiver,
+    })
+    .is_err()
+    {
+      report_failure(&session, error, outcome_sender).await;
+      return Ok(());
+    }
+    tracing::warn!(error = %error.message, attempt, "PDF signing will be retried");
+    let _ = outcome_sender.send(PdfSignResult::Failed {
+      message: error.message,
+      retryable: true,
+    });
+    outcome_sender = next_outcome_sender;
+
+    match tokio::time::timeout(DIALOG_TIMEOUT, choice_receiver).await {
+      Ok(Ok(DialogChoice::Retry)) => attempt += 1,
+      _ => {
+        cancel_dialog();
+        session.cancel(REASON_USER_CANCELLED).await;
+        let _ = outcome_sender.send(PdfSignResult::Cancelled);
+        let _ = window.close();
+        return Ok(());
+      }
     }
   }
-  Ok(())
+}
+
+/// End a flow that cannot go on: the session is cancelled if the API left it
+/// open, and the dialog keeps the message up with only a way to close it.
+async fn report_failure(
+  session: &SigningSession,
+  error: StepError,
+  outcome_sender: oneshot::Sender<PdfSignResult>,
+) {
+  if error.session_left_open {
+    session.cancel(REASON_USER_CANCELLED).await;
+  }
+  tracing::warn!(error = %error.message, "PDF signing failed");
+  let _ = outcome_sender.send(PdfSignResult::Failed {
+    message: error.message,
+    retryable: false,
+  });
 }
 
 struct SigningSession {
@@ -407,10 +492,12 @@ impl SigningSession {
   }
 }
 
-async fn sign(
+/// Phase 1 and the keychain: the certificate goes up, the digest comes back
+/// and the keychain signs it. The one step that may ask for a PIN.
+async fn prepare_signature(
   session: &SigningSession,
-  identity: SigningIdentity,
-) -> Result<i64, StepError> {
+  identity: &SigningIdentity,
+) -> Result<Vec<u8>, StepError> {
   let prepared: CertificateResponse = post(
     &session.client,
     session.url("certificate"),
@@ -444,18 +531,53 @@ async fn sign(
   }
   let digest = decode_digest(&prepared.digest_hex)?;
 
-  let signature = sign_digest(identity.id, digest, identity.key_type).await?;
+  sign_digest(identity.id.clone(), digest, identity.key_type).await
+}
 
-  let signed: SignatureResponse = post(
-    &session.client,
-    session.url("signature"),
-    &SignatureRequest {
+/// Phase 2: the API embeds the signature. Safe to repeat with the same
+/// signature: a transient failure keeps the session and the signature on the
+/// API's side, and a repeat of a call that already landed answers with the
+/// version it made.
+async fn finalize(
+  session: &SigningSession,
+  signature: &[u8],
+) -> Result<i64, StepError> {
+  let response = session
+    .client
+    .post(session.url("signature"))
+    .json(&SignatureRequest {
       session_token: &session.token,
-      signature: STANDARD.encode(&signature),
-    },
-  )
-  .await?;
-  Ok(signed.version_number)
+      signature: STANDARD.encode(signature),
+    })
+    .timeout(SIGNING_REQUEST_TIMEOUT)
+    .send()
+    .await
+    .map_err(|e| {
+      StepError::retryable(format!("stella desktop could not reach stella: {e}"))
+    })?;
+
+  let status = response.status();
+  if api_kept_signature(status) {
+    return Err(StepError::retryable(error_message(response, status).await));
+  }
+  if !status.is_success() {
+    return Err(StepError {
+      message: error_message(response, status).await,
+      session_left_open: !api_closed_session(status),
+      retryable: false,
+    });
+  }
+
+  response
+    .json::<SignatureResponse>()
+    .await
+    .map(|signed| signed.version_number)
+    .map_err(|e| StepError {
+      message: format!("stella desktop could not read the signing response: {e}"),
+      // The API answered successfully; whatever it did, it did.
+      session_left_open: false,
+      retryable: false,
+    })
 }
 
 fn decode_digest(digest_hex: &str) -> Result<[u8; DIGEST_BYTES], StepError> {
@@ -511,6 +633,7 @@ async fn post<Request: serde::Serialize, Response: serde::de::DeserializeOwned>(
     return Err(StepError {
       message: error_message(response, status).await,
       session_left_open: !api_closed_session(status),
+      retryable: false,
     });
   }
 
@@ -518,6 +641,7 @@ async fn post<Request: serde::Serialize, Response: serde::de::DeserializeOwned>(
     message: format!("stella desktop could not read the signing response: {e}"),
     // The API answered successfully; whatever it did, it did.
     session_left_open: false,
+    retryable: false,
   })
 }
 
@@ -691,13 +815,23 @@ mod tests {
 
   #[test]
   fn leaves_the_session_open_only_when_the_api_did_not_close_it() {
-    for status in [404, 409, 410, 422] {
+    for status in [404, 409, 410, 413, 422] {
       assert!(api_closed_session(
         reqwest::StatusCode::from_u16(status).unwrap()
       ));
     }
-    for status in [400, 401, 403, 429, 500, 502, 504] {
+    for status in [400, 401, 403, 429, 500, 502, 503, 504] {
       assert!(!api_closed_session(
+        reqwest::StatusCode::from_u16(status).unwrap()
+      ));
+    }
+  }
+
+  #[test]
+  fn only_a_503_means_the_api_kept_the_signature_for_a_retry() {
+    assert!(api_kept_signature(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+    for status in [200, 400, 404, 409, 422, 500, 502, 504] {
+      assert!(!api_kept_signature(
         reqwest::StatusCode::from_u16(status).unwrap()
       ));
     }
@@ -748,6 +882,9 @@ mod tests {
     let cancelled: PdfSignDialogResponse =
       serde_json::from_str(r#"{"action":"cancel"}"#).unwrap();
     assert!(matches!(cancelled, PdfSignDialogResponse::Cancel));
+    let retried: PdfSignDialogResponse =
+      serde_json::from_str(r#"{"action":"retry"}"#).unwrap();
+    assert!(matches!(retried, PdfSignDialogResponse::Retry));
 
     assert_eq!(
       serde_json::to_string(&PdfSignResult::Signed { version_number: 4 }).unwrap(),
@@ -756,6 +893,14 @@ mod tests {
     assert_eq!(
       serde_json::to_string(&PdfSignResult::Cancelled).unwrap(),
       r#"{"status":"cancelled"}"#
+    );
+    assert_eq!(
+      serde_json::to_string(&PdfSignResult::Failed {
+        message: "later".to_string(),
+        retryable: true,
+      })
+      .unwrap(),
+      r#"{"status":"failed","message":"later","retryable":true}"#
     );
   }
 }

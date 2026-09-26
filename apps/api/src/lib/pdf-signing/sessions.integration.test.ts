@@ -8,10 +8,16 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  claimFinalizeAttempt,
+  MAX_FINALIZE_ATTEMPTS,
+  releaseFinalizeAttempt,
+  storeDesktopSignature,
+} from "@/api/lib/pdf-signing/finalize-attempts";
 import {
   authorizePdfSigningSession,
   createPdfSigningToken,
@@ -279,5 +285,105 @@ describe("pdf signing session authorization", () => {
     ]);
     expect(authorized.value.signerCertificateChain).toEqual(["Zm9v"]);
     expect(authorized.value.keyType).toBe("RSA");
+  });
+});
+
+describe("pdf signing finalization attempts", () => {
+  const store = () => asTestRaw<Transaction>(testDb);
+
+  test("keeps the first signature and refuses a different one", async () => {
+    const { sessionId } = await seedHandoff();
+    const signature = new Uint8Array([1, 2, 3]);
+
+    expect(
+      await storeDesktopSignature({ sessionId, signature, tx: store() }),
+    ).toEqual({ status: "stored" });
+    // Repeating the same signature is how a retry resends it.
+    expect(
+      await storeDesktopSignature({ sessionId, signature, tx: store() }),
+    ).toEqual({ status: "stored" });
+    expect(
+      await storeDesktopSignature({
+        sessionId,
+        signature: new Uint8Array([9, 9, 9]),
+        tx: store(),
+      }),
+    ).toEqual({ status: "conflict" });
+
+    const rows = await testDb
+      .select({ signature: pdfSigningSessions.signature })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect([...(rows.at(0)?.signature ?? [])]).toEqual([1, 2, 3]);
+  });
+
+  test("leases each attempt and caps how many there are", async () => {
+    const { sessionId } = await seedHandoff();
+    const start = new Date();
+    const claim = async (now: Date) =>
+      await claimFinalizeAttempt({ now, sessionId, tx: store() });
+
+    expect(await claim(start)).toEqual({ status: "claimed", attempt: 1 });
+    // A retry racing a live attempt waits instead of embedding twice.
+    expect(await claim(start)).toEqual({ status: "in-progress" });
+
+    await releaseFinalizeAttempt({ sessionId, tx: store() });
+    expect(await claim(start)).toEqual({ status: "claimed", attempt: 2 });
+
+    // An attempt that died without releasing stops blocking once its lease
+    // lapses.
+    const afterLease = new Date(start.getTime() + 10 * MINUTE_MS);
+    expect(await claim(afterLease)).toEqual({ status: "claimed", attempt: 3 });
+
+    await releaseFinalizeAttempt({ sessionId, tx: store() });
+    expect(MAX_FINALIZE_ATTEMPTS).toBe(3);
+    expect(await claim(afterLease)).toEqual({ status: "exhausted" });
+  });
+
+  test("never claims or stores on a closed exchange", async () => {
+    const { sessionId } = await seedHandoff();
+    await testDb
+      .update(pdfSigningSessions)
+      .set({ closeReason: "user_cancelled", status: "cancelled" })
+      .where(eq(pdfSigningSessions.id, sessionId));
+
+    expect(
+      await claimFinalizeAttempt({ now: new Date(), sessionId, tx: store() }),
+    ).toEqual({ status: "closed" });
+    expect(
+      await storeDesktopSignature({
+        sessionId,
+        signature: new Uint8Array([1]),
+        tx: store(),
+      }),
+    ).toEqual({ status: "closed" });
+  });
+
+  test("tells the token holder which version a finalized exchange produced", async () => {
+    const { handoffToken, sessionId } = await seedHandoff();
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, db);
+    await testDb
+      .update(pdfSigningSessions)
+      .set({ finalizedVersionId: ids.entityVersionA1, status: "finalized" })
+      .where(eq(pdfSigningSessions.id, sessionId));
+
+    const answered = await authorizePdfSigningSession(
+      { sessionId, sessionToken: redeemed?.sessionToken ?? "" },
+      db,
+    );
+    expect(answered.status).toBe("finalized");
+    if (answered.status === "finalized") {
+      expect(answered.versionId).toBe(ids.entityVersionA1);
+    }
+
+    // Anyone else still learns nothing.
+    expect(
+      (
+        await authorizePdfSigningSession(
+          { sessionId, sessionToken: createPdfSigningToken() },
+          db,
+        )
+      ).status,
+    ).toBe("missing");
   });
 });

@@ -118,6 +118,20 @@ export const pdfSigningSessions = p.pgTable(
      * range, so phase 2 must reuse it rather than recompute it.
      */
     placeholderSize: p.integer("placeholder_size"),
+    /**
+     * The desktop's verified signature. Kept so a finalization that failed
+     * for a transient reason can be retried without asking for a new PIN,
+     * and so a retry can only ever embed this same signature.
+     */
+    signature: p.bytea("signature"),
+    /** Finalizations started; bounded so a failing one cannot loop. */
+    finalizeAttempts: p.integer("finalize_attempts").notNull().default(0),
+    /**
+     * Set while a finalization runs, so a retry that races a slow attempt
+     * waits instead of embedding twice. Past it, the attempt is presumed
+     * dead and the next one may start.
+     */
+    finalizeLeaseExpiresAt: timestamptz("finalize_lease_expires_at"),
     keyType: p.text("key_type", { enum: PDF_SIGNING_KEY_TYPES }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
@@ -149,6 +163,10 @@ export const pdfSigningSessions = p.pgTable(
     p.check(
       "pdf_signing_sessions_close_reason_check",
       sql`${table.closeReason} is null or ${table.closeReason} in (${PDF_SIGNING_SESSION_CLOSE_REASON_SQL_VALUES})`,
+    ),
+    p.check(
+      "pdf_signing_sessions_finalize_attempts_check",
+      sql`${table.finalizeAttempts} >= 0`,
     ),
     p.check(
       "pdf_signing_sessions_key_type_check",
