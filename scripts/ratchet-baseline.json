@@ -146,7 +146,7 @@
       "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 6,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/citations.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts": 2,
@@ -606,7 +606,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 363,
+    "count": 361,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -625,7 +625,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 3,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-raw.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 1,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
@@ -937,7 +937,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 115,
+    "count": 116,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -950,6 +950,7 @@
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 6,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
@@ -1085,7 +1086,7 @@
       "apps/api/src/handlers/case-law/erasure.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 1,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
@@ -1353,7 +1354,8 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 6,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/pipeline/composed-supplements.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-raw.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision.ts": 1,
