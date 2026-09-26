@@ -102,6 +102,20 @@ describe("bytes read as the charset they declare", () => {
     ).toEqual({ text: html, charset: "utf-8", source: "document" });
   });
 
+  test("a document that declares x-user-defined reads as windows-1252", () => {
+    // 0x8A is "Š" in windows-1252; x-user-defined would read U+F78A.
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode(`<meta charset="x-user-defined"><p>`),
+      0x8a,
+      ...new TextEncoder().encode("</p>"),
+    ]);
+    expect(decodeDeclared(bytes, { contentType: null })).toEqual({
+      text: `<meta charset="x-user-defined"><p>Š</p>`,
+      charset: "windows-1252",
+      source: "document",
+    });
+  });
+
   test("nothing declared, or a label the platform does not know, reads as UTF-8", () => {
     const bytes = new TextEncoder().encode(`<p>${SENTENCE}</p>`);
     expect(

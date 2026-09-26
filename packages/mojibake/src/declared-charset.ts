@@ -340,10 +340,14 @@ const documentDecoder = (bytes: Uint8Array): LabelledTextDecoder | null => {
   const label = XML_DECLARATION.exec(head)?.groups?.["label"] ?? prescan(head);
   const declared = label === null ? null : decoderFor(label);
   // A declaration of UTF-16 in ASCII bytes is not UTF-16; WHATWG reads such
-  // a document as UTF-8, and so does this.
-  return declared?.encoding.startsWith("utf-16") === true
-    ? new LabelledTextDecoder("utf-8")
-    : declared;
+  // a document as UTF-8, and one declaring x-user-defined as windows-1252.
+  if (declared?.encoding.startsWith("utf-16") === true) {
+    return new LabelledTextDecoder("utf-8");
+  }
+  if (declared?.encoding === "x-user-defined") {
+    return new LabelledTextDecoder("windows-1252");
+  }
+  return declared;
 };
 
 export const decodeDeclared = (
