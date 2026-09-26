@@ -1,3 +1,5 @@
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 export const DEV_INSPECTOR_ORIGINS = [
   "http://localhost:6274",
   "http://127.0.0.1:6274",
@@ -5,12 +7,12 @@ export const DEV_INSPECTOR_ORIGINS = [
 
 export const frontendOrigins = ({
   frontendUrl,
-  isDev,
+  runtimeMode,
 }: {
   frontendUrl: string;
-  isDev: boolean;
+  runtimeMode: RuntimeMode;
 }) => {
-  if (!isDev) {
+  if (runtimeMode.mode !== RUNTIME_MODE.open) {
     return [frontendUrl];
   }
   return expandLoopbackOrigin(frontendUrl);

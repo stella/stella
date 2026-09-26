@@ -12,6 +12,7 @@ const baseEnv = {
   S3_BUCKET: "stella-test",
   S3_REGION: "us-east-1",
   REDIS_URL: "redis://localhost:6379",
+  CONTENT_ENCRYPTION_KEY: "a".repeat(64),
 } as const;
 
 const workerEnvModuleUrl = new URL(
@@ -26,8 +27,10 @@ const workerEntrypoint = nodePath.resolve(
 
 const validateWorkerEnv = (env: Record<string, string | undefined> = baseEnv) =>
   Bun.spawnSync({
+    // A developer's .env in the repository root would otherwise leak in.
     cmd: [
       process.execPath,
+      "--no-env-file",
       "-e",
       `import ${JSON.stringify(workerEnvModuleUrl)};`,
     ],
@@ -50,6 +53,26 @@ describe("document-processing worker environment", () => {
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain("REDIS_URL is required");
+  });
+
+  test("requires a content encryption key without local development access", () => {
+    const { CONTENT_ENCRYPTION_KEY: _key, ...withoutKey } = baseEnv;
+
+    for (const nodeEnv of [undefined, "development", "production"]) {
+      const result = validateWorkerEnv({ ...withoutKey, NODE_ENV: nodeEnv });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "CONTENT_ENCRYPTION_KEY is required outside local development.",
+      );
+    }
+    expect(
+      validateWorkerEnv({
+        ...withoutKey,
+        NODE_ENV: "development",
+        STELLA_LOCAL_DEV: "1",
+      }).exitCode,
+    ).toBe(0);
   });
 
   test("accepts Railway private-network Redis in production", () => {

@@ -37,7 +37,9 @@ export const signInHuman = async (email: string): Promise<HumanBrowser> => {
   await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
   const otp = readDevOtp(email);
   if (!otp) {
-    panic("dev OTP not stashed; is env.isDev true under test?");
+    panic(
+      "dev OTP not stashed; run the suite through `bun run test`, which opts into local development access.",
+    );
   }
   const signInRes = await auth.api.signInEmailOTP({
     body: { email, otp },

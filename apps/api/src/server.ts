@@ -158,6 +158,7 @@ import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -208,9 +209,9 @@ const startMemoryPressureHandler = () => {
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
   const origins: (string | RegExp)[] = frontendOrigins({
     frontendUrl: env.FRONTEND_URL,
-    isDev: env.isDev,
+    runtimeMode: runtimeMode(),
   });
-  if (env.isDev) {
+  if (isLocalDevOpen()) {
     origins.push(/^chrome-extension:\/\//u);
     origins.push(...DEV_INSPECTOR_ORIGINS);
   }
@@ -582,9 +583,9 @@ const startServer = async (): Promise<void> => {
 
   const backgroundWorkers = initApiBackgroundWorkers();
 
-  // Deployed processes only; local runs and tests never start it. Same URL as
-  // the pools in `db/root.ts`.
-  const closeDatabaseLoginProbe = envBase.isDev
+  // Every process outside local development starts it. Same URL as the pools
+  // in `db/root.ts`.
+  const closeDatabaseLoginProbe = isLocalDevOpen()
     ? undefined
     : startDatabaseLoginProbe({
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),

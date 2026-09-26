@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { env } from "@/api/env";
 import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-reference";
 import {
@@ -13,6 +15,7 @@ import {
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
 import { LAW_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 // The server `instructions` ride on every initialize response, so they are a
 // per-session token cost. These budgets are hard ceilings: growth past them
@@ -81,29 +84,33 @@ describe("MCP server instructions", () => {
   // `getMcpInstructions`, and a gate-off deployment advertises none of the
   // legislation tools the workflow tells a model to call.
   const withPublicLaw = (
-    { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+    {
+      featurePublicLaw,
+      localDevOpen,
+    }: { featurePublicLaw: boolean; localDevOpen: boolean },
     run: () => void,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    const previousIsDev = env.isDev;
     env.FEATURE_PUBLIC_LAW = featurePublicLaw;
-    env.isDev = isDev;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
+    });
     try {
       run();
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   };
 
   test("serves the legislation pointer only while the public-law gate is open", () => {
-    withPublicLaw({ featurePublicLaw: true, isDev: false }, () => {
+    withPublicLaw({ featurePublicLaw: true, localDevOpen: false }, () => {
       const served = getMcpInstructions("default");
       expect(served).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
       expect(served).toBe(MCP_INSTRUCTIONS.default);
     });
 
-    withPublicLaw({ featurePublicLaw: false, isDev: false }, () => {
+    withPublicLaw({ featurePublicLaw: false, localDevOpen: false }, () => {
       const served = getMcpInstructions("default");
       expect(served).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
       // The template workflow is not gated, so it stays.
@@ -111,7 +118,7 @@ describe("MCP server instructions", () => {
     });
 
     // Dev sees everything, like the tool list.
-    withPublicLaw({ featurePublicLaw: false, isDev: true }, () => {
+    withPublicLaw({ featurePublicLaw: false, localDevOpen: true }, () => {
       expect(getMcpInstructions("default")).toContain(
         LEGISLATION_WORKFLOW_REFERENCE_URI,
       );
@@ -141,11 +148,11 @@ describe("MCP server instructions", () => {
     // The whole law tool list rides the public-law gate, so a gate-off
     // deployment serves an empty tools/list there: naming its tools
     // would be the same dead end the default surface avoids above.
-    withPublicLaw({ featurePublicLaw: true, isDev: false }, () => {
+    withPublicLaw({ featurePublicLaw: true, localDevOpen: false }, () => {
       expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);
     });
 
-    withPublicLaw({ featurePublicLaw: false, isDev: false }, () => {
+    withPublicLaw({ featurePublicLaw: false, localDevOpen: false }, () => {
       const served = getMcpInstructions("law");
       for (const { name } of LAW_MCP_TOOL_DEFINITIONS) {
         expect(
@@ -157,7 +164,7 @@ describe("MCP server instructions", () => {
       expect(served).toContain("not enabled on this deployment");
     });
 
-    withPublicLaw({ featurePublicLaw: false, isDev: true }, () => {
+    withPublicLaw({ featurePublicLaw: false, localDevOpen: true }, () => {
       expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);
     });
   });

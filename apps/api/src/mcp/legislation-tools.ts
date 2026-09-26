@@ -340,8 +340,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
-    // same surface the public routes gate behind env.isDev ||
-    // env.FEATURE_PUBLIC_LAW.
+    // same surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
     name: SEARCH_LEGISLATION_TOOL,
     scope: "stella:search",

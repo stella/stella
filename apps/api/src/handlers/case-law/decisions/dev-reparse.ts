@@ -19,6 +19,7 @@ import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const FETCH_TIMEOUT_MS = 20_000;
 
@@ -28,9 +29,9 @@ const NSS_BASE_URL = "https://vyhledavac.nssoud.cz";
 /** The publisher's own id, the only part of a stored URL that is used. */
 const NSS_DOCUMENT_ID = /\/DokumentDetail\/Index\/(?<id>\d+)(?:[/?#]|$)/u;
 
-/** Only a development process reading a shared corpus re-parses on read. */
+/** Only a local development process reading a shared corpus re-parses on read. */
 export const devReparseEnabled = (): boolean =>
-  envBase.isDev && envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
+  isLocalDevOpen() && envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
 
 export type DevReparseDecision = {
   id: SafeId<"caseLawDecision">;

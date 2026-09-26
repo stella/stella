@@ -1,11 +1,10 @@
-import { panic } from "better-result";
-
 import { session } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 const DEV_SEED_SESSION_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
@@ -49,9 +48,7 @@ export const mintDevSeedSession = async ({
   organizationId,
   userId,
 }: MintDevSeedSessionOptions): Promise<DevSeedSession> => {
-  if (!env.isDev) {
-    panic("Dev seed sessions are unavailable outside development.");
-  }
+  requireLocalDevOpen("A dev seed session");
 
   const now = new Date();
   const token = Bun.randomUUIDv7();

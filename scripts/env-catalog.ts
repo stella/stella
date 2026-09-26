@@ -439,7 +439,7 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
-  CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
+  CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
@@ -492,7 +492,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
 const HIDDEN_SCHEMA_KEYS = new Set([
   "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_DATABASE_URL",
-  "isDev",
 ]);
 
 const humanizeEnvName = (name: string) => {
@@ -637,7 +636,7 @@ export const API_ENV_SCHEMA = {
   ...envApiServerSchema,
 };
 
-export type ApiEnvironmentName = Exclude<keyof typeof API_ENV_SCHEMA, "isDev">;
+export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;

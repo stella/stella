@@ -17,7 +17,9 @@ describe("the shared publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
     const environment = {
       ...Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => key !== "REDIS_URL"),
+        Object.entries(process.env).filter(
+          ([key]) => key !== "REDIS_URL" && key !== "STELLA_LOCAL_DEV",
+        ),
       ),
       NODE_ENV: "production",
     };

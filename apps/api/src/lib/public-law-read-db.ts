@@ -18,6 +18,7 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
@@ -459,7 +460,7 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
     const database = drizzle({
       client,
       relations: databaseRelations,
-      logger: envBase.isDev ? queryCountLogger : undefined,
+      logger: isLocalDevOpen() ? queryCountLogger : undefined,
     });
     externalPublicLawDatabase = {
       database,

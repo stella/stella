@@ -1,6 +1,7 @@
 import { shouldEnablePostHog } from "@stll/analytics-config";
 
 import { envBase } from "@/api/env-base";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { createPostHogNodeAnalytics } from "./posthog-node";
 import type { ServerAnalytics } from "./server-analytics";
@@ -18,7 +19,7 @@ const noopAnalytics: ServerAnalytics = {
 let analytics: ServerAnalytics | null = null;
 
 export const isLocalPostHogDebugEnabled = (): boolean =>
-  envBase.isDev && envBase.POSTHOG_LOCAL_DEBUG;
+  isLocalDevOpen() && envBase.POSTHOG_LOCAL_DEBUG;
 
 export const getServerAnalytics = (): ServerAnalytics => {
   if (analytics) {
@@ -26,7 +27,7 @@ export const getServerAnalytics = (): ServerAnalytics => {
   }
 
   const posthogConfig = {
-    isDev: envBase.isDev,
+    suppressTelemetry: isLocalDevOpen(),
     key: envBase.POSTHOG_KEY,
     host: envBase.POSTHOG_HOST,
     localDebug: envBase.POSTHOG_LOCAL_DEBUG,

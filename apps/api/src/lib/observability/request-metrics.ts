@@ -1,6 +1,6 @@
 import { Temporal } from "@stll/time";
 
-import { envBase } from "@/api/env-base";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Per-request latency, split by request class, emitted as a CloudWatch
@@ -46,11 +46,10 @@ const writeMetricLine = (record: object): void => {
     metricLineSink(line);
     return;
   }
-  // Only deployed environments ship logs to CloudWatch; locally this
-  // would be noise on the dev server's stdout. The base environment is
-  // enough: capture reaches this module, and a worker that captures must not
-  // validate the whole API environment.
-  if (envBase.isDev) {
+  // Local development would only add noise to the dev server's stdout.
+  // Read from the runtime mode alone: capture reaches this module, and a
+  // worker that captures must not validate the whole API environment.
+  if (isLocalDevOpen()) {
     return;
   }
   process.stdout.write(`${line}\n`);

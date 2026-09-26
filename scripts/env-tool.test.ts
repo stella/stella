@@ -312,7 +312,11 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment({ app: "api", input });
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input,
+      mode: "development",
+    });
     expect(result.status).toBe("valid");
     expect(result.values["DATABASE_URL"]).toBe(
       "postgres://postgres:@localhost:5432/stella?sslmode=require",
@@ -331,7 +335,11 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment({ app: "api", input });
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input,
+      mode: "development",
+    });
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
       expect(result.issues).toContain(
@@ -350,7 +358,11 @@ describe("environment doctor output", () => {
       DB_USER: "UNCONFIGURED",
     });
 
-    const result = validateDoctorEnvironment({ app: "api", input });
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input,
+      mode: "development",
+    });
     expect(result.status).toBe("valid");
   });
 
@@ -366,7 +378,11 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment({ app: "api", input });
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input,
+      mode: "development",
+    });
     expect(result.status).toBe("valid");
     expect(result.values["DATABASE_URL"]).toBe(
       "postgres://postgres:postgres@localhost:5432/stella?sslmode=require",
@@ -391,6 +407,28 @@ describe("environment doctor output", () => {
     }
   });
 
+  test("flags single-process collab outside local development", () => {
+    const input = {
+      STELLA_API_URL: "https://api.example.com",
+      STELLA_COLLAB_MODE: "single-process",
+      STELLA_COLLAB_SERVICE_TOKEN: "x".repeat(32),
+    };
+    const strict = validateDoctorEnvironment({ app: "collab", input });
+    const development = validateDoctorEnvironment({
+      app: "collab",
+      input,
+      mode: "development",
+    });
+
+    expect(strict.status).toBe("invalid");
+    if (strict.status === "invalid") {
+      expect(strict.issues.join(" ")).toContain(
+        "STELLA_COLLAB_MODE=single-process is only supported in local development",
+      );
+    }
+    expect(development.status).toBe("valid");
+  });
+
   test("defaults an empty database SSL mode like API startup", () => {
     const input = validApiInput();
     delete input["DATABASE_URL"];
@@ -403,7 +441,11 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment({ app: "api", input });
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input,
+      mode: "development",
+    });
     expect(result.status).toBe("valid");
     expect(result.values["DATABASE_URL"]).toBe(
       "postgres://postgres:@localhost:5432/stella?sslmode=require",
@@ -445,6 +487,7 @@ describe("environment doctor output", () => {
         PUBLIC_LAW_DATABASE_POOL_MAX: "4",
         PUBLIC_LAW_DATABASE_URL: currentUrl,
       },
+      mode: "development",
     });
 
     expect(result.status).toBe("valid");
@@ -489,8 +532,7 @@ describe("environment doctor output", () => {
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
     },
     {
-      expected:
-        "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
+      expected: "CONTENT_ENCRYPTION_KEY is required outside local development.",
       overrides: { NODE_ENV: "production" },
     },
     {
@@ -657,6 +699,8 @@ describe("environment doctor output", () => {
     const result = validateDoctorEnvironment({
       app: "api",
       input: { ...validApiInput(), ...overrides },
+      // A case that names no NODE_ENV checks the local launcher configuration.
+      mode: "NODE_ENV" in overrides ? undefined : "development",
     });
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
@@ -675,6 +719,7 @@ describe("environment doctor output", () => {
         validateDoctorEnvironment({
           app: "api",
           input: { ...validApiInput(), QUERY_EXPANSION_MODE: mode },
+          mode: "development",
         }).status,
       ).toBe("valid");
     },
@@ -689,8 +734,38 @@ describe("environment doctor output", () => {
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
       expect(result.issues).toContain(
-        "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
+        "CONTENT_ENCRYPTION_KEY is required outside local development.",
       );
+    }
+  });
+
+  test("checks a configuration without the local development opt-in as strict", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: validApiInput(),
+    });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "CONTENT_ENCRYPTION_KEY is required outside local development.",
+      );
+    }
+  });
+
+  test("reports the local development opt-in outside a local NODE_ENV", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        NODE_ENV: "production",
+        STELLA_LOCAL_DEV: "1",
+      },
+    });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toEqual([
+        "STELLA_LOCAL_DEV=1 requires NODE_ENV=development or test; NODE_ENV is production.",
+      ]);
     }
   });
 

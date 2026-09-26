@@ -37,7 +37,7 @@ describe("shouldEnablePostHog", () => {
       shouldEnablePostHog({
         key: "phc_real-project-key",
         host: "https://eu.i.posthog.com",
-        isDev: true,
+        suppressTelemetry: true,
         localDebug: false,
       }),
     ).toBeFalse();
@@ -48,7 +48,7 @@ describe("shouldEnablePostHog", () => {
       shouldEnablePostHog({
         key: "phc_real-project-key",
         host: "https://eu.i.posthog.com",
-        isDev: true,
+        suppressTelemetry: true,
         localDebug: true,
       }),
     ).toBeTrue();
@@ -59,7 +59,7 @@ describe("shouldEnablePostHog", () => {
       shouldEnablePostHog({
         key: "phc_real-project-key",
         host: "https://eu.i.posthog.com",
-        isDev: false,
+        suppressTelemetry: false,
         localDebug: false,
       }),
     ).toBeTrue();
@@ -70,7 +70,7 @@ describe("shouldEnablePostHog", () => {
       shouldEnablePostHog({
         key: "phc_",
         host: "https://eu.i.posthog.com",
-        isDev: false,
+        suppressTelemetry: false,
         localDebug: false,
       }),
     ).toBeFalse();

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -13,6 +15,7 @@ import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -144,18 +147,22 @@ describe("list_audit_log", () => {
 
 describe("search_boe_legislation feature gating", () => {
   const withPublicLaw = async (
-    { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+    {
+      featurePublicLaw,
+      localDevOpen,
+    }: { featurePublicLaw: boolean; localDevOpen: boolean },
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    const previousIsDev = env.isDev;
     env.FEATURE_PUBLIC_LAW = featurePublicLaw;
-    env.isDev = isDev;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
+    });
     try {
       await run();
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   };
 
@@ -168,29 +175,38 @@ describe("search_boe_legislation feature gating", () => {
   });
 
   test("is hidden when the flag is off outside dev", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
-      const names = (
-        await listMcpTools(createContext(), "default", ["stella:read"])
-      ).map((tool) => tool.name);
-      expect(names).not.toContain("search_boe_legislation");
-      // An untagged stella:read tool stays listed: only the gate drops.
-      expect(names).toContain("list_matters");
-    });
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: false },
+      async () => {
+        const names = (
+          await listMcpTools(createContext(), "default", ["stella:read"])
+        ).map((tool) => tool.name);
+        expect(names).not.toContain("search_boe_legislation");
+        // An untagged stella:read tool stays listed: only the gate drops.
+        expect(names).toContain("list_matters");
+      },
+    );
   });
 
   test("is listed when the flag is on, and in dev regardless", async () => {
-    await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
-      const names = (
-        await listMcpTools(createContext(), "default", ["stella:read"])
-      ).map((tool) => tool.name);
-      expect(names).toContain("search_boe_legislation");
-    });
-    await withPublicLaw({ featurePublicLaw: false, isDev: true }, async () => {
-      const names = (
-        await listMcpTools(createContext(), "default", ["stella:read"])
-      ).map((tool) => tool.name);
-      expect(names).toContain("search_boe_legislation");
-    });
+    await withPublicLaw(
+      { featurePublicLaw: true, localDevOpen: false },
+      async () => {
+        const names = (
+          await listMcpTools(createContext(), "default", ["stella:read"])
+        ).map((tool) => tool.name);
+        expect(names).toContain("search_boe_legislation");
+      },
+    );
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: true },
+      async () => {
+        const names = (
+          await listMcpTools(createContext(), "default", ["stella:read"])
+        ).map((tool) => tool.name);
+        expect(names).toContain("search_boe_legislation");
+      },
+    );
   });
 
   test("rejects block_id without law_id before any BOE fetch", async () => {

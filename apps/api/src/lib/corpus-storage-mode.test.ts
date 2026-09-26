@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
@@ -28,7 +30,7 @@ describe("resolveCorpusStorageMode", () => {
 describe("corpusStorageInvariantViolation", () => {
   const deployed = {
     corpusBucket: "corpus",
-    isDev: false,
+    runtimeMode: { mode: RUNTIME_MODE.strict },
     projectionOwner: "external",
   } as const;
 
@@ -90,7 +92,7 @@ describe("corpusStorageInvariantViolation", () => {
           mode,
           searchProvider: "corpus-index",
           corpusBucket: undefined,
-          isDev: true,
+          runtimeMode: { mode: RUNTIME_MODE.open },
         }),
       ).toBeNull();
     }
@@ -103,7 +105,7 @@ describe("corpusStorageInvariantViolation", () => {
         projectionOwner: undefined,
         searchProvider: "pg-fts",
         corpusBucket: undefined,
-        isDev: false,
+        runtimeMode: { mode: RUNTIME_MODE.strict },
       }),
     ).toBeNull();
   });

@@ -8,10 +8,11 @@ import {
 
 import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
+import { runtimeMode } from "@/api/runtime-mode";
 
 const allowedHostOrigins = frontendOrigins({
   frontendUrl: env.FRONTEND_URL,
-  isDev: env.isDev,
+  runtimeMode: runtimeMode(),
 }).map((origin) => new URL(origin).origin);
 
 const allowedHostOriginsJson = JSON.stringify(allowedHostOrigins);

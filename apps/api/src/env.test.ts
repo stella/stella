@@ -12,66 +12,50 @@ const baseEnv = {
   GOTENBERG_URL: "http://localhost:3002",
   GOTENBERG_USERNAME: "test",
   GOTENBERG_PASSWORD: "test",
+  CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+} as const;
+
+const LOCAL_DEV_ENV = {
+  NODE_ENV: "development",
+  STELLA_LOCAL_DEV: "1",
 } as const;
 
 const envModuleUrl = new URL("env.ts", import.meta.url).href;
 const repoRoot = new URL("../../..", import.meta.url).pathname;
 
-const readEnvProvider = (env: Record<string, string | undefined>) => {
-  const result = Bun.spawnSync({
-    cmd: [
-      process.execPath,
-      "-e",
-      `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.EMAIL_PROVIDER));`,
-    ],
-    cwd: repoRoot,
-    env,
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-
-  expect(result.exitCode).toBe(0);
-  return result.stdout.toString().trim();
-};
-
-const readSelfhostLocalPasswordAuth = (
-  env: Record<string, string | undefined>,
-) => {
-  const result = Bun.spawnSync({
-    cmd: [
-      process.execPath,
-      "-e",
-      `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.SELFHOST_LOCAL_PASSWORD_AUTH));`,
-    ],
-    cwd: repoRoot,
-    env,
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-
-  expect(result.exitCode).toBe(0);
-  return result.stdout.toString().trim();
-};
-
+// A developer's .env in the repository root would otherwise leak into these
+// runtimes and decide their outcome.
 const spawnApiEnvironment = (
   env: Record<string, string | undefined>,
   script: string,
-  // The repository .env would otherwise supply a DATABASE_URL, hiding the
-  // database-component path these cases exist to exercise.
-  ignoreEnvFile = false,
 ) =>
   Bun.spawnSync({
-    cmd: [
-      process.execPath,
-      ...(ignoreEnvFile ? ["--no-env-file"] : []),
-      "-e",
-      script,
-    ],
+    cmd: [process.execPath, "--no-env-file", "-e", script],
     cwd: repoRoot,
     env,
     stderr: "pipe",
     stdout: "pipe",
   });
+
+const readEnvValue = (
+  env: Record<string, string | undefined>,
+  name: "EMAIL_PROVIDER" | "SELFHOST_LOCAL_PASSWORD_AUTH",
+) => {
+  const result = spawnApiEnvironment(
+    env,
+    `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.${name}));`,
+  );
+
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  return result.stdout.toString().trim();
+};
+
+const readEnvProvider = (env: Record<string, string | undefined>) =>
+  readEnvValue(env, "EMAIL_PROVIDER");
+
+const readSelfhostLocalPasswordAuth = (
+  env: Record<string, string | undefined>,
+) => readEnvValue(env, "SELFHOST_LOCAL_PASSWORD_AUTH");
 
 const FREEZE_SCRIPT = `const { env } = await import(${JSON.stringify(envModuleUrl)}); console.log(String(Object.isFrozen(env)));`;
 const DATABASE_URL_SCRIPT = `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(env.DATABASE_URL);`;
@@ -79,12 +63,8 @@ const DATABASE_URL_SCRIPT = `import { env } from ${JSON.stringify(envModuleUrl)}
 const bootApiEnvironment = (env: Record<string, string | undefined>) =>
   spawnApiEnvironment(env, FREEZE_SCRIPT);
 
-const bootDerivedDatabaseEnvironment = (
-  env: Record<string, string | undefined>,
-) => spawnApiEnvironment(env, FREEZE_SCRIPT, true);
-
 const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
-  const result = spawnApiEnvironment(env, DATABASE_URL_SCRIPT, true);
+  const result = spawnApiEnvironment(env, DATABASE_URL_SCRIPT);
 
   expect(result.exitCode).toBe(0);
   return result.stdout.toString().trim();
@@ -238,7 +218,7 @@ describe("API environment", () => {
   const { DATABASE_URL: _databaseUrl, ...envWithoutDatabaseUrl } = baseEnv;
 
   test("refuses to assemble a database URL from a placeholder component", () => {
-    const result = bootDerivedDatabaseEnvironment({
+    const result = bootApiEnvironment({
       ...envWithoutDatabaseUrl,
       ...databaseComponents,
       DB_PASSWORD: "PLACEHOLDER_SET_ME",
@@ -334,4 +314,101 @@ describe("API environment", () => {
       expect(result.stderr.toString()).toContain(expected);
     },
   );
+});
+
+describe("local development access", () => {
+  test.each([
+    { label: "NODE_ENV unset", overrides: {} },
+    { label: "NODE_ENV=development", overrides: { NODE_ENV: "development" } },
+    { label: "NODE_ENV=test", overrides: { NODE_ENV: "test" } },
+  ])("stays strict without the runtime opt-in ($label)", ({ overrides }) => {
+    const strict = bootApiEnvironment({ ...baseEnv, ...overrides });
+    const mockAi = bootApiEnvironment({
+      ...baseEnv,
+      ...overrides,
+      USE_MOCK_AI: "true",
+    });
+    const plaintextStorage = bootApiEnvironment({
+      ...baseEnv,
+      ...overrides,
+      S3_ENDPOINT: "http://storage.example.com",
+    });
+
+    expect(strict.exitCode).toBe(0);
+    expect(strict.stdout.toString().trim()).toBe("true");
+    expect(mockAi.stderr.toString()).toContain(
+      "USE_MOCK_AI is only supported in local development and tests.",
+    );
+    expect(plaintextStorage.stderr.toString()).toContain(
+      "S3_ENDPOINT must use HTTPS unless it targets a loopback address.",
+    );
+  });
+
+  test("relaxes local-only settings with the runtime opt-in", () => {
+    const { CONTENT_ENCRYPTION_KEY: _key, ...withoutKey } = baseEnv;
+    const result = bootApiEnvironment({
+      ...withoutKey,
+      ...LOCAL_DEV_ENV,
+      S3_ENDPOINT: "http://storage.example.com",
+      USE_MOCK_AI: "true",
+    });
+
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("false");
+  });
+
+  test.each(["production", "staging", ""])(
+    "refuses the opt-in with NODE_ENV=%p",
+    (nodeEnv) => {
+      const result = bootApiEnvironment({
+        ...baseEnv,
+        NODE_ENV: nodeEnv,
+        STELLA_LOCAL_DEV: "1",
+      });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "STELLA_LOCAL_DEV=1 requires NODE_ENV=development or test",
+      );
+    },
+  );
+
+  test("refuses an opt-in value other than 1", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      NODE_ENV: "development",
+      STELLA_LOCAL_DEV: "true",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      'STELLA_LOCAL_DEV accepts only "1".',
+    );
+  });
+
+  test("keeps the auth rate-limit bypass to NODE_ENV=development with the opt-in", () => {
+    const withoutOptIn = bootApiEnvironment({
+      ...baseEnv,
+      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
+      NODE_ENV: "development",
+    });
+    const testProcess = bootApiEnvironment({
+      ...baseEnv,
+      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
+      NODE_ENV: "test",
+      STELLA_LOCAL_DEV: "1",
+    });
+    const development = bootApiEnvironment({
+      ...baseEnv,
+      ...LOCAL_DEV_ENV,
+      E2E_DISABLE_AUTH_RATE_LIMIT: "true",
+    });
+
+    for (const refused of [withoutOptIn, testProcess]) {
+      expect(refused.stderr.toString()).toContain(
+        "E2E_DISABLE_AUTH_RATE_LIMIT is test-only",
+      );
+    }
+    expect(development.exitCode, development.stderr.toString()).toBe(0);
+  });
 });

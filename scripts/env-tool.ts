@@ -15,10 +15,7 @@ import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
 import {
-  classifyNodeEnv,
   envBaseInvariantViolation,
-  KNOWN_NODE_ENVS,
-  NODE_ENV_KIND,
   resolveApiEnvironmentPlaceholders,
 } from "../apps/api/src/env-base-schema";
 import { documentProcessingEnvInvariantViolation } from "../apps/api/src/env-document-processing-worker-schema";
@@ -27,7 +24,13 @@ import {
   resolveEmailProvider,
 } from "../apps/api/src/env-schema";
 import { EMPTY_VALUE_VARIABLES } from "../apps/api/src/lib/configuration-placeholders";
+import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
+import {
+  BUILD_KIND,
+  LOCAL_DEV_OPT_IN,
+  resolveRuntimeMode,
+} from "../packages/runtime-mode/src/index";
 import {
   AMBIENT_ENV_KEYS,
   API_ENV_SCHEMA,
@@ -864,21 +867,6 @@ export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
   return normalized;
 };
 
-const validateSchema = (
-  schema: Record<string, v.GenericSchema>,
-  input: DoctorInput,
-): DoctorValidationResult => {
-  const result = v.safeParse(v.object(schema), input);
-  if (!result.success) {
-    return {
-      status: "invalid",
-      issues: result.issues.map(formatEnvIssue),
-      values: input,
-    };
-  }
-  return { status: "valid", values: { ...input, ...result.output } };
-};
-
 const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   // Mirrors apps/api/src/env-base.ts: placeholders go first, so the doctor
   // and the runtime derive DATABASE_URL from the same values.
@@ -904,23 +892,24 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     };
   }
 
-  const nodeEnv = configured["NODE_ENV"];
-  const nodeEnvKind = classifyNodeEnv(nodeEnv);
-  // `unknown` is only ever a set, non-empty value.
-  if (nodeEnvKind === NODE_ENV_KIND.unknown && nodeEnv !== undefined) {
+  // Resolved as the runtime resolves it, from the same two keys.
+  const runtime = resolveRuntimeMode({
+    nodeEnv: configured["NODE_ENV"],
+    localDevOptIn: configured[LOCAL_DEV_OPT_IN.name],
+    buildKind: BUILD_KIND.source,
+  });
+  if (Result.isError(runtime)) {
     return {
       status: "invalid",
-      issues: [
-        `NODE_ENV: "${nodeEnv}" is not one of ${KNOWN_NODE_ENVS.join(", ")}.`,
-      ],
+      issues: [runtime.error.message],
       values: configured,
     };
   }
+  const { nodeEnv, runtimeMode } = runtime.value;
 
   const runtimeInput = {
     ...configured,
     DATABASE_URL: databaseUrl.value,
-    isDev: nodeEnvKind === NODE_ENV_KIND.local,
   };
   const parsed = v.safeParse(v.object(API_ENV_SCHEMA), runtimeInput);
   if (!parsed.success) {
@@ -934,19 +923,23 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   const emailProvider = resolveEmailProvider(parsed.output);
   const output = { ...parsed.output, EMAIL_PROVIDER: emailProvider };
   const issues: string[] = [];
-  const baseIssue = envBaseInvariantViolation(output);
+  const baseIssue = envBaseInvariantViolation({ ...output, runtimeMode });
   if (baseIssue !== null) {
     issues.push(baseIssue);
   }
   const documentProcessingIssue = documentProcessingEnvInvariantViolation({
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
-    nodeEnv,
     redisUrl: output.REDIS_URL,
+    runtimeMode,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);
   }
-  const apiIssue = envApiInvariantViolation({ ...output, nodeEnv });
+  const apiIssue = envApiInvariantViolation({
+    ...output,
+    nodeEnv,
+    runtimeMode,
+  });
   if (apiIssue !== null) {
     issues.push(apiIssue);
   }
@@ -954,6 +947,38 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   return issues.length === 0
     ? { status: "valid", values }
     : { status: "invalid", issues, values };
+};
+
+// Mirrors apps/collab/src/env.ts: the schema first, then the topology rule
+// under the same runtime mode resolution the process applies.
+const validateCollabEnvironment = (
+  input: DoctorInput,
+): DoctorValidationResult => {
+  const result = v.safeParse(v.object(COLLAB_ENV_SCHEMA), input);
+  if (!result.success) {
+    return {
+      status: "invalid",
+      issues: result.issues.map(formatEnvIssue),
+      values: input,
+    };
+  }
+  const values = { ...input, ...result.output };
+  const runtime = resolveRuntimeMode({
+    nodeEnv: input["NODE_ENV"],
+    localDevOptIn: input[LOCAL_DEV_OPT_IN.name],
+    buildKind: BUILD_KIND.source,
+  });
+  if (Result.isError(runtime)) {
+    return { status: "invalid", issues: [runtime.error.message], values };
+  }
+  const issue = collabEnvInvariantViolation({
+    mode: result.output.STELLA_COLLAB_MODE,
+    redisUrl: result.output.STELLA_COLLAB_REDIS_URL,
+    runtimeMode: runtime.value.runtimeMode,
+  });
+  return issue === null
+    ? { status: "valid", values }
+    : { status: "invalid", issues: [issue], values };
 };
 
 const validateWebEnvironment = (input: DoctorInput): DoctorValidationResult => {
@@ -991,7 +1016,7 @@ const ENV_APP_CONFIG = {
   collab: {
     examplePath: COLLAB_EXAMPLE_PATH,
     owners: new Set<EnvOwner>([ENV_OWNER.collab]),
-    validate: (input: DoctorInput) => validateSchema(COLLAB_ENV_SCHEMA, input),
+    validate: validateCollabEnvironment,
   },
   web: {
     examplePath: WEB_EXAMPLE_PATH,
@@ -1065,13 +1090,37 @@ type ValidateDoctorEnvironmentOptions = {
   mode?: EnvMode | undefined;
 };
 
+/**
+ * The runtime keys a selected mode stands for. Development and test are how
+ * the local launchers (dev runner, test runner) start the API: with the
+ * explicit local development opt-in.
+ */
+const doctorModeEnvironment = (mode: EnvMode) => {
+  switch (mode) {
+    case ENV_MODE.production:
+      return { NODE_ENV: mode };
+    case ENV_MODE.development:
+    case ENV_MODE.test:
+      return {
+        NODE_ENV: mode,
+        [LOCAL_DEV_OPT_IN.name]: LOCAL_DEV_OPT_IN.value,
+      };
+    default: {
+      mode satisfies never;
+      return panic(`Unhandled doctor mode: ${String(mode)}`);
+    }
+  }
+};
+
 export const validateDoctorEnvironment = ({
   app,
   input,
   mode,
 }: ValidateDoctorEnvironmentOptions): DoctorValidationResult => {
   const selectedInput =
-    app === ENV_APP.api && mode ? { ...input, NODE_ENV: mode } : input;
+    app !== ENV_APP.web && mode
+      ? { ...input, ...doctorModeEnvironment(mode) }
+      : input;
   return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
 };
 

@@ -9,6 +9,11 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import {
+  isLocalDevOpen,
+  runtimeMode,
+  runtimeNodeEnv,
+} from "@/api/runtime-mode";
 
 const apiRuntimeEnv = resolveConfigurationPlaceholders({
   schema: envApiServerSchema,
@@ -33,7 +38,8 @@ const emailProvider = resolveEmailProvider(envApi);
 const invariantViolation = envApiInvariantViolation({
   ...envApi,
   EMAIL_PROVIDER: emailProvider,
-  nodeEnv: process.env.NODE_ENV,
+  nodeEnv: runtimeNodeEnv(),
+  runtimeMode: runtimeMode(),
 });
 if (invariantViolation !== null) {
   panic(invariantViolation);
@@ -58,7 +64,7 @@ const validatedEnv = {
 
 // Bun owns process.env and may expose it through a runtime proxy. Freeze the
 // validated application boundary instead of mutating the runtime object.
-if (process.env.NODE_ENV === "production") {
+if (!isLocalDevOpen()) {
   Object.freeze(validatedEnv);
 }
 

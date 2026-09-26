@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
@@ -28,6 +30,7 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
@@ -124,7 +127,7 @@ describe("buildCaseLawDecisionUrl", () => {
 });
 
 describe("buildCaseLawDecisionAppUrl gate", () => {
-  let previousIsDev: boolean;
+  let restoreRuntimeMode: () => void = () => undefined;
   let previousFeaturePublicLaw: boolean;
 
   const input = {
@@ -138,24 +141,27 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
   };
 
   beforeEach(() => {
-    previousIsDev = env.isDev;
     previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
   });
 
   afterEach(() => {
-    env.isDev = previousIsDev;
+    restoreRuntimeMode();
     env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
   });
 
-  test("returns null when public law is disabled and not in dev", () => {
-    env.isDev = false;
+  test("returns null when public law is disabled outside local development", () => {
+    restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
     env.FEATURE_PUBLIC_LAW = false;
 
     expect(buildCaseLawDecisionAppUrl(input)).toBeNull();
   });
 
   test("builds the URL when the public-law feature flag is on", () => {
-    env.isDev = false;
+    restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
     env.FEATURE_PUBLIC_LAW = true;
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
@@ -163,8 +169,8 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     );
   });
 
-  test("builds the URL in dev regardless of the feature flag", () => {
-    env.isDev = true;
+  test("builds the URL in local development regardless of the feature flag", () => {
+    restoreRuntimeMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
     env.FEATURE_PUBLIC_LAW = false;
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(

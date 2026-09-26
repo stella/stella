@@ -18,6 +18,7 @@ import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {
   createDbAnalysisStore,
@@ -82,7 +83,7 @@ const readsSharedCorpus = (): boolean =>
  * instead, which is what makes the local reader work.
  */
 export const storesAnalyses = (): boolean =>
-  !readsSharedCorpus() || envBase.isDev;
+  !readsSharedCorpus() || isLocalDevOpen();
 
 export const analysisStore = (): AnalysisStore =>
   readsSharedCorpus() ? memoryAnalysisStore : dbAnalysisStore;
