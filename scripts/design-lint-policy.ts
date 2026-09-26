@@ -31,12 +31,102 @@ export const SHADCN_LINT_JS_PLUGINS = [
 ] satisfies ExternalPluginEntry[];
 
 /**
+ * Function shape limits: how many independent branches, lines, and positional
+ * parameters one function may carry before it has to be split. They ride the
+ * same backlog as the rules below for the same reason the API size bounds do:
+ * a finding is a property of one function, which only the rule can measure.
+ *
+ * `complexity` counts a `switch` once (the `modified` variant): an exhaustive
+ * switch over a union is one decision, and splitting it by case only scatters
+ * the dispatch. Components get a longer body than other functions because
+ * their markup is part of the function.
+ */
+const SIZE_LINT_FUNCTION_LINES = 200;
+const SIZE_LINT_COMPONENT_LINES = 300;
+
+const SIZE_LINT_BACKLOG_RULES = [
+  "eslint/complexity",
+  "eslint/max-lines-per-function",
+  "eslint/max-params",
+] as const;
+
+type SizeLintRule = (typeof SIZE_LINT_BACKLOG_RULES)[number];
+
+type SizeLintRuleMap = Record<SizeLintRule, DummyRuleMap[string]>;
+
+const sizeLintFunctionLines = (max: number) =>
+  [
+    "error",
+    { max, skipBlankLines: true, skipComments: true },
+  ] satisfies DummyRuleMap[string];
+
+export const SIZE_LINT_RULES = {
+  "eslint/complexity": ["error", { max: 30, variant: "modified" }],
+  "eslint/max-lines-per-function": sizeLintFunctionLines(
+    SIZE_LINT_FUNCTION_LINES,
+  ),
+  "eslint/max-params": ["error", 4],
+} satisfies SizeLintRuleMap;
+
+/**
+ * What a file outside the limits still gets: the backlog files and tests. The
+ * complexity ceiling is the cap that held before the limits were ratcheted,
+ * so no function anywhere can grow past it.
+ */
+const SIZE_LINT_CEILINGS = {
+  "eslint/complexity": ["error", 50],
+  "eslint/max-lines-per-function": "off",
+  "eslint/max-params": "off",
+} satisfies SizeLintRuleMap;
+
+/** The measuring pass counts nothing in the exempt files. */
+export const SIZE_LINT_UNMEASURED = {
+  "eslint/complexity": "off",
+  "eslint/max-lines-per-function": "off",
+  "eslint/max-params": "off",
+} satisfies SizeLintRuleMap;
+
+/**
+ * Tests are sequences of cases, not units to split: a `describe` block is as
+ * long as its cases, and a fixture builder takes what the case varies.
+ */
+const SIZE_LINT_EXEMPT_FILES = [
+  "**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}",
+  "**/*.type-test.ts",
+  "**/{test,tests,__tests__,__fixtures__,e2e}/**",
+];
+
+/**
+ * The scopes both passes share. `exempt` is what the exempt files get: the
+ * ceilings in the repository lint, nothing in the measuring pass, which
+ * would otherwise count the ceiling's findings as backlog.
+ */
+export const sizeLintPolicyOverrides = (
+  exempt: SizeLintRuleMap,
+): OxlintOverride[] => [
+  {
+    files: ["**/*.tsx"],
+    rules: {
+      "eslint/max-lines-per-function": sizeLintFunctionLines(
+        SIZE_LINT_COMPONENT_LINES,
+      ),
+    },
+  },
+  { files: SIZE_LINT_EXEMPT_FILES, rules: exempt },
+];
+
+export const SIZE_LINT_POLICY_OVERRIDES =
+  sizeLintPolicyOverrides(SIZE_LINT_CEILINGS);
+
+/**
  * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
  *
- * The last two are not design rules: they are API size-bound guards whose
- * findings need scope analysis, so no lexical `scripts/ratchet.ts` counter can
- * measure them. They ride this per-file, oxlint-measured backlog because it is
- * the one debt mechanism that counts with the rule itself.
+ * `require-bounded-request-schema` and `no-unbounded-response-body` are not
+ * design rules: they are API size-bound guards whose findings need scope
+ * analysis, so no lexical `scripts/ratchet.ts` counter can measure them. They,
+ * and the function shape limits above, ride this per-file, oxlint-measured
+ * backlog because it is the one debt mechanism that counts with the rule
+ * itself.
  */
 export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
@@ -45,6 +135,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-imported-class-constant/no-imported-class-constant",
   "require-bounded-request-schema/require-bounded-request-schema",
   "no-unbounded-response-body/no-unbounded-response-body",
+  ...SIZE_LINT_BACKLOG_RULES,
 ] as const;
 
 export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
@@ -100,9 +191,21 @@ export const isDesignLintLocalPlugin = (entry: unknown): entry is string =>
     entry.slice(LOCAL_PLUGIN_PREFIX.length, -LOCAL_PLUGIN_SUFFIX.length),
   );
 
-/** The tracked rules this repository implements, as opposed to the preset's. */
+const SIZE_LINT_RULE_IDS: ReadonlySet<string> = new Set(
+  SIZE_LINT_BACKLOG_RULES,
+);
+
+const isSizeLintRule = (rule: string): rule is SizeLintRule =>
+  SIZE_LINT_RULE_IDS.has(rule);
+
+/**
+ * The tracked rules this repository implements, as opposed to the preset's
+ * and the core size limits, which both passes configure from this module.
+ */
 const DESIGN_LINT_LOCAL_RULES: ReadonlySet<string> = new Set(
-  DESIGN_LINT_BACKLOG_RULES.filter((rule) => pluginOf(rule) !== SHADCN_PLUGIN),
+  DESIGN_LINT_BACKLOG_RULES.filter(
+    (rule) => pluginOf(rule) !== SHADCN_PLUGIN && !isSizeLintRule(rule),
+  ),
 );
 
 /**
@@ -246,9 +349,11 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
  * diagnostic the baseline script cannot map is then a rule that arrived
  * without a ratchet decision, which it reports instead of dropping. The
  * local rules are scoped by file in `oxlint.config.ts`, and the design config
- * reuses those overrides, so they stay off at the top level here.
+ * reuses those overrides, so they stay off at the top level here. The size
+ * limits apply everywhere outside `sizeLintPolicyOverrides`' exempt files.
  */
 export const DESIGN_LINT_MEASURED_RULES = {
+  ...SIZE_LINT_RULES,
   "shadcn/no-restyle": SHADCN_LINT_RULES["shadcn/no-restyle"],
   "shadcn/no-arbitrary-values": SHADCN_LINT_RULES["shadcn/no-arbitrary-values"],
   "shadcn/no-raw-colors": "off",
@@ -264,16 +369,18 @@ export const DESIGN_LINT_MEASURED_RULES = {
 
 /**
  * One override per backlog rule switching it off in the files the baseline
- * still lists. `scripts/design-lint-baseline.ts --check` holds each file's
- * count at or below the baseline and prunes files that reach zero, so this
- * list only shrinks; a file outside it is linted in full. It is spread last
- * in `oxlint.config.ts`: oxlint resolves overrides by replacement, so a later
- * scope that enables a tracked rule would hand it back to a backlog file.
+ * still lists; a size limit drops to its ceiling there instead. `scripts/
+ * design-lint-baseline.ts --check` holds each file's count at or below the
+ * baseline and prunes files that reach zero, so this list only shrinks; a file
+ * outside it is linted in full. It is spread last in `oxlint.config.ts`:
+ * oxlint resolves overrides by replacement, so a later scope that enables a
+ * tracked rule would hand it back to a backlog file.
  */
 export const designLintBacklogOverrides = (
   backlog: DesignLintBacklog,
 ): OxlintOverride[] =>
   DESIGN_LINT_BACKLOG_RULES.flatMap((rule) => {
     const files = Object.keys(backlog[rule]).toSorted();
-    return files.length === 0 ? [] : [{ files, rules: { [rule]: "off" } }];
+    const severity = isSizeLintRule(rule) ? SIZE_LINT_CEILINGS[rule] : "off";
+    return files.length === 0 ? [] : [{ files, rules: { [rule]: severity } }];
   });

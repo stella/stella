@@ -6,6 +6,7 @@ import {
   DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE,
   DESIGN_LINT_TRACKED_PLUGINS,
   type DesignLintBacklog,
+  designLintBacklogOverrides,
 } from "./design-lint-policy.ts";
 
 const backlog = (
@@ -20,6 +21,9 @@ const backlog = (
   "no-imported-class-constant/no-imported-class-constant": imported,
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
+  "eslint/complexity": {},
+  "eslint/max-lines-per-function": {},
+  "eslint/max-params": {},
 });
 
 test("a count above its baseline regresses, a clean file goes stale, a fall improves", () => {
@@ -99,6 +103,9 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-unbounded-response-body(no-unbounded-response-body)",
       "no-unbounded-response-body/no-unbounded-response-body",
     ],
+    ["eslint(complexity)", "eslint/complexity"],
+    ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
+    ["eslint(max-params)", "eslint/max-params"],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
@@ -106,8 +113,29 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "no-imported-class-constant",
     "require-bounded-request-schema",
     "no-unbounded-response-body",
+    "eslint",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
     DESIGN_LINT_BACKLOG_RULES.length,
   );
+});
+
+// A backlog file keeps the complexity cap that held before the limit was
+// ratcheted, so a listed function can still not grow without bound; the
+// other rules have no older cap to fall back to.
+test("a backlog file drops a size limit to its ceiling, other rules to off", () => {
+  const overrides = designLintBacklogOverrides({
+    ...backlog({ "apps/web/src/a.tsx": 1 }),
+    "eslint/complexity": { "apps/api/src/b.ts": 1 },
+    "eslint/max-params": { "apps/api/src/b.ts": 2 },
+  });
+
+  expect(overrides).toEqual([
+    { files: ["apps/web/src/a.tsx"], rules: { "shadcn/no-restyle": "off" } },
+    {
+      files: ["apps/api/src/b.ts"],
+      rules: { "eslint/complexity": ["error", 50] },
+    },
+    { files: ["apps/api/src/b.ts"], rules: { "eslint/max-params": "off" } },
+  ]);
 });

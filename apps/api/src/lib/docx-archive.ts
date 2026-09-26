@@ -60,10 +60,17 @@ export type DocxArchive = {
 
 const collectStreamBounded = async (
   stream: NodeJS.ReadableStream,
-  perEntryMax: number,
-  remainingBudget: number,
-  totalBudget: number,
-  path: string,
+  {
+    path,
+    perEntryMax,
+    remainingBudget,
+    totalBudget,
+  }: {
+    path: string;
+    perEntryMax: number;
+    remainingBudget: number;
+    totalBudget: number;
+  },
 ): Promise<Buffer> =>
   await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -177,13 +184,12 @@ export const loadDocxArchive = async (
         return null;
       }
       const remaining = maxTotalBytes - totalRead;
-      const buf = await collectStreamBounded(
-        entry.nodeStream("nodebuffer"),
-        maxEntryBytes,
-        remaining,
-        maxTotalBytes,
+      const buf = await collectStreamBounded(entry.nodeStream("nodebuffer"), {
         path,
-      );
+        perEntryMax: maxEntryBytes,
+        remainingBudget: remaining,
+        totalBudget: maxTotalBytes,
+      });
       totalRead += buf.length;
       return buf;
     };

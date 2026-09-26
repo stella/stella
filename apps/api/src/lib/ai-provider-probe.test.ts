@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { ProbeProviderOptions } from "@/api/lib/ai-provider-probe";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundFetchError,
@@ -79,20 +80,12 @@ const { probeProvider: probeProviderImpl } =
 const probeProvider = async (
   provider: Parameters<typeof probeProviderImpl>[0],
   apiKey: string,
-  endpoint?: string,
-  apiVersion?: string,
-  expectedAzureDeployments?: readonly string[],
-  timeoutMs?: number,
+  options: Omit<ProbeProviderOptions, "fetchBytes"> = {},
 ) =>
-  await probeProviderImpl(
-    provider,
-    apiKey,
-    endpoint,
-    apiVersion,
-    expectedAzureDeployments,
-    timeoutMs,
-    mockSafeOutboundFetchBytes,
-  );
+  await probeProviderImpl(provider, apiKey, {
+    ...options,
+    fetchBytes: mockSafeOutboundFetchBytes,
+  });
 
 beforeEach(() => {
   calls.length = 0;
@@ -105,12 +98,10 @@ beforeEach(() => {
 
 describe("probeProvider", () => {
   test("passes the configured Azure API version to the Foundry probe", async () => {
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-      "2024-06-01",
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+      apiVersion: "2024-06-01",
+    });
 
     expect(result).toEqual({ valid: true });
     const call = calls.at(0);
@@ -123,11 +114,9 @@ describe("probeProvider", () => {
   });
 
   test("uses the Azure default API version when none is configured", async () => {
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+    });
 
     expect(result).toEqual({ valid: true });
     const call = calls.at(0);
@@ -151,13 +140,10 @@ describe("probeProvider", () => {
       },
     };
 
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-      undefined,
-      ["gpt-5-chat", "gpt-5-mini"],
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+      expectedAzureDeployments: ["gpt-5-chat", "gpt-5-mini"],
+    });
 
     expect(result).toEqual({ valid: true });
   });
@@ -169,13 +155,10 @@ describe("probeProvider", () => {
       body: { object: "list", data: [{ id: "gpt-5-chat" }] },
     };
 
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-      undefined,
-      ["gpt-5-chat", "typo-deployment"],
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+      expectedAzureDeployments: ["gpt-5-chat", "typo-deployment"],
+    });
 
     expect(result).toEqual({
       valid: false,
@@ -186,13 +169,10 @@ describe("probeProvider", () => {
   test("Azure probe treats a malformed list-models body as zero deployments", async () => {
     nextResponse = { kind: "ok", status: 200, body: "not-an-object" };
 
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-      undefined,
-      ["any-deployment"],
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+      expectedAzureDeployments: ["any-deployment"],
+    });
 
     expect(result).toEqual({
       valid: false,
@@ -207,11 +187,9 @@ describe("probeProvider", () => {
       body: { error: { message: "Invalid API key" } },
     };
 
-    const result = await probeProvider(
-      "azure_foundry",
-      "azure-key",
-      "https://example.openai.azure.com/openai/v1",
-    );
+    const result = await probeProvider("azure_foundry", "azure-key", {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+    });
 
     expect(result).toEqual({
       valid: false,
@@ -225,11 +203,9 @@ describe("probeProvider", () => {
 
     let caught: unknown;
     try {
-      await probeProvider(
-        "azure_foundry",
-        "azure-key",
-        "https://example.openai.azure.com/openai/v1",
-      );
+      await probeProvider("azure_foundry", "azure-key", {
+        endpoint: "https://example.openai.azure.com/openai/v1",
+      });
     } catch (error) {
       caught = error;
     }
@@ -240,11 +216,9 @@ describe("probeProvider", () => {
   });
 
   test("Hugging Face probe calls the endpoint models route with bearer auth", async () => {
-    const result = await probeProvider(
-      "huggingface",
-      "hf-test",
-      "https://example.endpoints.huggingface.cloud/v1/",
-    );
+    const result = await probeProvider("huggingface", "hf-test", {
+      endpoint: "https://example.endpoints.huggingface.cloud/v1/",
+    });
 
     expect(result).toEqual({ valid: true });
     const call = calls.at(0);
@@ -267,11 +241,9 @@ describe("probeProvider", () => {
   });
 
   test("Hugging Face probe rejects unsafe endpoint shape before fetch", async () => {
-    const result = await probeProvider(
-      "huggingface",
-      "hf-test",
-      "http://localhost:8080/v1",
-    );
+    const result = await probeProvider("huggingface", "hf-test", {
+      endpoint: "http://localhost:8080/v1",
+    });
 
     expect(result).toEqual({
       valid: false,
@@ -287,11 +259,9 @@ describe("probeProvider", () => {
       body: { error: { message: "Invalid token" } },
     };
 
-    const result = await probeProvider(
-      "huggingface",
-      "hf-test",
-      "https://example.endpoints.huggingface.cloud/v1",
-    );
+    const result = await probeProvider("huggingface", "hf-test", {
+      endpoint: "https://example.endpoints.huggingface.cloud/v1",
+    });
 
     expect(result).toEqual({
       valid: false,
