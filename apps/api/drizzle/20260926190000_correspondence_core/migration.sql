@@ -74,7 +74,7 @@ CREATE TABLE "correspondence_attachments" (
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "correspondence_attachments_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE cascade,
   CONSTRAINT "correspondence_attachments_record_workspace_fk" FOREIGN KEY ("correspondence_id", "workspace_id") REFERENCES "correspondence"("id", "workspace_id") ON DELETE cascade,
-  CONSTRAINT "correspondence_attachments_entity_workspace_fk" FOREIGN KEY ("entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE restrict,
+  CONSTRAINT "correspondence_attachments_entity_workspace_fk" FOREIGN KEY ("entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE cascade,
   CONSTRAINT "correspondence_attachments_size_check" CHECK ("byte_size" >= 0 and "ordinal" >= 0),
   CONSTRAINT "correspondence_attachments_scan_check" CHECK ("scan_verdict" in ('clean', 'infected', 'unknown'))
 );--> statement-breakpoint

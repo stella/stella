@@ -71,6 +71,7 @@ export type CorrespondenceFiler =
       allowedSenderId: string;
       address: string;
       approvedBy: string;
+      approvedByName: string | null;
       filedAt: string;
     };
 

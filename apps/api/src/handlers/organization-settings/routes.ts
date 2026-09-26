@@ -8,6 +8,11 @@ import {
   saveBusinessRegistryCredential,
   deleteBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
+import createCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
+import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/delete";
+import listCorrespondenceAllowedSenders from "@/api/handlers/organization-settings/correspondence/allowed-senders/list";
+import addCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add";
+import removeCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove";
 import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-availability/get";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
@@ -42,6 +47,48 @@ export const organizationSettingsRoute = new Elysia({
   .guard({
     validateAuth: true,
   })
+  .get(
+    "/correspondence/allowed-senders",
+    listCorrespondenceAllowedSenders.handler,
+    {
+      permissions: listCorrespondenceAllowedSenders.config.permissions,
+      query: listCorrespondenceAllowedSenders.config.query,
+    },
+  )
+  .post(
+    "/correspondence/allowed-senders",
+    createCorrespondenceAllowedSender.handler,
+    {
+      permissions: createCorrespondenceAllowedSender.config.permissions,
+      body: createCorrespondenceAllowedSender.config.body,
+    },
+  )
+  .delete(
+    "/correspondence/allowed-senders/:senderId",
+    deleteCorrespondenceAllowedSender.handler,
+    {
+      permissions: deleteCorrespondenceAllowedSender.config.permissions,
+      params: deleteCorrespondenceAllowedSender.config.params,
+    },
+  )
+  .post(
+    "/correspondence/allowed-senders/:senderId/scope",
+    addCorrespondenceAllowedSenderScope.handler,
+    {
+      permissions: addCorrespondenceAllowedSenderScope.config.permissions,
+      params: addCorrespondenceAllowedSenderScope.config.params,
+      body: addCorrespondenceAllowedSenderScope.config.body,
+    },
+  )
+  .delete(
+    "/correspondence/allowed-senders/:senderId/scope",
+    removeCorrespondenceAllowedSenderScope.handler,
+    {
+      permissions: removeCorrespondenceAllowedSenderScope.config.permissions,
+      params: removeCorrespondenceAllowedSenderScope.config.params,
+      body: removeCorrespondenceAllowedSenderScope.config.body,
+    },
+  )
   .get("/", readOrganizationSettings.handler, {
     permissions: readOrganizationSettings.config.permissions,
   })

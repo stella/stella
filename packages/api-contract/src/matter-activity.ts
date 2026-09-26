@@ -5,6 +5,7 @@ export const MATTER_ACTIVITY_CATEGORIES = [
   "matter",
   "team",
   "court",
+  "correspondence",
   "automation",
 ] as const;
 
