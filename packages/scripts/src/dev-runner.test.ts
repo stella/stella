@@ -1148,7 +1148,9 @@ describe("dev env factories", () => {
       BETTER_AUTH_URL: "http://localhost:3101",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
+      NODE_ENV: "development",
       STELLA_API_PORT: "3101",
+      STELLA_LOCAL_DEV: "1",
       STELLA_WEB_PORT: "3100",
     });
     expect(result).not.toHaveProperty("DATABASE_URL");

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "bun build --target=bun --packages=external --outfile dist/index.js src/index.ts",
-    "dev": "bun --watch src/index.ts",
+    "dev": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware apps/collab",
