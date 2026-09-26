@@ -1,4 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -91,4 +93,36 @@ describe.serial("no-direct-pdf-save", () => {
     );
     expect(await lint(source)).toEqual([2]);
   });
+
+  test("reports nothing on the API's own PDF code", async () => {
+    // Every server module that touches libpdf, the signing pipeline's
+    // incremental revisions included, goes through the shared helpers.
+    const root = path.resolve(import.meta.dir, "../..");
+    const apiSource = path.join(root, "apps/api/src");
+    const modules = readdirSync(apiSource, { recursive: true })
+      .map(String)
+      .filter(
+        (file) =>
+          file.endsWith(".ts") &&
+          !file.endsWith(".test.ts") &&
+          !file.startsWith("tests/"),
+      )
+      .map((file) => path.join(apiSource, file))
+      .filter((file) => readFileSync(file, "utf-8").includes("@libpdf/core"));
+    expect(modules.length).toBeGreaterThan(0);
+
+    const reports: Record<string, number[]> = {};
+    for (const file of modules) {
+      const relative = path.relative(root, file);
+      const lines = await lintSingleRule(
+        "no-direct-pdf-save",
+        readFileSync(file, "utf-8"),
+        { sourcePath: relative },
+      );
+      if (lines.length > 0) {
+        reports[relative] = lines;
+      }
+    }
+    expect(reports).toEqual({});
+  }, 300_000);
 });
