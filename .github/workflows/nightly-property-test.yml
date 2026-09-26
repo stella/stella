@@ -100,3 +100,50 @@ jobs:
         run: |
           bun apps/api/scripts/chat-mutation-matrix.ts --self-test
           bun apps/api/scripts/chat-mutation-matrix.ts
+
+  # We follow TanStack AI's future releases. Against the latest published
+  # @tanstack/ai* versions, in this throwaway checkout: does each of our
+  # patches still apply, or is it already upstream, and do the provider-wire
+  # contract and the chat oracle suites still hold? Report only; it never
+  # fails the workflow. Watch in particular for the part-state change in
+  # TanStack/ai#1511 (a client tool's final state), which our persistence
+  # reads.
+  tanstack-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install pinned dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Move to the latest TanStack AI and check each patch
+        run: bun scripts/tanstack-drift.ts --write-package
+
+      - name: Install the latest TanStack AI
+        run: bash scripts/retry.sh bun install --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+
+      - name: Report drift
+        run: bun scripts/tanstack-drift.ts --report
