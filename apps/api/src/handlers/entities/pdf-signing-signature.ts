@@ -89,6 +89,7 @@ const signatureSource = ({
   level: applied.level,
   signingTime: signingTime.toISOString(),
   timestampAuthorityUrl: applied.timestampAuthorityUrl,
+  warnings: applied.warnings,
 });
 
 const config = {
