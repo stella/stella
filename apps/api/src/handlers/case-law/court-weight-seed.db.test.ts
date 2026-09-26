@@ -6,6 +6,7 @@ import nodePath from "node:path";
 import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
 
 import { caseLawCourtWeights } from "@/api/db/schema";
+import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import {
   COURT_WEIGHT_SEED,
   courtWeightMapFromSeed,
@@ -14,6 +15,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   courtTierSqlFromMap,
   courtWeightFromMap,
+  decisionCourtWeight,
+  flattenCourtWeightEntries,
 } from "@/api/lib/case-law/court-weights";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -246,5 +249,60 @@ test("Postgres ranks every writable United States court as TypeScript does", asy
       ),
     ),
   ).toEqual(names);
+  await client.close();
+}, 60_000);
+
+// The admission invariant. A decision stored with a court id ranks by that
+// id's directory tier in the corpus search, while the Postgres rank paths
+// (the search tier and the citing-court weight) and the significance read
+// still rank it by name through the seed. A court may be writable only while
+// every path gives it one rank, so this runs over the whole writable set: the
+// set cannot grow past a court whose seeded row disagrees with its tier.
+test("every writable United States court ranks the same by id and by name in every path", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  await applyMigration(db, FULL_SEED);
+  await applyMigration(db, USA_SEED);
+  const map = courtWeightMapFromSeed();
+  const writable = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id));
+  expect(writable.length).toBe(US_WRITABLE_COURT_IDS.size);
+
+  const values = sql.join(
+    writable.map(({ canonicalName }) => sql`(${canonicalName}, 'USA')`),
+    sql`, `,
+  );
+  const ranked = await db.execute<{
+    court: string;
+    tier: number;
+    weight: number;
+  }>(
+    sql`SELECT d.court,
+               (${sql.raw(courtTierSqlFromMap({ countryColumn: "d.country", courtColumn: "d.court", map }))})::int AS tier,
+               (${sql.raw(courtWeightSql("d.court", flattenCourtWeightEntries(map)))})::int AS weight
+          FROM (VALUES ${values}) AS d(court, country)`,
+  );
+  const byName = new Map(
+    ranked.rows.map(({ court, tier, weight }) => [
+      court,
+      { tier: Number(tier), weight: Number(weight) },
+    ]),
+  );
+  const disagreeing = writable.flatMap(({ id, canonicalName }) => {
+    const byId = decisionCourtWeight(map, {
+      court: canonicalName,
+      country: "USA",
+      courtId: id,
+    });
+    const paths = {
+      sql: byName.get(canonicalName),
+      significance: courtWeightFromMap(map, canonicalName, "USA"),
+    };
+    return Object.entries(paths).flatMap(([path, rank]) =>
+      rank?.tier === byId.tier && rank.weight === byId.weight
+        ? []
+        : [{ id, path, byId, byName: rank }],
+    );
+  });
+  expect(disagreeing).toEqual([]);
   await client.close();
 }, 60_000);
