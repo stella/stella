@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { lookupByIco, searchByName } from "./client.js";
+import { lookupByIco, lookupFullRecordByIco, searchByName } from "./client.js";
 import { OrsrValidationError } from "./errors.js";
+import type { OrsrRawRelatedResponse } from "./types.js";
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 // SAFETY: fixtures are captured directly from the live ORSR API and
@@ -403,5 +404,179 @@ describe("searchByName validation", () => {
   test("rejects empty input", () => {
     expect(searchByName("")).rejects.toBeInstanceOf(OrsrValidationError);
     expect(searchByName("   ")).rejects.toBeInstanceOf(OrsrValidationError);
+  });
+});
+
+// Stub keyed on the request path, with the request's init for its signal.
+const installPathStub = (
+  handler: (url: URL, init?: RequestInit) => Promise<Response>,
+): (() => void) => {
+  const original = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async (input: URL | Request | string, init?: RequestInit) =>
+      handler(new URL(urlOf(input)), init),
+    { preconnect: original.preconnect },
+  );
+  return () => {
+    globalThis.fetch = original;
+  };
+};
+
+describe("lookupFullRecordByIco", () => {
+  let restore: () => void = () => {
+    // replaced by each test's stub
+  };
+  afterEach(() => {
+    restore();
+  });
+
+  const eset = async () => ({
+    search: await readFixture<unknown>("search-by-ico-eset.json"),
+    extract: await readFixture<unknown>("extract-eset.json"),
+    full: await readFixture<unknown>("extract-full-eset.json"),
+    documents: await readFixture<unknown>("documents-eset.json"),
+    related: await readFixture<OrsrRawRelatedResponse>("related-empty.json"),
+  });
+
+  test("reads the extract, history, documents, and links of one file", async () => {
+    const fixtures = await eset();
+    const paths: string[] = [];
+    restore = installPathStub(async (url) => {
+      paths.push(url.pathname);
+      switch (url.pathname) {
+        case "/api/legal-person/extract":
+          return jsonResponse(fixtures.extract);
+        case "/api/legal-person/extract-full":
+          return jsonResponse(fixtures.full);
+        case "/api/legal-person/documents":
+          return jsonResponse(fixtures.documents);
+        case "/api/legal-person/related":
+          expect(url.searchParams.get("oddiel")).toBe("Sro");
+          expect(url.searchParams.get("vlozka")).toBe("3586");
+          expect(url.searchParams.get("sud")).toBe("B");
+          return jsonResponse(fixtures.related);
+        default:
+          return jsonResponse(fixtures.search);
+      }
+    });
+
+    const record = await lookupFullRecordByIco("31333532");
+
+    expect(paths.toSorted()).toEqual([
+      "/api/legal-person",
+      "/api/legal-person/documents",
+      "/api/legal-person/extract",
+      "/api/legal-person/extract-full",
+      "/api/legal-person/related",
+    ]);
+    expect(record?.company.name).toBe("ESET, spol. s r.o.");
+    expect(record?.history.status).toBe("loaded");
+    expect(record?.documents).toMatchObject({ status: "loaded" });
+    if (record?.documents.status === "loaded") {
+      expect(
+        record.documents.value.map(({ serialNumber }) => serialNumber),
+      ).toEqual([185, 181, 182, 156]);
+    }
+    expect(record?.related).toEqual({ status: "loaded", value: [] });
+  });
+
+  test("a failed supplementary part is reported, not fatal", async () => {
+    const fixtures = await eset();
+    restore = installPathStub(async (url) => {
+      switch (url.pathname) {
+        case "/api/legal-person/extract":
+          return jsonResponse(fixtures.extract);
+        case "/api/legal-person/extract-full":
+          return new Response("<html>Služba nedostupná</html>", {
+            status: 200,
+            headers: { "Content-Type": "text/html" },
+          });
+        case "/api/legal-person/documents":
+          return new Response("Bad Gateway", { status: 502 });
+        case "/api/legal-person/related":
+          throw new TypeError("fetch failed");
+        default:
+          return jsonResponse(fixtures.search);
+      }
+    });
+
+    const record = await lookupFullRecordByIco("31333532");
+
+    expect(record?.company.ico).toBe("31333532");
+    expect(record?.history).toEqual({
+      status: "unavailable",
+      reason: "ORSR 200: invalid JSON payload",
+    });
+    expect(record?.documents).toMatchObject({
+      status: "unavailable",
+      reason: expect.stringContaining("ORSR 502"),
+    });
+    expect(record?.related).toEqual({
+      status: "unavailable",
+      reason: "ORSR request failed",
+    });
+  });
+
+  test("an outage page instead of the extract fails the lookup", async () => {
+    const fixtures = await eset();
+    restore = installPathStub(async (url) =>
+      url.pathname === "/api/legal-person"
+        ? jsonResponse(fixtures.search)
+        : new Response("<html>Údržba</html>", { status: 200 }),
+    );
+
+    await expect(lookupFullRecordByIco("31333532")).rejects.toMatchObject({
+      name: "OrsrAPIError",
+      message: "ORSR 200: invalid JSON payload",
+    });
+  });
+
+  test("caller cancellation propagates instead of marking parts unavailable", async () => {
+    const fixtures = await eset();
+    const controller = new AbortController();
+    // The extract and history answer; the caller cancels while the
+    // supplementary documents request is in flight.
+    restore = installPathStub(async (url, init) => {
+      switch (url.pathname) {
+        case "/api/legal-person":
+          return jsonResponse(fixtures.search);
+        case "/api/legal-person/extract":
+          return jsonResponse(fixtures.extract);
+        case "/api/legal-person/extract-full":
+          return jsonResponse(fixtures.full);
+        default:
+          controller.abort(new Error("caller went away"));
+          init?.signal?.throwIfAborted();
+          return jsonResponse(fixtures.related);
+      }
+    });
+
+    await expect(
+      lookupFullRecordByIco("31333532", { signal: controller.signal }),
+    ).rejects.toThrow("caller went away");
+  });
+
+  test("returns null without file requests when the IČO is not on file", async () => {
+    const paths: string[] = [];
+    restore = installPathStub(async (url) => {
+      paths.push(url.pathname);
+      return jsonResponse({ filteredCount: 0, data: [] });
+    });
+
+    expect(await lookupFullRecordByIco("31333532")).toBeNull();
+    expect(paths).toEqual(["/api/legal-person"]);
+  });
+
+  test("rejects an invalid IČO before any request", async () => {
+    let called = false;
+    restore = installPathStub(async () => {
+      called = true;
+      return jsonResponse({});
+    });
+
+    await expect(lookupFullRecordByIco("12345678")).rejects.toBeInstanceOf(
+      OrsrValidationError,
+    );
+    expect(called).toBe(false);
   });
 });

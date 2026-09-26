@@ -1,18 +1,38 @@
 import { isRecord } from "../shared/guards.js";
-import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import {
+  DEFAULT_REGISTRY_TIMEOUT_MS,
+  performRegistryRequest,
+  readRegistryJson,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   OrsrAPIError,
+  OrsrError,
   OrsrRequestError,
   OrsrValidationError,
 } from "./errors.js";
-import { parseExtract, parseSearchHit } from "./parse.js";
+import {
+  parseDocument,
+  parseExtract,
+  parseHistory,
+  parseRelatedHit,
+  parseSearchHit,
+} from "./parse.js";
 import type {
   OrsrCompany,
+  OrsrDocument,
+  OrsrFileReference,
+  OrsrFullRecord,
+  OrsrHistoryEntry,
+  OrsrRawDocument,
   OrsrRawErrorResponse,
   OrsrRawExtractResponse,
+  OrsrRawRelatedResponse,
   OrsrRawSearchHit,
   OrsrRawSearchResponse,
+  OrsrRecordPart,
+  OrsrRelatedLegalPerson,
   OrsrSearchResult,
 } from "./types.js";
 import { normalizeIco, validateIco } from "./validation.js";
@@ -20,6 +40,15 @@ import { normalizeIco, validateIco } from "./validation.js";
 const BASE = "https://sluzby.orsr.sk/api/legal-person";
 const SEARCH_URL = BASE;
 const EXTRACT_URL = `${BASE}/extract`;
+const EXTRACT_FULL_URL = `${BASE}/extract-full`;
+const DOCUMENTS_URL = `${BASE}/documents`;
+const RELATED_URL = `${BASE}/related`;
+
+// The search and the current extract keep the shared registry timeout. The
+// history, document, and related-person requests are opt-in and larger (the
+// full extract is several times the current one), so each gets a longer
+// timeout; they run in parallel, which bounds the opt-in phase by it.
+const PART_TIMEOUT_MS = 30_000;
 
 const DEFAULT_SEARCH_LIMIT = 50;
 
@@ -47,6 +76,22 @@ const isOrsrExtractResponse = (
     typeof value["courtName"] === "string") &&
   (value["legalPerson"] === undefined || isRecord(value["legalPerson"]));
 
+const isOrsrDocumentList = (value: unknown): value is OrsrRawDocument[] =>
+  Array.isArray(value) &&
+  value.every(
+    (item) =>
+      isRecord(item) &&
+      (item["serialNumber"] === undefined ||
+        typeof item["serialNumber"] === "number"),
+  );
+
+const isOrsrRelatedResponse = (
+  value: unknown,
+): value is OrsrRawRelatedResponse =>
+  isRecord(value) &&
+  (value["data"] === undefined ||
+    (Array.isArray(value["data"]) && value["data"].every(isRecord)));
+
 const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -61,13 +106,34 @@ const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
   return result;
 };
 
-const orsrGet = async <T>(
-  url: string,
-  isExpectedShape: (value: unknown) => value is T,
-): Promise<T> => {
+/** The timeout and caller cancellation of one request. */
+type RequestContext = {
+  timeoutMs: number;
+  signal: AbortSignal | undefined;
+};
+
+// The search and the current extract, as ORSR has always run them.
+const CORE_REQUEST: RequestContext = {
+  timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS,
+  signal: undefined,
+};
+
+type OrsrGetOptions<T> = {
+  url: string;
+  isExpectedShape: (value: unknown) => value is T;
+  context: RequestContext;
+};
+
+const orsrGet = async <T>({
+  url,
+  isExpectedShape,
+  context: { timeoutMs, signal },
+}: OrsrGetOptions<T>): Promise<T> => {
   const response = await performRegistryRequest({
     url,
     init: { headers: { Accept: "application/json" } },
+    signal,
+    timeoutMs,
     wrapRequestError: (cause) =>
       new OrsrRequestError(url, "ORSR request failed", { cause }),
   });
@@ -86,8 +152,11 @@ const orsrGet = async <T>(
     });
   }
 
+  // An outage page served with HTTP 200 is HTML, so it fails here as an
+  // invalid JSON payload rather than parsing as an empty record.
   return readRegistryJson({
     response,
+    signal,
     isExpectedShape,
     wrapParseError: (cause) =>
       new OrsrAPIError({
@@ -114,6 +183,13 @@ const buildSearchUrl = (filterValue: string, take?: number): string => {
   }
   return `${SEARCH_URL}?${params.toString()}`;
 };
+
+const fileUrl = (base: string, file: OrsrFileReference): string =>
+  `${base}?${new URLSearchParams({
+    oddiel: file.section,
+    vlozka: file.insertNumber,
+    sud: file.court,
+  }).toString()}`;
 
 const pickLatestHit = (
   hits: OrsrRawSearchHit[] | undefined,
@@ -172,6 +248,117 @@ const dedupeLatestHitsByIco = (
 };
 
 /**
+ * Resolve an IČO to its trade-register file (`oddiel` / `vlozka` / `sud`)
+ * through the search endpoint, or `null` when no filed record carries it.
+ */
+const findFileByIco = async (
+  ico: string,
+  context: RequestContext,
+): Promise<OrsrFileReference | null> => {
+  const searchData = await orsrGet({
+    url: buildSearchUrl(ico),
+    isExpectedShape: isOrsrSearchResponse,
+    context,
+  });
+  const fileRef = pickLatestHit(searchData.data, ico)?.fileReference;
+  if (
+    !fileRef?.section ||
+    fileRef.insertNumber === undefined ||
+    !fileRef.court
+  ) {
+    return null;
+  }
+  return {
+    section: fileRef.section,
+    insertNumber: String(fileRef.insertNumber),
+    court: fileRef.court,
+  };
+};
+
+const validatedIco = (input: string): string => {
+  const normalized = normalizeIco(input);
+  if (!validateIco(normalized)) {
+    throw new OrsrValidationError(`Invalid Slovak IČO: ${input}`);
+  }
+  return normalized;
+};
+
+// The extract is fetched by file reference, not by IČO. A record naming a
+// different entity means the registry holds no record for this IČO at that
+// reference, so it is reported as not on file rather than returned.
+const companyForIco = (
+  extract: OrsrRawExtractResponse,
+  ico: string,
+): OrsrCompany | null => {
+  const company = parseExtract(extract);
+  return company !== null && normalizeIco(company.ico) === ico ? company : null;
+};
+
+const fetchExtract = async (
+  file: OrsrFileReference,
+  context: RequestContext,
+): Promise<OrsrRawExtractResponse> =>
+  await orsrGet({
+    url: fileUrl(EXTRACT_URL, file),
+    isExpectedShape: isOrsrExtractResponse,
+    context,
+  });
+
+const fetchHistory = async (
+  file: OrsrFileReference,
+  context: RequestContext,
+): Promise<OrsrHistoryEntry[]> =>
+  parseHistory(
+    await orsrGet({
+      url: fileUrl(EXTRACT_FULL_URL, file),
+      isExpectedShape: isOrsrExtractResponse,
+      context,
+    }),
+  );
+
+const fetchDocuments = async (
+  file: OrsrFileReference,
+  context: RequestContext,
+): Promise<OrsrDocument[]> => {
+  const documents = await orsrGet({
+    url: fileUrl(DOCUMENTS_URL, file),
+    isExpectedShape: isOrsrDocumentList,
+    context,
+  });
+  return documents.map(parseDocument).filter((document) => document !== null);
+};
+
+const fetchRelated = async (
+  file: OrsrFileReference,
+  context: RequestContext,
+): Promise<OrsrRelatedLegalPerson[]> => {
+  const related = await orsrGet({
+    url: fileUrl(RELATED_URL, file),
+    isExpectedShape: isOrsrRelatedResponse,
+    context,
+  });
+  return (related.data ?? [])
+    .map(parseRelatedHit)
+    .filter((person) => person !== null);
+};
+
+// A supplementary part that the register fails to serve is reported as
+// unavailable with the adapter error's message; anything that is not an
+// adapter error (caller cancellation, a defect) still propagates.
+const settlePart = async <Value>(
+  pending: Promise<Value>,
+): Promise<OrsrRecordPart<Value>> => {
+  try {
+    return { status: "loaded", value: await pending };
+  } catch (error) {
+    if (error instanceof OrsrError) {
+      return { status: "unavailable", reason: error.message };
+    }
+    throw error;
+  }
+};
+
+/**
  * Look up a Slovak entity by IČO. Implements the two-step contract
  * the Ministry of Justice's JSON API requires:
  *
@@ -186,50 +373,54 @@ const dedupeLatestHitsByIco = (
  * @returns The entity, or `null` if the IČO is not on file (including when
  *   the fetched extract names a different IČO).
  * @throws {OrsrValidationError} when the IČO fails MOD-11
- * @throws {OrsrAPIError} on upstream HTTP errors
- * @throws {OrsrRequestError} on network failures
+ * @throws {OrsrAPIError} on upstream HTTP errors or a non-JSON body
+ * @throws {OrsrRequestError} on network failures and timeouts
  */
 export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
-  const normalized = normalizeIco(ico);
-  if (!validateIco(normalized)) {
-    throw new OrsrValidationError(`Invalid Slovak IČO: ${ico}`);
-  }
-
-  const searchData = await orsrGet(
-    buildSearchUrl(normalized),
-    isOrsrSearchResponse,
-  );
-  const hit = pickLatestHit(searchData.data, normalized);
-  if (!hit) {
+  const normalized = validatedIco(ico);
+  const context = CORE_REQUEST;
+  const file = await findFileByIco(normalized, context);
+  if (!file) {
     return null;
   }
+  return companyForIco(await fetchExtract(file, context), normalized);
+};
 
-  const fileRef = hit.fileReference;
-  if (
-    !fileRef?.section ||
-    fileRef.insertNumber === undefined ||
-    !fileRef.court
-  ) {
+/**
+ * Look up a Slovak entity by IČO with everything the register files about
+ * it: the current extract, the superseded entries of the full extract, the
+ * collection of deeds, and the related legal persons. After the IČO search
+ * the four requests run in parallel. It costs three requests more than
+ * {@link lookupByIco}, so callers ask for it explicitly.
+ *
+ * The current extract is required; a history, document, or related-person
+ * request that fails is reported as an unavailable part of the record.
+ *
+ * @returns The record, or `null` if the IČO is not on file.
+ * @throws {OrsrValidationError} when the IČO fails MOD-11
+ * @throws {OrsrAPIError} when the search or the extract fails upstream
+ * @throws {OrsrRequestError} on network failures and timeouts of either
+ */
+export const lookupFullRecordByIco = async (
+  ico: string,
+  options?: RegistryClientOptions,
+): Promise<OrsrFullRecord | null> => {
+  const normalized = validatedIco(ico);
+  const signal = options?.signal;
+  const core = { timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS, signal };
+  const file = await findFileByIco(normalized, core);
+  if (!file) {
     return null;
   }
-
-  const extractParams = new URLSearchParams({
-    oddiel: fileRef.section,
-    vlozka: String(fileRef.insertNumber),
-    sud: fileRef.court,
-  });
-  const extract = await orsrGet(
-    `${EXTRACT_URL}?${extractParams.toString()}`,
-    isOrsrExtractResponse,
-  );
-  const company = parseExtract(extract);
-  // The extract is fetched by file reference, not by IČO. A record naming a
-  // different entity means the registry holds no record for this IČO at that
-  // reference, so it is reported as not on file rather than returned.
-  if (company !== null && normalizeIco(company.ico) !== normalized) {
-    return null;
-  }
-  return company;
+  const parts = { timeoutMs: PART_TIMEOUT_MS, signal };
+  const [extract, history, documents, related] = await Promise.all([
+    fetchExtract(file, core),
+    settlePart(fetchHistory(file, parts)),
+    settlePart(fetchDocuments(file, parts)),
+    settlePart(fetchRelated(file, parts)),
+  ]);
+  const company = companyForIco(extract, normalized);
+  return company ? { company, history, documents, related } : null;
 };
 
 export type SearchOptions = {
@@ -244,8 +435,8 @@ export type SearchOptions = {
  *
  * @returns A list of matching entities (may be empty).
  * @throws {OrsrValidationError} if `name` is empty after trimming
- * @throws {OrsrAPIError} on upstream HTTP errors
- * @throws {OrsrRequestError} on network failures
+ * @throws {OrsrAPIError} on upstream HTTP errors or a non-JSON body
+ * @throws {OrsrRequestError} on network failures and timeouts
  */
 export const searchByName = async (
   name: string,
@@ -261,9 +452,10 @@ export const searchByName = async (
     Math.max(take, DEFAULT_SEARCH_LIMIT),
     MAX_SEARCH_LIMIT,
   );
-  const data = await orsrGet(
-    buildSearchUrl(trimmed, searchTake),
-    isOrsrSearchResponse,
-  );
+  const data = await orsrGet({
+    url: buildSearchUrl(trimmed, searchTake),
+    isExpectedShape: isOrsrSearchResponse,
+    context: CORE_REQUEST,
+  });
   return dedupeLatestHitsByIco(data.data).slice(0, take).map(parseSearchHit);
 };

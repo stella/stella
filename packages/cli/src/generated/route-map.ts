@@ -2245,8 +2245,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contact", "lookup-registry"],
             toolName: "lookup_business_registry",
-            description:
-              "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, RPO, or VIES).",
+            description: "Look up a company in a public business register.",
             flags: [
               {
                 flag: "--registry",
@@ -2278,6 +2277,16 @@ export const generatedRouteMap: RouteNode = {
                 description:
                   "Canonical identifier (e.g. company number, VAT number) or company name",
                 required: true,
+              },
+              {
+                flag: "--detail",
+                prop: "detail",
+                kind: "enum",
+                enum: ["standard", "full"],
+                repeatable: false,
+                description:
+                  "full adds history, filings, and linked persons where the register keeps them (ORSR, RPO). Default: standard.",
+                required: false,
               },
             ],
             inputOnly: [],
@@ -2315,6 +2324,12 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 256,
                   description:
                     "Canonical identifier (e.g. company number, VAT number) or company name",
+                },
+                detail: {
+                  enum: ["standard", "full"],
+                  type: "string",
+                  description:
+                    "full adds history, filings, and linked persons where the register keeps them (ORSR, RPO). Default: standard.",
                 },
               },
             },
@@ -11037,7 +11052,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "contacts.business-registries.lookup",
                 description:
-                  "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, RPO, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+                  "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it.",
                 access: "read",
                 flags: [
                   {
@@ -11076,7 +11091,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "q",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["query.detail"],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -11113,6 +11128,20 @@ export const generatedRouteMap: RouteNode = {
                           description:
                             "Canonical identifier (e.g. company number, VAT number) or company name",
                           type: "string",
+                        },
+                        detail: {
+                          description:
+                            "full adds history, filings, and linked persons where the register keeps them (ORSR, RPO). Default: standard.",
+                          anyOf: [
+                            {
+                              const: "standard",
+                              type: "string",
+                            },
+                            {
+                              const: "full",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },

@@ -155,6 +155,97 @@ describe("executeRegistryLookup — details channel", () => {
   });
 });
 
+describe("ORSR lookup detail", () => {
+  // Minimal ORSR payloads: one search row naming the file, and an extract
+  // for the same IČO (reused for the full extract).
+  const SEARCH = {
+    data: [
+      {
+        id: 1,
+        registrationNumber: "31333532",
+        fileReference: { section: "Sro", insertNumber: 3586, court: "B" },
+      },
+    ],
+  };
+  const EXTRACT = {
+    fileReference: { section: "Sro", insertNumber: 3586, court: "B" },
+    legalPerson: {
+      id: [{ identifierType: { item: "IČO" }, identifierValue: "31333532" }],
+      corporateBody: {
+        corporateBodyFullName: [{ current: true, value: "ESET, spol. s r.o." }],
+      },
+    },
+  };
+  const BODY_BY_PATH: Record<string, unknown> = {
+    "/api/legal-person": SEARCH,
+    "/api/legal-person/extract": EXTRACT,
+    "/api/legal-person/extract-full": EXTRACT,
+    "/api/legal-person/documents": [],
+    "/api/legal-person/related": { data: [] },
+  };
+
+  const lookupWith = async (
+    detail: "standard" | "full" | undefined,
+  ): Promise<{ paths: string[]; result: unknown }> => {
+    const paths: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (input: URL | Request | string) => {
+        const { pathname } = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        paths.push(pathname);
+        return Response.json(BODY_BY_PATH[pathname]);
+      },
+      { preconnect: original.preconnect },
+    );
+    try {
+      const result = await executeRegistryLookup({
+        handler: BUSINESS_REGISTRY_DISPATCH.orsr,
+        query: "31333532",
+        detail,
+      });
+      return { paths, result };
+    } finally {
+      globalThis.fetch = original;
+    }
+  };
+
+  test("the default lookup reads only the search and the current extract", async () => {
+    for (const detail of [undefined, "standard"] as const) {
+      const { paths, result } = await lookupWith(detail);
+      expect(paths).toEqual(["/api/legal-person", "/api/legal-person/extract"]);
+      expect(result).toMatchObject({
+        hit: { details: { registry: "orsr", detail: "standard" } },
+      });
+    }
+  });
+
+  test("the full lookup also reads history, documents, and related persons", async () => {
+    const { paths, result } = await lookupWith("full");
+
+    expect(paths.toSorted()).toEqual([
+      "/api/legal-person",
+      "/api/legal-person/documents",
+      "/api/legal-person/extract",
+      "/api/legal-person/extract-full",
+      "/api/legal-person/related",
+    ]);
+    expect(result).toMatchObject({
+      hit: {
+        name: "ESET, spol. s r.o.",
+        details: {
+          registry: "orsr",
+          detail: "full",
+          history: { status: "loaded", value: [] },
+          documents: { status: "loaded", value: [] },
+          related: { status: "loaded", value: [] },
+        },
+      },
+    });
+  });
+});
+
 describe("jurisdiction routing", () => {
   test("every jurisdiction has exactly one primary register", () => {
     const primaries = new Map<string, string[]>();

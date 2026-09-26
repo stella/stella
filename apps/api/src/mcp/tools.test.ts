@@ -1354,6 +1354,33 @@ describe("OpenAI-compatible MCP tools", () => {
         query: "0000123456",
       });
     });
+
+    test("passes the requested detail through to the lookup", async () => {
+      const baseContext = createContext();
+      const executeRegistryLookupMock = mock(
+        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => ({
+          type: "lookup" as const,
+          registry: handler.slug,
+          hit: null,
+        }),
+      );
+      await handleMcpToolCall({
+        args: { registry: "orsr", query: "31333532", detail: "full" },
+        context: {
+          ...baseContext,
+          testDependencies: {
+            ...baseContext.testDependencies,
+            executeRegistryLookup: executeRegistryLookupMock,
+          },
+        },
+        toolName: "lookup_business_registry",
+      });
+
+      expect(executeRegistryLookupMock.mock.calls.at(0)?.at(0)).toMatchObject({
+        handler: { slug: "orsr" },
+        detail: "full",
+      });
+    });
   });
 
   test("remaps case-law tools to anonymized scopes", async () => {

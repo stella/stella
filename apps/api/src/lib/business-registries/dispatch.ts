@@ -7,7 +7,10 @@
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 
-import type { BusinessRegistrySlug } from "@stll/api-contract";
+import type {
+  BusinessRegistryLookupDetail,
+  BusinessRegistrySlug,
+} from "@stll/api-contract";
 import {
   AresAPIError,
   type AresAddress,
@@ -83,10 +86,12 @@ import {
   OrsrAPIError,
   type OrsrAddress,
   type OrsrCompany,
+  type OrsrFullRecord,
   OrsrRequestError,
   type OrsrSearchResult,
   OrsrValidationError,
   lookupByIco as lookupOrsrByIco,
+  lookupFullRecordByIco as lookupOrsrFullRecordByIco,
   normalizeIco as normalizeOrsrIco,
   searchByName as searchOrsrByName,
 } from "@stll/business-registries/orsr";
@@ -201,7 +206,8 @@ export type BusinessRegistryHitDetails =
   | { registry: "edgar"; company: EdgarCompany }
   | { registry: "gcis"; company: GcisCompany }
   | { registry: "krs"; entity: KrsEntity }
-  | { registry: "orsr"; company: OrsrCompany }
+  | { registry: "orsr"; detail: "standard"; company: OrsrCompany }
+  | ({ registry: "orsr"; detail: "full" } & OrsrFullRecord)
   | { registry: "prh"; company: PrhCompany }
   | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany }
   | { registry: "rpo"; entity: RpoEntity }
@@ -238,6 +244,17 @@ export type RegistryLookupResponse =
 // ---------------------------------------------------------------------------
 // Per-registry handler shape
 // ---------------------------------------------------------------------------
+
+/** Agent-facing wording of the lookup `detail` input, shared by every tool. */
+export const LOOKUP_DETAIL_DESCRIPTION =
+  "full adds history, filings, and linked persons where the register " +
+  "keeps them (ORSR, RPO). Default: standard.";
+
+export type RegistryLookupOptions = {
+  credential?: string | undefined;
+  /** Registers without more to read answer `full` with their standard record. */
+  detail?: BusinessRegistryLookupDetail | undefined;
+};
 
 export type RegistryJurisdictionRole =
   | { type: "primary" }
@@ -292,7 +309,7 @@ export type RegistryHandler = {
   /** Lookup by canonical ID. */
   lookup: (
     input: string,
-    credential?: string,
+    options?: RegistryLookupOptions,
   ) => Promise<BusinessRegistryHit | null>;
   /**
    * Search by name. `null` when the upstream registry has no
@@ -694,9 +711,9 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   // as CompaniesHouseValidationError → HTTP 400.
   isCanonicalId: (input) =>
     /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u.test(normalizeCompanyNumber(input)),
-  lookup: async (input, credential) => {
+  lookup: async (input, options) => {
     const company = await lookupByCompanyNumber(input, {
-      apiKey: requireCompaniesHouseApiKey(credential),
+      apiKey: requireCompaniesHouseApiKey(options?.credential),
     });
     return company ? companiesHouseCompanyToHit(company) : null;
   },
@@ -824,9 +841,9 @@ const DENUE_HANDLER = {
   // validation lives in lookupByEstablishmentId and surfaces as
   // DenueValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,12}$/u.test(normalizeEstablishmentId(input)),
-  lookup: async (input, credential) => {
+  lookup: async (input, options) => {
     const establishment = await lookupByEstablishmentId(input, {
-      token: requireDenueApiToken(credential),
+      token: requireDenueApiToken(options?.credential),
     });
     return establishment ? denueEstablishmentToHit(establishment) : null;
   },
@@ -937,9 +954,9 @@ const EDGAR_HANDLER: RegistryHandler = {
   // padding. Semantic validation (e.g. the reserved zero CIK) lives
   // in the adapter and surfaces as EdgarValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,10}$/u.test(normalizeCik(input)),
-  lookup: async (input, credential) => {
+  lookup: async (input, options) => {
     const company = await lookupByCik(input, {
-      userAgent: requireEdgarUserAgent(credential),
+      userAgent: requireEdgarUserAgent(options?.credential),
     });
     return company ? edgarCompanyToHit(company) : null;
   },
@@ -1075,18 +1092,35 @@ const orsrAddressToHit = (
   };
 };
 
-const orsrCompanyToHit = (company: OrsrCompany): BusinessRegistryHit => ({
+type OrsrDetails = Extract<BusinessRegistryHitDetails, { registry: "orsr" }>;
+
+const orsrHit = (details: OrsrDetails): BusinessRegistryHit => ({
   registry: "orsr",
-  id: company.ico,
-  name: company.name,
-  legalForm: company.legalForm,
-  address: orsrAddressToHit(company.address),
-  registryUrl: company.registryUrl,
-  // Carry the full extract payload — Slovak corporate-law work needs
+  id: details.company.ico,
+  name: details.company.name,
+  legalForm: details.company.legalForm,
+  address: orsrAddressToHit(details.company.address),
+  registryUrl: details.company.registryUrl,
+  // Carry the full extract payload: Slovak corporate-law work needs
   // statutory bodies, stakeholders, court file, and acting clause; the
   // baseline cross-registry shape only surfaces name + address.
-  details: { registry: "orsr", company },
+  details,
 });
+
+// The full record costs three requests more, so only on request.
+const lookupOrsrHit = async (
+  input: string,
+  detail: BusinessRegistryLookupDetail | undefined,
+): Promise<BusinessRegistryHit | null> => {
+  if (detail === "full") {
+    const record = await lookupOrsrFullRecordByIco(input);
+    return record ? orsrHit({ registry: "orsr", detail, ...record }) : null;
+  }
+  const company = await lookupOrsrByIco(input);
+  return company
+    ? orsrHit({ registry: "orsr", detail: "standard", company })
+    : null;
+};
 
 const orsrSearchResultToHit = (
   result: OrsrSearchResult,
@@ -1145,10 +1179,7 @@ const ORSR_HANDLER: RegistryHandler = {
   // Falling through to search would silently turn a bad-checksum IČO
   // into an empty name-search result.
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeOrsrIco(input)),
-  lookup: async (input) => {
-    const company = await lookupOrsrByIco(input);
-    return company ? orsrCompanyToHit(company) : null;
-  },
+  lookup: async (input, options) => await lookupOrsrHit(input, options?.detail),
   search: async (input, options) => {
     const results = await searchOrsrByName(input, options);
     return results.map(orsrSearchResultToHit);
@@ -1249,8 +1280,10 @@ const RPO_HANDLER: RegistryHandler = {
   isCanonicalId: isRpoIcoShape,
   // The client returns Results; the handler contract reports failures by
   // throwing into `mapError`.
-  lookup: async (input) => {
-    const entity = await lookupRpoByIco(input);
+  lookup: async (input, options) => {
+    const entity = await lookupRpoByIco(input, {
+      view: options?.detail === "full" ? "historical" : "current",
+    });
     if (entity.isErr()) {
       throw entity.error;
     }
@@ -1742,9 +1775,12 @@ export const executeRegistryLookup = async ({
   handler,
   query,
   limit,
+  detail,
 }: {
   handler: RegistryHandler;
   query: string;
+  /** Forwarded to the canonical-ID lookup; ignored by name search. */
+  detail?: BusinessRegistryLookupDetail | undefined;
   /**
    * Forwarded to the adapter's name-search call. Ignored on the
    * lookup path (canonical-ID resolution always returns at most one
@@ -1767,7 +1803,7 @@ export const executeRegistryLookup = async ({
   // checksum bindings, and a binding failure must map like any adapter error.
   try {
     if (handler.isCanonicalId(trimmed)) {
-      const hit = await handler.lookup(trimmed);
+      const hit = await handler.lookup(trimmed, { detail });
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn) {

@@ -1,4 +1,4 @@
-export { lookupByIco, searchByName } from "./client.js";
+export { lookupByIco, lookupFullRecordByIco, searchByName } from "./client.js";
 export type { SearchOptions } from "./client.js";
 export {
   OrsrAPIError,
@@ -13,6 +13,9 @@ export type {
   OrsrCompany,
   OrsrCompanyStatus,
   OrsrCourtFile,
+  OrsrDocument,
+  OrsrFullRecord,
+  OrsrHistoryEntry,
   OrsrRawAddress,
   OrsrRawCorporateBody,
   OrsrRawDeposit,
@@ -26,6 +29,8 @@ export type {
   OrsrRawSearchResponse,
   OrsrRawStakeholderMember,
   OrsrRawStatutoryBodyMember,
+  OrsrRecordPart,
+  OrsrRelatedLegalPerson,
   OrsrSearchResult,
   OrsrStakeholder,
   OrsrStatutoryBody,

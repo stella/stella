@@ -1,0 +1,38 @@
+[
+  {
+    "serialNumber": 185,
+    "name": "Konsolidovaná výročná správa za rok 2025",
+    "formattedName": "<b>Konsolidovaná výročná správa za rok 2025</b>, typ: 5, dátum doručenia: 20.06.2026, poradové číslo: 185, počet listov: 0",
+    "type": 5,
+    "deliveryDate": "2026-06-20T00:00:00",
+    "pageCount": 0,
+    "isElectronic": true
+  },
+  {
+    "serialNumber": 181,
+    "name": "Schválená účtovná závierka za rok 2025 - Iný výkaz alebo príloha",
+    "formattedName": "<b>Schválená účtovná závierka za rok 2025 - Iný výkaz alebo príloha</b>, typ: 5, dátum doručenia: 19.06.2026, poradové číslo: 181, počet listov: 0",
+    "type": 5,
+    "deliveryDate": "2026-06-19T00:00:00",
+    "pageCount": 0,
+    "isElectronic": true
+  },
+  {
+    "serialNumber": 182,
+    "name": "Schválená konsolidovaná účtovná závierka za rok 2025 - Iný výkaz alebo príloha",
+    "formattedName": "<b>Schválená konsolidovaná účtovná závierka za rok 2025 - Iný výkaz alebo príloha</b>, typ: 5, dátum doručenia: 19.06.2026, poradové číslo: 182, počet listov: 0",
+    "type": 5,
+    "deliveryDate": "2026-06-19T00:00:00",
+    "pageCount": 0,
+    "isElectronic": true
+  },
+  {
+    "serialNumber": 156,
+    "name": "Dodatok č.1 k spoločenskej zmluve zo dňa 24.2.2005",
+    "formattedName": "<b>Dodatok č.1 k spoločenskej zmluve zo dňa 24.2.2005</b>, typ: 2, dátum doručenia: 17.03.2005, poradové číslo: 156, počet listov: 9",
+    "type": 2,
+    "deliveryDate": "2005-03-17T00:00:00",
+    "pageCount": 9,
+    "isElectronic": true
+  }
+]
