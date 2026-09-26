@@ -91,6 +91,26 @@ describe("walkInlines", () => {
     ]);
   });
 
+  test("pageAnchor turns the elements it answers for into zero-width anchors", () => {
+    const html =
+      "Shrin<span class='page' data-page='114'>*114</span>ers <b>and</b>";
+    const options: WalkInlinesOptions = {
+      pageAnchor: (element) => {
+        const label = element.attribs["data-page"];
+        return label === undefined ? undefined : { type: "page-anchor", label };
+      },
+    };
+    expect(walk(html, options)).toEqual([
+      { type: "text", text: "Shrin" },
+      { type: "page-anchor", label: "114" },
+      { type: "text", text: "ers " },
+      { type: "bold", children: [{ type: "text", text: "and" }] },
+    ]);
+    // Without the hook the same markup keeps its printed label as text, as
+    // every existing parser reads it.
+    expect(inlinesToPlainText(walk(html))).toBe("Shrin*114ers and");
+  });
+
   test("non-anonymized and anonymized text do not merge together", () => {
     const inlines = walk("plain<span class='anon-block'>secret</span>");
     expect(inlines).toEqual([
