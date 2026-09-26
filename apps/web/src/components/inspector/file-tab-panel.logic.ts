@@ -1,12 +1,15 @@
 import {
   FILE_FACETS,
   type FileFacet as Facet,
+  type FileTab,
 } from "@/components/inspector/inspector-store-types";
 import {
+  DOCX_MIME,
   getNativeOfficeViewerFormat,
   isEmailFile,
   isMarkdownFile,
 } from "@/lib/consts";
+import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 
 // Sidepeek shows every facet, including Preview (the file viewer
 // itself). Fullscreen drops Preview entirely — the main view IS
@@ -61,6 +64,51 @@ export const getFileTabNativePreviewKind = ({
   }
   return "pdf";
 };
+
+type GetFileTabDisplayStateOptions = {
+  activeId: string | null;
+  minimized: boolean;
+  scaleOffsets: ReadonlyMap<string, number>;
+  tab: FileTab;
+};
+
+export const getFileTabDisplayState = ({
+  activeId,
+  minimized,
+  scaleOffsets,
+  tab,
+}: GetFileTabDisplayStateOptions) => {
+  const isActive = tab.id === activeId;
+  const nativePreviewKind = getFileTabNativePreviewKind({
+    fileName: tab.fileName,
+    mimeType: tab.mimeType,
+  });
+  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
+  const isEmailDisplay = nativePreviewKind === "email";
+  const storedScaleOffset = scaleOffsets.get(tab.id);
+  const scaleOffset = storedScaleOffset ?? 0;
+  return {
+    desktopEditFileType: getDesktopEditFileType({
+      fileName: tab.fileName,
+      mimeType: tab.mimeType,
+    }),
+    isActive,
+    isEmailDisplay,
+    isEmailViewerActive: isEmailDisplay && isActive && !minimized,
+    isMarkdownDisplay: nativePreviewKind === "markdown",
+    isNativeDocxDisplay,
+    isOfficeDisplay: nativePreviewKind === "office",
+    requiresPdfMeasurement:
+      !isNativeDocxDisplay && nativePreviewKind !== "office",
+    needsPropertyResolution:
+      isNativeDocxDisplay && tab.propertyId === undefined,
+    officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
+    renderId: tab.renderId ?? tab.id,
+    scaleOffset,
+  };
+};
+
+export type FileTabDisplayState = ReturnType<typeof getFileTabDisplayState>;
 
 export const shouldSurfaceEmailResolutionAlert = ({
   isEmailDisplay,

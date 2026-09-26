@@ -1,21 +1,14 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
   ReactElement,
+  ReactNode,
   RefObject,
   SetStateAction,
 } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  CheckIcon,
-  GitCommitHorizontalIcon,
-  Maximize2Icon,
-  Minimize2Icon,
-  XIcon,
-} from "lucide-react";
+import { CheckIcon, GitCommitHorizontalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
@@ -23,105 +16,51 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
-import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
+import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
   REVIEW_SUGGESTION_ORIGIN,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
-import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
-import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
-import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
-import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { useFileAnonymizationPipeline } from "@/components/inspector/anonymize-pdf";
-import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
-import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
-import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
-import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
-import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
 import {
   EmailChatResolutionAlert,
-  EmailFileViewer,
   EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
-import {
-  EMAIL_CHAT_HOST,
-  EMAIL_CHAT_MODE,
-  getEmailChatMode,
-  getEmailExtractionRefetchInterval,
-  shouldSurfaceEmailChatResolutionError,
-} from "@/components/inspector/email-html-viewer.logic";
-import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
-import { downloadTabFile } from "@/components/inspector/file-download-service";
-import {
-  getEntityFileDownloadRenditions,
-  type DownloadVariant,
-} from "@/components/inspector/file-download-service.logic";
-import {
-  FullViewPreviewGuard,
-  MetadataPanelSkeleton,
-  TabFacetBar,
-} from "@/components/inspector/file-facets";
+import type { EmailChatMode } from "@/components/inspector/email-html-viewer.logic";
+import { TabFacetBar } from "@/components/inspector/file-facets";
 import type { Facet } from "@/components/inspector/file-facets";
+import { FileTabFacetContent } from "@/components/inspector/file-tab-facet-content";
+import { FileTabFullView } from "@/components/inspector/file-tab-full-view";
+import {
+  BackToPeekButton,
+  FileTabHeaderActions,
+  getFileTabHeaderProps,
+  MoveToMainButton,
+} from "@/components/inspector/file-tab-header";
+import type { MatterOrigin } from "@/components/inspector/file-tab-header";
 import {
   FACETS,
-  FULLVIEW_FACETS,
-  getFileTabNativePreviewKind,
-  getMarkdownDraftSyncDecision,
+  getFileTabDisplayState,
   shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
+import { FileTabViewer } from "@/components/inspector/file-tab-viewer";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
-import {
-  InspectorTabHeader,
-  MatterOriginLink,
-} from "@/components/inspector/inspector-tab-header";
+import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import { MarkdownDraftActions } from "@/components/inspector/markdown-file-viewer";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
-import { PlaybookFacet } from "@/components/inspector/playbook-facet";
-import { VersionsFacet } from "@/components/inspector/versions-facet";
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
-import {
-  PeekPdfControls,
-  PeekPdfViewer,
-  PeekSuspenseFallback,
-} from "@/components/pdf/peek/peek-pdf-viewer";
-import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
-import Tooltip from "@/components/tooltip";
+import { useDocxEditorBindings } from "@/components/inspector/use-docx-editor-bindings";
+import { useEmailAttachmentSelection } from "@/components/inspector/use-email-attachment-selection";
+import { useFileTabEntity } from "@/components/inspector/use-file-tab-entity";
+import { useMarkdownFileDraft } from "@/components/inspector/use-markdown-file-draft";
+import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
 import { env } from "@/env";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
-import {
-  DOCX_MIME,
-  getNativeOfficeViewerFormat,
-  MARKDOWN_MIME,
-  PDF_MIME,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
-import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
+import type { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
-import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
-
-const OfficeFileViewer = lazy(async () => {
-  const m = await import("@/components/office/office-file-viewer");
-  return { default: m.OfficeFileViewer };
-});
-
-type MatterOrigin = {
-  color: string | null;
-  id: string;
-  name: string;
-  onClick: () => void;
-};
 
 type FileTabPanelProps = {
   activeId: string | null;
@@ -185,149 +124,6 @@ const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
   }
 };
 
-/** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
-const stripExtension = (name: string): string => {
-  const dotIndex = name.lastIndexOf(".");
-  if (dotIndex <= 0) {
-    return name;
-  }
-  return name.slice(0, dotIndex);
-};
-
-type GetPeekPDFColorControlOptions = {
-  colorMode: PDFColorMode;
-  mimeType: string | null | undefined;
-  onColorModeChange: (colorMode: PDFColorMode) => void;
-};
-
-const getPeekPDFColorControl = ({
-  colorMode,
-  mimeType,
-  onColorModeChange,
-}: GetPeekPDFColorControlOptions) => {
-  if (mimeType !== PDF_MIME) {
-    return undefined;
-  }
-  return { colorMode, onColorModeChange };
-};
-
-const getFileTabDisplayState = ({
-  activeId,
-  minimized,
-  scaleOffsets,
-  tab,
-}: Pick<
-  FileTabPanelProps,
-  "activeId" | "minimized" | "scaleOffsets" | "tab"
->) => {
-  const isActive = tab.id === activeId;
-  const nativePreviewKind = getFileTabNativePreviewKind({
-    fileName: tab.fileName,
-    mimeType: tab.mimeType,
-  });
-  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
-  const isEmailDisplay = nativePreviewKind === "email";
-  const storedScaleOffset = scaleOffsets.get(tab.id);
-  const scaleOffset = storedScaleOffset ?? 0;
-  return {
-    desktopEditFileType: getDesktopEditFileType({
-      fileName: tab.fileName,
-      mimeType: tab.mimeType,
-    }),
-    isActive,
-    isEmailDisplay,
-    isEmailViewerActive: isEmailDisplay && isActive && !minimized,
-    isMarkdownDisplay: nativePreviewKind === "markdown",
-    isNativeDocxDisplay,
-    isOfficeDisplay: nativePreviewKind === "office",
-    requiresPdfMeasurement:
-      !isNativeDocxDisplay && nativePreviewKind !== "office",
-    needsPropertyResolution:
-      isNativeDocxDisplay && tab.propertyId === undefined,
-    officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
-    renderId: tab.renderId ?? tab.id,
-    scaleOffset,
-  };
-};
-
-const getFileTabEntityState = ({
-  entityData,
-  entityQueryError,
-  needsPropertyResolution,
-  tab,
-}: {
-  entityData:
-    | {
-        extractionFileFieldId?: string | null | undefined;
-        fields: { id: string; propertyId?: string | undefined }[];
-      }
-    | undefined;
-  entityQueryError: boolean;
-  needsPropertyResolution: boolean;
-  tab: FileTabPanelProps["tab"];
-}) => {
-  const resolvedEmailChatMode = getEmailChatMode({
-    extractionFileFieldId: entityData?.extractionFileFieldId,
-    fieldId: tab.id,
-  });
-  const shouldSurfaceEmailResolutionError =
-    shouldSurfaceEmailChatResolutionError({
-      hasData: entityData !== undefined,
-      isError: entityQueryError,
-    });
-  return {
-    emailChatMode: shouldSurfaceEmailResolutionError
-      ? EMAIL_CHAT_MODE.resolutionError
-      : resolvedEmailChatMode,
-    filePropertyId:
-      tab.propertyId ??
-      (needsPropertyResolution
-        ? entityData?.fields.find((field) => field.id === tab.id)?.propertyId
-        : undefined),
-    resolvedEmailChatMode,
-    shouldSurfaceEmailResolutionError,
-  };
-};
-
-const getEmailAttachmentState = ({
-  isActive,
-  scaleOffsets,
-  selectedEmailAttachmentId,
-  tab,
-}: {
-  isActive: boolean;
-  scaleOffsets: FileTabPanelProps["scaleOffsets"];
-  selectedEmailAttachmentId: string | null;
-  tab: FileTabPanelProps["tab"];
-}) => {
-  const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
-    ? getEmailAttachmentPreviewId({
-        attachmentId: selectedEmailAttachmentId,
-        fieldId: tab.id,
-        workspaceId: tab.workspaceId,
-      })
-    : null;
-  const facet = tab.facet ?? "preview";
-  const isPreviewActive = isActive && facet === "preview";
-  return {
-    emailAttachmentOverlayActivation:
-      isActive && tab.facet === "attachments"
-        ? FILE_CHAT_OVERLAY_ACTIVATION.active
-        : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
-    emailAttachmentScaleOffset: selectedEmailAttachmentPreviewId
-      ? (scaleOffsets.get(selectedEmailAttachmentPreviewId) ?? 0)
-      : 0,
-    emailPreviewOverlayActivation: isPreviewActive
-      ? FILE_CHAT_OVERLAY_ACTIVATION.active
-      : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
-    emailSidepeekOverlayActivation:
-      isPreviewActive || (isActive && tab.facet === "attachments")
-        ? FILE_CHAT_OVERLAY_ACTIVATION.active
-        : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
-    selectedEmailAttachmentPreviewId,
-  };
-};
-
 const getFileTabEditorState = ({
   canUpdateEntity,
   desktopEditFileType,
@@ -351,6 +147,10 @@ const getFileTabEditorState = ({
     isNativeDocxDisplay &&
     editingDocxTabId === tab.id &&
     filePropertyId !== undefined;
+  const isCollaboratingNativeDocx =
+    isEditingNativeDocx &&
+    env.VITE_FEATURE_FOLIO_COLLAB &&
+    env.VITE_COLLAB_URL !== undefined;
   const isCurrentDesktopEditField =
     filePropertyId !== undefined &&
     entityData?.fields.some(
@@ -364,49 +164,11 @@ const getFileTabEditorState = ({
       isCurrentDesktopEditField
         ? { fileType: desktopEditFileType, propertyId: filePropertyId }
         : null,
+    isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
   };
 };
-
-const shouldQueryFileTabEntity = ({
-  canUpdateEntity,
-  desktopEditFileType,
-  isActive,
-  isEmailViewerActive,
-  minimized,
-  needsPropertyResolution,
-}: {
-  canUpdateEntity: boolean;
-  desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
-  isActive: boolean;
-  isEmailViewerActive: boolean;
-  minimized: boolean;
-  needsPropertyResolution: boolean;
-}) =>
-  isEmailViewerActive ||
-  needsPropertyResolution ||
-  (isActive && !minimized && canUpdateEntity && desktopEditFileType !== null);
-
-type MarkdownSyncInput = {
-  fieldId: string;
-  isDirty: boolean;
-  isMarkdownDisplay: boolean;
-  serverText: string | undefined;
-};
-
-const shouldSyncMarkdownDraft = ({
-  lastSyncInput,
-  syncInput,
-}: {
-  lastSyncInput: MarkdownSyncInput | null;
-  syncInput: MarkdownSyncInput;
-}) =>
-  lastSyncInput === null ||
-  lastSyncInput.fieldId !== syncInput.fieldId ||
-  lastSyncInput.isDirty !== syncInput.isDirty ||
-  lastSyncInput.isMarkdownDisplay !== syncInput.isMarkdownDisplay ||
-  lastSyncInput.serverText !== syncInput.serverText;
 
 const getFileTabChromeState = ({
   isEditingNativeDocx,
@@ -468,32 +230,28 @@ export const FileTabPanel = ({
   tab,
 }: FileTabPanelProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
-  const pdfColorControl = getPeekPDFColorControl({
-    colorMode: pdfColorMode,
-    mimeType: tab.mimeType,
-    onColorModeChange: setPDFColorMode,
-  });
-  const openFile = useInspectorTabsStore((s) => s.openFile);
-  const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
+  const display = getFileTabDisplayState({
+    activeId,
+    minimized,
+    scaleOffsets,
+    tab,
+  });
   const {
     desktopEditFileType,
     isActive,
     isEmailDisplay,
-    isEmailViewerActive,
     isMarkdownDisplay,
     isNativeDocxDisplay,
     isOfficeDisplay,
-    needsPropertyResolution,
-    officeViewerFormat,
     renderId,
     requiresPdfMeasurement,
     scaleOffset,
-  } = getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab });
+  } = display;
+  // This tab is the route's document while the route's own pane is showing the
+  // review: the inspector is where the document is read, so the fullscreen
+  // persona keeps its preview.
   const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
   const fullViewFacet =
     tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
@@ -511,165 +269,28 @@ export const FileTabPanel = ({
     workspaceId: tab.workspaceId,
     entityId: tab.entityId,
   });
-  // A DOCX tab opened by a caller that knows only the file field (a review's
-  // reference, a search hit) still needs the field's property to mount the
-  // editor; read it off the entity rather than leaving the viewer empty.
-  const entityQuery = useQuery({
-    ...entityOptions(tab.workspaceId, tab.entityId),
-    enabled: shouldQueryFileTabEntity({
-      canUpdateEntity,
-      desktopEditFileType,
-      isActive,
-      isEmailViewerActive,
-      minimized,
-      needsPropertyResolution,
-    }),
-    refetchInterval: ({ state }) =>
-      getEmailExtractionRefetchInterval({
-        extractionFileFieldId: state.data?.extractionFileFieldId,
-        isEmailViewerActive,
-      }),
-  });
-  const {
-    emailChatMode,
-    filePropertyId,
-    resolvedEmailChatMode,
-    shouldSurfaceEmailResolutionError,
-  } = getFileTabEntityState({
-    entityData: entityQuery.data,
-    entityQueryError: entityQuery.isError,
-    needsPropertyResolution,
+  const entity = useFileTabEntity({
+    canUpdateEntity,
+    desktopEditFileType,
+    isActive,
+    isEmailViewerActive: display.isEmailViewerActive,
+    minimized,
+    needsPropertyResolution: display.needsPropertyResolution,
     tab,
   });
-  const downloadRenditions = getEntityFileDownloadRenditions({
-    entityData: entityQuery.data,
-    fieldId: tab.id,
-  });
-  const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
-    string | null
-  >(null);
-  const [isCollaborationPublishable, setIsCollaborationPublishable] =
-    useState(false);
-  const {
-    emailAttachmentOverlayActivation,
-    emailAttachmentScaleOffset,
-    emailPreviewOverlayActivation,
-    emailSidepeekOverlayActivation,
-    selectedEmailAttachmentPreviewId,
-  } = getEmailAttachmentState({
+  const { emailChatMode, filePropertyId } = entity;
+  const emailAttachments = useEmailAttachmentSelection({
+    handleResetZoom,
+    handleZoom,
     isActive,
     scaleOffsets,
-    selectedEmailAttachmentId,
     tab,
   });
-  const openEmailAttachment = (attachmentId: string | null) => {
-    setSelectedEmailAttachmentId(attachmentId);
-    setFileFacet(tab.id, "attachments");
-  };
-  const resetEmailAttachmentZoom = () => {
-    if (selectedEmailAttachmentPreviewId) {
-      handleResetZoom(selectedEmailAttachmentPreviewId);
-    }
-  };
-  const zoomEmailAttachment = (direction: "in" | "out") => {
-    if (selectedEmailAttachmentPreviewId) {
-      handleZoom(selectedEmailAttachmentPreviewId, direction);
-    }
-  };
-  const markdownTextQuery = useQuery({
-    ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
-    enabled: isMarkdownDisplay,
-  });
-  const [markdownDraft, setMarkdownDraft] = useState("");
-  const [markdownDraftSourceFieldId, setMarkdownDraftSourceFieldId] = useState<
-    string | null
-  >(null);
-  const markdownText = markdownTextQuery.data?.text ?? "";
-  const markdownIsDirty = markdownDraft !== markdownText;
-  const [lastMarkdownSyncInput, setLastMarkdownSyncInput] =
-    useState<MarkdownSyncInput | null>(null);
-  const markdownSaveMutation = useMutation({
-    mutationFn: async ({
-      entityId,
-      fileName,
-      text,
-      workspaceId,
-    }: {
-      entityId: string;
-      fieldId: string;
-      fileName: string;
-      propertyId?: string | undefined;
-      text: string;
-      workspaceId: string;
-    }) => {
-      // This path serializes editor text into a fixed Markdown file; it cannot
-      // carry user-supplied DOCX bytes that require attached-template preflight.
-      const file = new File([text], fileName, { type: MARKDOWN_MIME });
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["upload-version"].post({
-          entityId: toSafeId<"entity">(entityId),
-          file,
-        });
-
-      return unwrapEden(response);
-    },
-    onSuccess: async (response, variables) => {
-      replaceFileFieldId(variables.fieldId, {
-        id: response.fieldId,
-        fileName: variables.fileName,
-        label: tab.label,
-        mimeType: MARKDOWN_MIME,
-        pdfFileId: null,
-        ...(variables.propertyId ? { propertyId: variables.propertyId } : {}),
-      });
-      stellaToast.add({
-        title: t("workspaces.files.versionUploaded"),
-        type: "success",
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(variables.workspaceId),
-        }),
-      ]);
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("workspaces.files.versionUploadFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
-    },
-  });
-
-  const markdownSyncInput = {
-    fieldId: tab.id,
-    isDirty: markdownIsDirty,
+  const markdown = useMarkdownFileDraft({
+    filePropertyId,
     isMarkdownDisplay,
-    serverText: markdownTextQuery.data?.text,
-  } satisfies MarkdownSyncInput;
-  if (
-    shouldSyncMarkdownDraft({
-      lastSyncInput: lastMarkdownSyncInput,
-      syncInput: markdownSyncInput,
-    })
-  ) {
-    setLastMarkdownSyncInput(markdownSyncInput);
-    if (!isMarkdownDisplay) {
-      setMarkdownDraftSourceFieldId(null);
-    } else {
-      const decision = getMarkdownDraftSyncDecision({
-        ...markdownSyncInput,
-        lastSyncedFieldId: markdownDraftSourceFieldId,
-      });
-      if (decision.type === "sync") {
-        setMarkdownDraftSourceFieldId(decision.fieldId);
-        setMarkdownDraft(decision.text);
-      }
-    }
-  }
+    tab,
+  });
 
   const handleViewerError = () => {
     stellaToast.add({
@@ -678,88 +299,15 @@ export const FileTabPanel = ({
     });
   };
 
-  const handleDocxScrollTopChange = (scrollTop: number) => {
-    setDocxScrollTopByTab((prev) => {
-      const next = new Map(prev);
-      next.set(tab.id, scrollTop);
-      return next;
-    });
-  };
-
-  // The hosted editor lives above this panel, so what it reports back travels
-  // through the claim. Stable for the tab's lifetime: a claim rewritten on
-  // every render of the inspector would churn the host for nothing.
-  const handleDocxClose = useLatestCallback(() => {
-    // Don't touch docxActionsRef here. The editor stays mounted across
-    // error -> idle transitions; only its own cleanup should release the
-    // slot, otherwise the next unlock finds no entry and silently no-ops.
-    setEditingDocxTabId(null);
+  const docxEditor = useDocxEditorBindings({
+    docxActionsRef,
+    onError: handleViewerError,
+    setDocxCompatibilityByTab,
+    setDocxScrollTopByTab,
+    setEditingDocxTabId,
+    setScaleOffsets,
+    tabId: tab.id,
   });
-  const handleDocxCompatibilityChange = useLatestCallback(
-    (compatibility: DocxCompatibility) => {
-      setDocxCompatibilityByTab((prev) => {
-        if (prev.get(tab.id) === compatibility) {
-          return prev;
-        }
-        const next = new Map(prev);
-        next.set(tab.id, compatibility);
-        return next;
-      });
-    },
-  );
-  const handleDocxSaved = useLatestCallback((savedFieldId: string) => {
-    if (savedFieldId === tab.id) {
-      return;
-    }
-    setDocxScrollTopByTab((prev) => {
-      const scrollTop = prev.get(tab.id);
-      if (scrollTop === undefined) {
-        return prev;
-      }
-      const next = new Map(prev);
-      next.set(savedFieldId, scrollTop);
-      return next;
-    });
-    setScaleOffsets((prev) => {
-      const savedScaleOffset = prev.get(tab.id);
-      if (savedScaleOffset === undefined) {
-        return prev;
-      }
-      const next = new Map(prev);
-      next.set(savedFieldId, savedScaleOffset);
-      return next;
-    });
-    useInspectorTabsStore.getState().replaceFileFieldId(tab.id, savedFieldId);
-  });
-  const handleDocxScrollTop = useLatestCallback(handleDocxScrollTopChange);
-  const handleDocxCollaborationPublishableChange = useLatestCallback(
-    setIsCollaborationPublishable,
-  );
-  const handleDocxError = useLatestCallback(handleViewerError);
-  const docxEditorBindings = useMemo(
-    () =>
-      ({
-        actionsKey: tab.id,
-        actionsMapRef: docxActionsRef,
-        onClose: handleDocxClose,
-        onCollaborationPublishableChange:
-          handleDocxCollaborationPublishableChange,
-        onCompatibilityChange: handleDocxCompatibilityChange,
-        onError: handleDocxError,
-        onSaved: handleDocxSaved,
-        onScrollTopChange: handleDocxScrollTop,
-      }) satisfies DocxEditorSlotBindings,
-    [
-      docxActionsRef,
-      handleDocxClose,
-      handleDocxCollaborationPublishableChange,
-      handleDocxCompatibilityChange,
-      handleDocxError,
-      handleDocxSaved,
-      handleDocxScrollTop,
-      tab.id,
-    ],
-  );
 
   if (minimized) {
     return null;
@@ -775,56 +323,20 @@ export const FileTabPanel = ({
   // Justification bbox highlighting on Folio is a separate
   // follow-up; until then the bbox overlay is omitted on
   // DOCX, but the doc itself remains editable.
-  const { desktopEditTarget, isEditingNativeDocx, isMetadataLaneExpanded } =
-    getFileTabEditorState({
-      canUpdateEntity,
-      desktopEditFileType,
-      editingDocxTabId,
-      entityData: entityQuery.data,
-      filePropertyId,
-      isNativeDocxDisplay,
-      tab,
-    });
-  const isCollaboratingNativeDocx =
-    isEditingNativeDocx &&
-    env.VITE_FEATURE_FOLIO_COLLAB &&
-    env.VITE_COLLAB_URL !== undefined;
-  // This tab is the route's document while the route's own pane is showing the
-  // review: the inspector is where the document is read, so the fullscreen
-  // persona keeps its preview.
-  const desktopOpenButton =
-    desktopEditTarget !== null ? (
-      <DesktopOpenButton
-        entityId={tab.entityId}
-        fieldId={tab.id}
-        fileType={desktopEditTarget.fileType}
-        propertyId={desktopEditTarget.propertyId}
-        workspaceId={tab.workspaceId}
-      />
-    ) : null;
-
-  const startDownload = (variant: DownloadVariant) => {
-    detached(
-      downloadTabFile({
-        fieldId: tab.id,
-        fileName: tab.fileName,
-        variant,
-        workspaceId: tab.workspaceId,
-        onError: (message) => {
-          stellaToast.add({ title: message, type: "error" });
-        },
-      }),
-      "file-tab-panel.download-tab-file",
-    );
-  };
-  // One element, rendered by both the peek header and the full-view header, so
-  // the two cannot drift apart.
-  const downloadButton = (
-    <DownloadSplitButton
-      onDownload={startDownload}
-      renditions={downloadRenditions}
-    />
-  );
+  const {
+    desktopEditTarget,
+    isCollaboratingNativeDocx,
+    isEditingNativeDocx,
+    isMetadataLaneExpanded,
+  } = getFileTabEditorState({
+    canUpdateEntity,
+    desktopEditFileType,
+    editingDocxTabId,
+    entityData: entity.query.data,
+    filePropertyId,
+    isNativeDocxDisplay,
+    tab,
+  });
 
   // Entering edit mode happens in the document itself: clicking or typing
   // into a locked DOCX unlocks it. The header carries only the exit — Save
@@ -838,522 +350,239 @@ export const FileTabPanel = ({
       isOfficeDisplay,
       tab,
     });
-  const markdownActions = (() => {
-    if (!isMarkdownDisplay) {
-      return null;
-    }
-
-    return (
-      markdownIsDirty && (
-        <>
-          <Button
-            disabled={markdownSaveMutation.isPending}
-            onClick={() => {
-              setMarkdownDraft(markdownText);
-            }}
-            size="xs"
-            variant="ghost"
-          >
-            <XIcon className="size-3.5" />
-            {t("common.cancel")}
-          </Button>
-          <Button
-            disabled={markdownSaveMutation.isPending}
-            onClick={() => {
-              markdownSaveMutation.mutate({
-                entityId: tab.entityId,
-                fieldId: tab.id,
-                fileName: tab.fileName,
-                propertyId: filePropertyId,
-                text: markdownDraft,
-                workspaceId: tab.workspaceId,
-              });
-            }}
-            size="xs"
-          >
-            <CheckIcon className="size-3.5" />
-            {t("common.save")}
-          </Button>
-        </>
-      )
-    );
-  })();
-
-  const editToggle = (() => {
-    if (isEditingNativeDocx) {
-      return (
-        <Button
-          className={cn(
-            "transition-colors",
-            isCollaboratingNativeDocx && "min-h-11",
-          )}
-          disabled={isCollaboratingNativeDocx && !isCollaborationPublishable}
-          onClick={() => {
-            const finalize = docxActionsRef.current.get(tab.id)?.finalize();
-            if (finalize) {
-              detached(finalize, "file-tab-panel.finalize-docx");
-            }
-          }}
-          size="xs"
-        >
-          {isCollaboratingNativeDocx ? (
-            <GitCommitHorizontalIcon className="size-3.5" />
-          ) : (
-            <CheckIcon className="size-3.5" />
-          )}
-          {isCollaboratingNativeDocx
-            ? t("folio.createVersion")
-            : t("common.save")}
-        </Button>
-      );
-    }
-    return null;
-  })();
-
-  const moveToMainButton = (
-    <Tooltip
-      content={t("inspector.moveToMain")}
-      render={
-        <Button
-          aria-label={t("inspector.moveToMain")}
-          onClick={() => {
-            detached(handleOpenFullView(), "file-tab-panel.open-full-view");
-          }}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <Maximize2Icon className="size-3.5" />
-        </Button>
-      }
-    />
-  );
-
-  const fileActions = (
-    <>
-      {downloadButton}
-      {desktopOpenButton}
-      {isPreviewFacet && (markdownActions ?? editToggle)}
-      {canOpenFullView && moveToMainButton}
-    </>
-  );
-
-  // Floating preview-only toolbar mounted on top of the
-  // viewer body — zoom controls only. The edit-mode exit
-  // (Save / Create version) lives in the tab header
-  // (`fileActions` above).
-  const previewOverlay = isPreviewOverlayVisible ? (
-    <ViewerOverlayBar>
-      <PeekPdfControls
-        onReset={() => handleResetZoom(tab.id)}
-        onZoom={(direction) => handleZoom(tab.id, direction)}
-        pdfColorControl={pdfColorControl}
-        scaleOffset={scaleOffset}
+  const editExit = isMarkdownDisplay ? (
+    <MarkdownDraftActions draft={markdown} />
+  ) : (
+    isEditingNativeDocx && (
+      <DocxFinalizeButton
+        docxActionsRef={docxActionsRef}
+        isCollaborating={isCollaboratingNativeDocx}
+        isCollaborationPublishable={docxEditor.isCollaborationPublishable}
+        tabId={tab.id}
       />
-    </ViewerOverlayBar>
-  ) : null;
-
-  const contextBar = (
-    <InspectorTabHeader
-      actions={fileActions}
-      label={stripExtension(tab.label)}
-      matter={
-        matterOrigin ? (
-          <MatterOriginLink
-            color={matterOrigin.color}
-            id={matterOrigin.id}
-            name={matterOrigin.name}
-            onClick={matterOrigin.onClick}
-          />
-        ) : undefined
-      }
-      onClose={() => handleCloseTab(tab.id)}
-      onLabelContextMenu={ribbonLabelContextMenuOpenAt}
-      onStartRename={() => startRename(tab)}
-      rename={{
-        active: editingTabId === tab.id,
-        value: editValue,
-        onChange: setEditValue,
-        onCommit: () => commitRename(tab),
-        onCancel: () => setEditingTabId(null),
-      }}
-    />
+    )
   );
 
-  const viewerErrorFallback = ({ reset }: { reset: () => void }) => (
-    <InspectorPdfErrorFallback onRetry={reset} />
-  );
+  const tabHeader = getFileTabHeaderProps({
+    commitRename,
+    editingTabId,
+    editValue,
+    handleCloseTab,
+    matterOrigin,
+    ribbonLabelContextMenuOpenAt,
+    setEditingTabId,
+    setEditValue,
+    startRename,
+    tab,
+  });
 
-  const fileViewer = (() => {
-    if (isEmailDisplay) {
-      if (shouldSurfaceEmailResolutionError) {
-        return (
-          <EmailFileViewer
-            chatMode={EMAIL_CHAT_MODE.resolutionError}
-            entityId={tab.entityId}
-            fieldId={tab.id}
-            fileName={tab.fileName}
-            onOpenAttachment={openEmailAttachment}
-            overlayActivation={emailPreviewOverlayActivation}
-            onRetryChatResolution={() => {
-              detached(entityQuery.refetch(), "file-tab-panel.refetch");
-            }}
-            chatHost={EMAIL_CHAT_HOST.parent}
-            workspaceId={tab.workspaceId}
-          />
-        );
-      }
-      return (
-        <EmailFileViewer
-          chatMode={resolvedEmailChatMode}
-          entityId={tab.entityId}
-          fieldId={tab.id}
-          fileName={tab.fileName}
-          onOpenAttachment={openEmailAttachment}
-          overlayActivation={emailPreviewOverlayActivation}
-          chatHost={EMAIL_CHAT_HOST.parent}
-          workspaceId={tab.workspaceId}
-        />
-      );
-    }
-    if (isMarkdownDisplay) {
-      if (markdownTextQuery.isPending) {
-        return (
-          <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
-            {t("common.loading")}
-          </div>
-        );
-      }
-      if (markdownTextQuery.error) {
-        return (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-muted-foreground max-w-sm text-sm">
-              {markdownTextQuery.error.message || t("errors.actionFailed")}
-            </p>
-            <Button
-              onClick={() => {
-                detached(markdownTextQuery.refetch(), "file-tab-panel.refetch");
-              }}
-              size="xs"
-              variant="secondary"
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        );
-      }
-      // Workspace .md edits use the same hybrid editor as skills. Edits feed
-      // the draft; the existing Save button uploads a new file version.
-      return (
-        <MarkdownHybridEditor
-          imagePolicy="data-only"
-          key={tab.id}
-          markdown={markdownText}
-          onMarkdownChange={setMarkdownDraft}
-          readOnly={!canUpdateEntity}
-        />
-      );
-    }
-    if (isOfficeDisplay && officeViewerFormat !== null) {
-      return (
-        <QuerySuspenseBoundary
-          area="office-file-viewer"
-          errorFallback={viewerErrorFallback}
-          resetKeys={[tab.id]}
-          suspenseFallback={
-            <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
-              {t("common.loading")}
-            </div>
-          }
-        >
-          <OfficeFileViewer
-            desktopEditTarget={desktopEditTarget}
-            entityId={tab.entityId}
-            fieldId={tab.id}
-            fileName={tab.fileName}
-            format={officeViewerFormat}
-            key={tab.id}
-            workspaceId={tab.workspaceId}
-          />
-        </QuerySuspenseBoundary>
-      );
-    }
-    if (isNativeDocxDisplay) {
-      if (filePropertyId === undefined) {
-        // Still resolving the field's property, or the entity no longer
-        // holds this field: never fall through to the PDF viewer, which has
-        // nothing to draw for a DOCX.
-        return entityQuery.data === undefined && !entityQuery.isError ? (
-          <PeekSuspenseFallback />
-        ) : (
-          <InspectorPdfErrorFallback />
-        );
-      }
-      return (
-        <>
-          {/* Beside the slot, not inside the editor: the chat overlay travels
-              with the editor's chunk, and its two reads would otherwise queue
-              behind that fetch instead of running alongside it. */}
-          <FileChatWarmup
-            entityId={tab.entityId}
-            fileFieldId={tab.id}
-            workspaceId={tab.workspaceId}
-          />
-          <DocxEditorSlot
-            bindings={docxEditorBindings}
-            canUnlock={canUpdateEntity}
-            document={{
-              entityId: tab.entityId,
-              fileFieldId: tab.id,
-              propertyId: filePropertyId,
-              workspaceId: tab.workspaceId,
-            }}
-            fallback={<PeekSuspenseFallback />}
-            initialScrollTop={docxScrollTopByTab.get(tab.id)}
-            isEditing={isEditingNativeDocx}
-            scaleOffset={scaleOffset}
-            slot={DOCX_EDITOR_SLOT.inspector}
-          />
-        </>
-      );
-    }
-    return (
-      <PeekPdfViewer
-        activePropertyId={filePropertyId ?? ""}
-        entityId={tab.entityId}
-        errorFallback={viewerErrorFallback}
-        fieldId={tab.id}
-        filePurpose="display"
-        colorMode={pdfColorMode}
-        mimeType={tab.mimeType ?? undefined}
-        onDocxScrollTopChange={handleDocxScrollTopChange}
-        onError={handleViewerError}
-        onPeekNavigate={closeAll}
-        onWheelZoom={(deltaY) => handleWheelZoom(tab.id, deltaY)}
-        scaleOffset={scaleOffset}
-        viewId={peekPdfViewId}
-        workspaceId={tab.workspaceId}
-      />
-    );
-  })();
-
-  const viewerPane = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {tab.justificationFieldId && !isEmailDisplay && !isMarkdownDisplay && (
-        <Suspense
-          fallback={
-            <div
-              className={cn(
-                "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                TOOLBAR_ROW_HEIGHT,
-              )}
-            >
-              {t("common.loading")}...
-            </div>
-          }
-        >
-          <DocumentAiSourceBar
-            activeTab={tab}
-            fieldId={tab.justificationFieldId}
-            isActiveTab={isActive}
-            workspaceId={tab.workspaceId}
-          />
-        </Suspense>
-      )}
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        {fileViewer}
-        {previewOverlay}
-      </div>
-    </div>
-  );
+  const changeFacet = (next: Facet) => {
+    setFileFacet(tab.id, next);
+    pulseChatInputForReview(next, tab.entityId);
+  };
 
   const viewerContent = (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-      {viewerPane}
-    </div>
+    <FileTabViewer
+      canUpdateEntity={canUpdateEntity}
+      closeAll={closeAll}
+      desktopEditTarget={desktopEditTarget}
+      display={display}
+      docxEditor={docxEditor}
+      docxInitialScrollTop={docxScrollTopByTab.get(tab.id)}
+      emailAttachments={emailAttachments}
+      entity={entity}
+      handleResetZoom={handleResetZoom}
+      handleWheelZoom={handleWheelZoom}
+      handleZoom={handleZoom}
+      isEditingNativeDocx={isEditingNativeDocx}
+      isZoomOverlayVisible={isPreviewOverlayVisible}
+      markdown={markdown}
+      onPdfColorModeChange={setPDFColorMode}
+      onViewerError={handleViewerError}
+      pdfColorMode={pdfColorMode}
+      peekPdfViewId={peekPdfViewId}
+      tab={tab}
+    />
   );
+  const facetContentProps = {
+    emailAttachments: isEmailDisplay ? emailAttachments : null,
+    emailChatMode,
+    filePropertyId,
+    pdfRouteJustification,
+    peekPdfViewId,
+    tab,
+  };
 
-  // "Expanded" persona: the route already renders the file in
-  // its main content (full folio), so the inspector tab drops
-  // the file chrome (zoom, file viewer) and
-  // shows itself as a metadata panel — same tab state, different
-  // rendering.
   if (isMetadataLaneExpanded) {
     return (
-      <div
-        className={cn(
-          "bg-background flex flex-1 flex-col overflow-hidden",
-          !isActive && "hidden",
-        )}
-        key={renderId}
-      >
-        {/* The guard exists because the main view is normally the preview.
-            When the route has handed that pane to the review, it is not, and
-            the preview belongs here. */}
-        {!readsDocumentInInspector && (
-          <FullViewPreviewGuard
-            facet={tab.facet}
-            setFileFacet={setFileFacet}
-            tabId={tab.id}
+      <FileTabFullView
+        facet={fullViewFacet}
+        facetContent={
+          <FileTabFacetContent
+            {...facetContentProps}
+            facet={fullViewFacet}
+            persona={{ type: "fullView", isActive }}
           />
-        )}
-        <InspectorTabHeader
-          actions={
-            <>
-              {downloadButton}
-              {desktopOpenButton}
-              <Tooltip
-                content={t("workspaces.pdf.backToPeek")}
-                render={
-                  <Button
-                    onClick={() => {
-                      handleMinimizeFromFullView(tab);
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-3.5" />
-                  </Button>
-                }
-              />
-            </>
-          }
-          label={stripExtension(tab.label)}
-          matter={
-            matterOrigin ? (
-              <MatterOriginLink
-                color={matterOrigin.color}
-                id={matterOrigin.id}
-                name={matterOrigin.name}
-                onClick={matterOrigin.onClick}
-              />
-            ) : undefined
-          }
-          onClose={() => handleCloseTab(tab.id)}
-          onLabelContextMenu={ribbonLabelContextMenuOpenAt}
-          onStartRename={() => startRename(tab)}
-          rename={{
-            active: editingTabId === tab.id,
-            value: editValue,
-            onChange: setEditValue,
-            onCommit: () => commitRename(tab),
-            onCancel: () => setEditingTabId(null),
-          }}
-        />
-        <TabFacetBar
-          // Preview is intentionally absent in fullscreen — the
-          // main view IS the preview. If the user enters Full
-          // view with Preview active in sidepeek, the
-          // FullViewPreviewGuard above swaps to Metadata and
-          // pulses the Minimize button so they know how to get
-          // a side-by-side view back. The exception is the swapped
-          // arrangement, where this panel is the only place the
-          // document can be read.
-          baseFacets={readsDocumentInInspector ? FACETS : FULLVIEW_FACETS}
-          entityId={tab.entityId}
-          facet={fullViewFacet}
-          fieldId={tab.id}
-          fileName={tab.fileName}
-          mimeType={tab.mimeType}
-          onChange={(next) => {
-            setFileFacet(tab.id, next);
-            pulseChatInputForReview(next, tab.entityId);
-          }}
-          pulseSeq={tab.facetPulseSeq}
-          workspaceId={tab.workspaceId}
-        />
-        <div className="flex min-h-0 flex-1 flex-col">
-          {/* The document itself, when the main pane is showing the review
-              instead. Same viewer the sidepeek persona mounts, so the block
-              scroll a finding requests lands in it unchanged. */}
-          {readsDocumentInInspector && fullViewFacet === "preview" && (
-            <div className="flex min-h-0 min-w-0 flex-1">{viewerContent}</div>
-          )}
-          {fullViewFacet === "metadata" && (
-            <Suspense fallback={<MetadataPanelSkeleton />}>
-              <EntityMetadataPanel
-                activeJustificationFieldId={pdfRouteJustification}
-                currentFilePropertyId={filePropertyId ?? null}
-                entityId={tab.entityId}
-                fileFieldId={tab.id}
-                onAiFieldClick={({ fieldId, propertyId }) => {
-                  // Keep the inspector tab in sync so
-                  // peek-back lands on the same selection.
-                  openFile({
-                    ...tab,
-                    justificationFieldId: fieldId,
-                    propertyId,
-                  });
-                  detached(
-                    navigate({
-                      to: "/workspaces/$workspaceId/$viewId/document",
-                      params: {
-                        workspaceId: tab.workspaceId,
-                        viewId: peekPdfViewId,
-                      },
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        entity: tab.entityId,
-                        field: tab.id,
-                        justification: fieldId,
-                        justificationPage: 1,
-                      }),
-                    }),
-                    "file-tab-panel.navigate",
-                  );
-                }}
-                workspaceId={tab.workspaceId}
-              />
-            </Suspense>
-          )}
-          {fullViewFacet === "attachments" && isEmailDisplay && (
-            <EmailAttachmentsFacet
-              chatMode={emailChatMode}
-              entityId={tab.entityId}
-              fieldId={tab.id}
-              fileName={tab.fileName}
-              onResetZoom={resetEmailAttachmentZoom}
-              onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoom={zoomEmailAttachment}
-              overlayActivation={emailAttachmentOverlayActivation}
-              scaleOffset={emailAttachmentScaleOffset}
-              selectedId={selectedEmailAttachmentId}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {fullViewFacet === "versions" && (
-            <VersionsFacet
-              currentFieldId={tab.id}
-              currentFilePropertyId={filePropertyId}
-              entityId={tab.entityId}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {fullViewFacet === "playbook" && (
-            <PlaybookFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {fullViewFacet === "anonymization" && (
-            <AnonymizationFacet
-              activeFieldId={tab.id}
-              entityId={tab.entityId}
-              isVisible={isActive}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {/* Without the swap there is no preview branch here: the main
-           *  view IS the preview, and FullViewPreviewGuard above moves a
-           *  stale "preview" facet to "metadata" on entry. */}
-        </div>
-      </div>
+        }
+        header={
+          <InspectorTabHeader
+            actions={
+              <FileTabHeaderActions
+                desktopEditTarget={desktopEditTarget}
+                downloadRenditions={entity.downloadRenditions}
+                tab={tab}
+              >
+                <BackToPeekButton
+                  onMinimize={() => handleMinimizeFromFullView(tab)}
+                />
+              </FileTabHeaderActions>
+            }
+            {...tabHeader}
+          />
+        }
+        isActive={isActive}
+        key={renderId}
+        onFacetChange={changeFacet}
+        readsDocumentInInspector={readsDocumentInInspector}
+        tab={tab}
+        viewer={viewerContent}
+      />
     );
   }
 
   const sidepeekFacet = tab.facet ?? "preview";
+  return (
+    <FileTabSidepeek
+      email={
+        isEmailDisplay
+          ? {
+              chatMode: emailChatMode,
+              onRetryChatResolution: () => {
+                detached(entity.query.refetch(), "file-tab-panel.refetch");
+              },
+              overlayActivation:
+                emailAttachments.emailSidepeekOverlayActivation,
+              resolutionFailed: entity.shouldSurfaceEmailResolutionError,
+            }
+          : null
+      }
+      facet={sidepeekFacet}
+      facetContent={
+        <FileTabFacetContent
+          {...facetContentProps}
+          facet={sidepeekFacet}
+          persona={{
+            type: "sidepeek",
+            onOpenFullView: () => {
+              detached(handleOpenFullView(), "file-tab-panel.open-full-view");
+            },
+          }}
+        />
+      }
+      header={
+        <InspectorTabHeader
+          actions={
+            <FileTabHeaderActions
+              desktopEditTarget={desktopEditTarget}
+              downloadRenditions={entity.downloadRenditions}
+              tab={tab}
+            >
+              {isPreviewFacet && editExit}
+              {canOpenFullView && (
+                <MoveToMainButton onOpenFullView={handleOpenFullView} />
+              )}
+            </FileTabHeaderActions>
+          }
+          {...tabHeader}
+        />
+      }
+      isActive={isActive}
+      key={renderId}
+      measured={requiresPdfMeasurement}
+      onFacetChange={changeFacet}
+      onViewerError={handleViewerError}
+      scaleOffset={scaleOffset}
+      tab={tab}
+      viewer={viewerContent}
+    />
+  );
+};
 
+type DocxFinalizeButtonProps = {
+  docxActionsRef: RefObject<Map<string, DocxBrowserEditorActions>>;
+  isCollaborating: boolean;
+  isCollaborationPublishable: boolean;
+  tabId: string;
+};
+
+/** The exit from DOCX editing: Save, or Create version while collaborating. */
+const DocxFinalizeButton = ({
+  docxActionsRef,
+  isCollaborating,
+  isCollaborationPublishable,
+  tabId,
+}: DocxFinalizeButtonProps) => {
+  const t = useTranslations();
+  return (
+    <Button
+      className={cn("transition-colors", isCollaborating && "min-h-11")}
+      disabled={isCollaborating && !isCollaborationPublishable}
+      onClick={() => {
+        const finalize = docxActionsRef.current.get(tabId)?.finalize();
+        if (finalize) {
+          detached(finalize, "file-tab-panel.finalize-docx");
+        }
+      }}
+      size="xs"
+    >
+      {isCollaborating ? (
+        <GitCommitHorizontalIcon className="size-3.5" />
+      ) : (
+        <CheckIcon className="size-3.5" />
+      )}
+      {isCollaborating ? t("folio.createVersion") : t("common.save")}
+    </Button>
+  );
+};
+
+type FileTabSidepeekEmail = {
+  chatMode: EmailChatMode;
+  onRetryChatResolution: () => void;
+  overlayActivation: FileChatOverlayActivation;
+  resolutionFailed: boolean;
+};
+
+type FileTabSidepeekProps = {
+  /** `null` when the tab is not an email. */
+  email: FileTabSidepeekEmail | null;
+  facet: Facet;
+  /** The non-preview facets, rendered for `facet`. */
+  facetContent: ReactNode;
+  header: ReactNode;
+  isActive: boolean;
+  /** Whether the viewer sits under a measured PDF. */
+  measured: boolean;
+  onFacetChange: (facet: Facet) => void;
+  onViewerError: () => void;
+  scaleOffset: number;
+  tab: FileTab;
+  viewer: ReactNode;
+};
+
+/** The inspector tab beside the route's own content. */
+const FileTabSidepeek = ({
+  email,
+  facet,
+  facetContent,
+  header,
+  isActive,
+  measured,
+  onFacetChange,
+  onViewerError,
+  scaleOffset,
+  tab,
+  viewer,
+}: FileTabSidepeekProps) => {
   // Facet bar stays visible during edit. The viewer (with the
   // live editor) is kept mounted via CSS hide on facet switches
   // (see `sidepeekBody` below) so unsaved session state survives a
@@ -1363,14 +592,11 @@ export const FileTabPanel = ({
     <TabFacetBar
       baseFacets={FACETS}
       entityId={tab.entityId}
-      facet={sidepeekFacet}
+      facet={facet}
       fieldId={tab.id}
       fileName={tab.fileName}
       mimeType={tab.mimeType}
-      onChange={(next) => {
-        setFileFacet(tab.id, next);
-        pulseChatInputForReview(next, tab.entityId);
-      }}
+      onChange={onFacetChange}
       pulseSeq={tab.facetPulseSeq}
       workspaceId={tab.workspaceId}
     />
@@ -1385,7 +611,7 @@ export const FileTabPanel = ({
   // The viewer stays mounted across facet switches and is
   // visually hidden when off-Preview, so the DOCX/PDF doesn't
   // re-parse every time the user pops out to Metadata and back.
-  const isPreviewVisible = sidepeekFacet === "preview";
+  const isPreviewVisible = facet === "preview";
   const sidepeekBody = (
     <>
       <div
@@ -1394,137 +620,51 @@ export const FileTabPanel = ({
           isPreviewVisible ? "flex" : "hidden",
         )}
       >
-        {viewerContent}
+        {viewer}
       </div>
       {!isPreviewVisible && (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {sidepeekFacet === "metadata" && (
-            <Suspense fallback={<MetadataPanelSkeleton />}>
-              <EntityMetadataPanel
-                activeJustificationFieldId={pdfRouteJustification}
-                currentFilePropertyId={filePropertyId ?? null}
-                entityId={tab.entityId}
-                fileFieldId={tab.id}
-                onAiFieldClick={({ fieldId, propertyId }) => {
-                  openFile({
-                    ...tab,
-                    justificationFieldId: fieldId,
-                    propertyId,
-                  });
-                  detached(
-                    navigate({
-                      to: "/workspaces/$workspaceId/$viewId/document",
-                      params: {
-                        workspaceId: tab.workspaceId,
-                        viewId: peekPdfViewId,
-                      },
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        entity: tab.entityId,
-                        field: tab.id,
-                        justification: fieldId,
-                        justificationPage: 1,
-                      }),
-                    }),
-                    "file-tab-panel.navigate",
-                  );
-                }}
-                workspaceId={tab.workspaceId}
-              />
-            </Suspense>
-          )}
-          {sidepeekFacet === "attachments" && isEmailDisplay && (
-            <EmailAttachmentsFacet
-              chatMode={emailChatMode}
-              entityId={tab.entityId}
-              fieldId={tab.id}
-              fileName={tab.fileName}
-              onResetZoom={resetEmailAttachmentZoom}
-              onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoom={zoomEmailAttachment}
-              overlayActivation={emailAttachmentOverlayActivation}
-              scaleOffset={emailAttachmentScaleOffset}
-              selectedId={selectedEmailAttachmentId}
-              chatHost={EMAIL_CHAT_HOST.parent}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {sidepeekFacet === "versions" && (
-            <VersionsFacet
-              currentFieldId={tab.id}
-              currentFilePropertyId={filePropertyId}
-              entityId={tab.entityId}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {sidepeekFacet === "playbook" && (
-            <PlaybookFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {sidepeekFacet === "anonymization" && (
-            // Sidepeek shows the file as a thumbnail-sized preview
-            // without an interactive Folio editor underneath, so
-            // there's no per-document match data to display. Pass
-            // `activeFieldId={null}` so the facet renders the
-            // "open full view first" hint instead of a zero count
-            // that the user can't act on from here.
-            <AnonymizationFacet
-              activeFieldId={null}
-              entityId={tab.entityId}
-              onOpenFullView={() => {
-                detached(handleOpenFullView(), "file-tab-panel.open-full-view");
-              }}
-              workspaceId={tab.workspaceId}
-            />
-          )}
+          {facetContent}
         </div>
       )}
     </>
   );
-  const sidepeekContent = isEmailDisplay ? (
-    <EmailViewerWithAI
-      chatMode={emailChatMode}
-      entityId={tab.entityId}
-      fieldId={tab.id}
-      fileName={tab.fileName}
-      overlayActivation={emailSidepeekOverlayActivation}
-      workspaceId={tab.workspaceId}
-    >
-      {sidepeekBody}
-      {shouldSurfaceEmailResolutionAlert({
-        isEmailDisplay,
-        isPreviewVisible,
-        resolutionFailed: shouldSurfaceEmailResolutionError,
-      }) ? (
-        <EmailChatResolutionAlert
-          onRetry={() => {
-            detached(entityQuery.refetch(), "file-tab-panel.refetch");
-          }}
-        />
-      ) : null}
-    </EmailViewerWithAI>
-  ) : (
-    sidepeekBody
-  );
+  const sidepeekContent =
+    email !== null ? (
+      <EmailViewerWithAI
+        chatMode={email.chatMode}
+        entityId={tab.entityId}
+        fieldId={tab.id}
+        fileName={tab.fileName}
+        overlayActivation={email.overlayActivation}
+        workspaceId={tab.workspaceId}
+      >
+        {sidepeekBody}
+        {shouldSurfaceEmailResolutionAlert({
+          isEmailDisplay: true,
+          isPreviewVisible,
+          resolutionFailed: email.resolutionFailed,
+        }) ? (
+          <EmailChatResolutionAlert onRetry={email.onRetryChatResolution} />
+        ) : null}
+      </EmailViewerWithAI>
+    ) : (
+      sidepeekBody
+    );
   return (
     <div
       className={cn(
         "flex flex-1 flex-col overflow-hidden",
         !isActive && "hidden",
       )}
-      key={renderId}
     >
-      {contextBar}
+      {header}
       {facetBar}
       <FileTabMeasurementBoundary
         active={isActive}
         fieldId={tab.id}
-        measured={requiresPdfMeasurement}
-        onError={handleViewerError}
+        measured={measured}
+        onError={onViewerError}
         scaleOffset={scaleOffset}
       >
         {sidepeekContent}
