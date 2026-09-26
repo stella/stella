@@ -270,23 +270,31 @@ type AttestedGroupsOptions = {
   lock?: "share";
 };
 
+type CorpusIndexGroupRegistry = {
+  /** Registered groups whose current digest is attested. */
+  attested: ReadonlySet<string>;
+  /** Registered groups with an enrollment row, whatever its state. */
+  enrolled: ReadonlySet<string>;
+};
+
 /**
- * The registered groups of `manifest` whose current digest is attested.
- * Empty, with no read, for a manifest the registry records no group of.
+ * What the registry holds for `manifest`'s groups. Empty, with no read, for a
+ * manifest the registry records no group of.
  */
-export const attestedCorpusIndexGroupsTx = async (
+export const readCorpusIndexGroupRegistryTx = async (
   tx: ReadTransaction,
   manifest: CorpusIndexManifest,
   { lock }: AttestedGroupsOptions = {},
-): Promise<ReadonlySet<string>> => {
+): Promise<CorpusIndexGroupRegistry> => {
   const groups = registeredCorpusIndexGroups(manifest);
   if (groups.length === 0) {
-    return new Set();
+    return { attested: new Set(), enrolled: new Set() };
   }
   const query = tx
     .select({
       indexGroup: corpusIndexGroupEnrollments.indexGroup,
       effectiveDigest: corpusIndexGroupEnrollments.effectiveDigest,
+      provisioningStatus: corpusIndexGroupEnrollments.provisioningStatus,
     })
     .from(corpusIndexGroupEnrollments)
     .where(
@@ -297,27 +305,35 @@ export const attestedCorpusIndexGroupsTx = async (
           corpusIndexGroupEnrollments.indexGroup,
           groups.map(({ indexGroup }) => indexGroup),
         ),
-        eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
       ),
     )
     .orderBy(corpusIndexGroupEnrollments.indexGroup)
     .limit(groups.length);
-  const attested = lock === "share" ? await query.for("share") : await query;
-  const digestOf = new Map(
-    attested.map(({ indexGroup, effectiveDigest }) => [
-      indexGroup,
-      effectiveDigest,
-    ]),
-  );
-  return new Set(
-    groups
-      .filter(
-        ({ indexGroup, effectiveDigest }) =>
-          digestOf.get(indexGroup) === effectiveDigest,
-      )
-      .map(({ indexGroup }) => indexGroup),
-  );
+  const rows = lock === "share" ? await query.for("share") : await query;
+  const rowOf = new Map(rows.map((row) => [row.indexGroup, row]));
+  return {
+    attested: new Set(
+      groups
+        .filter(({ indexGroup, effectiveDigest }) => {
+          const row = rowOf.get(indexGroup);
+          return (
+            row?.provisioningStatus === "attested" &&
+            row.effectiveDigest === effectiveDigest
+          );
+        })
+        .map(({ indexGroup }) => indexGroup),
+    ),
+    enrolled: new Set(rowOf.keys()),
+  };
 };
+
+/** The registered groups of `manifest` whose current digest is attested. */
+export const attestedCorpusIndexGroupsTx = async (
+  tx: ReadTransaction,
+  manifest: CorpusIndexManifest,
+  options: AttestedGroupsOptions = {},
+): Promise<ReadonlySet<string>> =>
+  (await readCorpusIndexGroupRegistryTx(tx, manifest, options)).attested;
 
 /**
  * The physical indexes of `manifest` that no append may reach yet: every
@@ -360,12 +376,14 @@ export const readServingCorpusIndexTargetTx = async (
     jurisdiction === undefined ||
     corpusIndexGroupContractForJurisdiction(manifest, jurisdiction).type !==
       "base";
+  const registry: CorpusIndexGroupRegistry = readsEnrollment
+    ? await readCorpusIndexGroupRegistryTx(tx, manifest)
+    : { attested: new Set(), enrolled: new Set() };
   const resolution = corpusIndexReadTarget({
     manifest,
     jurisdiction,
-    attestedGroups: readsEnrollment
-      ? await attestedCorpusIndexGroupsTx(tx, manifest)
-      : new Set(),
+    attestedGroups: registry.attested,
+    enrolledGroups: registry.enrolled,
   });
   if (resolution.type === "unready") {
     const readiness = await readCorpusIndexGroupReadinessTx(

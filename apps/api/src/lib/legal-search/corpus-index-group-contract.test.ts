@@ -312,12 +312,13 @@ const matchesIndexTarget = (target: string, indexId: string): boolean =>
 
 const globalTarget = (
   manifest: CorpusIndexManifest,
-  attestedGroups: ReadonlySet<string>,
+  { attested, enrolled }: { attested: string[]; enrolled: string[] },
 ) => {
   const resolution = corpusIndexReadTarget({
     manifest,
     jurisdiction: undefined,
-    attestedGroups,
+    attestedGroups: new Set(attested),
+    enrolledGroups: new Set(enrolled),
   });
   if (resolution.type !== "ready") {
     throw new Error("a global read is never refused");
@@ -325,55 +326,93 @@ const globalTarget = (
   return resolution.target;
 };
 
-test("a global read names an exact set of declared indexes and nothing named like them", () => {
+test("a global read names created groups exactly and bridges a later group until it is enrolled", () => {
   for (const manifest of CASE_LAW_MANIFESTS) {
     const id = (group: string) => `${manifest.generation}_${group}`;
-    const unattested = globalTarget(manifest, new Set());
-    // The groups the generation was created with; HUN was declared after
-    // these generations were built and USA is not attested.
-    expect(unattested.route.indexId.split(",")).toEqual(
-      ["aut", "cs_sk", "eu", "pol"].map(id),
-    );
-    // Shadows, strays and later groups named like a declared one are not
-    // reached, and neither is an index the registry has not attested.
+
+    // No registry row: HUN, declared after these generations were built, is
+    // reached through the pattern over its own id, as the generation wildcard
+    // reached it; USA, not attested, is not reached.
+    const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
+    expect(bridged.route.indexId.split(",")).toEqual([
+      id("aut"),
+      id("cs_sk"),
+      id("eu"),
+      `${id("hun")}*`,
+      id("pol"),
+    ]);
+    expect(matchesIndexTarget(bridged.route.indexId, id("hun"))).toBe(true);
+    // Shadows and strays named like a created group are not reached.
     for (const stray of [
       `${id("cs_sk")}_shadow`,
       `${id("eu")}rope`,
       `${id("aut")}_old`,
       `${id("pol")}2`,
       id("usa"),
-      id("hun"),
+      `${id("usa")}_shadow`,
     ]) {
-      expect([
-        stray,
-        matchesIndexTarget(unattested.route.indexId, stray),
-      ]).toEqual([stray, false]);
+      expect([stray, matchesIndexTarget(bridged.route.indexId, stray)]).toEqual(
+        [stray, false],
+      );
     }
 
-    // Attested, a later base group and an enrolled group join by exact id.
-    const attested = globalTarget(manifest, new Set(["hun", "usa"]));
+    // Enrolled but pending: the bridge has ended and nothing replaces it yet.
+    const pending = globalTarget(manifest, {
+      attested: [],
+      enrolled: ["hun"],
+    });
+    expect(pending.route.indexId.split(",")).toEqual(
+      ["aut", "cs_sk", "eu", "pol"].map(id),
+    );
+    expect(matchesIndexTarget(pending.route.indexId, id("hun"))).toBe(false);
+
+    // Attested: HUN by its exact id, and USA once it is attested too.
+    const attested = globalTarget(manifest, {
+      attested: ["hun", "usa"],
+      enrolled: ["hun", "usa"],
+    });
     expect(attested.route.indexId.split(",")).toEqual(
       ["aut", "cs_sk", "eu", "hun", "pol", "usa"].map(id),
     );
-    expect(
-      matchesIndexTarget(attested.route.indexId, `${id("usa")}_shadow`),
-    ).toBe(false);
+    for (const stray of [`${id("hun")}_shadow`, `${id("usa")}_shadow`]) {
+      expect(matchesIndexTarget(attested.route.indexId, stray)).toBe(false);
+    }
 
-    // The cursor binds the exact set: a group joining changes it.
-    expect(unattested.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
-    expect(globalTarget(manifest, new Set(["hun"])).cursorTarget).not.toBe(
-      unattested.cursorTarget,
+    // The cursor binds each index and how it is named: bridged and exact
+    // HUN are different targets, and so is the set without it.
+    const exactHun = globalTarget(manifest, {
+      attested: ["hun"],
+      enrolled: ["hun"],
+    });
+    const identities = [bridged, pending, exactHun, attested].map(
+      ({ cursorTarget }) => cursorTarget,
     );
-    expect(attested.cursorTarget).not.toBe(
-      globalTarget(manifest, new Set(["hun"])).cursorTarget,
-    );
+    for (const identity of identities) {
+      expect(identity).toMatch(/^[0-9a-f]{32}$/u);
+    }
+    expect(new Set(identities).size).toBe(identities.length);
   }
+  // A bridged pattern reaches only its own group: no declared group's name
+  // extends another's.
+  for (const group of CASE_LAW_INDEX_GROUP_NAMES) {
+    for (const other of CASE_LAW_INDEX_GROUP_NAMES) {
+      expect([
+        group,
+        other,
+        other !== group && other.startsWith(group),
+      ]).toEqual([group, other, false]);
+    }
+  }
+});
+
+test("scoped reads resolve apart from the registry's bridge", () => {
   // A scoped read of the enrolled group before attestation is refused.
   expect(
     corpusIndexReadTarget({
       manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
       jurisdiction: "USA",
       attestedGroups: new Set(),
+      enrolledGroups: new Set(),
     }).type,
   ).toBe("unready");
   // A scoped read of a base group keeps its route and its legacy cursor form,
@@ -383,6 +422,7 @@ test("a global read names an exact set of declared indexes and nothing named lik
       manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
       jurisdiction: "HUN",
       attestedGroups: new Set(),
+      enrolledGroups: new Set(),
     }),
   ).toMatchObject({
     type: "ready",
@@ -397,6 +437,7 @@ test("a global read names an exact set of declared indexes and nothing named lik
       manifest: CORPUS_INDEX_MANIFESTS.legislation_v2,
       jurisdiction: undefined,
       attestedGroups: new Set(),
+      enrolledGroups: new Set(),
     }),
   ).toEqual({
     type: "ready",
@@ -430,6 +471,7 @@ test("each generation's USA contract gives its cursors an identity of their own"
       manifest,
       jurisdiction: "USA",
       attestedGroups: new Set(["usa"]),
+      enrolledGroups: new Set(["usa"]),
     });
     return resolution.type === "ready" ? resolution.target.cursorTarget : null;
   });
