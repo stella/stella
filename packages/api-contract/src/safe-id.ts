@@ -48,6 +48,7 @@ export type SafeIdType =
   | "correspondenceAttachment"
   | "matterInboundAddress"
   | "correspondenceAllowedSender"
+  | "correspondenceAllowedSenderMatter"
   | "correspondenceDropLog"
   | "contactExtractionUpload"
   | "contactImportRequest"
