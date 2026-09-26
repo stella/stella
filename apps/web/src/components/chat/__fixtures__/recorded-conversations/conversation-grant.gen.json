@@ -442,7 +442,8 @@
                     "completionTokens": 1
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []
@@ -1003,7 +1004,8 @@
                     "completionTokens": 2
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []
@@ -1672,7 +1674,8 @@
                     "completionTokens": 3
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []

@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 
 import {
+  type ChatSourceCitationHref,
   isResourceRef,
+  parseCanonicalChatSourceCitationHref,
   RESOURCE_TYPE,
   type ResourceRef,
 } from "@stll/api-contract";
@@ -63,11 +65,86 @@ export type ChatUnresolvedInputRefContext = {
   toolCallId: string;
 };
 
-export type ChatRefContext = {
-  version: 1;
+/** Prefix of the model-facing source-citation ref (`src_N`). */
+export const CHAT_SOURCE_REF_PREFIX = "src";
+
+/**
+ * The target a model-facing ref was bound to when a message was persisted.
+ * A ref can sit anywhere the model sees it (a code-mode result, script
+ * source, prose), not only at a declared tool path that is resolved back to
+ * an id, so the binding itself is what lets a later request resolve it.
+ */
+export type ChatRefBinding =
+  | { kind: "contact"; ref: string; contact: ResourceRef<"contact"> }
+  | {
+      kind: "entity";
+      ref: string;
+      entity: ResourceRef<"entity">;
+      workspace: ResourceRef<"workspace">;
+    }
+  | { kind: "matter"; ref: string; workspace: ResourceRef<"workspace"> }
+  | { kind: "property"; ref: string; property: ResourceRef<"property"> }
+  | { kind: "source"; ref: string; href: ChatSourceCitationHref };
+
+type ChatRefContextFields = {
   entities: ChatEntityRefContext[];
   unresolvedInputs: ChatUnresolvedInputRefContext[];
   workspaceScope: ResourceRef<"workspace">[];
+};
+
+/**
+ * Version 1 predates ref bindings and stays readable for messages persisted
+ * before them; their raw refs cannot be restored. Remove once no stored
+ * message carries a version 1 context.
+ */
+export type ChatRefContext =
+  | (ChatRefContextFields & { version: 1 })
+  | (ChatRefContextFields & { version: 2; refs: ChatRefBinding[] });
+
+const isResourceRefOfType = <TType extends ResourceRef["type"]>(
+  value: unknown,
+  type: TType,
+): value is ResourceRef<TType> => isResourceRef(value) && value.type === type;
+
+const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
+  if (!isRecord(value) || typeof value["ref"] !== "string") {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "contact":
+      return isResourceRefOfType(value["contact"], RESOURCE_TYPE.CONTACT);
+    case "entity":
+      return (
+        isResourceRefOfType(value["entity"], RESOURCE_TYPE.ENTITY) &&
+        isResourceRefOfType(value["workspace"], RESOURCE_TYPE.WORKSPACE)
+      );
+    case "matter":
+      return isResourceRefOfType(value["workspace"], RESOURCE_TYPE.WORKSPACE);
+    case "property":
+      return isResourceRefOfType(value["property"], RESOURCE_TYPE.PROPERTY);
+    case "source":
+      return (
+        typeof value["href"] === "string" &&
+        parseCanonicalChatSourceCitationHref(value["href"]) !== null
+      );
+    default:
+      return false;
+  }
+};
+
+/** Bindings a stored context carries; version 1 predates them. */
+export const getChatRefBindings = (
+  context: ChatRefContext,
+): readonly ChatRefBinding[] => {
+  switch (context.version) {
+    case 1:
+      return [];
+    case 2:
+      return context.refs;
+    default:
+      context satisfies never;
+      return panic("Unhandled chat ref context version");
+  }
 };
 
 const isChatEntityRefContext = (
@@ -91,7 +168,10 @@ const isChatUnresolvedInputRefContext = (
 
 export const isChatRefContext = (value: unknown): value is ChatRefContext =>
   isRecord(value) &&
-  value["version"] === 1 &&
+  (value["version"] === 1 ||
+    (value["version"] === 2 &&
+      Array.isArray(value["refs"]) &&
+      value["refs"].every(isChatRefBinding))) &&
   Array.isArray(value["entities"]) &&
   value["entities"].every(isChatEntityRefContext) &&
   Array.isArray(value["unresolvedInputs"]) &&

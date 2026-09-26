@@ -896,7 +896,8 @@
                     "completionTokens": 1
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []

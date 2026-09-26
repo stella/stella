@@ -1615,10 +1615,9 @@ export const createSendMessage = (
         );
       }
 
-      const refRegistry = createChatRefRegistry();
-      // Turn-scoped alongside the ref registry: records tool calls that failed
-      // with a server defect so every toolset built this turn refuses to
-      // re-execute the identical call (see `ChatToolDefectMemo`).
+      // Records tool calls that failed with a server defect so every toolset
+      // built this turn refuses to re-execute the identical call (see
+      // `ChatToolDefectMemo`).
       const toolDefectMemo = createChatToolDefectMemo();
       // Narrower than the combined `suggest_changes` gate below:
       // only the file overlay (`file-chat-overlay.tsx`) mounts the
@@ -1690,6 +1689,12 @@ export const createSendMessage = (
           userId: user.id,
           workspaceId,
         }),
+      );
+      // Refs live as long as the thread, not the request: an interactive
+      // answer is a new request, and every ref its history shows the model
+      // must keep its target.
+      const refRegistry = createChatRefRegistry(
+        validationThreadState.refBindings,
       );
       const activeDraftContext = yield* Result.await(
         validateActiveDraftContext({
@@ -3080,7 +3085,8 @@ const resolveAssistantMessageRefs = ({
       turnWorkspaceIds.add(id);
     }
     const refContext = {
-      version: 1,
+      version: 2,
+      refs: refRegistry.collectRefBindings(message.parts),
       entities: entityContexts,
       unresolvedInputs: unresolvedInputRefs,
       workspaceScope: messageWorkspaceIds.map((id) =>

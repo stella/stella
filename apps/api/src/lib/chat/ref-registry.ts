@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import {
   type ChatSourceCitationTarget,
   isSafeIdValue,
+  parseCanonicalChatSourceCitationHref,
   replaceCanonicalChatSourceCitationHrefs,
   replaceCanonicalChatResourceHrefs,
   resourceRef,
@@ -16,6 +17,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   CHAT_REF_INPUT_STATE,
   CHAT_REF_TOKEN_PREFIX,
+  CHAT_SOURCE_REF_PREFIX,
+  type ChatRefBinding,
   type ChatRefInputState,
   type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
@@ -59,6 +62,17 @@ const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
 // Shape of a ref this registry mints: `<prefix>_<counter>`.
 const MINTED_REF_SHAPE = /^[a-z]+_[0-9]+$/u;
 
+const MINTED_REF_PREFIXES = [
+  ...Object.values(CHAT_REF_TOKEN_PREFIX),
+  CHAT_SOURCE_REF_PREFIX,
+];
+// Every minted ref wherever it sits in serialized parts. `_` is a word
+// character, so `\b` keeps `ent_1` from matching inside `xent_1` or `ent_12`.
+const MINTED_REF_TOKEN_REGEX = new RegExp(
+  `\\b(?:${MINTED_REF_PREFIXES.join("|")})_[1-9][0-9]*\\b`,
+  "gu",
+);
+
 /**
  * Telemetry description of a ref the registry never minted. Such a ref is
  * model-authored text captured by the link regex, not a token this turn
@@ -73,6 +87,22 @@ const describeUnresolvedRef = (ref: string) => ({
   refLength: String(ref.length),
   refMatchesMintedShape: String(MINTED_REF_SHAPE.test(ref)),
 });
+
+const reportRefTelemetry = ({
+  kind,
+  message,
+  ref,
+}: {
+  kind: string;
+  message: string;
+  ref: string;
+}) => {
+  captureError(new TelemetryError({ message }), {
+    source: "chat-ref-registry",
+    kind,
+    ...describeUnresolvedRef(ref),
+  });
+};
 
 const escapeMarkdownLinkLabel = (label: string) =>
   label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
@@ -128,8 +158,15 @@ export type EntityTarget = {
 type RefState<TTarget> = {
   counter: number;
   prefix: string;
+  refToKey: Map<string, string>;
   refToTarget: Map<string, TTarget>;
   targetToRef: Map<string, string>;
+  /**
+   * Restored refs that stored history bound to two different targets. They
+   * resolve to nothing, and no mint reuses them: failing loudly beats
+   * reading the wrong document.
+   */
+  conflicted: Set<string>;
   /** Refs minted by a read path, as opposed to only offered to the model. */
   observed: Set<string>;
 };
@@ -139,8 +176,10 @@ type ResolveRefsResult<TTarget> = Result<TTarget[], ChatToolError>;
 const createRefState = <TTarget>(prefix: string): RefState<TTarget> => ({
   counter: 0,
   prefix,
+  refToKey: new Map(),
   refToTarget: new Map(),
   targetToRef: new Map(),
+  conflicted: new Set(),
   observed: new Set(),
 });
 
@@ -168,6 +207,7 @@ const getOrCreateRef = <TTarget>({
   if (ref === undefined) {
     state.counter += 1;
     ref = `${state.prefix}_${state.counter}`;
+    state.refToKey.set(ref, key);
     state.targetToRef.set(key, ref);
     state.refToTarget.set(ref, target);
   }
@@ -175,6 +215,58 @@ const getOrCreateRef = <TTarget>({
     state.observed.add(ref);
   }
   return ref;
+};
+
+const parseRefCounter = (prefix: string, ref: string) => {
+  const match = new RegExp(`^${escapeRegex(prefix)}_([1-9][0-9]*)$`, "u").exec(
+    ref,
+  );
+  return match?.[1] === undefined ? null : Number(match[1]);
+};
+
+type RestoreRefOutcome = "restored" | "conflict" | "malformed";
+
+/**
+ * Re-bind a ref stored history already showed the model. The counter moves
+ * past it so a new mint never reuses the spelling for another target.
+ */
+const restoreRef = <TTarget>({
+  key,
+  ref,
+  state,
+  target,
+}: {
+  key: string;
+  ref: string;
+  state: RefState<TTarget>;
+  target: TTarget;
+}): RestoreRefOutcome => {
+  const counter = parseRefCounter(state.prefix, ref);
+  if (counter === null) {
+    return "malformed";
+  }
+  state.counter = Math.max(state.counter, counter);
+  if (state.conflicted.has(ref)) {
+    return "conflict";
+  }
+  const boundKey = state.refToKey.get(ref);
+  if (boundKey !== undefined && boundKey !== key) {
+    state.conflicted.add(ref);
+    state.refToKey.delete(ref);
+    state.refToTarget.delete(ref);
+    for (const conflictingKey of [boundKey, key]) {
+      if (state.targetToRef.get(conflictingKey) === ref) {
+        state.targetToRef.delete(conflictingKey);
+      }
+    }
+    return "conflict";
+  }
+  state.refToKey.set(ref, key);
+  state.refToTarget.set(ref, target);
+  if (!state.targetToRef.has(key)) {
+    state.targetToRef.set(key, ref);
+  }
+  return "restored";
 };
 
 const resolveRefs = <TTarget>({
@@ -298,6 +390,12 @@ export type ChatRefRegistry = {
    * are returned unchanged.
    */
   hydrateRefId: (props: HydrateRefIdProps) => unknown;
+  /**
+   * Bindings for every ref this registry holds that appears anywhere in
+   * `value`. Persisted with the message so a later request of the thread
+   * resolves each visible ref to the same target.
+   */
+  collectRefBindings: (value: unknown) => ChatRefBinding[];
   /** Resolve one declared model-facing ref without guessing from its text. */
   resolveRefId: (props: ResolveRefIdProps) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
@@ -338,7 +436,14 @@ export type ChatRefRegistry = {
   toSourceCitationHref: (target: ChatSourceCitationTarget) => string;
 };
 
-export const createChatRefRegistry = (): ChatRefRegistry => {
+/**
+ * `restoredBindings` are the refs the thread's stored history showed the
+ * model. They are bound before anything can mint, so every one keeps its
+ * target and new mints continue past them.
+ */
+export const createChatRefRegistry = (
+  restoredBindings: readonly ChatRefBinding[] = [],
+): ChatRefRegistry => {
   const contactState = createRefState<SafeId<"contact">>(
     CHAT_REF_TOKEN_PREFIX.contact,
   );
@@ -351,7 +456,9 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
   const entityState = createRefState<EntityTarget>(
     CHAT_REF_TOKEN_PREFIX.entity,
   );
-  const sourceCitationState = createRefState<ChatSourceCitationTarget>("src");
+  const sourceCitationState = createRefState<ChatSourceCitationTarget>(
+    CHAT_SOURCE_REF_PREFIX,
+  );
 
   const toMatterRef = (workspaceId: SafeId<"workspace">) =>
     getOrCreateRef({
@@ -403,16 +510,11 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
   const reportUnknownAssistantRef = (kind: string, ref: string) => {
-    captureError(
-      new TelemetryError({
-        message: "Assistant text cited a chat ref this turn never minted",
-      }),
-      {
-        source: "chat-ref-registry",
-        kind,
-        ...describeUnresolvedRef(ref),
-      },
-    );
+    reportRefTelemetry({
+      kind,
+      message: "Assistant text cited a chat ref this turn never minted",
+      ref,
+    });
   };
 
   const resolveAssistantTextRefs = (text: string) => {
@@ -692,6 +794,142 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     return [...ids];
   };
 
+  const reportRestoreFailure = (
+    binding: ChatRefBinding,
+    outcome: Exclude<RestoreRefOutcome, "restored">,
+  ) => {
+    reportRefTelemetry({
+      kind: binding.kind,
+      message:
+        outcome === "conflict"
+          ? "Stored chat history bound one ref to two targets"
+          : "Stored chat ref binding has a malformed ref",
+      ref: binding.ref,
+    });
+  };
+
+  const restoreRefBinding = (binding: ChatRefBinding): RestoreRefOutcome => {
+    switch (binding.kind) {
+      case "contact": {
+        const contactId = brandPersistedContactId(binding.contact.id);
+        return restoreRef({
+          key: contactId,
+          ref: binding.ref,
+          state: contactState,
+          target: contactId,
+        });
+      }
+      case "entity": {
+        const target = {
+          entityId: brandPersistedEntityId(binding.entity.id),
+          workspaceId: brandPersistedWorkspaceId(binding.workspace.id),
+        };
+        return restoreRef({
+          key: createEntityRefKey(target),
+          ref: binding.ref,
+          state: entityState,
+          target,
+        });
+      }
+      case "matter": {
+        const workspaceId = brandPersistedWorkspaceId(binding.workspace.id);
+        return restoreRef({
+          key: workspaceId,
+          ref: binding.ref,
+          state: matterState,
+          target: workspaceId,
+        });
+      }
+      case "property": {
+        const propertyId = brandPersistedPropertyId(binding.property.id);
+        return restoreRef({
+          key: propertyId,
+          ref: binding.ref,
+          state: propertyState,
+          target: propertyId,
+        });
+      }
+      case "source": {
+        const target = parseCanonicalChatSourceCitationHref(binding.href);
+        if (target === null) {
+          return panic("Validated source ref binding has no canonical href");
+        }
+        return restoreRef({
+          key: createSourceCitationRefKey(target),
+          ref: binding.ref,
+          state: sourceCitationState,
+          target,
+        });
+      }
+      default:
+        binding satisfies never;
+        return panic(`Unhandled ref binding: ${String(binding)}`);
+    }
+  };
+
+  for (const binding of restoredBindings) {
+    const outcome = restoreRefBinding(binding);
+    if (outcome !== "restored") {
+      reportRestoreFailure(binding, outcome);
+    }
+  }
+
+  const toRefBinding = (ref: string): ChatRefBinding | null => {
+    const contactId = contactState.refToTarget.get(ref);
+    if (contactId !== undefined) {
+      return {
+        kind: "contact",
+        ref,
+        contact: resourceRef({ type: RESOURCE_TYPE.CONTACT, id: contactId }),
+      };
+    }
+    const entity = entityState.refToTarget.get(ref);
+    if (entity !== undefined) {
+      return {
+        kind: "entity",
+        ref,
+        entity: resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: entity.entityId,
+        }),
+        workspace: toWorkspaceResource(entity.workspaceId),
+      };
+    }
+    const workspaceId = matterState.refToTarget.get(ref);
+    if (workspaceId !== undefined) {
+      return {
+        kind: "matter",
+        ref,
+        workspace: toWorkspaceResource(workspaceId),
+      };
+    }
+    const propertyId = propertyState.refToTarget.get(ref);
+    if (propertyId !== undefined) {
+      return {
+        kind: "property",
+        ref,
+        property: resourceRef({ type: RESOURCE_TYPE.PROPERTY, id: propertyId }),
+      };
+    }
+    const source = sourceCitationState.refToTarget.get(ref);
+    if (source !== undefined) {
+      return { kind: "source", ref, href: toChatSourceCitationHref(source) };
+    }
+    return null;
+  };
+
+  const collectRefBindings = (value: unknown): ChatRefBinding[] => {
+    const refs = new Set(JSON.stringify(value).match(MINTED_REF_TOKEN_REGEX));
+    const bindings: ChatRefBinding[] = [];
+    for (const ref of refs) {
+      const binding = toRefBinding(ref);
+      if (binding !== null) {
+        bindings.push(binding);
+      }
+    }
+    return bindings;
+  };
+
   const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {
     const ids = new Set<SafeId<"workspace">>([
       ...matterState.refToTarget.values(),
@@ -716,6 +954,7 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     hydrateUserTextRefs,
     hydrateAssistantValueRefs,
     hydrateRefId,
+    collectRefBindings,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,
     resolveRefId,

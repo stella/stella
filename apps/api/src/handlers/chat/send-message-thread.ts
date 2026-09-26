@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
@@ -14,6 +14,11 @@ import type {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  type ChatRefBinding,
+  getChatRefBindings,
+  isChatRefContext,
+} from "@/api/lib/chat/ref-token";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
@@ -31,6 +36,8 @@ type ThreadValidationState = {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
   } | null;
+  /** Ref bindings the thread's stored assistant messages recorded. */
+  refBindings: ChatRefBinding[];
   webSearchEnabled: boolean;
 };
 
@@ -57,6 +64,19 @@ export const readThreadValidationState = async ({
             workspaceId: true,
             webSearchEnabled: true,
           },
+          extras: {
+            // Only the ref contexts leave the database: message content
+            // stays unread.
+            storedRefContexts: (table) => sql<unknown>`(
+              SELECT coalesce(
+                jsonb_agg(${chatMessages.content}->'metadata'->'refContext'),
+                '[]'::jsonb
+              )
+              FROM ${chatMessages}
+              WHERE ${chatMessages.threadId} = ${table.id}
+                AND ${chatMessages.role} = 'assistant'
+            )`,
+          },
           with: {
             messages: {
               where: { id: { eq: messageId } },
@@ -68,7 +88,11 @@ export const readThreadValidationState = async ({
     );
 
     if (!thread) {
-      return Result.ok({ persistedMessage: null, webSearchEnabled: false });
+      return Result.ok({
+        persistedMessage: null,
+        refBindings: [],
+        webSearchEnabled: false,
+      });
     }
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
@@ -81,6 +105,13 @@ export const readThreadValidationState = async ({
       );
     }
 
+    const { storedRefContexts } = thread;
+    const refBindings = Array.isArray(storedRefContexts)
+      ? storedRefContexts.flatMap((refContext: unknown) =>
+          isChatRefContext(refContext) ? getChatRefBindings(refContext) : [],
+        )
+      : [];
+
     const persistedMessage = thread.messages.at(0);
     return Result.ok({
       persistedMessage:
@@ -90,6 +121,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
+      refBindings,
       webSearchEnabled: thread.webSearchEnabled,
     });
   });
