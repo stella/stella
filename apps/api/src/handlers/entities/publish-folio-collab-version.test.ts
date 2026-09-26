@@ -67,16 +67,28 @@ describe("folio collaboration publication cut", () => {
     const source = await Bun.file(
       import.meta.path.replace(".test.ts", ".ts"),
     ).text();
-    const transactionStart = source.indexOf("const publicationResult =");
-    const roomLock = source.indexOf('.for("update")', transactionStart);
+    const lockStart = source.indexOf("const lockPublicationRoom =");
+    const lockEnd = source.indexOf("type LockedPublicationRoom", lockStart);
+    const transactionStart = source.indexOf(
+      "const publishCheckpointInTransaction =",
+    );
+    const roomLock = source.indexOf(
+      "await lockPublicationRoom(",
+      transactionStart,
+    );
     const canonicalWrite = source.indexOf(
       "const versionWrite = await writeFileVersion",
       transactionStart,
     );
 
+    expect(lockStart).toBeGreaterThan(-1);
+    expect(source.slice(lockStart, lockEnd)).toContain('.for("update")');
     expect(transactionStart).toBeGreaterThan(-1);
     expect(roomLock).toBeGreaterThan(transactionStart);
     expect(canonicalWrite).toBeGreaterThan(roomLock);
+    expect(source).toMatch(
+      /safeDb\(\(tx\) =>\s*publishCheckpointInTransaction\(/u,
+    );
     expect(source).toContain(
       "eq(folioCollabRooms.generation, expectedGeneration)",
     );
