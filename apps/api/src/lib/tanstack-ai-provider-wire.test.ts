@@ -61,8 +61,6 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
     oracles: [toolInput],
     reason: "maintenance",
   },
-  "bedrock/rate-limit": { oracles: [error], reason: "maintenance" },
-  "bedrock/server-error": { oracles: [error], reason: "maintenance" },
   "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
   "google/length": { oracles: [finish], reason: "maintenance" },
@@ -78,15 +76,13 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
     oracles: [error],
     reason: "maintenance",
   },
-  "openai/bad-request": { oracles: [error], reason: "maintenance" },
   "openai/length": { oracles: [finish], reason: "maintenance" },
-  "openai/rate-limit": { oracles: [error], reason: "maintenance" },
   "openrouter/early-eof": { oracles: [finish], reason: "maintenance" },
   "openrouter/strict-null": { oracles: [toolInput], reason: "maintenance" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 21;
+const UNMET_SIZE = 17;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
