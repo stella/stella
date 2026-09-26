@@ -207,7 +207,7 @@ export const preflightPdfSigning = async ({
     return Result.err(bytes.error);
   }
 
-  const source = new Uint8Array(bytes.value);
+  const source = new Uint8Array(bytes.value.bytes);
   const loaded = await Result.tryPromise(async () => await PDF.load(source));
   if (Result.isError(loaded)) {
     // Unreadable bytes are phase 1's to report, with their own reason; a
