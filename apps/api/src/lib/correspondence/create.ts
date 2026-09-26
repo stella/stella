@@ -316,7 +316,7 @@ export const createCorrespondence = async ({
         : [];
     const correspondenceId = created?.id ?? existing.at(0)?.id;
     if (correspondenceId === undefined) {
-      tx.rollback();
+      return tx.rollback();
     }
 
     const filers = await tx

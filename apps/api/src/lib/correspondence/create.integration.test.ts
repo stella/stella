@@ -684,6 +684,9 @@ describe("matter correspondence", () => {
       const approver = originalMailbox.filers.find(
         (filer) => filer.type === "shared_mailbox",
       );
+      if (actor === undefined || approver === undefined) {
+        throw new Error("Expected retained filer and mailbox approver");
+      }
       expect(actor).toMatchObject({
         userStatus: "active",
         userName: expect.any(String),
