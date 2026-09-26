@@ -56,7 +56,6 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
 const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "anthropic/length": { oracles: [usage], reason: "maintenance" },
   "anthropic/refusal": { oracles: [finish], reason: "maintenance" },
-  "anthropic/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/early-eof": { oracles: [finish], reason: "maintenance" },
   "bedrock/parallel-tool-calls": {
     oracles: [toolInput],
@@ -64,16 +63,14 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   },
   "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
-  "google/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
   "openai/length": { oracles: [usage], reason: "maintenance" },
   "openrouter/early-eof": { oracles: [finish], reason: "maintenance" },
-  "openrouter/strict-null": { oracles: [toolInput], reason: "maintenance" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 13;
+const UNMET_SIZE = 10;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
