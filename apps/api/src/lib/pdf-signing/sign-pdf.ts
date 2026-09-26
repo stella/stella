@@ -41,6 +41,12 @@ import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import {
+  addSignatureStamp,
+  certificateSubjectName,
+  stampLines,
+} from "@/api/lib/pdf-signing/stamp";
+import type { SignatureStamp } from "@/api/lib/pdf-signing/stamp";
+import {
   createFallbackTimestampAuthority,
   PdfSigningTimestampUnavailableError,
 } from "@/api/lib/pdf-signing/timestamp-authority";
@@ -161,7 +167,32 @@ type SigningInvocation = SigningIdentity & {
   placeholderSize: number;
   reason: string | null;
   signingTime: Date;
+  /** A visible stamp to sign into, or `null` for an invisible signature. */
+  stamp: SignatureStamp | null;
 };
+
+/**
+ * Put the stamp's field on the page, when there is one, and name the field
+ * to sign into. Runs on a freshly loaded document in both phases; the stamp
+ * is built from persisted inputs only, so both produce the same bytes.
+ */
+const prepareSignatureField = (
+  pdf: PDF,
+  invocation: SigningInvocation,
+): string | undefined =>
+  invocation.stamp === null
+    ? undefined
+    : addSignatureStamp({
+        lines: stampLines({
+          location: invocation.location,
+          reason: invocation.reason,
+          signerName: certificateSubjectName(invocation.certificate),
+          signingTime: invocation.signingTime,
+          stamp: invocation.stamp,
+        }),
+        pdf,
+        stamp: invocation.stamp,
+      });
 
 /**
  * The digest the desktop's keychain signs.
@@ -193,6 +224,7 @@ const buildSignOptions = (
   { location, placeholderSize, reason, signingTime }: SigningInvocation,
   signer: Signer,
   trust: TrustOptions,
+  fieldName: string | undefined,
 ) =>
   ({
     signer,
@@ -200,6 +232,7 @@ const buildSignOptions = (
     digestAlgorithm: DIGEST_ALGORITHM,
     estimatedSize: placeholderSize,
     signingTime,
+    ...(fieldName !== undefined && { fieldName }),
     ...trust,
     ...(reason !== null && { reason }),
     ...(location !== null && { location }),
@@ -254,7 +287,8 @@ export const captureSigningDigest = async (
         });
       }
       try {
-        await pdf.sign(buildSignOptions(invocation, signer, {}));
+        const fieldName = prepareSignatureField(pdf, invocation);
+        await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName));
       } catch (error) {
         if (error instanceof PlaceholderError) {
           throw new PdfSigningPlaceholderTooSmallError({
@@ -388,8 +422,9 @@ export const applySignature = async (
 
   const signOnce = async (trust: TrustOptions) => {
     const pdf = await PDF.load(invocation.basePdf);
+    const fieldName = prepareSignatureField(pdf, invocation);
     const { bytes, warnings } = await pdf.sign(
-      buildSignOptions(invocation, signer, trust),
+      buildSignOptions(invocation, signer, trust, fieldName),
     );
     return { bytes, pdf, warnings };
   };

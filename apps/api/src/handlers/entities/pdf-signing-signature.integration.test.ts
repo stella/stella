@@ -93,6 +93,7 @@ const seedPreparedSession = async () => {
     reserveTimestamp: false,
     signatureAlgorithm: "RSASSA-PKCS1-v1_5",
     signingTime,
+    stamp: null,
   });
   const key = crypto.createPrivateKey({
     key: Buffer.from(await crypto.subtle.exportKey("pkcs8", privateKey)),

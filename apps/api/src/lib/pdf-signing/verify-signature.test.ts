@@ -35,6 +35,7 @@ const prepare = async (keyType: "RSA" | "EC") => {
     reserveTimestamp: false,
     signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
     signingTime: SIGNING_TIME,
+    stamp: null,
   });
   return { der, key: await nodeKey(privateKey), signedAttributes };
 };
