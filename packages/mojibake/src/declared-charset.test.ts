@@ -99,3 +99,53 @@ describe("bytes read as the charset they declare", () => {
     });
   });
 });
+
+describe("text that only looks like a declaration", () => {
+  // Each decoy names windows-1252 where a prescan must not read one; the
+  // bytes are UTF-8 and the real declaration, where there is one, says so.
+  const REAL = `<meta charset="utf-8">`;
+  const DECOYS = [
+    `<!-- <meta charset="windows-1252"> -->${REAL}`,
+    `<!--> --><!-- <meta charset=windows-1252> -->${REAL}`,
+    `<div title="<meta charset=windows-1252>"></div>${REAL}`,
+    `<meta name="description" content="charset=windows-1252">${REAL}`,
+    `<meta data-charset="windows-1252">${REAL}`,
+    `<metadata charset="windows-1252">${REAL}`,
+    `<p>charset=windows-1252</p>`,
+    `<?xml-stylesheet encoding="windows-1252"?>${REAL}`,
+    `<p>x</p><?xml version="1.0" encoding="windows-1252"?>`,
+  ];
+
+  test.each(DECOYS)("%s", (head) => {
+    const html = `${head}<p>Győr</p>`;
+    const decoded = decodeDeclared(new TextEncoder().encode(html), {
+      contentType: null,
+    });
+    expect(decoded.text).toBe(html);
+    expect(decoded.charset).toBe("utf-8");
+  });
+
+  test("a real declaration after a decoy is the one read", () => {
+    const html = `<!-- <meta charset="utf-8"> --><meta http-equiv="content-type" content="text/html; charset='windows-1250'"><p>${SENTENCE}</p>`;
+    expect(decodeDeclared(windows1250(html), { contentType: null })).toEqual({
+      text: html,
+      charset: "windows-1250",
+      source: "document",
+    });
+  });
+
+  test("a content charset without the http-equiv pragma is not a declaration", () => {
+    const html = `<meta content="text/html; charset=windows-1250"><p>${SENTENCE}</p>`;
+    expect(
+      decodeDeclared(windows1250(html), { contentType: null }).source,
+    ).toBe("default");
+  });
+
+  test("a declaration past the first kilobyte is not read", () => {
+    const html = `<p>${"x".repeat(1024)}</p><meta charset="windows-1250">`;
+    expect(
+      decodeDeclared(new TextEncoder().encode(html), { contentType: null })
+        .source,
+    ).toBe("default");
+  });
+});

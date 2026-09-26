@@ -9,7 +9,7 @@
  * byte to U+FFFD before a parser sees it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 // node:util's constructor takes any label string, which is what a charset
 // read off the wire is; the global one is typed to a closed list of labels.
 import { TextDecoder as LabelledTextDecoder } from "node:util";
@@ -32,10 +32,6 @@ export type DecodeDeclaredOptions = {
 const PRESCAN_BYTES = 1024;
 
 const HTTP_CHARSET = /;\s*charset\s*=\s*"?(?<label>[^";\s]+)/iu;
-const DOCUMENT_CHARSET = [
-  /<\?xml[^>]*\bencoding\s*=\s*["'](?<label>[^"']+)["']/iu,
-  /<meta[^>]*\bcharset\s*=\s*["']?(?<label>[^"'\s/>;]+)/iu,
-];
 
 const BOMS = [
   { bytes: [0xef, 0xbb, 0xbf], charset: "utf-8" },
@@ -54,17 +50,274 @@ const bomCharset = (bytes: Uint8Array): string | null =>
     bom.every((byte, index) => bytes[index] === byte),
   )?.charset ?? null;
 
+const isSpace = (char: string | undefined): boolean =>
+  char === "\t" ||
+  char === "\n" ||
+  char === "\f" ||
+  char === "\r" ||
+  char === " ";
+
+const isAsciiLetter = (char: string | undefined): boolean =>
+  char !== undefined && /^[A-Za-z]$/u.test(char);
+
+/** Only ASCII capitals: the prescan does not fold any other byte. */
+const asciiLower = (char: string): string =>
+  char >= "A" && char <= "Z" ? char.toLowerCase() : char;
+
+type AttributeRead =
+  | { type: "attribute"; name: string; value: string; next: number }
+  /** `next` is the `>` that closes the tag. */
+  | { type: "end-of-tag"; next: number }
+  | { type: "end-of-input" };
+
+type ValueReadOptions = { head: string; start: number; name: string };
+
+const readAttributeValue = ({
+  head,
+  start,
+  name,
+}: ValueReadOptions): AttributeRead => {
+  let position = start;
+  while (isSpace(head[position])) {
+    position += 1;
+  }
+  const quote = head[position];
+  if (quote === undefined) {
+    return { type: "end-of-input" };
+  }
+  if (quote === ">") {
+    return { type: "attribute", name, value: "", next: position };
+  }
+  const quoted = quote === '"' || quote === "'";
+  let value = "";
+  position += quoted ? 1 : 0;
+  for (;;) {
+    const char = head[position];
+    if (char === undefined) {
+      return { type: "end-of-input" };
+    }
+    if (quoted && char === quote) {
+      return { type: "attribute", name, value, next: position + 1 };
+    }
+    if (!quoted && (isSpace(char) || char === ">")) {
+      return { type: "attribute", name, value, next: position };
+    }
+    value += asciiLower(char);
+    position += 1;
+  }
+};
+
+/** The HTML prescan's "get an attribute", from `start`. */
+const readAttribute = (head: string, start: number): AttributeRead => {
+  let position = start;
+  while (isSpace(head[position]) || head[position] === "/") {
+    position += 1;
+  }
+  if (head[position] === undefined) {
+    return { type: "end-of-input" };
+  }
+  if (head[position] === ">") {
+    return { type: "end-of-tag", next: position };
+  }
+  let name = "";
+  for (;;) {
+    const char = head[position];
+    if (char === undefined) {
+      return { type: "end-of-input" };
+    }
+    if (char === "=" && name.length > 0) {
+      return readAttributeValue({ head, start: position + 1, name });
+    }
+    if (isSpace(char)) {
+      while (isSpace(head[position])) {
+        position += 1;
+      }
+      return head[position] === "="
+        ? readAttributeValue({ head, start: position + 1, name })
+        : { type: "attribute", name, value: "", next: position };
+    }
+    if (char === "/" || char === ">") {
+      return { type: "attribute", name, value: "", next: position };
+    }
+    name += asciiLower(char);
+    position += 1;
+  }
+};
+
+/** The charset a `content="text/html; charset=…"` value names, or null. */
+const charsetFromContent = (content: string): string | null => {
+  let position = 0;
+  for (;;) {
+    const found = content.indexOf("charset", position);
+    if (found === -1) {
+      return null;
+    }
+    position = found + "charset".length;
+    while (isSpace(content[position])) {
+      position += 1;
+    }
+    if (content[position] !== "=") {
+      continue;
+    }
+    position += 1;
+    while (isSpace(content[position])) {
+      position += 1;
+    }
+    const first = content[position];
+    if (first === undefined) {
+      return null;
+    }
+    if (first === '"' || first === "'") {
+      const end = content.indexOf(first, position + 1);
+      return end === -1 ? null : content.slice(position + 1, end);
+    }
+    let end = position;
+    while (
+      end < content.length &&
+      !isSpace(content[end]) &&
+      content[end] !== ";"
+    ) {
+      end += 1;
+    }
+    return content.slice(position, end);
+  }
+};
+
+type TagRead =
+  | { type: "charset"; label: string }
+  | { type: "next"; next: number }
+  | { type: "end-of-input" };
+
+/** A `<meta>` tag's attributes, from just after its name. */
+const readMeta = (head: string, start: number): TagRead => {
+  const seen = new Set<string>();
+  let gotPragma = false;
+  let needPragma: boolean | null = null;
+  let charset: string | null = null;
+  let position = start;
+  for (;;) {
+    const read = readAttribute(head, position);
+    if (read.type === "end-of-input") {
+      return read;
+    }
+    if (read.type === "end-of-tag") {
+      position = read.next;
+      break;
+    }
+    position = read.next;
+    if (seen.has(read.name)) {
+      continue;
+    }
+    seen.add(read.name);
+    if (read.name === "http-equiv" && read.value === "content-type") {
+      gotPragma = true;
+    } else if (read.name === "content" && charset === null) {
+      const label = charsetFromContent(read.value);
+      if (label !== null && decoderFor(label) !== null) {
+        charset = label;
+        needPragma = true;
+      }
+    } else if (read.name === "charset") {
+      charset = decoderFor(read.value) === null ? null : read.value;
+      needPragma = false;
+    }
+  }
+  if (charset === null || needPragma === null || (needPragma && !gotPragma)) {
+    return { type: "next", next: position + 1 };
+  }
+  return { type: "charset", label: charset };
+};
+
+/** Every attribute of a tag that is not `<meta>`, skipped as the prescan does. */
+const skipTag = (head: string, start: number): TagRead => {
+  let position = start;
+  while (
+    position < head.length &&
+    !isSpace(head[position]) &&
+    head[position] !== ">"
+  ) {
+    position += 1;
+  }
+  for (;;) {
+    const read = readAttribute(head, position);
+    if (read.type === "end-of-input") {
+      return read;
+    }
+    position = read.next;
+    if (read.type === "end-of-tag") {
+      return { type: "next", next: position + 1 };
+    }
+  }
+};
+
+const META_START = /^<meta[\t\n\f\r /]/iu;
+
+/** A start or end tag at `position`, read; null where none starts there. */
+const readTag = (head: string, position: number): TagRead | null => {
+  if (META_START.test(head.slice(position, position + 6))) {
+    return readMeta(head, position + 5);
+  }
+  const opensTag =
+    head[position] === "<" &&
+    (isAsciiLetter(head[position + 1]) ||
+      (head[position + 1] === "/" && isAsciiLetter(head[position + 2])));
+  return opensTag ? skipTag(head, position + 1) : null;
+};
+
+/**
+ * The HTML prescan for a character encoding
+ * (https://html.spec.whatwg.org/multipage/parsing.html#prescan-a-byte-stream-to-determine-its-encoding):
+ * comments and other tags' attributes are stepped over, so a declaration
+ * quoted in either is not one. Its input is the bounded head of the bytes.
+ */
+const prescan = (head: string): string | null => {
+  let position = 0;
+  while (position < head.length) {
+    if (head.startsWith("<!--", position)) {
+      const end = head.indexOf("-->", position + 2);
+      if (end === -1) {
+        return null;
+      }
+      position = end + 3;
+      continue;
+    }
+    const tag = readTag(head, position);
+    if (tag !== null) {
+      switch (tag.type) {
+        case "charset":
+          return tag.label;
+        case "end-of-input":
+          return null;
+        case "next":
+          position = tag.next;
+          continue;
+        default:
+          tag satisfies never;
+          return panic("Unhandled prescan tag read");
+      }
+    }
+    if (/^<[!/?]/u.test(head.slice(position, position + 2))) {
+      const end = head.indexOf(">", position);
+      if (end === -1) {
+        return null;
+      }
+      position = end + 1;
+      continue;
+    }
+    position += 1;
+  }
+  return null;
+};
+
+/** An XML declaration, which only the very start of the bytes can hold. */
+const XML_DECLARATION =
+  /^<\?xml[\t\n\r ][^>]*?\bencoding\s*=\s*["'](?<label>[^"']+)["']/u;
+
 const documentLabel = (bytes: Uint8Array): string | null => {
   // Every declaration is ASCII, and every charset a declaration can name
   // writes ASCII as ASCII, so a byte-per-character reading finds it.
   const head = String.fromCodePoint(...bytes.subarray(0, PRESCAN_BYTES));
-  for (const pattern of DOCUMENT_CHARSET) {
-    const label = pattern.exec(head)?.groups?.["label"];
-    if (label !== undefined) {
-      return label;
-    }
-  }
-  return null;
+  return XML_DECLARATION.exec(head)?.groups?.["label"] ?? prescan(head);
 };
 
 export const decodeDeclared = (
