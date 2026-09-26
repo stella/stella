@@ -16,6 +16,7 @@ const CRL_DISTRIBUTION_POINTS_OID = "2.5.29.31";
 const CA_ISSUERS_OID = "1.3.6.1.5.5.7.48.2";
 const OCSP_OID = "1.3.6.1.5.5.7.48.1";
 const GENERAL_NAME_URI = 6;
+const EXTENDED_KEY_USAGE_OID = "2.5.29.37";
 
 const RSA_KEY = {
   name: "RSASSA-PKCS1-v1_5",
@@ -34,6 +35,8 @@ type TestCertificateOptions = {
   caIssuersUrl?: string;
   commonName: string;
   crlUrl?: string;
+  /** Extended key usage OIDs; omitted leaves the extension out. */
+  extendedKeyUsages?: string[];
   isCa?: boolean;
   /** Omitted: self-signed. */
   issuer?: TestCertificate;
@@ -59,6 +62,7 @@ export const createTestCertificate = async ({
   caIssuersUrl,
   commonName,
   crlUrl,
+  extendedKeyUsages,
   isCa = false,
   issuer,
   ocspUrl,
@@ -127,6 +131,16 @@ export const createTestCertificate = async ({
       }),
     );
   }
+  if (extendedKeyUsages !== undefined) {
+    extensions.push(
+      new pkijs.Extension({
+        extnID: EXTENDED_KEY_USAGE_OID,
+        extnValue: new pkijs.ExtKeyUsage({ keyPurposes: extendedKeyUsages })
+          .toSchema()
+          .toBER(false),
+      }),
+    );
+  }
   certificate.extensions = extensions;
 
   await certificate.subjectPublicKeyInfo.importKey(keys.publicKey);
@@ -143,6 +157,10 @@ export const createTestCertificate = async ({
 export const createTestCrl = async (
   issuer: TestCertificate,
   revoked: readonly TestCertificate[] = [],
+  {
+    nextUpdate = new Date(Date.now() + 86_400_000),
+    thisUpdate = new Date(),
+  }: { nextUpdate?: Date; thisUpdate?: Date } = {},
 ): Promise<Uint8Array> => {
   const crl = new pkijs.CertificateRevocationList();
   crl.version = 1;
@@ -156,11 +174,8 @@ export const createTestCrl = async (
         }),
     );
   }
-  crl.thisUpdate = new pkijs.Time({ type: 0, value: new Date() });
-  crl.nextUpdate = new pkijs.Time({
-    type: 0,
-    value: new Date(Date.now() + 86_400_000),
-  });
+  crl.thisUpdate = new pkijs.Time({ type: 0, value: thisUpdate });
+  crl.nextUpdate = new pkijs.Time({ type: 0, value: nextUpdate });
   await crl.sign(issuer.privateKey, "SHA-256");
   return new Uint8Array(crl.toSchema(true).toBER(false));
 };
@@ -173,12 +188,19 @@ const ID_PKIX_OCSP_BASIC = "1.3.6.1.5.5.7.48.1.1";
  */
 export const createTestOcspResponse = async ({
   issuer,
+  nextUpdate,
+  responder = issuer,
   status,
   subject,
+  thisUpdate = new Date(),
 }: {
   issuer: TestCertificate;
+  nextUpdate?: Date;
+  /** Signs the response; default the issuer itself. Carried when delegated. */
+  responder?: TestCertificate;
   status: "good" | "revoked";
   subject: TestCertificate;
+  thisUpdate?: Date;
 }): Promise<Uint8Array> => {
   const certID = new pkijs.CertID();
   await certID.createForCertificate(subject.certificate, {
@@ -198,18 +220,20 @@ export const createTestOcspResponse = async ({
         });
   const basic = new pkijs.BasicOCSPResponse({
     tbsResponseData: new pkijs.ResponseData({
-      responderID: issuer.certificate.subject,
+      responderID: responder.certificate.subject,
       producedAt: new Date(),
       responses: [
         new pkijs.SingleResponse({
           certID,
           certStatus,
-          thisUpdate: new Date(),
+          thisUpdate,
+          ...(nextUpdate !== undefined && { nextUpdate }),
         }),
       ],
     }),
+    ...(responder !== issuer && { certs: [responder.certificate] }),
   });
-  await basic.sign(issuer.privateKey, "SHA-256");
+  await basic.sign(responder.privateKey, "SHA-256");
   return new Uint8Array(
     new pkijs.OCSPResponse({
       responseStatus: new asn1js.Enumerated({ value: 0 }),

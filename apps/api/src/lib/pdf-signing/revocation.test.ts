@@ -159,4 +159,98 @@ describe("revocation data for long-term validation", () => {
 
     expect(revoked).toEqual([leaf.der]);
   });
+
+  describe("authenticity and currency", () => {
+    const serve = (bytes: Uint8Array) =>
+      createTrackedRevocationProvider(async () => bytes);
+
+    test("ignores a good OCSP answer the issuer did not sign", async () => {
+      const { leaf, root } = await buildLeaf();
+      // Same name as the real issuer, different key: a forged "good" that
+      // would otherwise hide a revocation.
+      const impostor = await createTestCertificate({
+        commonName: "Root",
+        isCa: true,
+      });
+      const forged = await createTestOcspResponse({
+        issuer: root,
+        responder: impostor,
+        status: "good",
+        subject: leaf,
+      });
+      const provider = serve(forged);
+
+      expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
+      expect(provider.covers(leaf.der)).toBe(false);
+    });
+
+    test("ignores a good OCSP answer past its next update", async () => {
+      const { leaf, root } = await buildLeaf();
+      const day = 86_400_000;
+      const stale = await createTestOcspResponse({
+        issuer: root,
+        nextUpdate: new Date(Date.now() - 9 * day),
+        status: "good",
+        subject: leaf,
+        thisUpdate: new Date(Date.now() - 10 * day),
+      });
+      const provider = serve(stale);
+
+      expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
+      expect(provider.covers(leaf.der)).toBe(false);
+    });
+
+    test("accepts a responder the issuer delegated for OCSP, and only that", async () => {
+      const { leaf, root } = await buildLeaf();
+      const delegated = await createTestCertificate({
+        commonName: "Root OCSP responder",
+        extendedKeyUsages: ["1.3.6.1.5.5.7.3.9"],
+        issuer: root,
+      });
+      const undelegated = await createTestCertificate({
+        commonName: "Root web server",
+        extendedKeyUsages: ["1.3.6.1.5.5.7.3.1"],
+        issuer: root,
+      });
+
+      const byDelegate = serve(
+        await createTestOcspResponse({
+          issuer: root,
+          responder: delegated,
+          status: "good",
+          subject: leaf,
+        }),
+      );
+      await byDelegate.getOCSP(leaf.der, root.der);
+      expect(byDelegate.covers(leaf.der)).toBe(true);
+
+      const byOther = serve(
+        await createTestOcspResponse({
+          issuer: root,
+          responder: undelegated,
+          status: "good",
+          subject: leaf,
+        }),
+      );
+      expect(await byOther.getOCSP(leaf.der, root.der)).toBe(null);
+      expect(byOther.covers(leaf.der)).toBe(false);
+    });
+
+    test("ignores a CRL past its next update", async () => {
+      const { leaf, root } = await buildLeaf();
+      const day = 86_400_000;
+      // An old list, from before the certificate was revoked, must not
+      // stand in for a current one.
+      const stale = await createTestCrl(root, [], {
+        nextUpdate: new Date(Date.now() - 2 * day),
+        thisUpdate: new Date(Date.now() - 9 * day),
+      });
+      const provider = createTrackedRevocationProvider(async ({ url }) =>
+        url === CRL_URL ? stale : null,
+      );
+
+      expect(await provider.getCRL(leaf.der, root.der)).toBe(null);
+      expect(provider.covers(leaf.der)).toBe(false);
+    });
+  });
 });
