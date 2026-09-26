@@ -1310,12 +1310,20 @@ type DecisionMetadata = {
   caseNumberType?: DecisionPrimaryReferenceType | undefined;
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
+  /**
+   * The decision's country. Identifiers are told apart by the key
+   * `normalizeDecisionIdentifierIn` gives them there, the key the identifier
+   * rows are written under, so two spellings of one reference (`10 A. 5`,
+   * `10 Atl. 5`) become one row rather than a primary-key collision.
+   */
+  jurisdiction?: string | undefined;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
+  jurisdiction?: string | undefined;
   metadata: Record<string, unknown>;
 };
 
@@ -1326,6 +1334,7 @@ export const decisionIdentifiersFromMetadata = ({
   caseNumberType = DEFAULT_PRIMARY_REFERENCE_TYPE,
   ecli,
   identifiers,
+  jurisdiction,
 }: DecisionMetadata): DecisionIdentifiers => {
   const caseNumberIdentifier = primaryDecisionIdentifier({
     caseNumber,
@@ -1341,8 +1350,10 @@ export const decisionIdentifiersFromMetadata = ({
   if (identifiers !== undefined) {
     candidates.push(...identifiers);
   }
-  const normalizedCaseNumber =
-    normalizeDecisionIdentifier(caseNumberIdentifier);
+  const normalizedCaseNumber = normalizeDecisionIdentifierIn(
+    jurisdiction,
+    caseNumberIdentifier,
+  );
   if (!normalizedCaseNumber) {
     throw new UnpersistableDecisionFieldError({
       message: "Decision case number has no searchable content",
@@ -1353,7 +1364,10 @@ export const decisionIdentifiersFromMetadata = ({
     `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
   ]);
   const additional = candidates.slice(1).filter((identifier) => {
-    const normalized = normalizeDecisionIdentifier(identifier);
+    // The first spelling of a reference is kept (the primary before any
+    // other); a later spelling of the same reference stays in the stored
+    // publisher identifiers, not in the rows.
+    const normalized = normalizeDecisionIdentifierIn(jurisdiction, identifier);
     if (!normalized) {
       return false;
     }
@@ -1411,6 +1425,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
   caseNumberType,
   ecli,
+  jurisdiction,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
   const persistedIdentifiers =
@@ -1424,6 +1439,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
       caseNumber,
       caseNumberType,
       ecli,
+      jurisdiction,
       identifiers:
         firstIdentifier === undefined
           ? undefined
@@ -1491,6 +1507,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
     caseNumber,
     caseNumberType,
     ecli,
+    jurisdiction,
     identifiers:
       firstIdentifier === undefined
         ? undefined

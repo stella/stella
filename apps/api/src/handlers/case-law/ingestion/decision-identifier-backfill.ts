@@ -26,7 +26,6 @@ import {
 import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
-  normalizeDecisionIdentifier,
   normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -620,8 +619,11 @@ const identifierKey = ({
 const identifiersForStoredDecision = (
   row: DecisionRow,
 ): DecisionIdentifiers | null =>
-  normalizeDecisionIdentifier(primaryDecisionIdentifier(row))
-    ? decisionIdentifiersFromStoredMetadata(row)
+  normalizeDecisionIdentifierIn(row.country, primaryDecisionIdentifier(row))
+    ? decisionIdentifiersFromStoredMetadata({
+        ...row,
+        jurisdiction: row.country,
+      })
     : null;
 
 const decisionMismatchCount = async (

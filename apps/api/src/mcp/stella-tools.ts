@@ -891,19 +891,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search case law within one country. `queries` carries several " +
-      "phrasings of one question and merges their results; matchedQueries " +
-      "names the phrasings that returned each hit. `limit` is the merged " +
-      "page, split evenly across them. Filters: court, language, dates, " +
-      "decision type, source_id (a `facets.source` bucket's `value`). " +
-      `\`sort\` defaults to '${DEFAULT_SEARCH_SORT}'. Facets and total ` +
+      "Search case law within one country. `queries` carries phrasings of " +
+      "one question and merges their results; matchedQueries names the " +
+      "phrasings behind each hit. `limit` is the merged page, split evenly " +
+      "across them. Filters: court, language, dates, decision type, " +
+      "source_id (a `facets.source` bucket's `value`). Facets and total " +
       "describe ONE query's whole set: first page of a single-query call " +
       "only, null otherwise. Function words are not required terms; " +
       "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
       "`strict` requires every word. Each hit carries citationAuthority " +
-      "(the score the ranking blends in), matchingPassages (at least 1) and " +
-      "a route-independent resourceName. read_case_law_citations gives the " +
-      "polarity of the citing decisions.",
+      "(the score ranking blends in), matchingPassages, a route-independent " +
+      "resourceName and caseNumber, its citable reference: not always a " +
+      "docket. read_case_law_decision types it; read_case_law_citations " +
+      "gives citing polarity.",
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -929,16 +929,17 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve case references to decisions: docket numbers, ECLIs and " +
-      "reporter citations. Answered from the identity columns, never by ranking text, so a hit is the " +
-      "decision named, not one citing it. Every `identifiers[]` entry is " +
-      "answered on its own, in input order, under `status`: `found` carries " +
-      "that decision's id, resourceName, appUrl, reference, court, " +
-      "date and ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
-      "court, not to the corpus, and picking one would cite the wrong " +
-      "court; `not_found` says what to call instead; `lookup_failed` means " +
-      "the read did not complete, so retry that entry. Use this when the " +
-      "user names a case; use search_case_law when they describe one. Pass " +
-      "a `found` decisionId to read_case_law_decision for the text.",
+      "reporter citations. Answered from identity columns, not ranked " +
+      "text: a hit is the decision named, not one citing it. Each " +
+      "`identifiers[]` entry is answered on its own, in input order, under " +
+      "`status`: `found` carries that decision's id, resourceName, appUrl, " +
+      "caseNumber (citable reference, not always a docket), court, date and " +
+      "ECLI; `ambiguous` carries the candidates: a docket is unique per " +
+      "court, not per corpus, so none is picked; `not_found` says what to " +
+      "call instead; `lookup_failed`: the read did not complete; retry that " +
+      "entry. Use this when the user names a case; use search_case_law when " +
+      "they describe one. Pass a `found` decisionId to " +
+      "read_case_law_decision for the text and typed identifiers.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({

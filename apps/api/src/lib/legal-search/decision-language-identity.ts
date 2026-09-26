@@ -91,6 +91,40 @@ export const assertDocketKeyedSupplementAllowed = (country: string): void => {
   }
 };
 
+type ReplayIdentityFields = {
+  caseNumber: string;
+  country: string;
+  language: string;
+  sourceDocumentId: string | null;
+};
+
+/**
+ * What must not change for a re-parsed payload to still be the row it was
+ * read from, compared as a whole. Where decisions are keyed by docket, the
+ * docket is part of the identity. Where they are keyed by publisher
+ * document, the reference is not: it is derived from the payload and may be
+ * corrected, as a docket upgraded to its reporter citation. The document,
+ * language and jurisdiction then are the identity.
+ *
+ * The policy is the stored row's; the re-parsed result is read under it.
+ */
+export const decisionReplayIdentity = (
+  policyCountry: string,
+  { caseNumber, country, language, sourceDocumentId }: ReplayIdentityFields,
+) => {
+  const identity = decisionLanguageIdentityOf(policyCountry);
+  switch (identity) {
+    case DECISION_LANGUAGE_IDENTITY.ECLI_OR_DOCKET:
+      return { caseNumber, language, sourceDocumentId };
+    case DECISION_LANGUAGE_IDENTITY.SOURCE_DOCUMENT:
+      return { country, language, sourceDocumentId };
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled language identity: ${String(identity)}`);
+    }
+  }
+};
+
 type DecisionLanguageGroupKeyOptions = {
   caseNumber: string;
   country: string;

@@ -27,6 +27,7 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 
@@ -211,6 +212,10 @@ const advanceUnchangedObservationWatermark = async ({
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
             sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+            // The reference the skip compared, so a concurrent correction of
+            // it is not overwritten by a watermark that says nothing changed.
+            eq(caseLawDecisions.caseNumber, existing.caseNumber),
+            eq(caseLawDecisions.caseNumberType, existing.caseNumberType),
             // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
             // bind parameter's type, and the driver then JSON-encodes the
             // already-serialized string, so the comparison sees a jsonb
@@ -358,6 +363,9 @@ export const resolveExistingDecisionPolicy = async ({
       !storedPartialObservation.isListingOnly &&
       !corpusCarriesDocument(existing.contentHash)
     ) &&
+    existing.caseNumber === result.caseNumber &&
+    existing.caseNumberType ===
+      parsePrimaryReferenceType(result.caseNumberType) &&
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
       existingSourceRawContentType: existing.sourceRawContentType,
