@@ -91,7 +91,9 @@ export type CollectionSpec = {
  * A recodification reuses a title: `občanský zákoník` is 40/1964 Sb. in a 2011
  * judgment and 89/2012 Sb. in a 2016 one. Both entries exist, each with its
  * window, so the wrong act is a lookup miss rather than a silent mis-binding.
- * Both bounds are half-open ISO dates; an entry without them always applies.
+ * Both bounds are half-open ISO dates. An entry never applies before the
+ * year its act was issued, whatever its window leaves open; within that, an
+ * entry without bounds always applies.
  */
 export type CitedWindow = {
   citedFrom?: string;

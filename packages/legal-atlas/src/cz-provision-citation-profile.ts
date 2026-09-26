@@ -15,6 +15,7 @@
  */
 
 import type {
+  ActTitleSpec,
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
@@ -32,6 +33,15 @@ const RECODIFICATION = "2014-01-01";
 
 /** The day 134/2016 Sb. replaced 137/2006 Sb. */
 const PUBLIC_PROCUREMENT_RECODIFICATION = "2016-10-01";
+
+/** The day 262/2006 Sb. replaced 65/1965 Sb. */
+const LABOUR_CODE_RECODIFICATION = "2007-01-01";
+
+/** The day 500/2004 Sb. replaced 71/1967 Sb. */
+const ADMINISTRATIVE_PROCEDURE_RECODIFICATION = "2006-01-01";
+
+/** The day 235/2004 Sb. replaced 588/1992 Sb. */
+const VAT_RECODIFICATION = "2004-05-01";
 
 /** The day 40/2009 Sb. replaced 140/1961 Sb. */
 const CRIMINAL_CODE_RECODIFICATION = "2010-01-01";
@@ -60,6 +70,29 @@ const HUMAN_RIGHTS_CONVENTION = [
   `${noun} o ochraně lidských práv a základních svobod`,
   `${noun} o ochraně lidských práv`,
 ]);
+
+type SuccessionOptions = {
+  spellings: readonly string[];
+  older: WorkIdentifier;
+  newer: WorkIdentifier;
+  /** The day the newer act took effect (e-Sbírka `datum účinnosti od`). */
+  on: string;
+};
+
+/**
+ * A name two acts bore in turn: the older until the newer took effect, the
+ * newer from then. A citation that names its act outright (`z roku 1965`,
+ * `č. 65/1965 Sb.`) still opens the older one after the switch.
+ */
+const succession = ({
+  newer,
+  older,
+  on,
+  spellings,
+}: SuccessionOptions): readonly ActTitleSpec[] => [
+  { spellings, identifier: older, citedUntil: on },
+  { spellings, identifier: newer, citedFrom: on },
+];
 
 /**
  * A short title `zákon o …` in every case a citing sentence puts it in, plus
@@ -160,7 +193,13 @@ export const CZ_PROFILE = {
       spellings: ["OSŘ", "o. s. ř.", "o.s.ř.", "o. s. ř", "o.s.ř"],
       identifier: sb(99, 1963),
     },
-    { spellings: ["NOZ", "OZ", "o. z.", "o.z."], identifier: sb(89, 2012) },
+    { spellings: ["NOZ"], identifier: sb(89, 2012) },
+    ...succession({
+      spellings: ["OZ", "o. z.", "o.z."],
+      older: sb(40, 1964),
+      newer: sb(89, 2012),
+      on: RECODIFICATION,
+    }),
     {
       spellings: ["OZ64", "obč. zák.", "obč.zák.", "obč. zák"],
       identifier: sb(40, 1964),
@@ -203,14 +242,18 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(141, 1961),
     },
-    {
+    ...succession({
       spellings: ["ZP", "zák. práce", "zákoník práce"],
-      identifier: sb(262, 2006),
-    },
-    {
+      older: sb(65, 1965),
+      newer: sb(262, 2006),
+      on: LABOUR_CODE_RECODIFICATION,
+    }),
+    ...succession({
       spellings: ["SŘ", "spr. ř.", "s. ř.", "s.ř."],
-      identifier: sb(500, 2004),
-    },
+      older: sb(71, 1967),
+      newer: sb(500, 2004),
+      on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
+    }),
     { spellings: ["SŘS", "s. ř. s.", "s.ř.s."], identifier: sb(150, 2002) },
     { spellings: ["DŘ", "d. ř."], identifier: sb(280, 2009) },
     {
@@ -243,13 +286,33 @@ export const CZ_PROFILE = {
     },
     { spellings: ["AT"], identifier: sb(177, 1996) },
     { spellings: ["ZDP"], identifier: sb(586, 1992) },
-    { spellings: ["ZDPH"], identifier: sb(235, 2004) },
+    ...succession({
+      spellings: ["ZDPH"],
+      older: sb(588, 1992),
+      newer: sb(235, 2004),
+      on: VAT_RECODIFICATION,
+    }),
     { spellings: ["ZZVZ", "NZVZ"], identifier: sb(134, 2016) },
-    { spellings: ["ZVZ"], identifier: sb(137, 2006) },
-    { spellings: ["KatZ"], identifier: sb(256, 2013) },
-    { spellings: ["ZMPS"], identifier: sb(91, 2012) },
+    ...succession({
+      spellings: ["ZVZ"],
+      older: sb(40, 2004),
+      newer: sb(137, 2006),
+      on: "2006-07-01",
+    }),
+    // The predecessors (344/1992, 97/1963) are not known by these names.
+    {
+      spellings: ["KatZ"],
+      identifier: sb(256, 2013),
+      citedFrom: RECODIFICATION,
+    },
+    {
+      spellings: ["ZMPS"],
+      identifier: sb(91, 2012),
+      citedFrom: RECODIFICATION,
+    },
     { spellings: ["ZOR"], identifier: sb(94, 1963) },
-    { spellings: ["OdpŠk"], identifier: sb(82, 1998) },
+    // Replaced 58/1969 Sb., a differently named act, on 15 May 1998.
+    { spellings: ["OdpŠk"], identifier: sb(82, 1998), citedFrom: "1998-05-15" },
     { spellings: ["InfZ"], identifier: sb(106, 1999) },
   ],
 
@@ -409,10 +472,12 @@ export const CZ_PROFILE = {
       identifier: sb(428, 2012),
     },
     { spellings: actTitleForms("o rodině"), identifier: sb(94, 1963) },
-    {
+    ...succession({
       spellings: ["zákoník práce", "zákoníku práce", "zákoníkem práce"],
-      identifier: sb(262, 2006),
-    },
+      older: sb(65, 1965),
+      newer: sb(262, 2006),
+      on: LABOUR_CODE_RECODIFICATION,
+    }),
     {
       spellings: [
         "obchodní zákoník",
@@ -441,7 +506,7 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(150, 2002),
     },
-    {
+    ...succession({
       spellings: [
         "správní řád",
         "správního řádu",
@@ -449,8 +514,10 @@ export const CZ_PROFILE = {
         "správnímu řádu",
         "správním řádem",
       ],
-      identifier: sb(500, 2004),
-    },
+      older: sb(71, 1967),
+      newer: sb(500, 2004),
+      on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
+    }),
     {
       spellings: [
         "exekuční řád",
@@ -478,33 +545,44 @@ export const CZ_PROFILE = {
     {
       spellings: ["advokátní tarif", "advokátního tarifu", "advokátním tarifu"],
       identifier: sb(177, 1996),
+      // 270/1990 Sb. set fees before it under another title.
+      citedFrom: "1996-07-01",
     },
-    {
+    ...succession({
       spellings: [
         "zákon o zaměstnanosti",
         "zákona o zaměstnanosti",
         "zákoně o zaměstnanosti",
       ],
-      identifier: sb(435, 2004),
-    },
-    {
+      older: sb(1, 1991),
+      newer: sb(435, 2004),
+      on: "2004-10-01",
+    }),
+    ...succession({
       spellings: [
         "zákon o soudech a soudcích",
         "zákona o soudech a soudcích",
         "zákoně o soudech a soudcích",
       ],
-      identifier: sb(6, 2002),
-    },
-    {
+      older: sb(335, 1991),
+      newer: sb(6, 2002),
+      on: "2002-04-01",
+    }),
+    ...succession({
       spellings: [
         "zákon o obcích",
         "zákona o obcích",
         "obecní zřízení",
         "obecního zřízení",
       ],
-      identifier: sb(128, 2000),
-    },
-    // 199/1994 Sb. carried the same title until 134/2016 Sb. took effect.
+      older: sb(367, 1990),
+      newer: sb(128, 2000),
+      on: "2000-11-12",
+    }),
+    // A historical-title lookup, not 199/1994 Sb.'s force period (it was
+    // repealed on 1 May 2004): between the two acts that bore this title,
+    // 40/2004 and 137/2006 Sb. were titled `o veřejných zakázkách`, so the
+    // name can only mean the 1994 act until 134/2016 Sb. took it.
     {
       spellings: actTitleForms("o zadávání veřejných zakázek"),
       identifier: sb(199, 1994),
@@ -549,11 +627,24 @@ export const CZ_PROFILE = {
       spellings: actTitleForms("o daních z příjmů"),
       identifier: sb(586, 1992),
     },
+    // Read from 1 January 1993, when 588/1992 Sb. took effect.
+    {
+      spellings: actTitleForms("o dani z přidané hodnoty"),
+      identifier: sb(588, 1992),
+      citedFrom: "1993-01-01",
+      citedUntil: VAT_RECODIFICATION,
+    },
     {
       spellings: actTitleForms("o dani z přidané hodnoty"),
       identifier: sb(235, 2004),
+      citedFrom: VAT_RECODIFICATION,
     },
-    { spellings: actTitleForms("o pobytu cizinců"), identifier: sb(326, 1999) },
+    ...succession({
+      spellings: actTitleForms("o pobytu cizinců"),
+      older: sb(123, 1992),
+      newer: sb(326, 1999),
+      on: "2000-01-01",
+    }),
     { spellings: actTitleForms("o azylu"), identifier: sb(325, 1999) },
     {
       spellings: actTitleForms("o soudních poplatcích"),
@@ -571,7 +662,12 @@ export const CZ_PROFILE = {
       spellings: actTitleForms("o silničním provozu"),
       identifier: sb(361, 2000),
     },
-    { spellings: actTitleForms("o advokacii"), identifier: sb(85, 1996) },
+    ...succession({
+      spellings: actTitleForms("o advokacii"),
+      older: sb(128, 1990),
+      newer: sb(85, 1996),
+      on: "1996-07-01",
+    }),
   ],
 
   ordinalWords: {
