@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia/error";
 import { readFileSync } from "node:fs";
 
 import type {
@@ -83,6 +84,19 @@ const recorderFor = (
   });
 
 const handlerContext = <T>(value: unknown) => asTestRaw<T>(value);
+
+type HandlerFailure = Extract<
+  Awaited<ReturnType<typeof getCorrespondence.handler>>,
+  { code: number }
+>;
+
+const expectSuccess = <T>(response: T | HandlerFailure): T => {
+  expect(response).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+  if (response instanceof ElysiaCustomStatusResponse) {
+    throw new TypeError(`Expected success, received status ${response.code}`);
+  }
+  return response;
+};
 
 const directProvenance = {
   intake: "direct",
@@ -192,7 +206,10 @@ describe("matter correspondence", () => {
       filer: { type: "user", userId: ids.userA2 },
       parsed: { ...parsed, messageId: `<${Bun.randomUUIDv7()}@example.test>` },
     });
-    expect(noMatterAccess.type).toBe("error");
+    expect(noMatterAccess).toMatchObject({
+      type: "error",
+      error: { status: 403, message: "Matter access required" },
+    });
 
     const attached = await createCorrespondence({
       ...options,
@@ -225,18 +242,22 @@ describe("matter correspondence", () => {
       user: { id: ids.userA1 },
       recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
     };
-    const list = await listCorrespondence.handler(
-      handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
-        ...common,
-        query: {},
-      }),
+    const list = expectSuccess(
+      await listCorrespondence.handler(
+        handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
+          ...common,
+          query: {},
+        }),
+      ),
     );
     expect(list.items.map(({ id }) => id)).toContain(first.id);
-    const detail = await getCorrespondence.handler(
-      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-        ...common,
-        params: { correspondenceId: first.id },
-      }),
+    const detail = expectSuccess(
+      await getCorrespondence.handler(
+        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...common,
+          params: { correspondenceId: first.id },
+        }),
+      ),
     );
     expect(detail.record.id).toBe(first.id);
     expect(detail.record.bodyHtml).not.toContain("<script>");
@@ -253,21 +274,25 @@ describe("matter correspondence", () => {
       }),
     );
     expect(foreignRead).toMatchObject({ code: 404 });
-    const attachmentDetail = await getCorrespondence.handler(
-      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-        ...common,
-        params: { correspondenceId: attached.id },
-      }),
+    const attachmentDetail = expectSuccess(
+      await getCorrespondence.handler(
+        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...common,
+          params: { correspondenceId: attached.id },
+        }),
+      ),
     );
     expect(attachmentDetail.attachments).toMatchObject([
       { entityId: ids.entityA1, filename: "evidence.pdf" },
     ]);
-    const updated = await updateCorrespondence.handler(
-      handlerContext<Parameters<typeof updateCorrespondence.handler>[0]>({
-        ...common,
-        body: { handlingState: "handled", assigneeId: ids.userA1 },
-        params: { correspondenceId: first.id },
-      }),
+    const updated = expectSuccess(
+      await updateCorrespondence.handler(
+        handlerContext<Parameters<typeof updateCorrespondence.handler>[0]>({
+          ...common,
+          body: { handlingState: "handled", assigneeId: ids.userA1 },
+          params: { correspondenceId: first.id },
+        }),
+      ),
     );
     expect(updated.record.handlingState).toBe("handled");
 
@@ -279,23 +304,27 @@ describe("matter correspondence", () => {
       user: { id: ids.userAdmin },
       recordAuditEvent: recorderFor(ids.userAdmin, null),
     };
-    const approved = await createAllowedSender.handler(
-      handlerContext<Parameters<typeof createAllowedSender.handler>[0]>({
-        ...admin,
-        body: {
-          address: "office@example.test",
-          scope: "matters",
-          matterIds: [ids.wsA1],
-        },
-      }),
+    const approved = expectSuccess(
+      await createAllowedSender.handler(
+        handlerContext<Parameters<typeof createAllowedSender.handler>[0]>({
+          ...admin,
+          body: {
+            address: "office@example.test",
+            scope: "matters",
+            matterIds: [ids.wsA1],
+          },
+        }),
+      ),
     );
     expect(approved.scope).toBe("matters");
     const senderId = approved.id;
-    const allowedList = await listAllowedSenders.handler(
-      handlerContext<Parameters<typeof listAllowedSenders.handler>[0]>({
-        ...admin,
-        query: {},
-      }),
+    const allowedList = expectSuccess(
+      await listAllowedSenders.handler(
+        handlerContext<Parameters<typeof listAllowedSenders.handler>[0]>({
+          ...admin,
+          query: {},
+        }),
+      ),
     );
     expect(
       allowedList.items.find(({ id }) => id === senderId)?.matterIds,
@@ -323,11 +352,13 @@ describe("matter correspondence", () => {
       created: false,
       filerAdded: true,
     });
-    const mailboxDetail = await getCorrespondence.handler(
-      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-        ...common,
-        params: { correspondenceId: first.id },
-      }),
+    const mailboxDetail = expectSuccess(
+      await getCorrespondence.handler(
+        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...common,
+          params: { correspondenceId: first.id },
+        }),
+      ),
     );
     expect(mailboxDetail.filers).toContainEqual(
       expect.objectContaining({
@@ -337,12 +368,16 @@ describe("matter correspondence", () => {
       }),
     );
 
-    const removedScope = await removeAllowedSenderMatter.handler(
-      handlerContext<Parameters<typeof removeAllowedSenderMatter.handler>[0]>({
-        ...admin,
-        body: { matterId: ids.wsA1 },
-        params: { senderId },
-      }),
+    const removedScope = expectSuccess(
+      await removeAllowedSenderMatter.handler(
+        handlerContext<Parameters<typeof removeAllowedSenderMatter.handler>[0]>(
+          {
+            ...admin,
+            body: { matterId: ids.wsA1 },
+            params: { senderId },
+          },
+        ),
+      ),
     );
     expect(removedScope).toEqual({ removed: true });
     const outOfScope = await createCorrespondence({
@@ -350,21 +385,28 @@ describe("matter correspondence", () => {
       filer: { type: "shared_mailbox", allowedSenderId: senderId },
       parsed: { ...parsed, messageId: `<${Bun.randomUUIDv7()}@example.test>` },
     });
-    expect(outOfScope.type).toBe("error");
+    expect(outOfScope).toMatchObject({
+      type: "error",
+      error: { status: 403, message: "Mailbox not approved for matter" },
+    });
 
-    const addedScope = await addAllowedSenderMatter.handler(
-      handlerContext<Parameters<typeof addAllowedSenderMatter.handler>[0]>({
-        ...admin,
-        body: { matterId: ids.wsA1 },
-        params: { senderId },
-      }),
+    const addedScope = expectSuccess(
+      await addAllowedSenderMatter.handler(
+        handlerContext<Parameters<typeof addAllowedSenderMatter.handler>[0]>({
+          ...admin,
+          body: { matterId: ids.wsA1 },
+          params: { senderId },
+        }),
+      ),
     );
     expect(addedScope).toEqual({ added: true });
-    const revokedApproval = await revokeAllowedSender.handler(
-      handlerContext<Parameters<typeof revokeAllowedSender.handler>[0]>({
-        ...admin,
-        params: { senderId },
-      }),
+    const revokedApproval = expectSuccess(
+      await revokeAllowedSender.handler(
+        handlerContext<Parameters<typeof revokeAllowedSender.handler>[0]>({
+          ...admin,
+          params: { senderId },
+        }),
+      ),
     );
     expect(revokedApproval).toEqual({ id: senderId, revoked: true });
     const revoked = await createCorrespondence({
@@ -372,7 +414,10 @@ describe("matter correspondence", () => {
       filer: { type: "shared_mailbox", allowedSenderId: senderId },
       parsed: { ...parsed, messageId: `<${Bun.randomUUIDv7()}@example.test>` },
     });
-    expect(revoked.type).toBe("error");
+    expect(revoked).toMatchObject({
+      type: "error",
+      error: { status: 403, message: "Mailbox approval required" },
+    });
   });
 
   test("rotates and revokes the per-matter inbound address", async () => {
@@ -388,20 +433,26 @@ describe("matter correspondence", () => {
         user: { id: ids.userA1 },
         recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
       };
-      const first = await createMatterInboundAddress.handler(
-        handlerContext<
-          Parameters<typeof createMatterInboundAddress.handler>[0]
-        >(common),
+      const first = expectSuccess(
+        await createMatterInboundAddress.handler(
+          handlerContext<
+            Parameters<typeof createMatterInboundAddress.handler>[0]
+          >(common),
+        ),
       );
-      const second = await createMatterInboundAddress.handler(
-        handlerContext<
-          Parameters<typeof createMatterInboundAddress.handler>[0]
-        >(common),
+      const second = expectSuccess(
+        await createMatterInboundAddress.handler(
+          handlerContext<
+            Parameters<typeof createMatterInboundAddress.handler>[0]
+          >(common),
+        ),
       );
       expect(first.address).not.toBe(second.address);
-      const active = await getMatterInboundAddress.handler(
-        handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
-          common,
+      const active = expectSuccess(
+        await getMatterInboundAddress.handler(
+          handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+            common,
+          ),
         ),
       );
       expect(active.address).toBe(second.address);
@@ -410,9 +461,11 @@ describe("matter correspondence", () => {
           Parameters<typeof revokeMatterInboundAddress.handler>[0]
         >(common),
       );
-      const revoked = await getMatterInboundAddress.handler(
-        handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
-          common,
+      const revoked = expectSuccess(
+        await getMatterInboundAddress.handler(
+          handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+            common,
+          ),
         ),
       );
       expect(revoked.address).toBeNull();
@@ -434,11 +487,13 @@ describe("matter correspondence", () => {
     const first = await fileMessage(inline);
     const replay = await fileMessage(inline);
     expect(replay.id).toBe(first.id);
-    const detail = await getCorrespondence.handler(
-      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-        ...commonContext(),
-        params: { correspondenceId: first.id },
-      }),
+    const detail = expectSuccess(
+      await getCorrespondence.handler(
+        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...commonContext(),
+          params: { correspondenceId: first.id },
+        }),
+      ),
     );
     expect(detail.record).toMatchObject({
       intake: "forwarded_inline",
@@ -466,11 +521,13 @@ describe("matter correspondence", () => {
           originalSignature,
         }),
       );
-      const read = await getCorrespondence.handler(
-        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-          ...commonContext(),
-          params: { correspondenceId: attachment.id },
-        }),
+      const read = expectSuccess(
+        await getCorrespondence.handler(
+          handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+            ...commonContext(),
+            params: { correspondenceId: attachment.id },
+          }),
+        ),
       );
       expect(read.record).toMatchObject({
         intake: "forwarded_attachment",
@@ -478,11 +535,13 @@ describe("matter correspondence", () => {
         originalSignature,
       });
     }
-    const list = await listCorrespondence.handler(
-      handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
-        ...commonContext(),
-        query: {},
-      }),
+    const list = expectSuccess(
+      await listCorrespondence.handler(
+        handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
+          ...commonContext(),
+          query: {},
+        }),
+      ),
     );
     expect(list.items.find(({ id }) => id === first.id)).toMatchObject({
       intake: "forwarded_inline",
@@ -506,19 +565,27 @@ describe("matter correspondence", () => {
           body,
         }),
       );
-    expect((await patch({ assigneeId: ids.userA1 })).record).toMatchObject({
+    expect(
+      expectSuccess(await patch({ assigneeId: ids.userA1 })).record,
+    ).toMatchObject({
       handlingState: "new",
       assigneeId: ids.userA1,
     });
-    expect((await patch({ handlingState: "handled" })).record).toMatchObject({
+    expect(
+      expectSuccess(await patch({ handlingState: "handled" })).record,
+    ).toMatchObject({
       handlingState: "handled",
       assigneeId: ids.userA1,
     });
-    expect((await patch({ assigneeId: null })).record).toMatchObject({
+    expect(
+      expectSuccess(await patch({ assigneeId: null })).record,
+    ).toMatchObject({
       handlingState: "handled",
       assigneeId: null,
     });
-    expect((await patch({ handlingState: "new" })).record).toMatchObject({
+    expect(
+      expectSuccess(await patch({ handlingState: "new" })).record,
+    ).toMatchObject({
       handlingState: "new",
       assigneeId: null,
     });
@@ -533,7 +600,9 @@ describe("matter correspondence", () => {
       expect(await patch({ assigneeId: ids.userA1 })).toMatchObject({
         code: 400,
       });
-      expect((await patch({ handlingState: "handled" })).record).toMatchObject({
+      expect(
+        expectSuccess(await patch({ handlingState: "handled" })).record,
+      ).toMatchObject({
         handlingState: "handled",
         assigneeId: null,
       });
@@ -598,14 +667,16 @@ describe("matter correspondence", () => {
       if (!readerMembership) {
         throw new Error("Expected reader membership");
       }
-      const read = (id: typeof filed.id) =>
-        getCorrespondence.handler(
-          handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
-            ...commonContext(),
-            safeDb: safeDbFor(ids.userA2, ids.wsA1),
-            user: { id: ids.userA2 },
-            params: { correspondenceId: id },
-          }),
+      const read = async (id: typeof filed.id) =>
+        expectSuccess(
+          await getCorrespondence.handler(
+            handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+              ...commonContext(),
+              safeDb: safeDbFor(ids.userA2, ids.wsA1),
+              user: { id: ids.userA2 },
+              params: { correspondenceId: id },
+            }),
+          ),
         );
       const original = await read(filed.id);
       const originalMailbox = await read(mailbox.id);
