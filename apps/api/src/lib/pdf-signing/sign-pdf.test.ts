@@ -537,6 +537,32 @@ describe("two-phase PDF signing", () => {
     ).toMatch(/^[0-9a-f]{64}$/u);
   });
 
+  test("prepares the same digest for a PDF that has no file identifier", async () => {
+    const { invocation, privateKey } = await buildInvocation();
+    // Blank the trailer /ID in place, keeping every byte offset: what many
+    // producers outside stella write.
+    const text = Buffer.from(invocation.basePdf).toString("latin1");
+    const withoutId = text.replace(/\/ID\s*\[[^\]]*\]/u, (id) =>
+      " ".repeat(id.length),
+    );
+    expect(withoutId).not.toBe(text);
+    const basePdf = new Uint8Array(Buffer.from(withoutId, "latin1"));
+    const noId = { ...invocation, basePdf };
+
+    const digestHex = await digestOf(noId);
+    expect(await digestOf(noId)).toBe(digestHex);
+    // And phase 2 reproduces it.
+    const signature = await signDigestLikeAKeychain(privateKey, digestHex);
+    const applied = await applySignature({
+      ...noId,
+      certificateChainComplete: true,
+      expectedDigestHex: digestHex,
+      signature,
+      timestampAuthorities: [],
+    });
+    expect(applied.level).toBe("B-B");
+  });
+
   describe("the signature placeholder", () => {
     test("grows with the certificates and the timestamp it must hold", async () => {
       const { invocation } = await buildInvocation();
