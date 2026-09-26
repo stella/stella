@@ -1,4 +1,5 @@
 import type { UIMessage } from "@tanstack/ai-client";
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
@@ -13,6 +14,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { createForkThread } from "@/api/handlers/chat/fork/create";
 import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-document-tool";
 import {
   ASK_USER_TOOL_NAME,
@@ -33,6 +35,7 @@ import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { findOfferedInteractions } from "@/api/tests/helpers/chat-thread-invariants";
+import { loadWebChat } from "@/api/tests/helpers/chat-web-client";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -156,9 +159,15 @@ type Ledger = {
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
   approvesAll: boolean;
-  latest: "awaiting" | "failed" | "none" | "text";
+  /** How the latest turn ended; `cancelled` when the user stopped it or a
+   *  fork settled what it awaited. */
+  latest: "awaiting" | "cancelled" | "failed" | "none" | "text";
+  /** How each turn stood when the conversation last settled. */
+  outcomes: Map<number, Ledger["latest"]>;
   pending: string[];
   turn: number;
+  /** What each turn still waited on when the conversation last settled. */
+  waiting: Map<number, CallKind[]>;
 };
 
 const newLedger = (): Ledger => ({
@@ -167,8 +176,10 @@ const newLedger = (): Ledger => ({
   failures: 0,
   approvesAll: false,
   latest: "none",
+  outcomes: new Map(),
   pending: [],
   turn: 0,
+  waiting: new Map(),
 });
 
 const TEXT_ANSWER: RunShape = [
@@ -318,17 +329,30 @@ type Real = {
 type Model = {
   latest: Ledger["latest"];
   pendingKinds: CallKind[];
+  /** The user turns so far, each with its one answer. */
+  turn: number;
+  /** What each turn still waited on when the conversation last settled. */
+  waiting: ReadonlyMap<number, readonly CallKind[]>;
 };
 
+/** A client call the page still runs keeps the turn running: the composer
+ *  shows Stop and queues what the user sends. */
+const isBusy = (model: Readonly<Model>): boolean =>
+  model.pendingKinds.includes("client");
+
 /** After `approve-all`, approves the approval cards on screen, one click
- *  each, round after round. */
+ *  each, round after round, until the round the ledger leaves open: one that
+ *  also waits on an ask-user card or a client call. */
 const approveCardsOnScreen = async (real: Real) => {
+  const { ledger } = real;
+  const openCards = ledger.pending.filter((id) => hasCard(kindOf(ledger, id)));
   for (let round = 0; round < 10; round += 1) {
     const cards = real.client.cards();
     if (
-      !real.ledger.approvesAll ||
+      !ledger.approvesAll ||
       cards.length === 0 ||
-      !cards.every((card) => card.kind === "approval")
+      !cards.every((card) => card.kind === "approval") ||
+      sorted(cards.map(({ toolCallId }) => toolCallId)) === sorted(openCards)
     ) {
       return;
     }
@@ -385,8 +409,13 @@ const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
 };
 
 const syncModel = (model: Model, ledger: Ledger) => {
+  const pendingKinds = ledger.pending.map((id) => kindOf(ledger, id));
+  ledger.outcomes.set(ledger.turn, ledger.latest);
+  ledger.waiting.set(ledger.turn, pendingKinds);
   model.latest = ledger.latest;
-  model.pendingKinds = ledger.pending.map((id) => kindOf(ledger, id));
+  model.pendingKinds = pendingKinds;
+  model.turn = ledger.turn;
+  model.waiting = new Map(ledger.waiting);
 };
 
 /**
@@ -408,6 +437,7 @@ const verify = async (
   ];
   expect(violations).toEqual([]);
   syncModel(model, real.ledger);
+  expect(await findUncoveredActions(model, real)).toEqual([]);
 };
 
 /** The oracles a page left behind by another tab still owes: its own
@@ -455,13 +485,15 @@ const checkStalePage = async (
 // --- Commands --------------------------------------------------------------
 
 class SendUserMessage implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = (model: Readonly<Model>) =>
+    model.pendingKinds.length === 0;
   readonly runs: readonly RunShape[];
   readonly text: string;
   constructor(runs: readonly RunShape[], text: string) {
     this.runs = runs;
     this.text = text;
   }
-  check = (model: Readonly<Model>) => model.pendingKinds.length === 0;
+  check = SendUserMessage.allows;
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
     real.ledger.turn += 1;
@@ -543,6 +575,8 @@ const resolveOnFirstTab = async (
 };
 
 class ResolveCards implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = (model: Readonly<Model>) =>
+    model.pendingKinds.length > 0;
   readonly continuations: readonly RunShape[];
   readonly decisions: readonly Decision[];
   constructor(
@@ -552,7 +586,7 @@ class ResolveCards implements fc.AsyncCommand<Model, Real> {
     this.continuations = continuations;
     this.decisions = decisions;
   }
-  check = (model: Readonly<Model>) => model.pendingKinds.length > 0;
+  check = ResolveCards.allows;
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
     await resolveOnFirstTab(real, this.decisions, this.continuations);
@@ -569,14 +603,15 @@ class ResolveCards implements fc.AsyncCommand<Model, Real> {
  * still waiting keeps the page busy, so the composer queues instead.
  */
 class SupersedeCards implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = (model: Readonly<Model>) =>
+    model.pendingKinds.length > 0 && !isBusy(model);
   readonly runs: readonly RunShape[];
   readonly text: string;
   constructor(runs: readonly RunShape[], text: string) {
     this.runs = runs;
     this.text = text;
   }
-  check = (model: Readonly<Model>) =>
-    model.pendingKinds.length > 0 && !model.pendingKinds.includes("client");
+  check = SupersedeCards.allows;
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
     real.ledger.pending = [];
@@ -592,8 +627,173 @@ class SupersedeCards implements fc.AsyncCommand<Model, Real> {
   toString = () => `SupersedeCards(${JSON.stringify(this.runs)})`;
 }
 
+/** The thread's answers, oldest first: one per user turn. */
+const answerIdsOf = async (real: Real): Promise<SafeId<"chatMessage">[]> =>
+  (await real.harness.readThreadMessages(real.threadId)).flatMap(
+    ({ id, role }) =>
+      role === "assistant" ? [toSafeId<"chatMessage">(id)] : [],
+  );
+
+/**
+ * "Fork from here" on an answer, which the page offers on every answer but
+ * a running latest one. The fork holds the thread up to that answer, with
+ * whatever it still awaited settled, and the user continues there.
+ */
+class ForkFrom implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = (model: Readonly<Model>) =>
+    model.turn > (isBusy(model) ? 1 : 0);
+  readonly pick: number;
+  constructor(pick: number) {
+    this.pick = pick;
+  }
+  check = ForkFrom.allows;
+  /** The turn whose answer the fork is taken from. */
+  targetTurn = (model: Readonly<Model>): number =>
+    (this.pick % (isBusy(model) ? model.turn - 1 : model.turn)) + 1;
+  run = async (model: Model, real: Real) => {
+    const { ledger } = real;
+    const failuresBefore = ledger.failures;
+    const turn = this.targetTurn(model);
+    const answers = await answerIdsOf(real);
+    // The fixture must reach the fault: one answer per turn.
+    expect(answers).toHaveLength(ledger.turn);
+    const upToMessageId =
+      answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
+    const forkThreadId = newThread();
+    const forked = await createForkThread({
+      indexChatThread: async () => undefined,
+    }).handler(
+      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+        body: { newThreadId: forkThreadId, upToMessageId },
+        getWorkspaceAccess: async () => null,
+        memberRole: { role: "owner" },
+        params: { threadId: real.threadId },
+        query: {},
+        recordAuditEvent: async () => undefined,
+        request: new Request("http://localhost/v1/chat/threads/fork"),
+        safeDb,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+    expect(forked).toMatchObject({ threadId: forkThreadId });
+    const outcome =
+      turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
+    ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
+    for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
+      ledger.waiting.delete(later);
+    }
+    ledger.pending = [];
+    ledger.latest =
+      outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
+    ledger.turn = turn;
+    real.client.dispose();
+    real.threadId = forkThreadId;
+    real.client = await real.harness.openWebClient(forkThreadId);
+    await verify(model, real, { failuresBefore });
+  };
+  toString = () => `ForkFrom(${String(this.pick)})`;
+}
+
+/**
+ * The composer's Stop while the page still runs a client call: the call is
+ * cancelled and the turn ends.
+ */
+class StopRunningCall implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = isBusy;
+  check = StopRunningCall.allows;
+  run = async (model: Model, real: Real) => {
+    real.ledger.pending = [];
+    real.ledger.latest = "cancelled";
+    await real.client.stop();
+    await verify(model, real, { failuresBefore: real.ledger.failures });
+  };
+  toString = () => "StopRunningCall";
+}
+
+/**
+ * The user sends a message and stops the answer while it streams: after its
+ * server call has streamed, or while the call's input still streams. The
+ * call stays in the answer and nothing waits on the user.
+ */
+class StopMidStream implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = SendUserMessage.allows;
+  readonly quietAt: "after-tool-end" | "before-tool-end";
+  constructor(quietAt: "after-tool-end" | "before-tool-end") {
+    this.quietAt = quietAt;
+  }
+  check = StopMidStream.allows;
+  run = async (model: Model, real: Real) => {
+    const { harness, ledger, threadId } = real;
+    ledger.turn += 1;
+    const toolCallId = real.nextId();
+    ledger.calls.push({ id: toolCallId, kind: "plain", turn: ledger.turn });
+    ledger.pending = [];
+    ledger.latest = "cancelled";
+    harness.streamLive(threadId);
+    try {
+      harness.script(threadId, [
+        {
+          quietUntilAborted: this.quietAt,
+          text: "Checking the register",
+          toolCalls: [
+            {
+              arguments: PLAIN_TOOL_ARGUMENTS,
+              toolCallId,
+              toolName: PLAIN_TOOL_NAME,
+            },
+          ],
+          type: "step",
+        },
+      ]);
+      await real.client.startUserMessage(
+        Bun.randomUUIDv7(),
+        "Check the register",
+        (messages) =>
+          messages.some(({ parts }) =>
+            parts.some(
+              (part) => part.type === "tool-call" && part.id === toolCallId,
+            ),
+          ),
+      );
+      await real.client.stop();
+    } finally {
+      harness.streamWhole(threadId);
+    }
+    await verify(model, real, { failuresBefore: ledger.failures });
+  };
+  toString = () => `StopMidStream(${this.quietAt})`;
+}
+
+/**
+ * Any step, taken in a second tab on the thread: the first tab's view goes
+ * stale, and the page rebuilds it from the server when the user returns to
+ * it.
+ */
+class OnSecondTab implements fc.AsyncCommand<Model, Real> {
+  readonly step: fc.AsyncCommand<Model, Real>;
+  constructor(step: fc.AsyncCommand<Model, Real>) {
+    this.step = step;
+  }
+  check = (model: Readonly<Model>) => this.step.check(model);
+  run = async (model: Model, real: Real) => {
+    const first = real.client;
+    real.client = await real.harness.openWebClient(real.threadId);
+    try {
+      await this.step.run(model, real);
+    } finally {
+      real.client.dispose();
+      first.dispose();
+      real.client = await real.harness.openWebClient(real.threadId);
+    }
+    await verify(model, real, { failuresBefore: real.ledger.failures });
+  };
+  toString = () => `OnSecondTab(${String(this.step)})`;
+}
+
 class ReloadPage implements fc.AsyncCommand<Model, Real> {
-  check = () => true;
+  static readonly allows = () => true;
+  check = ReloadPage.allows;
   run = async (model: Model, real: Real) => {
     real.client.dispose();
     real.client = await real.harness.openWebClient(real.threadId);
@@ -602,20 +802,25 @@ class ReloadPage implements fc.AsyncCommand<Model, Real> {
   toString = () => "ReloadPage";
 }
 
+/**
+ * Retry on the latest answer, which the page offers whenever the thread ends
+ * with an answer and no turn runs, cards waiting or not.
+ */
 class ResendLatest implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = (model: Readonly<Model>) =>
+    model.turn > 0 && !isBusy(model);
   readonly runs: readonly RunShape[];
   constructor(runs: readonly RunShape[]) {
     this.runs = runs;
   }
-  check = (model: Readonly<Model>) =>
-    model.pendingKinds.length === 0 &&
-    (model.latest === "text" || model.latest === "failed");
+  check = ResendLatest.allows;
   run = async (model: Model, real: Real) => {
     const { ledger } = real;
     const failuresBefore = ledger.failures;
-    // The regenerated answer replaces the latest turn's message; what that
-    // message's approved calls did stays done.
+    // The regenerated answer replaces the latest turn's message, and with it
+    // the cards it still showed; what its approved calls did stays done.
     ledger.calls = ledger.calls.filter(({ turn }) => turn !== ledger.turn);
+    ledger.pending = [];
     real.harness.script(
       real.threadId,
       ...planRequests(ledger, this.runs, real.nextId),
@@ -647,17 +852,21 @@ class AnswerOnStaleTab implements fc.AsyncCommand<Model, Real> {
     this.decisions = decisions;
   }
   check = (model: Readonly<Model>) =>
-    model.pendingKinds.length > 0 &&
-    model.pendingKinds.every((kind) => kind === "approval");
+    model.pendingKinds.length > 0 && model.pendingKinds.every(hasCard);
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
-    const cards = [...real.ledger.pending];
+    const cards = real.ledger.pending.map((id) => ({
+      id,
+      kind: kindOf(real.ledger, id),
+    }));
     const stale = await real.harness.openWebClient(real.threadId);
     try {
       await resolveOnFirstTab(real, this.decisions, this.continuations);
       await verify(model, real, { failuresBefore });
-      for (const id of cards) {
-        await stale.approve(id, this.approved);
+      for (const { id, kind } of cards) {
+        await (kind === "ask-user"
+          ? stale.answer(id, ASK_USER_ANSWER)
+          : stale.approve(id, this.approved));
       }
       await checkStalePage(real, stale);
     } finally {
@@ -709,6 +918,146 @@ class RaceApprovals implements fc.AsyncCommand<Model, Real> {
   toString = () => "RaceApprovals";
 }
 
+// --- Every action the page offers ------------------------------------------
+
+/**
+ * How the model performs each action the chat thread page offers
+ * (`CHAT_USER_ACTIONS` in `apps/web/src/components/chat/chat-user-actions.ts`):
+ * by the commands whose preconditions `allows` joins, which may not be
+ * stricter than the page, or not at all, and why.
+ */
+type ActionCoverage =
+  | {
+      allows: (model: Readonly<Model>) => boolean;
+      commands: string;
+      type: "commands";
+    }
+  | { reason: string; type: "not-modelled" };
+
+const byCommands = (
+  commands: string,
+  allows: (model: Readonly<Model>) => boolean,
+): ActionCoverage => ({ allows, commands, type: "commands" });
+const notModelled = (reason: string): ActionCoverage => ({
+  reason,
+  type: "not-modelled",
+});
+const READS_ONLY = notModelled("It reads the thread and changes nothing.");
+const PAGE_STATE = notModelled(
+  "It changes what the page sends next, not the conversation.",
+);
+
+const ACTION_COVERAGE: Record<string, ActionCoverage> = {
+  "allow-in-conversation": byCommands(
+    "ResolveCards (approve-all), AnswerOnStaleTab, RaceApprovals",
+    ResolveCards.allows,
+  ),
+  "allow-once": byCommands(
+    "ResolveCards, AnswerOnStaleTab, RaceApprovals",
+    ResolveCards.allows,
+  ),
+  "always-allow": notModelled(
+    "A grant kept in the browser's storage; the conversation sees the approval it answers with, as allow-once.",
+  ),
+  "answer-question": byCommands(
+    "ResolveCards, AnswerOnStaleTab",
+    ResolveCards.allows,
+  ),
+  "attach-files": notModelled(
+    "The harness posts text messages only; attachments need stored files.",
+  ),
+  copy: READS_ONLY,
+  "delete-thread": notModelled(
+    "Deleting the thread ends the conversation; nothing is left to check.",
+  ),
+  deny: byCommands("ResolveCards, AnswerOnStaleTab", ResolveCards.allows),
+  "edit-answer": notModelled(
+    "Edit and rerun lives in the session hook, which the harness does not render.",
+  ),
+  export: READS_ONLY,
+  fork: byCommands("ForkFrom", ForkFrom.allows),
+  "improve-prompt": PAGE_STATE,
+  "load-older": READS_ONLY,
+  "move-to-side": PAGE_STATE,
+  "new-chat": notModelled("It leaves the thread."),
+  "open-created-document": READS_ONLY,
+  "open-draft": READS_ONLY,
+  "remove-queued-message": notModelled(
+    "The send queue lives in the session hook, which the harness does not render.",
+  ),
+  "rename-thread": notModelled("It changes the title only."),
+  "resend-without-anonymization": notModelled(
+    "Offered only after the anonymization boundary refuses a turn, which the harness's raw boundary never does.",
+  ),
+  "resolve-draft": notModelled(
+    "Saving a draft changes the stored document, not the conversation.",
+  ),
+  retry: byCommands("ResendLatest", ResendLatest.allows),
+  "run-client-tool": byCommands("ResolveCards", ResolveCards.allows),
+  "select-matters": PAGE_STATE,
+  "select-model": notModelled(
+    "The harness scripts one model; a model switch needs a second one.",
+  ),
+  // While a turn runs, the composer queues the message; the queue lives in
+  // the session hook, which the harness does not render.
+  send: byCommands(
+    "SendUserMessage, StopMidStream, SupersedeCards",
+    (model) =>
+      SendUserMessage.allows(model) ||
+      SupersedeCards.allows(model) ||
+      isBusy(model),
+  ),
+  stop: byCommands("StopRunningCall, StopMidStream", StopRunningCall.allows),
+  "toggle-anonymization": PAGE_STATE,
+  "toggle-web-search": PAGE_STATE,
+};
+
+/**
+ * The actions the page offers on the live view that the model's commands do
+ * not allow: a precondition stricter than the page's.
+ */
+const findUncoveredActions = async (
+  model: Readonly<Model>,
+  real: Real,
+): Promise<OracleViolation[]> => {
+  const web = await loadWebChat();
+  const messages = real.client.messages();
+  const { hasError, requestActive } = real.client.runtimeState();
+  const isGenerating = web.isChatTurnGenerating({
+    hasError:
+      hasError ||
+      web.getChatAssistantTurnError(messages.at(-1) ?? null) !== undefined,
+    messages,
+    requestActive,
+    sessionGenerating: false,
+  });
+  const answers = messages.filter(({ role }) => role === "assistant");
+  const offeredOnAnswer = (gate: typeof web.canForkAssistantMessage): boolean =>
+    answers.some(({ id }) => gate({ isGenerating, messageId: id, messages }));
+  const cards = real.client.cards();
+  const offered: Record<string, boolean> = {
+    "allow-in-conversation": cards.some(({ kind }) => kind === "approval"),
+    "allow-once": cards.some(({ kind }) => kind === "approval"),
+    "answer-question": cards.some(({ kind }) => kind === "answer"),
+    deny: cards.some(({ kind }) => kind === "approval"),
+    fork: offeredOnAnswer(web.canForkAssistantMessage),
+    retry: offeredOnAnswer(web.canRetryAssistantMessage),
+    send: true,
+    stop: isGenerating,
+  };
+  return violationsOf(
+    CHAT_ORACLE.modelCoversPageActions,
+    Object.entries(offered).flatMap(([action, isOffered]) => {
+      const coverage = ACTION_COVERAGE[action];
+      return isOffered &&
+        coverage?.type === "commands" &&
+        !coverage.allows(model)
+        ? [{ action, commands: coverage.commands, model }]
+        : [];
+    }),
+  );
+};
+
 // --- Generators -----------------------------------------------------------
 
 /** A step's calls: server calls the loop runs at once, calls that wait on
@@ -721,34 +1070,41 @@ const callsArb = fc.oneof(
   }),
   fc.array(fc.constant<CallKind>("client"), { maxLength: 2, minLength: 1 }),
 );
-const stepArb: fc.Arbitrary<StepShape> = fc.record({
-  calls: callsArb,
-  cutOff: fc.boolean(),
-  reasoning: fc.boolean(),
-  text: fc.boolean(),
-});
-const stepsArb: fc.Arbitrary<StepShape[]> = fc.array(stepArb, {
-  maxLength: 3,
-  minLength: 1,
-});
-/** A model run: steps, or now and then a provider call that fails before it
- *  answers. */
-const runArb: fc.Arbitrary<RunShape> = fc.oneof(
-  { arbitrary: stepsArb, weight: 5 },
-  { arbitrary: fc.constant<RunShape>("fail"), weight: 1 },
+/** A step's calls in any mix, as a model may make them. */
+const mixedCallsArb = fc.array(
+  fc.constantFrom<CallKind>("plain", "approval", "ask-user", "client"),
+  { maxLength: 4, minLength: 1 },
 );
-/** The runs a step's requests answer with: its own, then the ones
- *  `approve-all` sends. */
-const runsArb: fc.Arbitrary<RunShape[]> = fc.array(runArb, {
-  maxLength: 3,
-  minLength: 1,
-});
+
+/** The runs a step's requests answer with, built from steps whose calls
+ *  `calls` shapes: its own, then the ones `approve-all` sends. */
+const runsOf = (calls: fc.Arbitrary<CallKind[]>): fc.Arbitrary<RunShape[]> => {
+  const stepArb: fc.Arbitrary<StepShape> = fc.record({
+    calls,
+    cutOff: fc.boolean(),
+    reasoning: fc.boolean(),
+    text: fc.boolean(),
+  });
+  const stepsArb: fc.Arbitrary<StepShape[]> = fc.array(stepArb, {
+    maxLength: 3,
+    minLength: 1,
+  });
+  // A model run: steps, or now and then a provider call that fails before
+  // it answers.
+  const runArb: fc.Arbitrary<RunShape> = fc.oneof(
+    { arbitrary: stepsArb, weight: 5 },
+    { arbitrary: fc.constant<RunShape>("fail"), weight: 1 },
+  );
+  return fc.array(runArb, { maxLength: 3, minLength: 1 });
+};
 const decisionsArb = fc.array(
   fc.constantFrom<Decision>("approve", "approve-all", "deny"),
   { maxLength: 4, minLength: 4 },
 );
 
-const conversationCommands = [
+/** The steps of a conversation in one tab, and the races a second tab
+ *  brings. */
+const conversationCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
   fc
     .tuple(runsArb, fc.constantFrom("Draft the NDA", "Continue"))
     .map(([runs, text]) => new SendUserMessage(runs, text)),
@@ -768,9 +1124,47 @@ const conversationCommands = [
     ),
   fc.constant(new RaceApprovals()),
 ];
+const conversationCommands = conversationCommandsOf(runsOf(callsArb));
+
+/**
+ * Every step the page offers: the conversation's own, over steps of any mix
+ * of calls, and a fork, a Stop, a new message typed past waiting cards, and
+ * any step taken in a second tab.
+ */
+const pageActionCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
+  ...conversationCommandsOf(runsArb),
+  fc.nat({ max: 5 }).map((pick) => new ForkFrom(pick)),
+  fc.constant(new StopRunningCall()),
+  fc
+    .constantFrom<"after-tool-end" | "before-tool-end">(
+      "after-tool-end",
+      "before-tool-end",
+    )
+    .map((quietAt) => new StopMidStream(quietAt)),
+  fc
+    .tuple(runsArb, fc.constantFrom("Use the buyer's form", "Start over"))
+    .map(([runs, text]) => new SupersedeCards(runs, text)),
+  fc
+    .oneof(
+      fc
+        .tuple(runsArb, fc.constantFrom("Draft the NDA", "Continue"))
+        .map(([runs, text]) => new SendUserMessage(runs, text)),
+      fc
+        .tuple(decisionsArb, runsArb)
+        .map(
+          ([decisions, continuations]) =>
+            new ResolveCards(decisions, continuations),
+        ),
+      runsArb.map((runs) => new ResendLatest(runs)),
+    )
+    .map((step) => new OnSecondTab(step)),
+];
 
 const supersedeCommand = fc
-  .tuple(runsArb, fc.constantFrom("Use the buyer's form", "Start over"))
+  .tuple(
+    runsOf(callsArb),
+    fc.constantFrom("Use the buyer's form", "Start over"),
+  )
   .map(([runs, text]) => new SupersedeCards(runs, text));
 
 const openConversation = async () => {
@@ -787,7 +1181,12 @@ const openConversation = async () => {
     },
     threadId,
   };
-  const model: Model = { latest: "none", pendingKinds: [] };
+  const model: Model = {
+    latest: "none",
+    pendingKinds: [],
+    turn: 0,
+    waiting: new Map(),
+  };
   return { model, real };
 };
 
@@ -811,6 +1210,209 @@ const runConversations = async (
     propertyConfig({ numRuns: 25, seed: propertySeed() }),
   );
 };
+
+// --- Cases the page does not handle yet -------------------------------------
+
+/** Runs `steps` on a fresh conversation. */
+const inConversation = async (
+  steps: (model: Model, real: Real) => Promise<void>,
+) => {
+  const conversation = await openConversation();
+  try {
+    await steps(conversation.model, conversation.real);
+  } finally {
+    closeConversation(conversation);
+  }
+};
+
+/** A message typed while an approval waits is posted and stored. */
+const sendPastAnApproval = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["approval"] }]],
+      "Delete the NDA",
+    ).run(model, real);
+    real.harness.script(real.threadId, [
+      { text: "Kept it", toolCalls: [], type: "step" },
+    ]);
+    await real.client.sendUserMessage(Bun.randomUUIDv7(), "Keep it");
+    const users = (await real.harness.readThreadMessages(real.threadId)).filter(
+      ({ role }) => role === "user",
+    );
+    expect({
+      errors: real.client.takeErrors().map(String),
+      users: users.length,
+    }).toEqual({ errors: [], users: 2 });
+  });
+};
+
+const replaceWaiting = async (calls: CallKind[]) => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage([[{ ...STEP, calls }]], "Draft the NDA").run(
+      model,
+      real,
+    );
+    // The fixture must reach the fault: every call still waits.
+    expect(real.ledger.pending).toHaveLength(calls.length);
+    await new SupersedeCards([TEXT_ANSWER], "Use the buyer's form").run(
+      model,
+      real,
+    );
+    await new ReloadPage().run(model, real);
+  });
+};
+
+const resumeAfterReplacing = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["ask-user", "approval"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    await new SupersedeCards(
+      [[{ ...STEP, calls: ["approval", "client"] }]],
+      "Use the buyer's form",
+    ).run(model, real);
+    // The fixture must reach the fault: the replacing turn waits on its own
+    // approval and client call.
+    expect(model.pendingKinds).toEqual(["approval", "client"]);
+    await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
+    expect(real.ledger.effects).toHaveLength(1);
+    await new ReloadPage().run(model, real);
+  });
+};
+
+const stopWhileStreaming = async (
+  quietAt: "after-tool-end" | "before-tool-end",
+) => {
+  await inConversation(async (model, real) => {
+    await new StopMidStream(quietAt).run(model, real);
+    await new ReloadPage().run(model, real);
+  });
+};
+
+const forkWhileAQuestionWaits = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["ask-user"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    await new ForkFrom(0).run(model, real);
+    // The fixture must reach the fault: the fork settled the question.
+    expect(model.pendingKinds).toEqual([]);
+    await new SendUserMessage([TEXT_ANSWER], "Use the buyer's form").run(
+      model,
+      real,
+    );
+  });
+};
+
+const stopARunningClientCall = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["client"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    // The fixture must reach the fault: the page still runs the call.
+    expect(model.pendingKinds).toEqual(["client"]);
+    await new StopRunningCall().run(model, real);
+    await new ReloadPage().run(model, real);
+  });
+};
+
+/** The command a step performs, through any second tab it is taken in. */
+const innermost = (
+  command: fc.AsyncCommand<Model, Real>,
+): fc.AsyncCommand<Model, Real> =>
+  command instanceof OnSecondTab ? innermost(command.step) : command;
+
+type OpenGap = {
+  /** The steps the page-action property leaves out while this is open. */
+  condition: string;
+  excludes: (
+    command: fc.AsyncCommand<Model, Real>,
+    model: Readonly<Model>,
+  ) => boolean;
+  /** Fails while this is open. */
+  reproduce: () => Promise<void>;
+};
+
+const isSupersede = (command: fc.AsyncCommand<Model, Real>) =>
+  command instanceof SupersedeCards;
+
+/**
+ * Open findings, by id: each one's excluded steps and its failing case. The
+ * ledger only shrinks: every case must still fail, an entry whose case
+ * passes fails until it is removed, and its size is pinned to
+ * OPEN_GAPS_SIZE, which only goes down.
+ */
+const OPEN_GAPS = {
+  S1: {
+    condition: "SupersedeCards",
+    excludes: isSupersede,
+    reproduce: sendPastAnApproval,
+  },
+  S2: {
+    condition: "SupersedeCards",
+    excludes: isSupersede,
+    reproduce: async () => {
+      await replaceWaiting(["ask-user"]);
+    },
+  },
+  S3: {
+    condition: "SupersedeCards whose runs end at a card",
+    excludes: (command) =>
+      command instanceof SupersedeCards &&
+      command.runs.some(
+        (run) =>
+          !isFailure(run) && run.some(({ calls }) => calls.some(isInteraction)),
+      ),
+    reproduce: resumeAfterReplacing,
+  },
+  F2: {
+    condition: "StopMidStream",
+    excludes: (command) => command instanceof StopMidStream,
+    reproduce: async () => {
+      await stopWhileStreaming("after-tool-end");
+      await stopWhileStreaming("before-tool-end");
+    },
+  },
+  F3: {
+    condition:
+      "ForkFrom a turn that waits on an ask-user card or a client call",
+    excludes: (command, model) =>
+      command instanceof ForkFrom &&
+      (model.waiting.get(command.targetTurn(model)) ?? []).some(
+        (kind) => kind === "ask-user" || kind === "client",
+      ),
+    reproduce: forkWhileAQuestionWaits,
+  },
+  F5: {
+    condition: "StopRunningCall",
+    excludes: (command) => command instanceof StopRunningCall,
+    reproduce: stopARunningClientCall,
+  },
+} as const satisfies Record<string, OpenGap>;
+
+/** The ledger's size. Lower it with every entry removed; never raise it. */
+const OPEN_GAPS_SIZE = 6;
+
+/** A step the page-action property takes unless an open finding excludes
+ *  it. */
+class OutsideOpenGaps implements fc.AsyncCommand<Model, Real> {
+  readonly command: fc.AsyncCommand<Model, Real>;
+  constructor(command: fc.AsyncCommand<Model, Real>) {
+    this.command = command;
+  }
+  check = (model: Readonly<Model>) =>
+    this.command.check(model) &&
+    !Object.values(OPEN_GAPS).some(({ excludes }) =>
+      excludes(innermost(this.command), model),
+    );
+  run = async (model: Model, real: Real) => {
+    await this.command.run(model, real);
+  };
+  toString = () => String(this.command);
+}
 
 const STEP: StepShape = {
   calls: [],
@@ -1210,14 +1812,11 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(240_000),
   );
 
-  const replacedBatches: [string, CallKind[]][] = [
+  test.each([
     ["an approval", ["approval"]],
     ["an ask-user card", ["ask-user"]],
-    ["a mixed batch", ["approval", "ask-user", "approval"]],
-  ];
-
-  test.failing.each(replacedBatches)(
-    "lets a new message replace %s that still waits",
+  ] satisfies [string, CallKind[]][])(
+    "regenerates the latest answer while %s waits",
     async (_label, calls) => {
       const conversation = await openConversation();
       const { model, real } = conversation;
@@ -1226,13 +1825,9 @@ describe("a conversation's live view", () => {
           model,
           real,
         );
-        // The fixture must reach the fault: every call still waits.
+        // The fixture must reach the fault: the answer still waits.
         expect(real.ledger.pending).toHaveLength(calls.length);
-
-        await new SupersedeCards([TEXT_ANSWER], "Use the buyer's form").run(
-          model,
-          real,
-        );
+        await new ResendLatest([TEXT_ANSWER]).run(model, real);
         await new ReloadPage().run(model, real);
       } finally {
         closeConversation(conversation);
@@ -1241,32 +1836,124 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
-    "resumes the new turn's own calls after a message replaced waiting ones",
+  test(
+    "forks an answer and continues there",
     async () => {
       const conversation = await openConversation();
       const { model, real } = conversation;
       try {
         await new SendUserMessage(
-          [[{ ...STEP, calls: ["ask-user", "approval"] }]],
-          "Draft the NDA",
+          [[{ ...STEP, calls: ["approval"] }]],
+          "Delete the NDA",
         ).run(model, real);
-        await new SupersedeCards(
-          [[{ ...STEP, calls: ["approval", "client"] }]],
-          "Use the buyer's form",
-        ).run(model, real);
-        // The fixture must reach the fault: the replacing turn waits on its
-        // own approval and client call.
-        expect(model.pendingKinds).toEqual(["approval", "client"]);
-
         await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
-        expect(real.ledger.effects).toHaveLength(1);
-        await new ReloadPage().run(model, real);
+        await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(
+          model,
+          real,
+        );
+        await new ForkFrom(0).run(model, real);
+        // The fixture must reach the fault: the fork holds the first turn
+        // and its approved call only.
+        expect(real.ledger.calls).toHaveLength(1);
+        await new SendUserMessage([TEXT_ANSWER], "Continue").run(model, real);
+        expect(real.harness.executions).toHaveLength(1);
       } finally {
         closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "sends a message typed while an approval waits",
+    sendPastAnApproval,
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing.each([
+    ["an approval", ["approval"]],
+    ["an ask-user card", ["ask-user"]],
+    ["a mixed batch", ["approval", "ask-user", "approval"]],
+  ] satisfies [string, CallKind[]][])(
+    "lets a new message replace %s that still waits",
+    async (_label, calls) => {
+      await replaceWaiting(calls);
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "resumes the new turn's own calls after a message replaced waiting ones",
+    resumeAfterReplacing,
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing.each(["after-tool-end", "before-tool-end"] as const)(
+    "stops an answer while it streams (%s)",
+    async (quietAt) => {
+      await stopWhileStreaming(quietAt);
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "continues a fork taken while a question waits",
+    forkWhileAQuestionWaits,
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "stops a client call the page still runs",
+    stopARunningClientCall,
+    propertyTestTimeout(30_000),
+  );
+
+  test.each(Object.keys(OPEN_GAPS))(
+    "open finding %s still fails its case",
+    async (id) => {
+      const gap = Object.entries(OPEN_GAPS).find(([key]) => key === id)?.[1];
+      const outcome = await (gap ?? expect.unreachable(`No open finding ${id}`))
+        .reproduce()
+        .then(
+          () => "passes",
+          () => "fails",
+        );
+      if (outcome === "passes") {
+        panic(`${id} passes now: remove it from OPEN_GAPS`);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test("the open findings only shrink, and each names its condition", () => {
+    expect(Object.keys(OPEN_GAPS)).toHaveLength(OPEN_GAPS_SIZE);
+    expect(
+      Object.entries(OPEN_GAPS)
+        .filter(([, { condition }]) => condition.trim() === "")
+        .map(([id]) => id),
+    ).toEqual([]);
+  });
+
+  test("maps every action the page offers to the model's commands", async () => {
+    const web = await loadWebChat();
+    expect(Object.keys(ACTION_COVERAGE).toSorted()).toEqual(
+      web.chatUserActions.toSorted(),
+    );
+  });
+
+  test(
+    "matches a reload and the ledger after every action the page offers",
+    async () => {
+      await runConversations(
+        fc.commands(
+          pageActionCommandsOf(runsOf(mixedCallsArb)).map((arbitrary) =>
+            arbitrary.map((command) => new OutsideOpenGaps(command)),
+          ),
+          { maxCommands: 6 },
+        ),
+      );
+    },
+    propertyTestTimeout(240_000),
   );
 
   test.failing(

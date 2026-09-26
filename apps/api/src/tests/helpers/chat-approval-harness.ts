@@ -868,6 +868,10 @@ export const createApprovalHarness = ({
     streamLive: (threadId: SafeId<"chatThread">) => {
       liveThreads.add(threadId);
     },
+    /** From now on, `threadId`'s responses reach the page whole again. */
+    streamWhole: (threadId: SafeId<"chatThread">) => {
+      liveThreads.delete(threadId);
+    },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),

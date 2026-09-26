@@ -47,6 +47,8 @@ const { getToolApprovalGrant, isApprovalToolName } =
   await import("@/components/chat/chat-ui-tools");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
+const { CHAT_USER_ACTIONS } =
+  await import("@/components/chat/chat-user-actions");
 const { useChatSession } =
   await import("@/features/chat/hooks/use-chat-session");
 const { useChatThreadRuntime } =
@@ -118,7 +120,8 @@ type RecordedAction =
   | { tool: string; toolCallId: string; type: "client-tool" }
   | { type: "stop" }
   | { type: "drop-connection" }
-  | { type: "reload" };
+  | { type: "reload" }
+  | { type: "retry" };
 type RecordedConversation = {
   initialPage: RecordedPage;
   scenario: string;
@@ -161,6 +164,7 @@ const STEP_KINDS: readonly RecordedAction["type"][] = [
   "client-tool",
   "drop-connection",
   "reload",
+  "retry",
   "send",
   "stop",
 ];
@@ -931,6 +935,17 @@ const performAction = async ({
       );
       return;
     }
+    case "retry": {
+      // The latest answer's Retry.
+      await act(async () => {
+        void live
+          .session()
+          .resendLatestMessage()
+          .catch(() => undefined);
+        await sleep(0);
+      });
+      return;
+    }
     case "stop": {
       // The composer's Stop.
       act(() => {
@@ -1077,6 +1092,73 @@ const replay = async (scenario: string) => {
   return { recording, server };
 };
 
+/**
+ * How the recordings perform each action the chat page offers
+ * (`CHAT_USER_ACTIONS`): by a recorded step, or not at all, and why.
+ */
+type RecordedCoverage =
+  | { performs: (action: RecordedAction) => boolean; type: "recorded" }
+  | { reason: string; type: "not-recorded" };
+
+const recordedAs = (
+  performs: (action: RecordedAction) => boolean,
+): RecordedCoverage => ({ performs, type: "recorded" });
+const approvedAs =
+  (decision: "allow-in-conversation" | "allow-once" | "deny") =>
+  (action: RecordedAction) =>
+    action.type === "approve" && action.decision === decision;
+const notRecorded = (reason: string): RecordedCoverage => ({
+  reason,
+  type: "not-recorded",
+});
+const OUTSIDE_THE_CONVERSATION = notRecorded(
+  "It changes the page or the thread's settings, not the conversation the server records.",
+);
+
+const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
+  "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
+  "allow-once": recordedAs(approvedAs("allow-once")),
+  "always-allow": recordedAs(({ type }) => type === "auto-approve"),
+  "answer-question": recordedAs(({ type }) => type === "answer"),
+  "attach-files": notRecorded(
+    "The recorder posts text messages only; attachments need stored files.",
+  ),
+  copy: OUTSIDE_THE_CONVERSATION,
+  "delete-thread": OUTSIDE_THE_CONVERSATION,
+  deny: recordedAs(approvedAs("deny")),
+  "edit-answer": notRecorded(
+    "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
+  ),
+  export: OUTSIDE_THE_CONVERSATION,
+  fork: notRecorded(
+    "A fork opens another thread; the conversation property test covers it (ForkFrom).",
+  ),
+  "improve-prompt": OUTSIDE_THE_CONVERSATION,
+  "load-older": OUTSIDE_THE_CONVERSATION,
+  "move-to-side": OUTSIDE_THE_CONVERSATION,
+  "new-chat": OUTSIDE_THE_CONVERSATION,
+  "open-created-document": OUTSIDE_THE_CONVERSATION,
+  "open-draft": OUTSIDE_THE_CONVERSATION,
+  "remove-queued-message": notRecorded(
+    "The recorder has no send queue; it lives in the session hook this replay renders.",
+  ),
+  "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "resend-without-anonymization": notRecorded(
+    "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",
+  ),
+  "resolve-draft": OUTSIDE_THE_CONVERSATION,
+  retry: recordedAs(({ type }) => type === "retry"),
+  "run-client-tool": recordedAs(({ type }) => type === "client-tool"),
+  "select-matters": OUTSIDE_THE_CONVERSATION,
+  "select-model": notRecorded(
+    "The recorder scripts one model; a model switch needs a second one.",
+  ),
+  send: recordedAs(({ type }) => type === "send"),
+  stop: recordedAs(({ type }) => type === "stop"),
+  "toggle-anonymization": OUTSIDE_THE_CONVERSATION,
+  "toggle-web-search": OUTSIDE_THE_CONVERSATION,
+};
+
 const SCENARIOS = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(RECORDING_EXTENSION))
   .map((file) => file.slice(0, -RECORDING_EXTENSION.length));
@@ -1166,6 +1248,22 @@ describe("a recorded conversation, rendered", () => {
     },
     REPLAY_TIMEOUT_MS,
   );
+
+  test("a recording performs every action the page offers, or says why not", () => {
+    const performed = SCENARIOS.flatMap((scenario) =>
+      readRecording(scenario).steps.map(({ action }) => action),
+    );
+    const uncovered = Object.keys(CHAT_USER_ACTIONS).filter((action) => {
+      const coverage =
+        RECORDED_ACTIONS[action] ??
+        expect.unreachable(`No recorded coverage for ${action}`);
+      return coverage.type === "recorded" && !performed.some(coverage.performs);
+    });
+    expect(uncovered).toEqual([]);
+    expect(Object.keys(RECORDED_ACTIONS).toSorted()).toEqual(
+      Object.keys(CHAT_USER_ACTIONS).toSorted(),
+    );
+  });
 
   test("the recordings cover every kind of step", () => {
     const kinds = new Set(
