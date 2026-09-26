@@ -1,11 +1,10 @@
 /**
  * Czech Republic: Sbírka zákonů, e-sbirka.cz anchors.
  *
- * Sources for the vocabulary are the court fixtures in the pinned public repo
- * (`cz-ns`, `cz-us`), which is why the lists carry spellings that look like
- * typos and are not: `písm. f/` with a slash instead of a bracket, `177/96 Sb.`
- * with a two-digit year, `o.s.ř.` unspaced, `zák. práce`. Each of those appears
- * verbatim in a real decision and each would otherwise cost a citation.
+ * The lists carry the spellings courts print, including ones that look like
+ * typos and are not: `o. s. ř` without its last period, `zák. práce`. Each
+ * would otherwise cost a citation. Spacing inside an abbreviation is the
+ * grammar's, so `o.s.ř.` and `o. s. ř.` are one spelling.
  *
  * Where a title names different acts before and after a recodification, the
  * entry carries the window the citing decision must fall in. `občanský
