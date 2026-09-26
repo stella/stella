@@ -38,7 +38,7 @@
     "./safe-id": "./src/safe-id.ts",
     "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
-    "./us-court-enrollment": "./src/us-court-enrollment.ts",
+    "./us-court-abbreviations": "./src/us-court-abbreviations.ts",
     "./us-courts": "./src/us-courts.ts",
     "./time-entries": "./src/time-entries.ts",
     "./us-reporter-citation": "./src/us-reporter-citation.ts",
