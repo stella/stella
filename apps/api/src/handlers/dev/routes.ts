@@ -311,9 +311,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .get("/public-law-connection", readPublicLawConnection)
   .post("/public-law-connection", startPublicLawConnection);
 
-// Public dev-only routes (no auth — needed for the unauthenticated
-// email-OTP flow). Returns 404 outside dev so this never exists in
-// the production API surface.
+// Public local development routes (no auth: the unauthenticated email-OTP
+// flow needs them). server.ts registers them only when local development
+// access is open; the guard answers 404 for any other caller of the module.
 export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
   .guard({
     beforeHandle: () => {
