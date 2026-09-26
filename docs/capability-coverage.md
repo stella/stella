@@ -291,6 +291,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.cells.retry`                    | write              | stella:matters_write | —       | generic invoke → `stella capability matters cells-retry`                    |
 | `matters.contacts.create`                | write              | stella:matters_write | —       | curated tool `link_matter_contact`                                          |
 | `matters.contacts.delete`                | write, destructive | stella:matters_write | —       | covered by `link_matter_contact`                                            |
+| `matters.correspondence.get`             | read               | stella:read          | —       | generic invoke → `stella capability matters correspondence-get`             |
+| `matters.correspondence.list`            | read               | stella:read          | —       | generic invoke → `stella capability matters correspondence-list`            |
+| `matters.correspondence.update`          | write              | stella:matters_write | —       | generic invoke → `stella capability matters correspondence-update`          |
 | `matters.create`                         | write              | stella:matters_write | —       | curated tool `save_matter`                                                  |
 | `matters.delete`                         | write, destructive | stella:matters_write | —       | curated tool `delete_matter`                                                |
 | `matters.duplicate`                      | write              | stella:matters_write | —       | generic invoke → `stella capability matters duplicate`                      |
@@ -307,17 +310,22 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 ## organization-settings
 
-| Capability                                             | Access | Scope              | Feature | Reachable via                                                                             |
-| ------------------------------------------------------ | ------ | ------------------ | ------- | ----------------------------------------------------------------------------------------- |
-| `organization-settings.ai-availability.get`            | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings ai-availability-get`            |
-| `organization-settings.anonymization-blacklist.get`    | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings anonymization-blacklist-get`    |
-| `organization-settings.anonymization-blacklist.update` | write  | stella:admin_write | —       | generic invoke → `stella capability organization-settings anonymization-blacklist-update` |
-| `organization-settings.deepl-availability.get`         | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings deepl-availability-get`         |
-| `organization-settings.document-ocr-availability.get`  | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings document-ocr-availability-get`  |
-| `organization-settings.get`                            | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings get`                            |
-| `organization-settings.practice-jurisdictions.update`  | write  | stella:admin_write | —       | curated tool `set_practice_jurisdictions`                                                 |
-| `organization-settings.preview`                        | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings preview`                        |
-| `organization-settings.update`                         | write  | stella:admin_write | —       | covered by `manage_organization`                                                          |
+| Capability                                                          | Access             | Scope              | Feature | Reachable via                                                                                          |
+| ------------------------------------------------------------------- | ------------------ | ------------------ | ------- | ------------------------------------------------------------------------------------------------------ |
+| `organization-settings.ai-availability.get`                         | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings ai-availability-get`                         |
+| `organization-settings.anonymization-blacklist.get`                 | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings anonymization-blacklist-get`                 |
+| `organization-settings.anonymization-blacklist.update`              | write              | stella:admin_write | —       | generic invoke → `stella capability organization-settings anonymization-blacklist-update`              |
+| `organization-settings.correspondence.allowed-senders.create`       | write              | stella:admin_write | —       | generic invoke → `stella capability organization-settings correspondence-allowed-senders-create`       |
+| `organization-settings.correspondence.allowed-senders.delete`       | write, destructive | stella:admin_write | —       | generic invoke → `stella capability organization-settings correspondence-allowed-senders-delete`       |
+| `organization-settings.correspondence.allowed-senders.list`         | write              | stella:admin_write | —       | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list`         |
+| `organization-settings.correspondence.allowed-senders.scope.add`    | write              | stella:admin_write | —       | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-add`    |
+| `organization-settings.correspondence.allowed-senders.scope.remove` | write, destructive | stella:admin_write | —       | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-remove` |
+| `organization-settings.deepl-availability.get`                      | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings deepl-availability-get`                      |
+| `organization-settings.document-ocr-availability.get`               | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings document-ocr-availability-get`               |
+| `organization-settings.get`                                         | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings get`                                         |
+| `organization-settings.practice-jurisdictions.update`               | write              | stella:admin_write | —       | curated tool `set_practice_jurisdictions`                                                              |
+| `organization-settings.preview`                                     | read               | stella:admin_read  | —       | generic invoke → `stella capability organization-settings preview`                                     |
+| `organization-settings.update`                                      | write              | stella:admin_write | —       | covered by `manage_organization`                                                                       |
 
 ## playbooks
 
@@ -600,7 +608,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
 | native_tool_ui         | 9     |
-| provider_secret        | 24    |
+| provider_secret        | 27    |
 | public_indexing        | 7     |
 | realtime_stream        | 3     |
 | search_ui              | 15    |
@@ -609,4 +617,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 171
+Total: 174

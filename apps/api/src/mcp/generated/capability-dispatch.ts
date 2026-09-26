@@ -567,6 +567,18 @@ export const CAPABILITY_DISPATCH = {
   "matters.contacts.delete": {
     load: async () => await import("@/api/handlers/workspaces/contacts/delete"),
   },
+  "matters.correspondence.get": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/get"),
+  },
+  "matters.correspondence.list": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/list"),
+  },
+  "matters.correspondence.update": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/update"),
+  },
   "matters.create": {
     load: async () => await import("@/api/handlers/workspaces/create"),
   },
@@ -620,6 +632,26 @@ export const CAPABILITY_DISPATCH = {
   "organization-settings.anonymization-blacklist.update": {
     load: async () =>
       await import("@/api/handlers/organization-settings/anonymization-blacklist/update"),
+  },
+  "organization-settings.correspondence.allowed-senders.create": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/create"),
+  },
+  "organization-settings.correspondence.allowed-senders.delete": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/delete"),
+  },
+  "organization-settings.correspondence.allowed-senders.list": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/list"),
+  },
+  "organization-settings.correspondence.allowed-senders.scope.add": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add"),
+  },
+  "organization-settings.correspondence.allowed-senders.scope.remove": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove"),
   },
   "organization-settings.deepl-availability.get": {
     load: async () =>
