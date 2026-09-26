@@ -246,6 +246,7 @@ export const describeRowUpdateTx = async (
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
+        courtId: result.courtId ?? null,
         country: result.country,
         language: result.language,
         sheetNumber: result.sheetNumber,

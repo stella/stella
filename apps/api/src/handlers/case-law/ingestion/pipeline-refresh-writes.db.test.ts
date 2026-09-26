@@ -509,3 +509,46 @@ test("a payload replaced between the read and the write is planned again", async
   // Planned against what the row then held, so the document went back in.
   expect(transferred.length).toBeGreaterThan(packsBefore);
 });
+
+test("a directory jurisdiction's decision is written with its court id, and every other without one", async () => {
+  const usa = (rawHash: string): IngestionResult => ({
+    ...withDocument("No. 19-1392", rawHash),
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+  });
+  const courtIdOf = async (caseNumber: string) =>
+    (
+      await db
+        .select({ courtId: caseLawDecisions.courtId })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.caseNumber, caseNumber))
+    ).map(({ courtId }) => courtId);
+
+  await ingest(usa("page-v1"), canonical);
+  await ingest(withDocument("30 Cdo 900/2024", "page-v1"), canonical);
+  expect(await courtIdOf("No. 19-1392")).toEqual(["scotus"]);
+  expect(await courtIdOf("30 Cdo 900/2024")).toEqual([null]);
+
+  // A refresh that states the same court id is not a change of the row.
+  const first = await storedRow("No. 19-1392");
+  await ingest(usa("page-v2"), canonical);
+  expect((await storedRow("No. 19-1392")).updatedAt).toBe(first.updatedAt);
+
+  // A result that reaches the write path without its court id is an adapter
+  // defect; nothing is written for it.
+  const { courtId: _courtId, ...unresolved } = usa("page-v3");
+  await expect(
+    processDecision({
+      input: { ...unresolved, caseNumber: "No. 20-1" },
+      observationOrder: 1000n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 13)),
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus: canonical,
+    }),
+  ).rejects.toThrow("Decision court identity rejected for USA: missing");
+  expect(await courtIdOf("No. 20-1")).toEqual([]);
+});

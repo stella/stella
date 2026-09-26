@@ -45,11 +45,8 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -626,13 +623,14 @@ const retrievePassages = async (
     return [];
   }
   const searched = await Result.tryPromise(async () => {
-    const serving = await caseLawDb(
-      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+    const { serving, manifest } = await caseLawDb(
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction: decision.country,
+        }),
     );
-    const { indexId } = corpusIndexRoute(
-      requireCorpusIndexManifest("case_law", serving.generation),
-      decision.country,
-    );
+    const { indexId } = corpusIndexRoute(manifest, decision.country);
     return await getCorpusIndexClient(serving.cluster).search({
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,

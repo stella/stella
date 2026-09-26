@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   lte,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -19,6 +20,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexProjectionFailureKind,
@@ -145,6 +147,8 @@ type CorpusProjectionReservationQueueOptions = {
   eligibilityAt: Date;
   scopedEntityIds: readonly string[] | null;
   scopedIndexId: string | null;
+  /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
+  excludedIndexIds: readonly string[];
 };
 
 /**
@@ -160,6 +164,7 @@ export const corpusProjectionReservationQueue = (
     eligibilityAt,
     scopedEntityIds,
     scopedIndexId,
+    excludedIndexIds,
   }: CorpusProjectionReservationQueueOptions,
 ) => {
   const runnableAt = sql<Date>`coalesce(
@@ -194,6 +199,13 @@ export const corpusProjectionReservationQueue = (
         scopedIndexId === null
           ? undefined
           : eq(corpusIndexProjectionStates.desiredIndexId, scopedIndexId),
+        // An unattested group's desired state stays eligible and waits here:
+        // it is appended once the group is attested, never before.
+        excludedIndexIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionStates.desiredIndexId, [
+              ...excludedIndexIds,
+            ]),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         inArray(corpusIndexProjectionStates.workStatus, [
           "eligible",
@@ -243,6 +255,10 @@ export const reserveCorpusProjectionIntentsTx = async <
     generation,
   );
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
+  const excludedIndexIds = await unattestedCorpusIndexIdsTx(tx, manifest);
+  if (scopedIndexId !== null && excludedIndexIds.includes(scopedIndexId)) {
+    return [];
+  }
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const candidates = await corpusProjectionReservationQueue(tx, {
     family,
@@ -251,6 +267,7 @@ export const reserveCorpusProjectionIntentsTx = async <
     eligibilityAt,
     scopedEntityIds,
     scopedIndexId,
+    excludedIndexIds,
   });
 
   if (candidates.length === 0) {

@@ -240,6 +240,7 @@ const readCaseLawMaterials = async (
       redactedAt: caseLawDecisions.redactedAt,
       caseNumber: caseLawDecisions.caseNumber,
       court: caseLawDecisions.court,
+      courtId: caseLawDecisions.courtId,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
       // Read for `publisherSummaryOf` only. The decision's AST is not read

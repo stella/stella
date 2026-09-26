@@ -34,9 +34,20 @@ const CASE_LAW_INPUT = {
     { type: "docket", value: "4 As 3/2008" },
   ],
   court: "Nejvyšší správní soud",
+  courtId: null,
   decisionDate: "2008-02-27",
   ecli: null,
   metadata: null,
+} as const satisfies CaseLawProjectionInput;
+
+const USA_INPUT = {
+  ...CASE_LAW_INPUT,
+  jurisdiction: "USA",
+  language: "en",
+  caseNumber: "No. 19-1392",
+  identifiers: [{ type: "docket", value: "No. 19-1392" }],
+  court: "Supreme Court of the United States",
+  courtId: "scotus",
 } as const satisfies CaseLawProjectionInput;
 
 const LEGISLATION_INPUT = {
@@ -259,5 +270,70 @@ test("only a generation that writes stem fields fingerprints the stemmer set", (
   expect(MORPHOLOGY_VERSION).toContain(SNOWBALL_RELEASE);
   for (const language of MORPHOLOGY_LANGUAGES) {
     expect(MORPHOLOGY_VERSION).toContain(language);
+  }
+});
+
+test("a court-partitioned decision's fingerprint covers its court identity and contract", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  const corrected = {
+    ...USA_INPUT,
+    court: "Court of Appeals for the First Circuit",
+    courtId: "ca1",
+  } as const satisfies CaseLawProjectionInput;
+  // A court correction keeps the index and moves the fingerprint, so the
+  // decision's desired state changes and its projection is replaced.
+  for (const input of [USA_INPUT, corrected]) {
+    expect(
+      deriveCorpusIndexProjectionDescriptor(manifest, input),
+    ).toMatchObject({ action: "upsert", indexId: "case_law_v7_usa" });
+  }
+  expect(fingerprintOf(manifest, USA_INPUT)).not.toBe(
+    fingerprintOf(manifest, corrected),
+  );
+  // Each generation's effective contract is its own.
+  expect(
+    new Set(
+      [
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        CORPUS_INDEX_MANIFESTS.case_law_v6,
+        manifest,
+      ].map((each) => fingerprintOf(each, USA_INPUT)),
+    ).size,
+  ).toBe(3);
+});
+
+test("a court-partitioned decision without a resolvable court identity fails the projection", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  expect(() =>
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      courtId: null,
+    }),
+  ).toThrow("no court id");
+  expect(() =>
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      court: "Supreme Court",
+    }),
+  ).toThrow("does not match the directory");
+  // An erasure needs no identity: the row is leaving the index.
+  expect(
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      courtId: null,
+      redacted: true,
+    }),
+  ).toEqual({ action: "erase" });
+});
+
+test("a group under its manifest's contract never reads a court id into its fingerprint", () => {
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    expect(
+      fingerprintOf(manifest, { ...CASE_LAW_INPUT, courtId: "scotus" }),
+    ).toBe(EXPECTED_FINGERPRINTS[manifest.generation]);
   }
 });

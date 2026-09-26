@@ -115,11 +115,8 @@ import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -1696,11 +1693,15 @@ export const searchCorpusIndexDecisions = async (
     });
   };
 
-  const serving = await dbTimer.time(
+  const { serving, manifest } = await dbTimer.time(
     CASE_LAW_SEARCH_DB_READ.servingGeneration,
     async () =>
       await caseLawDb(
-        async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+        async (tx) =>
+          await readServingCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            jurisdiction: body.country,
+          }),
       ),
   );
   const generation = serving.generation;
@@ -1816,7 +1817,7 @@ export const searchCorpusIndexDecisions = async (
   // Scoped query → that country's index, plus a jurisdiction clause when that
   // index holds other countries; unscoped → the generation glob.
   const { indexId, jurisdictionClause } = corpusIndexRoute(
-    requireCorpusIndexManifest("case_law", generation),
+    manifest,
     body.country,
   );
 
