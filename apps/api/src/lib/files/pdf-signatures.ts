@@ -13,6 +13,12 @@
  */
 
 import type { PDF, SaveOptions } from "@libpdf/core";
+import { TaggedError } from "better-result";
+
+/** An appended revision was asked for where only a rewrite is possible. */
+export class PdfRevisionAppendError extends TaggedError(
+  "PdfRevisionAppendError",
+)<{ blocker: string; message: string }> {}
 
 /**
  * Name tokens that only a signature (or a certification pointing at one) puts
@@ -112,8 +118,19 @@ export const savePdfRewrite = async ({
  * this is the one save that is meant for a signed PDF, and the signing
  * pipeline is its only caller.
  */
-export const appendSigningRevision = async (pdf: PDF): Promise<Uint8Array> =>
-  await pdf.save({ incremental: true });
+export const appendSigningRevision = async (pdf: PDF): Promise<Uint8Array> => {
+  // LibPDF quietly falls back to a full rewrite when it cannot append (a
+  // pending encryption change, a linearized or repaired file). For a signed
+  // file that rewrite is exactly what this helper exists to prevent.
+  const blocker = pdf.canSaveIncrementally();
+  if (blocker !== null) {
+    throw new PdfRevisionAppendError({
+      blocker,
+      message: `This PDF cannot take an appended revision (${blocker}).`,
+    });
+  }
+  return await pdf.save({ incremental: true });
+};
 
 /**
  * Serialises a transient copy that only ever goes to a model as input (a

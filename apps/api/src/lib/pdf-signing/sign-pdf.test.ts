@@ -10,6 +10,7 @@ import {
   PdfSigningCertifiedDocumentError,
   PdfSigningDigestMismatchError,
   PdfSigningPlaceholderTooSmallError,
+  PdfSigningWouldBreakSignaturesError,
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
@@ -492,6 +493,48 @@ describe("two-phase PDF signing", () => {
         "REVOCATION_UNAVAILABLE",
       ]);
     });
+  });
+
+  test("refuses, before any digest exists, to rewrite a PDF that is already signed", async () => {
+    const { invocation } = await buildInvocation();
+    const signed = await createSignedPdf();
+    // A broken cross-reference makes LibPDF repair the file, after which it
+    // can only save a full rewrite.
+    const text = Buffer.from(signed).toString("latin1");
+    const at = text.lastIndexOf("startxref");
+    const repaired = new Uint8Array(
+      Buffer.from(
+        text.slice(0, at) +
+          text.slice(at).replace(/startxref\s+\d+/u, "startxref\n999999"),
+        "latin1",
+      ),
+    );
+
+    const refused = await captureSigningDigest({
+      ...invocation,
+      basePdf: repaired,
+    }).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(PdfSigningWouldBreakSignaturesError);
+
+    // The same repair on an unsigned file breaks nothing, so it signs.
+    const created = PDF.create();
+    created.addPage({ width: 300, height: 400 });
+    const plain = Buffer.from(await created.save()).toString("latin1");
+    const plainAt = plain.lastIndexOf("startxref");
+    expect(
+      await digestOf({
+        ...invocation,
+        basePdf: new Uint8Array(
+          Buffer.from(
+            plain.slice(0, plainAt) +
+              plain
+                .slice(plainAt)
+                .replace(/startxref\s+\d+/u, "startxref\n999999"),
+            "latin1",
+          ),
+        ),
+      }),
+    ).toMatch(/^[0-9a-f]{64}$/u);
   });
 
   describe("the signature placeholder", () => {

@@ -30,6 +30,25 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-direct-pdf-save";
+/**
+ * The two helpers that save without the signed/encrypted refusal, and the
+ * only modules that may import them: an incremental revision for the
+ * signing pipeline, and transient copies that only go to a model.
+ */
+const HELPER_MODULE_SUFFIX = "/files/pdf-signatures";
+const RESTRICTED_HELPERS: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    "appendSigningRevision",
+    ["apps/api/src/lib/pdf-signing/validation-data.ts"],
+  ],
+  [
+    "savePdfForModelInput",
+    [
+      "apps/api/src/lib/bbox/generate-b-boxes.ts",
+      "apps/api/src/lib/workflow/generate-batch.ts",
+    ],
+  ],
+]);
 const OWNER_PATH = "apps/api/src/lib/files/pdf-signatures.ts";
 const LIBPDF = "@libpdf/core";
 const DOCUMENT_FACTORIES = new Set(["create", "load", "merge"]);
@@ -67,6 +86,8 @@ export default eslintCompatPlugin({
             "Save PDF documents through savePdfRewrite from @/api/lib/files/pdf-signatures.",
           otherWriter:
             "Write PDFs through @libpdf/core and savePdfRewrite from @/api/lib/files/pdf-signatures.",
+          restrictedHelper:
+            "This save helper is reserved for its owning module; use savePdfRewrite from @/api/lib/files/pdf-signatures.",
         },
         schema: [],
       },
@@ -167,6 +188,27 @@ export default eslintCompatPlugin({
             }
             if (OTHER_PDF_WRITERS.has(node.source.value)) {
               context.report({ node, messageId: "otherWriter" });
+              return;
+            }
+            if (
+              node.source.value.endsWith(HELPER_MODULE_SUFFIX) &&
+              Array.isArray(node.specifiers)
+            ) {
+              const filename = filenameForContext(context);
+              for (const specifier of node.specifiers) {
+                const owners = RESTRICTED_HELPERS.get(
+                  getImportedName(specifier) ?? "",
+                );
+                if (
+                  owners !== undefined &&
+                  !owners.some((owner) => filename.endsWith(owner))
+                ) {
+                  context.report({
+                    node: specifier,
+                    messageId: "restrictedHelper",
+                  });
+                }
+              }
               return;
             }
             if (

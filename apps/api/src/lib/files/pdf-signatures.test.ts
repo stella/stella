@@ -2,7 +2,12 @@ import { PDF, PdfDict } from "@libpdf/core";
 import type { PdfRef } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
-import { isSignedPdf, savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import {
+  appendSigningRevision,
+  isSignedPdf,
+  PdfRevisionAppendError,
+  savePdfRewrite,
+} from "@/api/lib/files/pdf-signatures";
 import {
   createEncryptedPdf,
   createSignedPdf,
@@ -155,5 +160,26 @@ describe("PDF rewrites", () => {
     expect(await savePdfRewrite({ pdf, source })).toEqual({
       status: "encrypted",
     });
+  });
+
+  test("an appended signing revision never falls back to a rewrite", async () => {
+    const signed = await createSignedPdf();
+    const pdf = await PDF.load(signed);
+    // A pending encryption change is one of the states LibPDF can only
+    // save by rewriting the whole file.
+    pdf.setProtection({ ownerPassword: "owner" });
+
+    const refused = await appendSigningRevision(pdf).catch(
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(PdfRevisionAppendError);
+
+    const untouched = await PDF.load(signed);
+    const appended = await appendSigningRevision(untouched);
+    expect(
+      Buffer.from(appended.subarray(0, signed.byteLength)).equals(
+        Buffer.from(signed),
+      ),
+    ).toBe(true);
   });
 });
