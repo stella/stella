@@ -1,7 +1,10 @@
 import type { createFormatter } from "use-intl/core";
 
-import { US_COURTS } from "@stll/api-contract/us-courts";
-import type { UsCourtId } from "@stll/api-contract/us-courts";
+import {
+  US_COURT_BY_CANONICAL_NAME,
+  US_WRITABLE_COURT_IDS,
+} from "@stll/api-contract/us-courts";
+import type { UsWritableCourtId } from "@stll/api-contract/us-courts";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -248,22 +251,26 @@ const INDIGOBOOK_MONTHS = [
 ] as const;
 
 /**
- * The IndigoBook court abbreviation of each enrolled court. Total over the
- * directory, so enrolling a court cannot compile without deciding its form.
+ * The IndigoBook court abbreviation of each writable court. Total over the
+ * writable courts, so enrolling a court cannot compile without deciding its
+ * form.
  */
 const US_COURT_INDIGOBOOK_ABBREVIATIONS = {
   scotus: "U.S.",
-} as const satisfies Record<UsCourtId, string>;
+} as const satisfies Record<UsWritableCourtId, string>;
+
+const isWritableCourtId = (id: string): id is UsWritableCourtId =>
+  US_WRITABLE_COURT_IDS.has(id);
 
 /**
  * A USA decision is stored under its enrolled court's canonical name, so the
  * name finds the abbreviation; any other name is cited as it stands.
  */
 const usCourtAbbreviation = (court: string): string => {
-  const enrolled = US_COURTS.find((candidate) => candidate.name === court);
-  return enrolled === undefined
-    ? court
-    : US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled.id];
+  const enrolled = US_COURT_BY_CANONICAL_NAME.get(court);
+  return enrolled !== undefined && isWritableCourtId(enrolled.id)
+    ? US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled.id]
+    : court;
 };
 
 const DOCKET_PREFIX_RE = /^Nos?\.\s/u;

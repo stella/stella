@@ -3,7 +3,6 @@ import type {
   UsCourtDirectoryRow,
   UsCourtRejectionReason,
 } from "./us-court-vocabulary";
-import type { US_REJECTED_COURT_IDS } from "./us-courts.generated";
 import {
   US_COURT_DIRECTORY as GENERATED_DIRECTORY,
   US_COURT_IDS,
@@ -29,13 +28,21 @@ export {
   US_REJECTED_COURT_IDS,
 } from "./us-courts.generated";
 
-/** The id of an accepted court. */
-export type UsCourtId = (typeof US_COURT_IDS)[number];
+declare const usCourtIdBrand: unique symbol;
+declare const usCourtDirectoryIdBrand: unique symbol;
 
-/** Every id the source registry holds. */
+/**
+ * The id of an accepted court, as `isUsCourtId` has checked it at runtime.
+ * Branded rather than a union of every id: a union of the directory's
+ * thousands of ids is more than the type checker can compare cheaply, and it
+ * would reach every program that imports this module.
+ */
+export type UsCourtId = string & { readonly [usCourtIdBrand]: true };
+
+/** Every id the source registry holds, accepted or rejected. */
 export type UsCourtDirectoryId =
   | UsCourtId
-  | (typeof US_REJECTED_COURT_IDS)[number];
+  | (string & { readonly [usCourtDirectoryIdBrand]: true });
 
 export type UsCourt = UsAcceptedCourtRow;
 
@@ -73,11 +80,22 @@ export const US_COURT_BY_CANONICAL_NAME: ReadonlyMap<string, UsCourt> = new Map(
 );
 
 /**
- * The accepted courts whose decisions may be written today. Every other
- * accepted court is named by the directory but not yet admitted to the index.
+ * The ids of the accepted courts whose decisions may be written today, as a
+ * closed list: a type keyed by it (a court's citation form, say) must decide
+ * every writable court. Every other accepted court is named by the directory
+ * but not yet admitted to the index.
  */
-export const US_WRITABLE_COURT_IDS: ReadonlySet<UsCourtId> = new Set<UsCourtId>(
-  ["scotus"],
+export const US_WRITABLE_COURT_ID_LIST = ["scotus"] as const;
+
+/** The id of a court whose decisions may be written. */
+export type UsWritableCourtId = (typeof US_WRITABLE_COURT_ID_LIST)[number];
+
+/**
+ * The writable court ids as a set, keyed by plain strings so a directory
+ * row's id can be looked up without narrowing it first.
+ */
+export const US_WRITABLE_COURT_IDS: ReadonlySet<string> = new Set<string>(
+  US_WRITABLE_COURT_ID_LIST,
 );
 
 export type UsCourtResolution =

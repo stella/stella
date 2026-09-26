@@ -64,7 +64,7 @@ import type {
 } from "../packages/api-contract/src/us-court-vocabulary";
 
 /** Bumped when the rendering or the resolution rules change. */
-const GENERATOR_VERSION = 1;
+const GENERATOR_VERSION = 2;
 
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const DATA_DIR = path.join(REPO_ROOT, "packages/api-contract/data/us-courts");
@@ -994,7 +994,7 @@ const renderEntry = (entry: DirectoryEntry): string => {
           ["rawJurisdiction", entry.rawJurisdiction],
           ["reason", entry.reason],
         ];
-  return `  { ${fields.map(([key, value]) => `${key}: ${literal(value)}`).join(", ")} },`;
+  return `  row({ ${fields.map(([key, value]) => `${key}: ${literal(value)}`).join(", ")} }),`;
 };
 
 type InputFiles = {
@@ -1071,19 +1071,26 @@ export const renderDirectory = (
     "",
     "/** The ids of the accepted courts, in id order. */",
     "// oxfmt-ignore",
-    "export const US_COURT_IDS = [",
+    "export const US_COURT_IDS: readonly string[] = [",
     ...packed(
       entries.filter(({ status }) => status === "accepted").map(({ id }) => id),
     ),
-    "] as const;",
+    "];",
     "",
     "/** The ids of the rejected source courts, in id order. */",
     "// oxfmt-ignore",
-    "export const US_REJECTED_COURT_IDS = [",
+    "export const US_REJECTED_COURT_IDS: readonly string[] = [",
     ...packed(
       entries.filter(({ status }) => status === "rejected").map(({ id }) => id),
     ),
-    "] as const;",
+    "];",
+    "",
+    "/**",
+    " * One row, checked against the row type on its own: the list is then typed",
+    " * as rows rather than as the union of every row's literal type, which is",
+    " * too large for the type checker to compare against.",
+    " */",
+    "const row = (entry: UsCourtDirectoryRow): UsCourtDirectoryRow => entry;",
     "",
     "/** Every source court, accepted or rejected, in id order. */",
     "// oxfmt-ignore",
