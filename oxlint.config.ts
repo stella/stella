@@ -923,7 +923,11 @@ export default defineConfig({
     "no-negated-condition": "off",
     "no-nested-ternary": "error",
     "no-use-before-define": "off",
+    // promise/always-return requires the trailing `return;` in `.then`
+    // callbacks that this rule flags.
     "no-useless-return": "off",
+    // Only a handful of task markers exist; "todo" is also domain vocabulary
+    // (kanban todos, React Compiler "Todo" bailouts).
     "no-warning-comments": "off",
     "no-unexpected-multiline": "off",
     "max-classes-per-file": "off",
@@ -937,6 +941,8 @@ export default defineConfig({
     "func-style": "off",
     "func-names": "off",
 
+    // Annotations on literal initializers are deliberate widening
+    // (`const marker: string = "…"`); removing them narrows to the literal.
     "typescript/no-inferrable-types": "off",
     "typescript/consistent-return": "error",
     "typescript/dot-notation": "error",
@@ -999,7 +1005,11 @@ export default defineConfig({
     "unicorn/throw-new-error": "off",
     "unicorn/no-array-reduce": "error",
     "unicorn/no-array-sort": "error",
+    // Flags `for (const n of [...el.childNodes])`, where the copy detaches a
+    // live NodeList (or Set) from the mutations the loop body makes.
     "unicorn/no-useless-spread": "off",
+    // Nursery; keys on the method name, so it also flags Cheerio's `toArray`.
+    "unicorn/no-useless-iterator-to-array": "off",
     // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
     // Number(x) transform is not semantics-preserving (lenient prefix parsing,
     // "" handling, hex strings); ingestion adapters rely on parseInt behavior.
