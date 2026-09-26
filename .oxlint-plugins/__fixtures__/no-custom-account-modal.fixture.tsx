@@ -8,6 +8,7 @@
 
 import { useTranslations } from "use-intl";
 
+// expect-clean: no-custom-account-modal/no-custom-account-modal
 import { Button } from "@stll/ui/button";
 // oxlint-disable-next-line no-custom-account-modal/no-custom-account-modal -- a modal that asks for an account
 import { Dialog, DialogPopup, DialogTitle } from "@stll/ui/dialog";
