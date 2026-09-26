@@ -633,6 +633,69 @@ describe("a printed name on a volume short form", () => {
   });
 });
 
+describe("the antecedent inspection cutoff", () => {
+  const LIMIT = 64;
+  /** `Brown v. Board` at page 1, then `count - 1` more first pages in 347. */
+  const volume = (count: number, first = "Brown v. Board, 347 U.S. 1.") =>
+    [
+      first,
+      ...Array.from(
+        { length: count - 1 },
+        (_, index) => `347 U.S. ${String(index + 2)}.`,
+      ),
+    ].join(" ");
+  const lastTarget = (text: string) =>
+    readingOf([paragraph("p", text)]).occurrences.at(-1)?.[2];
+
+  test("names the one match when every entry was inspected", () => {
+    expect(lastTarget(`${volume(LIMIT)} Brown, 347 U.S., at 5.`)).toEqual([
+      "347 U.S. 1",
+    ]);
+  });
+
+  test("abstains once entries lie past the cutoff", () => {
+    expect(lastTarget(`${volume(LIMIT + 1)} Brown, 347 U.S., at 5.`)).toBe(
+      "ambiguous-antecedent",
+    );
+  });
+
+  test("never names one match when a second one lies past the cutoff", () => {
+    expect(
+      lastTarget(
+        `${volume(LIMIT)} Brown v. Allen, 347 U.S. ${String(LIMIT + 1)}. Brown, 347 U.S., at 5.`,
+      ),
+    ).toBe("ambiguous-antecedent");
+  });
+
+  test("abstains whichever order the candidates were filed in", () => {
+    const pages = (from: number, count: number) =>
+      Array.from(
+        { length: count },
+        (_, index) => `347 U.S. ${String(from + index)}.`,
+      ).join(" ");
+    // The only named case past the cutoff.
+    expect(
+      lastTarget(
+        `${pages(1, LIMIT)} Brown v. Board, 347 U.S. ${String(LIMIT + 1)}. Brown, 347 U.S., at 5.`,
+      ),
+    ).toBe("ambiguous-antecedent");
+    // Two named cases, the later-filed one first in the volume's order.
+    expect(
+      lastTarget(
+        `Brown v. Allen, 347 U.S. 1. ${pages(2, LIMIT - 1)} Brown v. Board, 347 U.S. ${String(LIMIT + 1)}. Brown, 347 U.S., at 5.`,
+      ),
+    ).toBe("ambiguous-antecedent");
+  });
+
+  test("names a case filed under the cutoff by a unique party", () => {
+    expect(
+      lastTarget(
+        `${volume(LIMIT - 1)} Brown v. Allen, 347 U.S. ${String(LIMIT)}. Allen, 347 U.S., at 5.`,
+      ),
+    ).toEqual([`347 U.S. ${String(LIMIT)}`]);
+  });
+});
+
 describe("case captions", () => {
   test("two captions on one first page conflict everywhere they reach", () => {
     expect(
