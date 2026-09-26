@@ -661,7 +661,10 @@ export const createChatRuntime = ({
     },
     startRouteHandoffMessage: (message, options) => {
       const started = startClientSend(message, options);
-      detached(started.stream.catch(captureRuntimeError), "chat-queries.stream");
+      detached(
+        started.stream.catch(captureRuntimeError),
+        "chat-queries.stream",
+      );
       return started;
     },
     stop: () => {

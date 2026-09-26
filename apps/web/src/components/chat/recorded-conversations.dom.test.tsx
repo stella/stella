@@ -1174,7 +1174,7 @@ const SUPERSEDE_SCENARIOS = new Set([
 const REPLAY_TIMEOUT_MS = 60_000;
 
 describe("a recorded conversation, rendered", () => {
-  test.each(SCENARIOS.filter((scenario) => !SUPERSEDE_SCENARIOS.has(scenario)))(
+  test.each(SCENARIOS)(
     "%s shows what the server stored, live and in a second tab",
     async (scenario) => {
       await replay(scenario);
@@ -1182,15 +1182,7 @@ describe("a recorded conversation, rendered", () => {
     REPLAY_TIMEOUT_MS,
   );
 
-  test.failing.each([...SUPERSEDE_SCENARIOS])(
-    "%s shows what the server stored, live and in a second tab",
-    async (scenario) => {
-      await replay(scenario);
-    },
-    REPLAY_TIMEOUT_MS,
-  );
-
-  test.failing.each([...SUPERSEDE_SCENARIOS])(
+  test.each([...SUPERSEDE_SCENARIOS])(
     "%s sends the new message and never answers the replaced card",
     async (scenario) => {
       const { recording, server } = await replay(scenario);

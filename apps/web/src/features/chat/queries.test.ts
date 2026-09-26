@@ -2385,9 +2385,10 @@ describe("chat runtime", () => {
     });
     expectSupersededSend(sent);
 
-    // The superseded card stays in the transcript until the authoritative
-    // refresh replaces it. Answering it late must not start a request: the
-    // server already cancelled that interaction when it accepted the new turn.
+    // The superseded card stays in the transcript until the server's
+    // snapshot or the authoritative refresh replaces it. Answering it late
+    // must not start a request: the server already cancelled that
+    // interaction when it accepted the new turn.
     await sent.runtime.resolveToolApproval({
       approved: true,
       id: "approval_tool-save",
@@ -2568,6 +2569,8 @@ describe("chat runtime", () => {
       runtime,
       createOutgoingMessage(firstMessageId, "Save the playbook"),
     );
+    // What the server stores while the send below never reaches it.
+    const serverTranscript = runtime.getSnapshot().messages;
     await sendThreadChatMessage(
       runtime,
       createOutgoingMessage(
@@ -2580,11 +2583,9 @@ describe("chat runtime", () => {
     expect(reported).toHaveLength(1);
     expect(runtime.getSnapshot().status).toBe("error");
 
-    // The server never accepted the message: its transcript still ends on
-    // the approval request (the failed message and the assistant placeholder
-    // TanStack appended for it are local only), and the refresh rebuilds the
+    // The server never accepted the message, so its transcript still ends on
+    // the approval request; the refresh `onError` triggers rebuilds the
     // runtime from it.
-    const serverTranscript = runtime.getSnapshot().messages.slice(0, 2);
     expect(serverTranscript.at(-1)?.parts.at(0)).toMatchObject({
       state: "approval-requested",
       type: "tool-call",
