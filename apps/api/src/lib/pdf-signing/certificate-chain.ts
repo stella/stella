@@ -15,6 +15,7 @@
  */
 
 import * as asn1js from "asn1js";
+import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
 import { safePkiFetch, withFetchBudget } from "@/api/lib/pdf-signing/pki-fetch";
@@ -46,13 +47,10 @@ const ISSUER_MAX_BYTES = 64 * 1024;
 /** Phase 1 runs while the desktop waits; issuer downloads get this long. */
 const ISSUER_FETCH_BUDGET_MS = 20_000;
 
-export const parseCertificate = (der: Uint8Array): pkijs.Certificate | null => {
-  try {
-    return pkijs.Certificate.fromBER(new Uint8Array(der));
-  } catch {
-    return null;
-  }
-};
+export const parseCertificate = (der: Uint8Array): pkijs.Certificate | null =>
+  Result.try(() => pkijs.Certificate.fromBER(new Uint8Array(der))).unwrapOr(
+    null,
+  );
 
 const derOf = (certificate: pkijs.Certificate) =>
   new Uint8Array(certificate.toSchema().toBER(false));
@@ -75,17 +73,15 @@ export const accessLocations = (
   if (value === undefined) {
     return [];
   }
-  try {
-    return pkijs.InfoAccess.fromBER(new Uint8Array(value))
+  return Result.try(() =>
+    pkijs.InfoAccess.fromBER(new Uint8Array(value))
       .accessDescriptions.filter(
         (description) => description.accessMethod === accessMethod,
       )
       .map((description) => uriOf(description.accessLocation))
       .filter((uri) => uri !== null)
-      .slice(0, MAX_URLS_PER_CERTIFICATE);
-  } catch {
-    return [];
-  }
+      .slice(0, MAX_URLS_PER_CERTIFICATE),
+  ).unwrapOr([]);
 };
 
 /** The URIs a CRL distribution points extension lists. */
@@ -96,17 +92,15 @@ export const crlDistributionPoints = (
   if (value === undefined) {
     return [];
   }
-  try {
-    return pkijs.CRLDistributionPoints.fromBER(new Uint8Array(value))
+  return Result.try(() =>
+    pkijs.CRLDistributionPoints.fromBER(new Uint8Array(value))
       .distributionPoints.flatMap((point) =>
         Array.isArray(point.distributionPoint) ? point.distributionPoint : [],
       )
       .map(uriOf)
       .filter((uri) => uri !== null)
-      .slice(0, MAX_URLS_PER_CERTIFICATE);
-  } catch {
-    return [];
-  }
+      .slice(0, MAX_URLS_PER_CERTIFICATE),
+  ).unwrapOr([]);
 };
 
 const isSelfIssued = (certificate: pkijs.Certificate) =>
@@ -122,7 +116,7 @@ const basicConstraints = (certificate: pkijs.Certificate) => {
   if (value === undefined) {
     return null;
   }
-  try {
+  return Result.try(() => {
     const parsed = pkijs.BasicConstraints.fromBER(new Uint8Array(value));
     const { pathLenConstraint } = parsed;
     let pathLength: number | undefined;
@@ -132,9 +126,7 @@ const basicConstraints = (certificate: pkijs.Certificate) => {
       pathLength = pathLenConstraint.valueBlock.valueDec;
     }
     return { ca: parsed.cA === true, pathLength };
-  } catch {
-    return null;
-  }
+  }).unwrapOr(null);
 };
 
 /**
@@ -151,16 +143,14 @@ const mayIssueCertificates = (certificate: pkijs.Certificate) => {
   if (keyUsage === undefined) {
     return true;
   }
-  try {
+  return Result.try(() => {
     const bits = asn1js.fromBER(new Uint8Array(keyUsage)).result;
     if (!(bits instanceof asn1js.BitString)) {
       return false;
     }
     const firstByte = bits.valueBlock.valueHexView.at(0) ?? 0;
     return firstByte % (KEY_CERT_SIGN * 2) >= KEY_CERT_SIGN;
-  } catch {
-    return false;
-  }
+  }).unwrapOr(false);
 };
 
 const issued = async (
@@ -174,11 +164,10 @@ const issued = async (
   if (issuer !== subject && !mayIssueCertificates(issuer)) {
     return false;
   }
-  try {
-    return await subject.verify(issuer);
-  } catch {
-    return false;
-  }
+  const verified = await Result.tryPromise(
+    async () => await subject.verify(issuer),
+  );
+  return verified.unwrapOr(false);
 };
 
 const isValidAt = (certificate: pkijs.Certificate, at: Date) =>
@@ -248,7 +237,7 @@ const certificatesIn = (bytes: Uint8Array): pkijs.Certificate[] => {
   if (single !== null) {
     return [single];
   }
-  try {
+  return Result.try((): pkijs.Certificate[] => {
     const asn1 = asn1js.fromBER(new Uint8Array(bytes));
     const contentInfo = new pkijs.ContentInfo({ schema: asn1.result });
     if (contentInfo.contentType !== SIGNED_DATA_OID) {
@@ -258,9 +247,7 @@ const certificatesIn = (bytes: Uint8Array): pkijs.Certificate[] => {
     return (signedData.certificates ?? []).filter(
       (entry) => entry instanceof pkijs.Certificate,
     );
-  } catch {
-    return [];
-  }
+  }).unwrapOr([]);
 };
 
 const findIssuer = async (
