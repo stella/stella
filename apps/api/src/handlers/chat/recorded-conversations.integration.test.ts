@@ -497,6 +497,27 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
     recorder.client = await recorder.harness.openWebClient(recorder.threadId);
     await send(recorder, "Thanks", [answers("Anything else?")]);
   },
+  // The user types past a card that still waits: the new message replaces
+  // the waiting turn.
+  "supersede-approval": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await send(recorder, "Keep it and draft a new one", [answers("Drafted")]);
+  },
+  // The replacing turn asks for the same tool, and the user allows it for the
+  // conversation: the replaced card stays unanswered.
+  "supersede-approval-then-grant": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await send(recorder, "Delete the older copy instead", [
+      asks([approvalCall("call-2")]),
+    ]);
+    await approve(recorder, "call-2", "allow-in-conversation", [
+      answers("Deleted the older copy"),
+    ]);
+  },
+  "supersede-ask-user": async (recorder) => {
+    await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
+    await send(recorder, "Use the buyer's form", [answers("Drafted")]);
+  },
   "connection-drop": async (recorder) => {
     await sendUntilQuiet(recorder, "before-tool-end");
     await step(recorder, { type: "drop-connection" }, async () => {
@@ -561,24 +582,75 @@ const recordScenario = async (
   };
 };
 
+/** Conversations where a new message replaces a turn that still waits on a
+ *  card. */
+const SUPERSEDE_SCENARIOS = new Set([
+  "supersede-approval",
+  "supersede-approval-then-grant",
+  "supersede-ask-user",
+]);
+
+const checkRecording = async (scenario: string) => {
+  const run =
+    SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
+  const { failure, recording } = await recordScenario(scenario, run);
+  const recorded = stabilize(recording);
+  const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
+  if (process.env[WRITE_ENV] === "1") {
+    writeFileSync(file, recorded);
+  }
+  // A scenario step that failed is the finding, not a stale file.
+  expect(failure).toBeUndefined();
+  expect(existsSync(file)).toBe(true);
+  // Regenerate with `bun run gen:chat-transcripts` in apps/api.
+  expect(readFileSync(file, "utf-8")).toBe(recorded);
+};
+
 describe("recorded conversations", () => {
-  test.each(Object.keys(SCENARIOS))(
-    "the committed recording of %s matches the server",
+  test.each(
+    Object.keys(SCENARIOS).filter(
+      (scenario) => !SUPERSEDE_SCENARIOS.has(scenario),
+    ),
+  )("the committed recording of %s matches the server", checkRecording, 60_000);
+
+  // The card the new message replaces is recorded as it stands today.
+  test.each([...SUPERSEDE_SCENARIOS])(
+    "the committed recording of %s matches the server up to the new message",
     async (scenario) => {
       const run =
         SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
-      const { failure, recording } = await recordScenario(scenario, run);
-      const recorded = stabilize(recording);
-      const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
-      if (process.env[WRITE_ENV] === "1") {
-        writeFileSync(file, recorded);
-      }
-      // A scenario step that failed is the finding, not a stale file.
-      expect(failure).toBeUndefined();
-      expect(existsSync(file)).toBe(true);
-      // Regenerate with `bun run gen:chat-transcripts` in apps/api.
-      expect(readFileSync(file, "utf-8")).toBe(recorded);
+      const { recording } = await recordScenario(scenario, run);
+      const [firstStep] = recording.steps;
+      const fresh: unknown = JSON.parse(
+        stabilize({
+          ...recording,
+          steps: firstStep === undefined ? [] : [firstStep],
+        }),
+      );
+      const committed: unknown = JSON.parse(
+        readFileSync(
+          path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`),
+          "utf-8",
+        ),
+      );
+      // Instants are numbered across the whole recording, so the later
+      // steps shift them; the first step is compared without them.
+      const firstStepOf = (value: unknown) =>
+        JSON.stringify(asTestRaw<RecordedConversation>(value).steps.at(0))
+          .replaceAll(ISO_INSTANT_PATTERN, "<instant>")
+          .replaceAll(EPOCH_MS_PATTERN, "<instant>");
+      // The fixture must reach the fault: the next step is the new message.
+      expect(
+        asTestRaw<RecordedConversation>(committed).steps.at(1)?.action.type,
+      ).toBe("send");
+      expect(firstStepOf(fresh)).toBe(firstStepOf(committed));
     },
+    60_000,
+  );
+
+  test.failing.each([...SUPERSEDE_SCENARIOS])(
+    "the committed recording of %s matches the server",
+    checkRecording,
     60_000,
   );
 
