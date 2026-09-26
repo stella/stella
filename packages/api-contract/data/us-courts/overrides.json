@@ -1,0 +1,1125 @@
+{
+  "jurisdictionCodes": [
+    {
+      "id": "njcirctsussex",
+      "code": "ST",
+      "reason": "The source row carries 'St', which is not a source jurisdiction code. Its parent njcirct and every sibling county circuit court are coded ST."
+    },
+    {
+      "id": "ohctapp1",
+      "code": "SA",
+      "reason": "The source row carries an empty jurisdiction code. It is the First District of the Ohio Court of Appeals: courts-db lists it under ohioctapp, which the source codes SA."
+    }
+  ],
+  "systems": [
+    {
+      "id": "caljp",
+      "system": "state",
+      "reason": "The source codes committees C with no system. The Commission on Judicial Performance is a California state body; courts-db lists it in California."
+    },
+    {
+      "id": "dakotasup",
+      "system": "territory",
+      "reason": "The Supreme Court of Dakota Territory sat before statehood (1861-1889); courts-db locates it in Dakota Territory, not a state."
+    },
+    {
+      "id": "fcc",
+      "system": "federal",
+      "reason": "The source codes committees C with no system. The Federal Communications Commission is a federal agency."
+    },
+    {
+      "id": "indcirct",
+      "system": "state",
+      "reason": "The Indiana circuit courts are the state's trial courts; courts-db lists this row in the state system. The federal circuit court for Indiana is circtdin."
+    },
+    {
+      "id": "ohiobar",
+      "system": "state",
+      "reason": "The source codes committees C with no system. The board sits under the Supreme Court of Ohio; courts-db lists it in Ohio."
+    },
+    {
+      "id": "ohiocivright",
+      "system": "state",
+      "reason": "The source codes committees C with no system. The Ohio Civil Rights Commission is a state agency; courts-db lists it in Ohio."
+    },
+    {
+      "id": "padeptjust",
+      "system": "state",
+      "reason": "The Pennsylvania Department of Justice was the state's attorney general's department; courts-db lists it in the state system."
+    },
+    {
+      "id": "philadeptjust",
+      "system": "state",
+      "reason": "Opinions of the Pennsylvania Department of Justice; courts-db lists it in the state system, in Pennsylvania."
+    },
+    {
+      "id": "usjc",
+      "system": "federal",
+      "reason": "The source codes committees C with no system. The Judicial Conference of the United States is a body of the federal judiciary."
+    },
+    {
+      "id": "washterr",
+      "system": "territory",
+      "reason": "The court of Washington Territory sat before statehood (1853-1889, the source's own dates)."
+    }
+  ],
+  "tiers": [
+    {
+      "id": "cavc",
+      "tier": "appellate",
+      "reason": "The Court of Appeals for Veterans Claims reviews decisions of the Board of Veterans' Appeals; courts-db places it at the intermediate appellate level."
+    },
+    {
+      "id": "ccpa",
+      "tier": "appellate",
+      "reason": "The Court of Customs and Patent Appeals heard appeals from the Customs Court and the Patent Office; courts-db types it appellate."
+    },
+    {
+      "id": "eca",
+      "tier": "appellate",
+      "reason": "The Emergency Court of Appeals reviewed price-control regulations and orders; courts-db places it at the intermediate appellate level."
+    },
+    {
+      "id": "fiscr",
+      "tier": "appellate",
+      "reason": "The Foreign Intelligence Surveillance Court of Review reviews decisions of the Foreign Intelligence Surveillance Court."
+    },
+    {
+      "id": "indcirct",
+      "tier": "trial",
+      "reason": "The Indiana circuit courts are the state's trial courts of general jurisdiction."
+    },
+    {
+      "id": "masstaxbd",
+      "tier": "special",
+      "reason": "A tax board, not a court; the source codes it SA."
+    },
+    {
+      "id": "nhprivycounnh",
+      "tier": "appellate",
+      "reason": "The committee of the Privy Council heard appeals from the courts of colonial New Hampshire; the source codes it SS."
+    },
+    {
+      "id": "njlaborcomp",
+      "tier": "special",
+      "reason": "A workers' compensation bureau of a state department, not a court; the source codes it ST."
+    },
+    {
+      "id": "njpuc",
+      "tier": "special",
+      "reason": "A public utilities commission, not a court; the source codes it ST."
+    },
+    {
+      "id": "nycterr",
+      "tier": "supreme",
+      "reason": "The Court for the Trial of Impeachments and Correction of Errors was New York's court of last resort (1777-1846); courts-db records it as a court of last resort."
+    },
+    {
+      "id": "nyhospcommn",
+      "tier": "special",
+      "reason": "A state commission, not a court; the source codes it SA."
+    },
+    {
+      "id": "ohiopuc",
+      "tier": "special",
+      "reason": "A public utilities commission, not a court; the source codes it ST."
+    },
+    {
+      "id": "oklacrimapp",
+      "tier": "supreme",
+      "reason": "The Oklahoma Court of Criminal Appeals is the court of last resort in criminal cases, as the source codes texcrimapp; courts-db records it as a court of last resort."
+    },
+    {
+      "id": "privycoun",
+      "tier": "appellate",
+      "reason": "The committee of the Privy Council heard appeals from colonial courts; the source codes it ST and courts-db types it appellate."
+    },
+    {
+      "id": "scotus",
+      "tier": "supreme",
+      "reason": "The source codes the Supreme Court of the United States F with the federal courts of appeals."
+    },
+    {
+      "id": "superctguam",
+      "tier": "trial",
+      "reason": "The source codes it TA; the Superior Court of Guam is the territory's trial court of general jurisdiction, as courts-db records."
+    },
+    {
+      "id": "tecoa",
+      "tier": "appellate",
+      "reason": "The Temporary Emergency Court of Appeals heard appeals from the district courts; courts-db places it at the intermediate appellate level."
+    },
+    {
+      "id": "vamedmalrevpan",
+      "tier": "special",
+      "reason": "A medical malpractice review panel, not a court; the source codes it ST."
+    },
+    {
+      "id": "washterr",
+      "tier": "supreme",
+      "reason": "The row carries the decisions of the Supreme Court of Washington Territory, reported as Wash. Terr."
+    }
+  ],
+  "classifications": [
+    {
+      "id": "ag",
+      "classification": "attorney-general",
+      "reason": "Opinions of the Attorneys General of the United States."
+    },
+    {
+      "id": "arkworkcompcom",
+      "classification": "tribunal",
+      "reason": "A workers' compensation commission."
+    },
+    {
+      "id": "asbca",
+      "classification": "tribunal",
+      "reason": "An executive board of contract appeals."
+    },
+    {
+      "id": "bia",
+      "classification": "tribunal",
+      "reason": "An administrative board of the Department of Justice."
+    },
+    {
+      "id": "bpai",
+      "classification": "tribunal",
+      "reason": "An administrative board of the Patent and Trademark Office."
+    },
+    {
+      "id": "bta",
+      "classification": "tribunal",
+      "reason": "An executive board that preceded the Tax Court."
+    },
+    {
+      "id": "bva",
+      "classification": "tribunal",
+      "reason": "An administrative board of the Department of Veterans Affairs."
+    },
+    {
+      "id": "calofcadmhrg",
+      "classification": "tribunal",
+      "reason": "A state office of administrative hearings."
+    },
+    {
+      "id": "caluneinsappbd",
+      "classification": "tribunal",
+      "reason": "An unemployment insurance appeals board."
+    },
+    {
+      "id": "coloworkcompcom",
+      "classification": "tribunal",
+      "reason": "A workers' compensation appeals office."
+    },
+    {
+      "id": "connworkcompcom",
+      "classification": "tribunal",
+      "reason": "A workers' compensation review board."
+    },
+    {
+      "id": "coregsalina",
+      "classification": "tribunal",
+      "reason": "The register and receiver of a land office."
+    },
+    {
+      "id": "dadectypropbd",
+      "classification": "tribunal",
+      "reason": "A county property appraisal board."
+    },
+    {
+      "id": "deptinterior",
+      "classification": "tribunal",
+      "reason": "An executive department."
+    },
+    {
+      "id": "fladeptenvreg",
+      "classification": "tribunal",
+      "reason": "A state department."
+    },
+    {
+      "id": "fladepthrehabil",
+      "classification": "tribunal",
+      "reason": "A state department."
+    },
+    {
+      "id": "fladeptrev",
+      "classification": "tribunal",
+      "reason": "A state department."
+    },
+    {
+      "id": "fladivadminhrg",
+      "classification": "tribunal",
+      "reason": "A state division of administrative hearings."
+    },
+    {
+      "id": "flaindcommn",
+      "classification": "tribunal",
+      "reason": "An industrial commission."
+    },
+    {
+      "id": "flapubserv",
+      "classification": "tribunal",
+      "reason": "A public service commission."
+    },
+    {
+      "id": "flarealestcommn",
+      "classification": "tribunal",
+      "reason": "A real estate commission."
+    },
+    {
+      "id": "jaxcivservbd",
+      "classification": "tribunal",
+      "reason": "A municipal civil service board."
+    },
+    {
+      "id": "judcoun",
+      "classification": "tribunal",
+      "reason": "Judicial councils decide misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun10",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun2",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun3",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun5",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun6",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun7",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun8",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoun9",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "judcoundc",
+      "classification": "tribunal",
+      "reason": "A circuit judicial council decides misconduct and administrative matters, not cases."
+    },
+    {
+      "id": "masshserep",
+      "classification": "tribunal",
+      "reason": "A legislative chamber."
+    },
+    {
+      "id": "masstaxbd",
+      "classification": "tribunal",
+      "reason": "A tax board."
+    },
+    {
+      "id": "maworkcompcom",
+      "classification": "tribunal",
+      "reason": "A department of industrial accidents."
+    },
+    {
+      "id": "monttc",
+      "classification": "tribunal",
+      "reason": "A tax appeal board."
+    },
+    {
+      "id": "mspb",
+      "classification": "tribunal",
+      "reason": "An executive agency adjudicating federal personnel appeals."
+    },
+    {
+      "id": "ncworkcompcom",
+      "classification": "tribunal",
+      "reason": "An industrial commission."
+    },
+    {
+      "id": "njcommned",
+      "classification": "tribunal",
+      "reason": "A state commissioner of education."
+    },
+    {
+      "id": "njlaborcomp",
+      "classification": "tribunal",
+      "reason": "A workers' compensation bureau of a state department."
+    },
+    {
+      "id": "njlawbkconf",
+      "classification": "tribunal",
+      "reason": "A conference committee of lawyers and bankers."
+    },
+    {
+      "id": "njpuc",
+      "classification": "tribunal",
+      "reason": "A public utilities commission."
+    },
+    {
+      "id": "nyarbct",
+      "classification": "tribunal",
+      "reason": "An arbitration body of a chamber of commerce."
+    },
+    {
+      "id": "nyexecchamber",
+      "classification": "tribunal",
+      "reason": "The governor's executive chamber."
+    },
+    {
+      "id": "nyhospcommn",
+      "classification": "tribunal",
+      "reason": "A state commission."
+    },
+    {
+      "id": "nystateassembly",
+      "classification": "tribunal",
+      "reason": "A legislative chamber."
+    },
+    {
+      "id": "ohiopuc",
+      "classification": "tribunal",
+      "reason": "A public utilities commission."
+    },
+    {
+      "id": "ohiorac",
+      "classification": "tribunal",
+      "reason": "A racing commission."
+    },
+    {
+      "id": "ohiotax",
+      "classification": "tribunal",
+      "reason": "A board of tax appeals of a state department."
+    },
+    {
+      "id": "oklaag",
+      "classification": "attorney-general",
+      "reason": "Opinions of the Oklahoma Attorney General; the source codes them SS rather than SAG."
+    },
+    {
+      "id": "oklajeap",
+      "classification": "tribunal",
+      "reason": "A judicial ethics advisory panel."
+    },
+    {
+      "id": "olc",
+      "classification": "attorney-general",
+      "reason": "Opinions of the Office of Legal Counsel, which exercises the Attorney General's opinion function."
+    },
+    {
+      "id": "paarbpnlhc",
+      "classification": "tribunal",
+      "reason": "Health care arbitration panels."
+    },
+    {
+      "id": "padepted",
+      "classification": "tribunal",
+      "reason": "A state department."
+    },
+    {
+      "id": "padeptjust",
+      "classification": "attorney-general",
+      "reason": "Opinions of the Pennsylvania Department of Justice, the state's attorney general's department."
+    },
+    {
+      "id": "padeptpubwel",
+      "classification": "tribunal",
+      "reason": "A state department."
+    },
+    {
+      "id": "paenvhrbd",
+      "classification": "tribunal",
+      "reason": "An environmental hearing board."
+    },
+    {
+      "id": "paparolebd",
+      "classification": "tribunal",
+      "reason": "A parole board."
+    },
+    {
+      "id": "philadeptjust",
+      "classification": "attorney-general",
+      "reason": "Opinions of the Pennsylvania Department of Justice."
+    },
+    {
+      "id": "ptab",
+      "classification": "tribunal",
+      "reason": "An administrative board of the Patent and Trademark Office."
+    },
+    {
+      "id": "slcregrec",
+      "classification": "tribunal",
+      "reason": "The register and receiver of a land office."
+    },
+    {
+      "id": "tennworkcompapp",
+      "classification": "tribunal",
+      "reason": "A workers' compensation appeals board."
+    },
+    {
+      "id": "ttab",
+      "classification": "tribunal",
+      "reason": "An administrative board of the Patent and Trademark Office."
+    },
+    {
+      "id": "usjudconfcomdis",
+      "classification": "tribunal",
+      "reason": "A committee of the Judicial Conference deciding misconduct matters."
+    },
+    {
+      "id": "uslandoffice",
+      "classification": "tribunal",
+      "reason": "An executive land office."
+    },
+    {
+      "id": "ussurveyor",
+      "classification": "tribunal",
+      "reason": "An executive surveying office."
+    },
+    {
+      "id": "vamedmalrevpan",
+      "classification": "tribunal",
+      "reason": "A medical malpractice review panel."
+    }
+  ],
+  "regions": [
+    {
+      "id": "acca",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "afcca",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "ag",
+      "region": "national",
+      "evidence": {
+        "note": "A body of national jurisdiction with no courts-db entry."
+      }
+    },
+    {
+      "id": "arizsuper",
+      "region": "AZ",
+      "evidence": { "fullName": "Arizona" }
+    },
+    {
+      "id": "armfor",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "asbca",
+      "region": "national",
+      "evidence": {
+        "note": "A body of national jurisdiction with no courts-db entry."
+      }
+    },
+    {
+      "id": "bap1",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bap10",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bap2",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bap6",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bap8",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bap9",
+      "region": "multistate",
+      "evidence": {
+        "note": "A bankruptcy appellate panel of a circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "bapma",
+      "region": "MA",
+      "evidence": { "fullName": "Massachusetts" }
+    },
+    { "id": "bapme", "region": "ME", "evidence": { "fullName": "Maine" } },
+    {
+      "id": "bia",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "bpai",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "bta",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "bva",
+      "region": "national",
+      "evidence": {
+        "note": "A body of national jurisdiction with no courts-db entry."
+      }
+    },
+    {
+      "id": "ca1",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca10",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca11",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca2",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca3",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca4",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca5",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca6",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca7",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca8",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "ca9",
+      "region": "multistate",
+      "evidence": {
+        "note": "A court of appeals for a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    { "id": "caca", "region": "CA", "evidence": { "fullName": "California" } },
+    {
+      "id": "cafc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "caljustct",
+      "region": "CA",
+      "evidence": {
+        "note": "The source name misspells California ('Califonia Justice Court'); its twenty child rows are each named 'California Justice Court, <county> County'."
+      }
+    },
+    {
+      "id": "calmunct",
+      "region": "CA",
+      "evidence": { "fullName": "California" }
+    },
+    {
+      "id": "calofcadmhrg",
+      "region": "CA",
+      "evidence": { "fullName": "California" }
+    },
+    {
+      "id": "caluneinsappbd",
+      "region": "CA",
+      "evidence": { "fullName": "California" }
+    },
+    {
+      "id": "canalzoned",
+      "region": "canal-zone",
+      "evidence": { "fullName": "Canal Zone" }
+    },
+    {
+      "id": "cavc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "cc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "ccpa",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "cgcomilrev",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "cit",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "cma",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "com",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "coregsalina",
+      "region": "CO",
+      "evidence": {
+        "note": "The source sorts the row inside its Colorado block (position 351.15, between cosuperct at 351.12 and coloworkcompcom at 351.2) and gives it the co id prefix of that block."
+      }
+    },
+    {
+      "id": "cusc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "dakotasup",
+      "region": "dakota-territory",
+      "evidence": { "fullName": "Territory Of Dakota" }
+    },
+    {
+      "id": "eca",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "fcc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "fisc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "fiscr",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "jpml",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "judcoun10",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun2",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun3",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun5",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun6",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun7",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun8",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "judcoun9",
+      "region": "multistate",
+      "evidence": {
+        "note": "The judicial council of a numbered circuit, which spans several states; courts-db records its seat."
+      }
+    },
+    {
+      "id": "massland",
+      "region": "MA",
+      "evidence": { "fullName": "Massachusetts" }
+    },
+    {
+      "id": "mc",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    { "id": "mdgenct", "region": "MD", "evidence": { "fullName": "Maryland" } },
+    { "id": "minnag", "region": "MN", "evidence": { "fullName": "Minnesota" } },
+    { "id": "montag", "region": "MT", "evidence": { "fullName": "Montana" } },
+    {
+      "id": "mspb",
+      "region": "national",
+      "evidence": {
+        "note": "A body of national jurisdiction with no courts-db entry."
+      }
+    },
+    {
+      "id": "nhprivycounnh",
+      "region": "NH",
+      "evidence": { "fullName": "New Hampshire" }
+    },
+    {
+      "id": "nmariana",
+      "region": "MP",
+      "evidence": { "fullName": "Northern Mariana Islands" }
+    },
+    {
+      "id": "nmcca",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "olc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "privycoun",
+      "region": "multistate",
+      "evidence": {
+        "note": "The committee of the Privy Council heard appeals from several colonies; courts-db locates it in the United States as a whole."
+      }
+    },
+    {
+      "id": "ptab",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "reglrailreorgct",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "scotus",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    { "id": "stp", "region": "PA", "evidence": { "fullName": "Pennsylvania" } },
+    { "id": "sttex", "region": "TX", "evidence": { "fullName": "Texas" } },
+    {
+      "id": "tax",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "tecoa",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "tennsuperct",
+      "region": "TN",
+      "evidence": { "fullName": "Tennessee" }
+    },
+    {
+      "id": "tennworkcompcl",
+      "region": "TN",
+      "evidence": { "fullName": "Tennessee" }
+    },
+    {
+      "id": "texcrimdistct1",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct2",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct3",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct4",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct5",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct6",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct7",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    {
+      "id": "texcrimdistct8",
+      "region": "TX",
+      "evidence": { "fullName": "Texas" }
+    },
+    { "id": "texctyct", "region": "TX", "evidence": { "fullName": "Texas" } },
+    { "id": "texdistct", "region": "TX", "evidence": { "fullName": "Texas" } },
+    { "id": "texprobct", "region": "TX", "evidence": { "fullName": "Texas" } },
+    { "id": "texprobct1", "region": "TX", "evidence": { "fullName": "Texas" } },
+    {
+      "id": "ttab",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usafctmilrev",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usarmymilrev",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usberlinct",
+      "region": "not-applicable",
+      "evidence": {
+        "note": "The United States Court for Berlin sat abroad, in no state or territory."
+      }
+    },
+    {
+      "id": "uscfc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "uscgcoca",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usjc",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usjudconfcomdis",
+      "region": "national",
+      "evidence": {
+        "note": "A court of national jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "usnmcmilrev",
+      "region": "national",
+      "evidence": {
+        "note": "A military appellate court of worldwide jurisdiction; courts-db records its seat, not its reach."
+      }
+    },
+    {
+      "id": "washterr",
+      "region": "washington-territory",
+      "evidence": { "fullName": "Washington Territory" }
+    }
+  ],
+  "canonicalNames": [
+    {
+      "id": "massland",
+      "canonicalName": "Massachusetts Land Court [CL:massland]",
+      "evidence": {
+        "note": "A second source record of the court masslandct carries, created by a case import; no source field tells the two apart, so the id does."
+      }
+    },
+    {
+      "id": "texctyct70",
+      "canonicalName": "Texas City Court, Harris City Criminal Court at Law No. 3",
+      "evidence": { "shortName": "Crim. Ct. at Law No. 3" }
+    },
+    {
+      "id": "texctyct71",
+      "canonicalName": "Texas City Court, Harris City Criminal Court at Law No. 4",
+      "evidence": { "shortName": "Crim. Ct. at Law No. 4" }
+    },
+    {
+      "id": "texctyct72",
+      "canonicalName": "Texas City Court, Harris City Criminal Court at Law No. 11",
+      "evidence": { "shortName": "Crim. Ct. at Law No. 11" }
+    }
+  ]
+}

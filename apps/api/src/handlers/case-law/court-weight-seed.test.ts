@@ -3,15 +3,17 @@ import nodePath from "node:path";
 
 import { US_COURTS } from "@stll/api-contract/us-courts";
 
+import { caseLawCourtWeights } from "@/api/db/schema";
 import {
+  COURT_PATTERN_MAX_LENGTH,
   COURT_WEIGHT_SEED,
   courtWeightEntriesFromSeed,
   courtWeightJurisdictionSeedSql,
   courtWeightMapFromSeed,
   courtWeightSeedSql,
   seededCourtWeightEntries,
+  US_PATTERN_MAX_NAMES,
 } from "@/api/handlers/case-law/court-weight-seed";
-import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,
@@ -241,25 +243,26 @@ describe("court weight seed", () => {
     }
   });
 
-  test("the United States ranks each enrolled court once, at its directory tier", () => {
-    // Its decisions carry the directory's canonical court names, so the rank
-    // is anchored to that spelling rather than to words other courts share,
-    // and both the seeded label and the tier a reader is shown are the one
-    // the directory declares.
-    for (const court of US_COURTS) {
-      const matched = seededCourtWeightEntries("USA").filter((entry) =>
-        entry.pattern.test(court.name),
-      );
-      expect(
-        matched.map((entry) => ({
-          court: court.name,
-          displayed: courtTierLabel(entry.tier),
-          seeded: entry.tierLabel,
-        })),
-      ).toEqual([
-        { court: court.name, displayed: court.tier, seeded: court.tier },
-      ]);
-    }
+  test("the United States ranks every accepted court once, at its directory tier", () => {
+    // Its decisions carry the directory's canonical court names, so each rank
+    // is anchored to those spellings rather than to words other courts share.
+    const rankOfTier = {
+      supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
+      appellate: { tier: 2, tierLabel: "appeal", weight: 5 },
+      trial: { tier: 1, tierLabel: "district", weight: 2 },
+      special: { tier: 1, tierLabel: "special", weight: 3 },
+    } as const;
+    const entries = seededCourtWeightEntries("USA");
+    const mismatched = US_COURTS.flatMap((court) => {
+      const matched = entries
+        .filter((entry) => entry.pattern.test(court.canonicalName))
+        .map(({ tier, tierLabel, weight }) => ({ tier, tierLabel, weight }));
+      return matched.length === 1 &&
+        Bun.deepEquals(matched[0], rankOfTier[court.tier])
+        ? []
+        : [{ court: court.id, matched }];
+    });
+    expect(mismatched).toEqual([]);
     for (const court of [
       "Supreme Court of California",
       "United States Court of Appeals for the Ninth Circuit",
@@ -272,6 +275,42 @@ describe("court weight seed", () => {
         ),
       ]).toEqual([court, false]);
     }
+  });
+
+  test("United States patterns are anchored, bounded and fit the registry column", () => {
+    expect(caseLawCourtWeights.courtPattern.getSQLType()).toBe(
+      `varchar(${String(COURT_PATTERN_MAX_LENGTH)})`,
+    );
+    const usa = COURT_WEIGHT_SEED.filter((row) => row.country === "USA");
+    // The one court that keeps a pattern of its own, spelled as before.
+    expect(usa[0]).toEqual({
+      country: "USA",
+      courtPattern: "^supreme court of the united states$",
+      tier: 3,
+      tierLabel: "supreme",
+      weight: 8,
+    });
+    for (const { courtPattern } of usa) {
+      expect(courtPattern).toMatch(/^\^(?:\(\?:.*\))?.*\$$/u);
+      expect(courtPattern.length).toBeLessThanOrEqual(COURT_PATTERN_MAX_LENGTH);
+      expect(courtPattern.split(/(?<!\\)\|/u).length).toBeLessThanOrEqual(
+        US_PATTERN_MAX_NAMES,
+      );
+    }
+    // Every accepted name appears in exactly one pattern, and nothing else
+    // does: the patterns are a partition of the directory's names.
+    const alternatives = usa.flatMap(({ courtPattern }) =>
+      courtPattern
+        .replace(/^\^(?:\(\?:)?/u, "")
+        .replace(/\)?\$$/u, "")
+        .split(/(?<!\\)\|/u)
+        .map((fragment) => fragment.replaceAll(/\\(.)/gu, "$1")),
+    );
+    expect(alternatives.toSorted()).toEqual(
+      US_COURTS.map(({ canonicalName }) =>
+        canonicalName.toLowerCase(),
+      ).toSorted(),
+    );
   });
 
   test("the seeded tiers stay inside the range the search blend scales", () => {
