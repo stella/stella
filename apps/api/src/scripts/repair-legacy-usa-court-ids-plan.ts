@@ -9,7 +9,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { executedRows } from "@/api/scripts/repair-decision-dates-plan";
 
 /**
- * The column exactly as migration 20260926110000_case_law_decision_court_id
+ * The column exactly as migration 20260926120400_case_law_decision_court_id
  * adds it, so the migration's own IF NOT EXISTS keeps what this added.
  */
 export const ENSURE_DECISION_COURT_ID_COLUMN_SQL =

@@ -13,7 +13,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- Both ALTERs still take ACCESS EXCLUSIVE on a table the ingestion and
 -- projection workers write to without pause, so they run in the same tiered
 -- retry as the decision-date floor swap
--- (20260926100200_case_law_decision_date_floor_by_jurisdiction): short lock
+-- (20260926120300_case_law_decision_date_floor_by_jurisdiction): short lock
 -- waits first, longer ones once short ones have failed, and every fifth
 -- failure logs who holds the table. Re-runnable: both statements are
 -- guarded by IF NOT EXISTS.

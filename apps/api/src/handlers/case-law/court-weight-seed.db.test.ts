@@ -31,7 +31,7 @@ const migrationPath = (directory: string) =>
 const FULL_SEED = migrationPath(
   "20260918210100_case_law_court_weight_seed_hun",
 );
-const USA_SEED = migrationPath("20260926100100_case_law_court_weight_seed_usa");
+const USA_SEED = migrationPath("20260926120200_case_law_court_weight_seed_usa");
 
 type TestDb = ReturnType<typeof drizzle>;
 

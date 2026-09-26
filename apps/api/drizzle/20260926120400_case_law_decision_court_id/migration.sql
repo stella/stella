@@ -20,7 +20,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 --
 -- Both ALTERs are metadata-only but take ACCESS EXCLUSIVE on a table the
 -- ingestion and projection workers write to without pause, so they run in the
--- same tiered lock retry as 20260926100200_case_law_decision_date_floor_by_
+-- same tiered lock retry as 20260926120300_case_law_decision_date_floor_by_
 -- jurisdiction: short waits first, longer ones only after short ones failed,
 -- and every fifth failure logs who holds the table. The statement budget is
 -- lifted for the block alone: it is the sum of many bounded waits.
