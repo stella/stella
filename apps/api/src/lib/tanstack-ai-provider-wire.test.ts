@@ -12,6 +12,7 @@ import type {
 } from "@/api/tests/helpers/chat-oracles";
 import {
   cassetteFor,
+  cassetteKey,
   findMissingCassettes,
   loadProviderWireCassettes,
   PROVIDER_WIRE_PROVIDERS,
@@ -63,7 +64,6 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   },
   "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
-  "google/refusal": { oracles: [finish], reason: "maintenance" },
   "google/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
@@ -73,7 +73,7 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 14;
+const UNMET_SIZE = 13;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
@@ -125,7 +125,7 @@ const expectContract = (
 const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, run } = await replayWireScenario({ cassette, replay });
   expectContract(
-    `${cassette.provider}/${cassette.scenario}`,
+    cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
 };
@@ -152,9 +152,9 @@ describe("provider wire corpus", () => {
 
   test("every unmet entry names a cassette in the corpus", () => {
     const keys = new Set(
-      cassettes.flatMap(({ provider, scenario }) => [
-        `${provider}/${scenario}`,
-        `${provider}/cancel`,
+      cassettes.flatMap((cassette) => [
+        cassetteKey(cassette),
+        `${cassette.provider}/cancel`,
       ]),
     );
     expect(Object.keys(UNMET).filter((key) => !keys.has(key))).toEqual([]);
@@ -204,7 +204,7 @@ describe("provider wire corpus", () => {
 describe("every adapter satisfies the wire contract", () => {
   for (const cassette of cassettes) {
     test(
-      `${cassette.provider} ${cassette.scenario}`,
+      cassetteKey(cassette).replace("/", " "),
       async () => {
         await checkCassette(cassette);
       },
