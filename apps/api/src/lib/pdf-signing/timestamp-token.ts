@@ -10,7 +10,7 @@
  */
 
 import * as asn1js from "asn1js";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
 /** RFC 5652 id-signedData. */
@@ -56,14 +56,12 @@ const isTimeStampingKey = (certificate: pkijs.Certificate) => {
   if (extension === undefined || !extension.critical) {
     return false;
   }
-  try {
+  return Result.try(() => {
     const { keyPurposes } = pkijs.ExtKeyUsage.fromBER(
       new Uint8Array(extension.extnValue.valueBlock.valueHexView),
     );
     return keyPurposes.length === 1 && keyPurposes[0] === TIME_STAMPING_USAGE;
-  } catch {
-    return false;
-  }
+  }).unwrapOr(false);
 };
 
 const isValidAt = (certificate: pkijs.Certificate, at: Date) =>
@@ -134,8 +132,8 @@ const signerCertificateOf = async (
 const verifiedSigner = async (
   signedData: pkijs.SignedData,
   content: Uint8Array,
-) => {
-  try {
+): Promise<pkijs.Certificate | null> => {
+  const verified = await Result.tryPromise(async () => {
     const signerInfo = signedData.signerInfos.at(0);
     if (signerInfo === undefined) {
       return null;
@@ -174,20 +172,63 @@ const verifiedSigner = async (
       signedBytes = encoded;
     }
 
-    const verified = await engine.verifyWithPublicKey(
+    const matches = await engine.verifyWithPublicKey(
       signedBytes,
       signerInfo.signature,
       signer.subjectPublicKeyInfo,
       signerInfo.signatureAlgorithm,
       hashName,
     );
-    return verified ? signer : null;
-  } catch {
-    return null;
-  }
+    return matches ? signer : null;
+  });
+  return verified.unwrapOr(null);
 };
 
-/** Throws {@link PdfSigningTimestampInvalidError} for any token it refuses. */
+type ReadToken = {
+  content: Uint8Array;
+  signedData: pkijs.SignedData;
+  tstInfo: pkijs.TSTInfo;
+};
+
+const unreadable = () => invalid("The timestamp token could not be read.");
+
+/** The token's SignedData and the TSTInfo it encapsulates. */
+const readToken = (
+  token: Uint8Array,
+): Result<ReadToken, PdfSigningTimestampInvalidError> => {
+  const contentInfo = Result.try(() =>
+    pkijs.ContentInfo.fromBER(new Uint8Array(token)),
+  );
+  if (Result.isError(contentInfo)) {
+    return Result.err(unreadable());
+  }
+  if (contentInfo.value.contentType !== SIGNED_DATA_OID) {
+    return Result.err(invalid("The timestamp is not a signed token."));
+  }
+  const signedData = Result.try(
+    () => new pkijs.SignedData({ schema: contentInfo.value.content }),
+  );
+  if (Result.isError(signedData)) {
+    return Result.err(unreadable());
+  }
+  const encapsulated = signedData.value.encapContentInfo.eContent;
+  if (
+    signedData.value.encapContentInfo.eContentType !== TST_INFO_OID ||
+    encapsulated === undefined
+  ) {
+    return Result.err(invalid("The timestamp token carries no timestamp."));
+  }
+  const decoded = Result.try(() => {
+    const content = octetStringBytes(encapsulated);
+    return { content, tstInfo: pkijs.TSTInfo.fromBER(content) };
+  });
+  if (Result.isError(decoded)) {
+    return Result.err(unreadable());
+  }
+  return Result.ok({ ...decoded.value, signedData: signedData.value });
+};
+
+/** The token's contents, or {@link PdfSigningTimestampInvalidError}. */
 export const validateTimestampToken = async ({
   digest,
   nonce,
@@ -200,31 +241,12 @@ export const validateTimestampToken = async ({
   nonce?: asn1js.Integer;
   now: Date;
   token: Uint8Array;
-}): Promise<ValidatedTimestamp> => {
-  let signedData: pkijs.SignedData;
-  let tstInfo: pkijs.TSTInfo;
-  let content: Uint8Array;
-  try {
-    const contentInfo = pkijs.ContentInfo.fromBER(new Uint8Array(token));
-    if (contentInfo.contentType !== SIGNED_DATA_OID) {
-      throw invalid("The timestamp is not a signed token.");
-    }
-    signedData = new pkijs.SignedData({ schema: contentInfo.content });
-    const encapsulated = signedData.encapContentInfo.eContent;
-    if (
-      signedData.encapContentInfo.eContentType !== TST_INFO_OID ||
-      encapsulated === undefined
-    ) {
-      throw invalid("The timestamp token carries no timestamp.");
-    }
-    content = octetStringBytes(encapsulated);
-    tstInfo = pkijs.TSTInfo.fromBER(content);
-  } catch (error) {
-    if (PdfSigningTimestampInvalidError.is(error)) {
-      throw error;
-    }
-    throw invalid("The timestamp token could not be read.");
+}): Promise<Result<ValidatedTimestamp, PdfSigningTimestampInvalidError>> => {
+  const read = readToken(token);
+  if (Result.isError(read)) {
+    return read;
   }
+  const { content, signedData, tstInfo } = read.value;
 
   const imprint = tstInfo.messageImprint;
   if (
@@ -233,40 +255,44 @@ export const validateTimestampToken = async ({
       Buffer.from(digest),
     )
   ) {
-    throw invalid(
-      "The timestamp is about something other than this signature.",
+    return Result.err(
+      invalid("The timestamp is about something other than this signature."),
     );
   }
   if (
     nonce !== undefined &&
     (tstInfo.nonce === undefined || !tstInfo.nonce.isEqual(nonce))
   ) {
-    throw invalid("The timestamp does not answer this request.");
+    return Result.err(invalid("The timestamp does not answer this request."));
   }
   if (
     Math.abs(tstInfo.genTime.getTime() - now.getTime()) > MAX_GEN_TIME_SKEW_MS
   ) {
-    throw invalid("The timestamp's time is not current.");
+    return Result.err(invalid("The timestamp's time is not current."));
   }
 
   const signer = await verifiedSigner(signedData, content);
   if (signer === null) {
-    throw invalid("The timestamp's signature does not verify.");
+    return Result.err(invalid("The timestamp's signature does not verify."));
   }
   if (!isTimeStampingKey(signer)) {
-    throw invalid("The timestamp was not signed by a timestamping key.");
+    return Result.err(
+      invalid("The timestamp was not signed by a timestamping key."),
+    );
   }
   if (!isValidAt(signer, tstInfo.genTime)) {
-    throw invalid(
-      "The timestamp's certificate was not valid at the time it claims.",
+    return Result.err(
+      invalid(
+        "The timestamp's certificate was not valid at the time it claims.",
+      ),
     );
   }
 
-  return {
+  return Result.ok({
     certificates: (signedData.certificates ?? [])
       .filter((entry) => entry instanceof pkijs.Certificate)
       .map(derOf),
     genTime: tstInfo.genTime,
     signerCertificate: derOf(signer),
-  };
+  });
 };

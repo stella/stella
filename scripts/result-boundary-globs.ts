@@ -172,6 +172,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // Handed to LibPDF as a signer and a timestamp authority, which report a
+  // failure back through `pdf.sign` only by rejecting.
+  "apps/api/src/lib/pdf-signing/libpdf-callbacks.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.
