@@ -183,7 +183,7 @@ test("facets use only manifest-owned fields", async () => {
   // Every group a read may reach, and never an enrolled group's index that
   // is not attested.
   expect(requests.at(0)?.url).toContain(
-    "/case_law_v5_aut*,case_law_v5_cs_sk*,case_law_v5_eu*,case_law_v5_hun*,case_law_v5_pol*/search",
+    "/case_law_v5_aut,case_law_v5_cs_sk,case_law_v5_eu,case_law_v5_pol/search",
   );
   expect(requests.at(0)?.url).not.toContain("usa");
   expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
@@ -333,7 +333,7 @@ test("scopes to one jurisdiction index, and to every reachable index without one
 
   expect(requests.at(0)?.url).toContain(`/${generation}_cs_sk/search`);
   expect(requests.at(1)?.url).toContain(
-    `/${["aut", "cs_sk", "eu", "hun", "pol"].map((group) => `${generation}_${group}*`).join(",")}/search`,
+    `/${["aut", "cs_sk", "eu", "pol"].map((group) => `${generation}_${group}`).join(",")}/search`,
   );
 });
 

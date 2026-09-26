@@ -36,6 +36,7 @@ import {
   caseLawIndexGroup,
   isCaseLawIndexGroup,
   type CaseLawIndexGroup,
+  type CorpusIndexGroupContractVersion,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -308,34 +309,31 @@ export const enrolledCorpusIndexGroupContracts = (
 };
 
 /**
- * What a continuation cursor must agree with the read about: every group the
- * read reaches under a contract of its own, by effective digest. Null when the
- * read reaches none, so a cursor over groups under their manifests' contracts
- * keeps the form it always had.
+ * What a continuation cursor must agree with the read about. A scoped read of
+ * a group under its manifest's contract binds nothing, so its cursor keeps the
+ * form it always had. Any other read binds the exact indexes it reaches and
+ * the effective digest of every enrolled one: a group joining or leaving a
+ * generation-wide read, or a replacement contract, changes the identity.
  */
 const readTargetIdentity = (
   manifest: CorpusIndexManifest,
-  route: CorpusIndexRoute,
+  indexIds: readonly string[],
   contracts: readonly CorpusIndexGroupContract[],
-): string | null => {
-  const enrolled = contracts.flatMap((contract) =>
-    contract.type === "base"
-      ? []
-      : [
-          {
-            indexId: contract.indexId,
-            effectiveDigest: contract.effectiveDigest,
-          },
-        ],
-  );
-  return enrolled.length === 0
-    ? null
-    : corpusIndexContractDigest({
-        generation: manifest.generation,
-        indexes: route.indexId,
-        enrolled,
-      }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH);
-};
+): string =>
+  corpusIndexContractDigest({
+    generation: manifest.generation,
+    indexes: indexIds,
+    enrolled: contracts.flatMap((contract) =>
+      contract.type === "base"
+        ? []
+        : [
+            {
+              indexId: contract.indexId,
+              effectiveDigest: contract.effectiveDigest,
+            },
+          ],
+    ),
+  }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH);
 
 export type CorpusIndexReadTarget = {
   route: CorpusIndexRoute;
@@ -349,10 +347,73 @@ export type CorpusIndexReadTargetResolution =
   | { type: "ready"; target: CorpusIndexReadTarget }
   | { type: "unready"; contract: EnrolledGroupContract };
 
+/**
+ * The groups under their manifest's contract a generation was created with.
+ * The manifest records them (`route.byJurisdiction`), and their indexes exist
+ * for as long as the generation is active.
+ */
+export const createdCaseLawBaseGroups = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+): ReadonlySet<string> =>
+  new Set(
+    Object.values(manifest.route.byJurisdiction).filter(
+      (indexGroup) =>
+        resolveCorpusIndexGroupContract({ manifest, indexGroup }).type ===
+        "base",
+    ),
+  );
+
+/**
+ * A group the registry records an index for, with the digest its index is
+ * attested against. Two kinds: a group under a contract of its own
+ * (`enrolledCorpusIndexGroupContracts`), attested against its effective
+ * digest before anything reads or writes it; and a group under its manifest's
+ * contract declared after the generation was created, which the manifest
+ * cannot say has an index, attested against the manifest digest once it does.
+ * The second kind is recorded only for generation-wide reads to reach it; its
+ * scoped reads and its writes never wait on the registry, as before.
+ */
+export type RegisteredCorpusIndexGroup = {
+  manifest: CorpusIndexManifest;
+  indexGroup: string;
+  indexId: string;
+  contractVersion: "base" | CorpusIndexGroupContractVersion;
+  effectiveDigest: string;
+};
+
+const registeredGroupOf = (
+  contract: CorpusIndexGroupContract,
+): RegisteredCorpusIndexGroup => ({
+  manifest: contract.manifest,
+  indexGroup: contract.indexGroup,
+  indexId: contract.indexId,
+  contractVersion: contract.type,
+  effectiveDigest:
+    contract.type === "base"
+      ? corpusIndexManifestDigest(contract.manifest)
+      : contract.effectiveDigest,
+});
+
+/** Every group of `manifest` the registry may record. */
+export const registeredCorpusIndexGroups = (
+  manifest: CorpusIndexManifest,
+): RegisteredCorpusIndexGroup[] => {
+  if (manifest.family !== "case_law") {
+    return [];
+  }
+  const created = createdCaseLawBaseGroups(manifest);
+  return CASE_LAW_INDEX_GROUP_NAMES.flatMap((indexGroup) => {
+    const contract = resolveCorpusIndexGroupContract({ manifest, indexGroup });
+    return contract.type === "base" && created.has(indexGroup)
+      ? []
+      : [registeredGroupOf(contract)];
+  });
+};
+
 type CorpusIndexReadTargetOptions = {
   manifest: CorpusIndexManifest;
   jurisdiction: string | undefined;
-  /** Enrolled groups whose current contract is attested. */
+  /** Registered groups whose current digest is attested. */
   attestedGroups: ReadonlySet<string>;
 };
 
@@ -360,15 +421,16 @@ type CorpusIndexReadTargetOptions = {
  * The physical indexes a read reaches.
  *
  * A scoped read reaches its group's index, and only once that group is
- * attested if it is enrolled. A generation-wide case-law read names an
- * explicit, bounded set instead of the generation wildcard, which would also
- * reach an enrolled group's index before it is attested: every group under
- * its manifest's contract, plus every attested enrolled group. A base group is
- * named by a pattern over its own id so a group declared after the generation
- * was created, and not provisioned yet, is skipped rather than failing the
- * read; no group name is a prefix of another, so the pattern reaches that
- * group alone. An attested group is named exactly: its index exists. Legislation
- * enrolls no group and keeps the wildcard.
+ * attested if it is enrolled. A generation-wide case-law read names an exact,
+ * bounded set of index ids instead of any pattern, since a pattern also
+ * reaches whatever else is named like it (a shadow or a stray index) without
+ * its contract being proven. The set is every declared group whose index is
+ * known to exist and may be read: the base groups the generation was created
+ * with, and every registered group once attested (`RegisteredCorpusIndexGroup`;
+ * attestation proves its index). A group without an index, such as one
+ * declared after an older generation was built and never provisioned there,
+ * is left out rather than failing the read. Legislation enrolls no group and
+ * keeps its wildcard.
  */
 export const corpusIndexReadTarget = ({
   manifest,
@@ -389,7 +451,10 @@ export const corpusIndexReadTarget = ({
       target: {
         route,
         contract,
-        cursorTarget: readTargetIdentity(manifest, route, [contract]),
+        cursorTarget:
+          contract.type === "base"
+            ? null
+            : readTargetIdentity(manifest, [route.indexId], [contract]),
       },
     };
   }
@@ -403,29 +468,24 @@ export const corpusIndexReadTarget = ({
       },
     };
   }
+  const created = createdCaseLawBaseGroups(manifest);
   const reached = CASE_LAW_INDEX_GROUP_NAMES.flatMap((indexGroup) => {
     const contract = resolveCorpusIndexGroupContract({ manifest, indexGroup });
-    if (contract.type === "base") {
-      return [{ contract, name: `${contract.indexId}*` }];
-    }
-    return attestedGroups.has(indexGroup)
-      ? [{ contract, name: contract.indexId }]
-      : [];
+    const readable =
+      (contract.type === "base" && created.has(indexGroup)) ||
+      attestedGroups.has(indexGroup);
+    return readable ? [contract] : [];
   });
-  const route = {
-    indexId: reached.map(({ name }) => name).join(","),
-    jurisdictionClause: undefined,
-  };
+  if (reached.length === 0) {
+    return panic(`No readable index in ${manifest.generation}`);
+  }
+  const indexIds = reached.map(({ indexId }) => indexId);
   return {
     type: "ready",
     target: {
-      route,
+      route: { indexId: indexIds.join(","), jurisdictionClause: undefined },
       contract: null,
-      cursorTarget: readTargetIdentity(
-        manifest,
-        route,
-        reached.map(({ contract }) => contract),
-      ),
+      cursorTarget: readTargetIdentity(manifest, indexIds, reached),
     },
   };
 };

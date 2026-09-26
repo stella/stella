@@ -1,14 +1,19 @@
 /**
- * The registry of index groups under a contract of their own, and the gate
- * every read and write of such a group passes.
+ * The registry of index groups whose index the manifest cannot vouch for, and
+ * the gate reads and writes of such a group pass.
  *
- * An operator binds a group to its effective contract before creating the
- * physical index, then attests the group once the index is proven to carry
- * that contract's configuration. Binding is compare-or-insert: a second bind
- * with the same contract converges, and one with another contract fails
- * rather than overwriting. Until the attestation a group is neither read nor
- * written, even under a generation that is already serving; groups under the
- * manifest's own contract never touch the registry.
+ * Two kinds of group are recorded (`RegisteredCorpusIndexGroup`). A group
+ * under a contract of its own is neither read nor written until attested,
+ * even under a generation that is already serving. A group under its
+ * manifest's contract declared after the generation was created is reached by
+ * generation-wide reads only once attested; its scoped reads and its writes
+ * never wait on the registry. Groups the generation was created with never
+ * touch it.
+ *
+ * An operator binds a group to its digest before creating the physical index,
+ * then attests the group once the index is proven to carry that
+ * configuration. Binding is compare-or-insert: a second bind with the same
+ * digest converges, and one with another fails rather than overwriting.
  */
 import { panic, TaggedError } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
@@ -29,10 +34,10 @@ import {
   corpusIndexGroupContractForJurisdiction,
   corpusIndexReadTarget,
   enrolledCorpusIndexGroupContracts,
-  resolveCorpusIndexGroupContract,
+  registeredCorpusIndexGroups,
   type CorpusIndexGroupContract,
   type CorpusIndexReadTarget,
-  type EnrolledGroupContract,
+  type RegisteredCorpusIndexGroup,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   corpusIndexManifestDigest,
@@ -47,25 +52,24 @@ type CorpusIndexGroupTarget = {
 
 type ReadTransaction = Pick<Transaction, "select">;
 
-const requireEnrolledContract = (
+const requireRegisteredGroup = (
   target: CorpusIndexGroupTarget,
-): EnrolledGroupContract => {
-  const contract = resolveCorpusIndexGroupContract(target);
-  return contract.type === "base"
-    ? panic(
-        `Corpus index group is under its manifest's contract: ${target.manifest.generation}/${target.indexGroup}`,
-      )
-    : contract;
-};
-
-const enrollmentKey = (contract: EnrolledGroupContract) =>
-  and(
-    eq(corpusIndexGroupEnrollments.family, contract.manifest.family),
-    eq(corpusIndexGroupEnrollments.generation, contract.manifest.generation),
-    eq(corpusIndexGroupEnrollments.indexGroup, contract.indexGroup),
+): RegisteredCorpusIndexGroup =>
+  registeredCorpusIndexGroups(target.manifest).find(
+    ({ indexGroup }) => indexGroup === target.indexGroup,
+  ) ??
+  panic(
+    `Corpus index group is not one the registry records: ${target.manifest.generation}/${target.indexGroup}`,
   );
 
-/** A bound group's recorded contract differs from the one declared now. */
+const enrollmentKey = ({ manifest, indexGroup }: CorpusIndexGroupTarget) =>
+  and(
+    eq(corpusIndexGroupEnrollments.family, manifest.family),
+    eq(corpusIndexGroupEnrollments.generation, manifest.generation),
+    eq(corpusIndexGroupEnrollments.indexGroup, indexGroup),
+  );
+
+/** A bound group's recorded digest differs from the one declared now. */
 export class CorpusIndexGroupContractMismatchError extends TaggedError(
   "CorpusIndexGroupContractMismatchError",
 )<{ message: string; indexId: string }> {}
@@ -74,16 +78,16 @@ export type CorpusIndexGroupEnrollment =
   typeof corpusIndexGroupEnrollments.$inferSelect;
 
 /**
- * Bind an enrolled group of a registered, active generation to its declared
- * contract. Replays converge on the same row; a row bound to another index id,
- * contract version or effective digest fails closed.
+ * Bind a registered group of a registered, active generation to its declared
+ * contract and digest. Replays converge on the same row; a row bound to
+ * another index id, contract or digest fails closed.
  */
 export const bindCorpusIndexGroupEnrollmentTx = async (
   tx: Transaction,
   target: CorpusIndexGroupTarget,
 ): Promise<CorpusIndexGroupEnrollment> => {
-  const contract = requireEnrolledContract(target);
-  const { family, generation } = contract.manifest;
+  const group = requireRegisteredGroup(target);
+  const { family, generation } = group.manifest;
   const generationRow = (
     await tx
       .select()
@@ -109,7 +113,7 @@ export const bindCorpusIndexGroupEnrollmentTx = async (
   if (
     corpusIndexManifestDigest(
       requireRegisteredCorpusIndexManifest(generationRow),
-    ) !== corpusIndexManifestDigest(contract.manifest)
+    ) !== corpusIndexManifestDigest(group.manifest)
   ) {
     return panic(
       `Corpus index group manifest mismatch: ${family}/${generation}`,
@@ -120,10 +124,10 @@ export const bindCorpusIndexGroupEnrollmentTx = async (
     .values({
       family,
       generation,
-      indexGroup: contract.indexGroup,
-      physicalIndexId: contract.indexId,
-      contractVersion: contract.type,
-      effectiveDigest: contract.effectiveDigest,
+      indexGroup: group.indexGroup,
+      physicalIndexId: group.indexId,
+      contractVersion: group.contractVersion,
+      effectiveDigest: group.effectiveDigest,
       provisioningStatus: "pending",
     })
     .onConflictDoNothing();
@@ -131,72 +135,28 @@ export const bindCorpusIndexGroupEnrollmentTx = async (
     await tx
       .select()
       .from(corpusIndexGroupEnrollments)
-      .where(enrollmentKey(contract))
+      .where(enrollmentKey(group))
       .limit(1)
       .for("share")
   ).at(0);
   if (row === undefined) {
-    return panic(`Corpus index group enrollment was lost: ${contract.indexId}`);
+    return panic(`Corpus index group enrollment was lost: ${group.indexId}`);
   }
   if (
-    row.physicalIndexId !== contract.indexId ||
-    row.contractVersion !== contract.type ||
-    row.effectiveDigest !== contract.effectiveDigest
+    row.physicalIndexId !== group.indexId ||
+    row.contractVersion !== group.contractVersion ||
+    row.effectiveDigest !== group.effectiveDigest
   ) {
-    const message = `Corpus index group is bound to another contract: ${contract.indexId}`;
+    const message = `Corpus index group is bound to another contract: ${group.indexId}`;
     return panic(
       message,
       new CorpusIndexGroupContractMismatchError({
         message,
-        indexId: contract.indexId,
+        indexId: group.indexId,
       }),
     );
   }
   return row;
-};
-
-/**
- * Record that the group's physical index carries the effective contract whose
- * digest the operator verified. The digest must be the one declared and bound
- * now; attesting again converges, attesting anything else fails.
- */
-export const attestCorpusIndexGroupEnrollmentTx = async (
-  tx: Transaction,
-  {
-    effectiveDigest,
-    ...target
-  }: CorpusIndexGroupTarget & { effectiveDigest: string },
-): Promise<void> => {
-  const contract = requireEnrolledContract(target);
-  if (effectiveDigest !== contract.effectiveDigest) {
-    return panic(
-      `Attested contract is not the declared one: ${contract.indexId}`,
-    );
-  }
-  const attested = await tx
-    .update(corpusIndexGroupEnrollments)
-    .set({
-      provisioningStatus: "attested",
-      attestedAt: sql`clock_timestamp()`,
-      updatedAt: sql`clock_timestamp()`,
-    })
-    .where(
-      and(
-        enrollmentKey(contract),
-        eq(corpusIndexGroupEnrollments.effectiveDigest, effectiveDigest),
-        eq(corpusIndexGroupEnrollments.provisioningStatus, "pending"),
-      ),
-    )
-    .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
-  if (attested.length === 1) {
-    return;
-  }
-  const readiness = await readCorpusIndexGroupReadinessTx(tx, contract);
-  if (readiness.type !== "attested") {
-    return panic(
-      `Corpus index group cannot be attested (${readiness.type === "unready" ? readiness.reason : readiness.type}): ${contract.indexId}`,
-    );
-  }
 };
 
 export type CorpusIndexGroupReadiness =
@@ -207,17 +167,10 @@ export type CorpusIndexGroupReadiness =
       reason: "unbound" | "pending" | "contract_mismatch";
     };
 
-/**
- * Whether a group may be read and written. Only the columns the public
- * reader may see are read, so request code and workers ask the same question.
- */
-export const readCorpusIndexGroupReadinessTx = async (
+const readRegisteredGroupReadinessTx = async (
   tx: ReadTransaction,
-  contract: CorpusIndexGroupContract,
-): Promise<CorpusIndexGroupReadiness> => {
-  if (contract.type === "base") {
-    return { type: "base" };
-  }
+  group: RegisteredCorpusIndexGroup,
+): Promise<Exclude<CorpusIndexGroupReadiness, { type: "base" }>> => {
   const row = (
     await tx
       .select({
@@ -225,19 +178,80 @@ export const readCorpusIndexGroupReadinessTx = async (
         provisioningStatus: corpusIndexGroupEnrollments.provisioningStatus,
       })
       .from(corpusIndexGroupEnrollments)
-      .where(enrollmentKey(contract))
+      .where(enrollmentKey(group))
       .limit(1)
   ).at(0);
   if (row === undefined) {
     return { type: "unready", reason: "unbound" };
   }
-  if (row.effectiveDigest !== contract.effectiveDigest) {
+  if (row.effectiveDigest !== group.effectiveDigest) {
     return { type: "unready", reason: "contract_mismatch" };
   }
   return row.provisioningStatus === "attested"
     ? { type: "attested" }
     : { type: "unready", reason: "pending" };
 };
+
+/**
+ * Record that the group's physical index carries the configuration whose
+ * digest the operator verified. The digest must be the one declared and bound
+ * now; attesting again converges, attesting anything else fails.
+ */
+export const attestCorpusIndexGroupEnrollmentTx = async (
+  tx: Transaction,
+  {
+    effectiveDigest,
+    ...target
+  }: CorpusIndexGroupTarget & { effectiveDigest: string },
+): Promise<void> => {
+  const group = requireRegisteredGroup(target);
+  if (effectiveDigest !== group.effectiveDigest) {
+    return panic(`Attested contract is not the declared one: ${group.indexId}`);
+  }
+  const attested = await tx
+    .update(corpusIndexGroupEnrollments)
+    .set({
+      provisioningStatus: "attested",
+      attestedAt: sql`clock_timestamp()`,
+      updatedAt: sql`clock_timestamp()`,
+    })
+    .where(
+      and(
+        enrollmentKey(group),
+        eq(corpusIndexGroupEnrollments.effectiveDigest, effectiveDigest),
+        eq(corpusIndexGroupEnrollments.provisioningStatus, "pending"),
+      ),
+    )
+    .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
+  if (attested.length === 1) {
+    return;
+  }
+  const readiness = await readRegisteredGroupReadinessTx(tx, group);
+  if (readiness.type !== "attested") {
+    return panic(
+      `Corpus index group cannot be attested (${readiness.reason}): ${group.indexId}`,
+    );
+  }
+};
+
+/**
+ * Whether a group under a contract of its own may be read and written; a
+ * group under its manifest's contract always may. Only the columns the public
+ * reader may see are read, so request code and workers ask the same question.
+ */
+export const readCorpusIndexGroupReadinessTx = async (
+  tx: ReadTransaction,
+  contract: CorpusIndexGroupContract,
+): Promise<CorpusIndexGroupReadiness> =>
+  contract.type === "base"
+    ? { type: "base" }
+    : await readRegisteredGroupReadinessTx(tx, {
+        manifest: contract.manifest,
+        indexGroup: contract.indexGroup,
+        indexId: contract.indexId,
+        contractVersion: contract.type,
+        effectiveDigest: contract.effectiveDigest,
+      });
 
 /** A read or write reached a group whose index is not attested. */
 export class CorpusIndexGroupNotReadyError extends TaggedError(
@@ -257,16 +271,16 @@ type AttestedGroupsOptions = {
 };
 
 /**
- * The enrolled groups of `manifest` whose current contract is attested. Empty,
- * with no read, for a manifest whose groups are all under its own contract.
+ * The registered groups of `manifest` whose current digest is attested.
+ * Empty, with no read, for a manifest the registry records no group of.
  */
 export const attestedCorpusIndexGroupsTx = async (
   tx: ReadTransaction,
   manifest: CorpusIndexManifest,
   { lock }: AttestedGroupsOptions = {},
 ): Promise<ReadonlySet<string>> => {
-  const contracts = enrolledCorpusIndexGroupContracts(manifest);
-  if (contracts.length === 0) {
+  const groups = registeredCorpusIndexGroups(manifest);
+  if (groups.length === 0) {
     return new Set();
   }
   const query = tx
@@ -281,13 +295,13 @@ export const attestedCorpusIndexGroupsTx = async (
         eq(corpusIndexGroupEnrollments.generation, manifest.generation),
         inArray(
           corpusIndexGroupEnrollments.indexGroup,
-          contracts.map(({ indexGroup }) => indexGroup),
+          groups.map(({ indexGroup }) => indexGroup),
         ),
         eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
       ),
     )
     .orderBy(corpusIndexGroupEnrollments.indexGroup)
-    .limit(contracts.length);
+    .limit(groups.length);
   const attested = lock === "share" ? await query.for("share") : await query;
   const digestOf = new Map(
     attested.map(({ indexGroup, effectiveDigest }) => [
@@ -296,7 +310,7 @@ export const attestedCorpusIndexGroupsTx = async (
     ]),
   );
   return new Set(
-    contracts
+    groups
       .filter(
         ({ indexGroup, effectiveDigest }) =>
           digestOf.get(indexGroup) === effectiveDigest,
@@ -307,7 +321,7 @@ export const attestedCorpusIndexGroupsTx = async (
 
 /**
  * The physical indexes of `manifest` that no append may reach yet: every
- * enrolled group without an attestation of its current contract.
+ * group under a contract of its own without an attestation of it.
  */
 export const unattestedCorpusIndexIdsTx = async (
   tx: ReadTransaction,
