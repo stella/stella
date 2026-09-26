@@ -67,33 +67,118 @@ describe.serial(RULE, () => {
     expect(await lint(REMOVED_ACCOUNT_GATE_DIALOG)).toEqual([4]);
   });
 
+  /** A module whose one component renders a dialog around `inside`, after
+   *  `before` in the same component body. */
+  const dialogAround = (inside: string, before = "") => [
+    DIALOG_IMPORT,
+    "export const Prompt = () => {",
+    before,
+    "  return (",
+    "    <Dialog open>",
+    `      <DialogPopup>${inside}</DialogPopup>`,
+    "    </Dialog>",
+    "  );",
+    "};",
+    "",
+  ];
+
   test.each([
     [
       "the shell's sign-in hand-off",
-      'import { usePublicSignInRequest } from "@/components/public-sign-in-request";',
+      dialogAround(
+        "<Button onClick={() => requestSignIn?.(href)}>Continue</Button>",
+        "  const requestSignIn = usePublicSignInRequest();",
+      ),
     ],
-    ["an account-entry message key", 'const label = t("auth.signIn");'],
+    [
+      "an account-entry message key",
+      dialogAround('<DialogTitle>{t("auth.signIn")}</DialogTitle>'),
+    ],
+    [
+      "an account-entry message key as a template literal",
+      dialogAround("<DialogTitle>{t(`auth.signIn`)}</DialogTitle>"),
+    ],
     [
       "a direct sign-up call",
-      "const submit = () => authClient.signUp.email(input);",
+      dialogAround(
+        "<Button onClick={submit}>Continue</Button>",
+        "  const submit = () => authClient.signUp.email(input);",
+      ),
     ],
     [
       "a link to the sign-in page",
-      'export const Go = () => <Link to="/auth">x</Link>;',
+      dialogAround('<Link to="/auth">Continue</Link>'),
     ],
-  ])("reports a modal that reaches %s", async (_signal, line) => {
-    expect(await lint([DIALOG_IMPORT, line, ""])).toEqual([1]);
+    // The same target spelled as an expression, otherwise identical.
+    [
+      "a link to the sign-in page in braces",
+      dialogAround('<Link to={"/auth"}>Continue</Link>'),
+    ],
+    [
+      "a link to the sign-in page as a template literal",
+      dialogAround("<Link to={`/auth`}>Continue</Link>"),
+    ],
+  ])("reports a modal that reaches %s", async (_signal, lines) => {
+    expect(
+      await lint([
+        'import { usePublicSignInRequest } from "@/components/public-sign-in-request";',
+        ...lines,
+      ]),
+    ).toEqual([2]);
   });
 
   test.each([
-    'import { AlertDialog } from "@stll/ui/alert-dialog";',
-    'import { Sheet } from "@stll/ui/sheet";',
-    'import { Dialog } from "@base-ui/react/dialog";',
+    'import { AlertDialog as Dialog, AlertDialogPopup as DialogPopup } from "@stll/ui/alert-dialog";',
+    'import { Sheet as Dialog, SheetPopup as DialogPopup } from "@stll/ui/sheet";',
+    'import { Root as Dialog, Popup as DialogPopup } from "@base-ui/react/dialog";',
   ])("treats every modal surface alike: %s", async (modalImport) => {
     expect(
       await lint([
         modalImport,
-        'const label = t("auth.createFreeAccount");',
+        "export const Prompt = () => (",
+        "  <Dialog open>",
+        '    <DialogPopup>{t("auth.createFreeAccount")}</DialogPopup>',
+        "  </Dialog>",
+        ");",
+        "",
+      ]),
+    ).toEqual([1]);
+  });
+
+  test("follows the modal into the same-module parts it renders", async () => {
+    expect(
+      await lint([
+        DIALOG_IMPORT,
+        'const SIGN_IN_KEY = "auth.signIn";',
+        "const Actions = () => <Button>{t(SIGN_IN_KEY)}</Button>;",
+        "export const Prompt = () => (",
+        "  <Dialog open>",
+        "    <DialogPopup>",
+        "      <Actions />",
+        "    </DialogPopup>",
+        "  </Dialog>",
+        ");",
+        "",
+      ]),
+    ).toEqual([1]);
+  });
+
+  test("follows the modal up to a parent that hands it the sign-in", async () => {
+    expect(
+      await lint([
+        DIALOG_IMPORT,
+        'import { usePublicSignInRequest } from "@/components/public-sign-in-request";',
+        "const Prompt = ({ onContinue }: { onContinue: () => void }) => (",
+        "  <Dialog open>",
+        "    <DialogPopup>",
+        "      <Button onClick={onContinue}>Continue</Button>",
+        "    </DialogPopup>",
+        "  </Dialog>",
+        ");",
+        "export const Gate = ({ href }: { href: string }) => {",
+        "  const requestSignIn = usePublicSignInRequest();",
+        "  return <Prompt onContinue={() => requestSignIn?.(href)} />;",
+        "};",
         "",
       ]),
     ).toEqual([1]);
@@ -104,30 +189,50 @@ describe.serial(RULE, () => {
     [
       [
         'import { usePublicSignInRequest } from "@/components/public-sign-in-request";',
-        'const label = t("auth.createFreeAccount");',
+        "export const Banner = () => {",
+        "  const requestSignIn = usePublicSignInRequest();",
+        '  return <Button onClick={() => requestSignIn?.("/")}>{t("auth.createFreeAccount")}</Button>;',
+        "};",
         "",
       ],
     ],
     // Settings dialogs read other `auth.*` keys.
-    [[DIALOG_IMPORT, 'const placeholder = t("auth.password");', ""]],
+    [dialogAround('<DialogTitle>{t("auth.password")}</DialogTitle>')],
     // A loader redirect is not a navigation the modal offers.
     [
       [
         DIALOG_IMPORT,
         'const guard = () => { throw redirect({ to: "/auth" }); };',
+        "export const Sheet = () => <Dialog open><DialogPopup /></Dialog>;",
         "",
       ],
     ],
     // A deeper auth route is not the sign-in page.
+    [dialogAround('<Link to="/auth/organization" />')],
+    [dialogAround('<Link to={"/auth/organization"} />')],
+    // A local object that happens to be named `signIn` elsewhere.
+    [dialogAround("<Button onClick={() => session.signIn()} />")],
+    // An ordinary dialog beside an unrelated sign-in link in the same module.
     [
       [
         DIALOG_IMPORT,
-        'export const Go = () => <Link to="/auth/organization" />;',
+        'export const SignInLink = () => <Link to="/auth">{t("auth.signIn")}</Link>;',
+        "export const FeedbackDialog = () => (",
+        "  <Dialog open>",
+        "    <DialogPopup>",
+        '      <DialogTitle>{t("feedback.title")}</DialogTitle>',
+        "    </DialogPopup>",
+        "  </Dialog>",
+        ");",
+        "export const Page = () => (",
+        "  <>",
+        "    <SignInLink />",
+        "    <FeedbackDialog />",
+        "  </>",
+        ");",
         "",
       ],
     ],
-    // A local object that happens to be named `signIn` elsewhere.
-    [[DIALOG_IMPORT, "const run = () => session.signIn();", ""]],
   ])("accepts modules that are not an account modal: %j", async (lines) => {
     expect(await lint(lines)).toEqual([]);
   });
