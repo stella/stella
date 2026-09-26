@@ -10,6 +10,7 @@
  * still embedded but not counted as trusted time. No anchors ship with stella: trust lists differ by jurisdiction.
  */
 
+import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 
 import { env } from "@/api/env";
@@ -38,9 +39,7 @@ export const configuredTimestampTrustAnchors = (
   if (value.includes("-----BEGIN CERTIFICATE-----")) {
     return parseTrustAnchors(value);
   }
-  try {
-    return parseTrustAnchors(readFileSync(value.trim(), "utf-8"));
-  } catch {
-    return [];
-  }
+  return Result.try(() =>
+    parseTrustAnchors(readFileSync(value.trim(), "utf-8")),
+  ).unwrapOr([]);
 };

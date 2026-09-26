@@ -10,6 +10,7 @@
 
 import { PDF, PdfDict } from "@libpdf/core";
 import type { PdfArray, PdfObject, PdfRef } from "@libpdf/core";
+import { Result } from "better-result";
 
 import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 
@@ -107,11 +108,9 @@ export const readDocMdpPermission = ({
 export const certificationForbidsChanges = async (
   bytes: Uint8Array,
 ): Promise<boolean> => {
-  let pdf: PDF;
-  try {
-    pdf = await PDF.load(bytes);
-  } catch {
-    return false;
-  }
-  return readDocMdpPermission({ pdf, source: bytes }) === 1;
+  const loaded = await Result.tryPromise(async () => await PDF.load(bytes));
+  return (
+    Result.isOk(loaded) &&
+    readDocMdpPermission({ pdf: loaded.value, source: bytes }) === 1
+  );
 };

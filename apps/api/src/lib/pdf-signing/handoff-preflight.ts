@@ -66,15 +66,11 @@ const stampRejected = (
     }),
   );
 
-const isTimeZone = (timeZone: string) => {
-  try {
-    // Throws a RangeError for anything that is not an IANA zone.
-    new Intl.DateTimeFormat("en", { timeZone }).format(0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Formatting throws a RangeError for anything that is not an IANA zone.
+const isTimeZone = (timeZone: string) =>
+  Result.isOk(
+    Result.try(() => new Intl.DateTimeFormat("en", { timeZone }).format(0)),
+  );
 
 const label = (value: string) =>
   sanitizeSigningText(value, STAMP_LABEL_MAX_LENGTH) ?? "";

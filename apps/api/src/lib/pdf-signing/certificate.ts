@@ -9,6 +9,7 @@
  * any signing work starts.
  */
 
+import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
@@ -93,14 +94,15 @@ export const inspectSigningCertificate = (
   der: Uint8Array,
   now: Date,
 ): SigningCertificateInspection => {
-  let certificate: pkijs.Certificate;
-  try {
-    // Copy onto a plain ArrayBuffer: the web tsconfig types `der` as
-    // `Uint8Array<ArrayBufferLike>`, which pkijs's `BufferSource` rejects.
-    certificate = pkijs.Certificate.fromBER(new Uint8Array(der));
-  } catch {
+  // Copy onto a plain ArrayBuffer: the web tsconfig types `der` as
+  // `Uint8Array<ArrayBufferLike>`, which pkijs's `BufferSource` rejects.
+  const parsed = Result.try(() =>
+    pkijs.Certificate.fromBER(new Uint8Array(der)),
+  );
+  if (Result.isError(parsed)) {
     return { status: "rejected", reason: "malformed" };
   }
+  const certificate = parsed.value;
 
   const keyType = keyTypeForAlgorithmOid(
     certificate.subjectPublicKeyInfo.algorithm.algorithmId,
