@@ -73,6 +73,29 @@ const PDF_SIGNING_KEY_TYPE_SQL_VALUES = sqlValues(PDF_SIGNING_KEY_TYPES);
 /** Base64 DER of each intermediate the desktop keychain resolved. */
 export type PdfSigningCertificateChain = string[];
 
+export type PdfSigningStampRotation = 0 | 90 | 180 | 270;
+
+/**
+ * A visible stamp: where it lies (page, rectangle in that page's user
+ * space, the page's /Rotate so the text reads upright) and what it says
+ * besides the signer and the time (labels in the signer's language, the
+ * signer's time zone, text direction).
+ */
+export type PdfSigningStamp = {
+  direction: "ltr" | "rtl";
+  labels: {
+    date: string;
+    location: string;
+    reason: string;
+    signedBy: string;
+  };
+  pageIndex: number;
+  /** [llx, lly, urx, ury] in the page's user space. */
+  rect: [number, number, number, number];
+  rotation: PdfSigningStampRotation;
+  timeZone: string;
+};
+
 export const pdfSigningSessions = p.pgTable(
   "pdf_signing_sessions",
   {
@@ -109,6 +132,8 @@ export const pdfSigningSessions = p.pgTable(
       "signer_certificate_chain",
     ).$type<PdfSigningCertificateChain | null>(),
     signingTime: timestamptz("signing_time"),
+    /** The visible stamp to sign into; null signs invisibly. */
+    stamp: jsonb("stamp").$type<PdfSigningStamp | null>(),
     digestHex: p.varchar("digest_hex", { length: 64 }),
     /**
      * The DER CMS signed attributes `digest_hex` hashes. Kept so the

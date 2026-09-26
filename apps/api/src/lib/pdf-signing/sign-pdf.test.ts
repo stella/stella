@@ -87,6 +87,7 @@ const buildInvocation = async () => {
       reserveTimestamp: true,
       signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
       signingTime: SIGNING_TIME,
+      stamp: null,
       timestampTrustAnchors: [] as Uint8Array[],
     },
     privateKey,
