@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
+import fc from "fast-check";
 import * as v from "valibot";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -10,7 +13,85 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
   defineValibotMcpTool,
+  deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import {
+  createWireSchemaValidator,
+  schemaComparisonArbitrary,
+} from "@/api/tests/helpers/wire-json-schema";
+
+const LITERALS = ["a", "b", "c", 1, 2, true] as const;
+const DISCRIMINATORS = ["x", "y", "z"] as const;
+
+const leafSourceArbitrary: fc.Arbitrary<v.GenericSchema> = fc.oneof(
+  fc.constant(v.string()),
+  fc
+    .tuple(fc.nat({ max: 3 }), fc.nat({ max: 4 }))
+    .map(([min, extra]) =>
+      v.pipe(v.string(), v.minLength(min), v.maxLength(min + extra)),
+    ),
+  fc.constant(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(9))),
+  fc.constant(v.boolean()),
+  fc
+    .uniqueArray(fc.constantFrom("a", "b", "c", "d"), {
+      minLength: 1,
+      maxLength: 3,
+    })
+    .map((options) => v.picklist(options)),
+  fc
+    .uniqueArray(fc.constantFrom(...LITERALS), { minLength: 1, maxLength: 4 })
+    .map((options) => v.union(options.map((option) => v.literal(option)))),
+);
+
+/**
+ * Output sources built from the shapes the registry uses: literals and
+ * picklists, nullable values, closed objects with optional keys, arrays, and
+ * discriminated unions whose branches the generator merges property-wise.
+ */
+const { node: nodeSourceArbitrary } = fc.letrec<{
+  node: v.GenericSchema;
+  object: v.GenericSchema;
+}>((tie) => ({
+  node: fc.oneof(
+    { depthSize: "small", withCrossShrink: true },
+    leafSourceArbitrary,
+    tie("node").map((schema) => v.nullable(schema)),
+    tie("node").map((schema) => v.array(schema)),
+    tie("object"),
+    fc
+      .array(tie("node"), { minLength: 2, maxLength: DISCRIMINATORS.length })
+      .map((values) =>
+        v.union(
+          values.map((value, index) =>
+            v.strictObject({
+              kind: v.literal(DISCRIMINATORS[index] ?? "x"),
+              value,
+            }),
+          ),
+        ),
+      ),
+  ),
+  object: fc
+    .dictionary(
+      fc.constantFrom("p", "q", "r"),
+      fc.tuple(tie("node"), fc.boolean()),
+      { maxKeys: 3 },
+    )
+    .map((entries) =>
+      v.strictObject(
+        Object.fromEntries(
+          Object.entries(entries).map(([name, [schema, optional]]) => [
+            name,
+            optional ? v.optional(schema) : schema,
+          ]),
+        ),
+      ),
+    ),
+}));
+
+const outputSourceArbitrary = nodeSourceArbitrary.map((value) =>
+  v.strictObject({ value }),
+);
 
 describe("Valibot-backed MCP tool definitions", () => {
   test("derives executable and wire output contracts from one schema", () => {
@@ -82,18 +163,107 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(contract.outputSchema).toEqual({
       type: "object",
       properties: {
-        type: {
-          anyOf: [
-            { enum: ["left"], type: "string" },
-            { enum: ["right"], type: "string" },
-          ],
-        },
+        type: { enum: ["left", "right"], type: "string" },
         left: { type: "string" },
         right: { type: "number" },
       },
       required: ["type"],
       additionalProperties: false,
     });
+  });
+
+  test("merges literal alternatives of one type and nothing else", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({
+        status: v.union([
+          v.literal("found"),
+          v.picklist(["pending", "found"]),
+          v.literal(1),
+          v.literal("missing"),
+          v.literal(2),
+        ]),
+        mixed: v.union([
+          v.literal("none"),
+          v.pipe(v.string(), v.minLength(3)),
+          v.literal("all"),
+        ]),
+      }),
+    );
+
+    expect(contract.outputSchema).toMatchObject({
+      properties: {
+        status: {
+          anyOf: [
+            { enum: ["found", "pending", "missing"], type: "string" },
+            { enum: [1, 2], type: "number" },
+          ],
+        },
+        mixed: {
+          anyOf: [
+            { enum: ["none", "all"], type: "string" },
+            { type: "string", minLength: 3 },
+          ],
+        },
+      },
+    });
+  });
+
+  test("writes a nullable value as a type array only where that is exact", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({
+        label: v.nullable(v.pipe(v.string(), v.maxLength(8))),
+        tags: v.nullable(v.array(v.string())),
+        color: v.nullable(v.picklist(["red", "green"])),
+        either: v.nullable(v.union([v.string(), v.number()])),
+      }),
+    );
+
+    expect(contract.outputSchema).toMatchObject({
+      properties: {
+        label: { type: ["string", "null"], maxLength: 8 },
+        tags: { type: ["array", "null"], items: { type: "string" } },
+        // `enum` would reject null beside a type array: the anyOf stays.
+        color: {
+          anyOf: [{ enum: ["red", "green"], type: "string" }, { type: "null" }],
+        },
+        either: {
+          anyOf: [
+            { anyOf: [{ type: "string" }, { type: "number" }] },
+            { type: "null" },
+          ],
+        },
+      },
+    });
+  });
+
+  test("compacted output schemas accept exactly what the uncompacted projection accepts", () => {
+    const validator = createWireSchemaValidator();
+    fc.assert(
+      fc.property(
+        outputSourceArbitrary.chain((source) => {
+          const compacted = defineMcpToolOutput(source).outputSchema;
+          const uncompacted = deriveUncompactedMcpOutputSchema(source);
+          return fc.tuple(
+            fc.constant({ compacted, uncompacted }),
+            fc.array(schemaComparisonArbitrary([uncompacted, compacted]), {
+              minLength: 25,
+              maxLength: 25,
+            }),
+          );
+        }),
+        ([{ compacted, uncompacted }, values]) => {
+          expect(JSON.stringify(compacted).length).toBeLessThanOrEqual(
+            JSON.stringify(uncompacted).length,
+          );
+          const acceptsCompacted = validator.compile(compacted);
+          const acceptsUncompacted = validator.compile(uncompacted);
+          for (const value of values) {
+            expect(acceptsCompacted(value)).toBe(acceptsUncompacted(value));
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 150 }),
+    );
   });
 
   test("keeps list-item fields visible while widening deeper object internals", () => {

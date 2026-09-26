@@ -49,12 +49,13 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import {
   findUndeclaredArguments,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  handleMcpToolCall,
+  handleMcpToolCall as dispatchMcpToolCall,
   isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } from "@/api/mcp/tools";
@@ -64,7 +65,38 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createWireSchemaValidator } from "@/api/tests/helpers/wire-json-schema";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const wireSchemaValidator = createWireSchemaValidator();
+
+/**
+ * Every call here runs the real dispatcher, which parses a result through the
+ * tool's executable output source. The schema a client is shown is a
+ * projection of that source, so each successful result is also read against
+ * the advertised output schema by an independent validator.
+ */
+const handleMcpToolCall = async (
+  call: Parameters<typeof dispatchMcpToolCall>[0],
+): ReturnType<typeof dispatchMcpToolCall> => {
+  const result = await dispatchMcpToolCall(call);
+  const outputSchema = resolveMcpToolOutputContract(
+    call.toolName,
+    call.mode,
+  )?.outputSchema;
+  if (
+    result.isError !== true &&
+    result.structuredContent !== undefined &&
+    outputSchema !== undefined
+  ) {
+    const validate = wireSchemaValidator.compile(outputSchema);
+    expect(
+      validate(result.structuredContent),
+      `${call.toolName} result against its advertised output schema: ${wireSchemaValidator.errorsText(validate.errors)}`,
+    ).toBe(true);
+  }
+  return result;
+};
 
 /**
  * Minimal DOCX with a Heading1 paragraph, a two-row table, and a body
