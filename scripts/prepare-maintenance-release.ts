@@ -28,6 +28,10 @@ const GITHUB_API_ROOT = "https://api.github.com/repos/stella/stella";
 const RELEASE_PAGE_SIZE = 100;
 const RELEASE_PAGE_LIMIT = 20;
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
+// A summary line that opens a block the landing renderer cannot show: indented
+// code, a heading, quote or table row, a list item, or a code fence.
+const BLOCK_MARKUP_LINE =
+  /^(?: {4}|\t|[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3}))/u;
 const MAINTENANCE_CHANGELOG =
   "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
 const CHANGESET_DIRECTORY = ".changeset";
@@ -175,10 +179,11 @@ export const maintenanceChangelog = (
       const paragraph = summary.split(/\r?\n[^\S\r\n]*\r?\n/u).at(0) ?? "";
       // The landing renderer supports flat bullets, not tables, code blocks
       // or nested lists. Block-first notes stay in the linked changelog.
-      const blockMarkup =
-        /^(?: {4}|\t)|^[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3})|\|/mu;
+      const hasBlockMarkup =
+        paragraph.includes("|") ||
+        paragraph.split(/\r?\n/u).some((line) => BLOCK_MARKUP_LINE.test(line));
       const excerpt =
-        paragraph && !blockMarkup.test(paragraph)
+        paragraph && !hasBlockMarkup
           ? paragraph.replaceAll(/\s+/gu, " ").trim()
           : "See package changelog for details.";
       return `- ${links.join(", ")}: ${excerpt}\n`;
