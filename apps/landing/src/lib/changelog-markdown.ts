@@ -66,7 +66,7 @@ export const parseChangelogMarkdown = (body: string) => {
     if (imageMatch && imageSrc) {
       closeParagraph();
       closeList();
-      blocks.push({ alt: imageMatch[1], src: imageSrc, type: "image" });
+      blocks.push({ alt: imageMatch[1] ?? "", src: imageSrc, type: "image" });
       continue;
     }
 
