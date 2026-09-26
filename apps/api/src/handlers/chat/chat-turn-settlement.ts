@@ -165,37 +165,55 @@ const unfinishedCall = (part: ToolCallPart): ChatPart => {
     : panic("An unfinished tool call must remain a valid chat part");
 };
 
+/** The stored result that closes a call with an error. */
+export const errorToolResult = (
+  toolCallId: string,
+  error: string,
+): Extract<ChatPart, { type: "tool-result" }> => ({
+  content: JSON.stringify({ error }),
+  error,
+  state: "error",
+  toolCallId,
+  type: "tool-result",
+});
+
 /** What the model sees for a call whose turn ended before a result was
- *  stored: a cancelled clarification the user typed past, or a client call
- *  cut off by a stop. */
+ *  stored: a cancelled clarification the user typed past, an approval never
+ *  answered, or a client call cut off by a stop. */
 export const UNRESOLVED_CALL_ERROR =
   "This call never returned a result: its turn ended before one was stored.";
 
 /**
- * The engine treats every tool call it is handed as pending until a tool
- * result answers it: a client call without one is asked of the client again,
- * before the model runs. An errored or input-complete call on a message the
- * run does not resume can no longer be answered, so it is closed here with the
- * error as its result. `settleOpenToolCallsForOutcome` already stores an
- * error result for approved calls; this covers the states it leaves alone.
+ * Which open states the engine reads as a call still waiting on the client
+ * once it is handed the call without a result: it then asks the client again
+ * instead of running the model. An approval decision is answered by the
+ * engine itself (a denial) or already closed by `settleOpenToolCallsForOutcome`
+ * (an approval without its result). A call whose input never completed is not
+ * handed to the engine at all.
+ */
+const ENGINE_ASKS_CLIENT_AGAIN = {
+  "approval-requested": true,
+  "approval-responded": false,
+  "awaiting-input": false,
+  complete: false,
+  error: true,
+  "input-complete": true,
+  "input-streaming": false,
+} as const satisfies Record<ToolCallState, boolean>;
+
+/**
+ * Close every call on a message the run does not resume that the engine
+ * would otherwise ask the client about again. Such a call belongs to a turn
+ * that already ended, so nobody can answer it any more.
  */
 const closeUnresolvedCallsForEngine = (
   parts: readonly ChatPart[],
 ): ChatPart[] =>
   parts.flatMap((part): ChatPart[] =>
     part.type === "tool-call" &&
-    (part.state === "error" || part.state === "input-complete") &&
+    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&
     !hasStoredResult(part, parts)
-      ? [
-          part,
-          {
-            content: JSON.stringify({ error: UNRESOLVED_CALL_ERROR }),
-            error: UNRESOLVED_CALL_ERROR,
-            state: "error",
-            toolCallId: part.id,
-            type: "tool-result",
-          },
-        ]
+      ? [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)]
       : [part],
   );
 
@@ -216,18 +234,11 @@ export const settleOpenToolCallsForOutcome = ({
   if (OUTCOME_POLICY[outcome] === "client-answerable") {
     return [...parts];
   }
-  const error = UNFINISHED_APPROVED_CALL_ERROR;
   return parts.flatMap((part): ChatPart[] =>
     part.type === "tool-call" && isApprovedWithoutResult(part, parts)
       ? [
           unfinishedCall(part),
-          {
-            content: JSON.stringify({ error }),
-            error,
-            state: "error",
-            toolCallId: part.id,
-            type: "tool-result",
-          },
+          errorToolResult(part.id, UNFINISHED_APPROVED_CALL_ERROR),
         ]
       : [part],
   );

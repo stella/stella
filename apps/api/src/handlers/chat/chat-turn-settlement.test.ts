@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  errorToolResult,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
   settleHistoryForRun,
@@ -14,7 +15,8 @@ import type {
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
 
-type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
+type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+type ToolCallState = ToolCallPart["state"];
 
 // An external MCP tool: its parts carry the approval an approval-gated call
 // records.
@@ -25,7 +27,7 @@ const call = (
     output?: unknown;
     state: ToolCallState;
   },
-): ChatPart => ({
+): ToolCallPart => ({
   arguments: '{"name":"NDA"}',
   id,
   input: { name: "NDA" },
@@ -126,13 +128,7 @@ describe("settling the calls a turn left open", () => {
       output: { error: UNFINISHED_APPROVED_CALL_ERROR },
       state: "error",
     }),
-    {
-      content: JSON.stringify({ error: UNFINISHED_APPROVED_CALL_ERROR }),
-      error: UNFINISHED_APPROVED_CALL_ERROR,
-      state: "error",
-      toolCallId: "approved",
-      type: "tool-result",
-    },
+    errorToolResult("approved", UNFINISHED_APPROVED_CALL_ERROR),
   ] satisfies ChatPart[];
 
   test.each(["cancelled", "completed", "failed", "interrupted"] as const)(
@@ -217,38 +213,44 @@ describe("the history a run hands the engine", () => {
   });
 
   // A superseded turn stores its client call as an error without a result,
-  // and a stopped turn may leave an input-complete call open. The engine would
-  // ask the client for either again instead of running the model.
-  const unresolvedResult = (toolCallId: string): ChatPart => ({
-    content: JSON.stringify({ error: UNRESOLVED_CALL_ERROR }),
-    error: UNRESOLVED_CALL_ERROR,
-    state: "error",
-    toolCallId,
-    type: "tool-result",
-  });
+  // and a stopped turn may leave an input-complete call or an approval request
+  // open. The engine would ask the client for any of them again instead of
+  // running the model. Every state is listed so a new one must choose.
+  const unresolvedResult = (toolCallId: string): ChatPart =>
+    errorToolResult(toolCallId, UNRESOLVED_CALL_ERROR);
+  const openCallByState = {
+    "approval-requested": pendingApproval,
+    "approval-responded": denied,
+    "awaiting-input": call("awaiting", { state: "awaiting-input" }),
+    complete: completed,
+    error: failed,
+    "input-complete": call("awaiting-client", { state: "input-complete" }),
+    "input-streaming": streaming,
+  } as const satisfies Record<ToolCallState, ToolCallPart>;
+  const closedForEngine = {
+    "approval-requested": true,
+    "approval-responded": false,
+    "awaiting-input": false,
+    complete: false,
+    error: true,
+    "input-complete": true,
+    "input-streaming": false,
+  } as const satisfies Record<ToolCallState, boolean>;
 
-  test("closes an errored call without a stored result on an earlier message", () => {
-    const history = settleHistoryForRun({
-      messages: [assistant("earlier", [failed])],
-      resumedMessageId: undefined,
+  for (const part of Object.values(openCallByState)) {
+    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+      const history = settleHistoryForRun({
+        messages: [assistant("earlier", [part])],
+        resumedMessageId: undefined,
+      });
+
+      expect(history[0]?.parts).toEqual(
+        closedForEngine[part.state]
+          ? [part, unresolvedResult(part.id)]
+          : [part],
+      );
     });
-
-    expect(history[0]?.parts).toEqual([failed, unresolvedResult("failed")]);
-  });
-
-  test("closes an input-complete call on an earlier message", () => {
-    const awaitingClient = call("awaiting-client", { state: "input-complete" });
-
-    const history = settleHistoryForRun({
-      messages: [assistant("earlier", [awaitingClient])],
-      resumedMessageId: "resumed",
-    });
-
-    expect(history[0]?.parts).toEqual([
-      awaitingClient,
-      unresolvedResult("awaiting-client"),
-    ]);
-  });
+  }
 
   test("leaves the resumed message's open client call and stored results alone", () => {
     const storedError = {

@@ -4366,7 +4366,9 @@ describe("anonymized outgoing chat stream", () => {
 // A user who types past an ask-user card supersedes the turn: the card's call
 // is stored as an error with no result. Handed to the engine as is, that call
 // still reads as pending, so the run pauses for the client again and answers
-// nothing. The settled history closes it and the model runs.
+// nothing. The settled history closes it and the model runs. The first test
+// is the canary for that engine behaviour: once an upgrade makes it fail, the
+// engine no longer needs `closeUnresolvedCallsForEngine`, and both go.
 describe("a superseded client-tool call in the engine's history", () => {
   const askUserTool = toolDefinition({
     name: "ask-user",
@@ -4414,7 +4416,7 @@ describe("a superseded client-tool call in the engine's history", () => {
       }),
     );
 
-  test("the raw history ends the run with an empty completion", async () => {
+  test("canary: the engine ends the raw history with an empty completion", async () => {
     const { finish } = await runOver(supersededHistory);
 
     expect(finish?.outcome).toEqual({
