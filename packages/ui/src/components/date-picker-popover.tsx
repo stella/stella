@@ -582,7 +582,7 @@ const DatePickerPopoverContent = ({
             className={cn(
               "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
               "rounded-md px-1.5 text-sm",
-              "hover:bg-muted transition-colors",
+              "hover:bg-muted",
               (() => {
                 if (isOverdue) {
                   return "text-destructive";
@@ -631,7 +631,7 @@ const DatePickerPopoverContent = ({
             </Button>
             <button
               className={cn(
-                "text-xs font-medium transition-colors",
+                "text-xs font-medium",
                 view !== "years" &&
                   "hover:bg-muted cursor-pointer rounded-md px-2 py-0.5",
                 view === "years" && "cursor-default",
@@ -707,7 +707,7 @@ const DatePickerPopoverContent = ({
                       aria-selected={isSelected || undefined}
                       className={cn(
                         "flex size-8 items-center justify-center",
-                        "rounded-full text-xs transition-colors",
+                        "rounded-full text-xs",
                         "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                         disabled
                           ? "text-foreground-disabled cursor-not-allowed"
@@ -862,7 +862,7 @@ const MonthGrid = ({
               <button
                 aria-selected={isSelected || undefined}
                 className={cn(
-                  "rounded-md px-2 py-1.5 text-xs transition-colors",
+                  "rounded-md px-2 py-1.5 text-xs",
                   "hover:bg-muted cursor-pointer",
                   "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                   isNow && !isSelected && "ring-foreground font-medium ring-1",
@@ -937,7 +937,7 @@ const YearGrid = ({
               <button
                 aria-selected={isSelected || undefined}
                 className={cn(
-                  "rounded-md px-2 py-1.5 text-xs transition-colors",
+                  "rounded-md px-2 py-1.5 text-xs",
                   "hover:bg-muted cursor-pointer",
                   "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                   isOutside && !isSelected && "text-foreground-subtle",

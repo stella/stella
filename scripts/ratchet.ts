@@ -286,11 +286,129 @@ const countAsCasts = (content: string): number => {
   return total;
 };
 
+// `transition` is also an ordinary word and a discriminator value
+// (`kind: "transition"`), so it counts only in a class-list position.
+const BARE_TRANSITION_UTILITY = "transition";
+
 const LEGACY_PAINT_TRANSITION_UTILITIES: ReadonlySet<string> = new Set([
-  "transition",
   "transition-colors",
   "transition-shadow",
 ]);
+
+const CLASS_LIST_HELPERS: ReadonlySet<string> = new Set([
+  "clsx",
+  "cn",
+  "cva",
+  "twMerge",
+]);
+
+// Bindings and attributes such as `className`, `contentClassName`,
+// `CARD_CLASS` or `SIZE_CLASS_NAMES`.
+const CLASS_LIST_NAME = /class(?:_?names?|es)?$/iu;
+
+type StringPosition = "class-list" | "other";
+
+const isClassListBinding = (name: ts.Node): boolean =>
+  (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
+  CLASS_LIST_NAME.test(name.text);
+
+const isClassListHelperCall = (
+  node: ts.Node,
+  helper?: string,
+): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  (helper === undefined
+    ? CLASS_LIST_HELPERS.has(node.expression.text)
+    : node.expression.text === helper);
+
+// Operators whose right operand is the expression's value
+// (`open && "transition"`); a comparison's operands are not.
+const VALUE_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+const CVA_VARIANTS_KEY = "variants";
+
+// `cva(base, { variants: { size: { sm: "…" } } })`: the option's value.
+const isCvaVariantValue = (option: ts.PropertyAssignment): boolean => {
+  const options = option.parent;
+  const variant = options.parent;
+  if (!ts.isPropertyAssignment(variant)) {
+    return false;
+  }
+  const variants = variant.parent.parent;
+  if (
+    !ts.isPropertyAssignment(variants) ||
+    !ts.isIdentifier(variants.name) ||
+    variants.name.text !== CVA_VARIANTS_KEY
+  ) {
+    return false;
+  }
+  const config = variants.parent;
+  return (
+    isClassListHelperCall(config.parent, "cva") &&
+    config.parent.arguments.some((argument) => argument === config)
+  );
+};
+
+// Whether `node` is a class-list value: a class-helper argument, a class
+// attribute or binding value, or a branch that flows into one unchanged
+// (`&&`/`||`/`??` right operand, ternary branch, array element, clsx object
+// key, cva variant value). A comparison operand, a switch case or an argument
+// to any other call is not.
+const classValuePosition = (node: ts.Node): StringPosition => {
+  const parent = node.parent;
+  if (ts.isSourceFile(parent)) {
+    return "other";
+  }
+  if (ts.isCallExpression(parent)) {
+    return isClassListHelperCall(parent) &&
+      parent.arguments.some((argument) => argument === node)
+      ? "class-list"
+      : "other";
+  }
+  if (ts.isJsxAttribute(parent)) {
+    return CLASS_LIST_NAME.test(parent.name.getText()) ? "class-list" : "other";
+  }
+  if (
+    ts.isJsxExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isSpreadElement(parent) ||
+    ts.isTemplateSpan(parent) ||
+    ts.isTemplateExpression(parent)
+  ) {
+    return classValuePosition(parent);
+  }
+  if (ts.isBinaryExpression(parent)) {
+    return parent.right === node &&
+      VALUE_OPERATORS.has(parent.operatorToken.kind)
+      ? classValuePosition(parent)
+      : "other";
+  }
+  if (ts.isConditionalExpression(parent)) {
+    return parent.condition === node ? "other" : classValuePosition(parent);
+  }
+  if (ts.isPropertyAssignment(parent)) {
+    if (parent.name === node) {
+      return classValuePosition(parent.parent);
+    }
+    return isClassListBinding(parent.name) || isCvaVariantValue(parent)
+      ? "class-list"
+      : "other";
+  }
+  if (ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent)) {
+    return parent.initializer === node && isClassListBinding(parent.name)
+      ? "class-list"
+      : "other";
+  }
+  return "other";
+};
 
 const PAINT_TRANSITION_PROPERTIES = [
   "background",
@@ -312,22 +430,63 @@ const PAINT_TRANSITION_PROPERTY_SET: ReadonlySet<string> = new Set(
   PAINT_TRANSITION_PROPERTIES,
 );
 
-const countLegacyPaintTransitionTokens = (value: string): number => {
+// The utility after its variants: the last `:` outside brackets and
+// parentheses, so `in-[…]:[transition:…]` keeps its arbitrary property.
+const stripVariants = (token: string): string => {
+  let depth = 0;
+  let boundary = -1;
+  for (let index = 0; index < token.length; index += 1) {
+    const char = token.charAt(index);
+    if (char === "[" || char === "(") {
+      depth += 1;
+    } else if (char === "]" || char === ")") {
+      depth -= 1;
+    } else if (char === ":" && depth === 0) {
+      boundary = index;
+    }
+  }
+  return token.slice(boundary + 1);
+};
+
+// `[transition:background-color_1s]` and `[transition-property:color]`:
+// Tailwind arbitrary properties, whose `_` stands for a space.
+const ARBITRARY_TRANSITION_PROPERTY = /^\[transition(?:-property)?:(.*)\]$/u;
+
+const isPaintArbitraryTransition = (utility: string): boolean => {
+  const value = ARBITRARY_TRANSITION_PROPERTY.exec(utility)?.at(1);
+  if (value === undefined) {
+    return false;
+  }
+  return value.split(",").some((segment) => {
+    const property = segment.split("_").at(0) ?? "";
+    return (
+      property.startsWith("--") || PAINT_TRANSITION_PROPERTY_SET.has(property)
+    );
+  });
+};
+
+const countLegacyPaintTransitionTokens = (
+  value: string,
+  position: StringPosition,
+): number => {
   let count = 0;
-  for (const token of value.split(/[\s"'`{}()]+/u)) {
-    const variantBoundary = token.lastIndexOf(":");
-    const bare = token.slice(variantBoundary + 1);
+  for (const token of value.split(/[\s"'`{}]+/u)) {
+    const bare = stripVariants(token);
     const withoutLeadingImportant = bare.startsWith("!") ? bare.slice(1) : bare;
     const utility = withoutLeadingImportant.endsWith("!")
       ? withoutLeadingImportant.slice(0, -1)
       : withoutLeadingImportant;
-    if (LEGACY_PAINT_TRANSITION_UTILITIES.has(utility)) {
-      count += 1;
+    if (utility === BARE_TRANSITION_UTILITY) {
+      count += position === "class-list" ? 1 : 0;
       continue;
     }
     if (
-      utility.startsWith("transition-[") &&
-      PAINT_TRANSITION_PROPERTIES.some((property) => utility.includes(property))
+      LEGACY_PAINT_TRANSITION_UTILITIES.has(utility) ||
+      isPaintArbitraryTransition(utility) ||
+      (utility.startsWith("transition-[") &&
+        PAINT_TRANSITION_PROPERTIES.some((property) =>
+          utility.includes(property),
+        ))
     ) {
       count += 1;
     }
@@ -355,14 +514,10 @@ const countLegacyPaintCssTransitions = (content: string): number => {
   return count;
 };
 
-// The UX convention permits compositable transform/opacity transitions only.
-// The layout-motion lint rule rejects new layout transitions outright; this
-// counter freezes the older paint-property Tailwind utilities per file so
-// their remaining call sites can only shrink.
-const countLegacyPaintTransitions: FileCounter = (content, file) => {
-  if (file.endsWith(".css")) {
-    return countLegacyPaintCssTransitions(content);
-  }
+const countLegacyPaintScriptTransitions = (
+  content: string,
+  file: string,
+): number => {
   const source = ts.createSourceFile(
     file,
     content,
@@ -379,12 +534,66 @@ const countLegacyPaintTransitions: FileCounter = (content, file) => {
       ts.isTemplateMiddle(node) ||
       ts.isTemplateTail(node)
     ) {
-      total += countLegacyPaintTransitionTokens(node.text);
+      // Walking ancestors is only needed when the bare utility can occur.
+      const position = node.text.includes(BARE_TRANSITION_UTILITY)
+        ? classValuePosition(node)
+        : "other";
+      total += countLegacyPaintTransitionTokens(node.text, position);
+    }
+    // clsx object syntax: `{ transition: open }` names the class by its key.
+    if (
+      ts.isIdentifier(node) &&
+      node.text === BARE_TRANSITION_UTILITY &&
+      ts.isPropertyAssignment(node.parent) &&
+      node.parent.name === node &&
+      classValuePosition(node) === "class-list"
+    ) {
+      total += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
   return total;
+};
+
+type PaintTransitionAllowance = { utility: string; reason: string };
+
+// Paint transitions kept on purpose, one reasoned entry per file. Each
+// occurrence of the allowed utility is subtracted from its file's count; an
+// entry whose utility no longer appears panics, so the record cannot go stale.
+const LEGACY_PAINT_TRANSITION_ALLOWANCES: ReadonlyMap<
+  string,
+  PaintTransitionAllowance
+> = new Map([
+  [
+    "packages/ui/src/components/input-control.ts",
+    {
+      utility: "[transition:background-color_5000000s_ease-in-out_0s]",
+      reason:
+        "holds off the browser's autofill background so the control's translucent surface and its has-autofill tint show through; an inset box-shadow fill can only paint an opaque colour",
+    },
+  ],
+]);
+
+// The UX convention permits compositable transform/opacity transitions only.
+// The layout-motion lint rule rejects new layout transitions outright; this
+// counter freezes the older paint-property Tailwind utilities per file so
+// their remaining call sites can only shrink.
+const countLegacyPaintTransitions: FileCounter = (content, file) => {
+  const total = file.endsWith(".css")
+    ? countLegacyPaintCssTransitions(content)
+    : countLegacyPaintScriptTransitions(content, file);
+  const allowance = LEGACY_PAINT_TRANSITION_ALLOWANCES.get(file);
+  if (allowance === undefined) {
+    return total;
+  }
+  const allowed = content.split(allowance.utility).length - 1;
+  if (allowed === 0) {
+    return panic(
+      `legacy-paint-transitions allowance for ${file} no longer matches ${allowance.utility}; remove the entry (it was kept because it ${allowance.reason})`,
+    );
+  }
+  return total - allowed;
 };
 
 const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
@@ -3339,7 +3548,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
 const EXPECTED_PACKAGE_AS_CASTS = 2;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
-  `const direct = "transition transition-colors";`,
+  `const directClass = "transition transition-colors";`,
+  `const helper = cn("rounded", active && "transition");`,
+  `const Row = () => <div className="px-2 transition" />;`,
+  `const Picker = () => <Popover contentClassName="px-2 transition" />;`,
+  `const toggle = cn(open ? "transition" : "");`,
+  `const keyed = clsx({ transition: on });`,
+  `const motion = cva("", { variants: { motion: { on: "transition", transition: "opacity-100" } }, defaultVariants: { motion: "transition" } });`,
+  `const property = "[transition:background-color_150ms]";`,
+  `const propertyList = "in-[.row]:[transition-property:color,opacity]";`,
+  // Not counted: a bare `transition` outside a class-list value is a word or
+  // a discriminator (a comparison operand, a case, another call's argument,
+  // a cva option name or default), not a utility.
+  `const step = { kind: "transition" };`,
+  `type Variables = { type: "transition"; reason?: string };`,
+  `const label = "transition";`,
+  `const Step = () => <Tour data-kind="transition" />;`,
+  `const gated = cn(state === "transition" && "opacity-0");`,
+  `const nested = cn(describe("transition"));`,
+  `const pick = (kind: string) => { switch (kind) { case "transition": return cn("rounded"); } };`,
+  `const compositableProperty = "[transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s]";`,
   `const variant = "hover:transition-shadow";`,
   `const mixed = "transition-[background-color,opacity]";`,
   `const arbitrary = \`transition-[transform,box-shadow]\`;`,
@@ -3349,7 +3577,7 @@ const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const control = "transition-none duration-150 transition-induced";`,
 ] as const;
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS = `${LEGACY_PAINT_TRANSITION_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_LEGACY_PAINT_TRANSITIONS = 6;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS = 14;
 
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
 .paint {

@@ -59,7 +59,7 @@ const TableFooter = ({
 const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
   <tr
     className={cn(
-      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b transition-colors in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
+      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
       className,
     )}
     data-slot="table-row"

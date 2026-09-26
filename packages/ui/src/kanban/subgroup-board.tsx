@@ -842,7 +842,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                   <button
                     aria-expanded={!collapsed}
                     className={cn(
-                      "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start text-sm font-medium transition-[background-color]",
+                      "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start text-sm font-medium",
                       KANBAN_CHROME_ROW_HEIGHT,
                       KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
                     )}
