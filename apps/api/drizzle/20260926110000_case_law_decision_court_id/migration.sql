@@ -9,10 +9,14 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- directory jurisdiction; it is the rendering of `decisionCourtIdByCountrySql`
 -- (apps/api/src/lib/case-law/decision-court-id-sql.ts), which
 -- `decision-court-identity.db.test.ts` compares against this file. It is added
--- NOT VALID: enforced on every later INSERT or UPDATE, so a directory
--- jurisdiction's row cannot be written or changed without its id, while a row
--- stored before the id existed is left alone until it is resolved from its
--- source and the constraint is validated.
+-- NOT VALID, which skips the scan of other countries' rows but not the
+-- enforcement on a later UPDATE of an old one, so no USA row may be left
+-- without an id: the block refuses to continue while any USA row lacks one.
+-- On a database that holds such a row the migration fails before it changes
+-- anything, and names how many. The operator's repair
+-- (src/scripts/repair-legacy-usa-court-ids.ts) runs first: it adds this same
+-- column, which the IF NOT EXISTS below then keeps, and gives an id to each
+-- USA row whose court is a trusted identity, never to any other.
 --
 -- Both ALTERs are metadata-only but take ACCESS EXCLUSIVE on a table the
 -- ingestion and projection workers write to without pause, so they run in the
@@ -27,6 +31,7 @@ DO $$
 DECLARE
   attempts integer := 0;
   holders text;
+  unresolved bigint;
 BEGIN
   LOOP
     attempts := attempts + 1;
@@ -42,6 +47,18 @@ BEGIN
     BEGIN
       ALTER TABLE "case_law_decisions"
         ADD COLUMN IF NOT EXISTS "court_id" varchar(64);
+      -- Checked under the lock the column took, so no writer adds a row in
+      -- between: the CHECK below is enforced on every later UPDATE, so a USA
+      -- row without an id would become unwritable. Refuse the migration
+      -- instead; the repair script gives trusted rows their id beforehand.
+      SELECT count(*) INTO unresolved
+        FROM "case_law_decisions"
+       WHERE "country" = 'USA'
+         AND "court_id" IS NULL;
+      IF unresolved > 0 THEN
+        RAISE EXCEPTION 'case_law_decisions holds % USA rows without a court id; run src/scripts/repair-legacy-usa-court-ids.ts --apply and resolve what it reports from source before applying this migration', unresolved
+          USING ERRCODE = 'check_violation';
+      END IF;
       IF NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_constraint
          WHERE conname = 'case_law_decisions_court_id_by_country'
