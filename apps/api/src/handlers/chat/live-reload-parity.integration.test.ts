@@ -13,6 +13,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-document-tool";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
@@ -99,7 +100,7 @@ const DRAFT_RESULT = {
   destination: "download",
   fileName: "Mutual NDA.docx",
   success: true,
-};
+} as const satisfies CreateDocumentToolOutput;
 
 /**
  * What a model call asks for: a server call the loop runs at once, an
