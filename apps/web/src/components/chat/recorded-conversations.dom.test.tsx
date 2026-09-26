@@ -716,7 +716,9 @@ const expectedScreen = (page: RecordedPage): ScreenState => {
       }
       if (part.name === "ask-user") {
         askUserIndex += 1;
-        if (part.output === undefined) {
+        // A question waits only while its input is complete and unanswered;
+        // a replaced turn stores it as an error.
+        if (part.state === "input-complete" && part.output === undefined) {
           state.actionable.push(`ask-user-${String(askUserIndex)}`);
         }
         continue;
@@ -1078,15 +1080,64 @@ const replay = async (scenario: string) => {
 const SCENARIOS = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(RECORDING_EXTENSION))
   .map((file) => file.slice(0, -RECORDING_EXTENSION.length));
+/** Conversations where a new message replaces a turn that still waits on a
+ *  card. */
+const SUPERSEDE_SCENARIOS = new Set([
+  "supersede-approval",
+  "supersede-approval-then-grant",
+  "supersede-ask-user",
+]);
 
 /** A replay renders the thread once per checked step, in a second tab. */
 const REPLAY_TIMEOUT_MS = 60_000;
 
 describe("a recorded conversation, rendered", () => {
-  test.each(SCENARIOS)(
+  test.each(SCENARIOS.filter((scenario) => !SUPERSEDE_SCENARIOS.has(scenario)))(
     "%s shows what the server stored, live and in a second tab",
     async (scenario) => {
       await replay(scenario);
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
+  test.failing.each([...SUPERSEDE_SCENARIOS])(
+    "%s shows what the server stored, live and in a second tab",
+    async (scenario) => {
+      await replay(scenario);
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
+  test.failing.each([...SUPERSEDE_SCENARIOS])(
+    "%s sends the new message and never answers the replaced card",
+    async (scenario) => {
+      const { recording, server } = await replay(scenario);
+      const sends = recording.steps.flatMap(({ action }) =>
+        action.type === "send" ? [action.messageId] : [],
+      );
+      const replaced = storedToolCalls(recording).find(
+        ({ id }) => id === "call-1",
+      );
+      // The fixture must reach the fault: a second message typed while
+      // call-1 waited.
+      expect(sends).toHaveLength(2);
+      expect(replaced).toBeDefined();
+      const posted = JSON.stringify(server.posted.map(({ body }) => body));
+      expect(posted).toContain(sends.at(1) ?? "");
+      const answered = server.posted.flatMap(({ body }) =>
+        resumedInterrupts(body),
+      );
+      expect(
+        answered.filter((id) => id === replaced?.approval?.id),
+        finding(RENDER_ORACLE.grantAnswersOnce, scenario),
+      ).toEqual([]);
+      // The replaced card shows what the server stored and offers nothing.
+      const shown = readScreen(document.body);
+      expect(shown.actionable).not.toContain("call-1");
+      expect(shown.actionable).not.toContain("ask-user-1");
+      if (replaced?.approval !== undefined) {
+        expect(shown.denied).toContain("call-1");
+      }
     },
     REPLAY_TIMEOUT_MS,
   );

@@ -13,7 +13,10 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import {
+  ASK_USER_TOOL_NAME,
+  CREATE_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -87,8 +90,23 @@ const ASK_USER_ARGUMENTS = JSON.stringify({
 const ASK_USER_ANSWER = {
   answers: [{ answer: "Buyer", question: "Which side?" }],
 };
+const DRAFT_ARGUMENTS = JSON.stringify({
+  name: "Mutual NDA",
+  source: "@title Mutual NDA\n\nThe parties keep each other's information.",
+});
+/** What the page posts once it has handed a drafted document to the user. */
+const DRAFT_RESULT = {
+  destination: "download",
+  fileName: "Mutual NDA.docx",
+  success: true,
+};
 
-type CallKind = "approval" | "ask-user" | "plain";
+/**
+ * What a model call asks for: a server call the loop runs at once, an
+ * approval card, an ask-user card, or a client call the page answers on its
+ * own, with no card (a drafted document).
+ */
+type CallKind = "approval" | "ask-user" | "client" | "plain";
 type StepShape = {
   calls: CallKind[];
   /** Read only on a step without calls: the answer hit the output limit. */
@@ -112,6 +130,9 @@ const isFailure = (shape: RunShape): shape is FailureShape =>
 type Decision = "approve" | "approve-all" | "deny";
 
 const isInteraction = (kind: CallKind): boolean => kind !== "plain";
+/** Whether the call waits on a card the user answers. */
+const hasCard = (kind: CallKind): boolean =>
+  kind === "approval" || kind === "ask-user";
 
 // --- The ledger ------------------------------------------------------------
 
@@ -167,6 +188,13 @@ const scriptedCall = (kind: CallKind, toolCallId: string) => {
         arguments: ASK_USER_ARGUMENTS,
         toolCallId,
         toolName: ASK_USER_TOOL_NAME,
+      };
+    }
+    case "client": {
+      return {
+        arguments: DRAFT_ARGUMENTS,
+        toolCallId,
+        toolName: CREATE_DOCUMENT_TOOL_NAME,
       };
     }
     case "plain": {
@@ -326,10 +354,13 @@ const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
   const onScreen = real.client.cards().map(({ toolCallId }) => toolCallId);
   const stored = offered.map(({ toolCallId }) => toolCallId);
   const expectedCalls = ledger.calls.map(({ id }) => id);
+  const expectedCards = ledger.pending.filter((id) =>
+    hasCard(kindOf(ledger, id)),
+  );
   const live = toolCallIdsOf(real.client.messages());
   const reloaded = toolCallIdsOf(reload);
   const pendingMatches =
-    JSON.stringify(onScreen) === JSON.stringify(ledger.pending) &&
+    JSON.stringify(onScreen) === JSON.stringify(expectedCards) &&
     sorted(stored) === sorted(ledger.pending);
   const callsMatch =
     JSON.stringify(live) === JSON.stringify(expectedCalls) &&
@@ -444,11 +475,15 @@ class SendUserMessage implements fc.AsyncCommand<Model, Real> {
   toString = () => `SendUserMessage(${JSON.stringify(this.runs)})`;
 }
 
-/** Records the user's answers to the open cards in the ledger. */
+/** Records the user's answers to the open cards in the ledger, and the
+ *  page's own results for its client calls. */
 const decideBatch = (ledger: Ledger, decisions: readonly Decision[]) =>
   ledger.pending.map((id, index) => {
     if (kindOf(ledger, id) === "ask-user") {
       return { decision: "answer" as const, id };
+    }
+    if (kindOf(ledger, id) === "client") {
+      return { decision: "run" as const, id };
     }
     const decision = ledger.approvesAll
       ? "approve"
@@ -468,9 +503,25 @@ const answerBatch = async (
   batch: ReturnType<typeof decideBatch>,
 ) => {
   for (const { decision, id } of batch) {
-    await (decision === "answer"
-      ? page.answer(id, ASK_USER_ANSWER)
-      : page.approve(id, decision !== "deny"));
+    switch (decision) {
+      case "answer": {
+        await page.answer(id, ASK_USER_ANSWER);
+        break;
+      }
+      case "run": {
+        await page.runClientTool(id, CREATE_DOCUMENT_TOOL_NAME, DRAFT_RESULT);
+        break;
+      }
+      case "approve":
+      case "approve-all":
+      case "deny": {
+        await page.approve(id, decision !== "deny");
+        break;
+      }
+      default: {
+        decision satisfies never;
+      }
+    }
   }
 };
 
@@ -508,6 +559,36 @@ class ResolveCards implements fc.AsyncCommand<Model, Real> {
   };
   toString = () =>
     `ResolveCards(${JSON.stringify(this.decisions)}, ${JSON.stringify(this.continuations)})`;
+}
+
+/**
+ * The user types a new message while cards still wait. The message supersedes
+ * the awaited interactions: none of them is offered any more, none of their
+ * effects ever runs, and the new turn proceeds as any other. A client call
+ * still waiting keeps the page busy, so the composer queues instead.
+ */
+class SupersedeCards implements fc.AsyncCommand<Model, Real> {
+  readonly runs: readonly RunShape[];
+  readonly text: string;
+  constructor(runs: readonly RunShape[], text: string) {
+    this.runs = runs;
+    this.text = text;
+  }
+  check = (model: Readonly<Model>) =>
+    model.pendingKinds.length > 0 && !model.pendingKinds.includes("client");
+  run = async (model: Model, real: Real) => {
+    const failuresBefore = real.ledger.failures;
+    real.ledger.pending = [];
+    real.ledger.turn += 1;
+    real.harness.script(
+      real.threadId,
+      ...planRequests(real.ledger, this.runs, real.nextId),
+    );
+    await real.client.sendUserMessage(Bun.randomUUIDv7(), this.text);
+    await approveCardsOnScreen(real);
+    await verify(model, real, { failuresBefore });
+  };
+  toString = () => `SupersedeCards(${JSON.stringify(this.runs)})`;
 }
 
 class ReloadPage implements fc.AsyncCommand<Model, Real> {
@@ -629,14 +710,15 @@ class RaceApprovals implements fc.AsyncCommand<Model, Real> {
 
 // --- Generators -----------------------------------------------------------
 
-/** A step's calls: server calls the loop runs at once, or calls that wait on
- *  the user. */
+/** A step's calls: server calls the loop runs at once, calls that wait on
+ *  the user, or client calls the page answers on its own. */
 const callsArb = fc.oneof(
   fc.array(fc.constant<CallKind>("plain"), { maxLength: 4 }),
   fc.array(fc.constantFrom<CallKind>("approval", "ask-user"), {
     maxLength: 4,
     minLength: 1,
   }),
+  fc.array(fc.constant<CallKind>("client"), { maxLength: 2, minLength: 1 }),
 );
 const stepArb: fc.Arbitrary<StepShape> = fc.record({
   calls: callsArb,
@@ -685,6 +767,10 @@ const conversationCommands = [
     ),
   fc.constant(new RaceApprovals()),
 ];
+
+const supersedeCommand = fc
+  .tuple(runsArb, fc.constantFrom("Use the buyer's form", "Start over"))
+  .map(([runs, text]) => new SupersedeCards(runs, text));
 
 const openConversation = async () => {
   const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
@@ -1118,6 +1204,77 @@ describe("a conversation's live view", () => {
     async () => {
       await runConversations(
         fc.commands(conversationCommands, { maxCommands: 6 }),
+      );
+    },
+    propertyTestTimeout(240_000),
+  );
+
+  const replacedBatches: [string, CallKind[]][] = [
+    ["an approval", ["approval"]],
+    ["an ask-user card", ["ask-user"]],
+    ["a mixed batch", ["approval", "ask-user", "approval"]],
+  ];
+
+  test.failing.each(replacedBatches)(
+    "lets a new message replace %s that still waits",
+    async (_label, calls) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage([[{ ...STEP, calls }]], "Draft the NDA").run(
+          model,
+          real,
+        );
+        // The fixture must reach the fault: every call still waits.
+        expect(real.ledger.pending).toHaveLength(calls.length);
+
+        await new SupersedeCards([TEXT_ANSWER], "Use the buyer's form").run(
+          model,
+          real,
+        );
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "resumes the new turn's own calls after a message replaced waiting ones",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["ask-user", "approval"] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        await new SupersedeCards(
+          [[{ ...STEP, calls: ["approval", "client"] }]],
+          "Use the buyer's form",
+        ).run(model, real);
+        // The fixture must reach the fault: the replacing turn waits on its
+        // own approval and client call.
+        expect(model.pendingKinds).toEqual(["approval", "client"]);
+
+        await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
+        expect(real.ledger.effects).toHaveLength(1);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "matches a reload and the ledger when a new message replaces waiting cards",
+    async () => {
+      await runConversations(
+        fc.commands([...conversationCommands, supersedeCommand], {
+          maxCommands: 6,
+        }),
       );
     },
     propertyTestTimeout(240_000),
