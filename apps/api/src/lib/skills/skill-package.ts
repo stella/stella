@@ -1786,13 +1786,14 @@ const discoverGithubSkillPackages = async (
       if (sourceBytes.isErr() || sourceBytes.value === null) {
         return sourceBytes.map(() => null);
       }
+      const bytes = sourceBytes.value;
       // A skill that does not parse, for any reason, is counted as invalid
       // rather than failing the whole discovery.
       const discovered = Result.try(() =>
         toDiscoveredGithubSkill({
           commitSha,
           skillPath,
-          sourceBytes: sourceBytes.value,
+          sourceBytes: bytes,
           target,
         }),
       );
