@@ -176,7 +176,7 @@ export const maintenanceChangelog = (
       // The landing renderer supports flat bullets, not tables, code blocks
       // or nested lists. Block-first notes stay in the linked changelog.
       const blockMarkup =
-        /^(?: {4}|\t)|^\s*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3})|\|/mu;
+        /^(?: {4}|\t)|^[^\S\r\n]*(?:[#>|]|[-*+]\s|\d+[.)]\s|`{3}|~{3})|\|/mu;
       const excerpt =
         paragraph && !blockMarkup.test(paragraph)
           ? paragraph.replaceAll(/\s+/gu, " ").trim()
