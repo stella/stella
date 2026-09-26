@@ -65,7 +65,7 @@ const certificationLevel = (pdf: PDF): number | undefined => {
 };
 
 describe("signed PDF detection", () => {
-  test.each(SIGNED_SHAPES)("detects $name", async (shape) => {
+  test.each([...SIGNED_SHAPES])("detects $name", async (shape) => {
     const source = await createSignedPdf(shape);
     const integrity = await readSignatureIntegrity(source);
     expect(integrity).toHaveLength(shape.signatures ?? 1);

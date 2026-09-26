@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { captureSigningDigest } from "@/api/lib/files/pdf-signing/sign-pdf";
 import { verifyDesktopSignature } from "@/api/lib/files/pdf-signing/verify-signature";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import { settled } from "@/api/tests/helpers/settled";
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
@@ -24,19 +25,21 @@ const prepare = async (keyType: "RSA" | "EC") => {
   });
   const created = PDF.create();
   created.addPage({ width: 300, height: 400 });
-  const { signedAttributes } = await captureSigningDigest({
-    basePdf: await created.save(),
-    certificate: der,
-    certificateChain: [],
-    keyType,
-    location: null,
-    placeholderSize: 16_384,
-    reason: null,
-    reserveTimestamp: false,
-    signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
-    signingTime: SIGNING_TIME,
-    stamp: null,
-  });
+  const { signedAttributes } = await settled(
+    captureSigningDigest({
+      basePdf: await created.save(),
+      certificate: der,
+      certificateChain: [],
+      keyType,
+      location: null,
+      placeholderSize: 16_384,
+      reason: null,
+      reserveTimestamp: false,
+      signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
+      signingTime: SIGNING_TIME,
+      stamp: null,
+    }),
+  );
   return { der, key: await nodeKey(privateKey), signedAttributes };
 };
 

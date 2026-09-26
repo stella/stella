@@ -170,7 +170,7 @@ export const createTestTimestampAuthority = async ({
       serial += 1;
       return await issueTestTimestampToken({
         digest,
-        misbehaviour,
+        ...(misbehaviour !== undefined && { misbehaviour }),
         serial,
         signer: tsa,
       });
@@ -189,7 +189,10 @@ export const createTestTimestampResponder = async ({
   const requests: { contentType?: string; url: string }[] = [];
   let serial = 0;
   const fetcher: PkiFetcher = async ({ body, contentType, url }) => {
-    requests.push({ contentType, url });
+    requests.push({
+      ...(contentType !== undefined && { contentType }),
+      url,
+    });
     if (body === undefined) {
       return null;
     }
@@ -199,8 +202,8 @@ export const createTestTimestampResponder = async ({
       digest: new Uint8Array(
         request.messageImprint.hashedMessage.valueBlock.valueHexView,
       ),
-      misbehaviour,
-      nonce: request.nonce,
+      ...(misbehaviour !== undefined && { misbehaviour }),
+      ...(request.nonce !== undefined && { nonce: request.nonce }),
       serial,
       signer,
     });

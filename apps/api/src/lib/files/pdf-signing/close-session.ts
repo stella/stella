@@ -14,7 +14,7 @@ type ClosePdfSigningSessionOptions = {
    * The finalize attempt closing it, if any. Fences the close: an attempt a
    * later one has superseded cannot end the exchange under it.
    */
-  attempt?: number;
+  attempt?: number | undefined;
   closeReason: PdfSigningSessionCloseReason;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;

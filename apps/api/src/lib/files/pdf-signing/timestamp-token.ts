@@ -115,7 +115,10 @@ const signerCertificateOf = async (
   for (const certificate of certificates) {
     const hash = await crypto.subtle.digest(
       "SHA-1",
-      certificate.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHexView,
+      new Uint8Array(
+        certificate.subjectPublicKeyInfo.subjectPublicKey.valueBlock
+          .valueHexView,
+      ),
     );
     if (Buffer.from(hash).equals(keyId)) {
       return certificate;
@@ -158,7 +161,7 @@ const verifiedSigner = async (
         ({ type }) => type === MESSAGE_DIGEST_OID,
       )?.values[0];
       const contentHash = Buffer.from(
-        await crypto.subtle.digest(hashName, content),
+        await crypto.subtle.digest(hashName, new Uint8Array(content)),
       );
       if (
         !(messageDigest instanceof asn1js.OctetString) ||
