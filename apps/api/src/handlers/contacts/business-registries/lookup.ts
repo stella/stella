@@ -21,6 +21,14 @@ import type {
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+// A tuple of literals keeps each option in the route types, where a mapped
+// array widens to `never`; `satisfies` fails when the contract list changes.
+const [standardDetail, fullDetail] =
+  BUSINESS_REGISTRY_LOOKUP_DETAILS satisfies readonly [
+    BusinessRegistryLookupDetail,
+    BusinessRegistryLookupDetail,
+  ];
+
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
     description: "Business register to query",
@@ -32,10 +40,9 @@ const querySchema = t.Object({
       "Canonical identifier (e.g. company number, VAT number) or company name",
   }),
   detail: t.Optional(
-    t.Union(
-      BUSINESS_REGISTRY_LOOKUP_DETAILS.map((detail) => t.Literal(detail)),
-      { description: LOOKUP_DETAIL_DESCRIPTION },
-    ),
+    t.Union([t.Literal(standardDetail), t.Literal(fullDetail)], {
+      description: LOOKUP_DETAIL_DESCRIPTION,
+    }),
   ),
 });
 

@@ -3928,7 +3928,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T6d90fb7f32;
           query: {
-            detail?: never;
+            detail?: "standard" | "full";
             registry: Tb3a8582d6b;
             q: string;
           };
