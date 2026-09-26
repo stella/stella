@@ -24,6 +24,7 @@ import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   CORRESPONDENCE_STATE_LABEL_KEYS,
   correspondenceInfiniteOptions,
+  uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   useRevokeCorrespondenceAddress,
@@ -46,7 +47,9 @@ function CorrespondencePage() {
     shouldThrow: false,
   });
 
-  if (detailMatch) return <Outlet />;
+  if (detailMatch) {
+    return <Outlet />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -76,7 +79,9 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const address = data?.address ?? null;
 
   const copyAddress = async () => {
-    if (!address) return;
+    if (!address) {
+      return;
+    }
     const copied = await copyToClipboard(address);
     if (copied) {
       stellaToast.add({ title: t("common.copied"), type: "success" });
@@ -85,37 +90,42 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     stellaToast.add({ title: t("common.error"), type: "error" });
   };
 
+  let addressStatus = (
+    <p className="text-muted-foreground mt-1 text-sm">
+      {t("correspondence.noAddress")}
+    </p>
+  );
+  if (address) {
+    addressStatus = (
+      <p className="mt-1 font-mono text-sm break-all" dir="ltr">
+        <bdi>{address}</bdi>
+      </p>
+    );
+  } else if (isPending) {
+    addressStatus = <Skeleton className="mt-2 h-4 w-48" />;
+  } else if (isError) {
+    addressStatus = (
+      <div className="mt-1 flex items-center gap-2">
+        <p className="text-destructive text-sm">{t("common.error")}</p>
+        <Button
+          className="min-h-11"
+          onClick={() => detached(refetch(), "correspondence.retry-address")}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
       <div className="min-w-0">
         <h2 className="text-sm font-medium">
           {t("correspondence.addressTitle")}
         </h2>
-        {address ? (
-          <p className="mt-1 break-all font-mono text-sm" dir="ltr">
-            <bdi>{address}</bdi>
-          </p>
-        ) : isPending ? (
-          <Skeleton className="mt-2 h-4 w-48" />
-        ) : isError ? (
-          <div className="mt-1 flex items-center gap-2">
-            <p className="text-destructive text-sm">{t("common.error")}</p>
-            <Button
-              className="min-h-11"
-              onClick={() =>
-                detached(refetch(), "correspondence.retry-address")
-              }
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        ) : (
-          <p className="text-muted-foreground mt-1 text-sm">
-            {t("correspondence.noAddress")}
-          </p>
-        )}
+        {addressStatus}
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
@@ -195,7 +205,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="truncate text-sm font-medium">
                   <bdi dir="auto">
-                    {item.subject || t("correspondence.noSubject")}
+                    {item.subject || t("emailViewer.noSubject")}
                   </bdi>
                 </span>
                 <span className="text-muted-foreground text-xs">
@@ -203,16 +213,16 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                 </span>
               </span>
               <span className="text-muted-foreground mt-1 block truncate text-xs">
-                {t("correspondence.fromLabel")}:{" "}
+                {t("emailViewer.from")}:{" "}
                 <bdi dir="auto">{item.from.name ?? item.from.address}</bdi>
               </span>
               <span className="text-muted-foreground mt-1 block truncate text-xs">
-                {t("correspondence.toLabel")}:{" "}
-                {item.to.map((recipient, index) => (
+                {t("emailViewer.to")}:{" "}
+                {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
                   <bdi
                     className="me-2"
                     dir="auto"
-                    key={`${recipient.address}-${index}`}
+                    key={recipient.address.toLowerCase()}
                   >
                     {recipient.name ?? recipient.address}
                   </bdi>
@@ -220,7 +230,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
               </span>
             </span>
             <span className="text-muted-foreground shrink-0 text-xs">
-              DMARC:{" "}
+              {t("correspondence.dmarcLabel")}:{" "}
               {t(CORRESPONDENCE_AUTH_LABEL_KEYS[item.authentication.dmarc])}
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">

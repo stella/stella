@@ -48,18 +48,20 @@ const createAllowedSender = createSafeRootHandler(
 
     const created = yield* Result.await(
       safeDb(async (tx) => {
-        if (workspaceIds.length > 0) {
-          const matchingWorkspaces = await tx
-            .select({ id: workspaces.id })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.organizationId, session.activeOrganizationId),
-                inArray(workspaces.id, workspaceIds),
-              ),
-            );
-          if (matchingWorkspaces.length !== workspaceIds.length)
-            return { kind: "invalid_matters" as const };
+        const matchingWorkspaces =
+          workspaceIds.length === 0
+            ? []
+            : await tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(
+                  and(
+                    eq(workspaces.organizationId, session.activeOrganizationId),
+                    inArray(workspaces.id, workspaceIds),
+                  ),
+                );
+        if (matchingWorkspaces.length !== workspaceIds.length) {
+          return { kind: "invalid_matters" as const };
         }
 
         const insertedRows = await tx
@@ -74,13 +76,15 @@ const createAllowedSender = createSafeRootHandler(
           .onConflictDoNothing()
           .returning({ id: correspondenceAllowedSenders.id });
         const inserted = insertedRows.at(0);
-        if (!inserted) return { kind: "duplicate" as const };
+        if (!inserted) {
+          return { kind: "duplicate" as const };
+        }
 
-        if (workspaceIds.length > 0) {
+        if (matchingWorkspaces.length > 0) {
           await tx.insert(correspondenceAllowedSenderMatters).values(
-            workspaceIds.map((workspaceId) => ({
+            matchingWorkspaces.map(({ id }) => ({
               organizationId: session.activeOrganizationId,
-              workspaceId,
+              workspaceId: id,
               allowedSenderId: inserted.id,
             })),
           );
@@ -100,7 +104,7 @@ const createAllowedSender = createSafeRootHandler(
       }),
     );
 
-    if (created.kind === "invalid_matters")
+    if (created.kind === "invalid_matters") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -108,13 +112,15 @@ const createAllowedSender = createSafeRootHandler(
             "One or more matters do not belong to the active organization",
         }),
       );
-    if (created.kind === "duplicate")
+    }
+    if (created.kind === "duplicate") {
       return Result.err(
         new HandlerError({
           status: 409,
           message: "This address is already approved",
         }),
       );
+    }
     return Result.ok({
       id: created.id,
       address,

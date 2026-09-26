@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type {
+  CorrespondenceAddress,
   CorrespondenceAuthResult,
   CorrespondenceHandlingState,
 } from "@stll/api-contract/correspondence";
@@ -14,25 +15,39 @@ import { correspondenceQueryRoot } from "@/lib/resource-query-roots.logic";
 const getInitialCorrespondencePageParam = (): string | undefined => undefined;
 
 export const CORRESPONDENCE_STATE_LABEL_KEYS = {
-  new: "correspondence.states.new",
+  new: "inbox.view.new",
   handled: "correspondence.states.handled",
 } as const satisfies Record<CorrespondenceHandlingState, TranslationKey>;
 
 export const CORRESPONDENCE_AUTH_LABEL_KEYS = {
   pass: "correspondence.authResults.pass",
   fail: "correspondence.authResults.fail",
-  none: "correspondence.authResults.none",
+  none: "common.none",
   unknown: "correspondence.authResults.unknown",
 } as const satisfies Record<CorrespondenceAuthResult, TranslationKey>;
 
 export const correspondenceKeys = {
   all: correspondenceQueryRoot,
   infinite: (workspaceId: string, limit: number) =>
-    [...correspondenceQueryRoot(workspaceId), "infinite", { limit }] as const,
+    [...correspondenceKeys.all(workspaceId), "infinite", { limit }] as const,
   byId: (workspaceId: string, id: string) =>
-    [...correspondenceQueryRoot(workspaceId), id] as const,
+    [...correspondenceKeys.all(workspaceId), id] as const,
   address: (workspaceId: string) =>
-    [...correspondenceQueryRoot(workspaceId), "address"] as const,
+    [...correspondenceKeys.all(workspaceId), "address"] as const,
+};
+
+export const uniqueCorrespondenceAddresses = (
+  addresses: CorrespondenceAddress[],
+) => {
+  const seen = new Set<string>();
+  return addresses.filter(({ address }) => {
+    const key = address.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 
 export const correspondenceInfiniteOptions = (

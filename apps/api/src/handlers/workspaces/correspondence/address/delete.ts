@@ -32,13 +32,14 @@ const deleteMatterInboundAddress = createSafeHandler(
             ),
           )
           .returning({ id: matterInboundAddresses.id });
-        if (revoked.length > 0)
+        if (revoked.length > 0) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
             resourceId: workspaceId,
             changes: { inboundAddress: { old: "active", new: "revoked" } },
           });
+        }
       }),
     );
     return Result.ok({ address: null });

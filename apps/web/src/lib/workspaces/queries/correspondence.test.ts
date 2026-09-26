@@ -1,7 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import { correspondenceKeys } from "./correspondence";
+import {
+  correspondenceKeys,
+  uniqueCorrespondenceAddresses,
+} from "./correspondence";
 
 describe("correspondence query invalidation", () => {
   test("refreshes the list, record, and address in one matter without touching another", async () => {
@@ -25,4 +28,17 @@ describe("correspondence query invalidation", () => {
     }
     expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
   });
+});
+
+test("recipient labels keep the first entry for each email address", () => {
+  expect(
+    uniqueCorrespondenceAddresses([
+      { address: "Office@example.test", name: "Office" },
+      { address: "office@example.test", name: "Duplicate" },
+      { address: "client@example.test", name: null },
+    ]),
+  ).toEqual([
+    { address: "Office@example.test", name: "Office" },
+    { address: "client@example.test", name: null },
+  ]);
 });

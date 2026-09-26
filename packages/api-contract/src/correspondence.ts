@@ -26,6 +26,8 @@ export const CORRESPONDENCE_SCAN_VERDICTS = [
 export type CorrespondenceScanVerdict =
   (typeof CORRESPONDENCE_SCAN_VERDICTS)[number];
 
+export const CORRESPONDENCE_MAX_ATTACHMENTS = 25;
+
 export const CORRESPONDENCE_DROP_REASONS = [
   "unknown_recipient",
   "revoked_address",

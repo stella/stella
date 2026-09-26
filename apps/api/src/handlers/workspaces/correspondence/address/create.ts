@@ -19,13 +19,14 @@ const config = {
 const createMatterInboundAddress = createSafeHandler(
   config,
   async function* ({ safeDb, session, user, workspaceId, recordAuditEvent }) {
-    if (env.INBOUND_MAIL_DOMAIN === undefined)
+    if (env.INBOUND_MAIL_DOMAIN === undefined) {
       return Result.err(
         new HandlerError({
           status: 503,
           message: "Inbound mail domain is not configured",
         }),
       );
+    }
     const token = randomBytes(32).toString("base64url");
     yield* Result.await(
       safeDb(async (tx) => {
