@@ -15,8 +15,7 @@ bare_urls = "deny"
 broken_intra_doc_links = "deny"
 
 [dependencies]
-hex = "0.4"
-sha2 = "0.11"
+stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"

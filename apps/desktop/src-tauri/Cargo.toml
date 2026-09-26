@@ -45,7 +45,11 @@ unsafe_code = "forbid"
 # The raw AppKit/WebKit and Security.framework calls this crate cannot express
 # without `unsafe` live in the workspace members below, behind safe APIs.
 [workspace]
-members = ["crates/macos-park", "crates/macos-signing"]
+members = [
+  "crates/macos-park",
+  "crates/macos-signing",
+  "crates/signing-core",
+]
 
 [lints.rustdoc]
 bare_urls = "deny"
@@ -106,7 +110,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
 sha2 = "0.11"
-stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1" }
+stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -139,6 +143,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 ] }
 plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
+stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
