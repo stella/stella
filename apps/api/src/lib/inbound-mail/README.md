@@ -18,6 +18,15 @@ Addresses use 32 random bytes encoded as 64 lowercase hexadecimal characters.
   An approved shared mailbox requires current organization or matter scope.
   Its filer is the mailbox; documents have no human creator. The approval's
   administrator is never substituted as the filer or document creator.
+- Delivery authentication stays bound to the outer sender. `intake` distinguishes
+  direct mail, inline forwards and attached originals; extracted headers are the
+  forwarder's assertions. An attached original's DKIM signature is checked against
+  its exact decoded bytes with bounded DNS access. A verified signature identifies
+  its signing domain, not an authenticated original author. Unsigned, invalid or
+  partially signed originals remain unverified.
+- Threaded replies retain the member's complete message and quoted history.
+  Ambiguous quoted headers do not trigger extraction. Invalid or timezone-free
+  Date headers have an unknown sent time; explicitly zoned dates normalize to UTC.
 - The owner phase resolves only the exact token and locks the verified auth
   account. Filing runs as the scoped database role with the resolved tenant and
   matter. The token lookup policy is constrained to the owner and exact token;
@@ -50,6 +59,10 @@ matter/source digest. Matter members can read these through the bounded endpoint
 `GET /workspaces/:workspaceId/correspondence/drops`. Authentication failures include
 `configure_sender_spf_dkim_dmarc` as a setup hint. No subject or body is stored in
 this log. Unknown tokens have no matter in which to retain a log.
+Oversized provider objects stop streaming at the limit and become terminal
+`message_too_large` drops. Their provider object identity supplies the replay key
+because a complete content digest cannot be read within the limit. A failed drop
+write remains retryable; it never acknowledges an unrecorded rejection.
 
 ## Local development
 

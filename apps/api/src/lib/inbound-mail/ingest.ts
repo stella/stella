@@ -1,9 +1,12 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import * as v from "valibot";
 
 import type {
   CorrespondenceAuthResult,
+  CorrespondenceAuthentication,
+  CorrespondenceAuthenticatedSender,
   CorrespondenceDropReason,
+  CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 
@@ -11,6 +14,7 @@ import type { AttachmentScanVerdict } from "@/api/lib/inbound-mail/acceptance";
 import { parseInboundAddressToken } from "@/api/lib/inbound-mail/address";
 import {
   hasAlignedAuthentication,
+  verifyOriginalSignature,
   type MailAuthentication,
   type MailAuthResult,
   type MailEnvelope,
@@ -22,6 +26,7 @@ import {
   parseInboundMessage,
   type InboundAttachment,
   type InboundMessageErrorReason,
+  type ParsedInboundMessage,
 } from "@/api/lib/inbound-mail/message";
 
 const AUTH_PROJECTION = {
@@ -104,6 +109,7 @@ type IngestInboundMailOptions = {
   receivedAt: string;
   inboundDomain: string;
   verify: MailVerifier;
+  verifyOriginal?: typeof verifyOriginalSignature;
   scan: AttachmentScanVerdict;
   persist: InboundDeliveryStore;
 };
@@ -116,7 +122,48 @@ const projectAuthentication = (auth: MailAuthentication) => {
     dkim: dkim ? AUTH_PROJECTION[dkim.result] : "none",
     dmarc: AUTH_PROJECTION[auth.dmarc],
     alignedIdentifier: auth.fromDomain,
-  } satisfies ParsedCorrespondence["authentication"];
+  } satisfies CorrespondenceAuthentication;
+};
+
+type ProjectProvenanceOptions = {
+  parsed: ParsedInboundMessage;
+  authenticatedSender: CorrespondenceAuthenticatedSender;
+  verifyOriginal: typeof verifyOriginalSignature;
+};
+
+const projectProvenance = async ({
+  parsed,
+  authenticatedSender,
+  verifyOriginal,
+}: ProjectProvenanceOptions) => {
+  switch (parsed.forwardSource) {
+    case "none":
+      return Result.ok({
+        intake: "direct",
+        authenticatedSender,
+        originalSignature: null,
+      } as const satisfies CorrespondenceProvenance);
+    case "inline":
+      return Result.ok({
+        intake: "forwarded_inline",
+        authenticatedSender,
+        originalSignature: { status: "unverified" },
+      } as const satisfies CorrespondenceProvenance);
+    case "attached": {
+      const signature = await verifyOriginal(parsed.originalRaw);
+      return signature.map(
+        (originalSignature) =>
+          ({
+            intake: "forwarded_attachment",
+            authenticatedSender,
+            originalSignature,
+          }) as const satisfies CorrespondenceProvenance,
+      );
+    }
+    default:
+      parsed satisfies never;
+      return panic("Unhandled inbound extraction provenance");
+  }
 };
 
 type InboundMetadataOptions = Pick<
@@ -218,6 +265,7 @@ export const ingestInboundMail = async ({
   receivedAt,
   inboundDomain,
   verify,
+  verifyOriginal = verifyOriginalSignature,
   scan,
   persist,
 }: IngestInboundMailOptions) => {
@@ -308,12 +356,29 @@ export const ingestInboundMail = async ({
         reason: "attachment_rejected",
       };
     } else {
+      const provenance = await projectProvenance({
+        parsed: parsed.value,
+        authenticatedSender: {
+          address: outerSender,
+          ...projectAuthentication(authenticated.value),
+        },
+        verifyOriginal,
+      });
+      if (provenance.isErr()) {
+        return Result.err(
+          new InboundIngestError({
+            message: "Original signature verification is unavailable",
+            reason: "verification-unavailable",
+          }),
+        );
+      }
       delivery = {
         status: "candidate",
         sender: outerSender,
         attachments: message.attachments,
         authentication: authenticated.value,
         message: {
+          ...provenance.value,
           channel: "email",
           direction: message.from === outerSender ? "out" : "in",
           from: { address: message.from, name: null },
@@ -328,7 +393,6 @@ export const ingestInboundMail = async ({
           references: message.references,
           bodyText: message.text,
           bodyHtml: message.html,
-          authentication: projectAuthentication(authenticated.value),
         },
       };
     }

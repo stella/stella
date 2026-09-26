@@ -91,7 +91,10 @@ if (!databaseUrl || !runPostgresTests) {
             references: [],
             bodyText: "A filed message",
             bodyHtml: null,
-            authentication: {
+            intake: "direct",
+            originalSignature: null,
+            authenticatedSender: {
+              address: sender,
               spf: "pass",
               dkim: "none",
               dmarc: "pass",
