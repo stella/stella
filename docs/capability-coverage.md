@@ -602,11 +602,11 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui         | 9     |
 | provider_secret        | 24    |
 | public_indexing        | 7     |
-| realtime_stream        | 3     |
+| realtime_stream        | 4     |
 | search_ui              | 15    |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 171
+Total: 172

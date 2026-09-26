@@ -646,7 +646,7 @@ describe("durable chat turn persistence", () => {
         });
       }),
     );
-    expect(settled).toBe(true);
+    expect(settled).toBe("settled");
 
     const duplicateSettlement = unwrap(
       await safeDb(
@@ -659,7 +659,7 @@ describe("durable chat turn persistence", () => {
           }),
       ),
     );
-    expect(duplicateSettlement).toBe(false);
+    expect(duplicateSettlement).toBe("not-owned");
 
     const turn = await testDb.query.chatTurns.findFirst({
       where: { id: { eq: acceptance.id } },
@@ -1272,7 +1272,7 @@ describe("durable chat turn persistence", () => {
     );
     expect(
       unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
-    ).toBe(false);
+    ).toBe("lost");
   });
 
   test("serializes an awaiting continuation with a competing user send", async () => {
@@ -1609,7 +1609,7 @@ describe("durable chat turn persistence", () => {
     const beforeRenewal = Date.now();
     expect(
       unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
-    ).toBe(true);
+    ).toBe("owned");
 
     const turn = await testDb.query.chatTurns.findFirst({
       where: { id: { eq: execution.id } },

@@ -373,6 +373,8 @@ export const chatTurns = p.pgTable(
       enum: CHAT_TURN_INTERRUPTION_REASONS,
     }),
     settledAt: timestamptz("settled_at"),
+    /** The first stop request; the execution owner settles on it. */
+    cancelRequestedAt: timestamptz("cancel_requested_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()

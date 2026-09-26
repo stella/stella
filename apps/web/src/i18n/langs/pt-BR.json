@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
+    "stopFailed": "Não foi possível interromper a resposta. Tente novamente.",
     "stopResponse": "Parar",
     "stopped": "Interrompido",
     "suggestTitle": "Sugerir um título",

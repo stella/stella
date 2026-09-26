@@ -1,5 +1,6 @@
 {
   "initialPage": {
+    "activeTurnId": null,
     "messages": [],
     "olderCursor": null,
     "lastActivityAt": null
@@ -420,6 +421,7 @@
             "status": 200
           },
           "page": {
+            "activeTurnId": "00000000-0000-7000-8000-000000000004",
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:05.000Z",
@@ -981,6 +983,7 @@
             "status": 200
           },
           "page": {
+            "activeTurnId": "00000000-0000-7000-8000-000000000004",
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:13.000Z",
@@ -1650,6 +1653,7 @@
             "status": 200
           },
           "page": {
+            "activeTurnId": null,
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:18.000Z",

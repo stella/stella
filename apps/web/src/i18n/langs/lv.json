@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",
+    "stopFailed": "Neizdevās apturēt atbildi. Mēģiniet vēlreiz.",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "suggestTitle": "Ieteikt nosaukumu",

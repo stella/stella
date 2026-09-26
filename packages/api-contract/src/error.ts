@@ -4,6 +4,10 @@ export const API_VALIDATION_ERROR_CODE = "validation" as const;
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;
 
+/** A chat request whose turn has no execution it may continue: the turn was
+ *  stopped, superseded or already settled. */
+export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
+
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
 

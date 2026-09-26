@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
+    "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "suggestTitle": "Navrhnúť názov",

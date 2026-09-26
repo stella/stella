@@ -1,5 +1,6 @@
 {
   "initialPage": {
+    "activeTurnId": null,
     "messages": [],
     "olderCursor": null,
     "lastActivityAt": null
@@ -420,6 +421,7 @@
             "status": 200
           },
           "page": {
+            "activeTurnId": "00000000-0000-7000-8000-000000000004",
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:05.000Z",
@@ -483,7 +485,7 @@
     },
     {
       "action": {
-        "messageId": "00000000-0000-7000-8000-000000000004",
+        "messageId": "00000000-0000-7000-8000-000000000005",
         "text": "Keep it and draft a new one",
         "type": "send"
       },
@@ -519,7 +521,7 @@
                 ]
               },
               {
-                "id": "00000000-0000-7000-8000-000000000004",
+                "id": "00000000-0000-7000-8000-000000000005",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:09.000Z"
@@ -882,7 +884,7 @@
             "context": [],
             "forwardedProps": {
               "message": {
-                "id": "00000000-0000-7000-8000-000000000004",
+                "id": "00000000-0000-7000-8000-000000000005",
                 "role": "user",
                 "parts": [
                   {
@@ -898,7 +900,7 @@
             },
             "data": {
               "message": {
-                "id": "00000000-0000-7000-8000-000000000004",
+                "id": "00000000-0000-7000-8000-000000000005",
                 "role": "user",
                 "parts": [
                   {
@@ -915,10 +917,11 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:12.000Z\",\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"refContext\":{\"version\":1,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"}},\"role\":\"assistant\",\"parts\":[{\"approval\":{\"id\":\"approval_call-1\",\"approved\":false,\"needsApproval\":true},\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"id\":\"call-1\",\"input\":{\"name\":\"call-1\"},\"name\":\"mcp__external__delete\",\"state\":\"approval-responded\",\"type\":\"tool-call\"}],\"content\":\"\"}],\"timestamp\":1767225626000}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"delta\":\"Drafted\",\"timestamp\":1767225628000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225630000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:12.000Z\",\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"refContext\":{\"version\":1,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"}},\"role\":\"assistant\",\"parts\":[{\"approval\":{\"id\":\"approval_call-1\",\"approved\":false,\"needsApproval\":true},\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"id\":\"call-1\",\"input\":{\"name\":\"call-1\"},\"name\":\"mcp__external__delete\",\"state\":\"approval-responded\",\"type\":\"tool-call\"}],\"content\":\"\"}],\"timestamp\":1767225626000}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"role\":\"assistant\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"delta\":\"Drafted\",\"timestamp\":1767225628000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225630000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
+            "activeTurnId": null,
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:13.000Z",
@@ -973,7 +976,7 @@
               },
               {
                 "createdAt": "2026-01-01T00:00:15.000Z",
-                "id": "00000000-0000-7000-8000-000000000004",
+                "id": "00000000-0000-7000-8000-000000000005",
                 "role": "user",
                 "parts": [
                   {
@@ -984,7 +987,7 @@
               },
               {
                 "createdAt": "2026-01-01T00:00:16.000Z",
-                "id": "00000000-0000-7000-8000-000000000005",
+                "id": "00000000-0000-7000-8000-000000000006",
                 "metadata": {
                   "usage": {
                     "totalTokens": 2,

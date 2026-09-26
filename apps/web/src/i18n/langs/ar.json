@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
+    "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "suggestTitle": "اقتراح عنوان",

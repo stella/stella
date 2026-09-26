@@ -12,6 +12,8 @@ export const CHAT_ORACLE = {
   /** Every turn a request starts reaches a settled status once the
    *  request is done. */
   persistedTurnSettles: "chat.persisted.turn-settles",
+  /** A settled turn's status and reason are the outcome its answer stores. */
+  persistedTurnOutcome: "chat.persisted.turn-outcome",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",

@@ -2,7 +2,10 @@ import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
 
-import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import {
+  CHAT_TURN_ID_HEADER,
+  STELLA_API_VERSION_PREFIX,
+} from "@stll/api-contract";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
@@ -309,6 +312,7 @@ const api = new Elysia()
         "Content-Disposition",
         "X-Ai-Field-Errors",
         REQUEST_ID_HEADER,
+        CHAT_TURN_ID_HEADER,
       ],
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),

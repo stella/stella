@@ -7784,6 +7784,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
+                  activeTurnId: Ta0872c39fa;
                   messages: Array<T873a479438>;
                   olderCursor: T432e07d100;
                   contextMatterIds: Array<Teb5c753062>;
@@ -7836,6 +7837,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
+                  activeTurnId: Ta0872c39fa;
                   messages: Array<T873a479438>;
                   olderCursor: T432e07d100;
                   contextMatterIds: Array<Teb5c753062>;
@@ -8372,6 +8374,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
+                  activeTurnId: Ta0872c39fa;
                   forkProvenance: {
                     type: "none";
                   } | {
@@ -8549,6 +8552,63 @@ export type WebRoutes = {
                 500: Tc642053948;
                 502: Tc642053948;
                 503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      threads: {
+        ":threadId": {
+          turns: {
+            ":turnId": {
+              cancel: {
+                post: {
+                  body: Record<never, never>;
+                  params: {
+                    threadId: T780bacb7ad;
+                    turnId: T0885816b05;
+                  };
+                  query: Record<never, never>;
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      turn: {
+                        id: T0885816b05;
+                        status: ("failed" | "accepted" | "running" | "completed" | "awaiting-user");
+                      } | {
+                        id: T0885816b05;
+                        reason: T60e4ef96f9;
+                        status: "cancelled";
+                      } | {
+                        id: T0885816b05;
+                        reason: Ta189dcf2fe;
+                        status: "interrupted";
+                      };
+                    };
+                    400: Tc642053948;
+                    401: Tc642053948;
+                    402: Tc642053948;
+                    403: T82c7fa9c31;
+                    404: Tc642053948;
+                    409: Tc642053948;
+                    413: Tc642053948;
+                    422: (Tc642053948 | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: Tc642053948;
+                    429: Tc642053948;
+                    500: Tc642053948;
+                    502: Tc642053948;
+                    503: Tc642053948;
+                  };
+                };
               };
             };
           };
@@ -31538,13 +31598,13 @@ type T0122da017b = {
     type: "completed";
   } | {
     type: "cancelled";
-    reason: ("superseded" | "user-stop");
+    reason: T60e4ef96f9;
   } | {
     type: "failed";
     error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
   } | {
     type: "interrupted";
-    reason: ("client-disconnected" | "timeout");
+    reason: Ta189dcf2fe;
   };
   usage?: undefined | {
     totalTokens: number;
@@ -31674,6 +31734,10 @@ type T0803d60764 = null | "internal" | "pin_unresolved" | "pin_content_changed" 
 type T0823792555 = {
   readonly input: T424c5f5482;
   readonly output: T66d8615e4f;
+};
+
+type T0885816b05 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "chatTurn";
 };
 
 type T08bc488f5e = string & valibot_Brand<"SafeId"> & {
@@ -33485,6 +33549,8 @@ type T60d8f391f8 = {
   readonly input: T7020765e60;
   readonly output: T1f1ce35744;
 };
+
+type T60e4ef96f9 = "superseded" | "user-stop";
 
 type T61122d2719 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowRun";
@@ -35640,6 +35706,8 @@ type T9ffc3fafa7 = {
 
 type Ta083079a24 = "other" | "mobile" | "office" | "home" | "fax";
 
+type Ta0872c39fa = null | T0885816b05;
+
 type Ta08bea2410 = {
   ico: T432e07d100;
   name: string;
@@ -35665,6 +35733,8 @@ type Ta130d275b4 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type Ta189dcf2fe = "client-disconnected" | "timeout";
 
 type Ta197d6f640 = null | T938d9cc2e1;
 

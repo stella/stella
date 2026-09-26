@@ -1144,6 +1144,7 @@ type Messages = {
     "sourcePlaceholder": "Chat about {title}";
     "sourcePlaceholderAction": "Chat about";
     "sources": "Sources:";
+    "stopFailed": "Couldn't stop the answer. Try again.";
     "stopResponse": "Stop";
     "stopped": "Stopped";
     "suggestTitle": "Suggest a title";

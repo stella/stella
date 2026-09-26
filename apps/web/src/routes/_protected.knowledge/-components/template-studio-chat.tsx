@@ -659,6 +659,7 @@ const TemplateStudioChatInner = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     alwaysApprovedTools,
     conversationApprovedTools,
@@ -1298,7 +1299,7 @@ const TemplateStudioChatInner = ({
   // remount only swaps the surface, while the old Chat instance would
   // keep streaming inside the query cache.
   const startNewThread = () => {
-    stop();
+    leave();
     setPanelOpen(false);
     onNewThread();
   };
