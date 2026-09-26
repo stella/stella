@@ -107,6 +107,7 @@ describe("mail authentication trust boundary", () => {
   test("strict policy rejects sibling subdomains", () => {
     const auth = {
       source: "local",
+      evidence: "identifiers",
       fromDomain: "example.com",
       spf: { result: "pass", domain: "mail.example.com", alignment: "strict" },
       dkim: [],
@@ -128,4 +129,43 @@ describe("mail authentication trust boundary", () => {
     });
     expect(result.isErr()).toBe(true);
   });
+});
+
+test("local verification uses SMTP envelope and DNS, ignoring forged authentication headers", async () => {
+  const { createLocalMailVerifier } =
+    await import("@/api/lib/inbound-mail/authentication");
+  let cancelled = 0;
+  const verifier = createLocalMailVerifier(() => ({
+    resolve: async (domain, rrtype) => {
+      if (rrtype !== "TXT") {return [];}
+      if (domain === "example.com") {return [["v=spf1 ip4:192.0.2.1 -all"]];}
+      if (domain === "_dmarc.example.com")
+        {return [["v=DMARC1; p=reject; aspf=s"]];}
+      return [];
+    },
+    cancel: () => {
+      cancelled += 1;
+    },
+  }));
+  const raw = new TextEncoder().encode(
+    "From: member@example.com\r\nTo: recipient@example.net\r\nAuthentication-Results: mx.example.com; spf=pass; dmarc=pass header.from=example.com\r\nReceived: from mail.example.com (mail.example.com [192.0.2.1])\r\n\r\nBody",
+  );
+  for (const remoteIp of ["192.0.2.1", "192.0.2.2"]) {
+    const auth = await verifier({
+      raw,
+      fromAddress: "member@example.com",
+      envelope: {
+        mailFrom: "member@example.com",
+        recipients: ["token@inbound.example.com"],
+        remoteIp,
+        helo: "mail.example.com",
+      },
+    });
+    expect(auth.isOk()).toBe(true);
+    if (auth.isErr()) {continue;}
+    expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
+      remoteIp === "192.0.2.1",
+    );
+  }
+  expect(cancelled).toBe(2);
 });

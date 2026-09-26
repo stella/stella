@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { authenticate } from "mailauth";
+import { authenticate, type DNSResolver } from "mailauth";
 import { Resolver } from "node:dns/promises";
 import { isIP } from "node:net";
 import { getDomain } from "tldts";
@@ -24,8 +24,16 @@ const AUTH_RESULTS = [
 ] as const;
 export type MailAuthResult = (typeof AUTH_RESULTS)[number];
 
-export type MailAuthentication = {
-  source: "provider" | "local";
+export type MailAuthentication = (
+  | {
+      source: "provider";
+      evidence: "provider-dmarc";
+    }
+  | {
+      source: "provider" | "local";
+      evidence: "identifiers";
+    }
+) & {
   fromDomain: string;
   spf: {
     result: MailAuthResult;
@@ -111,6 +119,12 @@ export const hasAlignedAuthentication = (
   const fromDomain = mailboxDomain(fromAddress);
   if (!fromDomain || auth.dmarc !== "pass" || fromDomain !== auth.fromDomain) {
     return false;
+  }
+  if (auth.evidence === "provider-dmarc") {
+    return (
+      auth.spf.result === "pass" ||
+      auth.dkim.some(({ result }) => result === "pass")
+    );
   }
   return (
     (auth.spf.result === "pass" &&
@@ -223,6 +237,7 @@ export const parseProviderAuthentication = ({
   }
   const auth: MailAuthentication = {
     source: "provider",
+    evidence: "identifiers",
     fromDomain,
     spf: { result: "none", domain: null, alignment: "relaxed" },
     dkim: [],
@@ -299,86 +314,98 @@ export const createProviderMailVerifier =
   async ({ fromAddress }) =>
     parseProviderAuthentication({ ...metadata, fromAddress });
 
-export const verifyMailLocally: MailVerifier = async ({
-  raw,
-  envelope,
-  fromAddress,
-}) => {
-  const fromDomain = mailboxDomain(fromAddress);
-  if (
-    !fromDomain ||
-    !isIP(envelope.remoteIp) ||
-    !normalizeDomain(envelope.helo) ||
-    raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes
-  ) {
-    return Result.err(
-      new MailAuthenticationError({
-        message: "Invalid mail verification input",
-      }),
-    );
-  }
-  const resolver = new Resolver({
-    timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
-    tries: 1,
-  });
-  const signal = AbortSignal.timeout(
-    INBOUND_MAIL_LIMITS.authenticationTimeoutMs,
-  );
-  let queries = 0;
-  const cancellation = () => resolver.cancel();
-  signal.addEventListener("abort", cancellation, { once: true });
-  const verification = await Result.tryPromise({
-    try: () =>
-      authenticate(Buffer.from(raw), {
-        sender: envelope.mailFrom,
-        ip: envelope.remoteIp,
-        helo: envelope.helo,
-        trustReceived: false,
-        disableArc: true,
-        disableBimi: true,
-        resolver: async (domain, rrtype) => {
-          queries += 1;
-          if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-            throw new MailAuthenticationError({
-              message: "Mail verification budget exhausted",
-            });
-          }
-          return await resolver.resolve(domain, rrtype);
-        },
-      }),
-    catch: () =>
-      new MailAuthenticationError({
-        message: "Mail authentication could not complete",
-      }),
-  });
-  signal.removeEventListener("abort", cancellation);
-  resolver.cancel();
-  if (verification.isErr()) {
-    return verification;
-  }
-  if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-    return Result.err(
-      new MailAuthenticationError({
-        message: "Mail verification budget exhausted",
-      }),
-    );
-  }
-  const { spf, dkim, dmarc } = verification.value;
-  return Result.ok({
-    source: "local",
-    fromDomain,
-    spf: {
-      result: spf ? authResult(spf.status.result) : "none",
-      domain: spf ? spf.domain : null,
-      alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
+type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
+
+export const createLocalMailVerifier =
+  (
+    createResolver: () => LocalDnsResolver = () => {
+      const resolver = new Resolver({
+        timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
+        tries: 1,
+      });
+      return {
+        resolve: async (domain, rrtype) =>
+          await resolver.resolve(domain, rrtype),
+        cancel: () => resolver.cancel(),
+      };
     },
-    dkim: dkim.results.map((signature) => ({
-      result: signature.status.underSized
-        ? "fail"
-        : authResult(signature.status.result),
-      domain: signature.signingDomain,
-      alignment: dmarc && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
-    })),
-    dmarc: dmarc ? authResult(dmarc.status.result) : "none",
-  } satisfies MailAuthentication);
-};
+  ): MailVerifier =>
+  async ({ raw, envelope, fromAddress }) => {
+    const fromDomain = mailboxDomain(fromAddress);
+    if (
+      !fromDomain ||
+      !isIP(envelope.remoteIp) ||
+      !normalizeDomain(envelope.helo) ||
+      raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes
+    ) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Invalid mail verification input",
+        }),
+      );
+    }
+    const resolver = createResolver();
+    const signal = AbortSignal.timeout(
+      INBOUND_MAIL_LIMITS.authenticationTimeoutMs,
+    );
+    let queries = 0;
+    const cancellation = () => resolver.cancel();
+    signal.addEventListener("abort", cancellation, { once: true });
+    const verification = await Result.tryPromise({
+      try: () =>
+        authenticate(Buffer.from(raw), {
+          sender: envelope.mailFrom,
+          ip: envelope.remoteIp,
+          helo: envelope.helo,
+          trustReceived: false,
+          disableArc: true,
+          disableBimi: true,
+          resolver: async (domain, rrtype) => {
+            queries += 1;
+            if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+              throw new MailAuthenticationError({
+                message: "Mail verification budget exhausted",
+              });
+            }
+            return await resolver.resolve(domain, rrtype);
+          },
+        }),
+      catch: () =>
+        new MailAuthenticationError({
+          message: "Mail authentication could not complete",
+        }),
+    });
+    signal.removeEventListener("abort", cancellation);
+    resolver.cancel();
+    if (verification.isErr()) {
+      return verification;
+    }
+    if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Mail verification budget exhausted",
+        }),
+      );
+    }
+    const { spf, dkim, dmarc } = verification.value;
+    return Result.ok({
+      source: "local",
+      evidence: "identifiers",
+      fromDomain,
+      spf: {
+        result: spf ? authResult(spf.status.result) : "none",
+        domain: spf ? spf.domain : null,
+        alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
+      },
+      dkim: dkim.results.map((signature) => ({
+        result: signature.status.underSized
+          ? "fail"
+          : authResult(signature.status.result),
+        domain: signature.signingDomain,
+        alignment: dmarc && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
+      })),
+      dmarc: dmarc ? authResult(dmarc.status.result) : "none",
+    } satisfies MailAuthentication);
+  };
+
+export const verifyMailLocally = createLocalMailVerifier();
