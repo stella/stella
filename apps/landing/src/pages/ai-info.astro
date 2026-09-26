@@ -147,7 +147,7 @@ const faqJsonLd = {
               crawlerResources.map((res) => (
                 <a
                   href={res.href}
-                  class="crawler-card flex flex-col rounded-2xl p-6 no-underline transition-[border-color,transform] duration-200"
+                  class="crawler-card flex flex-col rounded-2xl p-6 no-underline transition-transform duration-200"
                   style="background: var(--card); border: 1px solid var(--border); color: inherit"
                   target={res.external ? "_blank" : undefined}
                   rel={res.external ? "noopener noreferrer" : undefined}
