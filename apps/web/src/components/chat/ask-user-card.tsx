@@ -475,34 +475,54 @@ export const AskUserCard = ({
           })}
         </div>
 
-        {/* Submit */}
         {!isDone && !isLoading && (
-          <div className="border-border/50 border-t px-3 py-2">
-            {isEditing && discardsDownstream && (
-              <p className="text-muted-foreground mb-2 text-xs">
-                {t("chat.askUser.editWarning")}
-              </p>
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-                type="submit"
-              >
-                {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
-              </button>
-              {isEditing && (
-                <button
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                  onClick={handleCancelEdit}
-                  type="button"
-                >
-                  {t("common.cancel")}
-                </button>
-              )}
-            </div>
-          </div>
+          <AskUserSubmitRow
+            discardsDownstream={discardsDownstream === true}
+            isEditing={isEditing}
+            onCancelEdit={handleCancelEdit}
+          />
         )}
       </form>
+    </div>
+  );
+};
+
+/** The form's submit row: a plain submit, or re-run plus cancel while the
+ *  answers are being edited. */
+const AskUserSubmitRow = ({
+  discardsDownstream,
+  isEditing,
+  onCancelEdit,
+}: {
+  discardsDownstream: boolean;
+  isEditing: boolean;
+  onCancelEdit: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      {isEditing && discardsDownstream && (
+        <p className="text-muted-foreground mb-2 text-xs">
+          {t("chat.askUser.editWarning")}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
+          type="submit"
+        >
+          {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
+        </button>
+        {isEditing && (
+          <button
+            className="text-muted-foreground hover:text-foreground text-xs"
+            onClick={onCancelEdit}
+            type="button"
+          >
+            {t("common.cancel")}
+          </button>
+        )}
+      </div>
     </div>
   );
 };
