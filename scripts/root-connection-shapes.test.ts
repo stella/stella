@@ -1,15 +1,30 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
+  findExemptRootOperations,
   findRootConnectionShapes,
   ROOT_CONNECTION_SHAPE,
+  ROOT_OPERATION_RESULTS,
 } from "./root-connection-shapes";
 import type { RootConnectionShape } from "./root-connection-shapes";
 
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const ROOT_IMPORT = 'import { rootDb } from "@/api/db/root";';
+const FIXTURE_FILE = "apps/api/src/lib/fixture.ts";
+const AUTH_FILE = ROOT_OPERATION_RESULTS.resolveMemberAuthorization.file;
+
+const shapesIn = (
+  file: string,
+  ...lines: readonly string[]
+): RootConnectionShape[] =>
+  findRootConnectionShapes(`${lines.join("\n")}\n`, file).map(
+    ({ shape }) => shape,
+  );
 
 const shapesOf = (...lines: readonly string[]): RootConnectionShape[] =>
-  findRootConnectionShapes(`${lines.join("\n")}\n`).map(({ shape }) => shape);
+  shapesIn(FIXTURE_FILE, ...lines);
 
 // Each case below is written in the form it took in the API before the
 // worker handles became explicit, so a regression to that form is caught.
@@ -350,8 +365,107 @@ describe("binding resolution", () => {
   });
 });
 
+describe("awaiting a call does not make its value explicit", () => {
+  test("an awaited factory in every position that hands a value on", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const returned = async () => {",
+        "  return await createExtractionRunStore(rootDb);",
+        "};",
+        "export const arrow = async () => await createExtractionRunStore(rootDb);",
+        "export const assigned = async () => {",
+        "  let store: Store | undefined;",
+        "  store = await createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const property = async (holder: { store?: Store }) => {",
+        "  holder.store = await createExtractionRunStore(rootDb);",
+        "};",
+        "export const ternary = async (given?: Store) =>",
+        "  given ? given : await createExtractionRunStore(rootDb);",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+    ]);
+  });
+
+  test("through renamed and namespace imports", () => {
+    expect(
+      shapesOf(
+        'import { rootDb as owner } from "../db/root";',
+        'import * as root from "@/api/db/root";',
+        "export const renamed = async () => await createStore(owner);",
+        "export const namespaced = async (holder: { store?: Store }) => {",
+        "  holder.store = await createStore(root.rootDb);",
+        "};",
+        "export const ternary = async (given?: Store) =>",
+        "  given ? given : await createStore(root.rootDb);",
+        "export const either = async (given?: Store) =>",
+        "  given ?? (await createStore(owner));",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+      ROOT_CONNECTION_SHAPE.fallbackOperand,
+    ]);
+  });
+
+  test("an unlisted operation, a listed one elsewhere, unawaited, or called as a member", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const repairs = async () => await runRepairs(rootDb);",
+        "export const resolve = async (lookup: Lookup) =>",
+        "  await resolveMemberAuthorization(lookup, rootDb);",
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.alias, ROOT_CONNECTION_SHAPE.alias]);
+    expect(
+      shapesIn(
+        AUTH_FILE,
+        ROOT_IMPORT,
+        "export const unawaited = (lookup: Lookup) =>",
+        "  resolveMemberAuthorization(lookup, rootDb);",
+        "export const member = async (lookup: Lookup) =>",
+        "  await auth.resolveMemberAuthorization(lookup, rootDb);",
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.alias, ROOT_CONNECTION_SHAPE.alias]);
+  });
+
+  test("ignores an awaited factory over a local that shadows the import", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const local = async (rootDb: Db) =>",
+        "  await createExtractionRunStore(rootDb);",
+        "export const inner = async (holder: { store?: Store }) => {",
+        "  const rootDb = scoped();",
+        "  holder.store = await createExtractionRunStore(rootDb);",
+        "};",
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("the listed owner operations", () => {
+  // The list may only shrink: an entry whose site was removed or rewritten
+  // must go, or it would exempt the next call that takes its name.
+  test.each(Object.entries(ROOT_OPERATION_RESULTS))(
+    "%s still names an awaited site in its file",
+    (operation, { file }) => {
+      const content = readFileSync(path.join(REPO_ROOT, file), "utf-8");
+      expect(findExemptRootOperations(content, file)).toContain(operation);
+    },
+  );
+});
+
 describe("explicit uses are not shapes", () => {
-  test("a direct query, an explicit argument, an awaited result, a local, and a door's operation", () => {
+  test("a direct query, an explicit argument, a local, and a door's operation", () => {
     expect(
       shapesOf(
         ROOT_IMPORT,
@@ -360,15 +474,6 @@ describe("explicit uses are not shapes", () => {
         "export const notifyActor = async (notice: Notice) => {",
         "  await fileNotice(notice, rootDb);",
         "};",
-        "export const repairs = async () => await runRepairs(rootDb);",
-        "export const verify = async (params: Params) => {",
-        "  return await consumeOtp(rootDb, params);",
-        "};",
-        "export const settle = async (given?: Outcome) => {",
-        "  let outcome = given;",
-        "  if (!outcome) outcome = await settleOn(rootDb);",
-        "  return first ? await settleOn(rootDb) : outcome;",
-        "};",
         "export const declared = () => {",
         "  const store = createExtractionRunStore(rootDb);",
         "  store.flush();",
@@ -376,6 +481,24 @@ describe("explicit uses are not shapes", () => {
         "const handles = async () => {",
         '  const { rootDb: owner } = await import("@/api/db/root");',
         "  return { owner: laneHandle(owner) };",
+        "};",
+      ),
+    ).toEqual([]);
+  });
+
+  test("a listed owner operation awaited in its own file", () => {
+    expect(
+      shapesIn(
+        AUTH_FILE,
+        ROOT_IMPORT,
+        "export const resolveCredential = async (lookup: Lookup) =>",
+        "  await resolveMemberAuthorization(lookup, rootDb);",
+        "export const hooks = {",
+        "  seed: async (organizationId: string) =>",
+        "    await ensureDefaultDocumentTypes(organizationId, rootDb),",
+        "};",
+        "export const audience = async (lookup: Lookup) => {",
+        "  return await resolveWorkspaceRealtimeAudience(lookup, rootDb);",
         "};",
       ),
     ).toEqual([]);
@@ -403,6 +526,7 @@ test("reports the line of each shape", () => {
   expect(
     findRootConnectionShapes(
       [ROOT_IMPORT, "", "export const deps = { db: rootDb };", ""].join("\n"),
+      FIXTURE_FILE,
     ),
   ).toEqual([{ shape: ROOT_CONNECTION_SHAPE.dependencyProperty, line: 3 }]);
 });

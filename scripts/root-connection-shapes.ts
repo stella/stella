@@ -34,11 +34,16 @@
 // value stored in a collection. A direct call on the handle inside a function
 // (`rootDb.select()`), or an explicit argument inside a function
 // (`notify(rows, rootDb)`), is not a shape here: that is an explicit use,
-// which the import ratchet and the door list account for. So is an awaited
-// call's result (`return await notify(rows, rootDb)`): the operation already
-// ran, and what it returns is not built from the handle. A declaration inside
-// a function (`const store = createStore(rootDb)`) binds a fresh local and
-// counts only once it is assigned over another value or returned.
+// which the import ratchet and the door list account for. A declaration
+// inside a function (`const store = createStore(rootDb)`) binds a fresh local
+// and counts only once it is assigned over another value or returned.
+//
+// Awaiting a call proves nothing about its value: `await createStore(rootDb)`
+// is still a store built from the handle, so a returned, assigned or
+// conditional call taking the handle counts awaited or not (the fallback
+// `s ??= await make(rootDb)` always has). The only exemptions are the owner
+// operations in ROOT_OPERATION_RESULTS, each named with the one file it may
+// be awaited in and why its result is not a handle.
 
 import ts from "typescript";
 
@@ -54,6 +59,57 @@ export const ROOT_CONNECTION_SHAPE = {
   assignment: "assignment",
   alias: "alias",
 } as const;
+
+type RootOperationResult = {
+  /** The one file whose awaited call to this operation is exempt. */
+  readonly file: string;
+  /** Why the awaited result carries no owner access. */
+  readonly reason: string;
+};
+
+/**
+ * Owner operations whose awaited result a function returns or assigns: the
+ * operation runs on the handle and hands back rows or a verdict, never the
+ * handle or something bound to it. Keyed by callee name, matched only as a
+ * plain identifier call that is awaited and takes the handle, in the named
+ * file. An entry that no longer matches a site fails the guard's test, so the
+ * list can only shrink.
+ */
+export const ROOT_OPERATION_RESULTS = {
+  consumeConfirmationOtp: {
+    file: "apps/api/src/lib/confirmation-otp.ts",
+    reason: "Burns the code on its own connection and returns the verdict.",
+  },
+  ensureDefaultDocumentTypes: {
+    file: "apps/api/src/lib/auth.ts",
+    reason: "Seeds a new organization's document types; returns nothing.",
+  },
+  readOrganizationMachineApiKeyPage: {
+    file: "apps/api/src/lib/machine-api-key-queries.ts",
+    reason: "Returns one page of an organization's machine key rows.",
+  },
+  resolveMemberAuthorization: {
+    file: "apps/api/src/lib/auth.ts",
+    reason: "Returns a credential's member authorization, or null.",
+  },
+  resolveUserRealtimeAuthorization: {
+    file: "apps/api/src/lib/auth.ts",
+    reason: "Returns the user's event stream authorization.",
+  },
+  resolveWorkspaceRealtimeAudience: {
+    file: "apps/api/src/lib/auth.ts",
+    reason: "Returns a workspace event stream's audience.",
+  },
+  writeUserGuideProgress: {
+    file: "apps/api/src/lib/guide-progress.ts",
+    reason: "Writes the session user's guide progress and returns its value.",
+  },
+} as const satisfies Record<string, RootOperationResult>;
+
+type RootOperationName = keyof typeof ROOT_OPERATION_RESULTS;
+
+const isRootOperationName = (name: string): name is RootOperationName =>
+  Object.hasOwn(ROOT_OPERATION_RESULTS, name);
 
 export type RootConnectionShape =
   (typeof ROOT_CONNECTION_SHAPE)[keyof typeof ROOT_CONNECTION_SHAPE];
@@ -336,14 +392,28 @@ const createRootReferenceTest = (bindings: RootBindings) => {
       (expression.arguments ?? []).some(isHandle)
     );
   };
-  /**
-   * A value built from the handle rather than an operation's result: an
-   * awaited call has already run on the handle and hands back what it
-   * returned (`return await notify(rows, rootDb)`), which is an explicit use.
-   */
-  const buildsValueFromHandle = (node: ts.Expression): boolean =>
-    !ts.isAwaitExpression(unwrapTypes(node)) && buildsFromHandle(node);
-  return { buildsFromHandle, buildsValueFromHandle, isHandle, reachesHandle };
+  return { buildsFromHandle, isHandle, reachesHandle };
+};
+
+// The listed operation an awaited call names, when the call is exempt in
+// `file`: awaited, a plain identifier callee on the list, and this file the
+// one the entry names.
+const exemptRootOperation = (
+  node: ts.Expression,
+  file: string,
+): RootOperationName | undefined => {
+  const awaited = unwrapTypes(node);
+  if (!ts.isAwaitExpression(awaited)) {
+    return undefined;
+  }
+  const call = unwrapTypes(awaited.expression);
+  if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) {
+    return undefined;
+  }
+  const name = call.expression.text;
+  return isRootOperationName(name) && ROOT_OPERATION_RESULTS[name].file === file
+    ? name
+    : undefined;
 };
 
 const FALLBACK_OPERATORS = new Set<ts.SyntaxKind>([
@@ -358,10 +428,17 @@ const FALLBACK_OPERATORS = new Set<ts.SyntaxKind>([
 const isInsideFunction = (node: ts.Node): boolean =>
   ts.findAncestor(node.parent, ts.isFunctionLike) !== undefined;
 
-export const findRootConnectionShapesAs = (
+type RootConnectionScan = {
+  hits: RootConnectionShapeHit[];
+  /** Listed operations whose awaited call this file was exempted for. */
+  exemptOperations: RootOperationName[];
+};
+
+const scanRootConnectionShapes = (
   content: string,
+  file: string,
   scriptKind: ts.ScriptKind,
-): RootConnectionShapeHit[] => {
+): RootConnectionScan => {
   const sourceFile = ts.createSourceFile(
     "root-connection-source",
     content,
@@ -371,14 +448,24 @@ export const findRootConnectionShapesAs = (
   );
   const bindings = collectRootBindings(sourceFile);
   if (bindings.handles.size === 0 && bindings.namespaces.size === 0) {
-    return [];
+    return { hits: [], exemptOperations: [] };
   }
-  const { buildsFromHandle, buildsValueFromHandle, isHandle, reachesHandle } =
+  const { buildsFromHandle, isHandle, reachesHandle } =
     createRootReferenceTest(bindings);
+  const exemptOperations: RootOperationName[] = [];
   // At module level a call taking the handle is already `module-level-call`;
   // counting the position that receives its value too would count it twice.
-  const buildsInFunction = (node: ts.Expression): boolean =>
-    isInsideFunction(node) && buildsValueFromHandle(node);
+  const buildsInFunction = (node: ts.Expression): boolean => {
+    if (!isInsideFunction(node) || !buildsFromHandle(node)) {
+      return false;
+    }
+    const exempt = exemptRootOperation(node, file);
+    if (exempt === undefined) {
+      return true;
+    }
+    exemptOperations.push(exempt);
+    return false;
+  };
   const hits: RootConnectionShapeHit[] = [];
   const record = (shape: RootConnectionShape, node: ts.Node): void => {
     hits.push({
@@ -449,20 +536,31 @@ export const findRootConnectionShapesAs = (
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return hits;
+  return { hits, exemptOperations };
 };
 
-// The counter sees content, not the file name. Parsing a `.ts` generic arrow
-// as TSX misreads what follows it, so both parses run and the one that found
-// more is the one that read the file correctly (the same rule the import
-// count in `scripts/ratchet.ts` follows).
+// Parsing a `.ts` generic arrow as TSX misreads what follows it, so both
+// parses run and the one that found more is the one that read the file
+// correctly (the same rule the import count in `scripts/ratchet.ts` follows).
+// The path is read only to match ROOT_OPERATION_RESULTS entries.
+const scanFile = (content: string, file: string): RootConnectionScan => {
+  const asTs = scanRootConnectionShapes(content, file, ts.ScriptKind.TS);
+  const asTsx = scanRootConnectionShapes(content, file, ts.ScriptKind.TSX);
+  return asTsx.hits.length > asTs.hits.length ? asTsx : asTs;
+};
+
 export const findRootConnectionShapes = (
   content: string,
-): RootConnectionShapeHit[] => {
-  const asTs = findRootConnectionShapesAs(content, ts.ScriptKind.TS);
-  const asTsx = findRootConnectionShapesAs(content, ts.ScriptKind.TSX);
-  return asTsx.length > asTs.length ? asTsx : asTs;
-};
+  file: string,
+): RootConnectionShapeHit[] => scanFile(content, file).hits;
 
-export const countRootConnectionShapes = (content: string): number =>
-  findRootConnectionShapes(content).length;
+/** The listed operations `file` was exempted for, one per exempt site. */
+export const findExemptRootOperations = (
+  content: string,
+  file: string,
+): RootOperationName[] => scanFile(content, file).exemptOperations;
+
+export const countRootConnectionShapes = (
+  content: string,
+  file: string,
+): number => findRootConnectionShapes(content, file).length;
