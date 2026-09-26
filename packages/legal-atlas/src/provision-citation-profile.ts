@@ -98,17 +98,25 @@ export type CitedWindow = {
   citedUntil?: string;
 };
 
+/**
+ * The unit an act numbers its provisions by, `section` when an entry leaves
+ * it out. A citation in the other unit (`§ 5 Listiny`) opens nothing.
+ */
+type ActUnit = { unit?: SectionUnit };
+
 /** An abbreviation that names one act. Matched case-sensitively. */
-export type ActAliasSpec = CitedWindow & {
-  spellings: readonly string[];
-  identifier: WorkIdentifier;
-};
+export type ActAliasSpec = CitedWindow &
+  ActUnit & {
+    spellings: readonly string[];
+    identifier: WorkIdentifier;
+  };
 
 /** A title (or a declined form of one) that names one act. Case-insensitive. */
-export type ActTitleSpec = CitedWindow & {
-  spellings: readonly string[];
-  identifier: WorkIdentifier;
-};
+export type ActTitleSpec = CitedWindow &
+  ActUnit & {
+    spellings: readonly string[];
+    identifier: WorkIdentifier;
+  };
 
 /** How a provision path renders as the publisher's deep-link anchor. */
 export type AnchorScheme = {

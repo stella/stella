@@ -113,6 +113,7 @@ export const SK_PROFILE = {
     {
       spellings: ["Ústava", "Ústavy", "Ústave", "Ústavou"],
       identifier: zb(460, 1992),
+      unit: "article",
     },
     { spellings: ["EP", "Exekučný poriadok"], identifier: zz(233, 1995) },
     { spellings: ["ZKR"], identifier: zz(7, 2005) },
@@ -183,6 +184,7 @@ export const SK_PROFILE = {
         "Ústave Slovenskej republiky",
       ],
       identifier: zb(460, 1992),
+      unit: "article",
     },
     {
       spellings: ["zákon o priestupkoch", "zákona o priestupkoch"],

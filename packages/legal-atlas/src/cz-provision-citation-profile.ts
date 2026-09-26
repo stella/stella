@@ -78,6 +78,7 @@ export const CZ_PROFILE = {
     { text: "článku", unit: "article" },
     { text: "článkem", unit: "article" },
     { text: "články", unit: "article" },
+    { text: "článků", unit: "article" },
     { text: "článcích", unit: "article" },
   ],
 
@@ -213,6 +214,7 @@ export const CZ_PROFILE = {
     {
       spellings: ["LZPS", "Listina", "Listiny", "Listině", "Listinou"],
       identifier: sb(2, 1993),
+      unit: "article",
     },
     // Capitalised only: lowercase `ústavy` are institutions, not the
     // constitution.
@@ -228,6 +230,7 @@ export const CZ_PROFILE = {
         "Ústavou ČR",
       ],
       identifier: sb(1, 1993),
+      unit: "article",
     },
     { spellings: ["AT"], identifier: sb(177, 1996) },
     { spellings: ["ZDP"], identifier: sb(586, 1992) },
@@ -312,6 +315,7 @@ export const CZ_PROFILE = {
     {
       spellings: HUMAN_RIGHTS_CONVENTION,
       identifier: sb(209, 1992),
+      unit: "article",
     },
     {
       spellings: [
@@ -416,6 +420,7 @@ export const CZ_PROFILE = {
         "Listinou základních práv a svobod",
       ],
       identifier: sb(2, 1993),
+      unit: "article",
     },
     {
       spellings: [
@@ -518,6 +523,7 @@ export const CZ_PROFILE = {
         "Ústavě České republiky",
       ],
       identifier: sb(1, 1993),
+      unit: "article",
     },
     {
       spellings: [
