@@ -60,6 +60,8 @@
     "deny": "Liegt",
     "pdfSignCertificate": "Parakstīšanas sertifikāts",
     "pdfSignDocument": "Dokuments",
+    "pdfSignExpires": "Derīgs līdz",
+    "pdfSignIssuer": "Izdevējs",
     "pdfSignMatter": "Lieta",
     "pdfSignNoIdentities": "Atslēgu saišķī nav pieejams neviens parakstīšanas sertifikāts.",
     "pdfSignRetry": "Mēģināt vēlreiz",

@@ -5,6 +5,9 @@ use std::fmt;
 
 use sha2::{Digest, Sha256};
 
+use crate::certificate::{can_sign_documents, certificate_facts, iso_date};
+use crate::spki::key_type_from_certificate;
+
 /// How many leading characters of the fingerprint stand in for a certificate
 /// with no subject summary. Long enough to stay unique in a picker, short
 /// enough to read.
@@ -37,6 +40,10 @@ pub struct SigningIdentity {
   pub id: String,
   /// The certificate's subject summary, for the picker.
   pub label: String,
+  /// The issuer's common name (or organization), for the picker.
+  pub issuer: Option<String>,
+  /// The last day the certificate is valid, `YYYY-MM-DD` in UTC.
+  pub expires_on: String,
   /// The leaf certificate, DER encoded.
   pub certificate_der: Vec<u8>,
   /// The issuers above the leaf, innermost first. Empty when the system
@@ -96,9 +103,80 @@ pub(crate) fn identity_label(subject_summary: &str, fingerprint: &str) -> String
   trimmed.to_string()
 }
 
+/// The picker's entry for a keychain certificate, or `None` when it cannot
+/// sign a document at `now` (Unix seconds): see [`crate::list_identities`].
+/// Everything comes from the certificate's own bytes.
+pub(crate) fn signing_identity(
+  certificate_der: Vec<u8>,
+  subject_summary: &str,
+  chain_der: impl FnOnce() -> Vec<Vec<u8>>,
+  now: i64,
+) -> Option<SigningIdentity> {
+  let key_type = key_type_from_certificate(&certificate_der)?;
+  let facts = certificate_facts(&certificate_der)?;
+  if !can_sign_documents(&facts, now) {
+    return None;
+  }
+  let id = certificate_fingerprint(&certificate_der);
+  Some(SigningIdentity {
+    label: identity_label(subject_summary, &id),
+    issuer: facts.issuer_name,
+    expires_on: iso_date(facts.not_after),
+    id,
+    chain_der: chain_der(),
+    certificate_der,
+    key_type,
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  const SIGNING: &[u8] = include_bytes!("../fixtures/signing-certificate.der");
+  const CODE_SIGNING: &[u8] =
+    include_bytes!("../fixtures/code-signing-certificate.der");
+  /// 2026-06-01T00:00:00Z.
+  const NOW: i64 = 1_780_272_000;
+
+  #[test]
+  fn describes_a_signing_certificate_for_the_picker() {
+    let identity =
+      signing_identity(SIGNING.to_vec(), "Jane Counsel", Vec::new, NOW).unwrap();
+
+    assert_eq!(identity.label, "Jane Counsel");
+    assert_eq!(identity.issuer.as_deref(), Some("Test Issuing CA"));
+    assert_eq!(identity.expires_on, "2055-06-30");
+    assert_eq!(identity.key_type, SigningKeyType::Ec);
+    assert_eq!(identity.id, certificate_fingerprint(SIGNING));
+  }
+
+  #[test]
+  fn leaves_out_what_cannot_sign_a_document_now() {
+    // Made for code, not documents.
+    assert!(signing_identity(CODE_SIGNING.to_vec(), "x", Vec::new, NOW).is_none());
+    // Expired: 2060 is past the fixture's validity.
+    assert!(signing_identity(SIGNING.to_vec(), "x", Vec::new, 2_840_140_800).is_none());
+  }
+
+  #[test]
+  fn builds_the_chain_only_for_a_certificate_it_offers() {
+    let mut built = false;
+    let offered = signing_identity(
+      CODE_SIGNING.to_vec(),
+      "x",
+      || {
+        built = true;
+        Vec::new()
+      },
+      NOW,
+    );
+    assert!(offered.is_none());
+    assert!(
+      !built,
+      "chain building is keychain work; skip it when filtered"
+    );
+  }
 
   #[test]
   fn fingerprints_a_certificate_as_lowercase_hex_sha256() {

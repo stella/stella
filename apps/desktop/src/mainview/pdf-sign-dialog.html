@@ -84,6 +84,14 @@
         display: block;
         margin-bottom: 18px;
       }
+      .identity-details {
+        color: #a1a1a6;
+        display: block;
+        font-size: 11px;
+        line-height: 1.4;
+        margin-top: 6px;
+        overflow-wrap: anywhere;
+      }
       select {
         background: #2c2c2e;
         border: 1px solid #3a3a3c;
@@ -156,7 +164,8 @@
           color: #1c1c1e;
         }
         .subtitle,
-        .label {
+        .label,
+        .identity-details {
           color: #636366;
         }
         .value {
@@ -187,6 +196,7 @@
       <label class="picker" hidden id="picker">
         <span class="label" id="certificateLabel"></span>
         <select id="identities"></select>
+        <span class="identity-details" dir="auto" id="identityDetails"></span>
       </label>
       <p class="status" hidden id="status"></p>
       <div class="actions">
@@ -243,6 +253,30 @@
         status.hidden = false;
       };
 
+      // Issuer and expiry tell apart certificates with the same holder, the
+      // usual case once a card has been renewed.
+      const expiryFormat = new Intl.DateTimeFormat(params.get("lang") || "en", {
+        dateStyle: "medium",
+        timeZone: "UTC",
+      });
+      const describeIdentity = (identity) => {
+        const parts = [];
+        if (identity.issuer) {
+          parts.push(`${strings.pdfSignIssuer || ""} ${identity.issuer}`);
+        }
+        const expires = new Date(`${identity.expiresOn}T00:00:00Z`);
+        if (!Number.isNaN(expires.getTime())) {
+          parts.push(`${strings.pdfSignExpires || ""} ${expiryFormat.format(expires)}`);
+        }
+        return parts.join(" · ");
+      };
+      const showIdentityDetails = () => {
+        const selected = identities.find(
+          (identity) => identity.id === element("identities").value,
+        );
+        setText("identityDetails", selected ? describeIdentity(selected) : "");
+      };
+
       if (state === "ready") {
         setText("subtitle", strings.pdfSignSubtitle);
         for (const identity of identities) {
@@ -251,6 +285,8 @@
           option.textContent = identity.label;
           element("identities").append(option);
         }
+        element("identities").addEventListener("change", showIdentityDetails);
+        showIdentityDetails();
         element("picker").hidden = false;
         element("signBtn").hidden = false;
       } else if (state === "noIdentities") {

@@ -13,31 +13,33 @@ use security_framework::trust::SecTrust;
 
 use crate::identity::{
   SigningError, SigningIdentity, SigningKeyType, certificate_fingerprint,
-  identity_label,
+  signing_identity,
 };
-use crate::spki::key_type_from_certificate;
 
 /// `errSecItemNotFound`: an empty keychain is a result, not a failure.
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 pub(crate) fn list_identities() -> Result<Vec<SigningIdentity>, SigningError> {
+  let now = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_or(0, |elapsed| {
+      i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+    });
   let mut identities = Vec::new();
   for identity in keychain_identities()? {
     let Ok(certificate) = identity.certificate() else {
       continue;
     };
     let certificate_der = certificate.to_der();
-    let Some(key_type) = key_type_from_certificate(&certificate_der) else {
-      continue;
-    };
-    let id = certificate_fingerprint(&certificate_der);
-    identities.push(SigningIdentity {
-      label: identity_label(&certificate.subject_summary(), &id),
-      id,
-      chain_der: issuer_chain_der(&certificate, &certificate_der),
+    let chain_certificate_der = certificate_der.clone();
+    if let Some(signing) = signing_identity(
       certificate_der,
-      key_type,
-    });
+      &certificate.subject_summary(),
+      || issuer_chain_der(&certificate, &chain_certificate_der),
+      now,
+    ) {
+      identities.push(signing);
+    }
   }
   Ok(identities)
 }

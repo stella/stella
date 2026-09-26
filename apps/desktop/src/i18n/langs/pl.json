@@ -60,6 +60,8 @@
     "deny": "Odmów",
     "pdfSignCertificate": "Certyfikat podpisu",
     "pdfSignDocument": "Dokument",
+    "pdfSignExpires": "Ważny do",
+    "pdfSignIssuer": "Wystawca",
     "pdfSignMatter": "Sprawa",
     "pdfSignNoIdentities": "W pęku kluczy nie ma dostępnego certyfikatu podpisu.",
     "pdfSignRetry": "Spróbuj ponownie",

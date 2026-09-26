@@ -60,6 +60,8 @@
     "deny": "Denegar",
     "pdfSignCertificate": "Certificado de firma",
     "pdfSignDocument": "Documento",
+    "pdfSignExpires": "Válido hasta",
+    "pdfSignIssuer": "Emitido por",
     "pdfSignMatter": "Asunto",
     "pdfSignNoIdentities": "No hay ningún certificado de firma disponible en tu llavero.",
     "pdfSignRetry": "Reintentar",
