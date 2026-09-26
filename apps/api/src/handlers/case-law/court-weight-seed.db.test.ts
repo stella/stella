@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import nodePath from "node:path";
 
-import { US_COURTS } from "@stll/api-contract/us-courts";
+import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
 
 import { caseLawCourtWeights } from "@/api/db/schema";
 import {
@@ -195,10 +195,10 @@ test("the USA seed writes no row of another jurisdiction", async () => {
 }, 60_000);
 
 // The rank lookup runs in TypeScript on the corpus-index path and as a SQL
-// CASE on the Postgres paths. The United States rows are anchored
-// alternations over thousands of names, so the two regex engines are held
-// equal over every canonical name the directory accepts, not a sample.
-test("Postgres ranks every accepted United States court as TypeScript does", async () => {
+// CASE on the Postgres paths. The United States rows are rendered from the
+// directory's writable courts, so the two regex engines are held equal over
+// every one of those names, as stored.
+test("Postgres ranks every writable United States court as TypeScript does", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   await applyMigration(db, FULL_SEED);
@@ -216,7 +216,10 @@ test("Postgres ranks every accepted United States court as TypeScript does", asy
       map,
     }),
   );
-  const names = US_COURTS.map(({ canonicalName }) => canonicalName);
+  const names = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id)).map(
+    ({ canonicalName }) => canonicalName,
+  );
+  expect(names).toHaveLength(US_WRITABLE_COURT_IDS.size);
   const values = sql.join(
     names.map((name) => sql`(${name}, 'USA')`),
     sql`, `,
@@ -233,5 +236,15 @@ test("Postgres ranks every accepted United States court as TypeScript does", asy
   );
   expect(inPostgres.size).toBe(names.length);
   expect(differing).toEqual([]);
+  // Ranked by a seeded row, not by the default every unranked court gets.
+  expect(
+    names.filter((name) =>
+      rows.some(
+        (row) =>
+          row.country === "USA" &&
+          new RegExp(row.courtPattern, "iu").test(name),
+      ),
+    ),
+  ).toEqual(names);
   await client.close();
-}, 300_000);
+}, 60_000);

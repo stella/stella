@@ -779,8 +779,9 @@
       "id": "coregsalina",
       "region": "CO",
       "evidence": {
-        "note": "The source sorts the row inside its Colorado block (position 351.15, between cosuperct at 351.12 and coloworkcompcom at 351.2) and gives it the co id prefix of that block."
-      }
+        "note": "Not conclusive. The source sorts the row inside its Colorado block (position 351.15, between cosuperct at 351.12 and coloworkcompcom at 351.2) and gives it the co id prefix of that block; its name alone does not say which state's Salina land office it is, and courts-db has no entry."
+      },
+      "certainty": "reviewed-uncertain"
     },
     {
       "id": "cusc",

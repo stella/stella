@@ -18,7 +18,7 @@ export const US_COURT_DIRECTORY_SOURCES = {
   courtsDbProjectionSha256:
     "9395e6ac7b14952f900e90f05639a0ee6c52aba98a7b9c1b1c0558678e782f76",
   overridesSha256:
-    "030f9d3f4d3919bda01c6268f091e19089618367b931b458ba67532e1de9d082",
+    "ed072cd71e9418843f87a1d3ce9b40180ea1c3825a858386db88dd7f9804d64d",
 } as const;
 
 /** The ids of the accepted courts, in id order. */

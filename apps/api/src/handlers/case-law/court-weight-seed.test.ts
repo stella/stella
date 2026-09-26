@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
-import { US_COURTS } from "@stll/api-contract/us-courts";
+import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
 
 import { caseLawCourtWeights } from "@/api/db/schema";
 import {
@@ -12,7 +12,6 @@ import {
   courtWeightMapFromSeed,
   courtWeightSeedSql,
   seededCourtWeightEntries,
-  US_PATTERN_MAX_NAMES,
 } from "@/api/handlers/case-law/court-weight-seed";
 import {
   HIGHEST_COURT_TIER,
@@ -243,9 +242,10 @@ describe("court weight seed", () => {
     }
   });
 
-  test("the United States ranks every accepted court once, at its directory tier", () => {
+  test("the United States ranks each writable court once, at its directory tier, and no other court", () => {
     // Its decisions carry the directory's canonical court names, so each rank
-    // is anchored to those spellings rather than to words other courts share.
+    // is anchored to that spelling rather than to words other courts share.
+    // Only a writable court's name can be stored, so only those are seeded.
     const rankOfTier = {
       supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
       appellate: { tier: 2, tierLabel: "appeal", weight: 5 },
@@ -253,16 +253,24 @@ describe("court weight seed", () => {
       special: { tier: 1, tierLabel: "special", weight: 3 },
     } as const;
     const entries = seededCourtWeightEntries("USA");
-    const mismatched = US_COURTS.flatMap((court) => {
-      const matched = entries
-        .filter((entry) => entry.pattern.test(court.canonicalName))
-        .map(({ tier, tierLabel, weight }) => ({ tier, tierLabel, weight }));
-      return matched.length === 1 &&
-        Bun.deepEquals(matched[0], rankOfTier[court.tier])
-        ? []
-        : [{ court: court.id, matched }];
-    });
-    expect(mismatched).toEqual([]);
+    const writable = US_COURTS.filter(({ id }) =>
+      US_WRITABLE_COURT_IDS.has(id),
+    );
+    expect(writable.map(({ id }) => id)).toEqual([...US_WRITABLE_COURT_IDS]);
+    expect(entries).toHaveLength(writable.length);
+    for (const court of writable) {
+      expect(
+        entries
+          .filter((entry) => entry.pattern.test(court.canonicalName))
+          .map(({ tier, tierLabel, weight }) => ({ tier, tierLabel, weight })),
+      ).toEqual([rankOfTier[court.tier]]);
+    }
+    const rankedButNotWritable = US_COURTS.filter(
+      (court) =>
+        !US_WRITABLE_COURT_IDS.has(court.id) &&
+        entries.some((entry) => entry.pattern.test(court.canonicalName)),
+    ).map(({ id }) => id);
+    expect(rankedButNotWritable).toEqual([]);
     for (const court of [
       "Supreme Court of California",
       "United States Court of Appeals for the Ninth Circuit",
@@ -270,47 +278,24 @@ describe("court weight seed", () => {
     ]) {
       expect([
         court,
-        seededCourtWeightEntries("USA").some((entry) =>
-          entry.pattern.test(court),
-        ),
+        entries.some((entry) => entry.pattern.test(court)),
       ]).toEqual([court, false]);
     }
   });
 
-  test("United States patterns are anchored, bounded and fit the registry column", () => {
+  test("United States patterns are exact names that fit the registry column", () => {
     expect(caseLawCourtWeights.courtPattern.getSQLType()).toBe(
       `varchar(${String(COURT_PATTERN_MAX_LENGTH)})`,
     );
-    const usa = COURT_WEIGHT_SEED.filter((row) => row.country === "USA");
-    // The one court that keeps a pattern of its own, spelled as before.
-    expect(usa[0]).toEqual({
-      country: "USA",
-      courtPattern: "^supreme court of the united states$",
-      tier: 3,
-      tierLabel: "supreme",
-      weight: 8,
-    });
-    for (const { courtPattern } of usa) {
-      expect(courtPattern).toMatch(/^\^(?:\(\?:.*\))?.*\$$/u);
-      expect(courtPattern.length).toBeLessThanOrEqual(COURT_PATTERN_MAX_LENGTH);
-      expect(courtPattern.split(/(?<!\\)\|/u).length).toBeLessThanOrEqual(
-        US_PATTERN_MAX_NAMES,
-      );
-    }
-    // Every accepted name appears in exactly one pattern, and nothing else
-    // does: the patterns are a partition of the directory's names.
-    const alternatives = usa.flatMap(({ courtPattern }) =>
-      courtPattern
-        .replace(/^\^(?:\(\?:)?/u, "")
-        .replace(/\)?\$$/u, "")
-        .split(/(?<!\\)\|/u)
-        .map((fragment) => fragment.replaceAll(/\\(.)/gu, "$1")),
-    );
-    expect(alternatives.toSorted()).toEqual(
-      US_COURTS.map(({ canonicalName }) =>
-        canonicalName.toLowerCase(),
-      ).toSorted(),
-    );
+    expect(COURT_WEIGHT_SEED.filter((row) => row.country === "USA")).toEqual([
+      {
+        country: "USA",
+        courtPattern: "^supreme court of the united states$",
+        tier: 3,
+        tierLabel: "supreme",
+        weight: 8,
+      },
+    ]);
   });
 
   test("the seeded tiers stay inside the range the search blend scales", () => {
