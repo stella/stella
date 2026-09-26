@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "Az AI-szolgáltató elutasította a beállított hitelesítő adatokat. Kérje meg a munkaterület adminisztrátorát, hogy ellenőrizze az API-kulcsot a szervezet beállításaiban.",
     "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbálja újra egy pillanat múlva.",
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
+    "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendPrompt": "Üzenet küldése",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {

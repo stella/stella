@@ -19,6 +19,9 @@ export type FailureGrade = (typeof FAILURE_GRADES)[number];
 export const FAILURE_REASON_GRADE = {
   upstream_unavailable: "transient",
   provider_unavailable: "transient",
+  // The provider's stream stopped before its answer finished: a dropped
+  // connection or a provider-side cut, not a fault of this service.
+  provider_stream_incomplete: "transient",
   quota_exhausted: "transient",
   pg_connection_lifecycle: "transient",
   // 40001: the designed outcome of a serializable or repeatable-read

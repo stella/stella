@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "Poskytovateľ AI odmietol nastavené prihlasovacie údaje. Požiadajte správcu pracovného priestoru, aby skontroloval kľúč API v nastaveniach organizácie.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
+    "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
     "sendPrompt": "Odoslať správu",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "skills": {

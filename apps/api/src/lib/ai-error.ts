@@ -12,6 +12,7 @@ import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 
+import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -36,6 +37,14 @@ export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
+
+// The run error codes of a stream that ended before its terminal event: the
+// provider stream contract's own, and the one TanStack's adapters report
+// themselves (TanStack/ai#1494).
+const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
+  INCOMPLETE_STREAM_CODE,
+  "incomplete-stream",
+]);
 
 // TanStack preserves these provider-owned response-body values when an adapter
 // cannot preserve the numeric status itself (notably OpenAI's 401 response).
@@ -179,6 +188,11 @@ const classifyAIErrorInternal = (
   }
   if (ChatEmptyCompletionError.is(error)) {
     return "empty_completion";
+  }
+  // A stream that stopped before its terminal event, named by the provider
+  // stream contract or by the adapter itself.
+  if (isRecord(error) && INCOMPLETE_STREAM_CODES.has(String(error["code"]))) {
+    return "provider_stream_incomplete";
   }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
@@ -370,6 +384,7 @@ const AI_ERROR_KIND_FAILURE_REASON = {
   provider_credentials_rejected: "provider_credentials_rejected",
   model_unavailable: "model_unavailable",
   provider_unavailable: "provider_unavailable",
+  provider_stream_incomplete: "provider_stream_incomplete",
   loop_detected: "chat_loop_detected",
   empty_completion: "chat_empty_completion",
 } as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
@@ -427,6 +442,13 @@ const aiKindHandlerError = (
         status: 502,
         message:
           "The AI provider is temporarily unavailable. Please try again in a moment.",
+        cause: error,
+      });
+    case "provider_stream_incomplete":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model's reply was cut off before it finished. Please try again.",
         cause: error,
       });
     case "loop_detected":

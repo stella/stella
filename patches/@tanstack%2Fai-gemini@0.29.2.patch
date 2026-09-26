@@ -1,0 +1,19 @@
+Backport of TanStack/ai#1375 (issue #1374): the run's abort signal
+reaches every Gemini request (chat stream, structured output).
+Remove when @tanstack/ai-gemini >= 0.29.4 is installed (it needs
+@tanstack/ai ^0.55.0).
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index b5dadd244c7a26e580b4aa92a64c58d9bd176c94..59417aa7b06efa900a437cc0ab062f4377be42cc 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -655,7 +655,8 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				...mappedThinkingConfig !== void 0 && { thinkingConfig: mappedThinkingConfig },
+ 				...systemInstruction !== void 0 && { systemInstruction },
+ 				tools: convertToolsToProviderFormat(options.tools),
+-				...combinedSchemaConfig ?? {}
++				...combinedSchemaConfig ?? {},
++				...options.request?.signal != null && { abortSignal: options.request.signal }
+ 			}
+ 		};
+ 	}

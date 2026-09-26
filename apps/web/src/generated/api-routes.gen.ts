@@ -31541,7 +31541,7 @@ type T0122da017b = {
     reason: ("superseded" | "user-stop");
   } | {
     type: "failed";
-    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "loop_detected" | "empty_completion");
+    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
   } | {
     type: "interrupted";
     reason: ("client-disconnected" | "timeout");

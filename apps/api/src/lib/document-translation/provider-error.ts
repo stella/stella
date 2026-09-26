@@ -25,6 +25,7 @@ export const documentTranslationProviderErrorCode = (
   const kind = classifyAIError(error);
   switch (kind) {
     case "provider_unavailable":
+    case "provider_stream_incomplete":
       return "provider_unavailable";
     case "empty_completion":
     case "loop_detected":

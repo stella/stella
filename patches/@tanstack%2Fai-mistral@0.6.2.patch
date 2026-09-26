@@ -1,0 +1,46 @@
+The run's abort signal reaches every Mistral request: the raw stream
+fetch and structuredOutput's chat.complete. Upstream has no signal on
+either (ai-mistral 0.6.11 main); upstream PR to be opened.
+Remove when an @tanstack/ai-mistral release passes the signal.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cbafaa750d2 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -48,7 +48,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 			hasEmittedRunStarted: false
+ 		};
+ 		try {
+-			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig);
++			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig, options.request?.signal ?? void 0);
+ 			yield* this.processMistralStreamChunks(stream, options, aguiState);
+ 		} catch (error) {
+ 			const err = error;
+@@ -94,7 +94,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					strict
+ 				}
+ 			}
+-		});
++		}, chatOptions.request?.signal ? { signal: chatOptions.request.signal } : void 0);
+ 		const rawText = response.choices[0]?.message?.content;
+ 		const textContent = typeof rawText === "string" ? rawText : "";
+ 		let parsed;
+@@ -414,7 +414,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 	* parses the SSE stream manually, bypassing the SDK's Zod validation which
+ 	* rejects streaming tool call chunks that omit `name` in argument deltas.
+ 	*/
+-	async *fetchRawMistralStream(params, config) {
++	async *fetchRawMistralStream(params, config, signal) {
+ 		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
+ 		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
+ 		const body = this.toWireBody(params);
+@@ -426,7 +426,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 		const response = await fetch(url, {
+ 			method: "POST",
+ 			headers,
+-			body: JSON.stringify(body)
++			body: JSON.stringify(body),
++			...signal !== void 0 && { signal }
+ 		});
+ 		if (!response.ok) {
+ 			const errorText = await response.text();

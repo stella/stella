@@ -25,6 +25,6 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "provider_stream_incomplete"
   }
 }

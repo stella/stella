@@ -1129,6 +1129,7 @@
     "sendErrorProviderCredentialsRejected": "Der KI-Anbieter hat die hinterlegten Zugangsdaten abgelehnt. Bitten Sie Ihren Arbeitsbereichs-Admin, den API-Schlüssel in den Organisationseinstellungen zu prüfen.",
     "sendErrorProviderUnavailable": "Der KI-Anbieter ist vorübergehend nicht verfügbar. Bitte versuchen Sie es gleich noch einmal.",
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
+    "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendPrompt": "Nachricht senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "skills": {
