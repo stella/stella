@@ -242,14 +242,22 @@ describe("correspondence offboarding", () => {
               .where(eq(correspondence.id, otherOrg.id))
               .returning({ id: correspondence.id }),
           ).toEqual([]);
-          await expect(
-            tx.transaction(async (savepoint) => {
-              await savepoint
-                .update(correspondence)
-                .set({ assigneeId: ids.userA2 })
-                .where(eq(correspondence.id, owned.id));
-            }),
-          ).rejects.toMatchObject({ cause: { code: "42501" } });
+          const deniedAssignment = await Result.tryPromise({
+            try: async () =>
+              await tx.transaction(async (savepoint) => {
+                await savepoint
+                  .update(correspondence)
+                  .set({ assigneeId: ids.userA2 })
+                  .where(eq(correspondence.id, owned.id));
+              }),
+            catch: (cause) => cause,
+          });
+          expect(Result.isError(deniedAssignment)).toBe(true);
+          if (Result.isError(deniedAssignment)) {
+            expect(deniedAssignment.error).toMatchObject({
+              cause: { code: "42501" },
+            });
+          }
 
           await clearCorrespondenceAssignmentsForOffboarding({
             tx: asTestRaw<Transaction>(tx),

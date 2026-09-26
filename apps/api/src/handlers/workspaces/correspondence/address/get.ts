@@ -36,7 +36,10 @@ const getMatterInboundAddress = createSafeHandler(
             ),
           );
     return Result.ok({
-      address: row === undefined ? null : `${row.token}@${domain}`,
+      address:
+        row === undefined || domain === undefined
+          ? null
+          : `${row.token}@${domain}`,
       setupHint:
         domain === undefined ? "Inbound mail domain is not configured" : null,
     });

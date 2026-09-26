@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
@@ -7,6 +8,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { compareCodeUnit } from "@stll/collation";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -47,11 +49,11 @@ const migration = readFileSync(
   "utf-8",
 );
 const createdTables = [...migration.matchAll(/CREATE TABLE "([^"]+)"/gu)].map(
-  ([, table]) => table,
+  ([, table]) => table ?? panic("Missing CREATE TABLE name capture"),
 );
 const forcedTables = [
   ...migration.matchAll(/ALTER TABLE "([^"]+)" FORCE ROW LEVEL SECURITY/gu),
-].map(([, table]) => table);
+].map(([, table]) => table ?? panic("Missing forced RLS table name capture"));
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -82,8 +84,6 @@ const recorderFor = (
     request: new Request("https://api.example.test/v1/correspondence"),
     server: null,
   });
-
-const handlerContext = <T>(value: unknown) => asTestRaw<T>(value);
 
 type HandlerFailure = Extract<
   Awaited<ReturnType<typeof getCorrespondence.handler>>,
@@ -159,7 +159,9 @@ const fileMessage = async (parsed: ParsedCorrespondence) => {
 describe("matter correspondence", () => {
   test("the migration forces RLS on every new table", () => {
     expect(createdTables.length).toBeGreaterThan(0);
-    expect(forcedTables.toSorted()).toEqual(createdTables.toSorted());
+    expect(forcedTables.toSorted(compareCodeUnit)).toEqual(
+      createdTables.toSorted(compareCodeUnit),
+    );
   });
 
   test("deduplicates a filed message, exposes it through matter routes, and enforces mailbox scope and revocation", async () => {
@@ -244,7 +246,7 @@ describe("matter correspondence", () => {
     };
     const list = expectSuccess(
       await listCorrespondence.handler(
-        handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
           ...common,
           query: {},
         }),
@@ -253,7 +255,7 @@ describe("matter correspondence", () => {
     expect(list.items.map(({ id }) => id)).toContain(first.id);
     const detail = expectSuccess(
       await getCorrespondence.handler(
-        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
           ...common,
           params: { correspondenceId: first.id },
         }),
@@ -263,7 +265,7 @@ describe("matter correspondence", () => {
     expect(detail.record.bodyHtml).not.toContain("<script>");
     expect(detail.filers).toMatchObject([{ type: "user", userId: ids.userA1 }]);
     const foreignRead = await getCorrespondence.handler(
-      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+      asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
         ...common,
         safeDb: asTestRaw<SafeDb>(
           createSafeDb(testDb, [ids.wsA1], ids.orgB, ids.userB1),
@@ -276,7 +278,7 @@ describe("matter correspondence", () => {
     expect(foreignRead).toMatchObject({ code: 404 });
     const attachmentDetail = expectSuccess(
       await getCorrespondence.handler(
-        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
           ...common,
           params: { correspondenceId: attached.id },
         }),
@@ -287,7 +289,7 @@ describe("matter correspondence", () => {
     ]);
     const updated = expectSuccess(
       await updateCorrespondence.handler(
-        handlerContext<Parameters<typeof updateCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof updateCorrespondence.handler>[0]>({
           ...common,
           body: { handlingState: "handled", assigneeId: ids.userA1 },
           params: { correspondenceId: first.id },
@@ -306,7 +308,7 @@ describe("matter correspondence", () => {
     };
     const approved = expectSuccess(
       await createAllowedSender.handler(
-        handlerContext<Parameters<typeof createAllowedSender.handler>[0]>({
+        asTestRaw<Parameters<typeof createAllowedSender.handler>[0]>({
           ...admin,
           body: {
             address: "office@example.test",
@@ -320,7 +322,7 @@ describe("matter correspondence", () => {
     const senderId = approved.id;
     const allowedList = expectSuccess(
       await listAllowedSenders.handler(
-        handlerContext<Parameters<typeof listAllowedSenders.handler>[0]>({
+        asTestRaw<Parameters<typeof listAllowedSenders.handler>[0]>({
           ...admin,
           query: {},
         }),
@@ -354,7 +356,7 @@ describe("matter correspondence", () => {
     });
     const mailboxDetail = expectSuccess(
       await getCorrespondence.handler(
-        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
           ...common,
           params: { correspondenceId: first.id },
         }),
@@ -370,13 +372,11 @@ describe("matter correspondence", () => {
 
     const removedScope = expectSuccess(
       await removeAllowedSenderMatter.handler(
-        handlerContext<Parameters<typeof removeAllowedSenderMatter.handler>[0]>(
-          {
-            ...admin,
-            body: { matterId: ids.wsA1 },
-            params: { senderId },
-          },
-        ),
+        asTestRaw<Parameters<typeof removeAllowedSenderMatter.handler>[0]>({
+          ...admin,
+          body: { matterId: ids.wsA1 },
+          params: { senderId },
+        }),
       ),
     );
     expect(removedScope).toEqual({ removed: true });
@@ -392,7 +392,7 @@ describe("matter correspondence", () => {
 
     const addedScope = expectSuccess(
       await addAllowedSenderMatter.handler(
-        handlerContext<Parameters<typeof addAllowedSenderMatter.handler>[0]>({
+        asTestRaw<Parameters<typeof addAllowedSenderMatter.handler>[0]>({
           ...admin,
           body: { matterId: ids.wsA1 },
           params: { senderId },
@@ -402,7 +402,7 @@ describe("matter correspondence", () => {
     expect(addedScope).toEqual({ added: true });
     const revokedApproval = expectSuccess(
       await revokeAllowedSender.handler(
-        handlerContext<Parameters<typeof revokeAllowedSender.handler>[0]>({
+        asTestRaw<Parameters<typeof revokeAllowedSender.handler>[0]>({
           ...admin,
           params: { senderId },
         }),
@@ -435,35 +435,35 @@ describe("matter correspondence", () => {
       };
       const first = expectSuccess(
         await createMatterInboundAddress.handler(
-          handlerContext<
-            Parameters<typeof createMatterInboundAddress.handler>[0]
-          >(common),
+          asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
+            common,
+          ),
         ),
       );
       const second = expectSuccess(
         await createMatterInboundAddress.handler(
-          handlerContext<
-            Parameters<typeof createMatterInboundAddress.handler>[0]
-          >(common),
+          asTestRaw<Parameters<typeof createMatterInboundAddress.handler>[0]>(
+            common,
+          ),
         ),
       );
       expect(first.address).not.toBe(second.address);
       const active = expectSuccess(
         await getMatterInboundAddress.handler(
-          handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+          asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
             common,
           ),
         ),
       );
       expect(active.address).toBe(second.address);
       await revokeMatterInboundAddress.handler(
-        handlerContext<
-          Parameters<typeof revokeMatterInboundAddress.handler>[0]
-        >(common),
+        asTestRaw<Parameters<typeof revokeMatterInboundAddress.handler>[0]>(
+          common,
+        ),
       );
       const revoked = expectSuccess(
         await getMatterInboundAddress.handler(
-          handlerContext<Parameters<typeof getMatterInboundAddress.handler>[0]>(
+          asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
             common,
           ),
         ),
@@ -489,7 +489,7 @@ describe("matter correspondence", () => {
     expect(replay.id).toBe(first.id);
     const detail = expectSuccess(
       await getCorrespondence.handler(
-        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
           ...commonContext(),
           params: { correspondenceId: first.id },
         }),
@@ -523,7 +523,7 @@ describe("matter correspondence", () => {
       );
       const read = expectSuccess(
         await getCorrespondence.handler(
-          handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
             ...commonContext(),
             params: { correspondenceId: attachment.id },
           }),
@@ -537,7 +537,7 @@ describe("matter correspondence", () => {
     }
     const list = expectSuccess(
       await listCorrespondence.handler(
-        handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
+        asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
           ...commonContext(),
           query: {},
         }),
@@ -552,11 +552,11 @@ describe("matter correspondence", () => {
 
   test("interleaved status and assignment edits preserve each other's supplied fields", async () => {
     const filed = await fileMessage(parsedMessage(directProvenance));
-    const patch = (
+    const patch = async (
       body: Parameters<typeof updateCorrespondence.handler>[0]["body"],
     ) =>
-      updateCorrespondence.handler(
-        handlerContext<Parameters<typeof updateCorrespondence.handler>[0]>({
+      await updateCorrespondence.handler(
+        asTestRaw<Parameters<typeof updateCorrespondence.handler>[0]>({
           ...commonContext(),
           safeDb: safeDbFor(ids.userAdmin, ids.wsA1),
           user: { id: ids.userAdmin },
@@ -670,7 +670,7 @@ describe("matter correspondence", () => {
       const read = async (id: typeof filed.id) =>
         expectSuccess(
           await getCorrespondence.handler(
-            handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+            asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
               ...commonContext(),
               safeDb: safeDbFor(ids.userA2, ids.wsA1),
               user: { id: ids.userA2 },
