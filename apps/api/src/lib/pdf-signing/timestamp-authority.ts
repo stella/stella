@@ -27,7 +27,9 @@ export class PdfSigningTimestampUnavailableError extends TaggedError(
 )<{ message: string; failures: { url: string; message: string }[] }> {}
 
 export type FallbackTimestampAuthority = TimestampAuthority & {
-  /** The authority whose token was used, once one has answered. */
+  /** The token that was used, once an authority has answered. */
+  usedToken: () => Uint8Array | null;
+  /** The authority that issued it. */
   usedUrl: () => string | null;
 };
 
@@ -37,9 +39,10 @@ const describe = (error: unknown) =>
 export const createFallbackTimestampAuthority = (
   authorities: readonly NamedTimestampAuthority[],
 ): FallbackTimestampAuthority => {
-  let usedUrl: string | null = null;
+  let used: { token: Uint8Array; url: string } | null = null;
   return {
-    usedUrl: () => usedUrl,
+    usedToken: () => used?.token ?? null,
+    usedUrl: () => used?.url ?? null,
     timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) => {
       const failures: { url: string; message: string }[] = [];
       for (const { authority, url } of authorities) {
@@ -47,7 +50,7 @@ export const createFallbackTimestampAuthority = (
           // Sequential on purpose: the list is a preference order, and a
           // later authority is only asked once every earlier one failed.
           const token = await authority.timestamp(digest, algorithm);
-          usedUrl = url;
+          used = { token, url };
           return token;
         } catch (error) {
           failures.push({ url, message: describe(error) });

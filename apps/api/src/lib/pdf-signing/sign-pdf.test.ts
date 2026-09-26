@@ -2,6 +2,7 @@ import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
+import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import {
   applySignature,
   captureSigningDigest,
@@ -10,6 +11,10 @@ import {
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import {
+  createTestCertificate,
+  createTestCrl,
+} from "@/api/tests/helpers/test-pki";
 import { createTestTimestampAuthority } from "@/api/tests/helpers/timestamp-token";
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
@@ -82,6 +87,7 @@ describe("two-phase PDF signing", () => {
       ...invocation,
       expectedDigestHex: digestHex,
       signature,
+      certificateChainComplete: true,
       timestampAuthorities: [],
     });
 
@@ -166,6 +172,7 @@ describe("two-phase PDF signing", () => {
       ...invocation,
       expectedDigestHex: otherDigestHex,
       signature,
+      certificateChainComplete: true,
       timestampAuthorities: [],
     }).catch((error: unknown) => error);
     expect(rejected).toBeInstanceOf(PdfSigningDigestMismatchError);
@@ -202,6 +209,7 @@ describe("two-phase PDF signing", () => {
       ...invocation,
       expectedDigestHex: digestHex,
       signature,
+      certificateChainComplete: true,
       timestampAuthorities: [
         {
           authority: {
@@ -222,5 +230,120 @@ describe("two-phase PDF signing", () => {
     expect(applied.bytes.byteLength).toBeGreaterThan(
       invocation.basePdf.byteLength,
     );
+  });
+
+  describe("validation data", () => {
+    const CRL_URL = "http://crl.example/issuing.crl";
+
+    const signUnderIssuingCa = async ({
+      chainComplete,
+    }: {
+      chainComplete: boolean;
+    }) => {
+      const root = await createTestCertificate({
+        commonName: "Root",
+        isCa: true,
+      });
+      const issuing = await createTestCertificate({
+        commonName: "Issuing CA",
+        crlUrl: CRL_URL,
+        isCa: true,
+        issuer: root,
+      });
+      const leaf = await createTestCertificate({
+        caIssuersUrl: "http://pki.example/issuing.cer",
+        commonName: "Jane Counsel",
+        crlUrl: CRL_URL,
+        issuer: issuing,
+      });
+      const crl = await createTestCrl(issuing);
+      const fetched: string[] = [];
+      const revocationProvider = createTrackedRevocationProvider(
+        async ({ url }) => {
+          fetched.push(url);
+          return url === CRL_URL ? crl : null;
+        },
+      );
+
+      const invocation = {
+        ...(await buildInvocation()).invocation,
+        certificate: leaf.der,
+        certificateChain: chainComplete
+          ? [issuing.der, root.der]
+          : [issuing.der],
+      };
+      const digestHex = await captureSigningDigest(invocation);
+      const signature = await signDigestLikeAKeychain(
+        leaf.privateKey,
+        digestHex,
+      );
+
+      // LibPDF's own fetching goes through the global `fetch`; nothing may
+      // reach it, whatever the certificate's URLs name.
+      const globalFetch = globalThis.fetch;
+      const globalFetches: string[] = [];
+      globalThis.fetch = Object.assign(
+        async (input: RequestInfo | URL) => {
+          globalFetches.push(String(input));
+          throw new Error("unexpected global fetch");
+        },
+        { preconnect: globalFetch.preconnect },
+      );
+      try {
+        const applied = await applySignature({
+          ...invocation,
+          certificateChainComplete: chainComplete,
+          expectedDigestHex: digestHex,
+          revocationProvider,
+          signature,
+          timestampAuthorities: [
+            {
+              authority: await createTestTimestampAuthority(),
+              url: "https://tsa.example/",
+            },
+          ],
+        });
+        return {
+          applied,
+          basePdf: invocation.basePdf,
+          crl,
+          fetched,
+          globalFetches,
+        };
+      } finally {
+        globalThis.fetch = globalFetch;
+      }
+    };
+
+    test("embeds revocation data fetched through the guarded provider for a complete chain", async () => {
+      const { applied, basePdf, crl, fetched, globalFetches } =
+        await signUnderIssuingCa({ chainComplete: true });
+
+      // Every step was an incremental update: the stored bytes are still the
+      // document's prefix, so the signature's byte range is intact.
+      expect(
+        Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)).equals(
+          Buffer.from(basePdf),
+        ),
+      ).toBe(true);
+
+      expect(applied.level).toBe("B-LT");
+      expect(fetched).toContain(CRL_URL);
+      expect(globalFetches).toEqual([]);
+      // The CRL lands in the document security store verbatim.
+      expect(Buffer.from(applied.bytes).includes(Buffer.from(crl))).toBe(true);
+    });
+
+    test("skips validation data for a chain that stops short of a root", async () => {
+      const { applied, fetched, globalFetches } = await signUnderIssuingCa({
+        chainComplete: false,
+      });
+
+      // Revocation data was still gathered for what is there, through the
+      // guarded provider; only the level claim stops at trusted time.
+      expect(applied.level).toBe("B-T");
+      expect(fetched).toContain(CRL_URL);
+      expect(globalFetches).toEqual([]);
+    });
   });
 });

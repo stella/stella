@@ -17,6 +17,7 @@ import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
+import { chainReachesRoot } from "@/api/lib/pdf-signing/certificate-chain";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
 import {
   applySignature,
@@ -153,13 +154,18 @@ const submitPdfSigningSignature = createSafeTokenHandler(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),
     );
 
+    const certificateChain = decodeCertificateChain(
+      session.signerCertificateChain,
+    );
     const signedPdf = await Result.tryPromise({
       try: async () =>
         await applySignature({
           basePdf,
           certificate: new Uint8Array(signerCertificateDer),
-          certificateChain: decodeCertificateChain(
-            session.signerCertificateChain,
+          certificateChain,
+          certificateChainComplete: chainReachesRoot(
+            signerCertificateDer,
+            certificateChain,
           ),
           expectedDigestHex: digestHex,
           keyType,

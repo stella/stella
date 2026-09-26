@@ -9,6 +9,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
 import { inspectSigningCertificate } from "@/api/lib/pdf-signing/certificate";
+import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
 import {
   captureSigningDigest,
@@ -132,12 +133,19 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),
     );
 
+    // The keychain builds its chain offline, so intermediates are often
+    // missing; the stored chain is the verified, completed one.
+    const { chain: signerChain } = await completeCertificateChain({
+      candidates: chain.filter((entry) => entry !== null),
+      certificate,
+    });
+
     const captured = await Result.tryPromise({
       try: async () =>
         await captureSigningDigest({
           basePdf,
           certificate,
-          certificateChain: chain.filter((entry) => entry !== null),
+          certificateChain: signerChain,
           keyType: inspection.keyType,
           location: session.location,
           reason: session.reason,
@@ -184,7 +192,9 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
           .set({
             digestHex,
             keyType: inspection.keyType,
-            signerCertificateChain: payload.value.certificateChain,
+            signerCertificateChain: signerChain.map((der) =>
+              Buffer.from(der).toString("base64"),
+            ),
             signerCertificateDer: Buffer.from(certificate),
             signingTime,
           })
