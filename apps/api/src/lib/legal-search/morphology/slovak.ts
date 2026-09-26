@@ -355,7 +355,14 @@ const removeSoftStemVowel = (
 const removeHardStemEm = (chars: readonly string[], length: number): number =>
   length > 4 && endsWith(chars, length, "ém") ? length - 2 : length;
 
-/** Upstream's possessive pass needs six characters; `súdov` has five. */
+/**
+ * Upstream's possessive pass needs six characters; `súdov` has five.
+ *
+ * The shorter floor costs precision: a five-character noun whose `-ov` is
+ * its stem, not its ending, now stems with a shorter word (`domov` and `dom`
+ * share `dom`). Recall of every one-syllable genitive plural is worth more to
+ * legal search than keeping those few nouns apart.
+ */
 const MIN_POSSESSIVE_OV_LENGTH = {
   faithful: 6,
   extended: 5,
