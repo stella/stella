@@ -525,6 +525,132 @@ describe("scoped object operations", () => {
   });
 });
 
+describe("tenant operations on expired credentials", () => {
+  const scope = { organizationId: "org_1", workspaceId: "ws_1" } as const;
+  const key = "org_1/ws_1/file.pdf";
+  const expiredToken = () =>
+    Object.assign(new Error("The provided token has expired."), {
+      name: "ExpiredToken",
+    });
+  const buildClient = () =>
+    new AwsS3Client({
+      credentials: {
+        accessKeyId: "test-access-key",
+        secretAccessKey: "test-secret-key",
+      },
+      region: "us-east-1",
+    });
+  const installScopedSessions = (): AwsS3Client[] => {
+    const built: AwsS3Client[] = [];
+    setScopedSigningEnabledForTesting(() => true);
+    setScopedS3ClientFactoryForTesting(async () => {
+      const client = buildClient();
+      built.push(client);
+      return { client, expiresAt: Date.now() + 60 * 60 * 1000 };
+    });
+    return built;
+  };
+  const failFirstRead = (failure: unknown) => {
+    const clients: AwsS3Client[] = [];
+    setTenantS3OperationHooksForTesting({
+      readObject: async (client) => {
+        clients.push(client);
+        if (clients.length === 1) {
+          throw failure;
+        }
+        return HELLO_BYTES;
+      },
+    });
+    return clients;
+  };
+
+  afterEach(() => {
+    resetAwsS3ClientForTesting();
+  });
+
+  test("replaces an expired scoped session and replays once", async () => {
+    const sessions = installScopedSessions();
+    const readClients = failFirstRead(expiredToken());
+
+    const bytes = await readTenantS3ArrayBuffer({
+      key,
+      scope,
+      signal: new AbortController().signal,
+    });
+
+    expect(new Uint8Array(bytes)).toEqual(HELLO_BYTES);
+    expect(sessions).toHaveLength(2);
+    expect(readClients).toEqual(sessions);
+  });
+
+  test("rebuilds an expired unscoped client and replays once", async () => {
+    setScopedSigningEnabledForTesting(() => false);
+    const readClients = failFirstRead(expiredToken());
+
+    const bytes = await readTenantS3ArrayBuffer({
+      key,
+      scope,
+      signal: new AbortController().signal,
+    });
+
+    expect(new Uint8Array(bytes)).toEqual(HELLO_BYTES);
+    expect(readClients).toHaveLength(2);
+    expect(readClients.at(1)).not.toBe(readClients.at(0));
+  });
+
+  test("surfaces a second consecutive expiry instead of looping", async () => {
+    installScopedSessions();
+    const failures = [expiredToken(), expiredToken()];
+    let writes = 0;
+    setTenantS3OperationHooksForTesting({
+      writeObject: async () => {
+        writes += 1;
+        throw failures.at(writes - 1);
+      },
+    });
+
+    const rejection = await writeTenantS3Object({
+      contentType: "application/pdf",
+      data: HELLO_BYTES,
+      key,
+      scope,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(writes).toBe(2);
+    expect(rejection).toBe(failures.at(1));
+  });
+
+  test("does not replay a cancelled operation", async () => {
+    installScopedSessions();
+    const controller = new AbortController();
+    const reason = new Error("run cancelled");
+    controller.abort(reason);
+    let heads = 0;
+    setTenantS3OperationHooksForTesting({
+      headObjectSize: async (_client, _command, signal) => {
+        heads += 1;
+        throw signal.reason;
+      },
+    });
+
+    const rejection = await readTenantS3ObjectSize({
+      key,
+      scope,
+      signal: controller.signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(reason);
+    expect(heads).toBe(1);
+  });
+});
+
 describe("scoped object operations over the S3 wire protocol", () => {
   let fake: FakeS3;
 
