@@ -43,6 +43,16 @@ export const documentSourceSchema = v.variant("kind", [
     level: v.picklist(["B-B", "B-T", "B-LT"]),
     /** The authority whose trusted time the signature carries. */
     timestampAuthorityUrl: v.nullable(v.pipe(v.string(), v.url())),
+    /** Why `level` is what it is when it fell short of the configuration. */
+    warnings: v.pipe(
+      v.array(
+        v.strictObject({
+          code: v.pipe(v.string(), v.maxLength(64)),
+          message: v.pipe(v.string(), v.maxLength(500)),
+        }),
+      ),
+      v.maxLength(20),
+    ),
   }),
   v.strictObject({
     kind: v.literal("sharepoint"),

@@ -26,7 +26,12 @@
  */
 
 import { PDF, PlaceholderError } from "@libpdf/core";
-import type { DigestAlgorithm, Signer, TimestampAuthority } from "@libpdf/core";
+import type {
+  DigestAlgorithm,
+  Signer,
+  SignWarning,
+  TimestampAuthority,
+} from "@libpdf/core";
 import { TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
@@ -34,7 +39,10 @@ import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certifi
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
-import { createFallbackTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
+import {
+  createFallbackTimestampAuthority,
+  PdfSigningTimestampUnavailableError,
+} from "@/api/lib/pdf-signing/timestamp-authority";
 import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
 import {
   embedValidationData,
@@ -281,10 +289,46 @@ type ApplySignatureInvocation = SigningInvocation & {
 
 export type AppliedSignature = {
   bytes: Uint8Array;
+  /** The level actually achieved, never the configured one. */
   level: PdfSigningLevel;
   /** The authority whose timestamp the signature carries. */
   timestampAuthorityUrl: string | null;
+  /** What kept the signature below B-LT, and anything LibPDF noted. */
+  warnings: PdfSigningWarning[];
 };
+
+export type PdfSigningWarning = { code: string; message: string };
+
+const WARNING_LIMIT = 20;
+const WARNING_MESSAGE_MAX_LENGTH = 500;
+
+/** Warnings are stored with the version; keep what one version carries small. */
+const boundWarnings = (warnings: readonly PdfSigningWarning[]) =>
+  warnings.slice(0, WARNING_LIMIT).map(({ code, message }) => ({
+    code: code.slice(0, 64),
+    message: message.slice(0, WARNING_MESSAGE_MAX_LENGTH),
+  }));
+
+/**
+ * LibPDF's own warnings, minus `MDP_VIOLATION`: it is raised for any
+ * certified document, and phase 1 has already refused the certifications
+ * that forbid a signature, so on what reaches here it is noise.
+ */
+const libpdfWarnings = (warnings: readonly SignWarning[]) =>
+  warnings
+    .filter(({ code }) => code !== "MDP_VIOLATION")
+    .map(({ code, message }) => ({ code, message }));
+
+const describeError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+/**
+ * Failures that only cost the timestamp: every authority failed, or a token
+ * came back too large for the reservation phase 1 made.
+ */
+const isTimestampFailure = (error: unknown) =>
+  PdfSigningTimestampUnavailableError.is(error) ||
+  error instanceof PlaceholderError;
 
 /**
  * Phase 2: the signed PDF. Throws {@link PdfSigningDigestMismatchError} when
@@ -312,25 +356,48 @@ export const applySignature = async (
     },
   };
 
+  const signOnce = async (trust: TrustOptions) => {
+    const pdf = await PDF.load(invocation.basePdf);
+    const { bytes, warnings } = await pdf.sign(
+      buildSignOptions(invocation, signer, trust),
+    );
+    return { bytes, pdf, warnings };
+  };
+
   return await withTimeout(
     async () => {
-      const pdf = await PDF.load(invocation.basePdf);
-      const timestampAuthority = createFallbackTimestampAuthority(
-        invocation.timestampAuthorities,
-      );
       try {
-        const { bytes } = await pdf.sign(
-          buildSignOptions(
-            invocation,
-            signer,
-            invocation.timestampAuthorities.length > 0
-              ? { timestampAuthority }
-              : {},
-          ),
+        const warnings: PdfSigningWarning[] = [];
+        const timestampAuthority = createFallbackTimestampAuthority(
+          invocation.timestampAuthorities,
         );
+        const timestamped =
+          invocation.timestampAuthorities.length > 0
+            ? await signOnce({ timestampAuthority }).catch((error: unknown) => {
+                if (!isTimestampFailure(error)) {
+                  throw error;
+                }
+                // The desktop's signature is already spent; a signature
+                // without trusted time beats none, and the level and the
+                // warning below say exactly what it lacks.
+                warnings.push({
+                  code: "TIMESTAMP_UNAVAILABLE",
+                  message: describeError(error),
+                });
+                return null;
+              })
+            : null;
+        const signed = timestamped ?? (await signOnce({}));
+        warnings.push(...libpdfWarnings(signed.warnings));
+
         const token = timestampAuthority.usedToken();
-        if (token === null) {
-          return { bytes, level: "B-B", timestampAuthorityUrl: null };
+        if (timestamped === null || token === null) {
+          return {
+            bytes: signed.bytes,
+            level: "B-B",
+            timestampAuthorityUrl: null,
+            warnings: boundWarnings(warnings),
+          } satisfies AppliedSignature;
         }
 
         // The chain is phase 1's completed one, so what is left to gather is
@@ -342,13 +409,28 @@ export const applySignature = async (
           signerChain: [invocation.certificate, ...invocation.certificateChain],
           timestampCertificates: timestampTokenCertificates(token),
         });
-        const longTermValidated =
-          invocation.certificateChainComplete &&
-          validation.uncovered.length === 0;
+        if (!invocation.certificateChainComplete) {
+          warnings.push({
+            code: "CHAIN_INCOMPLETE",
+            message:
+              "The signer's certificate chain does not reach a root certificate.",
+          });
+        }
+        if (validation.uncovered.length > 0) {
+          warnings.push({
+            code: "REVOCATION_UNAVAILABLE",
+            message: `No revocation data for ${validation.uncovered.length} certificate(s) in the signer's chain.`,
+          });
+        }
         return {
-          bytes: await embedValidationData(pdf, validation.material),
-          level: longTermValidated ? "B-LT" : "B-T",
+          bytes: await embedValidationData(signed.pdf, validation.material),
+          level:
+            invocation.certificateChainComplete &&
+            validation.uncovered.length === 0
+              ? "B-LT"
+              : "B-T",
           timestampAuthorityUrl: timestampAuthority.usedUrl(),
+          warnings: boundWarnings(warnings),
         } satisfies AppliedSignature;
       } catch (error) {
         if (PdfSigningDigestMismatchError.is(error)) {
