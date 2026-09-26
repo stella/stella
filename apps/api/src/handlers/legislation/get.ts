@@ -129,9 +129,10 @@ const config = {
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +
-    "version-validity dates, source links, full text, and parsed " +
-    "structure. Only documents from sources cleared for redistribution are " +
-    "returned; anything else reads as not found.",
+    "version-validity dates, source links, and parsed structure. Full text " +
+    "is returned only when the parsed structure is missing or unusable, and " +
+    "is null otherwise. Only documents from sources cleared for " +
+    "redistribution are returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_statute" },
   access: "read",
