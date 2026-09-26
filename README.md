@@ -110,8 +110,8 @@ the web app at <http://localhost:3000>, and opens the browser.
 ### Optional demo data
 
 ```bash
-bun --filter @stll/api db:seed-test-user
-bun --filter @stll/api db:seed-dev
+NODE_ENV=development STELLA_LOCAL_DEV=1 bun --filter @stll/api db:seed-test-user
+NODE_ENV=development STELLA_LOCAL_DEV=1 bun --filter @stll/api db:seed-dev
 ```
 
 ### Common commands

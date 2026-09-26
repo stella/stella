@@ -36,6 +36,7 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedId } from "./seed-utils";
 
@@ -329,9 +330,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
 };
 
 export async function seedCaseLaw() {
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to run: NODE_ENV must not be 'production'.");
-  }
+  requireLocalDevOpen("Seeding");
 
   // The dev seed route runs this inside the API process, so the lane is
   // released here rather than left to the process exit.
