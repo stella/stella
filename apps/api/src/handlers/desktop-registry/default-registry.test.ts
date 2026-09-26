@@ -69,7 +69,9 @@ test("conflicting primary jurisdictions still require an explicit choice", () =>
 });
 
 test("a supplementary register defers to its jurisdiction's primary register", () => {
-  const practiceJurisdictions = [{ countryCode: "SK", isPrimary: true }];
+  const practiceJurisdictions = [
+    { countryCode: "SK", isPrimary: true },
+  ] as const;
   expect(
     getDefaultDesktopRegistry({
       registries: [
