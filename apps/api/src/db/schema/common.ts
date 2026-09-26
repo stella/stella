@@ -290,6 +290,29 @@ export type TemplateDeletionCleanupStatus =
   (typeof TEMPLATE_DELETION_CLEANUP_STATUSES)[number];
 
 /**
+ * Whether a stored object's bytes passed the upload scan when they were
+ * written. `unscanned` rows are scanned on their next read (see
+ * `lib/file-scan/stored-object.ts`), so a row never reaches a parser on trust.
+ */
+export const STORED_FILE_SCAN_STATES = ["scanned", "unscanned"] as const;
+export type StoredFileScanState = (typeof STORED_FILE_SCAN_STATES)[number];
+
+const STORED_FILE_SCAN_STATE_SQL_VALUES = sql.join(
+  STORED_FILE_SCAN_STATES.map((state) => sql.raw(`'${state}'`)),
+  sql`, `,
+);
+
+/** Defaults to `unscanned`: a writer that records no proof gets a scan on read. */
+export const storedFileScanState = () =>
+  p
+    .text("scan_state", { enum: STORED_FILE_SCAN_STATES })
+    .notNull()
+    .default("unscanned");
+
+export const storedFileScanStateCheck = (name: string, column: AnyPgColumn) =>
+  p.check(name, sql`${column} IN (${STORED_FILE_SCAN_STATE_SQL_VALUES})`);
+
+/**
  * Search projections driven by the transactional repair queue. This one list
  * types the queue column, generates the table's CHECK constraint, and keys
  * the drain's repair dispatch, so a fourth projection cannot be added to one
