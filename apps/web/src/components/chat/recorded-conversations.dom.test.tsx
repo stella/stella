@@ -1143,6 +1143,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),
   "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "resend-without-anonymization": notRecorded(
+    "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",
+  ),
   "resolve-draft": OUTSIDE_THE_CONVERSATION,
   retry: recordedAs(({ type }) => type === "retry"),
   "run-client-tool": recordedAs(({ type }) => type === "client-tool"),

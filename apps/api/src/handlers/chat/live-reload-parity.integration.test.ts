@@ -972,6 +972,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "The send queue lives in the session hook, which the harness does not render.",
   ),
   "rename-thread": notModelled("It changes the title only."),
+  "resend-without-anonymization": notModelled(
+    "Offered only after the anonymization boundary refuses a turn, which the harness's raw boundary never does.",
+  ),
   "resolve-draft": notModelled(
     "Saving a draft changes the stored document, not the conversation.",
   ),
