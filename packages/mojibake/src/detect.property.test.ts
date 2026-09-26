@@ -21,13 +21,20 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import {
+  propertyConfig,
+  propertySeed,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import { alphabetFor } from "./alphabet.js";
 import { DECODING_PAIRS, type DecodingPair, misdecode } from "./charsets.js";
 import {
   checkTextEncoding,
   type EncodingCheck,
+  type EncodingCheckCounters,
+  MAX_EXAMINED_WORDS,
+  PAIR_EVALUATION_BUDGET,
   repairMisdecoding,
 } from "./detect.js";
 import { CLDR_EXEMPLARS } from "./exemplars.generated.js";
@@ -389,4 +396,84 @@ describe("generated text", () => {
       config(300),
     );
   });
+});
+
+describe("bounded work", () => {
+  /** Latin letters spelling `index`, so every generated word is distinct. */
+  const spelled = (index: number): string => {
+    let rest = index;
+    let word = "";
+    do {
+      word += String.fromCodePoint(0x61 + (rest % 26));
+      rest = Math.floor(rest / 26);
+    } while (rest > 0);
+    return word;
+  };
+  // Alternating misfit ("Sø…", a letter no CLDR Czech exemplar holds) and
+  // native ("př…") words: the shape that reaches the costliest branch of
+  // pair evidence, scanning the native words once a pair's misfits pass the
+  // evidence threshold (`detect.test.ts` covers it at a fixed size).
+  const mixedText = (wordCount: number): string =>
+    Array.from({ length: wordCount }, (_, index) =>
+      index % 2 === 0 ? `Sø${spelled(index)}` : `př${spelled(index)}`,
+    ).join(" ");
+
+  test(
+    "distinct words examined and pair evaluations never exceed the documented bounds, at every size",
+    () => {
+      fc.assert(
+        fc.property(fc.integer({ min: 0, max: 30_000 }), (wordCount) => {
+          const counters: EncodingCheckCounters = {
+            wordsExamined: 0,
+            pairEvaluations: 0,
+          };
+          checkTextEncoding(mixedText(wordCount), "cs", { counters });
+          expect(counters.wordsExamined).toBeLessThanOrEqual(
+            MAX_EXAMINED_WORDS,
+          );
+          expect(counters.pairEvaluations).toBeLessThanOrEqual(
+            PAIR_EVALUATION_BUDGET,
+          );
+        }),
+        config(30),
+      );
+    },
+    propertyTestTimeout(20_000),
+  );
+
+  test(
+    "a distinct-word count past the bound is never called clean",
+    () => {
+      fc.assert(
+        fc.property(
+          fc.integer({
+            min: MAX_EXAMINED_WORDS + 1,
+            max: MAX_EXAMINED_WORDS + 10_000,
+          }),
+          (wordCount) => {
+            // Every word is native: no misfit ever exists to be found as
+            // evidence, so the only bound this text can reach is the number
+            // of distinct words, and the only honest verdict past it is
+            // "incomplete", never "clean".
+            const text = Array.from(
+              { length: wordCount },
+              (_, index) => `př${spelled(index)}`,
+            ).join(" ");
+            const counters: EncodingCheckCounters = {
+              wordsExamined: 0,
+              pairEvaluations: 0,
+            };
+            const check = checkTextEncoding(text, "cs", { counters });
+            expect(counters.wordsExamined).toBe(MAX_EXAMINED_WORDS);
+            expect(check).toEqual({
+              status: "incomplete",
+              limit: "distinct-words",
+            });
+          },
+        ),
+        config(30),
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 });

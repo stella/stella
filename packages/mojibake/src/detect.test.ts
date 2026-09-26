@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { misdecode } from "./charsets.js";
 import {
   checkTextEncoding,
+  type EncodingCheckCounters,
   type EncodingFinding,
+  MAX_EXAMINED_WORDS,
+  PAIR_EVALUATION_BUDGET,
   repairMisdecoding,
 } from "./detect.js";
 import { UDHR_ARTICLE_1 } from "./udhr-article-1.fixture.js";
@@ -145,11 +148,6 @@ describe("work on a long text of distinct words", () => {
     }
     return words.join(" ");
   };
-  /**
-   * What a synchronous check may hold the ingestion worker's event loop for,
-   * with headroom for a loaded machine.
-   */
-  const LATENCY_BUDGET_MS = 500;
   const HALF_MEGABYTE = 500_000;
   // Never "clean": a check that stopped at a bound says so, unless what it
   // did weigh is already evidence. Thousands of distinct words in letters
@@ -166,14 +164,20 @@ describe("work on a long text of distinct words", () => {
   ] as const;
 
   test.each(SHAPES)(
-    "half a megabyte, %s: within the budget, and never called clean",
+    "half a megabyte, %s: within the documented bounds, and never called clean",
     (_, word, status) => {
       const text = textOf(HALF_MEGABYTE, word);
-      const started = performance.now();
-      const check = checkTextEncoding(text, "cs");
-      const elapsed = performance.now() - started;
+      const counters: EncodingCheckCounters = {
+        wordsExamined: 0,
+        pairEvaluations: 0,
+      };
+      const check = checkTextEncoding(text, "cs", { counters });
       expect(check.status).toBe(status);
-      expect(elapsed).toBeLessThan(LATENCY_BUDGET_MS);
+      // A bounded check never weighs, or reads back, more than it documents.
+      expect(counters.wordsExamined).toBeLessThanOrEqual(MAX_EXAMINED_WORDS);
+      expect(counters.pairEvaluations).toBeLessThanOrEqual(
+        PAIR_EVALUATION_BUDGET,
+      );
     },
   );
 

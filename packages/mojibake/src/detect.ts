@@ -61,11 +61,11 @@ const MIN_UTF8_SIGNATURE_OCCURRENCES = 2;
  * examined first; a check that stops at a bound says so (`incomplete`)
  * instead of calling the text clean.
  */
-const MAX_EXAMINED_WORDS = 20_000;
+export const MAX_EXAMINED_WORDS = 20_000;
 /** Misfit words every pair is tried on. */
-const MAX_PAIR_MISFITS = 200;
+export const MAX_PAIR_MISFITS = 200;
 /** Words read back through a pair, across all pairs. */
-const PAIR_EVALUATION_BUDGET = 40_000;
+export const PAIR_EVALUATION_BUDGET = 40_000;
 const MAX_SAMPLES = 5;
 const PREVIEW_CHARS = 400;
 
@@ -127,6 +127,22 @@ export type EncodingFinding =
     };
 
 export type EncodingFindingKind = EncodingFinding["kind"];
+
+/**
+ * Test-only: how much work a check actually did, so a test can assert the
+ * documented bounds (`MAX_EXAMINED_WORDS`, `PAIR_EVALUATION_BUDGET`) without
+ * timing the check. Filled in place; the caller owns the object.
+ */
+export type EncodingCheckCounters = {
+  /** Distinct words weighed, after the distinct-words bound. */
+  wordsExamined: number;
+  /** Word read-backs spent trying every pair, across all pairs. */
+  pairEvaluations: number;
+};
+
+export type CheckTextEncodingOptions = {
+  counters?: EncodingCheckCounters;
+};
 
 /** The bound a check stopped at before it had weighed every word. */
 export type EncodingCheckLimit =
@@ -454,6 +470,7 @@ type PairEvidenceOptions = {
   natives: readonly ClassifiedWord[];
   alphabet: Alphabet;
   budget: Budget;
+  counters: EncodingCheckCounters | undefined;
 };
 
 /**
@@ -462,11 +479,14 @@ type PairEvidenceOptions = {
  */
 const pairEvidence = (
   pair: DecodingPair,
-  { misfits, natives, alphabet, budget }: PairEvidenceOptions,
+  { misfits, natives, alphabet, budget, counters }: PairEvidenceOptions,
 ): PairEvidence | null | "exhausted" => {
   budget.remaining -= misfits.length;
   if (budget.remaining < 0) {
     return "exhausted";
+  }
+  if (counters !== undefined) {
+    counters.pairEvaluations += misfits.length;
   }
   let fixedOccurrences = 0;
   /** Fixed occurrences of words that are more than attached notation. */
@@ -512,6 +532,9 @@ const pairEvidence = (
   budget.remaining -= natives.length;
   if (budget.remaining < 0) {
     return "exhausted";
+  }
+  if (counters !== undefined) {
+    counters.pairEvaluations += natives.length;
   }
   let damagedOccurrences = 0;
   let convertedOccurrences = 0;
@@ -812,6 +835,7 @@ export const repairMisdecoding = (
 export const checkTextEncoding = (
   text: string,
   language: string,
+  { counters }: CheckTextEncodingOptions = {},
 ): EncodingCheck => {
   const findings: EncodingFinding[] = [];
 
@@ -834,6 +858,9 @@ export const checkTextEncoding = (
     Array.from(words, ([word, stat]) => ({ word, stat })),
     MAX_EXAMINED_WORDS,
   );
+  if (counters !== undefined) {
+    counters.wordsExamined = examined.length;
+  }
   const alphabet = alphabetFor(language);
   const utf8 = utf8Signature(examined, alphabet);
   if (utf8 !== null) {
@@ -862,6 +889,7 @@ export const checkTextEncoding = (
             ),
             alphabet,
             budget: { remaining: PAIR_EVALUATION_BUDGET },
+            counters,
           });
     if (best === "exhausted") {
       limit ??= "pair-evaluations";
