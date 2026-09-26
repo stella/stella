@@ -1,8 +1,6 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { pdfSigningSessions } from "@/api/db/schema";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -12,6 +10,7 @@ import { inspectSigningCertificate } from "@/api/lib/pdf-signing/certificate";
 import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
 import { certificateRevokedError } from "@/api/lib/pdf-signing/finalize";
+import { storePreparedState } from "@/api/lib/pdf-signing/prepared-state";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import {
   captureSigningDigest,
@@ -51,6 +50,13 @@ const decodeBase64Der = (value: string): Uint8Array | null => {
     ? new Uint8Array(bytes)
     : null;
 };
+
+const certificateConflict = () =>
+  new HandlerError({
+    status: 400,
+    code: "pdf_signing_certificate_conflict",
+    message: "This session is already prepared for a different certificate.",
+  });
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -133,16 +139,10 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
         signatureAlgorithm: inspection.signatureAlgorithm,
       });
     }
-    // Once a signature is kept, re-preparing would publish a digest that
-    // signature does not cover.
-    if (session.signature !== null) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          code: "pdf_signing_signature_already_submitted",
-          message: "This session already holds a signature.",
-        }),
-      );
+    // The first preparation is final: the desktop may already be signing its
+    // digest, and a second certificate would pull it out from under it.
+    if (session.digestHex !== null) {
+      return Result.err(certificateConflict());
     }
 
     const { bytes: basePdf } = yield* Result.await(
@@ -224,27 +224,51 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
     }
     const { digestHex, signedAttributes } = captured.value;
 
-    yield* Result.await(
-      session.safeDb(async (tx) => {
-        // audit: skip — the certificate and digest are the prepared state of
-        // an already-audited exchange, not a state transition. The CREATE is
-        // recorded when the exchange opens and the UPDATE when it closes.
-        await tx
-          .update(pdfSigningSessions)
-          .set({
-            digestHex,
-            keyType: inspection.keyType,
-            placeholderSize,
-            signedAttributes: Buffer.from(signedAttributes),
-            signerCertificateChain: signerChain.map((der) =>
-              Buffer.from(der).toString("base64"),
-            ),
-            signerCertificateDer: Buffer.from(certificate),
-            signingTime,
-          })
-          .where(eq(pdfSigningSessions.id, session.sessionId));
-      }),
+    const stored = yield* Result.await(
+      session.safeDb(
+        async (tx) =>
+          await storePreparedState({
+            sessionId: session.sessionId,
+            tx,
+            values: {
+              digestHex,
+              keyType: inspection.keyType,
+              placeholderSize,
+              signedAttributes,
+              signerCertificateChain: signerChain.map((der) =>
+                Buffer.from(der).toString("base64"),
+              ),
+              signerCertificateDer: certificate,
+              signingTime,
+            },
+          }),
+      ),
     );
+    switch (stored.status) {
+      case "stored": {
+        break;
+      }
+      // A concurrent post for the same certificate prepared first; its
+      // digest is the one to sign.
+      case "already-prepared": {
+        return Result.ok({
+          digestAlgorithm: "SHA-256" as const,
+          digestHex: stored.digestHex,
+          signatureAlgorithm: inspection.signatureAlgorithm,
+        });
+      }
+      case "conflict": {
+        return Result.err(certificateConflict());
+      }
+      case "closed": {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Signing session not found.",
+          }),
+        );
+      }
+    }
 
     return Result.ok({
       digestAlgorithm: "SHA-256" as const,
