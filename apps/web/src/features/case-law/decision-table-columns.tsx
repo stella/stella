@@ -37,12 +37,14 @@ import type { Decision } from "@/features/case-law/components/decision-cells";
 import { renderDecisionCell } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_LABEL_KEYS,
+  decisionColumnLabelKey,
   decisionIdentityLineFields,
 } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
   DecisionExtraColumn,
+  DecisionReferenceColumnKind,
 } from "@/features/case-law/decision-columns.logic";
 import {
   decisionTableSchema,
@@ -135,12 +137,15 @@ type UseDecisionTableColumnsOptions = {
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   /** The organization's questions and what may be done to one. */
   questions: QuestionColumnSurface;
+  /** What the case-number column holds across the rows shown. */
+  referenceKind: DecisionReferenceColumnKind;
 };
 
 /** The decision table's schema, with the labels resolved for the reader. */
 export const useDecisionTableSchema = ({
   extraColumns = NO_EXTRA_DECISION_COLUMNS,
   questions,
+  referenceKind,
 }: UseDecisionTableColumnsOptions): DecisionTableSchema => {
   const t = useTranslations();
   const questionColumns =
@@ -155,7 +160,7 @@ export const useDecisionTableSchema = ({
       decisionTableSchema({
         extraColumns,
         labels: {
-          caseNumber: t(DECISION_COLUMN_LABEL_KEYS.caseNumber),
+          caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
           summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
           court: t(DECISION_COLUMN_LABEL_KEYS.court),
           country: t(DECISION_COLUMN_LABEL_KEYS.country),
@@ -168,15 +173,20 @@ export const useDecisionTableSchema = ({
         questionColumns,
         withQuestionSurface,
       }),
-    [extraColumns, questionColumns, t, withQuestionSurface],
+    [extraColumns, questionColumns, referenceKind, t, withQuestionSurface],
   );
 };
 
 export const useDecisionTableColumns = ({
   extraColumns,
   questions,
+  referenceKind,
 }: UseDecisionTableColumnsOptions): TableColumnDef<DecisionRowData>[] => {
-  const schema = useDecisionTableSchema({ extraColumns, questions });
+  const schema = useDecisionTableSchema({
+    extraColumns,
+    questions,
+    referenceKind,
+  });
   const available = questions.type === "available" ? questions : null;
 
   return useMemo(

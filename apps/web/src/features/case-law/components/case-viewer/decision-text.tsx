@@ -51,6 +51,7 @@ import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
   courtHeadnoteOrigin,
+  decisionDisplayReference,
   decisionTopMatter,
   editorialSupplementBlocks,
   footnoteParts,
@@ -79,6 +80,7 @@ type Decision = Pick<
   PublicCaseLawDecision,
   | keyof DecisionDocumentState
   | "caseNumber"
+  | "caseNumberType"
   | "court"
   | "courtAbbreviation"
   | "courtTier"
@@ -879,10 +881,11 @@ export const DecisionText = ({
   // text hydrates bare and the links are laid over it right after.
   const hydrated = useHydrated();
 
-  const caseNumberBlock = ast?.blocks.find(
-    (block) => block.type === "paragraph" && block.role === "case-number",
-  );
-  const displayRef = caseNumberBlock?.plainText ?? decision.caseNumber;
+  const displayRef = decisionDisplayReference({
+    ast,
+    caseNumber: decision.caseNumber,
+    caseNumberType: decision.caseNumberType,
+  });
 
   const hasRenderableBody =
     visibleBlocks.length > 0 ||

@@ -18,6 +18,7 @@ import {
 import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
+  decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
   citationKeyOf,
@@ -2346,10 +2347,67 @@ describe("extractCitations", () => {
 });
 
 describe("stored decision identifier projection", () => {
+  test("recovers a reporter primary as a reporter citation from either stored shape", () => {
+    const reporter = {
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: "347 U.S. 483",
+    };
+    const docket = { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "1" };
+    const stored = {
+      caseNumber: reporter.value,
+      caseNumberType: reporter.type,
+      ecli: null,
+    };
+    // The identifiers written with the row, and the publisher aliases a row
+    // older than them carries.
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        metadata: storeDecisionIdentifiersInMetadata({}, [docket]),
+      }),
+    ).toEqual([reporter, docket]);
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        metadata: { additionalCaseNumbers: [docket.value] },
+      }),
+    ).toEqual([reporter, docket]);
+    // The fault the type closes: the same row read as a docket.
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        metadata: {},
+      }),
+    ).toEqual([
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: reporter.value },
+    ]);
+  });
+
+  test("keys a decision by its docket only where the docket is its primary", () => {
+    expect(
+      decisionCitationKeyOf({
+        caseNumber: "21 Cdo 1234/2020",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe(citationKeyOf("21 Cdo 1234/2020"));
+    for (const caseNumberType of [
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    ]) {
+      expect(
+        decisionCitationKeyOf({ caseNumber: "347 U.S. 483", caseNumberType }),
+      ).toBeNull();
+    }
+    // The reporter citation would otherwise canonicalize to a docket key.
+    expect(citationKeyOf("347 U.S. 483")).not.toBeNull();
+  });
+
   test("recovers publisher case-number aliases from stored metadata", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: "I ACa 1/24",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: "ECLI:PL:TEST:1",
         metadata: {
           additionalCaseNumbers: ["I ACz 2/24", "I ACa 1/24"],
@@ -2375,6 +2433,7 @@ describe("stored decision identifier projection", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: "1 As 2/2024",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata: { citation: "12 Test Reporter 34" },
       }),
@@ -2393,6 +2452,7 @@ describe("stored decision identifier projection", () => {
   test("reserves identifier capacity for a legacy reporter citation", () => {
     const identifiers = decisionIdentifiersFromStoredMetadata({
       caseNumber: "1 As 2/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: null,
       metadata: {
         additionalCaseNumbers: Array.from(
@@ -2423,6 +2483,7 @@ describe("stored decision identifier projection", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: "1 As 2/2024",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata,
       }),
@@ -2449,6 +2510,7 @@ describe("stored decision identifier projection", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: "1 Azs 4/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata,
       }),
@@ -3179,6 +3241,7 @@ describe("Constitutional Court rulings by their collection numbers", () => {
   // published under, then its reporter entry.
   const ruling = {
     caseNumber: "Pl. ÚS 18/01",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     ecli: "ECLI:CZ:US:2002:Pl.US.18.01",
     metadata: { parallelQuotation: "234/2002 Sb.\nN 53/26 SbNU 73" },
   };
@@ -3274,6 +3337,7 @@ describe("Constitutional Court rulings by their collection numbers", () => {
         citation?.citationText ?? "",
         decisionIdentifiersFromStoredMetadata({
           caseNumber: "Pl. ÚS 1/12",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           ecli: null,
           metadata: {
             parallelCitationLaws: "437/2012 Sb.",

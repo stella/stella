@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { readerTargetCitation } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
@@ -22,6 +24,7 @@ describe("the inspector decision citation", () => {
       ast: null,
       decision: {
         caseNumber: "56 Co 24/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         country: "CZE",
         court: "Krajský soud v Plzni",
         decisionDate: "2026-03-18",

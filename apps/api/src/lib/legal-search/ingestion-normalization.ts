@@ -33,6 +33,8 @@ import {
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import { assertDecisionLanguageIdentity } from "@/api/lib/legal-search/decision-language-identity";
+import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
@@ -257,9 +259,12 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     });
   }
 
+  assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
+
   return {
     ...result,
     caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
     identifiers,
     sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(

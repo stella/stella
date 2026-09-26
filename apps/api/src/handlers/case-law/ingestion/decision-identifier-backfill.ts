@@ -5,7 +5,10 @@ import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifiers,
+  DecisionPrimaryReferenceType,
+} from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -33,6 +36,10 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  primaryDecisionIdentifier,
+  primaryReferenceTypeFromStored,
+} from "@/api/lib/legal-search/decision-primary-reference";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -228,6 +235,7 @@ type DecisionRow = {
   id: string;
   caseNumber: string;
   country: string;
+  caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -276,6 +284,9 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
             id: row["id"],
             caseNumber: row["caseNumber"],
             country: row["country"],
+            caseNumberType: primaryReferenceTypeFromStored(
+              row["caseNumberType"],
+            ),
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
             metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
           },
@@ -341,6 +352,7 @@ const decisionRowsSql = (
   lock: boolean,
 ) => sql`
   SELECT decision.id::text AS id, decision.case_number AS "caseNumber",
+         decision.case_number_type AS "caseNumberType",
          decision.country, decision.ecli, decision.metadata
   FROM case_law_decisions decision
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
@@ -607,15 +619,10 @@ const identifierKey = ({
 
 const identifiersForStoredDecision = (
   row: DecisionRow,
-): DecisionIdentifiers | null => {
-  const caseNumberIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value: row.caseNumber,
-  } as const;
-  return normalizeDecisionIdentifier(caseNumberIdentifier)
+): DecisionIdentifiers | null =>
+  normalizeDecisionIdentifier(primaryDecisionIdentifier(row))
     ? decisionIdentifiersFromStoredMetadata(row)
     : null;
-};
 
 const decisionMismatchCount = async (
   tx: Transaction,

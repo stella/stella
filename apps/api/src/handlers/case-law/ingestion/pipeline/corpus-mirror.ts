@@ -128,6 +128,7 @@ export const rowHoldsDocument = sql<boolean>`(
  */
 const REFRESH_COMPARED_COLUMN_TYPES = {
   caseNumber: "text",
+  caseNumberType: "text",
   citationKey: "text",
   sourceDocumentId: "text",
   ecli: "text",

@@ -647,6 +647,7 @@
       "caseNumber": "Aktenzeichen",
       "citedBy": "Zitiert von",
       "headnote": "Leitsatz",
+      "reference": "Fundstelle",
       "summary": "Leitsatz / Fundstelle"
     },
     "corpusStatus": {

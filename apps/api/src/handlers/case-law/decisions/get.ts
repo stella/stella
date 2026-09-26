@@ -315,6 +315,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       columns: {
         id: true,
         caseNumber: true,
+        caseNumberType: true,
         slug: true,
         ecli: true,
         court: true,
@@ -361,10 +362,6 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { metadata, textFields } = readDecisionTextMetadata(
       decision.metadata,
     );
-    const identifiers = decisionIdentifierProjection(decision.identifiers, {
-      caseNumber: decision.caseNumber,
-      ecli: decision.ecli,
-    });
 
     const [
       courtWeights,
@@ -496,9 +493,10 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       // resolution says so, so a client can move to the judgment's address.
       resolution,
       caseNumber: decision.caseNumber,
+      caseNumberType: decision.caseNumberType,
       slug: decision.slug,
       ecli: decision.ecli,
-      identifiers,
+      identifiers: decisionIdentifierProjection(decision.identifiers, decision),
       court: decision.court,
       courtAbbreviation: presentation.courtAbbreviation,
       courtTier: presentation.courtTier,

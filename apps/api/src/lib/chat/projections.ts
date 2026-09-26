@@ -20,6 +20,10 @@ import {
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  DECISION_PRIMARY_REFERENCE_TYPES,
+} from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -1338,6 +1342,19 @@ const searchTotalProjection = v.variant("type", [
   ),
 ]);
 
+// `caseNumber` is the decision's primary citable reference: its docket for
+// `case-number`, otherwise a reporter or neutral citation.
+const caseNumberTypeProjection = v.picklist(DECISION_PRIMARY_REFERENCE_TYPES);
+
+// Every reference the decision answers to, the primary one and any docket
+// beside a reporter primary included.
+const decisionIdentifiersProjection = v.array(
+  v.strictObject({
+    type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
+    value: v.string(),
+  }),
+);
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
@@ -1396,6 +1413,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // take the tool off the chat surface on any deployment with the flag off.
       appUrl: v.nullable(v.string()),
       caseNumber: v.string(),
+      caseNumberType: caseNumberTypeProjection,
       citationCount: v.number(),
       // `ln(1 + weighted citations)`, the score the ranking blends in.
       citationAuthority: v.number(),
@@ -1414,6 +1432,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       language: v.string(),
       // Which of the call's `queries` returned this decision, by index,
       // ascending. A decision several phrasings agree on carries several.
+      identifiers: decisionIdentifiersProjection,
       matchedQueries: v.array(v.number()),
       // Passages of the decision that matched, within the scanned window.
       matchingPassages: v.number(),
@@ -1455,6 +1474,7 @@ const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   citationsFrom: v.array(
     v.strictObject({
       id: passthroughId(),
@@ -1486,6 +1506,7 @@ const caseLawDecisionProjection = v.strictObject({
   // UUID — never a Stella tenant id, so it is forwarded unchanged.
   documentUrl: v.nullable(publicUrl()),
   ecli: v.nullable(v.string()),
+  identifiers: decisionIdentifiersProjection,
   language: v.string(),
   metadata: unenumeratedJson(),
   textFields: v.strictObject(decisionTextFieldProjections),
@@ -1563,10 +1584,12 @@ const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   court: v.string(),
   decisionDate: v.nullable(v.string()),
   decisionId: passthroughId(),
   ecli: v.nullable(v.string()),
+  identifiers: decisionIdentifiersProjection,
   resourceName: passthroughId(),
 });
 
@@ -1648,6 +1671,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.
           appUrl: v.nullable(v.string()),
           caseNumber: v.string(),
+          caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
           court: v.string(),
           decisionDate: v.nullable(v.string()),
