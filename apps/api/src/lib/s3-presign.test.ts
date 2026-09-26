@@ -550,7 +550,7 @@ describe("tenant operations on expired credentials", () => {
     });
     return built;
   };
-  const failFirstRead = (failure: unknown) => {
+  const failFirstRead = (failure: Error) => {
     const clients: AwsS3Client[] = [];
     setTenantS3OperationHooksForTesting({
       readObject: async (client) => {
@@ -604,8 +604,12 @@ describe("tenant operations on expired credentials", () => {
     let writes = 0;
     setTenantS3OperationHooksForTesting({
       writeObject: async () => {
+        const failure = failures.at(writes);
         writes += 1;
-        throw failures.at(writes - 1);
+        if (failure === undefined) {
+          throw new Error("the write was replayed more than once");
+        }
+        throw failure;
       },
     });
 
@@ -633,7 +637,9 @@ describe("tenant operations on expired credentials", () => {
     setTenantS3OperationHooksForTesting({
       headObjectSize: async (_client, _command, signal) => {
         heads += 1;
-        throw signal.reason;
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("Aborted", "AbortError");
       },
     });
 

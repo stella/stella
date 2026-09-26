@@ -55,9 +55,16 @@ const client = new AwsS3Client({
 
 const waitForAbort = async (signal: AbortSignal): Promise<never> =>
   await new Promise<never>((_resolve, reject) => {
-    signal.addEventListener("abort", () => reject(signal.reason), {
-      once: true,
-    });
+    signal.addEventListener(
+      "abort",
+      () =>
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new DOMException("Aborted", "AbortError"),
+        ),
+      { once: true },
+    );
   });
 
 type StorageFake = {
