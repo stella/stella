@@ -6,13 +6,18 @@
  * revocation data (B-LT needs every one), and whether any is revoked, which
  * ends the signing outright: a revoked certificate must never sign.
  *
- * Only a response that is about this exact certificate counts: an OCSP
- * response must name its CertID, and a CRL must verify against the issuer.
- * A response that cannot be tied to the certificate is ignored, never read
- * as "good".
+ * Only authentic, current data about this exact certificate counts. An OCSP
+ * response must be signed by the issuer or by a responder the issuer
+ * delegated (id-kp-OCSPSigning), name the certificate's CertID and be inside
+ * its validity window; a CRL must be the issuer's, verify against it and be
+ * current. Anything else is ignored as unavailable, never read as "good".
+ * No nonce is sent (most responders serve pre-signed responses), so
+ * freshness rests on the validity window.
  */
 
 import * as pkijs from "pkijs";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import {
   accessLocations,
@@ -30,9 +35,17 @@ const CRL_MAX_BYTES = 4 * 1024 * 1024;
 const REVOCATION_FETCH_BUDGET_MS = 25_000;
 /** RFC 6960 OCSPResponseStatus successful. */
 const OCSP_SUCCESSFUL = 0;
-/** pkijs `getCertificateStatus`: 0 good, 1 revoked, 2 unknown. */
+/** CertStatus CHOICE tags (RFC 6960 4.2.1): [0] good, [1] revoked. */
 const OCSP_CERT_GOOD = 0;
 const OCSP_CERT_REVOKED = 1;
+/** RFC 6960 id-kp-OCSPSigning. */
+const OCSP_SIGNING_USAGE = "1.3.6.1.5.5.7.3.9";
+/** RFC 5280 id-ce-extKeyUsage. */
+const EXTENDED_KEY_USAGE_OID = "2.5.29.37";
+/** Clocks disagree; a response dated slightly ahead is still current. */
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+/** A response or CRL that names no next update is current for this long. */
+const MAX_UNDATED_AGE_MS = 7 * DAY_IN_MS;
 
 export type TrackedRevocationProvider = {
   /** Whether revocation data says this certificate is not revoked. */
@@ -54,33 +67,135 @@ export type TrackedRevocationProvider = {
 const fingerprint = (der: Uint8Array) =>
   new Bun.CryptoHasher("sha256").update(der).digest("hex");
 
+/** Whether data dated `thisUpdate`..`nextUpdate` is current at `now`. */
+export const isCurrent = (
+  thisUpdate: Date,
+  nextUpdate: Date | undefined,
+  now: Date,
+) =>
+  thisUpdate.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
+  (nextUpdate === undefined
+    ? thisUpdate.getTime() >= now.getTime() - MAX_UNDATED_AGE_MS
+    : nextUpdate.getTime() >= now.getTime() - MAX_CLOCK_SKEW_MS);
+
+/** A verification that throws (malformed key, unknown algorithm) failed. */
+const settlesTrue = async (verification: Promise<boolean>) => {
+  try {
+    return await verification;
+  } catch {
+    return false;
+  }
+};
+
+const allowsOcspSigning = (certificate: pkijs.Certificate) => {
+  const extension = certificate.extensions?.find(
+    ({ extnID }) => extnID === EXTENDED_KEY_USAGE_OID,
+  );
+  if (extension === undefined) {
+    return false;
+  }
+  try {
+    return pkijs.ExtKeyUsage.fromBER(
+      new Uint8Array(extension.extnValue.valueBlock.valueHexView),
+    ).keyPurposes.includes(OCSP_SIGNING_USAGE);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Whether the response is signed by the issuer itself, or by a responder
+ * certificate it carries that the issuer signed and authorized for OCSP.
+ */
+const signedByAuthorizedResponder = async (
+  basic: pkijs.BasicOCSPResponse,
+  issuer: pkijs.Certificate,
+) => {
+  const engine = pkijs.getCrypto(true);
+  const delegates: pkijs.Certificate[] = [];
+  for (const candidate of basic.certs ?? []) {
+    if (
+      allowsOcspSigning(candidate) &&
+      candidate.issuer.isEqual(issuer.subject) &&
+      (await settlesTrue(candidate.verify(issuer)))
+    ) {
+      delegates.push(candidate);
+    }
+  }
+  for (const signer of [issuer, ...delegates]) {
+    const verified = await settlesTrue(
+      engine.verifyWithPublicKey(
+        basic.tbsResponseData.tbsView,
+        basic.signature,
+        signer.subjectPublicKeyInfo,
+        basic.signatureAlgorithm,
+      ),
+    );
+    if (verified) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /** 0 good, 1 revoked, 2 unknown; `null` when not an answer about it. */
 const ocspStatus = async (
   bytes: Uint8Array,
   certificate: pkijs.Certificate,
   issuer: pkijs.Certificate,
+  now: Date,
 ): Promise<number | null> => {
   try {
     const response = pkijs.OCSPResponse.fromBER(new Uint8Array(bytes));
-    if (response.responseStatus.valueBlock.valueDec !== OCSP_SUCCESSFUL) {
+    const encoded = response.responseBytes?.response.valueBlock.valueHexView;
+    if (
+      response.responseStatus.valueBlock.valueDec !== OCSP_SUCCESSFUL ||
+      encoded === undefined
+    ) {
       return null;
     }
-    const status = await response.getCertificateStatus(certificate, issuer);
-    return status.isForCertificate ? status.status : null;
+    const basic = pkijs.BasicOCSPResponse.fromBER(new Uint8Array(encoded));
+    if (!(await signedByAuthorizedResponder(basic, issuer))) {
+      return null;
+    }
+    const engine = pkijs.getCrypto(true);
+    for (const single of basic.tbsResponseData.responses) {
+      const certID = new pkijs.CertID();
+      await certID.createForCertificate(certificate, {
+        hashAlgorithm: engine.getAlgorithmByOID(
+          single.certID.hashAlgorithm.algorithmId,
+          true,
+          "CertID.hashAlgorithm",
+        ).name,
+        issuerCertificate: issuer,
+      });
+      if (
+        single.certID.isEqual(certID) &&
+        isCurrent(single.thisUpdate, single.nextUpdate, now)
+      ) {
+        return single.certStatus.idBlock.tagNumber;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 };
 
-/** Whether `bytes` is a CRL `issuer` signed, and what it says. */
+/** Whether `bytes` is a current CRL `issuer` signed, and what it says. */
 const crlVerdict = async (
   bytes: Uint8Array,
   certificate: pkijs.Certificate,
   issuer: pkijs.Certificate,
+  now: Date,
 ): Promise<"good" | "revoked" | null> => {
   try {
     const crl = pkijs.CertificateRevocationList.fromBER(new Uint8Array(bytes));
-    if (!(await crl.verify({ issuerCertificate: issuer }))) {
+    if (
+      !crl.issuer.isEqual(issuer.subject) ||
+      !isCurrent(crl.thisUpdate.value, crl.nextUpdate?.value, now) ||
+      !(await crl.verify({ issuerCertificate: issuer }))
+    ) {
       return null;
     }
     return crl.isCertificateRevoked(certificate) ? "revoked" : "good";
@@ -107,6 +222,7 @@ export const createTrackedRevocationProvider = (
     safePkiFetch,
     REVOCATION_FETCH_BUDGET_MS,
   ),
+  now: () => Date = () => new Date(),
 ): TrackedRevocationProvider => {
   const covered = new Set<string>();
   const revoked = new Set<string>();
@@ -141,7 +257,7 @@ export const createTrackedRevocationProvider = (
         const status =
           response === null
             ? null
-            : await ocspStatus(response, certificate, issuer);
+            : await ocspStatus(response, certificate, issuer, now());
         if (
           response !== null &&
           (status === OCSP_CERT_GOOD || status === OCSP_CERT_REVOKED)
@@ -172,7 +288,9 @@ export const createTrackedRevocationProvider = (
           url,
         });
         const verdict =
-          crl === null ? null : await crlVerdict(crl, certificate, issuer);
+          crl === null
+            ? null
+            : await crlVerdict(crl, certificate, issuer, now());
         if (crl !== null && verdict !== null) {
           record(certificateDer, verdict);
           return crl;
