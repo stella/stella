@@ -8,7 +8,7 @@ import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-type
  * so extraction rejects the record rather than resolving short forms across
  * boundaries it cannot trust.
  */
-export const CITATION_SCOPE_DEFECTS = {
+const CITATION_SCOPE_DEFECTS = {
   DUPLICATE_OPINION: "duplicate-opinion",
   EMPTY_OPINION: "empty-opinion",
   DUPLICATE_BLOCK: "duplicate-block",

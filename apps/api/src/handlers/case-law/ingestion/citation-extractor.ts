@@ -2017,7 +2017,7 @@ export type ExtractDecisionCitationsOptions = {
  * pass, or not at all, for a reporter-citing decision without an AST, whose
  * empty result says nothing about what it cites.
  */
-export type DecisionCitationReading =
+type DecisionCitationReading =
   | { type: "patterns" }
   | { type: "reporter-occurrences"; diagnostics: UsCitationDiagnostics }
   | { type: "ast-unavailable" };

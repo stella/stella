@@ -52,9 +52,7 @@ export type CaseLawIndexGroup =
  * not equal to, the manifest's, and is enrolled and attested per group
  * (`corpus-index-group-contract.ts`).
  */
-export const CORPUS_INDEX_GROUP_CONTRACT_VERSIONS = [
-  "court_partition_v1",
-] as const;
+const CORPUS_INDEX_GROUP_CONTRACT_VERSIONS = ["court_partition_v1"] as const;
 
 export type CorpusIndexGroupContractVersion =
   (typeof CORPUS_INDEX_GROUP_CONTRACT_VERSIONS)[number];

@@ -62,7 +62,7 @@ import type { DocumentAst, Inline } from "@/api/lib/case-law/document-ast";
 /** Occurrences one decision may carry before extraction rejects it. */
 export const US_CITATION_OCCURRENCE_LIMIT = 50_000;
 
-export class UsCitationOccurrenceOverflowError extends TaggedError(
+class UsCitationOccurrenceOverflowError extends TaggedError(
   "UsCitationOccurrenceOverflowError",
 )<{
   message: string;
