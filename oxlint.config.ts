@@ -141,6 +141,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
     "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
+    "forbid-process-env-outside-env-ts/runtime-mode-keys",
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
@@ -3262,6 +3263,10 @@ export default defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
+              // The web server entrypoint reads its listen address from Bun's
+              // environment before any app module loads; the web app's env
+              // contract is the Vite build, not this process.
+              "apps/web/src/runtime.ts",
               "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
@@ -3301,6 +3306,28 @@ export default defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // NODE_ENV and the local development opt-in are read by the runtime
+      // mode owner alone; everything else consumes the resolved mode.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+      ],
+      rules: {
+        "forbid-process-env-outside-env-ts/runtime-mode-keys": [
+          "error",
+          {
+            allowedFiles: [
+              // The API test and tooling harness opts its processes in.
+              "apps/api/src/tests/setup-env.ts",
+              // The environment doctor picks which mode's env files to layer.
+              "scripts/env-tool.ts",
             ],
           },
         ],
