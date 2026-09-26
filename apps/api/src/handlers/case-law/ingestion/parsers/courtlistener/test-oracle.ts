@@ -11,6 +11,8 @@
 
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
+import { isTag, isText } from "domhandler";
+import type { AnyNode, Element } from "domhandler";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
@@ -154,14 +156,131 @@ export const sourceWords = (
       $("script, style").remove();
       return words($.root().text());
     }
-    case "plain":
     case "html":
+      return htmlWords(source);
+    case "plain":
       return words(source);
     default: {
       structure satisfies never;
       return panic("unknown structure");
     }
   }
+};
+
+const HTML_BLOCKS = new Set([
+  "address",
+  "article",
+  "blockquote",
+  "body",
+  "bodytext",
+  "br",
+  "casebody",
+  "center",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "footer",
+  "h",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
+
+const isPageMarker = (element: Element): boolean => {
+  const classes = (element.attribs["class"] ?? "").split(/\s+/u);
+  return (
+    element.name.toLowerCase() === "page-number" ||
+    (element.name.toLowerCase() === "span" &&
+      classes.includes("star-pagination")) ||
+    (element.name.toLowerCase() === "a" && classes.includes("page-label"))
+  );
+};
+
+const isNoteContainer = (element: Element): boolean => {
+  const name = element.name.toLowerCase();
+  if (name === "footnote" || name === "footnote_body") {
+    return true;
+  }
+  const classes = (element.attribs["class"] ?? "").split(/\s+/u);
+  if (name === "div" && classes.includes("footnote")) {
+    return true;
+  }
+  const id = element.attribs["id"] ?? "";
+  if (name !== "div" || !id.startsWith("fn_")) {
+    return false;
+  }
+  let parent = element.parent;
+  while (parent !== null) {
+    if (
+      isTag(parent) &&
+      parent.name.toLowerCase() === "div" &&
+      (parent.attribs["class"] ?? "").split(/\s+/u).includes("footnotes")
+    ) {
+      return true;
+    }
+    parent = parent.parent;
+  }
+  return false;
+};
+
+/** An independent DOM walk that drops only the printed page labels and note backlinks. */
+const htmlWords = (source: string): string[] => {
+  const $ = cheerio.load(source);
+  const body = $("body").first();
+  if (body.length === 0) {
+    return [];
+  }
+  const notes = $("*").toArray().filter(isNoteContainer);
+  for (const marker of $("*").toArray().filter(isPageMarker)) {
+    $(marker).remove();
+  }
+  for (const note of notes) {
+    for (const anchor of $(note).find("a").toArray()) {
+      const href = anchor.attribs["href"] ?? "";
+      const classes = (anchor.attribs["class"] ?? "").split(/\s+/u);
+      if (
+        classes.includes("footnote") ||
+        href.startsWith("#ref-") ||
+        href.startsWith("#fnr_")
+      ) {
+        $(anchor).remove();
+      }
+    }
+  }
+
+  const visible = (node: AnyNode): string => {
+    if (isText(node)) {
+      return node.data;
+    }
+    if (!isTag(node)) {
+      return "";
+    }
+    const name = node.name.toLowerCase();
+    if (name === "script" || name === "style") {
+      return "";
+    }
+    const children = node.children.map(visible).join("");
+    return HTML_BLOCKS.has(name) ? ` ${children} ` : children;
+  };
+
+  return words(body.contents().toArray().map(visible).join(""));
 };
 
 /**
