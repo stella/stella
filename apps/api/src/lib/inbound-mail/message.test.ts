@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import PostalMime from "postal-mime";
 
 import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
@@ -552,6 +553,45 @@ describe("inbound MIME normalization", () => {
     );
     const parsed = await parseInboundMessage(raw);
     expect(parsed.message.date).toBe("2026-09-26T12:00:00.000Z");
+  });
+
+  test("date storage and content identity stay stable across host timezones", async () => {
+    const previousTimezone = process.env.TZ;
+    const ambiguous = message(
+      baseHeaders.replace("12:00:00 +0000", "12:00:00"),
+      "Body",
+    );
+    const zoned = message(
+      baseHeaders.replace("12:00:00 +0000", "14:00:00 +0200"),
+      "Body",
+    );
+    const identities = new Set<string>();
+    const providerDates = new Set<string | undefined>();
+    try {
+      for (const timezone of [
+        "UTC",
+        "America/Los_Angeles",
+        "Pacific/Auckland",
+      ]) {
+        process.env.TZ = timezone;
+        providerDates.add((await PostalMime.parse(ambiguous)).date);
+        const withoutZone = await parseInboundMessage(ambiguous);
+        const withZone = await parseInboundMessage(zoned);
+        expect(withoutZone.message.date).toBeNull();
+        expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
+        identities.add(
+          JSON.stringify([
+            withoutZone.message.contentHash,
+            withZone.message.contentHash,
+          ]),
+        );
+      }
+    } finally {
+      // Bun's date cache needs a reassignment when restoring an unset TZ.
+      process.env.TZ = previousTimezone ?? "";
+    }
+    expect(providerDates.size).toBeGreaterThan(1);
+    expect(identities.size).toBe(1);
   });
 
   test("content identity ignores attachment order and transport filenames", async () => {

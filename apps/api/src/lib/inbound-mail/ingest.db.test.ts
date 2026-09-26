@@ -27,6 +27,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
 import type { MailVerifier } from "@/api/lib/inbound-mail/authentication";
 import { ingestInboundMail } from "@/api/lib/inbound-mail/ingest";
+import { parseInboundMessage } from "@/api/lib/inbound-mail/message";
 import { createInboundMailPersistence } from "@/api/lib/inbound-mail/persistence";
 import {
   receiveSesInboundMail,
@@ -348,6 +349,9 @@ describe("inbound mail persisted under forced RLS", () => {
       {
         workspaceId,
         direction: "out",
+        intake: "direct",
+        authenticatedSenderAddress: "member@example.test",
+        originalSignature: null,
         from: { address: "member@example.test" },
         subject: "Status update",
         dmarc: "pass",
@@ -389,6 +393,23 @@ describe("inbound mail persisted under forced RLS", () => {
     expect(await records()).toHaveLength(0);
   });
 
+  test("an invalid Date header files with unknown sent time and replays without retrying forever", async () => {
+    const raw = encode(
+      decode(await fixture("member-cc.eml")).replace(
+        /^Date:.*$/mu,
+        "Date: not-a-date",
+      ),
+    );
+    const first = await deliver(raw);
+    const replay = await deliver(raw);
+    expect(first.isOk() && first.value).toMatchObject([{ status: "filed" }]);
+    expect(replay.isOk() && replay.value).toMatchObject([
+      { status: "duplicate" },
+    ]);
+    expect(await records()).toMatchObject([{ sentAt: null, intake: "direct" }]);
+    expect(await drops()).toHaveLength(0);
+  });
+
   test("authenticated outsider reply is rejected without a record", async () => {
     const raw = encode(
       decode(await fixture("member-cc.eml")).replaceAll(
@@ -421,6 +442,9 @@ describe("inbound mail persisted under forced RLS", () => {
     expect(await records()).toMatchObject([
       {
         direction: "in",
+        intake: "forwarded_attachment",
+        authenticatedSenderAddress: "member@example.test",
+        originalSignature: { status: "unverified" },
         from: { address: "author@outside.test" },
         bodyText: "Original body.",
       },
@@ -428,6 +452,75 @@ describe("inbound mail persisted under forced RLS", () => {
     expect(
       (await filers()).map(({ filedByUserId }) => filedByUserId).toSorted(),
     ).toEqual([colleagueId, memberId].toSorted());
+  });
+
+  test("a fabricated inline original remains asserted content beside its authenticated delivery", async () => {
+    const forged = encode(
+      decode(await fixture("inline-forward-cs.eml"))
+        .replace("Author <author@outside.test>", "Judge <judge@court.example>")
+        .replace("Original body.", "Fabricated order."),
+    );
+    const result = await deliver(forged);
+    expect(result.isOk() && result.value).toMatchObject([{ status: "filed" }]);
+    expect(await records()).toMatchObject([
+      {
+        intake: "forwarded_inline",
+        from: { address: "judge@court.example" },
+        bodyText: "Fabricated order.",
+        originalSignature: { status: "unverified" },
+        authenticatedSenderAddress: "member@example.test",
+        alignedIdentifier: "example.test",
+        dmarc: "pass",
+      },
+    ]);
+    expect(await filers()).toMatchObject([{ filedByUserId: memberId }]);
+  });
+
+  test("direct mail and a matching asserted original keep distinct delivery provenance", async () => {
+    const direct = encode(
+      [
+        "From: Member <member@example.test>",
+        "To: Matter <matter@example.test>",
+        "Subject: Same content",
+        "Date: Sat, 26 Sep 2026 12:00:00 +0000",
+        "Message-ID: <same-content@example.test>",
+        "Content-Type: text/plain; charset=UTF-8",
+        "",
+        "Same content.",
+      ].join("\r\n"),
+    );
+    const forwarded = encode(
+      [
+        "From: Colleague <colleague@example.test>",
+        "To: Matter <matter@example.test>",
+        "Subject: Fwd: Same content",
+        'Content-Type: multipart/mixed; boundary="dedup"',
+        "",
+        "--dedup",
+        "Content-Type: message/rfc822",
+        "",
+        decode(direct),
+        "--dedup--",
+        "",
+      ].join("\r\n"),
+    );
+    const directParsed = await parseInboundMessage(direct);
+    const forwardedParsed = await parseInboundMessage(forwarded);
+    expect(forwardedParsed.forwardSource).toBe("attached");
+    expect(forwardedParsed.message.messageId).toBe(
+      directParsed.message.messageId,
+    );
+    expect(forwardedParsed.message.contentHash).toBe(
+      directParsed.message.contentHash,
+    );
+    for (const raw of [direct, forwarded, direct, forwarded]) {
+      expect((await deliver(raw)).isOk()).toBe(true);
+    }
+    expect((await records()).map(({ intake }) => intake).toSorted()).toEqual([
+      "direct",
+      "forwarded_attachment",
+    ]);
+    expect(await filers()).toHaveLength(2);
   });
 
   test("attachment retry links each ordinal once with real entity rows", async () => {

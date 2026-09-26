@@ -1,10 +1,13 @@
 import { Result, TaggedError } from "better-result";
-import { authenticate, type DNSResolver } from "mailauth";
+import { authenticate, dkimVerify, type DNSResolver } from "mailauth";
 import { Resolver } from "node:dns/promises";
 import { isIP } from "node:net";
 import { getDomain } from "tldts";
 
+import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
+
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export type MailEnvelope = {
   mailFrom: string;
@@ -316,19 +319,71 @@ export const createProviderMailVerifier =
 
 type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
 
+const createMailDnsResolver = (): LocalDnsResolver => {
+  const resolver = new Resolver({
+    timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
+    tries: 1,
+  });
+  return {
+    resolve: async (domain, rrtype) => await resolver.resolve(domain, rrtype),
+    cancel: () => resolver.cancel(),
+  };
+};
+
+type RunMailVerificationOptions<T> = {
+  createResolver: () => LocalDnsResolver;
+  verify: (resolve: DNSResolver) => Promise<T>;
+};
+
+const runMailVerification = async <T>({
+  createResolver,
+  verify,
+}: RunMailVerificationOptions<T>) => {
+  const resolver = createResolver();
+  const verified = await Result.tryPromise({
+    try: () =>
+      withTimeout(
+        async (signal) => {
+          let queries = 0;
+          const cancellation = () => resolver.cancel();
+          signal.addEventListener("abort", cancellation, { once: true });
+          try {
+            const result = await verify(async (domain, rrtype) => {
+              queries += 1;
+              if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+                throw new MailAuthenticationError({
+                  message: "Mail verification budget exhausted",
+                });
+              }
+              return await resolver.resolve(domain, rrtype);
+            });
+            if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
+              throw new MailAuthenticationError({
+                message: "Mail verification budget exhausted",
+              });
+            }
+            return result;
+          } finally {
+            signal.removeEventListener("abort", cancellation);
+          }
+        },
+        {
+          label: "mail-verification",
+          timeoutMs: INBOUND_MAIL_LIMITS.authenticationTimeoutMs,
+        },
+      ),
+    catch: () =>
+      new MailAuthenticationError({
+        message: "Mail authentication could not complete",
+      }),
+  });
+  resolver.cancel();
+  return verified;
+};
+
 export const createLocalMailVerifier =
   (
-    createResolver: () => LocalDnsResolver = () => {
-      const resolver = new Resolver({
-        timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
-        tries: 1,
-      });
-      return {
-        resolve: async (domain, rrtype) =>
-          await resolver.resolve(domain, rrtype),
-        cancel: () => resolver.cancel(),
-      };
-    },
+    createResolver: () => LocalDnsResolver = createMailDnsResolver,
   ): MailVerifier =>
   async ({ raw, envelope, fromAddress }) => {
     const fromDomain = mailboxDomain(fromAddress);
@@ -344,48 +399,21 @@ export const createLocalMailVerifier =
         }),
       );
     }
-    const resolver = createResolver();
-    const signal = AbortSignal.timeout(
-      INBOUND_MAIL_LIMITS.authenticationTimeoutMs,
-    );
-    let queries = 0;
-    const cancellation = () => resolver.cancel();
-    signal.addEventListener("abort", cancellation, { once: true });
-    const verification = await Result.tryPromise({
-      try: () =>
-        authenticate(Buffer.from(raw), {
+    const verification = await runMailVerification({
+      createResolver,
+      verify: async (resolver) =>
+        await authenticate(Buffer.from(raw), {
           sender: envelope.mailFrom,
           ip: envelope.remoteIp,
           helo: envelope.helo,
           trustReceived: false,
           disableArc: true,
           disableBimi: true,
-          resolver: async (domain, rrtype) => {
-            queries += 1;
-            if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-              throw new MailAuthenticationError({
-                message: "Mail verification budget exhausted",
-              });
-            }
-            return await resolver.resolve(domain, rrtype);
-          },
-        }),
-      catch: () =>
-        new MailAuthenticationError({
-          message: "Mail authentication could not complete",
+          resolver,
         }),
     });
-    signal.removeEventListener("abort", cancellation);
-    resolver.cancel();
     if (verification.isErr()) {
       return verification;
-    }
-    if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-      return Result.err(
-        new MailAuthenticationError({
-          message: "Mail verification budget exhausted",
-        }),
-      );
     }
     const { spf, dkim, dmarc } = verification.value;
     return Result.ok({
@@ -409,3 +437,41 @@ export const createLocalMailVerifier =
   };
 
 export const verifyMailLocally = createLocalMailVerifier();
+
+// A valid signature proves only the signing domain's signature over these bytes;
+// it never authenticates the forwarder's assertions as the original author's identity.
+export const createOriginalSignatureVerifier =
+  (createResolver: () => LocalDnsResolver = createMailDnsResolver) =>
+  async (raw: Uint8Array) => {
+    if (raw.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
+      return Result.err(
+        new MailAuthenticationError({
+          message: "Invalid original verification input",
+        }),
+      );
+    }
+    const verified = await runMailVerification({
+      createResolver,
+      verify: async (resolver) =>
+        await dkimVerify(Buffer.from(raw), { resolver }),
+    });
+    return verified.map(({ results }) => {
+      for (const signature of results) {
+        if (signature.status.result !== "pass" || signature.status.underSized) {
+          continue;
+        }
+        const domain = normalizeDomain(signature.signingDomain);
+        if (domain !== null) {
+          return {
+            status: "verified",
+            domain,
+          } as const satisfies CorrespondenceOriginalSignature;
+        }
+      }
+      return {
+        status: "unverified",
+      } as const satisfies CorrespondenceOriginalSignature;
+    });
+  };
+
+export const verifyOriginalSignature = createOriginalSignatureVerifier();

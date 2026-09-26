@@ -43,8 +43,10 @@ export type NormalizedInboundMessage = {
 export type ParsedInboundMessage = {
   outerSender: string | null;
   message: NormalizedInboundMessage;
-  forwardSource: "none" | "attached" | "inline";
-};
+} & (
+  | { forwardSource: "none" | "inline" }
+  | { forwardSource: "attached"; originalRaw: Uint8Array }
+);
 
 export type InboundMessageErrorReason =
   | "invalidMime"
@@ -674,6 +676,7 @@ export const parseInboundMessage = async (
         outerSender,
         message: normalizeMessage(attached.value.email, attached.value.date),
         forwardSource: "attached",
+        originalRaw: bytes,
       };
     }
   }

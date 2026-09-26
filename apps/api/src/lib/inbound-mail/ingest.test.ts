@@ -46,7 +46,13 @@ const memoryStore = () => {
     if (!members.has(delivery.sender)) {
       return { status: "dropped", reason: "unauthorized_sender" };
     }
-    const key = `${input.token}:${delivery.message.messageId}:${delivery.message.contentHash}`;
+    // This fake models identity only; DB tests exercise correspondenceDedupKey.
+    const key = JSON.stringify([
+      input.token,
+      delivery.message.intake,
+      delivery.message.messageId,
+      delivery.message.contentHash,
+    ]);
     const existing = records.get(key);
     if (existing) {
       existing.filers.add(delivery.sender);
@@ -66,6 +72,7 @@ const ingest = (raw: Uint8Array, persist: InboundDeliveryStore) =>
     receivedAt,
     inboundDomain: "inbound.example.test",
     verify,
+    verifyOriginal: async () => Result.ok({ status: "unverified" as const }),
     scan: "pass",
     persist,
   });
@@ -81,6 +88,12 @@ describe("raw mail through the inbound filing boundary", () => {
     if (delivery?.status === "candidate") {
       expect(delivery.message.direction).toBe("out");
       expect(delivery.message.from.address).toBe("member@example.test");
+      expect(delivery.message.intake).toBe("direct");
+      expect(delivery.message.originalSignature).toBeNull();
+      expect(delivery.message.authenticatedSender).toMatchObject({
+        address: "member@example.test",
+        dmarc: "pass",
+      });
     }
   });
 
@@ -110,6 +123,69 @@ describe("raw mail through the inbound filing boundary", () => {
       expect(delivery.message.direction).toBe("in");
       expect(delivery.message.from.address).toBe("author@outside.test");
       expect(delivery.sender).toBe("member@example.test");
+      expect(delivery.message.intake).toBe("forwarded_attachment");
+      expect(delivery.message.originalSignature).toEqual({
+        status: "unverified",
+      });
+      expect(delivery.message.authenticatedSender).toMatchObject({
+        address: "member@example.test",
+        dmarc: "pass",
+      });
+    }
+  });
+
+  test("a forged inline original keeps the outer sender's authentication separate", async () => {
+    const store = memoryStore();
+    const raw = new TextEncoder().encode(
+      [
+        "From: Member <member@example.test>",
+        "To: Matter <matter@example.test>",
+        "Subject: Fwd: Court order",
+        "Date: Sat, 26 Sep 2026 12:00:00 +0000",
+        "Message-ID: <forged-wrapper@example.test>",
+        "Content-Type: text/plain; charset=UTF-8",
+        "",
+        "Please file this order.",
+        "",
+        "---------- Forwarded message ---------",
+        "From: Court <judge@court.test>",
+        "Date: Fri, 25 Sep 2026 11:00:00 +0000",
+        "Subject: Court order",
+        "To: Member <member@example.test>",
+        "",
+        "This is a forged order.",
+      ].join("\r\n"),
+    );
+    const result = await ingestInboundMail({
+      raw,
+      envelope,
+      receivedAt,
+      inboundDomain: "inbound.example.test",
+      verify,
+      verifyOriginal: async () => {
+        throw new DOMException(
+          "inline content must not be signature checked",
+          "InvalidStateError",
+        );
+      },
+      scan: "pass",
+      persist: store.persist,
+    });
+    expect(result.isOk()).toBe(true);
+    const delivery = store.deliveries.at(0)?.delivery;
+    expect(delivery?.status).toBe("candidate");
+    if (delivery?.status === "candidate") {
+      expect(delivery.message.intake).toBe("forwarded_inline");
+      expect(delivery.message.from.address).toBe("judge@court.test");
+      expect(delivery.message.bodyText).toBe("This is a forged order.");
+      expect(delivery.message.originalSignature).toEqual({
+        status: "unverified",
+      });
+      expect(delivery.message.authenticatedSender).toMatchObject({
+        address: "member@example.test",
+        alignedIdentifier: "example.test",
+        dmarc: "pass",
+      });
     }
   });
 

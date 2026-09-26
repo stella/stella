@@ -95,7 +95,10 @@ const candidate = (sender: string): Candidate => {
       references: [],
       bodyText: "Test body",
       bodyHtml: null,
-      authentication: {
+      intake: "direct",
+      originalSignature: null,
+      authenticatedSender: {
+        address: sender,
         spf: "pass",
         dkim: "none",
         dmarc: "pass",
