@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
+import { createTestTimestampAuthority } from "@/api/tests/helpers/timestamp-token";
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
 const SHA256_DIGEST_INFO_PREFIX = Buffer.from(
@@ -77,10 +78,11 @@ describe("two-phase PDF signing", () => {
     expect(digestHex).toMatch(/^[0-9a-f]{64}$/u);
 
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
-    const signed = await applySignature({
+    const { bytes: signed } = await applySignature({
       ...invocation,
       expectedDigestHex: digestHex,
       signature,
+      timestampAuthorities: [],
     });
 
     // Phase 2 only returns bytes when LibPDF asked it to sign exactly the
@@ -164,6 +166,7 @@ describe("two-phase PDF signing", () => {
       ...invocation,
       expectedDigestHex: otherDigestHex,
       signature,
+      timestampAuthorities: [],
     }).catch((error: unknown) => error);
     expect(rejected).toBeInstanceOf(PdfSigningDigestMismatchError);
   });
@@ -187,5 +190,37 @@ describe("two-phase PDF signing", () => {
         }),
       ).toMatch(/^[0-9a-f]{64}$/u);
     }
+  });
+
+  test("takes trusted time from the next authority when one fails", async () => {
+    const { invocation, privateKey } = await buildInvocation();
+    const digestHex = await captureSigningDigest(invocation);
+    const signature = await signDigestLikeAKeychain(privateKey, digestHex);
+    const working = await createTestTimestampAuthority();
+
+    const applied = await applySignature({
+      ...invocation,
+      expectedDigestHex: digestHex,
+      signature,
+      timestampAuthorities: [
+        {
+          authority: {
+            timestamp: async () => {
+              throw new Error("authority unreachable");
+            },
+          },
+          url: "https://tsa-down.example/",
+        },
+        { authority: working, url: "https://tsa-up.example/" },
+      ],
+    });
+
+    // The timestamp is phase 2's alone: adding it did not change the digest
+    // phase 1 published, or the signer above would have refused.
+    expect(working.issued()).toBe(1);
+    expect(applied.timestampAuthorityUrl).toBe("https://tsa-up.example/");
+    expect(applied.bytes.byteLength).toBeGreaterThan(
+      invocation.basePdf.byteLength,
+    );
   });
 });

@@ -128,7 +128,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       });
     }
 
-    const basePdf = yield* Result.await(
+    const { bytes: basePdf } = yield* Result.await(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),
     );
 

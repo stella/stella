@@ -28,7 +28,7 @@ export const loadPdfSigningBaseBytes = async ({
   recordAuditEvent,
   session,
 }: LoadPdfSigningBaseBytesOptions): Promise<
-  Result<Uint8Array, HandlerError>
+  Result<{ bytes: Uint8Array; fileName: string }, HandlerError>
 > => {
   const resolved = await session.safeDb(async (tx) => {
     const entityRows = await tx
@@ -99,5 +99,8 @@ export const loadPdfSigningBaseBytes = async ({
     return bytes;
   }
 
-  return Result.ok(new Uint8Array(bytes.value));
+  return Result.ok({
+    bytes: new Uint8Array(bytes.value),
+    fileName: resolved.value.fileContent.fileName,
+  });
 };

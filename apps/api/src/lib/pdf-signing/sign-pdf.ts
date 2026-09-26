@@ -21,14 +21,15 @@
  * never re-read from the clock.
  */
 
-import { PDF, HttpTimestampAuthority } from "@libpdf/core";
-import type { DigestAlgorithm, Signer } from "@libpdf/core";
+import { PDF } from "@libpdf/core";
+import type { DigestAlgorithm, Signer, TimestampAuthority } from "@libpdf/core";
 import { TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
+import { createFallbackTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
+import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -79,9 +80,6 @@ type SigningInvocation = SigningIdentity & {
   signingTime: Date;
 };
 
-export const pdfSigningLevel = (): PdfSigningLevel =>
-  env.PDF_SIGNING_TSA_URL === undefined ? "B-B" : "B-LT";
-
 /**
  * The digest the desktop's keychain signs.
  *
@@ -95,28 +93,34 @@ const signedAttributesDigestHex = async (data: Uint8Array) =>
   ).toString("hex");
 
 /**
+ * What only phase 2 adds: trusted time and validation data. Neither is part
+ * of the signed attributes (the timestamp is an unsigned attribute, the
+ * validation data a later incremental update), so phase 1 leaves both out
+ * and the digest it publishes is still the one phase 2 reproduces.
+ */
+type TrustOptions = {
+  longTermValidation: boolean;
+  timestampAuthority?: TimestampAuthority;
+};
+
+/**
  * The option object both phases share. Built from persisted values only, so
  * phase 2 reproduces phase 1 byte for byte.
  */
 const buildSignOptions = (
   { location, reason, signingTime }: SigningInvocation,
   signer: Signer,
-) => {
-  const tsaUrl = env.PDF_SIGNING_TSA_URL;
-  return {
+  trust: TrustOptions,
+) =>
+  ({
     signer,
     subFilter: "ETSI.CAdES.detached",
     digestAlgorithm: DIGEST_ALGORITHM,
-    level: pdfSigningLevel(),
-    longTermValidation: tsaUrl !== undefined,
     signingTime,
-    ...(tsaUrl !== undefined && {
-      timestampAuthority: new HttpTimestampAuthority(tsaUrl),
-    }),
+    ...trust,
     ...(reason !== null && { reason }),
     ...(location !== null && { location }),
-  } as const;
-};
+  }) as const;
 
 /**
  * Phase 1: the SHA-256 of the CMS signed attributes, which is what the
@@ -153,7 +157,9 @@ export const captureSigningDigest = async (
         });
       }
       try {
-        await pdf.sign(buildSignOptions(invocation, signer));
+        await pdf.sign(
+          buildSignOptions(invocation, signer, { longTermValidation: false }),
+        );
       } catch (error) {
         if (!SignedAttributesCapturedError.is(error)) {
           throw new PdfSigningError({
@@ -178,6 +184,15 @@ export const captureSigningDigest = async (
 type ApplySignatureInvocation = SigningInvocation & {
   expectedDigestHex: string;
   signature: Uint8Array;
+  /** Tried in order; empty signs without trusted time. */
+  timestampAuthorities: readonly NamedTimestampAuthority[];
+};
+
+export type AppliedSignature = {
+  bytes: Uint8Array;
+  level: PdfSigningLevel;
+  /** The authority whose timestamp the signature carries. */
+  timestampAuthorityUrl: string | null;
 };
 
 /**
@@ -187,7 +202,7 @@ type ApplySignatureInvocation = SigningInvocation & {
  */
 export const applySignature = async (
   invocation: ApplySignatureInvocation,
-): Promise<Uint8Array> => {
+): Promise<AppliedSignature> => {
   const signer: Signer = {
     certificate: invocation.certificate,
     certificateChain: invocation.certificateChain,
@@ -209,9 +224,25 @@ export const applySignature = async (
   return await withTimeout(
     async () => {
       const pdf = await PDF.load(invocation.basePdf);
+      const timestamped = invocation.timestampAuthorities.length > 0;
+      const timestampAuthority = createFallbackTimestampAuthority(
+        invocation.timestampAuthorities,
+      );
       try {
-        const { bytes } = await pdf.sign(buildSignOptions(invocation, signer));
-        return bytes;
+        const { bytes } = await pdf.sign(
+          buildSignOptions(
+            invocation,
+            signer,
+            timestamped
+              ? { longTermValidation: true, timestampAuthority }
+              : { longTermValidation: false },
+          ),
+        );
+        return {
+          bytes,
+          level: timestamped ? "B-LT" : "B-B",
+          timestampAuthorityUrl: timestampAuthority.usedUrl(),
+        } satisfies AppliedSignature;
       } catch (error) {
         if (PdfSigningDigestMismatchError.is(error)) {
           throw error;
