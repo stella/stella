@@ -1,8 +1,10 @@
 import { EventType } from "@tanstack/ai";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type {
   ChatOracleId,
@@ -22,6 +24,7 @@ import {
   findWireCancelViolations,
   findWireContractViolations,
   replayWireScenario,
+  wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
@@ -35,7 +38,6 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 const cassettes = loadProviderWireCassettes();
 
 const {
-  providerWireCancel: cancel,
   providerWireError: error,
   providerWireFinish: finish,
   providerWireOneTerminal: oneTerminal,
@@ -55,7 +57,6 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "anthropic/length": { oracles: [finish], reason: "maintenance" },
   "anthropic/refusal": { oracles: [finish], reason: "maintenance" },
   "anthropic/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "bedrock/cancel": { oracles: [cancel], reason: "maintenance" },
   "bedrock/early-eof": { oracles: [finish], reason: "maintenance" },
   "bedrock/parallel-tool-calls": {
     oracles: [toolInput],
@@ -65,11 +66,9 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "bedrock/server-error": { oracles: [error], reason: "maintenance" },
   "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
-  "google/cancel": { oracles: [cancel], reason: "maintenance" },
   "google/length": { oracles: [finish], reason: "maintenance" },
   "google/refusal": { oracles: [finish], reason: "maintenance" },
   "google/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "mistral/cancel": { oracles: [cancel], reason: "maintenance" },
   "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
   "mistral/rate-limit": {
@@ -92,7 +91,7 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 25;
+const UNMET_SIZE = 22;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
@@ -238,4 +237,36 @@ describe("a cancelled run rejects cleanly", () => {
       await checkCancel(provider);
     });
   }
+});
+
+// A structured Bedrock request takes the non-streaming path; the run's cancel
+// reaches it too. Cancelled before it starts, it never reaches the wire.
+test("a cancelled structured Bedrock request never reaches the provider", async () => {
+  const model = wireChatModel("bedrock");
+  const adapter = createTanStackTextAdapterFactory({
+    apiKey: "cassette-replay-no-credentials",
+    provider: "bedrock",
+  })(model);
+  const controller = new AbortController();
+  controller.abort();
+  const outcome = await adapter
+    .structuredOutput({
+      chatOptions: {
+        logger: resolveDebugOption(false),
+        messages: [{ content: "Reply with OK.", role: "user" }],
+        model,
+        request: { signal: controller.signal },
+      },
+      outputSchema: {
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        type: "object",
+      },
+    })
+    .then(
+      () => "answered",
+      () => "rejected",
+    );
+  expect(outcome).toBe("rejected");
+  expect(replay.takeFindings().unexpected).toEqual([]);
 });

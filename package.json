@@ -262,7 +262,9 @@
     "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
     "@tanstack/ai-mcp@0.3.10": "patches/@tanstack%2Fai-mcp@0.3.10.patch",
     "@tanstack/ai@0.54.0": "patches/@tanstack%2Fai@0.54.0.patch",
-    "@tanstack/openai-base@0.10.11": "patches/@tanstack%2Fopenai-base@0.10.11.patch"
+    "@tanstack/openai-base@0.10.11": "patches/@tanstack%2Fopenai-base@0.10.11.patch",
+    "@tanstack/ai-mistral@0.6.2": "patches/@tanstack%2Fai-mistral@0.6.2.patch",
+    "@tanstack/ai-gemini@0.29.2": "patches/@tanstack%2Fai-gemini@0.29.2.patch"
   },
   "trustedDependencies": [
     "lefthook"

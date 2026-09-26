@@ -546,6 +546,22 @@ const createExtendedMistralAdapter = (
   return mistral(modelId, apiKey);
 };
 
+type BedrockTextOptions = Parameters<
+  BedrockConverseTextAdapter<never>["chatStream"]
+>[0];
+type BedrockStreamInput = Parameters<
+  BedrockConverseTextAdapter<never>["sendStream"]
+>[0];
+type BedrockInput = Parameters<BedrockConverseTextAdapter<never>["send"]>[0];
+
+/** Where a Bedrock request input carries its run's cancel. */
+const REQUEST_SIGNAL = Symbol("bedrock request signal");
+
+const requestOptionsOf = (input: object): { abortSignal?: AbortSignal } => {
+  const signal: unknown = Reflect.get(input, REQUEST_SIGNAL);
+  return signal instanceof AbortSignal ? { abortSignal: signal } : {};
+};
+
 // The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
@@ -554,6 +570,40 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
     const client = await super.getClient();
     client.config.requestHandler = this.requestHandler;
     return client;
+  }
+
+  // The run's cancel travels with the input built for it: every request path
+  // (streaming, structured, structured streaming) builds on this input, and
+  // spreading it keeps the symbol-keyed signal, which no command serializes.
+  protected override buildInput(options: BedrockTextOptions) {
+    const input = super.buildInput(options);
+    const signal = options.request?.signal;
+    if (signal) {
+      Reflect.set(input, REQUEST_SIGNAL, signal);
+    }
+    return input;
+  }
+
+  // The run's cancel reaches the request and closes its connection.
+  protected override async sendStream(input: BedrockStreamInput) {
+    const { ConverseStreamCommand } = await this.importBedrockRuntime();
+    const response = await (
+      await this.getClient()
+    ).send(new ConverseStreamCommand(input), requestOptionsOf(input));
+    if (!response.stream) {
+      throw new HandlerError({
+        status: 502,
+        message: "Bedrock Converse returned no stream.",
+      });
+    }
+    return response.stream;
+  }
+
+  protected override async send(input: BedrockInput) {
+    const { ConverseCommand } = await this.importBedrockRuntime();
+    return await (
+      await this.getClient()
+    ).send(new ConverseCommand(input), requestOptionsOf(input));
   }
 }
 
