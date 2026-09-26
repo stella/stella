@@ -190,6 +190,29 @@ export const forgetControlledTab = async (tabId: number): Promise<boolean> => {
   return true;
 };
 
+/**
+ * Chrome swapped the controlled tab for another: the new tab is the
+ * controlled one, and its document is not the one chat read. Returns
+ * whether `removedTabId` was the controlled tab.
+ */
+export const replaceControlledTab = async (
+  addedTabId: number,
+  removedTabId: number,
+): Promise<boolean> => {
+  const state = await readControlledTabState();
+  if (state?.tabId !== removedTabId) {
+    return false;
+  }
+  await writeControlledTabState({
+    adopted: state.adopted,
+    controllerId: state.controllerId,
+    settled: state.settled,
+    snapshot: null,
+    tabId: addedTabId,
+  });
+  return true;
+};
+
 /** Refs from the last snapshot stop matching once an action is dispatched. */
 const forgetSnapshot = async (state: ControlledTabState): Promise<void> => {
   await writeControlledTabState({ ...state, snapshot: null });
@@ -1481,6 +1504,19 @@ const openControlledTab = async (
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
+  // A tab created for this command and stopped before it navigated holds
+  // nothing; closing it leaves no controlled tab chat has never read.
+  const discardCreatedTab = async (): Promise<void> => {
+    if (existing === null) {
+      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+      await forgetContainedTab(tabId);
+      await chrome.tabs.remove(tabId).catch(() => undefined);
+    }
+  };
+  if (isStopped(signal)) {
+    await discardCreatedTab();
+    return { status: "cancelled" };
+  }
   await containControlledTab(tabId);
   await writeControlledTabState({
     adopted: existing?.state.adopted ?? false,
@@ -1490,6 +1526,7 @@ const openControlledTab = async (
     tabId,
   });
   if (isStopped(signal)) {
+    await discardCreatedTab();
     return { status: "cancelled" };
   }
   const navigation = createTabNavigationObserver(tabId);

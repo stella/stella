@@ -248,11 +248,41 @@ export const readContainedTabs = async (): Promise<ContainedTabs> => {
 // atomic `updateSessionRules` call.
 let containmentTail: Promise<unknown> = Promise.resolve();
 
-const changeListeners = new Set<() => void>();
+/** Tab owners as the download check reads them. */
+export type TabOwners = {
+  contained: readonly number[];
+  user: readonly number[];
+};
 
-/** Calls `listener` after every change to the contained set. */
-export const onContainedTabsChanged = (listener: () => void): void => {
+const ownersOf = (containment: ContainedTabs): TabOwners => ({
+  contained: containedTabIds(containment),
+  user: containment.userTabIds,
+});
+
+/** The stricter of two owner sets: confined in either, the user's in both. */
+const stricterOwners = (left: TabOwners, right: TabOwners): TabOwners => ({
+  contained: [...new Set([...left.contained, ...right.contained])],
+  user: left.user.filter((tabId) => right.user.includes(tabId)),
+});
+
+const changeListeners = new Set<(owners: TabOwners) => void>();
+
+/**
+ * Calls `listener` with the owners in force, in the same task as every
+ * change: while a change is applied, the stricter of the old and new owners;
+ * once it is stored, the new ones. A reader of the owners is thus never
+ * looser than the rules Chrome enforces.
+ */
+export const onContainedTabsChanged = (
+  listener: (owners: TabOwners) => void,
+): void => {
   changeListeners.add(listener);
+};
+
+const publishOwners = (owners: TabOwners): void => {
+  for (const listener of changeListeners) {
+    listener(owners);
+  }
 };
 
 const sameIds = (left: readonly number[], right: readonly number[]) =>
@@ -290,6 +320,7 @@ const updateContainedTabs = async <T>(
     if (!rewriteUnchanged && sameContainment(next, current)) {
       return result;
     }
+    publishOwners(stricterOwners(ownersOf(current), ownersOf(next)));
     // The rules change before the stored set does, so a newly recorded tab
     // is always one Chrome already confines.
     if (containedTabIds(next).length === 0) {
@@ -306,9 +337,7 @@ const updateContainedTabs = async <T>(
         [BROWSER_CONTAINED_TABS_STORAGE_KEY]: next,
       });
     }
-    for (const listener of changeListeners) {
-      listener();
-    }
+    publishOwners(ownersOf(next));
     return result;
   };
   const next = containmentTail.then(apply, apply);

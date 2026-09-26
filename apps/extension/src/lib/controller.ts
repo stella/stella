@@ -148,6 +148,28 @@ export const disconnectBrowserController = async (): Promise<void> => {
   }
 };
 
+/**
+ * Chrome swapped the controller's stella tab for another; the controller
+ * moves with it. Returns whether `removedTabId` was the controller's tab.
+ */
+export const replaceBrowserControllerTab = async (
+  addedTabId: number,
+  removedTabId: number,
+): Promise<boolean> => {
+  const controller = await readBrowserController();
+  if (controller?.tabId !== removedTabId) {
+    return false;
+  }
+  await chrome.storage.session.set({
+    [BROWSER_CONTROLLER_STORAGE_KEY]: {
+      controllerId: controller.controllerId,
+      origin: controller.origin,
+      tabId: addedTabId,
+    } satisfies BrowserController,
+  });
+  return true;
+};
+
 export const forgetBrowserControllerTab = async (
   tabId: number,
 ): Promise<void> => {
