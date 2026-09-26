@@ -8,8 +8,9 @@ import type {
   AuthorizedPdfSigningSession,
   PdfSigningSessionAuthorization,
 } from "@/api/lib/files/pdf-signing/sessions";
-import { authorizePdfSigningSessionAsOwner } from "@/api/lib/files/pdf-signing/sessions";
+import { authorizePdfSigningSession } from "@/api/lib/files/pdf-signing/sessions";
 import { validatePostAuth } from "@/api/lib/permissive-route-schema";
+import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
 const SESSION_TOKEN_LENGTH = 64;
 
@@ -81,7 +82,10 @@ export const authorizePdfSigningFinalizeCredentials = async (
   if (!credentials.ok) {
     return Result.err(pdfSigningSessionNotFoundError());
   }
-  const authorized = await authorizePdfSigningSessionAsOwner(credentials.value);
+  const authorized = await authorizePdfSigningSession(
+    credentials.value,
+    tokenScopedDatabase,
+  );
   if (authorized.status === "finalized") {
     return Result.ok({
       kind: "finalized",
@@ -112,6 +116,6 @@ export const authorizePdfSigningCredentials = async (
     return Result.err(pdfSigningSessionNotFoundError());
   }
   return openSessionOrError(
-    await authorizePdfSigningSessionAsOwner(credentials.value),
+    await authorizePdfSigningSession(credentials.value, tokenScopedDatabase),
   );
 };

@@ -228,22 +228,15 @@ export const pdfSigningSessions = p.pgTable(
       .onDelete("set null"),
     ...wsPolicies(),
     // Row security is forced on this table (see its migration), so the
-    // owner login gets exactly what its token-authenticated paths do: the
-    // desktop's handoff redemption and session lookup read a session by its
-    // token, redemption spends an open, unspent handoff, and account
-    // deletion removes a user's sessions. It never inserts one. The owner is
-    // named by the catalog rather than by role, since its login name differs
-    // from one deployment to the next.
+    // owner login gets only what it still does: the token lookups in the
+    // migration read a session as the owner, and account deletion removes a
+    // user's sessions. It never inserts or updates one. The owner is named
+    // by the catalog rather than by role, since its login name differs from
+    // one deployment to the next.
     p.pgPolicy("owner_select", {
       for: "select",
       to: "public",
       using: currentUserOwnsSessions,
-    }),
-    p.pgPolicy("owner_redeem_update", {
-      for: "update",
-      to: "public",
-      using: sql`${currentUserOwnsSessions} AND ${table.status} = 'open' AND ${table.handoffConsumedAt} IS NULL`,
-      withCheck: sql`${currentUserOwnsSessions} AND ${table.status} = 'open'`,
     }),
     p.pgPolicy("owner_delete", {
       for: "delete",

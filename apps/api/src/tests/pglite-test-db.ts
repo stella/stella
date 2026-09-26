@@ -19,6 +19,7 @@ import {
   createSchemaPglite,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCorpusProjectionRevisionFence,
+  installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
@@ -570,6 +571,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
+  await installPglitePdfSigningTokenScopes(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

@@ -8,12 +8,11 @@
  * the same deep link cannot both win.
  */
 
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -31,6 +30,7 @@ import type {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   createOpaqueToken,
   hashOpaqueToken,
@@ -38,7 +38,13 @@ import {
 } from "@/api/lib/entities/opaque-tokens";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 /** The browser hands the deep link straight to the OS; two minutes is the
  *  whole window in which the desktop app has to come up and redeem it. */
@@ -69,7 +75,6 @@ const isPdfSigningTokenShape = isOpaqueTokenShape;
  * `WHERE` clauses carry the whole access decision. Injectable so an
  * integration test can drive the real statements against a test database.
  */
-type PdfSigningDatabase = typeof rootDb;
 
 export type OpenedPdfSigningSession =
   | { status: "created" }
@@ -201,6 +206,39 @@ export const lockedCreatorAccess = (
     .for("share"),
 });
 
+/** A lookup's one row: the tenant a token's session lives in. */
+const tokenScopeRow = (row: unknown) =>
+  isRecord(row) &&
+  typeof row["organization_id"] === "string" &&
+  typeof row["user_id"] === "string" &&
+  typeof row["workspace_id"] === "string"
+    ? {
+        organizationId: brandPersistedOrganizationId(row["organization_id"]),
+        userId: brandPersistedUserId(row["user_id"]),
+        workspaceId: brandPersistedWorkspaceId(row["workspace_id"]),
+      }
+    : null;
+
+/**
+ * The tenant a token belongs to, from a SECURITY DEFINER lookup that answers
+ * only for the exact token hash (see the sessions migration). Everything the
+ * call then reads or writes runs scoped to that tenant, under row policies.
+ */
+const tokenScope = async (
+  db: TokenScopedDatabase,
+  lookup: ReturnType<typeof sql>,
+) => {
+  const result = await db.tenantless(async (tx) => await tx.execute(lookup));
+  const scope = tokenScopeRow(executedRows(result).at(0));
+  return scope === null
+    ? null
+    : db.scoped({
+        organizationId: scope.organizationId,
+        userId: scope.userId,
+        workspaceIds: [scope.workspaceId],
+      });
+};
+
 /**
  * Redeem a handoff: check the creator's access, consume the handoff, mint
  * the session token and read the descriptor, all in one transaction.
@@ -214,10 +252,18 @@ export const lockedCreatorAccess = (
  */
 export const redeemPdfSigningHandoff = async (
   handoffToken: string,
-  db: PdfSigningDatabase,
+  db: TokenScopedDatabase,
   { afterConsume }: { afterConsume?: () => Promise<void> } = {},
 ): Promise<RedeemedPdfSigningSession | null> => {
   if (!isPdfSigningTokenShape(handoffToken)) {
+    return null;
+  }
+
+  const scoped = await tokenScope(
+    db,
+    sql`SELECT * FROM pdf_signing_handoff_scope(${hashPdfSigningToken(handoffToken)})`,
+  );
+  if (scoped === null) {
     return null;
   }
 
@@ -225,7 +271,7 @@ export const redeemPdfSigningHandoff = async (
   const sessionToken = createPdfSigningToken();
   const expiresAt = computePdfSigningSessionExpiresAt();
 
-  return await db.transaction(async (tx) => {
+  return await scoped(async (tx) => {
     const sessions = await tx
       .select({
         baseVersionId: pdfSigningSessions.baseVersionId,
@@ -370,61 +416,75 @@ export const authorizePdfSigningSession = async (
     sessionId: SafeId<"pdfSigningSession">;
     sessionToken: string;
   },
-  db: PdfSigningDatabase,
+  db: TokenScopedDatabase,
 ): Promise<PdfSigningSessionAuthorization> => {
   if (!isPdfSigningTokenShape(sessionToken)) {
     return { status: "missing" };
   }
 
-  const rows = await db
-    .select({
-      baseVersionId: pdfSigningSessions.baseVersionId,
-      createdBy: pdfSigningSessions.createdBy,
-      digestHex: pdfSigningSessions.digestHex,
-      entityId: pdfSigningSessions.entityId,
-      finalizedVersionId: pdfSigningSessions.finalizedVersionId,
-      finalizedVersionNumber: entityVersions.versionNumber,
-      keyType: pdfSigningSessions.keyType,
-      location: pdfSigningSessions.location,
-      organizationId: workspaces.organizationId,
-      organizationRole: member.role,
-      placeholderSize: pdfSigningSessions.placeholderSize,
-      propertyId: pdfSigningSessions.propertyId,
-      reason: pdfSigningSessions.reason,
-      sessionStatus: pdfSigningSessions.status,
-      sessionTokenHash: pdfSigningSessions.sessionTokenHash,
-      signature: pdfSigningSessions.signature,
-      signedAttributes: pdfSigningSessions.signedAttributes,
-      signerCertificateChain: pdfSigningSessions.signerCertificateChain,
-      signerCertificateDer: pdfSigningSessions.signerCertificateDer,
-      signingTime: pdfSigningSessions.signingTime,
-      stamp: pdfSigningSessions.stamp,
-      tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
-      workspaceId: pdfSigningSessions.workspaceId,
-      workspaceMemberId: workspaceMembers.id,
-    })
-    .from(pdfSigningSessions)
-    .innerJoin(workspaces, eq(pdfSigningSessions.workspaceId, workspaces.id))
-    .leftJoin(
-      member,
-      and(
-        eq(member.userId, pdfSigningSessions.createdBy),
-        eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      entityVersions,
-      eq(entityVersions.id, pdfSigningSessions.finalizedVersionId),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
-        eq(workspaceMembers.workspaceId, pdfSigningSessions.workspaceId),
-      ),
-    )
-    .where(eq(pdfSigningSessions.id, sessionId))
-    .limit(1);
+  const scoped = await tokenScope(
+    db,
+    sql`SELECT * FROM pdf_signing_session_scope(${sessionId}, ${hashPdfSigningToken(sessionToken)})`,
+  );
+  if (scoped === null) {
+    return { status: "missing" };
+  }
+
+  const rows = await scoped(
+    async (tx) =>
+      await tx
+        .select({
+          baseVersionId: pdfSigningSessions.baseVersionId,
+          createdBy: pdfSigningSessions.createdBy,
+          digestHex: pdfSigningSessions.digestHex,
+          entityId: pdfSigningSessions.entityId,
+          finalizedVersionId: pdfSigningSessions.finalizedVersionId,
+          finalizedVersionNumber: entityVersions.versionNumber,
+          keyType: pdfSigningSessions.keyType,
+          location: pdfSigningSessions.location,
+          organizationId: workspaces.organizationId,
+          organizationRole: member.role,
+          placeholderSize: pdfSigningSessions.placeholderSize,
+          propertyId: pdfSigningSessions.propertyId,
+          reason: pdfSigningSessions.reason,
+          sessionStatus: pdfSigningSessions.status,
+          sessionTokenHash: pdfSigningSessions.sessionTokenHash,
+          signature: pdfSigningSessions.signature,
+          signedAttributes: pdfSigningSessions.signedAttributes,
+          signerCertificateChain: pdfSigningSessions.signerCertificateChain,
+          signerCertificateDer: pdfSigningSessions.signerCertificateDer,
+          signingTime: pdfSigningSessions.signingTime,
+          stamp: pdfSigningSessions.stamp,
+          tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
+          workspaceId: pdfSigningSessions.workspaceId,
+          workspaceMemberId: workspaceMembers.id,
+        })
+        .from(pdfSigningSessions)
+        .innerJoin(
+          workspaces,
+          eq(pdfSigningSessions.workspaceId, workspaces.id),
+        )
+        .leftJoin(
+          member,
+          and(
+            eq(member.userId, pdfSigningSessions.createdBy),
+            eq(member.organizationId, workspaces.organizationId),
+          ),
+        )
+        .leftJoin(
+          entityVersions,
+          eq(entityVersions.id, pdfSigningSessions.finalizedVersionId),
+        )
+        .leftJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.userId, pdfSigningSessions.createdBy),
+            eq(workspaceMembers.workspaceId, pdfSigningSessions.workspaceId),
+          ),
+        )
+        .where(eq(pdfSigningSessions.id, sessionId))
+        .limit(1),
+  );
 
   const session = rows.at(0);
   if (
@@ -532,16 +592,3 @@ export const resolvePdfSigningSessionStatus = ({
   finalizedVersionNumber,
   status: status === "open" && tokenExpiresAt <= now ? "expired" : status,
 });
-
-/**
- * The desktop's token-bearing calls carry no user session, so the session a
- * token names is found on the owner connection; everything after that runs
- * scoped to the session's creator (see `safeDb` above).
- */
-export const redeemPdfSigningHandoffAsOwner = async (handoffToken: string) =>
-  await redeemPdfSigningHandoff(handoffToken, rootDb);
-
-export const authorizePdfSigningSessionAsOwner = async (credentials: {
-  sessionId: SafeId<"pdfSigningSession">;
-  sessionToken: string;
-}) => await authorizePdfSigningSession(credentials, rootDb);

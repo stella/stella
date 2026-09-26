@@ -107,9 +107,9 @@ CREATE UNIQUE INDEX "pdf_signing_sessions_open_uidx"
 ALTER TABLE "pdf_signing_sessions"
   ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 
--- Forced, so the owner login is held to policies too. It gets only what its
--- token-authenticated paths need: reading a session by its token, spending
--- an open handoff on redemption, and removing a deleted account's sessions.
+-- Forced, so the owner login is held to policies too. It gets only what it
+-- still does: the token lookups below read a session (they run as the
+-- owner), and account deletion removes a deleted account's sessions.
 ALTER TABLE "pdf_signing_sessions"
   FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
@@ -118,11 +118,6 @@ ALTER TABLE "pdf_signing_sessions"
 CREATE POLICY "owner_select" ON "pdf_signing_sessions"
   AS PERMISSIVE FOR SELECT TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass));--> statement-breakpoint
-
-CREATE POLICY "owner_redeem_update" ON "pdf_signing_sessions"
-  AS PERMISSIVE FOR UPDATE TO public
-  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass) AND "status" = 'open' AND "handoff_consumed_at" IS NULL)
-  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass) AND "status" = 'open');--> statement-breakpoint
 
 CREATE POLICY "owner_delete" ON "pdf_signing_sessions"
   AS PERMISSIVE FOR DELETE TO public
@@ -152,4 +147,48 @@ CREATE POLICY "workspace_delete" ON "pdf_signing_sessions"
   'app.workspace_ids', true
 ))::uuid[]));--> statement-breakpoint
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "pdf_signing_sessions" TO stella;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "pdf_signing_sessions" TO stella;--> statement-breakpoint
+
+-- The desktop's calls carry a token, not a user session, so the tenant a
+-- token belongs to is found here and everything after runs under row
+-- policies in that tenant's scope. Each lookup answers only for the exact
+-- token hash the caller holds: it cannot list, and it returns the tenant's
+-- ids, never a session's contents.
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked and granted to the app role only; it writes nothing and returns only the tenant scope of the one open, unexpired handoff whose token hash the caller holds
+CREATE FUNCTION "pdf_signing_handoff_scope"(p_handoff_token_hash text)
+RETURNS TABLE (organization_id text, user_id text, workspace_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT w.organization_id::text, s.created_by, s.workspace_id
+    FROM public.pdf_signing_sessions s
+    JOIN public.workspaces w ON w.id = s.workspace_id
+   WHERE s.handoff_token_hash = p_handoff_token_hash
+     AND s.status = 'open'
+     AND s.handoff_consumed_at IS NULL
+     AND s.handoff_expires_at > pg_catalog.now()
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION "pdf_signing_handoff_scope"(text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION "pdf_signing_handoff_scope"(text) TO stella;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked and granted to the app role only; it writes nothing and returns only the tenant scope of the one session whose id and session token hash the caller holds
+CREATE FUNCTION "pdf_signing_session_scope"(p_session_id uuid, p_session_token_hash text)
+RETURNS TABLE (organization_id text, user_id text, workspace_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT w.organization_id::text, s.created_by, s.workspace_id
+    FROM public.pdf_signing_sessions s
+    JOIN public.workspaces w ON w.id = s.workspace_id
+   WHERE s.id = p_session_id
+     AND s.session_token_hash IS NOT NULL
+     AND s.session_token_hash = p_session_token_hash
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION "pdf_signing_session_scope"(uuid, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION "pdf_signing_session_scope"(uuid, text) TO stella;
