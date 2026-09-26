@@ -1548,6 +1548,27 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
+  test.each(["approval", "ask-user"] as const)(
+    "keeps a failed answer on screen when the next turn waits on %s",
+    async (kind) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(["fail"], "Draft the NDA").run(model, real);
+        // The fixture must reach the fault: the next turn ends at a card,
+        // whose snapshot rebuilds the page's messages.
+        await new SendUserMessage(
+          [[{ ...STEP, calls: [kind] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        expect(real.ledger.pending).toHaveLength(1);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
   test(
     "bounds every model call of a turn by the model's catalog output limit",
     async () => {

@@ -29,6 +29,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
 import { apiUrl } from "@/lib/api-url";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -312,17 +313,20 @@ export const createChatRuntime = ({
       if (!messages.every(isChatUiMessage)) {
         return panic("Stella chat connection received model messages");
       }
-      return upstreamConnection.connect(
+      return keepPostedMessagesInSnapshots(
         messages,
-        buildSendRequestBody({
-          context,
-          key,
-          messages: toPersistedChatMessages(messages),
-          run: runContext,
-          requestBody: normalizeChatContinuationRequestBody(data),
-        }),
-        abortSignal,
-        runContext,
+        upstreamConnection.connect(
+          messages,
+          buildSendRequestBody({
+            context,
+            key,
+            messages: toPersistedChatMessages(messages),
+            run: runContext,
+            requestBody: normalizeChatContinuationRequestBody(data),
+          }),
+          abortSignal,
+          runContext,
+        ),
       );
     },
   } satisfies ConnectConnectionAdapter;
