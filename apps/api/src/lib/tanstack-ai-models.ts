@@ -51,6 +51,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
 
@@ -617,16 +618,22 @@ const createExtendedBedrockAdapter = (
   return apiKey ? bedrock(modelId, { apiKey }) : bedrock(modelId);
 };
 
-export const createTanStackTextAdapterFactory = ({
-  provider,
-  apiKey,
-  region,
-}: TanStackModelFactoryOptions): TanStackTextAdapterFactory => {
+export const createTanStackTextAdapterFactory = (
+  options: TanStackModelFactoryOptions,
+): TanStackTextAdapterFactory => {
   const mockFactory = activeMockTextAdapterFactory();
   if (mockFactory) {
     return mockFactory;
   }
+  const factory = createProviderTextAdapterFactory(options);
+  return (modelId) => withProviderStreamContract(factory(modelId));
+};
 
+const createProviderTextAdapterFactory = ({
+  provider,
+  apiKey,
+  region,
+}: TanStackModelFactoryOptions): TanStackTextAdapterFactory => {
   const supportedProvider = resolveTanStackTextProvider({ provider, region });
 
   switch (supportedProvider) {

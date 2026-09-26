@@ -1151,6 +1151,7 @@
     "@tanstack/ai-mcp@0.3.10": "patches/@tanstack%2Fai-mcp@0.3.10.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
+    "@tanstack/openai-base@0.10.11": "patches/@tanstack%2Fopenai-base@0.10.11.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",

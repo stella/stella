@@ -1,0 +1,33 @@
+Backport of TanStack/ai#1494 (issue #1447): a Responses stream that ends
+without a terminal event reports a RUN_ERROR with code incomplete-stream
+instead of an invented RUN_FINISHED.
+Remove when @tanstack/openai-base >= 0.12.0 is installed.
+
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+index 5428b96879040c20dbecc6d600013b87e0baa894..1793ed854ce5d550485772bed9f60a77913a77b3 100644
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -1119,13 +1119,19 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 					model: model || options.model,
+ 					timestamp: Date.now()
+ 				};
++				// Backport of TanStack/ai#1494 (issue #1447): the Responses API always
++				// sends a terminal event, so a stream that ends without one failed.
++				// Remove with @tanstack/openai-base >= 0.12.0.
+ 				yield {
+-					type: EventType.RUN_FINISHED,
+-					runId: aguiState.runId,
+-					threadId: aguiState.threadId,
++					type: EventType.RUN_ERROR,
+ 					model: model || options.model,
+ 					timestamp: Date.now(),
+-					finishReason: toolCallMetadata.size > 0 ? "tool_calls" : "stop"
++					message: "The response stream ended before a terminal response event.",
++					code: "incomplete-stream",
++					error: {
++						message: "The response stream ended before a terminal response event.",
++						code: "incomplete-stream"
++					}
+ 				};
+ 			}
+ 		} catch (error) {
