@@ -12,8 +12,6 @@
 
 import { PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import type { PDF, PdfObject, PdfRef } from "@libpdf/core";
-import * as asn1js from "asn1js";
-import * as pkijs from "pkijs";
 
 import { parseCertificate } from "@/api/lib/pdf-signing/certificate-chain";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
@@ -29,21 +27,6 @@ const isSelfSigned = (der: Uint8Array) => {
   return (
     certificate !== null && certificate.subject.isEqual(certificate.issuer)
   );
-};
-
-/** The certificates a timestamp token carries: the TSA's own and its CAs. */
-export const timestampTokenCertificates = (token: Uint8Array): Uint8Array[] => {
-  try {
-    const contentInfo = new pkijs.ContentInfo({
-      schema: asn1js.fromBER(new Uint8Array(token)).result,
-    });
-    const signedData = new pkijs.SignedData({ schema: contentInfo.content });
-    return (signedData.certificates ?? [])
-      .filter((entry) => entry instanceof pkijs.Certificate)
-      .map((entry) => new Uint8Array(entry.toSchema().toBER(false)));
-  } catch {
-    return [];
-  }
 };
 
 /**
@@ -101,7 +84,7 @@ export const findRevokedCertificates = async ({
 
 export type GatheredValidationData = {
   material: ValidationMaterial;
-  /** Signer-chain certificates with no revocation data behind them. */
+  /** Certificates of either chain with no revocation data behind them. */
   uncovered: Uint8Array[];
 };
 
@@ -113,24 +96,27 @@ export const gatherValidationData = async ({
   provider,
   signer,
   signerChain,
-  timestampCertificates,
+  timestampChain,
 }: {
   provider: TrackedRevocationProvider;
   signer: ValidationMaterial;
   /** The signing certificate first, then its issuers. */
   signerChain: readonly Uint8Array[];
-  timestampCertificates: readonly Uint8Array[];
+  /** The timestamp's signing certificate first, then its issuers. */
+  timestampChain: readonly Uint8Array[];
 }): Promise<GatheredValidationData> => {
   const material: ValidationMaterial = {
-    certificates: [...signer.certificates, ...timestampCertificates],
+    certificates: [...signer.certificates, ...timestampChain],
     crls: [...signer.crls],
     ocspResponses: [...signer.ocspResponses],
   };
-  await gatherRevocation(timestampCertificates, provider, material);
+  await gatherRevocation(timestampChain, provider, material);
 
+  // B-LT needs validation data for the timestamp as much as for the
+  // signature: both chains count.
   return {
     material,
-    uncovered: signerChain.filter(
+    uncovered: [...signerChain, ...timestampChain].filter(
       (certificate) =>
         !isSelfSigned(certificate) && !provider.covers(certificate),
     ),

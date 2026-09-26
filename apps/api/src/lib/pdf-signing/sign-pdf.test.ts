@@ -18,7 +18,11 @@ import {
   createTestCertificate,
   createTestCrl,
 } from "@/api/tests/helpers/test-pki";
-import { createTestTimestampAuthority } from "@/api/tests/helpers/timestamp-token";
+import type { TestCertificate } from "@/api/tests/helpers/test-pki";
+import {
+  createTestTimestampAuthority,
+  createTestTimestampCertificate,
+} from "@/api/tests/helpers/timestamp-token";
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
 const SHA256_DIGEST_INFO_PREFIX = Buffer.from(
@@ -253,10 +257,12 @@ describe("two-phase PDF signing", () => {
       chainComplete,
       crlServed = true,
       leafRevoked = false,
+      timestampSigner,
     }: {
       chainComplete: boolean;
       crlServed?: boolean;
       leafRevoked?: boolean;
+      timestampSigner?: TestCertificate;
     }) => {
       const root = await createTestCertificate({
         commonName: "Root",
@@ -323,7 +329,11 @@ describe("two-phase PDF signing", () => {
           signature,
           timestampAuthorities: [
             {
-              authority: await createTestTimestampAuthority(),
+              authority: await createTestTimestampAuthority(
+                timestampSigner === undefined
+                  ? {}
+                  : { signer: timestampSigner },
+              ),
               url: "https://tsa.example/",
             },
           ],
@@ -376,6 +386,26 @@ describe("two-phase PDF signing", () => {
       ]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
+    });
+
+    test("claims only trusted time when the timestamp's own chain is missing", async () => {
+      // The authority's key is issued by a CA the token does not carry and
+      // no AIA URL leads to: its time cannot be validated long term.
+      const tsaCa = await createTestCertificate({
+        commonName: "Timestamp CA",
+        isCa: true,
+      });
+      const { applied } = await signUnderIssuingCa({
+        chainComplete: true,
+        timestampSigner: await createTestTimestampCertificate({
+          issuer: tsaCa,
+        }),
+      });
+
+      expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toContain(
+        "TIMESTAMP_CHAIN_INCOMPLETE",
+      );
     });
 
     test("refuses to embed a signature whose certificate is revoked", async () => {
