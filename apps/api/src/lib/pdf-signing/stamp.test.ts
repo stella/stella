@@ -85,6 +85,23 @@ describe("placing a stamp drawn on the displayed page", () => {
     });
   });
 
+  test("accepts a box drawn at exactly the size limits", async () => {
+    const pdf = await PDF.load(await buildPage(0));
+    // Fractions of a 600x800 page that round-trip to a hair under 72x24.
+    const placed = placeStamp({
+      box: {
+        x: 0.1,
+        y: 0.1,
+        width: (STAMP_SIZE_LIMITS.minWidth - 1e-9) / 600,
+        height: (STAMP_SIZE_LIMITS.minHeight - 1e-9) / 800,
+      },
+      pageIndex: 0,
+      pdf,
+    });
+
+    expect(placed.status).toBe("placed");
+  });
+
   test("refuses a box off the page, too small, too large or on a missing page", async () => {
     const pdf = await PDF.load(await buildPage(0));
     const reason = (candidate: Parameters<typeof placeStamp>[0]) => {
