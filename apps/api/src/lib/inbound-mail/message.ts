@@ -135,9 +135,8 @@ const UNSAFE_ATTACHMENT_MIME_TYPES = new Set([
   "text/javascript",
 ]);
 
-const fail = (reason: InboundMessageErrorReason): never => {
-  throw new InboundMessageError({ reason, message: reason });
-};
+const fail = (reason: InboundMessageErrorReason) =>
+  Result.err(new InboundMessageError({ reason, message: reason }));
 
 const normalizeMailbox = (address: Address): string | null => {
   if (address.group || !address.address) {
@@ -257,9 +256,9 @@ const explicitZoneDate = (value: string): string | null => {
   return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
 };
 
-const checkRaw = (raw: Uint8Array): number => {
+const checkRaw = (raw: Uint8Array): Result<number, InboundMessageError> => {
   if (raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
-    fail("rawTooLarge");
+    return fail("rawTooLarge");
   }
   const searchEnd = Math.min(
     raw.byteLength,
@@ -282,9 +281,9 @@ const checkRaw = (raw: Uint8Array): number => {
     }
   }
   if (headerEnd < 0) {
-    fail("headersTooLarge");
+    return fail("headersTooLarge");
   }
-  return headerEnd;
+  return Result.ok(headerEnd);
 };
 
 const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {
@@ -300,27 +299,39 @@ const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {
 
 const parseMime = async (raw: Uint8Array) => {
   const headerEnd = checkRaw(raw);
-  try {
-    const email = await PostalMime.parse(raw, {
-      attachmentEncoding: "arraybuffer",
-      forceRfc822Attachments: true,
-      maxNestingDepth: INBOUND_MAIL_LIMITS.mimeDepth,
-      maxHeadersSize: INBOUND_MAIL_LIMITS.headerBytes,
-      maxRfc822NestingDepth: 0,
-    });
-    return {
-      email,
-      date: explicitZoneDate(rawDateHeader(raw, headerEnd) ?? ""),
-    };
-  } catch {
-    return fail("invalidMime");
+  if (headerEnd.isErr()) {
+    return headerEnd;
   }
+  const parsed = await Result.tryPromise({
+    try: () =>
+      PostalMime.parse(raw, {
+        attachmentEncoding: "arraybuffer",
+        forceRfc822Attachments: true,
+        maxNestingDepth: INBOUND_MAIL_LIMITS.mimeDepth,
+        maxHeadersSize: INBOUND_MAIL_LIMITS.headerBytes,
+        maxRfc822NestingDepth: 0,
+      }),
+    catch: () =>
+      new InboundMessageError({
+        reason: "invalidMime",
+        message: "invalidMime",
+      }),
+  });
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  return Result.ok({
+    email: parsed.value,
+    date: explicitZoneDate(rawDateHeader(raw, headerEnd.value) ?? ""),
+  });
 };
 
-const checkedOuterSender = (email: Email): string | null => {
+const checkedOuterSender = (
+  email: Email,
+): Result<string | null, InboundMessageError> => {
   const fromHeaders = email.headers.filter(({ key }) => key === "from");
   if (fromHeaders.length === 0) {
-    return null;
+    return Result.ok(null);
   }
   if (fromHeaders.length !== 1) {
     return fail("invalidFrom");
@@ -329,21 +340,24 @@ const checkedOuterSender = (email: Email): string | null => {
   if (!header) {
     return fail("invalidFrom");
   }
-  return parseOneMailbox(header.value) ?? fail("invalidFrom");
+  const mailbox = parseOneMailbox(header.value);
+  return mailbox ? Result.ok(mailbox) : fail("invalidFrom");
 };
 
 const normalizeText = (value: string | undefined): string =>
   (value ?? "").replace(/\r\n?/gu, "\n").trim();
 
-const sanitizeBodyHtml = (email: Email): string | null => {
+const sanitizeBodyHtml = (
+  email: Email,
+): Result<string | null, InboundMessageError> => {
   if (!email.html) {
-    return null;
+    return Result.ok(null);
   }
   if (
     new TextEncoder().encode(email.html).byteLength >
     INBOUND_MAIL_LIMITS.bodyBytes
   ) {
-    fail("bodyTooLarge");
+    return fail("bodyTooLarge");
   }
   const parsed = {
     subject: null,
@@ -356,12 +370,14 @@ const sanitizeBodyHtml = (email: Email): string | null => {
     inlineImages: [],
     attachments: [],
   } satisfies ParsedEmail;
-  return load(renderEmailBodyHtml(parsed))("body").html();
+  return Result.ok(load(renderEmailBodyHtml(parsed))("body").html());
 };
 
-const checkedAttachments = (email: Email): InboundAttachment[] => {
+const checkedAttachments = (
+  email: Email,
+): Result<InboundAttachment[], InboundMessageError> => {
   if (email.attachments.length > INBOUND_MAIL_LIMITS.attachmentCount) {
-    fail("tooManyAttachments");
+    return fail("tooManyAttachments");
   }
   const attachments: InboundAttachment[] = [];
   for (const attachment of email.attachments) {
@@ -373,14 +389,14 @@ const checkedAttachments = (email: Email): InboundAttachment[] => {
       UNSAFE_ATTACHMENT_EXTENSIONS.has(extension) ||
       UNSAFE_ATTACHMENT_MIME_TYPES.has(mimeType)
     ) {
-      fail("unsafeAttachment");
+      return fail("unsafeAttachment");
     }
     const bytes =
       typeof attachment.content === "string"
         ? new TextEncoder().encode(attachment.content)
         : new Uint8Array(attachment.content);
     if (bytes.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
-      fail("attachmentTooLarge");
+      return fail("attachmentTooLarge");
     }
     if (
       (bytes[0] === 0x7f &&
@@ -390,22 +406,24 @@ const checkedAttachments = (email: Email): InboundAttachment[] => {
       (bytes[0] === 0x4d && bytes[1] === 0x5a) ||
       (bytes[0] === 0x23 && bytes[1] === 0x21)
     ) {
-      fail("unsafeAttachment");
+      return fail("unsafeAttachment");
     }
     attachments.push({ fileName, mimeType, bytes });
   }
   // Content dedup ignores MIME part order, so ordinal attachment links must
   // use the same canonical order when different deliveries resume a filing.
-  return attachments
-    .map((attachment) => ({
-      attachment,
-      key: JSON.stringify([
-        attachment.mimeType,
-        new Bun.CryptoHasher("sha256").update(attachment.bytes).digest("hex"),
-      ]),
-    }))
-    .toSorted((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)))
-    .map(({ attachment }) => attachment);
+  return Result.ok(
+    attachments
+      .map((attachment) => ({
+        attachment,
+        key: JSON.stringify([
+          attachment.mimeType,
+          new Bun.CryptoHasher("sha256").update(attachment.bytes).digest("hex"),
+        ]),
+      }))
+      .toSorted((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)))
+      .map(({ attachment }) => attachment),
+  );
 };
 
 const contentHash = (
@@ -440,47 +458,50 @@ const contentHash = (
 const normalizeMessage = (
   email: Email,
   date: string | null,
-): NormalizedInboundMessage => {
-  const fromHeaders = email.headers.filter(({ key }) => key === "from");
-  if (fromHeaders.length > 1) {
-    fail("invalidFrom");
-  }
-  const fromHeader = fromHeaders.at(0);
-  const from = fromHeader ? parseOneMailbox(fromHeader.value) : null;
-  if (fromHeader && !from) {
-    fail("invalidFrom");
-  }
-  const to = normalizeAddresses(email.to);
-  const cc = normalizeAddresses(email.cc);
-  if (to.length + cc.length > INBOUND_MAIL_LIMITS.recipients) {
-    fail("tooManyRecipients");
-  }
-  const text = normalizeText(email.text);
-  const html = sanitizeBodyHtml(email);
-  if (
-    text.length > INBOUND_MAIL_LIMITS.bodyCharacters ||
-    (html !== null && html.length > INBOUND_MAIL_LIMITS.bodyCharacters) ||
-    new TextEncoder().encode(text).byteLength > INBOUND_MAIL_LIMITS.bodyBytes ||
-    (html &&
-      new TextEncoder().encode(html).byteLength > INBOUND_MAIL_LIMITS.bodyBytes)
-  ) {
-    fail("bodyTooLarge");
-  }
-  const message = {
-    from,
-    to,
-    cc,
-    date,
-    subject: email.subject?.trim() ?? null,
-    text,
-    html,
-    messageId: normalizeHeaderId(email.messageId),
-    inReplyTo: normalizeHeaderId(email.inReplyTo),
-    references: normalizeReferences(email.references),
-    attachments: checkedAttachments(email),
-  };
-  return { ...message, contentHash: contentHash(message) };
-};
+): Result<NormalizedInboundMessage, InboundMessageError> =>
+  Result.gen(function* () {
+    const fromHeaders = email.headers.filter(({ key }) => key === "from");
+    if (fromHeaders.length > 1) {
+      return fail("invalidFrom");
+    }
+    const fromHeader = fromHeaders.at(0);
+    const from = fromHeader ? parseOneMailbox(fromHeader.value) : null;
+    if (fromHeader && !from) {
+      return fail("invalidFrom");
+    }
+    const to = normalizeAddresses(email.to);
+    const cc = normalizeAddresses(email.cc);
+    if (to.length + cc.length > INBOUND_MAIL_LIMITS.recipients) {
+      return fail("tooManyRecipients");
+    }
+    const text = normalizeText(email.text);
+    const html = yield* sanitizeBodyHtml(email);
+    if (
+      text.length > INBOUND_MAIL_LIMITS.bodyCharacters ||
+      (html !== null && html.length > INBOUND_MAIL_LIMITS.bodyCharacters) ||
+      new TextEncoder().encode(text).byteLength >
+        INBOUND_MAIL_LIMITS.bodyBytes ||
+      (html &&
+        new TextEncoder().encode(html).byteLength >
+          INBOUND_MAIL_LIMITS.bodyBytes)
+    ) {
+      return fail("bodyTooLarge");
+    }
+    const message = {
+      from,
+      to,
+      cc,
+      date,
+      subject: email.subject?.trim() ?? null,
+      text,
+      html,
+      messageId: normalizeHeaderId(email.messageId),
+      inReplyTo: normalizeHeaderId(email.inReplyTo),
+      references: normalizeReferences(email.references),
+      attachments: yield* checkedAttachments(email),
+    };
+    return Result.ok({ ...message, contentHash: contentHash(message) });
+  });
 
 const FORWARD_MARKER =
   /^(?:-{2,}\s*(?:forwarded message|original message|původní zpráva|ursprüngliche nachricht|message transféré|mensaje reenviado|messaggio inoltrato)\s*-{2,}|begin forwarded message:|début du message transféré\s*:|anfang der weitergeleiteten nachricht\s*:|inicio del mensaje reenviado\s*:|začátek přeposlané zprávy\s*:?)$/iu;
@@ -635,15 +656,29 @@ const parseInlineForward = (
 
 export const parseInboundMessage = async (
   raw: Uint8Array,
-): Promise<ParsedInboundMessage> => {
-  const { email: outerEmail, date: outerDate } = await parseMime(raw);
+): Promise<Result<ParsedInboundMessage, InboundMessageError>> => {
+  const outer = await parseMime(raw);
+  if (outer.isErr()) {
+    return outer;
+  }
+  const { email: outerEmail, date: outerDate } = outer.value;
   const outerSender = checkedOuterSender(outerEmail);
+  if (outerSender.isErr()) {
+    return outerSender;
+  }
   const message = normalizeMessage(outerEmail, outerDate);
+  if (message.isErr()) {
+    return message;
+  }
   if (
-    (message.inReplyTo !== null || message.references.length > 0) &&
-    !FORWARD_SUBJECT_PREFIX.test(message.subject ?? "")
+    (message.value.inReplyTo !== null || message.value.references.length > 0) &&
+    !FORWARD_SUBJECT_PREFIX.test(message.value.subject ?? "")
   ) {
-    return { outerSender, message, forwardSource: "none" };
+    return Result.ok({
+      outerSender: outerSender.value,
+      message: message.value,
+      forwardSource: "none",
+    } satisfies ParsedInboundMessage);
   }
   const rfc822Parts = outerEmail.attachments.filter(
     ({ mimeType }) => mimeType.toLowerCase() === "message/rfc822",
@@ -655,12 +690,9 @@ export const parseInboundMessage = async (
         ? new TextEncoder().encode(part.content)
         : new Uint8Array(part.content);
     if (bytes.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
-      fail("attachmentTooLarge");
+      return fail("attachmentTooLarge");
     }
-    const attached = await Result.tryPromise({
-      try: async () => await parseMime(bytes),
-      catch: (cause) => cause,
-    });
+    const attached = await parseMime(bytes);
     const fromHeaders = attached.isOk()
       ? attached.value.email.headers.filter(({ key }) => key === "from")
       : [];
@@ -671,19 +703,40 @@ export const parseInboundMessage = async (
       fromHeader &&
       parseOneMailbox(fromHeader.value)
     ) {
-      return {
-        outerSender,
-        message: normalizeMessage(attached.value.email, attached.value.date),
+      const original = normalizeMessage(
+        attached.value.email,
+        attached.value.date,
+      );
+      if (original.isErr()) {
+        return original;
+      }
+      return Result.ok({
+        outerSender: outerSender.value,
+        message: original.value,
         forwardSource: "attached",
         originalRaw: bytes,
-      };
+      } satisfies ParsedInboundMessage);
     }
   }
   if (rfc822Parts.length > 1) {
-    return { outerSender, message, forwardSource: "none" };
+    return Result.ok({
+      outerSender: outerSender.value,
+      message: message.value,
+      forwardSource: "none",
+    } satisfies ParsedInboundMessage);
   }
-  const forwarded = parseInlineForward(message);
-  return forwarded
-    ? { outerSender, message: forwarded, forwardSource: "inline" }
-    : { outerSender, message, forwardSource: "none" };
+  const forwarded = parseInlineForward(message.value);
+  return Result.ok(
+    forwarded
+      ? ({
+          outerSender: outerSender.value,
+          message: forwarded,
+          forwardSource: "inline",
+        } satisfies ParsedInboundMessage)
+      : ({
+          outerSender: outerSender.value,
+          message: message.value,
+          forwardSource: "none",
+        } satisfies ParsedInboundMessage),
+  );
 };

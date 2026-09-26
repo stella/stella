@@ -3,6 +3,8 @@ import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
 import {
+  createMailDnsResolver,
+  createLocalMailVerifier,
   domainsAlign,
   hasAlignedAuthentication,
   parseProviderAuthentication,
@@ -134,8 +136,6 @@ describe("mail authentication trust boundary", () => {
 });
 
 test("local verification uses SMTP envelope and DNS, ignoring forged authentication headers", async () => {
-  const { createLocalMailVerifier } =
-    await import("@/api/lib/inbound-mail/authentication");
   let cancelled = 0;
   const verifier = createLocalMailVerifier(() => ({
     resolve: async (domain, rrtype) => {
@@ -179,9 +179,69 @@ test("local verification uses SMTP envelope and DNS, ignoring forged authenticat
   expect(cancelled).toBe(2);
 });
 
+test("local verification resolves SPF MX hosts through the mail DNS adapter", async () => {
+  const queried: string[] = [];
+  let cancelled = 0;
+  const verifier = createLocalMailVerifier(() =>
+    createMailDnsResolver({
+      resolveTxt: async (domain) => {
+        queried.push(`TXT ${domain}`);
+        if (domain === "example.com") {
+          return [["v=spf1 mx -all"]];
+        }
+        if (domain === "_dmarc.example.com") {
+          return [["v=DMARC1; p=reject; aspf=s"]];
+        }
+        return [];
+      },
+      resolveMx: async (domain) => {
+        queried.push(`MX ${domain}`);
+        return domain === "example.com"
+          ? [{ priority: 10, exchange: "mail.example.com" }]
+          : [];
+      },
+      resolve4: async (domain) => {
+        queried.push(`A ${domain}`);
+        return domain === "mail.example.com" ? ["192.0.2.1"] : [];
+      },
+      resolve6: async () => [],
+      resolvePtr: async () => [],
+      cancel: () => {
+        cancelled += 1;
+      },
+    }),
+  );
+  const raw = new TextEncoder().encode(
+    "From: member@example.com\r\nTo: recipient@example.net\r\n\r\nBody",
+  );
+  for (const remoteIp of ["192.0.2.1", "192.0.2.2"]) {
+    const result = await verifier({
+      raw,
+      fromAddress: "member@example.com",
+      envelope: {
+        mailFrom: "member@example.com",
+        recipients: ["token@inbound.example.com"],
+        remoteIp,
+        helo: "mail.example.com",
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      continue;
+    }
+    expect(result.value.spf.result).toBe(
+      remoteIp === "192.0.2.1" ? "pass" : "fail",
+    );
+    expect(hasAlignedAuthentication(result.value, "member@example.com")).toBe(
+      remoteIp === "192.0.2.1",
+    );
+  }
+  expect(queried).toContain("MX example.com");
+  expect(queried).toContain("A mail.example.com");
+  expect(cancelled).toBe(2);
+});
+
 test("local verification validates DKIM bytes, alignment, and DMARC policy", async () => {
-  const { createLocalMailVerifier } =
-    await import("@/api/lib/inbound-mail/authentication");
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
   });
@@ -196,7 +256,7 @@ test("local verification validates DKIM bytes, alignment, and DMARC policy", asy
   );
   const makeSignedMessage = async (signingDomain: string) => {
     const signed = await dkimSign(unsigned, {
-      signTime: 1_800_000_000,
+      signTime: new Date("2026-09-26T00:00:00.000Z"),
       signatureData: [
         {
           signingDomain,

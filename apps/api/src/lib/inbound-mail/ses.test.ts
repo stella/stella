@@ -1,4 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { Readable } from "node:stream";
 
@@ -38,7 +39,7 @@ const read = async (input: unknown) =>
     event: input,
     bucket: "inbound-bucket",
     keyPrefix: "mail/",
-    readObject: async () => raw,
+    readObject: async () => Result.ok(raw),
   });
 
 test("provider metadata authenticates the outer sender without inventing a signing domain", async () => {
@@ -104,7 +105,7 @@ test("rejects bucket or object substitution before object storage access", async
       keyPrefix: "mail/",
       readObject: async () => {
         reads += 1;
-        return raw;
+        return Result.ok(raw);
       },
     });
     expect(result.isErr()).toBe(true);
@@ -185,7 +186,7 @@ test.each(["declared", "streamed"] as const)(
             sender: null,
           });
           drops += 1;
-          return { status: "dropped", reason: "message_too_large" };
+          return Result.ok({ status: "dropped", reason: "message_too_large" });
         },
       });
       expect(result.isOk() && result.value).toEqual([

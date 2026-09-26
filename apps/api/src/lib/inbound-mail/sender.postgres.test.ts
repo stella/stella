@@ -194,12 +194,12 @@ if (!databaseUrl || !runPostgresTests) {
             if (result.type !== "ok") {
               throw new Error(`Filing failed: ${result.type}`);
             }
-            return {
+            return Result.ok({
               status: result.created
                 ? ("filed" as const)
                 : ("duplicate" as const),
               correspondenceId: result.id,
-            };
+            });
           };
 
           const firstStore = createInboundMailStore({
@@ -210,7 +210,9 @@ if (!databaseUrl || !runPostgresTests) {
                   return await work(tx);
                 }),
             },
-            fileCandidate: async (candidate) => {
+            fileCandidate: async (
+              candidate: FileInboundCandidateOptions<Transaction>,
+            ) => {
               firstAtCandidate.resolve(undefined);
               await releaseCandidates.promise;
               return await fileCandidate(candidate);
@@ -231,7 +233,9 @@ if (!databaseUrl || !runPostgresTests) {
                   return await work(tx);
                 }),
             },
-            fileCandidate: async (candidate) => {
+            fileCandidate: async (
+              candidate: FileInboundCandidateOptions<Transaction>,
+            ) => {
               secondAtCandidate.resolve(undefined);
               await releaseCandidates.promise;
               return await fileCandidate(candidate);
@@ -243,7 +247,7 @@ if (!databaseUrl || !runPostgresTests) {
             deliveryKey: Bun.randomUUIDv7(),
             receivedAt,
             delivery,
-          });
+          }).then((result) => result.unwrap());
           activeDeliveries.push(first);
           await firstAtCandidate.promise;
           const second = secondStore({
@@ -251,7 +255,7 @@ if (!databaseUrl || !runPostgresTests) {
             deliveryKey: Bun.randomUUIDv7(),
             receivedAt,
             delivery,
-          });
+          }).then((result) => result.unwrap());
           activeDeliveries.push(second);
           const secondPid = await secondTransactionStarted.promise;
           let secondBlocked = false;

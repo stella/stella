@@ -13,7 +13,7 @@ import type { SenderMembership } from "@/api/lib/inbound-mail/acceptance";
 
 export type InboundTransaction = Pick<
   Transaction,
-  "select" | "insert" | "execute"
+  "select" | "insert" | "execute" | "rollback"
 >;
 
 type ResolveInboundSenderOptions = {

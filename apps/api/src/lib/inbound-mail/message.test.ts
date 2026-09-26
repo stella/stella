@@ -5,6 +5,24 @@ import { INBOUND_MAIL_LIMITS } from "./limits";
 import type { InboundMessageError } from "./message";
 import { parseInboundMessage } from "./message";
 
+const parseValidInboundMessage = async (raw: Uint8Array) => {
+  const result = await parseInboundMessage(raw);
+  expect(result.isOk()).toBe(true);
+  if (result.isErr()) {
+    throw result.error;
+  }
+  return result.value;
+};
+
+const parseInboundMessageError = async (raw: Uint8Array) => {
+  const result = await parseInboundMessage(raw);
+  expect(result.isErr()).toBe(true);
+  if (result.isOk()) {
+    throw new Error("Expected an invalid inbound message");
+  }
+  return result.error;
+};
+
 const bytes = (value: string): Uint8Array => new TextEncoder().encode(value);
 const fixture = async (name: string): Promise<Uint8Array> =>
   new Uint8Array(
@@ -24,7 +42,9 @@ const baseHeaders = [
 
 describe("inbound MIME normalization", () => {
   test("keeps a member's CC filing as their own message", async () => {
-    const parsed = await parseInboundMessage(await fixture("member-cc.eml"));
+    const parsed = await parseValidInboundMessage(
+      await fixture("member-cc.eml"),
+    );
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.outerSender).toBe("member@example.test");
     expect(parsed.message.from).toBe("member@example.test");
@@ -33,7 +53,7 @@ describe("inbound MIME normalization", () => {
   });
 
   test("extracts the original from an attached email fixture", async () => {
-    const parsed = await parseInboundMessage(
+    const parsed = await parseValidInboundMessage(
       await fixture("attached-forward.eml"),
     );
     expect(parsed.forwardSource).toBe("attached");
@@ -45,7 +65,7 @@ describe("inbound MIME normalization", () => {
   });
 
   test("extracts a localized inline forward fixture", async () => {
-    const parsed = await parseInboundMessage(
+    const parsed = await parseValidInboundMessage(
       await fixture("inline-forward-cs.eml"),
     );
     expect(parsed.forwardSource).toBe("inline");
@@ -68,7 +88,7 @@ describe("inbound MIME normalization", () => {
   ])(
     "preserves the reply and quoted original in %s",
     async (name, reply, id) => {
-      const parsed = await parseInboundMessage(await fixture(name));
+      const parsed = await parseValidInboundMessage(await fixture(name));
       expect(parsed.forwardSource).toBe("none");
       expect(parsed.message.from).toBe("member@example.test");
       expect(parsed.message.messageId).toBe(id);
@@ -100,7 +120,7 @@ describe("inbound MIME normalization", () => {
         }
         // The quote is extractable when explicitly forwarded, so this fixture
         // reaches the discrimination boundary rather than an unsupported marker.
-        const forwarded = await parseInboundMessage(
+        const forwarded = await parseValidInboundMessage(
           bytes(
             raw.replace(/^Subject:.*$/mu, "Subject: Fwd: Settlement proposal"),
           ),
@@ -108,7 +128,7 @@ describe("inbound MIME normalization", () => {
         expect(forwarded.forwardSource).toBe("inline");
         expect(forwarded.message.from).toBe("counsel@outside.test");
 
-        const parsed = await parseInboundMessage(bytes(raw));
+        const parsed = await parseValidInboundMessage(bytes(raw));
         expect(parsed.forwardSource).toBe("none");
         expect(parsed.message.from).toBe("member@example.test");
         expect(parsed.message.messageId).toBe(`<reply-${locale}@example.test>`);
@@ -130,7 +150,7 @@ describe("inbound MIME normalization", () => {
       const raw = new TextDecoder().decode(
         await fixture("attached-forward.eml"),
       );
-      const parsed = await parseInboundMessage(
+      const parsed = await parseValidInboundMessage(
         bytes(
           raw.replace(
             "Subject: Fwd: Original subject",
@@ -154,7 +174,7 @@ describe("inbound MIME normalization", () => {
     ["gmail-forward-en.eml", "Filing deadline"],
     ["apple-forward-fr.eml", "Projet de contrat"],
   ])("extracts the original from %s", async (name, subject) => {
-    const parsed = await parseInboundMessage(await fixture(name));
+    const parsed = await parseValidInboundMessage(await fixture(name));
     expect(parsed.forwardSource).toBe("inline");
     expect(parsed.outerSender).toBe("member@example.test");
     expect(parsed.message.from).toBe("author@outside.test");
@@ -163,9 +183,9 @@ describe("inbound MIME normalization", () => {
   });
 
   test("rejects a forged duplicate From fixture", async () => {
-    await expect(
-      parseInboundMessage(await fixture("forged-from.eml")),
-    ).rejects.toMatchObject({
+    expect(
+      await parseInboundMessageError(await fixture("forged-from.eml")),
+    ).toMatchObject({
       reason: "invalidFrom",
     } satisfies Partial<InboundMessageError>);
   });
@@ -175,7 +195,7 @@ describe("inbound MIME normalization", () => {
       `${baseHeaders}\nCc: Colleague <colleague@example.test>\nIn-Reply-To: <FIRST@EXAMPLE.TEST>\nReferences: <FIRST@EXAMPLE.TEST> <SECOND@example.test>\nContent-Type: text/html; charset=UTF-8`,
       `<p>Hello</p><script>alert(1)</script><a href="javascript:alert(1)" onclick="alert(1)">link</a><img src="https://remote.test/pixel">`,
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
 
     expect(parsed.outerSender).toBe("member@example.test");
     expect(parsed.forwardSource).toBe("none");
@@ -234,7 +254,7 @@ describe("inbound MIME normalization", () => {
       ].join("\r\n"),
     );
 
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.outerSender).toBe("member@example.test");
     expect(parsed.forwardSource).toBe("attached");
     expect(parsed.message.from).toBe("author@outside.test");
@@ -276,7 +296,7 @@ describe("inbound MIME normalization", () => {
           "Original body",
         ].join("\r\n"),
       );
-      const parsed = await parseInboundMessage(raw);
+      const parsed = await parseValidInboundMessage(raw);
       expect(parsed.forwardSource).toBe("inline");
       expect(parsed.outerSender).toBe("member@example.test");
       expect(parsed.message.from).toBe("author@outside.test");
@@ -297,7 +317,7 @@ describe("inbound MIME normalization", () => {
         "Body",
       ].join("\r\n"),
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.from).toBe("member@example.test");
     expect(parsed.message.text).toContain("No date");
@@ -318,7 +338,7 @@ describe("inbound MIME normalization", () => {
         "Quoted body",
       ].join("\r\n"),
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.text).toContain("Please keep this entire note");
     expect(parsed.message.text).toContain("Quoted body");
@@ -343,7 +363,7 @@ describe("inbound MIME normalization", () => {
         "The filing deadline is 30 September.",
       ].join("\r\n"),
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.from).toBe("member@example.test");
     expect(parsed.message.text).toContain("I object to this deadline.");
@@ -366,7 +386,7 @@ describe("inbound MIME normalization", () => {
         "Original body",
       ].join("\r\n"),
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.from).toBe("member@example.test");
   });
@@ -387,7 +407,7 @@ describe("inbound MIME normalization", () => {
         "--outer--",
       ].join("\r\n"),
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.from).toBe("member@example.test");
     expect(parsed.message.attachments).toHaveLength(1);
@@ -402,11 +422,11 @@ describe("inbound MIME normalization", () => {
         `${from}\nTo: matter@example.test\nSubject: Test`,
         "Body",
       );
-      await expect(parseInboundMessage(raw)).rejects.toMatchObject({
+      expect(await parseInboundMessageError(raw)).toMatchObject({
         reason: "invalidFrom",
       } satisfies Partial<InboundMessageError>);
     }
-    const absent = await parseInboundMessage(
+    const absent = await parseValidInboundMessage(
       message("To: matter@example.test\nSubject: Test", "Body"),
     );
     expect(absent.outerSender).toBeNull();
@@ -414,7 +434,7 @@ describe("inbound MIME normalization", () => {
 
   test("rejects oversized raw messages and dangerous attachment names", async () => {
     const oversized = new Uint8Array(INBOUND_MAIL_LIMITS.rawBytes + 1);
-    await expect(parseInboundMessage(oversized)).rejects.toMatchObject({
+    expect(await parseInboundMessageError(oversized)).toMatchObject({
       reason: "rawTooLarge",
     } satisfies Partial<InboundMessageError>);
 
@@ -433,7 +453,7 @@ describe("inbound MIME normalization", () => {
         "--outer--",
       ].join("\r\n"),
     );
-    await expect(parseInboundMessage(raw)).rejects.toMatchObject({
+    expect(await parseInboundMessageError(raw)).toMatchObject({
       reason: "unsafeAttachment",
     } satisfies Partial<InboundMessageError>);
   });
@@ -453,7 +473,7 @@ describe("inbound MIME normalization", () => {
         "--outer--",
       ].join("\r\n"),
     );
-    await expect(parseInboundMessage(hugeAttachment)).rejects.toMatchObject({
+    expect(await parseInboundMessageError(hugeAttachment)).toMatchObject({
       reason: "attachmentTooLarge",
     } satisfies Partial<InboundMessageError>);
 
@@ -461,7 +481,7 @@ describe("inbound MIME normalization", () => {
       baseHeaders,
       "A".repeat(INBOUND_MAIL_LIMITS.bodyBytes + 1),
     );
-    await expect(parseInboundMessage(hugeBody)).rejects.toMatchObject({
+    expect(await parseInboundMessageError(hugeBody)).toMatchObject({
       reason: "bodyTooLarge",
     } satisfies Partial<InboundMessageError>);
   });
@@ -479,7 +499,7 @@ describe("inbound MIME normalization", () => {
         "--outer--",
       ].join("\r\n"),
     );
-    await expect(parseInboundMessage(raw)).rejects.toMatchObject({
+    expect(await parseInboundMessageError(raw)).toMatchObject({
       reason: "unsafeAttachment",
     } satisfies Partial<InboundMessageError>);
   });
@@ -500,8 +520,8 @@ describe("inbound MIME normalization", () => {
           "Original body",
         ].join("\r\n"),
       );
-    const first = await parseInboundMessage(forwarded("Please file"));
-    const second = await parseInboundMessage(forwarded("FYI"));
+    const first = await parseValidInboundMessage(forwarded("Please file"));
+    const second = await parseValidInboundMessage(forwarded("FYI"));
     expect(first.message.contentHash).toBe(second.message.contentHash);
   });
 
@@ -535,10 +555,10 @@ describe("inbound MIME normalization", () => {
           "--outer--",
         ].join("\r\n"),
       );
-    const first = await parseInboundMessage(
+    const first = await parseValidInboundMessage(
       wrapper("member@example.test", "First wrapper"),
     );
-    const second = await parseInboundMessage(
+    const second = await parseValidInboundMessage(
       wrapper("colleague@example.test", "Second wrapper"),
     );
     expect(first.forwardSource).toBe("attached");
@@ -571,8 +591,8 @@ describe("inbound MIME normalization", () => {
       ].join("\n"),
       "Same body",
     );
-    const first = await parseInboundMessage(one);
-    const second = await parseInboundMessage(two);
+    const first = await parseValidInboundMessage(one);
+    const second = await parseValidInboundMessage(two);
     expect(first.message.date).toBe("2026-09-25T11:00:00.000Z");
     expect(second.message.date).toBe(first.message.date);
     expect(first.message.to).not.toEqual(second.message.to);
@@ -593,7 +613,7 @@ describe("inbound MIME normalization", () => {
       baseHeaders.replace("Sat, 26 Sep 2026 12:00:00 +0000", () => date),
       "Body",
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.message.date).toBeNull();
   });
 
@@ -609,8 +629,8 @@ describe("inbound MIME normalization", () => {
       baseHeaders.replace("Date: Sat, 26 Sep 2026 12:00:00 +0000\n", ""),
       "Body",
     );
-    const first = await parseInboundMessage(noZone);
-    const second = await parseInboundMessage(withoutDate);
+    const first = await parseValidInboundMessage(noZone);
+    const second = await parseValidInboundMessage(withoutDate);
     expect(first.message.date).toBeNull();
     expect(first.message.contentHash).toBe(second.message.contentHash);
   });
@@ -623,7 +643,7 @@ describe("inbound MIME normalization", () => {
       ),
       "Body",
     );
-    const parsed = await parseInboundMessage(raw);
+    const parsed = await parseValidInboundMessage(raw);
     expect(parsed.message.date).toBe("2026-09-26T12:00:00.000Z");
   });
 
@@ -647,8 +667,8 @@ describe("inbound MIME normalization", () => {
       ]) {
         process.env.TZ = timezone;
         providerDates.add((await PostalMime.parse(ambiguous)).date);
-        const withoutZone = await parseInboundMessage(ambiguous);
-        const withZone = await parseInboundMessage(zoned);
+        const withoutZone = await parseValidInboundMessage(ambiguous);
+        const withZone = await parseValidInboundMessage(zoned);
         expect(withoutZone.message.date).toBeNull();
         expect(withZone.message.date).toBe("2026-09-26T12:00:00.000Z");
         identities.add(
@@ -688,13 +708,13 @@ describe("inbound MIME normalization", () => {
           "--outer--",
         ].join("\r\n"),
       );
-    const first = await parseInboundMessage(
+    const first = await parseValidInboundMessage(
       email([
         attachment("first.pdf", "first"),
         attachment("second.pdf", "second"),
       ]),
     );
-    const second = await parseInboundMessage(
+    const second = await parseValidInboundMessage(
       email([
         attachment("renamed-second.pdf", "second"),
         attachment("renamed-first.pdf", "first"),
