@@ -517,6 +517,9 @@ test("a directory jurisdiction's decision is written with its court id, and ever
     courtId: "scotus",
     country: "USA",
     language: "en",
+    // The jurisdiction tells its language versions apart by the publisher's
+    // document, so every decision of it names one.
+    sourceDocumentId: "scotus-19-1392",
   });
   const courtIdOf = async (caseNumber: string) =>
     (
@@ -540,7 +543,11 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   // defect; nothing is written for it.
   const { courtId: _courtId, ...unresolved } = usa("page-v3");
   const rejection: unknown = await processDecision({
-    input: { ...unresolved, caseNumber: "No. 20-1" },
+    input: {
+      ...unresolved,
+      caseNumber: "No. 20-1",
+      sourceDocumentId: "scotus-20-1",
+    },
     observationOrder: 1000n,
     sourceId,
     scopedDb,

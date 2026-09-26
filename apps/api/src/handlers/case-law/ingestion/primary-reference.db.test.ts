@@ -104,6 +104,7 @@ const usDocketDecision = (sourceDocumentId: string): IngestionResult => ({
   ...base,
   caseNumber: DOCKET,
   court: SCOTUS,
+  courtId: "scotus",
   country: "USA",
   language: "en",
   metadata: {},
