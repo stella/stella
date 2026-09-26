@@ -1923,6 +1923,40 @@
       "person": "Person"
     }
   },
+  "correspondence": {
+    "addressTitle": "E-Mail-Adresse der Akte",
+    "attachments": "Anhänge",
+    "authResults": {
+      "fail": "Fehlgeschlagen",
+      "none": "Keine",
+      "pass": "Bestanden",
+      "unknown": "Unbekannt"
+    },
+    "authentication": "E-Mail-Authentifizierung",
+    "backToList": "Zurück zur Korrespondenz",
+    "ccLabel": "Kopie",
+    "createAddress": "Adresse erstellen",
+    "empty": "Noch keine Korrespondenz.",
+    "filers": "Einreicher",
+    "fromLabel": "Von",
+    "markHandled": "Als erledigt markieren",
+    "markNew": "Als neu markieren",
+    "message": "Nachricht",
+    "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
+    "noSubject": "(Kein Betreff)",
+    "receivedAt": "Empfangen",
+    "revokeAddress": "Adresse widerrufen",
+    "rotateAddress": "Adresse erneuern",
+    "sentAt": "Gesendet",
+    "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
+    "states": {
+      "handled": "Erledigt",
+      "new": "Neu"
+    },
+    "title": "Korrespondenz",
+    "toLabel": "An",
+    "unknownApprover": "Unbekannte genehmigende Person"
+  },
   "docxReview": {
     "acceptAll": "Alle annehmen",
     "acceptAllConfirmDescription": "Dadurch werden {count} Vorschläge auf einmal auf das Dokument angewendet.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Alle Aktivitäten",
           "automation": "Automatisierung",
+          "correspondence": "Korrespondenz",
           "court": "Gericht",
           "documents": "Dokumente",
           "matter": "Akte",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "Automatisierung",
+          "correspondence": "Korrespondenz",
           "court": "Gerichtseintrag",
           "document": "Dokument",
           "documentReview": "Dokumentenprüfung",

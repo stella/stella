@@ -233,14 +233,18 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/invoices",
     shouldThrow: false,
   });
+  const correspondenceMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/correspondence",
+    shouldThrow: false,
+  });
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.
-  // Timesheets and invoices bypass the
+  // Timesheets, invoices, and correspondence bypass the
   // WorkspaceDropZone (they have their own layouts), but the inspector
   // pane is still available everywhere inside a workspace.
   const content =
-    timesheetsMatch || invoicesMatch ? (
+    timesheetsMatch || invoicesMatch || correspondenceMatch ? (
       <Outlet />
     ) : (
       <WorkspaceDropZone workspaceId={workspaceId}>

@@ -12,6 +12,7 @@ import {
   CalendarClockIcon,
   ClockIcon,
   FolderTreeIcon,
+  MailIcon,
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
@@ -989,6 +990,24 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </div>
       )}
 
+      <div className="flex justify-end">
+        <Button
+          onClick={() =>
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/correspondence",
+                params: { workspaceId },
+              }),
+              "overview-view.open-correspondence",
+            )
+          }
+          size="sm"
+          variant="outline"
+        >
+          <MailIcon className="size-4" />
+          {t("correspondence.title")}
+        </Button>
+      </div>
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
     </div>
   );

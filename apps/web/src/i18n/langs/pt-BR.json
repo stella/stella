@@ -1923,6 +1923,40 @@
       "person": "Pessoa"
     }
   },
+  "correspondence": {
+    "addressTitle": "Endereço de e-mail do caso",
+    "attachments": "Anexos",
+    "authResults": {
+      "fail": "Falhou",
+      "none": "Nenhuma",
+      "pass": "Aprovada",
+      "unknown": "Desconhecida"
+    },
+    "authentication": "Autenticação do e-mail",
+    "backToList": "Voltar para correspondência",
+    "ccLabel": "Cc",
+    "createAddress": "Criar endereço",
+    "empty": "Ainda não há correspondência.",
+    "filers": "Remetentes",
+    "fromLabel": "De",
+    "markHandled": "Marcar como resolvido",
+    "markNew": "Marcar como novo",
+    "message": "Mensagem",
+    "noAddress": "Nenhum endereço de e-mail está ativo.",
+    "noSubject": "(Sem assunto)",
+    "receivedAt": "Recebido",
+    "revokeAddress": "Revogar endereço",
+    "rotateAddress": "Trocar endereço",
+    "sentAt": "Enviado",
+    "sharedMailboxFiler": "Caixa compartilhada {address}, aprovada por {approver}",
+    "states": {
+      "handled": "Resolvido",
+      "new": "Novo"
+    },
+    "title": "Correspondência",
+    "toLabel": "Para",
+    "unknownApprover": "Aprovador desconhecido"
+  },
   "docxReview": {
     "acceptAll": "Aceitar tudo",
     "acceptAllConfirmDescription": "Isso aplica {count} sugestões ao documento de uma só vez.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Toda a atividade",
           "automation": "Automação",
+          "correspondence": "Correspondência",
           "court": "Tribunal",
           "documents": "Documentos",
           "matter": "Caso",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automação",
+          "correspondence": "correspondência",
           "court": "registro judicial",
           "document": "documento",
           "documentReview": "revisão de documento",

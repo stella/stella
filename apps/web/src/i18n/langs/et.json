@@ -1923,6 +1923,40 @@
       "person": "Isik"
     }
   },
+  "correspondence": {
+    "addressTitle": "Asja e-posti aadress",
+    "attachments": "Manused",
+    "authResults": {
+      "fail": "Ebaõnnestunud",
+      "none": "Puudub",
+      "pass": "Läbitud",
+      "unknown": "Teadmata"
+    },
+    "authentication": "E-posti autentimine",
+    "backToList": "Tagasi kirjavahetuse juurde",
+    "ccLabel": "Koopia",
+    "createAddress": "Loo aadress",
+    "empty": "Kirjavahetust veel pole.",
+    "filers": "Esitajad",
+    "fromLabel": "Saatja",
+    "markHandled": "Märgi käsitletuks",
+    "markNew": "Märgi uueks",
+    "message": "Sõnum",
+    "noAddress": "Aktiivset e-posti aadressi pole.",
+    "noSubject": "(Teemata)",
+    "receivedAt": "Saabunud",
+    "revokeAddress": "Tühista aadress",
+    "rotateAddress": "Vaheta aadress",
+    "sentAt": "Saadetud",
+    "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
+    "states": {
+      "handled": "Käsitletud",
+      "new": "Uus"
+    },
+    "title": "Kirjavahetus",
+    "toLabel": "Saaja",
+    "unknownApprover": "Tundmatu kinnitaja"
+  },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
     "acceptAllConfirmDescription": "See rakendab dokumendile korraga {count} soovitust.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Kogu tegevus",
           "automation": "Automatiseerimine",
+          "correspondence": "Kirjavahetus",
           "court": "Kohus",
           "documents": "Dokumendid",
           "matter": "Toimik",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatiseerimine",
+          "correspondence": "kirjavahetus",
           "court": "kohtukirje",
           "document": "dokument",
           "documentReview": "dokumendi ülevaatus",

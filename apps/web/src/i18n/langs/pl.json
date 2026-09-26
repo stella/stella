@@ -1923,6 +1923,40 @@
       "person": "Osoba"
     }
   },
+  "correspondence": {
+    "addressTitle": "Adres e-mail sprawy",
+    "attachments": "Załączniki",
+    "authResults": {
+      "fail": "Niepowodzenie",
+      "none": "Brak",
+      "pass": "Zaliczono",
+      "unknown": "Nieznane"
+    },
+    "authentication": "Uwierzytelnianie e-maila",
+    "backToList": "Wróć do korespondencji",
+    "ccLabel": "DW",
+    "createAddress": "Utwórz adres",
+    "empty": "Brak korespondencji.",
+    "filers": "Nadawcy",
+    "fromLabel": "Od",
+    "markHandled": "Oznacz jako obsłużone",
+    "markNew": "Oznacz jako nowe",
+    "message": "Wiadomość",
+    "noAddress": "Brak aktywnego adresu e-mail.",
+    "noSubject": "(Brak tematu)",
+    "receivedAt": "Odebrano",
+    "revokeAddress": "Unieważnij adres",
+    "rotateAddress": "Zmień adres",
+    "sentAt": "Wysłano",
+    "sharedMailboxFiler": "Wspólna skrzynka {address}, zatwierdzona przez {approver}",
+    "states": {
+      "handled": "Obsłużone",
+      "new": "Nowe"
+    },
+    "title": "Korespondencja",
+    "toLabel": "Do",
+    "unknownApprover": "Nieznany zatwierdzający"
+  },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
     "acceptAllConfirmDescription": "Spowoduje to zastosowanie {count} sugestii do dokumentu naraz.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Cała aktywność",
           "automation": "Automatyzacja",
+          "correspondence": "Korespondencja",
           "court": "Sąd",
           "documents": "Dokumenty",
           "matter": "Sprawa",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatyzacja",
+          "correspondence": "korespondencja",
           "court": "wpis sądowy",
           "document": "dokument",
           "documentReview": "przegląd dokumentu",

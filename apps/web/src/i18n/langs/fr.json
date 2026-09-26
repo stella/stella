@@ -1923,6 +1923,40 @@
       "person": "Personne"
     }
   },
+  "correspondence": {
+    "addressTitle": "Adresse e-mail du dossier",
+    "attachments": "Pièces jointes",
+    "authResults": {
+      "fail": "Échec",
+      "none": "Aucune",
+      "pass": "Réussie",
+      "unknown": "Inconnue"
+    },
+    "authentication": "Authentification de l’e-mail",
+    "backToList": "Retour à la correspondance",
+    "ccLabel": "Cc",
+    "createAddress": "Créer une adresse",
+    "empty": "Aucune correspondance pour le moment.",
+    "filers": "Déposants",
+    "fromLabel": "De",
+    "markHandled": "Marquer comme traité",
+    "markNew": "Marquer comme nouveau",
+    "message": "Message",
+    "noAddress": "Aucune adresse e-mail active.",
+    "noSubject": "(Sans objet)",
+    "receivedAt": "Reçu",
+    "revokeAddress": "Révoquer l’adresse",
+    "rotateAddress": "Renouveler l’adresse",
+    "sentAt": "Envoyé",
+    "sharedMailboxFiler": "Boîte partagée {address}, approuvée par {approver}",
+    "states": {
+      "handled": "Traité",
+      "new": "Nouveau"
+    },
+    "title": "Correspondance",
+    "toLabel": "À",
+    "unknownApprover": "Approbateur inconnu"
+  },
   "docxReview": {
     "acceptAll": "Tout accepter",
     "acceptAllConfirmDescription": "Cela applique {count} suggestions au document en une seule fois.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Toute l’activité",
           "automation": "Automatisation",
+          "correspondence": "Correspondance",
           "court": "Juridiction",
           "documents": "Pièces",
           "matter": "Dossier",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatisation",
+          "correspondence": "correspondance",
           "court": "dossier judiciaire",
           "document": "fichier",
           "documentReview": "révision de document",

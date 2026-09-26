@@ -28,6 +28,7 @@ export const ROW_ACTION_LABEL_KEYS = {
 export const TARGET_LABEL_KEYS = {
   automation: "workspaces.overview.activity.targets.automation",
   court: "workspaces.overview.activity.targets.court",
+  correspondence: "workspaces.overview.activity.targets.correspondence",
   document: "workspaces.overview.activity.targets.document",
   documentReviewRun: "workspaces.overview.activity.targets.documentReview",
   folder: "workspaces.overview.activity.targets.folder",

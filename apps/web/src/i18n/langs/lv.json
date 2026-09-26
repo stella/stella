@@ -1923,6 +1923,40 @@
       "person": "Persona"
     }
   },
+  "correspondence": {
+    "addressTitle": "Lietas e-pasta adrese",
+    "attachments": "Pielikumi",
+    "authResults": {
+      "fail": "Neizdevās",
+      "none": "Nav",
+      "pass": "Izdevās",
+      "unknown": "Nezināms"
+    },
+    "authentication": "E-pasta autentifikācija",
+    "backToList": "Atpakaļ uz saraksti",
+    "ccLabel": "Kopija",
+    "createAddress": "Izveidot adresi",
+    "empty": "Sarakstes vēl nav.",
+    "filers": "Iesniedzēji",
+    "fromLabel": "No",
+    "markHandled": "Atzīmēt kā izskatītu",
+    "markNew": "Atzīmēt kā jaunu",
+    "message": "Ziņojums",
+    "noAddress": "Nav aktīvas e-pasta adreses.",
+    "noSubject": "(Bez temata)",
+    "receivedAt": "Saņemts",
+    "revokeAddress": "Atsaukt adresi",
+    "rotateAddress": "Mainīt adresi",
+    "sentAt": "Nosūtīts",
+    "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "states": {
+      "handled": "Izskatīts",
+      "new": "Jauns"
+    },
+    "title": "Sarakste",
+    "toLabel": "Kam",
+    "unknownApprover": "Nezināms apstiprinātājs"
+  },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
     "acceptAllConfirmDescription": "Tādējādi dokumentam vienlaikus tiek lietoti {count} ieteikumi.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Visas darbības",
           "automation": "Automatizācija",
+          "correspondence": "Sarakste",
           "court": "Tiesa",
           "documents": "Dokumenti",
           "matter": "Lieta",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatizācija",
+          "correspondence": "sarakste",
           "court": "tiesas ieraksts",
           "document": "dokuments",
           "documentReview": "dokumenta pārbaude",

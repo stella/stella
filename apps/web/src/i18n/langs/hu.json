@@ -1923,6 +1923,40 @@
       "person": "Személy"
     }
   },
+  "correspondence": {
+    "addressTitle": "Ügy e-mail-címe",
+    "attachments": "Mellékletek",
+    "authResults": {
+      "fail": "Sikertelen",
+      "none": "Nincs",
+      "pass": "Sikeres",
+      "unknown": "Ismeretlen"
+    },
+    "authentication": "E-mail-hitelesítés",
+    "backToList": "Vissza a levelezéshez",
+    "ccLabel": "Másolat",
+    "createAddress": "Cím létrehozása",
+    "empty": "Még nincs levelezés.",
+    "filers": "Benyújtók",
+    "fromLabel": "Feladó",
+    "markHandled": "Megjelölés elintézettként",
+    "markNew": "Megjelölés újként",
+    "message": "Üzenet",
+    "noAddress": "Nincs aktív e-mail-cím.",
+    "noSubject": "(Nincs tárgy)",
+    "receivedAt": "Érkezett",
+    "revokeAddress": "Cím visszavonása",
+    "rotateAddress": "Cím cseréje",
+    "sentAt": "Elküldve",
+    "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "states": {
+      "handled": "Elintézett",
+      "new": "Új"
+    },
+    "title": "Levelezés",
+    "toLabel": "Címzett",
+    "unknownApprover": "Ismeretlen jóváhagyó"
+  },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
     "acceptAllConfirmDescription": "Ez egyszerre {count} javaslatot alkalmaz a dokumentumon.",
@@ -5322,6 +5356,7 @@
         "filters": {
           "all": "Minden tevékenység",
           "automation": "Automatizálás",
+          "correspondence": "Levelezés",
           "court": "Bíróság",
           "documents": "Dokumentumok",
           "matter": "Ügy",
@@ -5353,6 +5388,7 @@
         },
         "targets": {
           "automation": "automatizálás",
+          "correspondence": "levelezés",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
           "documentReview": "dokumentumellenőrzés",
