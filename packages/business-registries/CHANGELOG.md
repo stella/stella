@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.9.0
+
+### Minor Changes
+
+- [#3920](https://github.com/stella/stella/pull/3920) [`49ef142`](https://github.com/stella/stella/commit/49ef1424209cf882ea1aca83fc12f49517e24d5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the Slovak legal-entity register (RPO) as `@stll/business-registries/rpo` and as the `rpo` registry.
+
 ## 0.8.4
 
 ### Patch Changes
