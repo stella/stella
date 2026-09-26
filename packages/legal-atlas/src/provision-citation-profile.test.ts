@@ -118,7 +118,7 @@ describe.each(PROFILES)("$name profile act tables", ({ profile }) => {
   });
 });
 
-test("the Czech tables name only acts e-Sbírka publishes", () => {
+test("every Czech table entry names an act in the Sb. collection", () => {
   expect(
     entriesOf(CZ_PROFILE)
       .filter(({ spec }) => spec.identifier.collection !== "Sb.")
