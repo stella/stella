@@ -36,6 +36,7 @@ import { TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
+import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
 import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
@@ -48,7 +49,6 @@ import {
   embedValidationData,
   findRevokedCertificates,
   gatherValidationData,
-  timestampTokenCertificates,
 } from "@/api/lib/pdf-signing/validation-data";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -415,10 +415,10 @@ export const applySignature = async (
         const signed = timestamped ?? (await signOnce({}));
         warnings.push(...libpdfWarnings(signed.warnings));
 
-        const token = timestampAuthority.usedToken();
+        const timestamp = timestampAuthority.used();
         if (
           timestamped === null ||
-          token === null ||
+          timestamp === null ||
           signerRevocation === null
         ) {
           return {
@@ -432,11 +432,20 @@ export const applySignature = async (
         // The chain is phase 1's completed one, so what is left to gather is
         // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
         // the store lands in one more incremental update after them.
+        // The timestamp's own chain, completed like the signer's: what the
+        // token carries, then its issuers' AIA URLs through the guard.
+        const timestampIssuers = await completeCertificateChain({
+          candidates: timestamp.certificates,
+          certificate: timestamp.signerCertificate,
+        });
         const validation = await gatherValidationData({
           provider,
           signer: signerRevocation.material,
           signerChain,
-          timestampCertificates: timestampTokenCertificates(token),
+          timestampChain: [
+            timestamp.signerCertificate,
+            ...timestampIssuers.chain,
+          ],
         });
         if (!invocation.certificateChainComplete) {
           warnings.push({
@@ -445,16 +454,24 @@ export const applySignature = async (
               "The signer's certificate chain does not reach a root certificate.",
           });
         }
+        if (!timestampIssuers.complete) {
+          warnings.push({
+            code: "TIMESTAMP_CHAIN_INCOMPLETE",
+            message:
+              "The timestamp authority's certificate chain does not reach a root certificate.",
+          });
+        }
         if (validation.uncovered.length > 0) {
           warnings.push({
             code: "REVOCATION_UNAVAILABLE",
-            message: `No revocation data for ${validation.uncovered.length} certificate(s) in the signer's chain.`,
+            message: `No revocation data for ${validation.uncovered.length} certificate(s) in the signer's or the timestamp authority's chain.`,
           });
         }
         return {
           bytes: await embedValidationData(signed.pdf, validation.material),
           level:
             invocation.certificateChainComplete &&
+            timestampIssuers.complete &&
             validation.uncovered.length === 0
               ? "B-LT"
               : "B-T",
