@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
 import type { Transaction } from "@/api/db/root";
@@ -9,8 +10,10 @@ import {
   auditLogs,
   correspondence,
   CORRESPONDENCE_OFFBOARDING_SETTING,
+  correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
   correspondenceFilers,
+  matterInboundAddresses,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
@@ -32,17 +35,16 @@ import {
 
 let testDb: TestDatabase;
 let ids: TestIds;
-const migrationOwnerPolicies = readFileSync(
+const migrationStatements = readFileSync(
   new URL(
     "../../../drizzle/20260926190000_correspondence_core/migration.sql",
     import.meta.url,
   ),
   "utf-8",
-)
-  .split("--> statement-breakpoint")
-  .filter((statement) =>
-    statement.includes('CREATE POLICY "correspondence_owner_offboarding_'),
-  );
+).split("--> statement-breakpoint");
+const migrationOwnerPolicies = migrationStatements.filter((statement) =>
+  statement.includes('CREATE POLICY "correspondence_owner_offboarding_'),
+);
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -56,6 +58,12 @@ beforeAll(async () => {
   );
   await testDb.execute(
     sql`ALTER TABLE correspondence_allowed_senders FORCE ROW LEVEL SECURITY`,
+  );
+  await testDb.execute(
+    sql`ALTER TABLE matter_inbound_addresses FORCE ROW LEVEL SECURITY`,
+  );
+  await testDb.execute(
+    sql`ALTER TABLE correspondence_allowed_sender_matters FORCE ROW LEVEL SECURITY`,
   );
 });
 afterAll(releaseRlsFixture);
@@ -161,13 +169,19 @@ describe("correspondence offboarding", () => {
               await tx.execute(sql.raw(statement));
             }
           }
-          // CURRENT_USER in CREATE POLICY binds the migration's owner. Rebind
-          // only that role to reproduce migration under a non-superuser owner.
           await tx.execute(
-            sql`ALTER POLICY correspondence_owner_offboarding_select ON correspondence TO correspondence_offboarding_owner_probe`,
+            sql`CREATE ROLE correspondence_offboarding_reader_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
           );
           await tx.execute(
-            sql`ALTER POLICY correspondence_owner_offboarding_update ON correspondence TO correspondence_offboarding_owner_probe`,
+            sql`GRANT USAGE ON SCHEMA public TO correspondence_offboarding_reader_probe`,
+          );
+          await tx.execute(
+            sql`GRANT SELECT, UPDATE ON correspondence TO correspondence_offboarding_reader_probe`,
+          );
+          // A separate SELECT grant makes UPDATE denial independent of row
+          // invisibility; the ordinary role still has no update policy.
+          await tx.execute(
+            sql`CREATE POLICY offboarding_reader_fixture ON correspondence FOR SELECT TO correspondence_offboarding_reader_probe USING (true)`,
           );
           await tx.execute(
             sql`SET LOCAL ROLE correspondence_offboarding_owner_probe`,
@@ -191,6 +205,22 @@ describe("correspondence offboarding", () => {
           await tx.execute(sql`SET LOCAL ROLE stella`);
           expect(
             await tx.select({ id: correspondence.id }).from(correspondence),
+          ).toEqual([]);
+          await tx.execute(
+            sql`SET LOCAL ROLE correspondence_offboarding_reader_probe`,
+          );
+          expect(
+            await tx
+              .select({ id: correspondence.id })
+              .from(correspondence)
+              .where(eq(correspondence.id, owned.id)),
+          ).toEqual([{ id: owned.id }]);
+          expect(
+            await tx
+              .update(correspondence)
+              .set({ assigneeId: null })
+              .where(eq(correspondence.id, owned.id))
+              .returning({ id: correspondence.id }),
           ).toEqual([]);
           await tx.execute(
             sql`SET LOCAL ROLE correspondence_offboarding_owner_probe`,
@@ -267,6 +297,105 @@ describe("correspondence offboarding", () => {
         if (error instanceof TransactionRollbackError) {
           return;
         }
+        throw error;
+      }
+      throw new Error("Expected integration transaction rollback");
+    },
+  );
+  test.each(["schema", "migration"] as const)(
+    "owner lookup policies follow table ownership and exclude ordinary roles (%s)",
+    async (policySource) => {
+      try {
+        await testDb.transaction(async (tx) => {
+          const addressId = createSafeId<"matterInboundAddress">();
+          const senderId = createSafeId<"correspondenceAllowedSender">();
+          const scopeId = createSafeId<"correspondenceAllowedSenderMatter">();
+          await tx.insert(matterInboundAddresses).values({
+            id: addressId,
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            token: addressId,
+          });
+          await tx.insert(correspondenceAllowedSenders).values({
+            id: senderId,
+            organizationId: ids.orgA,
+            address: `${senderId}@example.test`,
+            kind: "shared_mailbox",
+            scope: "matters",
+            approvedBy: ids.userA1,
+          });
+          await tx.insert(correspondenceAllowedSenderMatters).values({
+            id: scopeId,
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            allowedSenderId: senderId,
+          });
+          await tx.execute(
+            sql`CREATE ROLE correspondence_lookup_owner_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          );
+          await tx.execute(
+            sql`CREATE ROLE correspondence_lookup_reader_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          );
+          await tx.execute(
+            sql`GRANT USAGE ON SCHEMA public TO correspondence_lookup_owner_probe, correspondence_lookup_reader_probe`,
+          );
+          const lookups = [
+            { table: matterInboundAddresses, id: addressId },
+            { table: correspondenceAllowedSenders, id: senderId },
+            { table: correspondenceAllowedSenderMatters, id: scopeId },
+          ];
+          for (const { table } of lookups) {
+            await tx.execute(
+              sql`ALTER TABLE ${table} OWNER TO correspondence_lookup_owner_probe`,
+            );
+            await tx.execute(
+              sql`GRANT SELECT ON ${table} TO correspondence_lookup_reader_probe`,
+            );
+            if (policySource === "migration") {
+              const policies = getTableConfig(table).policies.filter(
+                ({ name }) => name.endsWith("_owner_lookup"),
+              );
+              expect(policies).toHaveLength(1);
+              for (const policy of policies) {
+                const statements = migrationStatements.filter((statement) =>
+                  statement.includes(`CREATE POLICY "${policy.name}"`),
+                );
+                expect(statements).toHaveLength(1);
+                await tx.execute(
+                  sql`DROP POLICY ${sql.identifier(policy.name)} ON ${table}`,
+                );
+                for (const statement of statements)
+                  {await tx.execute(sql.raw(statement));}
+              }
+            }
+          }
+          await tx.execute(
+            sql`SET LOCAL ROLE correspondence_lookup_owner_probe`,
+          );
+          for (const { table, id } of lookups) {
+            expect(
+              await tx
+                .select({ id: table.id })
+                .from(table)
+                .where(eq(table.id, id)),
+            ).toEqual([{ id }]);
+          }
+          for (const role of ["stella", "correspondence_lookup_reader_probe"]) {
+            await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(role)}`);
+            for (const { table, id } of lookups) {
+              expect(
+                await tx
+                  .select({ id: table.id })
+                  .from(table)
+                  .where(eq(table.id, id)),
+              ).toEqual([]);
+            }
+          }
+          await tx.execute(sql`RESET ROLE`);
+          tx.rollback();
+        });
+      } catch (error) {
+        if (error instanceof TransactionRollbackError) {return;}
         throw error;
       }
       throw new Error("Expected integration transaction rollback");
