@@ -113,7 +113,7 @@ function ContributePage() {
         <AddSkillForm />
 
         <div className="border-border border-t pt-6">
-          <Section title={t("knowledge.sections.prompts.title")}>
+          <Section title={t("knowledge.sections.skills.title")}>
             <p>
               <strong className="text-foreground font-medium">
                 {t("publicTools.contribute.inTreeTitle")}

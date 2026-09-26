@@ -3,6 +3,10 @@ import { Result } from "better-result";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
+import {
+  resolveTeamSkillRefs,
+  teamSkillRefsMessage,
+} from "@/api/lib/agent-skills/team-skill-refs";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -324,6 +328,20 @@ export const generateBatch = async (
     );
 
     const filenames = buildJustificationFilenames(preparedFiles);
+    const linkedSkills = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await resolveTeamSkillRefs(scopedDb, {
+            organizationId,
+            prompts: aiInputProperties.map((property) => property.tool.prompt),
+          }),
+        catch: (cause) =>
+          new WorkflowIntegrationError({
+            message: "Failed to read the skills property prompts link",
+            cause,
+          }),
+      }),
+    );
 
     const output = yield* Result.await(
       generateWorkflowData({
@@ -332,6 +350,7 @@ export const generateBatch = async (
         properties: aiInputProperties,
         filenames,
         textInputs,
+        linkedSkillsMessage: teamSkillRefsMessage(linkedSkills),
         abortSignal,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,

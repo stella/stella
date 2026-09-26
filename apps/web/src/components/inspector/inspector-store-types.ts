@@ -7,6 +7,7 @@ import type { ComposerSource } from "@/components/chat-editor-source";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
 
@@ -62,7 +63,7 @@ export type ChatTab = {
   activeLegalKey?: LegalDocumentChatKey | undefined;
   activeSkill?:
     | {
-        skillId?: string | undefined;
+        skillId: string;
         skillName: string;
       }
     | undefined;
@@ -95,13 +96,31 @@ export type ExternalTab = {
 
 export type SkillResourceTabId = `skill-resource:${string}`;
 
+export type SkillResourceOrigin = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof skillDetailOptions>["queryFn"]>>
+>["origin"];
+
+// Keyed by the API's origin union so a new persisted origin fails to compile
+// here instead of being rejected at runtime by the tab validators.
+const SKILL_RESOURCE_ORIGINS = {
+  authored: true,
+  bundled: true,
+  upload: true,
+  url: true,
+} as const satisfies Record<SkillResourceOrigin, true>;
+
+export const isSkillResourceOrigin = (
+  value: unknown,
+): value is SkillResourceOrigin =>
+  typeof value === "string" && Object.hasOwn(SKILL_RESOURCE_ORIGINS, value);
+
 export type SkillResourceTab = {
   type: "skill-resource";
   id: SkillResourceTabId;
   label: string;
   skillName: string;
-  skillId: string | null;
-  origin: "authored" | "built-in" | "bundled" | "upload" | "url";
+  skillId: string;
+  origin: SkillResourceOrigin;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;

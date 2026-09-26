@@ -950,6 +950,7 @@
     "caseLawGreeting": "Posez vos questions sur cette décision — son texte intégral est disponible ici.",
     "chatAbout": "Insérer dans la conversation IA",
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
+    "commandsSection": "Commandes",
     "composerMenu": {
       "context": "Contexte",
       "editMode": "Mode d'édition",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",
-      "noPrompts": "Aucune compétence pour le moment",
       "noRecentChats": "Aucune conversation récente",
+      "noSkills": "Aucune compétence pour le moment",
       "pinnedMatters": "Dossiers épinglés",
-      "prompts": "Compétences",
-      "recentChats": "Conversations récentes"
+      "recentChats": "Conversations récentes",
+      "skills": "Compétences"
     },
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "Aucune compétence correspondante",
-      "noShortcuts": "Aucune compétence pour le moment. Ajoutez-en dans Connaissances → Compétences.",
       "tryOne": "Essayez l’une d’entre elles pour commencer"
     },
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Réécrire avec l'IA",
-      "aiRewritePlaceholder": "Resserrer la formulation ; ajouter une étape pour citer les sources…",
-      "aiRewritePrompt": "Décrivez comment réécrire ce fichier",
-      "aiRewriteRunning": "Réécriture en cours…",
-      "binaryPreviewUnsupported": "L'aperçu des fichiers binaires n'est pas pris en charge. Modifiez ce fichier en téléversant à nouveau le paquet de compétence.",
-      "builtInBadge": "Intégré",
-      "builtInSection": "Compétences intégrées",
-      "chooseFile": "Choisissez un fichier ou déposez-le ici",
-      "coaching": {
-        "publish": "Publier la compétence"
-      },
-      "deleteConfirmDescription": "« {name} » sera supprimée de cet espace de travail.",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
-      "description": "Installez des packs SKILL.md qui ajoutent aux conversations des méthodes spécialisées et des ressources en lecture seule.",
       "disableSkill": "Désactiver la compétence",
-      "disabled": "Désactivée",
       "discoverSkills": "Rechercher des compétences",
       "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
       "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées}}",
-      "dropFile": "Déposez SKILL.md ou .zip ici",
       "editSkill": "Modifier la compétence",
-      "emptyDescription": "Importez un fichier SKILL.md, un dossier de compétence compressé ou une URL publique de compétence GitHub.",
-      "emptyTitle": "Installez votre première compétence",
       "enableSkill": "Activer la compétence",
-      "enabled": "Activée",
       "fileExists": "Un fichier avec ce chemin existe déjà",
       "filesHeading": "Fichiers",
-      "formBodyHelp": "Instructions au format Markdown que l'agent lit lorsque la compétence est invoquée.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Ajouter un fichier",
-      "generateDraft": "Ébaucher la compétence",
-      "generateExamplesLabel": "Déclencheurs ou scénarios d'exemple (facultatif)",
-      "generateExamplesPlaceholder": "Lorsqu'un utilisateur pose une question sur… Lors de la révision d'un contrat qui… ",
-      "generateFeedbackLabel": "Ajustements (facultatif)",
-      "generateFeedbackPlaceholder": "Resserrez les conditions de déclenchement ; ajoutez une étape sur la citation des sources.",
-      "generateHelp": "Décrivez la compétence souhaitée. Le modèle rédige un fichier SKILL.md que vous pouvez relire et modifier avant l'installation.",
-      "generateIntentLabel": "Que doit faire cette compétence ?",
-      "generateIntentPlaceholder": "Une compétence qui résume les décisions de justice dans une note brève reprenant la solution, le raisonnement et la référence.",
-      "generateResourceContentPlaceholder": "Contenu Markdown de ce fichier…",
-      "generateResourceDuplicatePathError": "Chaque chemin de fichier associé doit être unique.",
-      "generateResourcePathError": "Le chemin doit commencer par references/, prompts/ ou knowledge/ et se terminer par .md (lettres minuscules, chiffres, traits d'union, points, tirets bas).",
-      "generateResourcesHelp": "Fichiers Markdown complémentaires fournis avec SKILL.md.",
-      "generateResourcesLabel": "Fichiers complémentaires",
-      "generateSkill": "Générer avec l'IA",
-      "generateTitle": "Générer une compétence avec l'IA",
-      "generating": "Génération en cours…",
       "howItRuns": "Mode d’exécution",
       "importFailureFetch": "La source de la compétence n’a pas pu être chargée.",
       "importFailureIntegrity": "La source de la compétence a changé après sa détection. Vérifiez-la à nouveau.",
@@ -3160,16 +3123,14 @@
       "newFolder": "Nouveau dossier",
       "pdfPreviewSoon": "L'aperçu PDF sera disponible une fois les ressources de compétence binaires prises en charge.",
       "renameFile": "Renommer",
-      "resources": "{count, plural, one {# ressource} other {# ressources}}",
       "scopePrivate": "Moi uniquement",
       "scopeTeam": "Toute l’équipe",
-      "selectFileHint": "Sélectionnez un fichier dans la liste pour l’ouvrir dans le volet d’édition à droite.",
-      "selectedFile": "Sélectionné : {name}",
       "selectionLimit": "Sélectionnez jusqu’à {count} compétences à la fois.",
-      "sourceUpload": "Importé",
-      "sourceUrl": "URL publique",
-      "unsavedChanges": "Modifications non enregistrées : abandonner ?",
-      "uploadFile": "Téléverser un fichier",
+      "skippedFiles": "{count, plural, one {# fichier n’a pas été importé} other {# fichiers n’ont pas été importés}}",
+      "skippedReasonNotUtf8Text": "Pas du texte UTF-8",
+      "skippedReasonOutsideSkillFolder": "En dehors du dossier de la compétence",
+      "skippedReasonUnsupportedExtension": "Type de fichier non pris en charge",
+      "skippedReasonUnsupportedFolder": "Pas dans un dossier de ressources",
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Listes de contrôle évaluées qui examinent les documents au regard de vos référentiels"
       },
-      "prompts": {
-        "description": "Compétences réutilisables disponibles avec / dans les conversations",
+      "skills": {
         "title": "Compétences"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Saisissez-la dans une conversation pour exécuter cette compétence.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
-      "createTitle": "Nouvelle compétence",
-      "deleteConfirmDescription": "Cette compétence sera supprimée définitivement.",
-      "deleteShortcut": "Supprimer la compétence",
-      "emptyDescription": "Créez des compétences réutilisables pour le travail que votre équipe répète, des synthèses aux instructions de premier jet.",
-      "emptyState": "Aucune compétence pour le moment. Ajoutez la première.",
-      "emptyTitle": "Créer votre première compétence",
-      "emptyVideoLabel": "Aperçu des compétences",
       "errors": {
-        "commandConflict": "Une compétence avec ce nom / existe déjà",
-        "commandInvalid": "Utilisez uniquement des lettres minuscules, des chiffres, des traits d'union et des tirets bas",
-        "commandReserved": "\"/{command}\" est une compétence réservée"
+        "commandInvalid": "Utilisez uniquement des lettres minuscules, des chiffres, des traits d'union et des tirets bas"
       },
       "form": {
-        "command": "Raccourci de compétence",
-        "commandHint": "Le nom / de la compétence : lettres minuscules, chiffres, traits d’union et underscores uniquement",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Brève description affichée dans le sélecteur",
-        "namePlaceholder": "ex. Résumer le document",
-        "promptPlaceholder": "Instructions insérées dans la zone de saisie de la conversation lorsque cette compétence est utilisée",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
         "scopeTeam": "Tout le monde dans l’équipe"
-      },
-      "shadowed": "Masquée par la compétence d’équipe"
+      }
     }
   },
   "lawHome": {

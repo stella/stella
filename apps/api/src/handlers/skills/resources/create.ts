@@ -2,8 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
-import type { AgentSkillResourceKind } from "@/api/db/schema";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+} from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -22,6 +25,9 @@ const createSkillResourceParamsSchema = t.Object({
 const createSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: 512 }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
+  // A literal tuple, not `t.UnionEnum`: Elysia fills an absent optional
+  // UnionEnum with its first member, so the path inference below would never
+  // run. create.test.ts holds the list to SKILL_RESOURCE_KINDS.
   kind: t.Optional(
     t.Union([
       t.Literal("asset"),
@@ -78,13 +84,17 @@ const createSkillResource = createSafeRootHandler(
       }),
     );
 
-    const kind: AgentSkillResourceKind = body.kind ?? inferResourceKind(path);
+    const kind = body.kind ?? inferResourceKind(path);
     const sizeBytes = new TextEncoder().encode(body.content).byteLength;
 
     const inserted = yield* Result.await(
       safeDb(
         async (tx) =>
           await tx.transaction(async (innerTx) => {
+            const lockedSkill = await lockSkillForResourceWrite(
+              innerTx,
+              params.skillId,
+            );
             const rows = await innerTx
               .insert(agentSkillResources)
               .values({
@@ -102,6 +112,7 @@ const createSkillResource = createSafeRootHandler(
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
+            await refreshSkillContentHash(innerTx, lockedSkill);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.CREATE,

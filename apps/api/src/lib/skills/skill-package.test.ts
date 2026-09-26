@@ -2,7 +2,9 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { LIMITS } from "@/api/lib/limits";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   createSkillPackageFetchContext,
@@ -18,9 +20,18 @@ import {
   verifySkillPackageIntegrity,
 } from "./skill-package";
 
+const parseUpload = async (file: File) =>
+  await parseUploadedSkillPackage(
+    testScannedFile({
+      bytes: await file.arrayBuffer(),
+      mimeType: file.type,
+      path: file.name,
+    }),
+  );
+
 describe("agent skill package imports", () => {
   test("parses a single SKILL.md upload", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -43,14 +54,13 @@ Follow the checklist.`,
     expect(result.value.name).toBe("contract-review");
     expect(result.value.license).toBe("Apache-2.0");
     expect(result.value.resources).toEqual([]);
-    expect(result.value.contentHash).toHaveLength(64);
     expect(result.value.entrypointHash).toHaveLength(64);
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
           integrity: {
             type: "content-hash",
-            value: result.value.contentHash,
+            value: hashSkillPackageContent(result.value),
           },
           parsed: result.value,
           sourceUrl: "https://example.com/SKILL.md",
@@ -126,6 +136,60 @@ Follow the checklist.`,
     ).toBe(true);
   });
 
+  test("imports a zip around files it cannot keep and lists each one with the reason", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "skill/SKILL.md",
+      `---
+name: mixed-pack
+description: A pack with files the importer does not keep.
+---
+
+Use the references.`,
+    );
+    zip.file("skill/references/guide.md", "# Guide");
+    // Latin-1 "Müller": a supported path whose bytes are not UTF-8 text.
+    zip.file(
+      "skill/references/latin1.txt",
+      new Uint8Array([0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72]),
+    );
+    zip.file("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+    zip.file("skill/notes/todo.md", "Not a resource folder");
+    zip.file("README.md", "Outside the skill folder");
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUpload(
+      new File([buffer], "mixed-pack.zip", { type: "application/zip" }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "references/guide.md",
+    ]);
+    expect(
+      result.value.skippedFiles.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
+    ).toEqual([
+      { path: "README.md", reason: "outside-skill-folder" },
+      { path: "skill/assets/logo.png", reason: "unsupported-extension" },
+      { path: "skill/notes/todo.md", reason: "unsupported-folder" },
+      { path: "skill/references/latin1.txt", reason: "not-utf8-text" },
+    ]);
+  });
+
+  test("a SKILL.md that is not UTF-8 text still fails the import", async () => {
+    const zip = new JSZip();
+    zip.file("SKILL.md", new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]));
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUpload(
+      new File([buffer], "broken.zip", { type: "application/zip" }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
   test("parses zipped skill folders with read-only resources", async () => {
     const zip = new JSZip();
     zip.file(
@@ -142,7 +206,7 @@ Use the references.`,
     zip.file("skill/private/ignore.md", "Ignored");
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "nda-review.zip", { type: "application/zip" }),
     );
 
@@ -154,7 +218,9 @@ Use the references.`,
       "assets/example.txt",
       "references/checklist.md",
     ]);
-    expect(result.value.contentHash).not.toBe(result.value.entrypointHash);
+    expect(hashSkillPackageContent(result.value)).not.toBe(
+      result.value.entrypointHash,
+    );
     const commitSha = "b".repeat(40);
     const pinnedSourceUrl = `https://github.com/example/skills/tree/${commitSha}/nda-review`;
     expect(
@@ -196,12 +262,12 @@ Instructions.`;
       split.generateAsync({ type: "arraybuffer" }),
     ]);
     const [combinedResult, splitResult] = await Promise.all([
-      parseUploadedSkillPackage(
+      parseUpload(
         new File([combinedBuffer], "combined.zip", {
           type: "application/zip",
         }),
       ),
-      parseUploadedSkillPackage(
+      parseUpload(
         new File([splitBuffer], "split.zip", { type: "application/zip" }),
       ),
     ]);
@@ -211,13 +277,13 @@ Instructions.`;
     if (Result.isError(combinedResult) || Result.isError(splitResult)) {
       throw new TypeError("Package parsing unexpectedly failed");
     }
-    expect(combinedResult.value.contentHash).not.toBe(
-      splitResult.value.contentHash,
+    expect(hashSkillPackageContent(combinedResult.value)).not.toBe(
+      hashSkillPackageContent(splitResult.value),
     );
   });
 
   test("rejects skill names that cannot be used as a load-skill id", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -235,8 +301,100 @@ Instructions.`,
     expect(Result.isError(result)).toBe(true);
   });
 
+  const parseFrontmatter = async (frontmatter: string) =>
+    await parseUpload(
+      new File([`---\n${frontmatter}\n---\n\nInstructions.`], "SKILL.md", {
+        type: "text/markdown",
+      }),
+    );
+
+  test("accepts only names the Agent Skills specification allows", async () => {
+    const accepted = ["a", "pdf-processing", "v2-review", "x".repeat(64)];
+    const refused = [
+      "-leading",
+      "trailing-",
+      "double--hyphen",
+      "Upper",
+      "x".repeat(65),
+    ];
+
+    for (const name of accepted) {
+      const result = await parseFrontmatter(
+        `name: ${name}\ndescription: Valid.`,
+      );
+      expect({ name, ok: Result.isOk(result) }).toEqual({ name, ok: true });
+    }
+    for (const name of refused) {
+      const result = await parseFrontmatter(
+        `name: ${name}\ndescription: Valid.`,
+      );
+      expect({ name, ok: Result.isOk(result) }).toEqual({ name, ok: false });
+    }
+  });
+
+  test("accepts compatibility up to the Agent Skills specification limit of 500 characters", async () => {
+    const atLimit = await parseFrontmatter(
+      `name: compatible\ndescription: Valid.\ncompatibility: ${"c".repeat(500)}`,
+    );
+    const overLimit = await parseFrontmatter(
+      `name: compatible\ndescription: Valid.\ncompatibility: ${"c".repeat(501)}`,
+    );
+
+    expect(Result.isOk(atLimit)).toBe(true);
+    expect(Result.isError(overLimit)).toBe(true);
+  });
+
+  test("accepts a description at the Agent Skills specification limit of 1024 characters", async () => {
+    const description = "x".repeat(1024);
+    const result = await parseUpload(
+      new File(
+        [
+          `---
+name: spec-length-description
+description: ${description}
+---
+
+Instructions.`,
+        ],
+        "SKILL.md",
+        { type: "text/markdown" },
+      ),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.description).toBe(description);
+  });
+
+  test("reports why invalid frontmatter was refused", async () => {
+    const cases = [
+      ["name: no-description", "must include name and description"],
+      ["name: [not, a, string]\ndescription: Valid.", "name must be a string"],
+      ["name: bad-yaml\ndescription: : :\n  - [", "must be valid YAML"],
+      [
+        "name: typed-metadata\ndescription: Valid.\nmetadata:\n  attempts: 3",
+        "metadata values must be strings",
+      ],
+    ] as const;
+
+    for (const [frontmatter, reason] of cases) {
+      const result = await parseUpload(
+        new File([`---\n${frontmatter}\n---\n\nInstructions.`], "SKILL.md", {
+          type: "text/markdown",
+        }),
+      );
+
+      if (Result.isOk(result)) {
+        throw new Error(`Expected frontmatter to be refused: ${frontmatter}`);
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toContain(reason);
+    }
+  });
+
   test("rejects oversized frontmatter before chat metadata storage", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -259,7 +417,7 @@ Instructions.`,
       ["version", `1.0.0${String.fromCodePoint(8297)}override`],
       ["license", `MIT${String.fromCodePoint(8238)}override`],
     ] as const) {
-      const result = await parseUploadedSkillPackage(
+      const result = await parseUpload(
         new File(
           [
             `---
@@ -286,7 +444,7 @@ Instructions.`,
   });
 
   test("rejects oversized custom metadata before storage", async () => {
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File(
         [
           `---
@@ -322,7 +480,7 @@ Instructions.`,
     }
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "crowded-skill.zip", { type: "application/zip" }),
     );
 
@@ -346,7 +504,7 @@ Instructions.`,
     );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
-    const result = await parseUploadedSkillPackage(
+    const result = await parseUpload(
       new File([buffer], "huge-skill.zip", { type: "application/zip" }),
     );
 

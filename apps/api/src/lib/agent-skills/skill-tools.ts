@@ -5,19 +5,24 @@ import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import type { AgentSkillOrigin } from "@/api/db/schema";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import {
+  recordSkillReadAudit,
+  SKILL_READ_OUTCOME,
+  SKILL_READ_SURFACE,
+} from "@/api/lib/agent-skills/skill-read-audit";
+import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
+import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
-  listAvailableChatSkillResources,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
+  SKILL_RESOURCE_READ_STATUS,
 } from "@/api/lib/agent-skills/skills";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -28,25 +33,33 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
-import { hashAuthoredSkillContent } from "./authored-content-hash";
-
-type AvailableSkillMetadata = SkillMetadata & {
-  source?: "built-in" | "installed" | undefined;
-};
+import { auditedSkillBody } from "./audited-body";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+  skillContentHashAfter,
+} from "./content-hash";
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   /**
-   * A `validation` set registers the catalog tools whatever `skills` holds and
-   * accepts any skill name: the catalog that produced a persisted call may have
-   * changed since (a skill uninstalled, disabled, or renamed), and availability
-   * is decided when the tool runs, never by the schema.
+   * A `validation` set registers the catalog tools whatever `skills` holds:
+   * the catalog that produced a persisted call may have changed since (a
+   * skill uninstalled, disabled, or renamed), and availability is decided
+   * when the tool runs, never by the schema.
    */
   purpose?: ChatToolSetPurpose | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
+  /**
+   * Records skill reads. Separate from `recordAuditEvent`, which is bound to
+   * approved mutations; `load-skill` and `read-skill-resource` run without an
+   * approval.
+   */
+  recordReadAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  skills: readonly AvailableSkillMetadata[];
+  /** The turn's skill catalog; absent when the caller loaded none. */
+  skills?: readonly SkillMetadata[] | undefined;
   userId: SafeId<"user">;
 };
 
@@ -55,12 +68,30 @@ export const createSkillTools = ({
   organizationId,
   purpose = CHAT_TOOL_SET_PURPOSE.run,
   recordAuditEvent,
+  recordReadAuditEvent,
   safeDb,
   skills,
   userId,
 }: CreateSkillToolsProps) => {
-  const availableSkillIds = new Set(skills.map((skill) => skill.name));
-  const activeSkillId = activeSkillContext?.id ?? undefined;
+  const auditRead = async (read: {
+    outcome: SkillReadOutcome;
+    path: string | null;
+    skillId: SafeId<"agentSkill">;
+    slug: string;
+  }) => {
+    if (recordReadAuditEvent === undefined) {
+      return;
+    }
+    await recordSkillReadAudit({
+      reads: [{ ...read, surface: SKILL_READ_SURFACE.chat }],
+      recordAuditEvent: recordReadAuditEvent,
+      safeDb,
+    });
+  };
+  const availableSkillIds = new Set(
+    skills === undefined ? undefined : skills.map((skill) => skill.name),
+  );
+  const activeSkillId = activeSkillContext?.id;
   const activeEditableSkillContext =
     toActiveEditableSkillContext(activeSkillContext);
   const currentSkillEditTools =
@@ -74,17 +105,13 @@ export const createSkillTools = ({
       : {};
 
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
-  if (skills.length === 0 && !forValidation) {
+  if (availableSkillIds.size === 0 && !forValidation) {
     return {
       "load-skill": undefined,
       "read-skill-resource": undefined,
       ...currentSkillEditTools,
     };
   }
-
-  const skillNameSchema = forValidation
-    ? anySkillNameSchema
-    : createSkillNameSchema(skills);
 
   return {
     "load-skill": toolDefinition({
@@ -105,21 +132,25 @@ export const createSkillTools = ({
         skillName,
       });
 
-      const skillResult = await loadAvailableChatSkill({
-        activeSkillId,
-        organizationId,
-        safeDb,
-        skillName,
-        userId,
-      });
-      if (Result.isError(skillResult)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Skill could not be loaded.",
-          cause: skillResult.error,
-        });
+      const skill = unwrapSkillRead(
+        await loadAvailableChatSkill({
+          activeSkillId,
+          organizationId,
+          safeDb,
+          skillName,
+          userId,
+        }),
+        "Skill could not be loaded.",
+      );
+      if (skill === null) {
+        throw unavailableSkillError(skillName);
       }
-      const skill = skillResult.value;
+      await auditRead({
+        outcome: SKILL_READ_OUTCOME.success,
+        path: null,
+        skillId: skill.id,
+        slug: skill.name,
+      });
       return {
         name: skill.name,
         version: skill.version,
@@ -153,118 +184,67 @@ export const createSkillTools = ({
         skillName,
       });
 
-      const resourcesResult = await listAvailableChatSkillResources({
-        activeSkillId,
-        organizationId,
-        safeDb,
-        skillName,
-        userId,
-      });
-      if (Result.isError(resourcesResult)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Skill resources could not be listed.",
-          cause: resourcesResult.error,
-        });
+      const read = unwrapSkillRead(
+        await readAvailableChatSkillResource({
+          activeSkillId,
+          organizationId,
+          path,
+          safeDb,
+          skillName,
+          userId,
+        }),
+        "Skill resource could not be read.",
+      );
+      switch (read.status) {
+        case SKILL_RESOURCE_READ_STATUS.skillNotFound:
+          throw unavailableSkillError(skillName);
+        case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
+          await auditRead({
+            outcome: SKILL_READ_OUTCOME.error,
+            path,
+            skillId: read.skillId,
+            slug: skillName,
+          });
+          throw new ChatToolError({
+            kind: "not-found",
+            message: "Unknown or unavailable skill resource path.",
+          });
+        case SKILL_RESOURCE_READ_STATUS.found:
+          await auditRead({
+            outcome: SKILL_READ_OUTCOME.success,
+            path,
+            skillId: read.skillId,
+            slug: skillName,
+          });
+          return {
+            skillName,
+            path,
+            mimeType: inferSkillResourceMimeType(path),
+            content: read.content,
+            skillId: read.skillId,
+            origin: read.origin,
+          };
+        default: {
+          read satisfies never;
+          return panic("skill resource read returned an unknown status");
+        }
       }
-
-      const resources = resourcesResult.value;
-      if (!resources.some((resource) => resource.path === path)) {
-        throw new ChatToolError({
-          kind: "not-found",
-          message: "Unknown or unavailable skill resource path.",
-        });
-      }
-
-      const read = await readSkillResourceContent({
-        activeSkillId,
-        organizationId,
-        path,
-        safeDb,
-        skillName,
-        userId,
-      });
-      return {
-        skillName,
-        path,
-        mimeType: inferSkillResourceMimeType(path),
-        content: read.content,
-        skillId: read.skillId,
-        origin: read.origin,
-      };
     }),
 
     ...currentSkillEditTools,
   };
 };
 
-const SKILL_NAME_DESCRIPTION =
-  "Skill name exactly as listed in the chat skill catalog.";
-
-const anySkillNameSchema = v.pipe(
+// Installed skill names are user-controlled and can carry privileged matter
+// context, so they stay out of the provider-visible JSON Schema; the runtime
+// availability check is authoritative.
+const skillNameSchema = v.pipe(
   v.string(),
-  v.description(SKILL_NAME_DESCRIPTION),
+  v.description("Skill name exactly as listed in the chat skill catalog."),
 );
-
-const createSkillNameSchema = (skills: readonly AvailableSkillMetadata[]) => {
-  // Installed names are user-controlled and can contain privileged matter
-  // context. They stay out of provider-visible JSON Schema; the runtime
-  // availability check remains authoritative for mixed catalogs. A catalog
-  // containing only built-in public names can make invalid calls impossible
-  // at the provider boundary with an exact enum.
-  if (skills.some((skill) => skill.source === "installed")) {
-    return anySkillNameSchema;
-  }
-
-  const skillNames = skills.map((skill) => skill.name);
-  const firstSkillName = skillNames.at(0);
-  if (firstSkillName === undefined) {
-    return anySkillNameSchema;
-  }
-
-  return v.pipe(
-    v.picklist([firstSkillName, ...skillNames.slice(1)]),
-    v.description(SKILL_NAME_DESCRIPTION),
-  );
-};
-
-const readSkillResourceContent = async ({
-  activeSkillId,
-  organizationId,
-  path,
-  safeDb,
-  skillName,
-  userId,
-}: {
-  activeSkillId?: SafeId<"agentSkill"> | undefined;
-  organizationId: SafeId<"organization">;
-  path: string;
-  safeDb: SafeDb;
-  skillName: string;
-  userId: SafeId<"user">;
-}) => {
-  const resourceResult = await readAvailableChatSkillResource({
-    activeSkillId,
-    organizationId,
-    path,
-    safeDb,
-    skillName,
-    userId,
-  });
-  if (Result.isError(resourceResult)) {
-    throw new ChatToolError({
-      kind: "server-defect",
-      message: "Skill resource could not be read.",
-      cause: resourceResult.error,
-    });
-  }
-  return resourceResult.value;
-};
 
 type ActiveEditableSkillContext = ActiveChatSkillContext & {
   editable: true;
-  id: SafeId<"agentSkill">;
-  origin: AgentSkillOrigin;
 };
 
 const toActiveEditableSkillContext = (
@@ -272,16 +252,9 @@ const toActiveEditableSkillContext = (
 ): ActiveEditableSkillContext | null => {
   if (
     activeSkillContext?.editable === true &&
-    activeSkillContext.id !== null &&
-    activeSkillContext.origin !== "built-in" &&
     activeSkillContext.origin !== "bundled"
   ) {
-    return {
-      ...activeSkillContext,
-      editable: true,
-      id: activeSkillContext.id,
-      origin: activeSkillContext.origin,
-    };
+    return { ...activeSkillContext, editable: true };
   }
 
   return null;
@@ -421,31 +394,15 @@ const updateCurrentSkillBody = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
-        const currentRows = await innerTx
-          .select({
-            name: agentSkills.name,
-            description: agentSkills.description,
-            version: agentSkills.version,
-          })
-          .from(agentSkills)
-          .where(eq(agentSkills.id, activeSkillContext.id))
-          .limit(1)
-          .for("update");
-        const current = currentRows.at(0);
-        if (current === undefined) {
-          panic("active skill vanished during body update");
-        }
-        // The content hash covers the body, so a body-only write must refresh
-        // it: the revision trigger snapshots whatever hash the row carries.
+        // The content hash covers the body and goes out in the same write:
+        // the revision trigger snapshots whatever hash the row carries.
         await innerTx
           .update(agentSkills)
           .set({
             body: content,
-            contentHash: hashAuthoredSkillContent({
-              body: content,
-              description: current.description,
-              name: current.name,
-              version: current.version,
+            contentHash: await skillContentHashAfter(innerTx, {
+              skillId: activeSkillContext.id,
+              patch: { body: content },
             }),
           })
           .where(eq(agentSkills.id, activeSkillContext.id));
@@ -456,8 +413,8 @@ const updateCurrentSkillBody = async ({
           resourceId: activeSkillContext.id,
           changes: {
             body: {
-              old: activeSkillContext.body,
-              new: content,
+              old: auditedSkillBody(activeSkillContext.body),
+              new: auditedSkillBody(content),
             },
           },
           metadata: { slug: activeSkillContext.toolName },
@@ -540,10 +497,15 @@ const updateCurrentSkillResource = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
+        const lockedSkill = await lockSkillForResourceWrite(
+          innerTx,
+          activeSkillContext.id,
+        );
         await innerTx
           .update(agentSkillResources)
           .set({ content, sizeBytes: nextSizeBytes })
           .where(eq(agentSkillResources.id, row.id));
+        await refreshSkillContentHash(innerTx, lockedSkill);
 
         await recordAuditEvent(innerTx, {
           action: AUDIT_ACTION.UPDATE,
@@ -648,6 +610,10 @@ const createCurrentSkillResource = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
+        const lockedSkill = await lockSkillForResourceWrite(
+          innerTx,
+          activeSkillContext.id,
+        );
         const rows = await innerTx
           .insert(agentSkillResources)
           .values({
@@ -659,6 +625,7 @@ const createCurrentSkillResource = async ({
             sizeBytes,
           })
           .returning({ id: agentSkillResources.id });
+        await refreshSkillContentHash(innerTx, lockedSkill);
         const row = rows.at(0);
         if (row) {
           await recordAuditEvent(innerTx, {
@@ -745,6 +712,29 @@ const inferSkillResourceMimeType = (path: string): string => {
   return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
 };
 
+/** A skill read that failed in the database is a server defect for the tool. */
+const unwrapSkillRead = <T>(
+  result: Result<T, SafeDbError>,
+  message: string,
+): T => {
+  if (Result.isError(result)) {
+    throw new ChatToolError({
+      kind: "server-defect",
+      message,
+      cause: result.error,
+    });
+  }
+  return result.value;
+};
+
+const unavailableSkillError = (skillName: string) =>
+  new ChatToolError({
+    kind: "not-found",
+    message:
+      `No skill named "${skillName}" is available in this chat context. ` +
+      "Continue without it or choose an exact name from the skill catalog.",
+  });
+
 const assertAvailableSkill = ({
   availableSkillIds,
   skillName,
@@ -753,11 +743,6 @@ const assertAvailableSkill = ({
   skillName: string;
 }) => {
   if (!availableSkillIds.has(skillName)) {
-    throw new ChatToolError({
-      kind: "not-found",
-      message:
-        `No skill named "${skillName}" is available in this chat context. ` +
-        "Continue without it or choose an exact name from the skill catalog.",
-    });
+    throw unavailableSkillError(skillName);
   }
 };

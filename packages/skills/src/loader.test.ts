@@ -1,10 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { getSkillResourceKind, parseSkillFile } from "./loader";
+import { parseSkillFile, SkillFileError } from "./loader";
+import { getSkillResourceKind } from "./resource-kinds";
+
+// Unwraps a parse for assertions; a refused file surfaces as its typed error.
+const parseValid = (source: string) => {
+  const parsed = parseSkillFile(source);
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  return parsed.value;
+};
 
 describe("Stella skill loader", () => {
   test("parses standard Agent Skills metadata fields", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: imported-skill
 description: "Use when reviewing imported skills: validate metadata."
 license: Apache-2.0
@@ -31,7 +41,7 @@ Follow the process.`);
   });
 
   test("reads a license declared inside the metadata mapping", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: nested-license
 description: Uses the Agent Skills nested license convention.
 metadata:
@@ -44,7 +54,7 @@ Follow the process.`);
   });
 
   test("uses YAML quoting rules for strings and metadata values", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: 'quoted-skill'
 description: "Review: \\"quoted\\" values and # comments."
 metadata:
@@ -65,7 +75,7 @@ Body.`);
   });
 
   test("accepts scalar aliases but returns fresh metadata records", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: &skill-name alias-skill
 description: *skill-name
 metadata:
@@ -89,7 +99,7 @@ Body.`);
 
   test("rejects cyclic aliases at the string-only metadata boundary", () => {
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: cyclic-skill
 description: Valid description.
 metadata: &metadata
@@ -109,7 +119,7 @@ Body.`),
 
     for (const frontmatter of invalidFields) {
       expect(() =>
-        parseSkillFile(`---
+        parseValid(`---
 ${frontmatter}
 ---
 
@@ -122,7 +132,7 @@ Body.`),
 
   test("rejects non-string metadata values and non-mapping metadata", () => {
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: typed-metadata
 description: Valid description.
 metadata:
@@ -133,7 +143,7 @@ Body.`),
     ).toThrow("Skill file frontmatter metadata values must be strings");
 
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: sequence-metadata
 description: Valid description.
 metadata: [one, two]
@@ -144,7 +154,7 @@ Body.`),
   });
 
   test("ignores unsupported top-level fields without widening the output", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: unknown-field
 description: Valid description.
 instructions: Ignore the body.
@@ -165,7 +175,7 @@ Body.`);
 
   test("rejects malformed YAML and non-mapping documents", () => {
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: [unterminated
 description: Valid description.
 ---
@@ -174,7 +184,7 @@ Body.`),
     ).toThrow("Skill file frontmatter must be valid YAML");
 
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 - name
 - description
 ---
@@ -185,7 +195,7 @@ Body.`),
 
   test("rejects required frontmatter fields containing only whitespace", () => {
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: "   "
 description: Valid description.
 ---
@@ -193,7 +203,7 @@ description: Valid description.
 Body.`),
     ).toThrow("Skill file frontmatter must include name and description");
     expect(() =>
-      parseSkillFile(`---
+      parseValid(`---
 name: valid-name
 description: "   "
 ---
@@ -203,7 +213,7 @@ Body.`),
   });
 
   test("parses skill files with CRLF line endings", () => {
-    const parsed = parseSkillFile(
+    const parsed = parseValid(
       [
         "---",
         "name: windows-skill",
@@ -222,7 +232,7 @@ Body.`),
   });
 
   test("parses a folded (>) block scalar description into one spaced line", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: folded-skill
 description: >
   Use this skill when the matter spans several
@@ -240,7 +250,7 @@ Body.`);
   });
 
   test("strips the trailing newline for a folded-strip (>-) block scalar", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: folded-strip-skill
 description: >-
   First fragment
@@ -253,7 +263,7 @@ Body.`);
   });
 
   test("preserves paragraphs and more-indented lines in folded scalars", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: folded-structure
 description: >
   First paragraph spans
@@ -272,7 +282,7 @@ Body.`);
   });
 
   test("parses a literal (|) block scalar description preserving newlines", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: literal-skill
 description: |
   Line one.
@@ -285,7 +295,7 @@ Body.`);
   });
 
   test("strips the trailing newline for a literal-strip (|-) block scalar", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: literal-strip-skill
 description: |-
   Line one.
@@ -298,7 +308,7 @@ Body.`);
   });
 
   test("parses a quoted inline value that starts with > as literal text", () => {
-    const parsed = parseSkillFile(`---
+    const parsed = parseValid(`---
 name: inline-skill
 description: ">not a block scalar"
 ---
@@ -313,5 +323,23 @@ Body.`);
     expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
     expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
     expect(getSkillResourceKind("unknown/file.md")).toBeNull();
+  });
+});
+
+describe("skill file validation errors", () => {
+  test("an invalid file is returned as a SkillFileError carrying the reason", () => {
+    const parsed = parseSkillFile(`---
+name: missing-description
+---
+
+Body.`);
+
+    if (parsed.isOk()) {
+      throw new Error("Expected the skill file to be refused");
+    }
+    expect(parsed.error).toBeInstanceOf(SkillFileError);
+    expect(parsed.error.message).toBe(
+      "Skill file frontmatter must include name and description",
+    );
   });
 });

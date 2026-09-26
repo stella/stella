@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 
 import {
   resourceRef,
+  SKILL_REF_HREF_PREFIX,
   RESOURCE_TYPE,
   toChatMentionResourceHref,
   toChatResourceHref,
@@ -51,7 +52,6 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 };
 
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);
-const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
 const isAllowedLocalHref = (href: string): boolean =>
   href.startsWith(SKILL_REF_HREF_PREFIX) &&

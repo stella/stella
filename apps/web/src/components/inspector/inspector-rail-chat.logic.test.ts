@@ -49,12 +49,12 @@ describe("what the rail's new-chat button opens", () => {
   test("keeps naming the skill the reader picked, over the document they stand on", () => {
     expect(
       railChatOpenArgs({
-        activeSkill: { skillName: "Redline" },
+        activeSkill: { skillId: "skill-1", skillName: "Redline" },
         legalDocument: decision,
       }),
     ).toEqual({
       activeLegalKey: "decision:decision-1",
-      activeSkill: { skillName: "Redline" },
+      activeSkill: { skillId: "skill-1", skillName: "Redline" },
       label: "Redline",
     });
   });

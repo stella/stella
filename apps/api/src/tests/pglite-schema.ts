@@ -30,6 +30,11 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   "20260827080000_agent_skill_revisions",
   "migration.sql",
 );
+const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260925230100_agent_skill_anchor_lock",
+  "migration.sql",
+);
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260911150000_statute_citation_counts",
@@ -232,6 +237,11 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
+  // The anchor lock migration holds only its function and grants.
+  await installPgliteMigration({
+    db,
+    migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
+  });
 };
 
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [

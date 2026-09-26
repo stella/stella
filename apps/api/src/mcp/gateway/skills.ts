@@ -1,9 +1,19 @@
-import { Result } from "better-result";
-import { and, asc, eq, or } from "drizzle-orm";
+import { panic, Result } from "better-result";
 
-import { agentSkills } from "@/api/db/schema";
+import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+
+import type { SafeDbError } from "@/api/db/safe-db";
+import {
+  listAvailableChatSkillMetadata,
+  loadAvailableChatSkill,
+  readAvailableChatSkillResource,
+  SKILL_RESOURCE_READ_STATUS,
+} from "@/api/lib/agent-skills/skills";
+import type {
+  AvailableChatSkill,
+  LoadedChatSkill,
+} from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
-import { LIMITS } from "@/api/lib/limits";
 import {
   collisionSafeToolName,
   namespaceSkillToolName,
@@ -11,73 +21,36 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 
-export type SkillToolRow = {
-  body: string;
-  description: string;
-  id: typeof agentSkills.$inferSelect.id;
-  metadata: Record<string, string>;
-  name: string;
-  origin: typeof agentSkills.$inferSelect.origin;
-  scope: typeof agentSkills.$inferSelect.scope;
-  slug: string;
-  userId: string;
-  version: string | null;
-  compatibility: string | null;
-  license: string | null;
-};
-
-export type ResolvedSkillTool = SkillToolRow & {
+/**
+ * A skill as `tools/list` serves it: catalog metadata only. Instruction
+ * bodies and resources are read for the one skill a call names.
+ */
+export type ResolvedSkillTool = AvailableChatSkill & {
   exposedName: string;
 };
 
+/**
+ * The skill catalog is the one chat serves (enabled team skills plus the
+ * caller's private ones, private first on a slug collision), so every agent
+ * surface offers the same skills under the same precedence.
+ */
 export const loadVisibleSkillTools = async ({
   context,
 }: {
   context: McpRequestContext;
 }): Promise<ResolvedSkillTool[]> => {
-  const rows = await context.safeDb((tx) =>
-    tx
-      .select({
-        id: agentSkills.id,
-        scope: agentSkills.scope,
-        userId: agentSkills.userId,
-        slug: agentSkills.slug,
-        name: agentSkills.name,
-        description: agentSkills.description,
-        version: agentSkills.version,
-        license: agentSkills.license,
-        compatibility: agentSkills.compatibility,
-        metadata: agentSkills.metadata,
-        body: agentSkills.body,
-        origin: agentSkills.origin,
-      })
-      .from(agentSkills)
-      .where(
-        and(
-          eq(agentSkills.organizationId, context.organizationId),
-          eq(agentSkills.enabled, true),
-          or(
-            eq(agentSkills.scope, "team"),
-            eq(agentSkills.userId, context.userId),
-          ),
-        ),
-      )
-      .orderBy(agentSkills.scope, asc(agentSkills.slug), asc(agentSkills.id))
-      .limit(LIMITS.mcpGatewaySkillsMax * 2),
+  // A load fault propagates instead of `[]`, so a transient DB outage is not
+  // mistaken for "no skills": dispatch maps it to a retryable error and
+  // `tools/list` fails loudly rather than silently dropping skill tools.
+  const skills = throwOnLoadFault(
+    await listAvailableChatSkillMetadata({
+      organizationId: context.organizationId,
+      safeDb: context.safeDb,
+      userId: context.userId,
+    }),
   );
 
-  if (Result.isError(rows)) {
-    captureError(rows.error, { source: "mcp-gateway-skills" });
-    // Propagate the load fault instead of `[]`, so a transient DB outage is not
-    // mistaken for "no skills": dispatch maps this to a retryable error and
-    // `tools/list` fails loudly rather than silently dropping skill tools.
-    throw new McpGatewayLoadError({
-      message: "Failed to load agent skills",
-      cause: rows.error,
-    });
-  }
-
-  return resolveSkillToolPrecedence(rows.value);
+  return exposeSkillTools(skills);
 };
 
 export const resolveSkillTool = async ({
@@ -91,43 +64,118 @@ export const resolveSkillTool = async ({
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
-/**
- * Pure naming and precedence step, exported so tests and the orientation eval
- * derive collision-safe exposed names through the served code path rather
- * than a hand-written mirror of it.
- */
-export const resolveSkillToolPrecedence = (
-  rows: readonly SkillToolRow[],
-): ResolvedSkillTool[] => {
-  const skills: ResolvedSkillTool[] = [];
-  const seenSlugs = new Set<string>();
-  const seenToolNames = new Set<string>();
+export const SKILL_TOOL_READ_TYPE = {
+  resource: "resource",
+  resourceNotFound: "resource-not-found",
+  skill: "skill",
+} as const;
 
-  for (const row of rows.toSorted(
-    (a, b) => scopePriority(a.scope) - scopePriority(b.scope),
-  )) {
-    if (
-      skills.length >= LIMITS.mcpGatewaySkillsMax ||
-      seenSlugs.has(row.slug)
-    ) {
-      continue;
+export type SkillToolRead =
+  | { type: typeof SKILL_TOOL_READ_TYPE.skill; skill: LoadedChatSkill }
+  | {
+      type: typeof SKILL_TOOL_READ_TYPE.resource;
+      content: string;
+      kind: SkillResourceKind;
+      path: string;
+      skill: ResolvedSkillTool;
     }
+  | {
+      type: typeof SKILL_TOOL_READ_TYPE.resourceNotFound;
+      path: string;
+      skill: ResolvedSkillTool;
+    };
 
-    seenSlugs.add(row.slug);
-    const baseName = namespaceSkillToolName(row.slug);
-    skills.push({
-      ...row,
-      exposedName: collisionSafeToolName({
-        baseName,
-        rawName: row.slug,
-        seen: seenToolNames,
-      }),
-    });
+/**
+ * Reads what one skill call asks for: the instructions and resource list of
+ * the skill it resolved to, or one of its resource files. `null` means the
+ * skill stopped being available between resolution and this read (deleted or
+ * disabled). The read re-resolves by slug, so a row other than the resolved
+ * one (a team skill behind a private one disabled since) also counts as gone:
+ * the caller audits the resolved row, and what it serves must come from it.
+ */
+export const readSkillTool = async ({
+  context,
+  resourcePath,
+  skill,
+}: {
+  context: McpRequestContext;
+  resourcePath: string | undefined;
+  skill: ResolvedSkillTool;
+}): Promise<SkillToolRead | null> => {
+  const scope = {
+    organizationId: context.organizationId,
+    safeDb: context.safeDb,
+    skillName: skill.name,
+    userId: context.userId,
+  };
+
+  if (resourcePath === undefined) {
+    const loaded = throwOnLoadFault(await loadAvailableChatSkill(scope));
+    return loaded === null || loaded.id !== skill.id
+      ? null
+      : { type: SKILL_TOOL_READ_TYPE.skill, skill: loaded };
   }
 
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- exposedName is the MCP tool registry's machine identifier, not display text
-  return skills.toSorted((a, b) => a.exposedName.localeCompare(b.exposedName));
+  const read = throwOnLoadFault(
+    await readAvailableChatSkillResource({ ...scope, path: resourcePath }),
+  );
+  switch (read.status) {
+    case SKILL_RESOURCE_READ_STATUS.skillNotFound:
+      return null;
+    case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
+      return read.skillId === skill.id
+        ? {
+            type: SKILL_TOOL_READ_TYPE.resourceNotFound,
+            path: resourcePath,
+            skill,
+          }
+        : null;
+    case SKILL_RESOURCE_READ_STATUS.found:
+      return read.skillId === skill.id
+        ? {
+            type: SKILL_TOOL_READ_TYPE.resource,
+            content: read.content,
+            kind: read.kind,
+            path: resourcePath,
+            skill,
+          }
+        : null;
+    default: {
+      read satisfies never;
+      return panic("skill resource read returned an unknown status");
+    }
+  }
 };
 
-const scopePriority = (scope: "team" | "private") =>
-  scope === "private" ? 0 : 1;
+const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
+  if (Result.isError(result)) {
+    captureError(result.error, { source: "mcp-gateway-skills" });
+    // A load fault means the skills may still exist: dispatch answers a
+    // retryable error rather than `unknown_tool`.
+    throw new McpGatewayLoadError({
+      message: "Failed to load agent skills",
+      cause: result.error,
+    });
+  }
+  return result.value;
+};
+
+/**
+ * Pure naming step over an already precedence-resolved catalog, exported so
+ * tests and the orientation eval derive collision-safe exposed names through
+ * the served code path rather than a hand-written mirror of it.
+ */
+export const exposeSkillTools = (
+  skills: readonly AvailableChatSkill[],
+): ResolvedSkillTool[] => {
+  const seenToolNames = new Set<string>();
+
+  return skills.map((skill) => ({
+    ...skill,
+    exposedName: collisionSafeToolName({
+      baseName: namespaceSkillToolName(skill.name),
+      rawName: skill.name,
+      seen: seenToolNames,
+    }),
+  }));
+};

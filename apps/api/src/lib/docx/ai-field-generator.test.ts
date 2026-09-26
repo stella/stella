@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
@@ -177,10 +178,10 @@ beforeEach(() => {
 const orgAIConfig = {} as OrgAIConfig;
 const organizationId = toSafeId<"organization">("org_test");
 const userId = toSafeId<"user">("user_test");
-// SAFETY: never invoked — the skill catalog is empty here, so no skill tool is
-// ever built or run.
+// SAFETY: every query answers with no rows, so the skill catalog is empty and
+// no skill tool is ever built or run.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const safeDb = (async () => undefined) as unknown as SafeDb;
+const safeDb = (async () => Result.ok([])) as unknown as SafeDb;
 const skillContext = { organizationId, safeDb, userId };
 
 const SKILL_REF_PROMPT =

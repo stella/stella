@@ -69,7 +69,7 @@ type ActiveExternalContext = {
 };
 
 export type ActiveSkillContext = {
-  skillId?: string | undefined;
+  skillId: string;
   skillName: string;
 };
 

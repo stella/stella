@@ -25,6 +25,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
+import { useCatalogueRemoval } from "./use-catalogue-removal";
 
 type CatalogueDetailPanelProps = {
   entry: CatalogueEntry;
@@ -53,12 +54,11 @@ export const CatalogueDetailPanel = ({
   const isFirstParty = entry.author === "stella";
   const installed = isEffectivelyInstalled(entry);
   const installable = !installed && entry.installState !== "unavailable";
-  const canRemove =
-    installed &&
-    !entry.isLocked &&
-    (entry.kind === "native-tool" ||
-      (entry.kind === "mcp" && entry.installedConnectorSlug !== null) ||
-      (entry.kind === "skill" && entry.installedSkillId !== null));
+  const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
+    entry,
+    onRemove,
+  });
+  const canRemove = removal !== "none";
   const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
@@ -208,7 +208,7 @@ export const CatalogueDetailPanel = ({
           <Button
             className="flex-1"
             disabled={removing}
-            onClick={onRemove}
+            onClick={requestRemoval}
             type="button"
             variant="destructive-outline"
           >
@@ -227,6 +227,7 @@ export const CatalogueDetailPanel = ({
           </p>
         )}
       </footer>
+      {confirmDialog}
     </div>
   );
 };

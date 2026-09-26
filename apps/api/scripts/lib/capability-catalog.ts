@@ -180,7 +180,6 @@ export const DOMAIN_ACTION_VERBS = [
   "rewrite",
   "run",
   "search",
-  "seed",
   "split",
   "start",
   "stop",

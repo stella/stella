@@ -129,7 +129,7 @@ type ChatSendRequestBase = {
     supportsDocxEdits?: boolean;
   };
   activeSkill?: {
-    skillId?: SafeId<"agentSkill">;
+    skillId: SafeId<"agentSkill">;
     skillName: string;
   };
   activeStatute?: {

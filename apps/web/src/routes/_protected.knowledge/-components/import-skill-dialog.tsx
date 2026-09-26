@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
   SelectItem,
@@ -32,7 +33,11 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
-import { summarizeSkillImportFailures } from "./import-skill-dialog.logic";
+import {
+  listSkippedImportFiles,
+  summarizeSkillImportFailures,
+} from "./import-skill-dialog.logic";
+import type { SkippedImportFile } from "./import-skill-dialog.logic";
 
 const MAX_SELECTED_SKILLS = 20;
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
@@ -61,6 +66,24 @@ type SkillDiscovery = Exclude<
   NonNullable<Extract<DiscoverResponse, { data: unknown }>["data"]>,
   Response
 >;
+
+type ImportResponse = Awaited<
+  ReturnType<(typeof api.skills)["import-urls"]["post"]>
+>;
+
+type SkippedFileReason = Exclude<
+  NonNullable<Extract<ImportResponse, { data: unknown }>["data"]>,
+  Response
+>["installed"][number]["skippedFiles"][number]["reason"];
+
+const SKIPPED_FILE_REASON_MESSAGE_KEY = {
+  "not-utf8-text": "knowledge.agentSkills.skippedReasonNotUtf8Text",
+  "outside-skill-folder":
+    "knowledge.agentSkills.skippedReasonOutsideSkillFolder",
+  "unsupported-extension":
+    "knowledge.agentSkills.skippedReasonUnsupportedExtension",
+  "unsupported-folder": "knowledge.agentSkills.skippedReasonUnsupportedFolder",
+} as const satisfies Record<SkippedFileReason, TranslationKey>;
 
 type ImportSkillDialogProps = {
   canManageTeam: boolean;
@@ -101,6 +124,9 @@ const ImportSkillDialogBody = ({
   const [scope, setScope] = useState<SkillScope>("private");
   const [discovery, setDiscovery] = useState<SkillDiscovery | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [skippedFiles, setSkippedFiles] = useState<
+    SkippedImportFile<SkippedFileReason>[]
+  >([]);
 
   const discover = useMutation({
     onMutate: () => onBusyChange(true),
@@ -132,24 +158,27 @@ const ImportSkillDialogBody = ({
   const importSkills = useMutation({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
-    mutationFn: async () => {
+    mutationFn: async (source: SkillDiscovery) => {
       const response = await api.skills["import-urls"].post({
-        items: discovery
-          ? discovery.skills
-              .filter((skill) => selected.has(skill.sourceUrl))
-              .map((skill) => ({
-                integrity: skill.integrity,
-                sourceUrl: skill.sourceUrl,
-              }))
-          : [],
+        items: source.skills
+          .filter((skill) => selected.has(skill.sourceUrl))
+          .map((skill) => ({
+            integrity: skill.integrity,
+            sourceUrl: skill.sourceUrl,
+          })),
         scope,
       });
       return unwrapEden(response);
     },
-    onSuccess: (result) => {
+    onSuccess: (result, source) => {
       if (result.installed.length > 0) {
         onImported();
       }
+      const skipped = listSkippedImportFiles({
+        installed: result.installed,
+        skills: source.skills,
+      });
+      setSkippedFiles(skipped);
       if (result.failed.length === 0) {
         stellaToast.add({
           title: tSkills("importedSkills", {
@@ -157,7 +186,13 @@ const ImportSkillDialogBody = ({
           }),
           type: "success",
         });
-        onOpenChange(false);
+        if (skipped.length === 0) {
+          onOpenChange(false);
+          return;
+        }
+        // Keep the dialog open on the list of files the import left out.
+        setDiscovery(null);
+        setSelected(new Set());
         return;
       }
 
@@ -202,6 +237,7 @@ const ImportSkillDialogBody = ({
     setUrl(nextUrl);
     setDiscovery(null);
     setSelected(new Set());
+    setSkippedFiles([]);
   };
 
   const toggleSkill = (sourceUrl: string, checked: boolean) => {
@@ -421,16 +457,47 @@ const ImportSkillDialogBody = ({
             )}
           </>
         )}
+        {skippedFiles.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-xs font-medium">
+              {tSkills("skippedFiles", { count: skippedFiles.length })}
+            </p>
+            <div className="border-border overflow-hidden rounded-lg border">
+              <ScrollArea className="max-h-60">
+                <ul className="flex flex-col">
+                  {skippedFiles.map((file) => (
+                    <li
+                      className="flex flex-wrap items-baseline gap-x-2 px-3 py-2 text-xs"
+                      key={`${file.skillName} ${file.path}`}
+                    >
+                      <span className="text-foreground font-medium">
+                        <bdi>{file.skillName}</bdi>
+                      </span>
+                      <code dir="ltr">
+                        <bdi dir="ltr">{file.path}</bdi>
+                      </code>
+                      <span className="text-muted-foreground">
+                        {t(SKIPPED_FILE_REASON_MESSAGE_KEY[file.reason])}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            </div>
+          </div>
+        )}
       </DialogPanel>
 
       <DialogFooter>
         <DialogClose render={<Button disabled={busy} variant="ghost" />}>
-          {t("common.cancel")}
+          {skippedFiles.length > 0 && discovery === null
+            ? t("common.done")
+            : t("common.cancel")}
         </DialogClose>
         {discovery && discovery.skills.length > 0 && (
           <Button
             disabled={selected.size === 0 || busy}
-            onClick={() => importSkills.mutate()}
+            onClick={() => importSkills.mutate(discovery)}
             type="button"
           >
             {importSkills.isPending && (

@@ -4,6 +4,10 @@ import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
+import {
+  lockSkillForResourceWrite,
+  refreshSkillContentHash,
+} from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
   RESOURCE_PATH_PATTERN,
@@ -124,10 +128,15 @@ const renameSkillResource = createSafeRootHandler(
       safeDb(
         async (tx) =>
           await tx.transaction(async (innerTx) => {
+            const lockedSkill = await lockSkillForResourceWrite(
+              innerTx,
+              params.skillId,
+            );
             await innerTx
               .update(agentSkillResources)
               .set({ path: newPath, kind: nextKind })
               .where(eq(agentSkillResources.id, existing.id));
+            await refreshSkillContentHash(innerTx, lockedSkill);
 
             await recordAuditEvent(innerTx, {
               action: AUDIT_ACTION.UPDATE,

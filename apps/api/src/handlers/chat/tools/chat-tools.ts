@@ -74,7 +74,6 @@ import {
 import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -421,6 +420,8 @@ type GetChatToolsProps = {
   skillMetadata?: readonly SkillMetadata[] | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
+  /** Records reads that run without an approval, such as `load-skill`. */
+  recordReadAuditEvent?: AuditRecorder | undefined;
   /**
    * Execution-time matter provenance for durable memories created during this
    * turn. The resolver must include the initial prompt/thread scope and refs
@@ -630,6 +631,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     skillMetadata,
     activeSkillContext,
     recordAuditEvent,
+    recordReadAuditEvent,
     resolveMemorySourceWorkspaceIds,
     workspaceStatusById,
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -688,8 +690,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     purpose,
     recordAuditEvent,
+    recordReadAuditEvent,
     safeDb,
-    skills: skillMetadata ?? getChatSkillMetadata(),
+    skills: skillMetadata,
     userId,
   });
   // Unified business-registry tool: register once with a dynamic

@@ -9,6 +9,7 @@ import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
+  exposeSkillTools,
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
@@ -118,20 +119,25 @@ describe("MCP gateway skill tools", () => {
     const context = createContext({
       rows: [
         skillRow({
+          id: toSafeId<"agentSkill">("skill_team_shared"),
           slug: "shared",
           scope: "team",
           userId: "user_other",
-          body: "team-body",
         }),
-        skillRow({ slug: "shared", scope: "private", body: "private-body" }),
+        skillRow({
+          id: toSafeId<"agentSkill">("skill_private_shared"),
+          slug: "shared",
+          scope: "private",
+        }),
       ],
     });
 
     const tools = await loadVisibleSkillTools({ context });
 
     expect(tools).toHaveLength(1);
-    expect(tools.at(0)?.scope).toBe("private");
-    expect(tools.at(0)?.body).toBe("private-body");
+    expect(tools.at(0)?.id).toBe(
+      toSafeId<"agentSkill">("skill_private_shared"),
+    );
   });
 
   test("distinct slugs that sanitize to the same name get collision-safe names", async () => {
@@ -156,16 +162,19 @@ describe("MCP gateway skill tools", () => {
     );
   });
 
-  test("never exposes more skills than the gateway cap", async () => {
-    const rows = Array.from(
-      { length: LIMITS.mcpGatewaySkillsMax + 5 },
-      (_, i) => skillRow({ slug: `skill-${i}` }),
+  test("exposes every skill of the chat catalog, up to the shared cap", () => {
+    const catalog = Array.from(
+      { length: LIMITS.agentSkillsChatMetadataMax },
+      (_, i) => ({
+        description: `desc ${String(i)}`,
+        displayName: `Skill ${String(i)}`,
+        id: toSafeId<"agentSkill">(`skill_${String(i)}`),
+        name: `skill-${String(i)}`,
+        version: null,
+      }),
     );
-    const context = createContext({ rows });
 
-    const tools = await loadVisibleSkillTools({ context });
-
-    expect(tools).toHaveLength(LIMITS.mcpGatewaySkillsMax);
+    expect(exposeSkillTools(catalog)).toHaveLength(catalog.length);
   });
 
   test("propagates a load fault (captured, not swallowed) instead of an empty list when the DB read fails", async () => {
@@ -200,7 +209,7 @@ describe("MCP gateway skill tools", () => {
       toolName: "skill__beta",
     });
 
-    expect(resolved?.slug).toBe("beta");
+    expect(resolved?.name).toBe("beta");
     expect(resolved?.exposedName).toBe("skill__beta");
   });
 

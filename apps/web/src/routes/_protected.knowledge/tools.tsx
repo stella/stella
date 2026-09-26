@@ -14,12 +14,9 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { BoundedSet } from "@/lib/bounded-set";
 import { detached } from "@/lib/detached";
-import { knowledgeKeys } from "@/lib/knowledge/queries";
 import {
   catalogueKeys,
   catalogueOptions,
@@ -124,46 +121,10 @@ const searchSchema = v.object({
   slug: v.optional(v.string()),
 });
 
-// Per-tab flag so we POST /skills/seed at most once per browser
-// session. The handler itself is idempotent (returns early when any
-// slash-command skill already exists for the user), but a wasted
-// round trip on every Tools navigation still hurts; this gates it
-// to the first visit.
-const seededThisSession = new BoundedSet<string>(20);
-
 export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
-  // Seed default slash-command skills on first Tools visit per
-  // session. Used to live on the standalone Prompts page, which no
-  // longer exists.
   loader: async ({ context }) => {
     const orgId = context.user.activeOrganizationId;
-
-    if (!seededThisSession.has(orgId)) {
-      const response = await api.skills.seed.post({});
-      // Only mark the org as seeded once the server confirmed — a
-      // transient failure would otherwise pin us into the "already
-      // seeded" branch for the rest of the session and the user would
-      // never get default slash commands without a full reload.
-      if (!response.error) {
-        seededThisSession.add(orgId);
-        // When the server actually wrote rows, invalidate the local
-        // skill/catalogue caches so chat (slash menu) and any open Tools
-        // browser pick the new commands up immediately instead of waiting
-        // for staleTime to lapse. Both queries are keyed by org id.
-        if (response.data.seeded) {
-          await Promise.all([
-            context.queryClient.invalidateQueries({
-              queryKey: knowledgeKeys.skills.all(orgId),
-            }),
-            context.queryClient.invalidateQueries({
-              queryKey: catalogueKeys.all(orgId),
-            }),
-          ]);
-        }
-      }
-    }
-
     const [, settings, role] = await Promise.all([
       ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
       ensureRouteQueryData(
@@ -174,12 +135,12 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
       // it here so it is a synchronous cache hit on mount. Otherwise a cold-cache
       // fetch resolving mid-mount notifies the not-yet-mounted fiber (React
       // "state update on a component that hasn't mounted yet"), which flaked the
-      // route-smoke e2e on /knowledge/skills (and its twin /knowledge/prompts).
+      // route-smoke e2e.
       ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
 
     return {
-      canImportSkills: authClient.organization.checkRolePermission({
+      canCreateSkills: authClient.organization.checkRolePermission({
         permissions: { agentSkill: ["create"] },
         role,
       }),
@@ -207,11 +168,11 @@ function ToolsPage() {
   });
   const routeData = Route.useLoaderData({
     select: ({
-      canImportSkills,
+      canCreateSkills,
       canManageCustomTools,
       practiceJurisdictions,
     }) => ({
-      canImportSkills,
+      canCreateSkills,
       canManageCustomTools,
       practiceJurisdictions,
     }),
@@ -220,8 +181,7 @@ function ToolsPage() {
   // OAuth completion lands in a popup tab/window; the popup
   // broadcasts via BroadcastChannel (falling back to opener
   // postMessage), so the catalogue page needs an active subscription
-  // to surface the toast and refetch the catalogue. The legacy
-  // listener lived on /knowledge/mcp before the surface unified.
+  // to surface the toast and refetch the catalogue.
   useExternalSyncEffect(
     () =>
       subscribeToMcpOAuthOutcome((outcome) => {
@@ -252,7 +212,7 @@ function ToolsPage() {
       <ToolsPageHeader />
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
         <LazyCatalogueBrowser
-          canImportSkills={routeData.canImportSkills}
+          canCreateSkills={routeData.canCreateSkills}
           canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
           initialSlug={initialSlug}
@@ -328,7 +288,7 @@ const ToolsPageHeader = () => {
   );
 };
 
-// The route's `loader` (skills.seed POST) blocks the first visit, so without a
+// The route's `loader` waits for the catalogue and settings, so without a
 // pendingComponent it flashes the glowing logo before the catalogue skeleton.
 // Render the real chrome + catalogue skeleton during route-pending as well.
 function ToolsPagePending() {

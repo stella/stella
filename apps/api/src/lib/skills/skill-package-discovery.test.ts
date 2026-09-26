@@ -370,6 +370,7 @@ describe("GitHub skill package discovery", () => {
       throw result.error;
     }
     expect(result.value.name).toBe("small-skill");
+    expect(result.value.urlReplayIdentity).toBe("source-url");
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
       "scripts/helper.ts",
     ]);

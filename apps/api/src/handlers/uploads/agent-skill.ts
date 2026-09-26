@@ -1,12 +1,11 @@
 /**
  * `agent_skill` purpose: presigned-upload flow that ends in an
- * installed `agentSkills` row + companion `agentSkillResources`,
- * mirroring the legacy multipart endpoint at
- * `apps/api/src/handlers/skills/upload.ts`.
+ * installed `agentSkills` row + companion `agentSkillResources`, the
+ * same install the multipart endpoint at
+ * `apps/api/src/handlers/skills/upload.ts` runs.
  *
- * `validateAgentSkill` enforces the team-scope admin/owner check the
- * legacy handler runs. The route is still workspace-scoped during the
- * migration, matching the temporary shared endpoint permission gate.
+ * `validateAgentSkill` enforces the same team-scope admin/owner check
+ * as the multipart endpoint.
  */
 import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
@@ -19,6 +18,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   authorizeSkillInstallScope,
   installSkill,
@@ -32,9 +32,9 @@ export type ValidateAgentSkillProps = {
 };
 
 /**
- * The legacy handler's scope check is pure (no DB), so we reuse it
- * verbatim. Returning early at presign time keeps the API from
- * minting a URL for an upload the user can't legitimately finalize.
+ * The install scope check is pure (no DB), so it also runs at presign
+ * time: the API does not mint a URL for an upload the user can't
+ * legitimately finalize.
  *
  * @returns the authorization result.
  */
@@ -55,9 +55,7 @@ export type FinalizeAgentSkillProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   memberRole: { role: string };
-  fileBuffer: ArrayBuffer;
-  declaredName: string;
-  declaredMime: string;
+  scanned: ScannedFile;
   scope: "team" | "private";
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
@@ -65,16 +63,16 @@ export type FinalizeAgentSkillProps = {
 };
 
 /**
- * Domain transaction for `agent_skill`: parses the uploaded ZIP /
- * markdown into a `ParsedSkillPackage`, then runs the legacy
- * `installSkill` path which handles user-limit, slug-uniqueness,
- * resource fan-out, and the audit row.
+ * Domain transaction for `agent_skill`: parses the scanned ZIP /
+ * markdown into a `ParsedSkillPackage`, then runs `installSkill`,
+ * which handles user-limit, slug-uniqueness, resource fan-out, and
+ * the audit row.
  *
  * Skill rows do not have an S3 backing object: the skill body and
  * resources are inlined into DB columns. The generic upload runtime
- * still verifies and scans the staged bytes, then this finalizer
- * installs the skill and marks the pending-upload row inside the
- * same transaction.
+ * verifies and scans the staged bytes, then this finalizer installs
+ * the skill and marks the pending-upload row inside the same
+ * transaction.
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
@@ -85,22 +83,15 @@ export const finalizeAgentSkill = async function* ({
   organizationId,
   userId,
   memberRole,
-  fileBuffer,
-  declaredName,
-  declaredMime,
+  scanned,
   scope,
   uploadId,
   claimRequestId,
   workspaceId,
 }: FinalizeAgentSkillProps) {
-  // parseUploadedSkillPackage takes a File; wrap the buffer back
-  // into one. The legacy handler's parsing is identical; the
-  // archive size has already been bounded by the presign-time
+  // The archive size has already been bounded by the presign-time
   // `FILE_SIZE_LIMIT_BYTES.skillPack` check.
-  const file = new File([fileBuffer], declaredName, {
-    type: declaredMime,
-  });
-  const parsed = await parseUploadedSkillPackage(file);
+  const parsed = await parseUploadedSkillPackage(scanned);
   if (Result.isError(parsed)) {
     return finalizeErr({
       status: parsed.error.status === 500 ? 500 : 422,
@@ -120,6 +111,7 @@ export const finalizeAgentSkill = async function* ({
         skillId: skill.id,
         name: parsed.value.name,
         version: parsed.value.version ?? "",
+        skippedFiles: parsed.value.skippedFiles,
       };
 
       // audit: skip — final FSM transition on pending_uploads;
@@ -194,6 +186,7 @@ export const finalizeAgentSkill = async function* ({
     skillId: installResult.value.id,
     name: parsed.value.name,
     version: parsed.value.version ?? "",
+    skippedFiles: parsed.value.skippedFiles,
   };
 
   // The audit row is emitted inside `installSkill` against the

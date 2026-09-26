@@ -394,6 +394,7 @@ describe("findStaleBaselineEntries", () => {
       identicalToSource: { "tasks.status": ["de"] },
       duplicatesCommon: ["chat.saveDraft"],
       duplicateValues: ["chat.title", "tasks.title"],
+      unusedKeys: [],
     };
     expect(findStaleBaselineEntries({ source: en, locales, baseline })).toEqual(
       [],
@@ -409,6 +410,7 @@ describe("findStaleBaselineEntries", () => {
       },
       duplicatesCommon: ["tasks.status"],
       duplicateValues: ["tasks.status"],
+      unusedKeys: [],
     };
     expect(findStaleBaselineEntries({ source: en, locales, baseline })).toEqual(
       [

@@ -7,6 +7,9 @@ import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecyc
 const identifyOrganizationGroup =
   mock<ServerAnalytics["identifyOrganizationGroup"]>();
 const seedDefaultDocumentTypes = mock(async () => await Promise.resolve());
+const seedMemberDefaults = mock<
+  Parameters<typeof createOrganizationLifecycleHooks>[0]["seedMemberDefaults"]
+>(async () => await Promise.resolve());
 const analytics: ServerAnalytics = {
   capture: () => undefined,
   identifyOrganizationGroup,
@@ -14,16 +17,31 @@ const analytics: ServerAnalytics = {
 };
 
 const orgId = toSafeId<"organization">("3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41");
+const userId = toSafeId<"user">("member-user-1");
 
 const hooks = createOrganizationLifecycleHooks({
   analytics,
   seedDefaultDocumentTypes,
+  seedMemberDefaults,
 });
 
 describe("organization lifecycle hooks", () => {
   beforeEach(() => {
     identifyOrganizationGroup.mockClear();
     seedDefaultDocumentTypes.mockClear();
+    seedMemberDefaults.mockClear();
+  });
+
+  test("each new membership seeds that member's defaults once", async () => {
+    const member = { organizationId: orgId, userId };
+
+    await hooks.afterAddMember({ member });
+    await hooks.afterAcceptInvitation({ member });
+    await hooks.afterCreateOrganization({
+      organization: { id: orgId, name: "Acme Legal" },
+    });
+
+    expect(seedMemberDefaults.mock.calls).toEqual([[member], [member]]);
   });
 
   test("afterCreateOrganization seeds document types, then names the group", async () => {

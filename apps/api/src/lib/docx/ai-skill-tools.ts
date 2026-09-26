@@ -14,18 +14,16 @@
  * can adopt the same `maybeSkillTools` seam later without changing this module.
  */
 
-import type { SafeDb } from "@/api/db/safe-db";
+import { Result } from "better-result";
+
+import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
-import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
+import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-
-/**
- * Mirrors `SKILL_CHIP_HREF_PREFIX` on the web side (the prompt inputs serialize
- * skill chips as `[label](#stella-skill-ref=slug)`). The slug sits inside the
- * markdown link target, so it runs up to the closing paren or whitespace.
- */
-const SKILL_REF_RE = /#stella-skill-ref=(?<slug>[^)\s]+)/u;
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -37,26 +35,33 @@ export type SkillToolsContext = {
 /**
  * Returns the `load-skill` + `read-skill-resource` tool set when `prompt`
  * references at least one skill, otherwise `undefined` so the caller keeps its
- * existing no-tools behaviour. `ctx` is omitted at boundaries that cannot wire
- * the skill identity yet; in that case skill refs stay inert (no tools).
+ * existing no-tools behaviour. The catalog is the one chat serves: the
+ * caller's enabled team and private skills, private first on a slug
+ * collision. `ctx` is omitted at boundaries that cannot wire the skill
+ * identity; in that case skill refs stay inert (no tools).
  */
-export const maybeSkillTools = (
+export const maybeSkillTools = async (
   prompt: string,
   ctx: SkillToolsContext | undefined,
-): ChatToolMap | undefined => {
-  if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
-    return undefined;
+): Promise<Result<ChatToolMap | undefined, SafeDbError>> => {
+  if (ctx === undefined || extractSkillRefSlugs(prompt).length === 0) {
+    return Result.ok(undefined);
   }
-  const skills = getChatSkillMetadata();
-  if (skills.length === 0) {
-    return undefined;
+  const skills = await listAvailableChatSkillMetadata(ctx);
+  if (Result.isError(skills)) {
+    return Result.err(skills.error);
   }
-  return createSkillTools({
-    organizationId: ctx.organizationId,
-    safeDb: ctx.safeDb,
-    skills,
-    userId: ctx.userId,
-  });
+  if (skills.value.length === 0) {
+    return Result.ok(undefined);
+  }
+  return Result.ok(
+    createSkillTools({
+      organizationId: ctx.organizationId,
+      safeDb: ctx.safeDb,
+      skills: skills.value,
+      userId: ctx.userId,
+    }),
+  );
 };
 
 /**
@@ -66,6 +71,6 @@ export const maybeSkillTools = (
  */
 export const SKILL_REF_GENERATOR_GUIDANCE =
   "If the instruction contains a markdown link of the form " +
-  "[label](#stella-skill-ref=slug), call load-skill with that slug first, " +
+  `[label](${SKILL_REF_HREF_PREFIX}slug), call load-skill with that slug first, ` +
   "then apply the skill's methodology to draft this field. Do not narrate " +
   "loading the skill; return only the field value.";

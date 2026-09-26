@@ -36,7 +36,6 @@ const QUICK_START_INCOMPLETE_MATTER_MODE = "replace";
 const PHASE_LABELS = {
   [DEV_QUICK_START_PHASE.authenticate]: "Signing in",
   [DEV_QUICK_START_PHASE.organization]: "Creating organization",
-  [DEV_QUICK_START_PHASE.skills]: "Adding skills",
   [DEV_QUICK_START_PHASE.matters]: "Starting LAB matter import",
 } as const satisfies Record<DevQuickStartPhase, string>;
 
@@ -52,7 +51,6 @@ const DEV_QUICK_START_COPY = {
 const DEV_QUICK_START_ERROR = {
   matterImport: "matterImport",
   otpUnavailable: "otpUnavailable",
-  seed: "seed",
 } as const;
 
 type DevQuickStartErrorCode =
@@ -63,7 +61,6 @@ const ERROR_MESSAGES = {
     "The Harvey LAB import could not start.",
   [DEV_QUICK_START_ERROR.otpUnavailable]:
     "The development OTP was not available.",
-  [DEV_QUICK_START_ERROR.seed]: DEV_QUICK_START_COPY.errorFallback,
 } as const satisfies Record<DevQuickStartErrorCode, string>;
 
 class DevQuickStartError extends TaggedError("DevQuickStartError")<{
@@ -138,16 +135,6 @@ const createOrganization = async ({
   }
 
   return organizationId;
-};
-
-const seedSkills = async (organizationId: string) => {
-  const response = await api.dev["seed-skills"].post({ organizationId });
-  if (response.error) {
-    throw new DevQuickStartError({
-      code: DEV_QUICK_START_ERROR.seed,
-      message: "The default skills could not be installed.",
-    });
-  }
 };
 
 const startMatterImport = async (
@@ -322,7 +309,6 @@ export const DevQuickStartContinuation = ({
           },
           onPhase: setPhase,
           startMatterImport,
-          seedSkills,
         });
         await invalidateSession.mutateAsync();
         clearDevQuickStartAttempt();

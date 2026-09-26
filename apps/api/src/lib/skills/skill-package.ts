@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
 import {
@@ -8,16 +8,20 @@ import {
   parseSkillFile,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import {
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+} from "@stll/skills/package-limits";
 import { Temporal } from "@stll/time";
 
+import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SKILL_FILE_NAME = "SKILL.md";
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_DISCOVERY_TIMEOUT_MS = 30_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
@@ -63,7 +67,7 @@ export const githubSkillFetchHeaders = ({
 
 export type ParsedSkillResource = {
   content: string;
-  kind: PersistedSkillResourceKind;
+  kind: SkillResourceKind;
   path: string;
   sizeBytes: number;
 };
@@ -71,7 +75,6 @@ export type ParsedSkillResource = {
 export type ParsedSkillPackage = {
   body: string;
   compatibility: string | null;
-  contentHash: string;
   description: string;
   entrypointHash: string;
   license: string | null;
@@ -80,6 +83,43 @@ export type ParsedSkillPackage = {
   resources: ParsedSkillResource[];
   sourceUrl: string | null;
   version: string | null;
+};
+
+/** Why an uploaded package file was left out of the installed skill. */
+export const SKIPPED_SKILL_FILE_REASON = {
+  OUTSIDE_SKILL_FOLDER: "outside-skill-folder",
+  UNSUPPORTED_FOLDER: "unsupported-folder",
+  UNSUPPORTED_EXTENSION: "unsupported-extension",
+  NOT_UTF8_TEXT: "not-utf8-text",
+} as const;
+
+type SkippedSkillFileReason =
+  (typeof SKIPPED_SKILL_FILE_REASON)[keyof typeof SKIPPED_SKILL_FILE_REASON];
+
+export type SkippedSkillFile = {
+  /** The file's path inside the uploaded package. */
+  path: string;
+  reason: SkippedSkillFileReason;
+};
+
+/**
+ * An uploaded package as parsed, plus the files it contained that the skill
+ * does not keep, so the caller can say what was left out.
+ */
+export type ImportedSkillPackage = ParsedSkillPackage & {
+  skippedFiles: SkippedSkillFile[];
+};
+
+/**
+ * What makes a repeated URL import the same install. A commit-pinned GitHub
+ * source is identified by its pinned URL; any other source by its content, so
+ * a mirror serving identical content replays onto the installed skill.
+ */
+export type UrlReplayIdentity = "content-hash" | "source-url";
+
+/** A package fetched from a URL, carrying how a repeated import replays. */
+export type FetchedSkillPackage = ImportedSkillPackage & {
+  urlReplayIdentity: UrlReplayIdentity;
 };
 
 export type SkillSourceIntegrity =
@@ -108,8 +148,6 @@ export type SkillPackageDiscovery = {
   repositoryUrl: string | null;
   skills: DiscoveredSkillPackage[];
 };
-
-type PersistedSkillResourceKind = Exclude<SkillResourceKind, "other">;
 
 export type SkillFile = {
   content: string;
@@ -192,12 +230,16 @@ export const getOrCreateGithubTreeRequest = ({
   return request;
 };
 
+/**
+ * Parses an uploaded skill pack. Takes a `ScannedFile`, so every upload path
+ * runs the file scan before its bytes reach the parser.
+ */
 export const parseUploadedSkillPackage = async (
-  file: File,
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+  file: ScannedFile,
+): Promise<Result<ImportedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const buffer = await file.arrayBuffer();
+      const buffer = file.bytes;
       if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.skillPack) {
         throw new HandlerError({
           status: 400,
@@ -205,9 +247,12 @@ export const parseUploadedSkillPackage = async (
         });
       }
 
-      const parsed = isZipFile({ buffer, name: file.name })
+      const parsed = isZipFile({ buffer, name: file.fileName })
         ? await parseZipSkillPackage(buffer)
-        : parseMarkdownSkillPackage(decodeUtf8(buffer));
+        : {
+            ...parseMarkdownSkillPackage(decodeUtf8(buffer)),
+            skippedFiles: [],
+          };
       return { ...parsed, sourceUrl: null };
     },
     catch: toHandlerError,
@@ -216,19 +261,20 @@ export const parseUploadedSkillPackage = async (
 export const fetchSkillPackageFromUrl = async (
   rawUrl: string,
   context = createSkillPackageFetchContext(),
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+): Promise<Result<FetchedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
-    try: async () => {
+    try: async (): Promise<FetchedSkillPackage> => {
       const githubPath = await parseGithubSkillPath(
         rawUrl,
         context.requestBudget,
       );
       if (githubPath) {
-        return await fetchGithubSkillPackage(
+        const parsed = await fetchGithubSkillPackage(
           githubPath,
           redactSkillSourceUrlForStorage(rawUrl),
           context,
         );
+        return { ...parsed, urlReplayIdentity: "source-url" };
       }
 
       const url = new URL(rawUrl);
@@ -244,8 +290,15 @@ export const fetchSkillPackageFromUrl = async (
         path: url.pathname,
       })
         ? await parseZipSkillPackage(response.body)
-        : parseMarkdownSkillPackage(decodeUtf8(response.body));
-      return { ...parsed, sourceUrl: redactSkillSourceUrlForStorage(rawUrl) };
+        : {
+            ...parseMarkdownSkillPackage(decodeUtf8(response.body)),
+            skippedFiles: [],
+          };
+      return {
+        ...parsed,
+        sourceUrl: redactSkillSourceUrlForStorage(rawUrl),
+        urlReplayIdentity: "content-hash",
+      };
     },
     catch: toHandlerError,
   });
@@ -256,14 +309,16 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async ({
-  fetchFiles = async (skillTarget) =>
-    await fetchGithubSkillFiles(skillTarget, {
+  fetchFiles = async (skillTarget) => {
+    const { files } = await fetchGithubSkillFiles(skillTarget, {
       githubAccess: {
         source: "catalogue",
         ...(githubToken ? { githubToken } : {}),
       },
       githubTrees: new Map(),
-    }),
+    });
+    return files;
+  },
   githubToken,
   sourceUrl,
   target,
@@ -311,7 +366,7 @@ export const discoverSkillPackagesFromUrl = async (
             toDiscoveredSkill({
               integrity: {
                 type: "content-hash",
-                value: parsed.value.contentHash,
+                value: hashSkillPackageContent(parsed.value),
               },
               parsed: parsed.value,
               sourceUrl: rawUrl,
@@ -334,9 +389,58 @@ const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
     },
   ]);
 
+type ZipPackageEntry = {
+  file: JSZip.JSZipObject;
+  path: string;
+};
+
+type PackagePathVerdict =
+  | { type: "entrypoint" }
+  | { type: "resource" }
+  | { type: "skipped"; reason: SkippedSkillFileReason };
+
+/**
+ * Decides from the path alone whether a package file becomes part of the
+ * skill, so files the skill never keeps are not downloaded, inflated or
+ * decoded. Zip uploads, zip URLs and GitHub folders all classify through it.
+ */
+const classifyPackageFilePath = ({
+  path,
+  rootPrefix,
+  skillFilePath,
+}: {
+  path: string;
+  rootPrefix: string;
+  skillFilePath: string;
+}): PackagePathVerdict => {
+  if (path === skillFilePath) {
+    return { type: "entrypoint" };
+  }
+  if (!path.startsWith(rootPrefix)) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.OUTSIDE_SKILL_FOLDER,
+    };
+  }
+  const relativePath = path.slice(rootPrefix.length);
+  if (getSkillResourceKind(relativePath) === null) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_FOLDER,
+    };
+  }
+  if (!isAllowedResourcePath(relativePath)) {
+    return {
+      type: "skipped",
+      reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_EXTENSION,
+    };
+  }
+  return { type: "resource" };
+};
+
 const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
-): Promise<ParsedSkillPackage> => {
+): Promise<ImportedSkillPackage> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files);
@@ -347,15 +451,34 @@ const parseZipSkillPackage = async (
     });
   }
 
-  const files: SkillFile[] = [];
-  let totalUncompressedBytes = 0;
-
+  const packageEntries: ZipPackageEntry[] = [];
   for (const file of entries) {
     if (file.dir || file.name.startsWith("__MACOSX/")) {
       continue;
     }
     const normalizedPath = normalizePackageFilePath(file.name);
     if (!normalizedPath) {
+      continue;
+    }
+    packageEntries.push({ file, path: normalizedPath });
+  }
+
+  const skillFilePath = findSkillFilePath(
+    packageEntries.map((entry) => entry.path),
+  );
+  const rootPrefix = skillFolderPrefix(skillFilePath);
+  const files: SkillFile[] = [];
+  const skippedFiles: SkippedSkillFile[] = [];
+  let totalUncompressedBytes = 0;
+
+  for (const { file, path } of packageEntries) {
+    const verdict = classifyPackageFilePath({
+      path,
+      rootPrefix,
+      skillFilePath,
+    });
+    if (verdict.type === "skipped") {
+      skippedFiles.push({ path, reason: verdict.reason });
       continue;
     }
 
@@ -368,14 +491,22 @@ const parseZipSkillPackage = async (
     totalUncompressedBytes += bytes.byteLength;
     assertZipUncompressedLimit(totalUncompressedBytes);
 
-    files.push({
-      content: decodeUtf8(bytes),
-      path: normalizedPath,
-      sizeBytes: bytes.byteLength,
-    });
+    // SKILL.md must be text; a resource that is not (a binary asset) is left
+    // out and reported rather than failing the whole package.
+    const content =
+      verdict.type === "entrypoint" ? decodeUtf8(bytes) : tryDecodeUtf8(bytes);
+    if (content === null) {
+      skippedFiles.push({
+        path,
+        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
+      });
+      continue;
+    }
+
+    files.push({ content, path, sizeBytes: bytes.byteLength });
   }
 
-  return parseSkillFiles(files);
+  return { ...parseSkillFiles(files), skippedFiles };
 };
 
 const assertZipUncompressedLimit = (totalBytes: number) => {
@@ -391,19 +522,24 @@ const assertZipUncompressedLimit = (totalBytes: number) => {
 
 const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   const skillFile = findSkillFile(files);
-  const rootPrefix =
-    skillFile.path === SKILL_FILE_NAME
-      ? ""
-      : skillFile.path.slice(0, -SKILL_FILE_NAME.length);
+  const rootPrefix = skillFolderPrefix(skillFile.path);
   const relativeSkillSource = skillFile.content;
-  const parsed = parseSkillFile(relativeSkillSource);
+  const parsedFile = parseSkillFile(relativeSkillSource);
+  if (parsedFile.isErr()) {
+    throw new HandlerError({
+      status: 400,
+      message: parsedFile.error.message,
+      cause: parsedFile.error,
+    });
+  }
+  const parsed = parsedFile.value;
   const name = parsed.metadata.name;
 
   if (!SKILL_NAME_PATTERN.test(name)) {
     throw new HandlerError({
       status: 400,
       message:
-        "Skill name must use lowercase letters, digits, and hyphens only",
+        "Skill name must use lowercase letters and digits, joined by single hyphens",
     });
   }
   assertFrontmatterLimits(parsed.metadata);
@@ -418,15 +554,8 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   return {
     body: parsed.body,
     compatibility: parsed.metadata.compatibility ?? null,
-    contentHash: hashSkillPackage({
-      resources,
-      source: relativeSkillSource,
-    }),
     description: parsed.metadata.description,
-    entrypointHash: hashSkillPackage({
-      resources: [],
-      source: relativeSkillSource,
-    }),
+    entrypointHash: hashSkillEntrypoint(relativeSkillSource),
     license: parsed.metadata.license ?? null,
     metadata: parsed.metadata.metadata ?? {},
     name,
@@ -436,20 +565,32 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
   };
 };
 
-const findSkillFile = (files: readonly SkillFile[]): SkillFile => {
-  const candidates = files
+/** The shallowest SKILL.md in the package is its entry point. */
+const findSkillFilePath = (paths: readonly string[]): string => {
+  const skillFilePath = paths
     .filter(
-      (file) =>
-        file.path === SKILL_FILE_NAME ||
-        file.path.endsWith(`/${SKILL_FILE_NAME}`),
+      (path) =>
+        path === SKILL_FILE_NAME || path.endsWith(`/${SKILL_FILE_NAME}`),
     )
-    .toSorted((a, b) => a.path.length - b.path.length);
-  const skillFile = candidates.at(0);
-  if (!skillFile) {
+    .toSorted((a, b) => a.length - b.length)
+    .at(0);
+  if (skillFilePath === undefined) {
     throw new HandlerError({
       status: 400,
       message: "Skill pack must include SKILL.md",
     });
+  }
+  return skillFilePath;
+};
+
+const skillFolderPrefix = (skillFilePath: string): string =>
+  skillFilePath.slice(0, -SKILL_FILE_NAME.length);
+
+const findSkillFile = (files: readonly SkillFile[]): SkillFile => {
+  const skillFilePath = findSkillFilePath(files.map((file) => file.path));
+  const skillFile = files.find((file) => file.path === skillFilePath);
+  if (!skillFile) {
+    return panic("The chosen SKILL.md path is one of the package files");
   }
   return skillFile;
 };
@@ -495,7 +636,7 @@ const collectResources = ({
       });
     }
 
-    const kind = persistedSkillResourceKind(normalizedPath);
+    const kind = getSkillResourceKind(normalizedPath);
     if (!kind) {
       continue;
     }
@@ -614,41 +755,27 @@ const assertFrontmatterMetadata = (
   }
 };
 
-const persistedSkillResourceKind = (
-  path: string,
-): PersistedSkillResourceKind | null => {
-  const kind = getSkillResourceKind(path);
-  switch (kind) {
-    case "asset":
-    case "knowledge":
-    case "prompt":
-    case "reference":
-    case "script":
-    case "template":
-      return kind;
-    case "other":
-    case null:
-      return null;
-    default:
-      return null;
-  }
-};
-
 const fetchGithubSkillPackage = async (
   target: GithubSkillPath,
   originalUrl: string,
   context: SkillPackageFetchContext,
-): Promise<ParsedSkillPackage> => {
-  const files = await fetchGithubSkillFiles(target, context);
+): Promise<ImportedSkillPackage> => {
+  const { files, skippedFiles } = await fetchGithubSkillFiles(target, context);
   const parsed = parseSkillFiles(files);
-  return { ...parsed, sourceUrl: originalUrl };
+  return { ...parsed, skippedFiles, sourceUrl: originalUrl };
+};
+
+type GithubSkillFiles = {
+  files: SkillFile[];
+  skippedFiles: SkippedSkillFile[];
 };
 
 const fetchGithubSkillFiles = async (
   target: GithubSkillPath,
   context: SkillPackageFetchContext,
-): Promise<SkillFile[]> => {
+): Promise<GithubSkillFiles> => {
   const files: SkillFile[] = [];
+  const skippedFiles: SkippedSkillFile[] = [];
   let totalFileBytes = 0;
   let resourceCount = 0;
   const resourcePaths = new Set<string>();
@@ -674,11 +801,16 @@ const fetchGithubSkillFiles = async (
       continue;
     }
     const normalizedPath = normalizePackageFilePath(relativePath);
-    if (
-      !normalizedPath ||
-      (normalizedPath !== SKILL_FILE_NAME &&
-        !isAllowedResourcePath(normalizedPath))
-    ) {
+    if (!normalizedPath) {
+      continue;
+    }
+    const verdict = classifyPackageFilePath({
+      path: normalizedPath,
+      rootPrefix: "",
+      skillFilePath: SKILL_FILE_NAME,
+    });
+    if (verdict.type === "skipped") {
+      skippedFiles.push({ path: normalizedPath, reason: verdict.reason });
       continue;
     }
 
@@ -718,14 +850,27 @@ const fetchGithubSkillFiles = async (
     totalFileBytes += raw.body.byteLength;
     assertGithubTotalFileBytes(totalFileBytes);
 
+    // SKILL.md must be text; a resource that is not is left out and
+    // reported, as a zip upload does.
+    const content =
+      verdict.type === "entrypoint"
+        ? decodeUtf8(raw.body)
+        : tryDecodeUtf8(raw.body);
+    if (content === null) {
+      skippedFiles.push({
+        path: normalizedPath,
+        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
+      });
+      continue;
+    }
     files.push({
-      content: decodeUtf8(raw.body),
+      content,
       path: normalizedPath,
       sizeBytes: raw.body.byteLength,
     });
   }
 
-  return files;
+  return { files, skippedFiles };
 };
 
 const fetchGithubTreeOnce = async ({
@@ -786,7 +931,18 @@ const fetchGithubTreeOnce = async ({
         });
       },
     });
-    return [{ path: selectedSkillPath, type: "blob" }, ...resourceTrees.flat()];
+    // Files beside SKILL.md are listed so the import can report them; the
+    // folders that hold no resources are never listed.
+    const siblingFiles = directoryTree.filter(
+      (item) =>
+        (item.type === "blob" || item.type === "file") &&
+        item.path !== selectedSkillPath,
+    );
+    return [
+      { path: selectedSkillPath, type: "blob" },
+      ...siblingFiles,
+      ...resourceTrees.flat(),
+    ];
   }
 
   return await fetchGithubScopedTree({
@@ -1158,13 +1314,8 @@ const normalizePackageFilePath = (path: string): string | null => {
   }
 };
 
-const hashSkillPackage = ({
-  resources,
-  source,
-}: {
-  resources: readonly ParsedSkillResource[];
-  source: string;
-}) => {
+// Identifies the SKILL.md a GitHub preview showed, independent of resources.
+const hashSkillEntrypoint = (source: string) => {
   const hasher = new Bun.CryptoHasher("sha256");
   const updateField = (value: string) => {
     const bytes = UTF8_ENCODER.encode(value);
@@ -1173,11 +1324,7 @@ const hashSkillPackage = ({
   };
   updateField("stella-skill-package-v1");
   updateField(source);
-  updateField(String(resources.length));
-  for (const resource of resources) {
-    updateField(resource.path);
-    updateField(resource.content);
-  }
+  updateField("0");
   return hasher.digest("hex");
 };
 
@@ -1367,16 +1514,18 @@ export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
   return url.toString();
 };
 
+const parseSkillUrl = (rawUrl: string): URL => {
+  if (!URL.canParse(rawUrl)) {
+    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
+  }
+  return new URL(rawUrl);
+};
+
 const parseGithubSkillPath = async (
   rawUrl: string,
   budget?: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
-  }
+  const url = parseSkillUrl(rawUrl);
 
   if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
     return null;
@@ -1424,12 +1573,7 @@ const parseGithubDiscoveryPath = async (
   rawUrl: string,
   budget: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
-  }
+  const url = parseSkillUrl(rawUrl);
 
   if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
     return null;
@@ -1602,7 +1746,7 @@ export const verifySkillPackageIntegrity = ({
 }): Result<void, HandlerError> => {
   switch (integrity.type) {
     case "content-hash":
-      if (integrity.value === parsed.contentHash) {
+      if (integrity.value === hashSkillPackageContent(parsed)) {
         return Result.ok(undefined);
       }
       break;
@@ -1974,6 +2118,9 @@ const isZipFile = ({
     bytes.at(3) === 0x04
   );
 };
+
+const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null =>
+  Result.try(() => UTF8_DECODER.decode(buffer)).unwrapOr(null);
 
 const decodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string => {
   try {

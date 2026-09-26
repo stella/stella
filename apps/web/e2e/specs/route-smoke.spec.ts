@@ -119,15 +119,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   // Reachable in dev/staging (playbooks preview gate is open there); redirects
   // to /knowledge only in production where the flag is off.
   staticRoute("/knowledge/playbooks"),
-  staticRoute("/knowledge/mcp", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=mcp" },
-  }),
-  staticRoute("/knowledge/prompts", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  }),
-  staticRoute("/knowledge/skills", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  }),
   staticRoute("/knowledge/styles"),
   staticRoute("/knowledge/templates"),
   staticRoute("/knowledge/tools"),

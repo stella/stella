@@ -38590,7 +38590,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         description: {
                           minLength: 1,
-                          maxLength: 1000,
+                          maxLength: 1024,
                           type: "string",
                         },
                         body: {
@@ -38865,7 +38865,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "from-url-import"],
                 capabilityId: "skills.from-url.import",
                 description:
-                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
+                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Importing an unchanged package again returns the skill it installed. The result lists the package files the skill does not keep (skippedFiles: path and reason). Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
                 access: "write",
                 flags: [
                   {
@@ -38964,7 +38964,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "import"],
                 capabilityId: "skills.import",
                 description:
-                  "Import one or more discovered skills from source URLs into the selected scope.",
+                  "Import one or more discovered skills from source URLs into the selected scope. Each installed skill lists the package files it does not keep (skippedFiles: path and reason).",
                 access: "write",
                 flags: [
                   {
@@ -39077,7 +39077,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "list"],
                 capabilityId: "skills.list",
                 description:
-                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination, alongside the deployment's built-in skills. Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
+                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination. Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -39445,7 +39445,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "proposals-review"],
                 capabilityId: "skills.proposals.review",
                 description:
-                  "Accept or reject a change proposal for an agent skill. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
+                  "Accept or reject a change proposal for an agent skill that its author has submitted for review (status proposed); a draft is a 409. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
                 access: "write",
                 flags: [
                   {
@@ -40133,32 +40133,13 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            seed: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "skills", "seed"],
-                capabilityId: "skills.seed",
-                description:
-                  "Install the four default slash-command skills (summarize, risks, compare, draft) as private skills for the signed-in user in the active organization. Returns seeded false and writes nothing when that user already has any authored skill with a command in this organization, so defaults someone deleted are not put back.",
-                access: "write",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
             update: {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "skills", "update"],
                 capabilityId: "skills.update",
                 description:
-                  "Change an agent skill: enable or disable it, or edit its name, description, instruction body, version, or slash command. Pass command as null to clear it; at least one field is required. Enabling and disabling works on any skill you may manage, but editing the content of a bundled skill is refused. A rename also moves the slug, and a name or command already taken in the organization is a 409.",
+                  "Change an agent skill: enable or disable it, or edit its name, description, instruction body, version, or slash command. Pass command as null to clear it; at least one field is required. Enabling and disabling works on any skill you may manage, but editing the content of a bundled skill is refused. A rename derives a new unique slug from the name; a command already taken in the organization is a 409.",
                 access: "write",
                 flags: [
                   {
@@ -40245,7 +40226,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         description: {
                           minLength: 1,
-                          maxLength: 1000,
+                          maxLength: 1024,
                           type: "string",
                         },
                         body: {

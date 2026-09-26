@@ -91,7 +91,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
-import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -158,7 +158,7 @@ function ChatIndex() {
   const controller = useChatEditor({
     threadRef,
   });
-  const prompts = useSavedPrompts();
+  const suggestedSkills = useSuggestedSkills();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -634,15 +634,16 @@ function ChatIndex() {
         heading={
           <Link
             className={LANDING_SECTION_HEADING_CLASS}
-            to="/knowledge/prompts"
+            search={{ kind: "skill" }}
+            to="/knowledge/tools"
           >
             <BookOpenIcon className="size-4" />
-            {t("chat.landing.prompts")}
+            {t("chat.landing.skills")}
           </Link>
         }
       >
-        {prompts.length > 0 ? (
-          prompts.map((prompt) => (
+        {suggestedSkills.length > 0 ? (
+          suggestedSkills.map((prompt) => (
             <LandingButton
               icon={<SlashPromptIcon />}
               key={prompt.id}
@@ -652,7 +653,7 @@ function ChatIndex() {
             />
           ))
         ) : (
-          <LandingEmpty>{t("chat.landing.noPrompts")}</LandingEmpty>
+          <LandingEmpty>{t("chat.landing.noSkills")}</LandingEmpty>
         )}
       </LandingSection>
       <LandingSection

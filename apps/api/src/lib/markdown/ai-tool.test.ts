@@ -78,6 +78,28 @@ describe("ai tool", () => {
     );
   });
 
+  test("a skill link survives the editor round trip as a skill chip", () => {
+    const stored: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: 'Apply [NDA "review"](#stella-skill-ref=nda-review) here.\n',
+      dependencies: [],
+    };
+
+    const deserialized = deserializeAITool(stored);
+    const $ = cheerio.load(deserialized.prompt, undefined, false);
+    const chip = $("pasted-text");
+    expect(chip.attr("data-source")).toBe("skill");
+    expect(chip.attr("data-label")).toBe('NDA "review"');
+    expect(chip.text()).toBe("nda-review");
+
+    // The editor renders a skill chip as the link inside its element.
+    chip.html('<a href="#stella-skill-ref=nda-review">NDA "review"</a>');
+    expect(serializeAITool({ ...stored, prompt: $.html() }).prompt).toBe(
+      stored.prompt,
+    );
+  });
+
   test("deserialize escapes generated mention-component attributes", () => {
     const toolWithHostileLinkText: AITool = {
       version: 1,

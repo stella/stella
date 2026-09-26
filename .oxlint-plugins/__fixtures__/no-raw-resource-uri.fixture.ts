@@ -22,6 +22,9 @@ export const rawStaticHref = "#stella-entity=entity_1";
 export const rawTemplateHref = `#stella-entity=${entityId}`;
 
 // oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri -- regression case
+export const rawSkillRefHref = `#stella-skill-ref=${entityId}`;
+
+// oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri -- regression case
 export const rawPrefixTemplateHref = `${CHAT_RESOURCE_HREF_PREFIX.entity}${entityId}`;
 
 // oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri -- regression case proves imported aliases retain prefix provenance

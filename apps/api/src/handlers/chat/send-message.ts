@@ -97,6 +97,7 @@ import {
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
+import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
 import {
   compactMessagesForContext,
   markChatCompactionDue,
@@ -1323,6 +1324,43 @@ const prepareValidatedIncomingMessage = async ({
     });
   });
 
+type AssembleTurnSystemPromptOptions = {
+  chatContext: {
+    systemSafe: ChatSafePrompt;
+    systemUntrusted: ChatUntrustedPromptSuffix;
+  };
+  externalMcpTools: LoadedExternalMcpTools | undefined;
+  requestedSkillsPrompt: string;
+  sendMode: ChatSendMode;
+};
+
+// The "safe" half is whatever the prompt builder declared safe. The
+// anonymized-mode hint is a fixed assembler-owned addition, so callers cannot
+// brand arbitrary strings as safe. The external MCP catalog is
+// organization/user-configured text and requested skill bodies are
+// user-authored, so both ride with the dynamic suffix and cross the boundary
+// in anonymized mode.
+const assembleTurnSystemPrompt = ({
+  chatContext,
+  externalMcpTools,
+  requestedSkillsPrompt,
+  sendMode,
+}: AssembleTurnSystemPromptOptions) => ({
+  systemSafe:
+    sendMode === CHAT_SEND_MODE.anonymized
+      ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
+      : chatContext.systemSafe,
+  systemUntrusted: extendChatUntrustedPromptSuffix(
+    chatContext.systemUntrusted,
+    [
+      buildExternalMcpSystemHint(
+        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
+      ),
+      requestedSkillsPrompt,
+    ],
+  ),
+});
+
 export type SendMessageDependencies = {
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
@@ -1898,6 +1936,24 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
+        // Reads the assistant makes without an approval, such as a skill
+        // loaded by `load-skill`.
+        const recordReadAuditEvent = createAuditRecorder({
+          execution: {
+            performer: {
+              type: "agent",
+              id: "stella-assistant",
+              name: "Stella AI",
+            },
+            trigger: {
+              type: "user_dispatch",
+              userId: user.id,
+              source: "chat",
+              sourceId: body.threadId,
+            },
+            runId: parsedMessage.message.id,
+          },
+        });
         const chatTools = getChatTools({
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -1961,6 +2017,7 @@ export const createSendMessage = (
             },
             ...(workspaceId === null ? {} : { workspaceId }),
           }),
+          recordReadAuditEvent,
           resolveMemorySourceWorkspaceIds: () =>
             resolveMemorySourceWorkspaceIds({
               accessibleWorkspaceIds: accessibleSet,
@@ -1995,23 +2052,25 @@ export const createSendMessage = (
               : restrictChatToolsToScope(chatTools, body.toolScope),
         });
 
-        const externalMcpSystemHint = buildExternalMcpSystemHint(
-          externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-        );
-        // The "safe" half is whatever the prompt builder declared
-        // safe. The anonymized-mode hint is a fixed assembler-owned
-        // addition, so callers cannot brand arbitrary strings as safe.
-        // The external MCP catalog is organization/user-configured text,
-        // so it rides with the dynamic suffix and crosses the boundary in
-        // anonymized mode.
-        const systemSafe =
-          body.sendMode === CHAT_SEND_MODE.anonymized
-            ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
-            : chatContext.systemSafe;
-        const systemUntrusted = extendChatUntrustedPromptSuffix(
-          chatContext.systemUntrusted,
-          [externalMcpSystemHint],
-        );
+        const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
+          activeSkillContext: chatContext.activeSkillContext,
+          catalog: chatContext.skillMetadata,
+          messages: chatContext.hydratedMessages,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent: recordReadAuditEvent,
+          safeDb,
+          userId: user.id,
+        });
+        if (Result.isError(requestedSkillsPrompt)) {
+          await lifecycle.failCurrentTurn("internal", true);
+          return Result.err(requestedSkillsPrompt.error);
+        }
+        const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
+          chatContext,
+          externalMcpTools,
+          requestedSkillsPrompt: requestedSkillsPrompt.value,
+          sendMode: body.sendMode,
+        });
 
         // A normal chat hands loaded clients to the stream. Agent runs leave
         // this false so the outer finally closes any validation-only load.

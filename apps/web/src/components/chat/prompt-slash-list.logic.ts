@@ -1,6 +1,6 @@
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 
-const SECTION_ORDER = ["private", "team", "built-in"] as const;
+const SECTION_ORDER = ["private", "team", "commands"] as const;
 
 export type SlashSectionKey = (typeof SECTION_ORDER)[number];
 
@@ -11,7 +11,7 @@ export type SlashItemGroup = {
 
 const getSectionKey = (item: SlashItem): SlashSectionKey => {
   if (item.kind === "command") {
-    return "built-in";
+    return "commands";
   }
   return item.kind === "prompt" ? item.prompt.scope : item.skill.scope;
 };

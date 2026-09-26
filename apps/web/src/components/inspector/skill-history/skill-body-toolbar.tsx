@@ -23,7 +23,7 @@ type SkillBodyToolbarProps = {
   proposals: readonly SkillProposalSummary[];
   openProposalId: string | null;
   onOpenProposal: (proposalId: string) => void;
-  /** Bundled and built-in bodies are replaced on update, so they take no proposals. */
+  /** Bundled bodies are replaced on update, so they take no proposals. */
   isProposable: boolean;
   onPropose: () => void;
 };

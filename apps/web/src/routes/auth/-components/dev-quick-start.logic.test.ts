@@ -45,10 +45,6 @@ describe("runDevQuickStart", () => {
         expect(organizationId).toBe(ORGANIZATION_ID);
         calls.push("matters");
       },
-      seedSkills: async (organizationId) => {
-        expect(organizationId).toBe(ORGANIZATION_ID);
-        calls.push("skills");
-      },
     });
 
     expect(calls).toEqual([
@@ -58,9 +54,6 @@ describe("runDevQuickStart", () => {
       `phase:${DEV_QUICK_START_PHASE.organization}`,
       "organization",
       `completed:${DEV_QUICK_START_PHASE.organization}`,
-      `phase:${DEV_QUICK_START_PHASE.skills}`,
-      "skills",
-      `completed:${DEV_QUICK_START_PHASE.skills}`,
       `phase:${DEV_QUICK_START_PHASE.matters}`,
       "matters",
       `completed:${DEV_QUICK_START_PHASE.matters}`,
@@ -85,9 +78,6 @@ describe("runDevQuickStart", () => {
         onPhase: () => undefined,
         startMatterImport: async () => {
           calls.push("matters");
-        },
-        seedSkills: async () => {
-          calls.push("skills");
         },
       }),
     ).rejects.toThrow("organization failed");
@@ -129,10 +119,6 @@ describe("runDevQuickStart", () => {
             throw new Error("import failed");
           }
         },
-        seedSkills: async (organizationId) => {
-          expect(organizationId).toBe(ORGANIZATION_ID);
-          calls.push("skills");
-        },
       });
 
     const firstRun = await run().then(
@@ -150,7 +136,6 @@ describe("runDevQuickStart", () => {
     expect(calls).toEqual([
       "authenticate",
       "organization",
-      "skills",
       "matters",
       "matters",
     ]);
@@ -175,11 +160,8 @@ describe("runDevQuickStart", () => {
       startMatterImport: async (_identity, organizationId) => {
         seededOrganizations.push(organizationId);
       },
-      seedSkills: async (organizationId) => {
-        seededOrganizations.push(organizationId);
-      },
     });
 
-    expect(seededOrganizations).toEqual([ORGANIZATION_ID, ORGANIZATION_ID]);
+    expect(seededOrganizations).toEqual([ORGANIZATION_ID]);
   });
 });

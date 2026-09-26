@@ -2,6 +2,8 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 
+import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+
 import { ChatPastedTextNode } from "@/components/chat-pasted-text-node";
 
 export const PASTED_TEXT_NODE_NAME = "pastedText";
@@ -12,7 +14,6 @@ export const PASTED_TEXT_SOURCES = [
   "skill",
   "command",
 ] as const;
-export const SKILL_CHIP_HREF_PREFIX = "#stella-skill-ref=";
 export type PastedTextSource = (typeof PASTED_TEXT_SOURCES)[number];
 
 export type PastedTextAttrs = {
@@ -164,7 +165,7 @@ export const PastedText = Node.create({
       return [
         "pasted-text",
         mergeAttributes(HTMLAttributes),
-        ["a", { href: `${SKILL_CHIP_HREF_PREFIX}${text}` }, label],
+        ["a", { href: `${SKILL_REF_HREF_PREFIX}${text}` }, label],
       ];
     }
     return [
@@ -186,7 +187,7 @@ export const PastedText = Node.create({
         node.attrs["label"].length > 0
           ? node.attrs["label"]
           : text;
-      return `[${label}](${SKILL_CHIP_HREF_PREFIX}${text})`;
+      return `[${label}](${SKILL_REF_HREF_PREFIX}${text})`;
     }
     return text;
   },

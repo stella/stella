@@ -37,7 +37,7 @@ const config = {
     "owner. The skill is stored as bundled content, so it cannot be edited " +
     "afterwards. Refused when that slug is already installed at the same " +
     "scope, or when the scope's skill limit is reached.",
-  permissions: { organizationSettings: ["update"] },
+  permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: installSkillBody,
 } satisfies HandlerConfig;

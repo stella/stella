@@ -1,10 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -46,20 +46,17 @@ const buildParsedBlueprint = (
     return null;
   }
 
-  const { body, metadata } = parseSkillFile(blueprint.source);
-  const contentHash = hashAuthoredSkillContent({
-    body,
-    description: metadata.description,
-    name: metadata.name,
-    version: metadata.version,
-  });
+  const parsed = parseSkillFile(blueprint.source);
+  if (parsed.isErr()) {
+    return panic(`Blueprint skill file is invalid: ${parsed.error.message}`);
+  }
+  const { body, metadata } = parsed.value;
 
   return {
     body,
     compatibility: metadata.compatibility ?? null,
-    contentHash,
     description: metadata.description,
-    entrypointHash: contentHash,
+    entrypointHash: skillTextSha256(blueprint.source),
     license: metadata.license ?? null,
     metadata: { blueprintId: blueprint.id },
     name: metadata.name,

@@ -9,6 +9,8 @@ import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
+import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
+import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -30,7 +32,7 @@ const updateSkillProposalBodySchema = t.Object({
     t.String({ maxLength: LIMITS.agentSkillProposalSummaryMaxChars }),
   ),
   // Authoring statuses only: a decision is made through
-  // skills.proposals.decide, never by writing the status here.
+  // skills.proposals.review, never by writing the status here.
   status: t.Optional(t.Union([t.Literal("draft"), t.Literal("proposed")])),
 });
 
@@ -56,7 +58,7 @@ type ProposalUpdateFields = {
 type ProposalUpdateChange<T> = { old: T; new: T };
 
 type ProposalUpdateChanges = {
-  body?: ProposalUpdateChange<string>;
+  body?: ProposalUpdateChange<AuditedSkillBody>;
   summary?: ProposalUpdateChange<string>;
   status?: ProposalUpdateChange<AgentSkillProposalStatus>;
 };
@@ -87,12 +89,9 @@ const updateSkillProposal = createSafeRootHandler(
 
     yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        // Locked because a concurrent decide on the same skill would
-        // otherwise decide the proposal between this read and the write.
         const skill = await loadVisibleSkill(tx, {
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
-          lock: "update",
         });
 
         const rows = await tx
@@ -114,7 +113,11 @@ const updateSkillProposal = createSafeRootHandler(
               ),
             ),
           )
-          .limit(1);
+          .limit(1)
+          // Locks the proposal, not the skill: its author may be a member who
+          // cannot write the skill row. Deciding locks the same row, so a
+          // concurrent decide cannot land between this read and the write.
+          .for("update");
 
         const existing = rows.at(0);
         if (!existing) {
@@ -141,7 +144,10 @@ const updateSkillProposal = createSafeRootHandler(
         const changes: ProposalUpdateChanges = {};
         if (body.body !== undefined && body.body !== existing.body) {
           updates.body = body.body;
-          changes.body = { old: existing.body, new: body.body };
+          changes.body = {
+            old: auditedSkillBody(existing.body),
+            new: auditedSkillBody(body.body),
+          };
         }
         if (body.summary !== undefined && body.summary !== existing.summary) {
           updates.summary = body.summary;

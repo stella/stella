@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { agentSkillRevisions } from "@/api/db/schema";
@@ -7,14 +7,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 type LatestSkillRevisionOptions = {
   skillId: SafeId<"agentSkill">;
   organizationId: SafeId<"organization">;
-  /**
-   * Hold a share lock on the row for the rest of the transaction. Anything
-   * that anchors to the revision (a proposal, a comment) takes it so the
-   * revision trigger, which locks the latest row for update before
-   * coalescing a save into it, serializes behind the anchor instead of
-   * rewriting the body underneath it.
-   */
-  lock?: "share";
 };
 
 type LatestSkillRevision = {
@@ -29,9 +21,9 @@ type LatestSkillRevision = {
  */
 export const loadLatestSkillRevision = async (
   tx: Transaction,
-  { skillId, organizationId, lock }: LatestSkillRevisionOptions,
+  { skillId, organizationId }: LatestSkillRevisionOptions,
 ): Promise<LatestSkillRevision | undefined> => {
-  const query = tx
+  const rows = await tx
     .select({
       id: agentSkillRevisions.id,
       revisionNumber: agentSkillRevisions.revisionNumber,
@@ -46,7 +38,20 @@ export const loadLatestSkillRevision = async (
     )
     .orderBy(desc(agentSkillRevisions.revisionNumber))
     .limit(1);
-  const rows = lock === "share" ? await query.for("share") : await query;
 
   return rows.at(0);
+};
+
+/**
+ * Keep saves out of a skill until this transaction ends. Anything that anchors
+ * to a revision (a proposal, a comment) takes it before reading the revision:
+ * the revision trigger coalesces a save into the latest revision only while
+ * nothing references it, and every save updates the skill row this locks. The
+ * database function checks the caller can see the skill and refuses otherwise.
+ */
+export const lockSkillForAnchor = async (
+  tx: Transaction,
+  skillId: SafeId<"agentSkill">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT lock_agent_skill_for_anchor(${skillId})`);
 };

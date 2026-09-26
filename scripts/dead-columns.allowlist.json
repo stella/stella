@@ -1,10 +1,5 @@
 [
   {
-    "table": "agent_skills",
-    "column": "autoInvokeHint",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "ai_memories",
     "column": "supersededById",
     "reason": "unreferenced as of 2026-09-02; decide: wire or drop"

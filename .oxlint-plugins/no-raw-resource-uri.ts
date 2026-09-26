@@ -1,6 +1,8 @@
 // Resource names and chat links carry opaque IDs. Constructing either format
 // outside its canonical serializer can skip strict component encoding and
-// break persistence or Markdown parsing for valid IDs.
+// break persistence or Markdown parsing for valid IDs. The skill-ref chip link
+// prefix has one owner too (SKILL_REF_HREF_PREFIX in @stll/api-contract), so a
+// spelled-out copy cannot drift from what the readers match.
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
@@ -29,8 +31,20 @@ const RESOURCE_URI_PREFIX_BINDINGS = new Set([
   "RESOURCE_NAME_PREFIX",
 ]);
 
+const RAW_SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
+
 const containsRawResourceUriPrefix = (value: string): boolean =>
   RAW_RESOURCE_URI_PREFIXES.some((prefix) => value.includes(prefix));
+
+type RawPrefixMessageId = "rawResourceUri" | "rawSkillRef";
+
+/** Which raw prefix a string spells out, as the message to report. */
+const rawPrefixMessageId = (value: string): RawPrefixMessageId | null => {
+  if (containsRawResourceUriPrefix(value)) {
+    return "rawResourceUri";
+  }
+  return value.includes(RAW_SKILL_REF_HREF_PREFIX) ? "rawSkillRef" : null;
+};
 
 const templateElementText = (value: unknown): string | null => {
   if (!isAstNode(value) || value.type !== "TemplateElement") {
@@ -51,14 +65,25 @@ const templateElementText = (value: unknown): string | null => {
   return typeof raw === "string" ? raw : null;
 };
 
-const templateContainsRawResourceUriPrefix = (node: unknown): boolean =>
-  isAstNode(node) &&
-  node.type === "TemplateLiteral" &&
-  Array.isArray(node.quasis) &&
-  node.quasis.some((quasi) => {
+const templateRawPrefixMessageId = (
+  node: unknown,
+): RawPrefixMessageId | null => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "TemplateLiteral" ||
+    !Array.isArray(node.quasis)
+  ) {
+    return null;
+  }
+  for (const quasi of node.quasis) {
     const text = templateElementText(quasi);
-    return text !== null && containsRawResourceUriPrefix(text);
-  });
+    const messageId = text === null ? null : rawPrefixMessageId(text);
+    if (messageId !== null) {
+      return messageId;
+    }
+  }
+  return null;
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-raw-resource-uri" },
@@ -71,6 +96,9 @@ export default eslintCompatPlugin({
             "Construct resource names with toResourceName() and chat links " +
             "with toChatResourceHref() or toChatMentionResourceHref(); the " +
             "canonical serializers encode opaque IDs safely.",
+          rawSkillRef:
+            "Build skill-ref links from SKILL_REF_HREF_PREFIX in " +
+            "@stll/api-contract instead of spelling the prefix out.",
         },
       },
       createOnce(context) {
@@ -225,9 +253,12 @@ export default eslintCompatPlugin({
           );
         };
 
-        const report = (node: unknown): void => {
+        const report = (
+          node: unknown,
+          messageId: RawPrefixMessageId = "rawResourceUri",
+        ): void => {
           if (isAstNode(node)) {
-            context.report({ node, messageId: "rawResourceUri" });
+            context.report({ node, messageId });
           }
         };
 
@@ -247,20 +278,24 @@ export default eslintCompatPlugin({
             }
           },
           Literal(node) {
-            if (
-              isStringLiteral(node) &&
-              containsRawResourceUriPrefix(node.value)
-            ) {
-              report(node);
+            const messageId = isStringLiteral(node)
+              ? rawPrefixMessageId(node.value)
+              : null;
+            if (messageId !== null) {
+              report(node, messageId);
             }
           },
           TemplateLiteral(node) {
+            const messageId = templateRawPrefixMessageId(node);
+            if (messageId !== null) {
+              report(node, messageId);
+              return;
+            }
             if (
-              templateContainsRawResourceUriPrefix(node) ||
-              (Array.isArray(node.expressions) &&
-                node.expressions.some((expression) =>
-                  referencesResourceUriPrefix(expression),
-                ))
+              Array.isArray(node.expressions) &&
+              node.expressions.some((expression) =>
+                referencesResourceUriPrefix(expression),
+              )
             ) {
               report(node);
             }

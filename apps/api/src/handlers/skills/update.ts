@@ -1,14 +1,19 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import {
   AGENT_SKILL_COMMAND_PATTERN,
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
+import { uniqueSlug } from "@/api/handlers/skills/slug";
+import type { SkillSlug } from "@/api/handlers/skills/slug";
+import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
+import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
+import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -52,8 +57,8 @@ const config = {
     "description, instruction body, version, or slash command. Pass command " +
     "as null to clear it; at least one field is required. Enabling and " +
     "disabling works on any skill you may manage, but editing the content of " +
-    "a bundled skill is refused. A rename also moves the slug, and a name or " +
-    "command already taken in the organization is a 409.",
+    "a bundled skill is refused. A rename derives a new unique slug from the " +
+    "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: updateSkillParamsSchema,
@@ -66,7 +71,7 @@ type SkillUpdateFields = {
   description?: string;
   enabled?: boolean;
   name?: string;
-  slug?: string;
+  slug?: SkillSlug;
   version?: string | null;
   command?: string | null;
 };
@@ -74,7 +79,7 @@ type SkillUpdateFields = {
 type SkillUpdateChange<T> = { old: T; new: T };
 
 type SkillUpdateChanges = {
-  body?: SkillUpdateChange<string>;
+  body?: SkillUpdateChange<AuditedSkillBody>;
   description?: SkillUpdateChange<string>;
   enabled?: SkillUpdateChange<boolean>;
   name?: SkillUpdateChange<string>;
@@ -145,10 +150,11 @@ const buildSkillUpdateDiff = (
     changes.enabled = { old: existing.enabled, new: body.enabled };
   }
   if (body.name !== undefined && body.name !== existing.name) {
+    const slug = uniqueSlug(body.name);
     updates.name = body.name;
-    updates.slug = body.name;
+    updates.slug = slug;
     changes.name = { old: existing.name, new: body.name };
-    changes.slug = { old: existing.slug, new: body.name };
+    changes.slug = { old: existing.slug, new: slug };
   }
   if (
     body.description !== undefined &&
@@ -162,7 +168,10 @@ const buildSkillUpdateDiff = (
   }
   if (body.body !== undefined && body.body !== existing.body) {
     updates.body = body.body;
-    changes.body = { old: existing.body, new: body.body };
+    changes.body = {
+      old: auditedSkillBody(existing.body),
+      new: auditedSkillBody(body.body),
+    };
   }
   if (body.version !== undefined && body.version !== existing.version) {
     updates.version = body.version;
@@ -202,14 +211,16 @@ const updateSkill = createSafeRootHandler(
       );
     }
 
-    const commandValidation = validateRequestedCommand(body.command);
-    if (Result.isError(commandValidation)) {
-      return Result.err(commandValidation.error);
-    }
+    yield* validateRequestedCommand(body.command);
 
-    const existingRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    // Read, decide, and write under one row lock: the diff, the audit's old
+    // values, and the content hash all derive from the row being replaced.
+    // Every refusal is decided before the first write, so returning it
+    // commits nothing.
+    const updateResult = await abortableTx(
+      safeDb,
+      async (tx): Promise<Result<void, HandlerError>> => {
+        const existingRows = await tx
           .select({
             id: agentSkills.id,
             scope: agentSkills.scope,
@@ -230,87 +241,113 @@ const updateSkill = createSafeRootHandler(
               eq(agentSkills.organizationId, session.activeOrganizationId),
             ),
           )
-          .limit(1),
-      ),
-    );
-    const existing = existingRows.at(0);
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Skill not found" }),
-      );
-    }
-
-    yield* requireSkillManager({
-      skill: existing,
-      memberRole,
-      userId: user.id,
-      action: "edit",
-    });
-
-    if (hasMetadataEdit) {
-      yield* requireEditableSkillOrigin(existing.origin);
-    }
-
-    const { updates, changes } = buildSkillUpdateDiff(body, existing);
-
-    if (Object.keys(updates).length === 0) {
-      return Result.ok({ id: params.skillId });
-    }
-
-    if (
-      updates.body !== undefined ||
-      updates.description !== undefined ||
-      updates.name !== undefined ||
-      updates.version !== undefined
-    ) {
-      updates.contentHash = hashAuthoredSkillContent({
-        body: updates.body ?? existing.body,
-        description: updates.description ?? existing.description,
-        name: updates.name ?? existing.name,
-        version:
-          updates.version !== undefined ? updates.version : existing.version,
-      });
-    }
-
-    const updateResult = await safeDb(
-      async (tx) =>
-        await tx.transaction(async (innerTx) => {
-          await innerTx
-            .update(agentSkills)
-            .set(updates)
-            .where(eq(agentSkills.id, params.skillId));
-
-          await recordAuditEvent(innerTx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-            resourceId: params.skillId,
-            changes,
-            metadata: { slug: updates.slug ?? existing.slug },
+          .limit(1)
+          .for("update");
+        const existing = existingRows.at(0);
+        if (!existing) {
+          // The row lock follows the write policy, so a skill the caller can
+          // read but not manage is missing here; refuse it as the handler would.
+          const visibleRows = await tx
+            .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+            .from(agentSkills)
+            .where(
+              and(
+                eq(agentSkills.id, params.skillId),
+                eq(agentSkills.organizationId, session.activeOrganizationId),
+              ),
+            )
+            .limit(1);
+          const visible = visibleRows.at(0);
+          if (!visible) {
+            return Result.err(
+              new HandlerError({ status: 404, message: "Skill not found" }),
+            );
+          }
+          const refused = requireSkillManager({
+            skill: visible,
+            memberRole,
+            userId: user.id,
+            action: "edit",
           });
-        }),
+          if (Result.isError(refused)) {
+            return refused;
+          }
+          panic(
+            "skills.update: the write policy hid a skill the caller manages",
+          );
+        }
+
+        const manager = requireSkillManager({
+          skill: existing,
+          memberRole,
+          userId: user.id,
+          action: "edit",
+        });
+        if (Result.isError(manager)) {
+          return manager;
+        }
+        if (hasMetadataEdit) {
+          const editable = requireEditableSkillOrigin(existing.origin);
+          if (Result.isError(editable)) {
+            return editable;
+          }
+        }
+
+        const { updates, changes } = buildSkillUpdateDiff(body, existing);
+        if (Object.keys(updates).length === 0) {
+          return Result.ok(undefined);
+        }
+
+        if (
+          updates.body !== undefined ||
+          updates.description !== undefined ||
+          updates.name !== undefined ||
+          updates.version !== undefined
+        ) {
+          updates.contentHash = await skillContentHashAfter(tx, {
+            skillId: params.skillId,
+            patch: updates,
+          });
+        }
+
+        await tx
+          .update(agentSkills)
+          .set(updates)
+          .where(eq(agentSkills.id, params.skillId));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+          resourceId: params.skillId,
+          changes,
+          metadata: { slug: updates.slug ?? existing.slug },
+        });
+        return Result.ok(undefined);
+      },
     );
     if (Result.isError(updateResult)) {
       if (
         DatabaseError.is(updateResult.error) &&
         updateResult.error.code === PG_ERROR.UNIQUE_VIOLATION
       ) {
-        if (typeof updates.command === "string") {
+        if (typeof body.command === "string") {
           return Result.err(
             new HandlerError({
               status: 409,
-              message: `A skill with command "/${updates.command}" already exists`,
+              message: `A skill with command "/${body.command}" already exists`,
             }),
           );
         }
         return Result.err(
           new HandlerError({
             status: 409,
-            message: `A skill named "${updates.slug ?? existing.slug}" already exists`,
+            message: "A skill with the same name already exists",
           }),
         );
       }
       return Result.err(updateResult.error);
     }
+    yield* updateResult.value;
 
     return Result.ok({ id: params.skillId });
   },

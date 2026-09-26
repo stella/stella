@@ -950,6 +950,7 @@
     "caseLawGreeting": "Ask about this decision — its full text is available here.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",
+    "commandsSection": "Commands",
     "composerMenu": {
       "context": "Context",
       "editMode": "Edit mode",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Last accessed matters",
       "noMatters": "No matters yet",
-      "noPrompts": "No skills yet",
       "noRecentChats": "No recent chats",
+      "noSkills": "No skills yet",
       "pinnedMatters": "Pinned matters",
-      "prompts": "Skills",
-      "recentChats": "Recent chats"
+      "recentChats": "Recent chats",
+      "skills": "Skills"
     },
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "No matching skills",
-      "noShortcuts": "No skills yet. Add some in Knowledge → Skills.",
       "tryOne": "Try one of these to start"
     },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Rewrite with AI",
-      "aiRewritePlaceholder": "Tighten the wording; add a step for citing sources…",
-      "aiRewritePrompt": "Describe how to rewrite this file",
-      "aiRewriteRunning": "Rewriting…",
-      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
-      "builtInBadge": "Built in",
-      "builtInSection": "Built-in skills",
-      "chooseFile": "Choose a file or drag it here",
-      "coaching": {
-        "publish": "Publish skill"
-      },
-      "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.",
       "deleteFile": "Delete file",
       "deleteFileConfirm": "Delete file? This cannot be undone.",
-      "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.",
       "disableSkill": "Disable skill",
-      "disabled": "Disabled",
       "discoverSkills": "Find skills",
       "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}",
       "discoveryEmpty": "No skills were found at this repository or folder.",
       "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}",
-      "dropFile": "Drop SKILL.md or .zip here",
       "editSkill": "Edit skill",
-      "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.",
-      "emptyTitle": "Install your first skill",
       "enableSkill": "Enable skill",
-      "enabled": "Enabled",
       "fileExists": "A file with this path already exists",
       "filesHeading": "Files",
-      "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Add file",
-      "generateDraft": "Draft skill",
-      "generateExamplesLabel": "Example triggers or scenarios (optional)",
-      "generateExamplesPlaceholder": "When a user asks about... When reviewing a contract that... ",
-      "generateFeedbackLabel": "Adjustments (optional)",
-      "generateFeedbackPlaceholder": "Tighten the trigger conditions; add a step about citing sources.",
-      "generateHelp": "Describe the skill you want. The model drafts a SKILL.md you can review and edit before installing.",
-      "generateIntentLabel": "What should this skill do?",
-      "generateIntentPlaceholder": "A skill that summarises court rulings into a short brief with the holding, reasoning, and citation.",
-      "generateResourceContentPlaceholder": "Markdown content for this file…",
-      "generateResourceDuplicatePathError": "Each companion file path must be unique.",
-      "generateResourcePathError": "Path must start with references/, prompts/, or knowledge/ and end in .md (lowercase letters, digits, hyphens, dots, underscores).",
-      "generateResourcesHelp": "Companion markdown files bundled alongside SKILL.md.",
-      "generateResourcesLabel": "Companion files",
-      "generateSkill": "Generate with AI",
-      "generateTitle": "Generate skill with AI",
-      "generating": "Generating…",
       "howItRuns": "How it runs",
       "importFailureFetch": "The skill source could not be loaded.",
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.",
@@ -3160,16 +3123,14 @@
       "newFolder": "New folder",
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "renameFile": "Rename",
-      "resources": "{count, plural, one {# resource} other {# resources}}",
       "scopePrivate": "Only me",
       "scopeTeam": "Everyone in the team",
-      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
-      "selectedFile": "Selected: {name}",
       "selectionLimit": "Select up to {count} skills at once.",
-      "sourceUpload": "Uploaded",
-      "sourceUrl": "Public URL",
-      "unsavedChanges": "Unsaved changes — discard?",
-      "uploadFile": "Upload file",
+      "skippedFiles": "{count, plural, one {# file was not imported} other {# files were not imported}}",
+      "skippedReasonNotUtf8Text": "Not UTF-8 text",
+      "skippedReasonOutsideSkillFolder": "Outside the skill folder",
+      "skippedReasonUnsupportedExtension": "File type not supported",
+      "skippedReasonUnsupportedFolder": "Not in a resource folder",
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Graded checklists that review documents against your standards"
       },
-      "prompts": {
-        "description": "Reusable skills available from / in chat",
+      "skills": {
         "title": "Skills"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Chat command (optional)",
       "commandPlaceholder": "e.g. summarize",
-      "createTitle": "New skill",
-      "deleteConfirmDescription": "This skill will be permanently removed.",
-      "deleteShortcut": "Delete skill",
-      "emptyDescription": "Create reusable skills for the work your team repeats, from summaries to first-pass drafting instructions.",
-      "emptyState": "No skills yet. Add your first one.",
-      "emptyTitle": "Create your first skill",
-      "emptyVideoLabel": "Skills overview",
       "errors": {
-        "commandConflict": "A skill with this / name already exists",
-        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
-        "commandReserved": "\"/{command}\" is a reserved skill"
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores"
       },
       "form": {
-        "command": "Skill shortcut",
-        "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Short description shown in the picker",
-        "namePlaceholder": "e.g. Summarise document",
-        "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used",
         "scope": "Visibility",
         "scopePrivate": "Only me",
         "scopeTeam": "Everyone in the team"
-      },
-      "shadowed": "Shadowed by team skill"
+      }
     }
   },
   "lawHome": {

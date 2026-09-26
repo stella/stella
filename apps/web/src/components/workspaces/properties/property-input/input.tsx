@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { FieldError } from "@stll/ui/field";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
 import { PropertyFormField } from "@/components/workspaces/properties/form";
 import {
   createCustomMention,
@@ -164,6 +165,7 @@ export const PropertyPromptInput = ({
           placeholder={
             placeholder ?? t("workspaces.properties.setPromptPlaceholder")
           }
+          skillChips={SKILL_CHIP_CATALOG.team}
           value={field.state.value}
           variant={variant}
         />

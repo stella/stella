@@ -11,7 +11,7 @@
 
 import { maxIterations } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -48,6 +48,8 @@ import type {
   AiFieldDraft,
   AiFieldGenerator,
 } from "@/api/lib/docx/resolve-ai-fields";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
@@ -308,6 +310,13 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   return v.parse(input.outputSchema, output);
 };
 
+// Loading the caller's skill catalog failed before any model call, so it is a
+// database failure of this adapter rather than a generation outcome.
+const SKILL_CATALOG_LOAD_SINK = failureSink({
+  event: "ai_field.skill_catalog_load_failed",
+  expected: [],
+});
+
 export const buildAiFieldGenerator = ({
   orgAIConfig,
   organizationId,
@@ -337,7 +346,18 @@ export const buildAiFieldGenerator = ({
   }
   return async ({ prompt, values, documentText, item, maxLength }) => {
     try {
-      const skillTools = maybeSkillTools(prompt, skillContext);
+      const skillToolsResult = await maybeSkillTools(prompt, skillContext);
+      if (Result.isError(skillToolsResult)) {
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
+        return {
+          type: "failed",
+          reason: "generation-failed",
+          message: AI_FIELD_GENERATION_FAILURE_MESSAGE,
+        };
+      }
+      const skillTools = skillToolsResult.value;
       // Injected only for fields that opted in via aiSeesDocument; omitted
       // entirely otherwise so non-opted fields cost the same tokens as before.
       const documentSection =
@@ -451,7 +471,14 @@ export const buildAiConditionDecider = ({
   }
   return async ({ prompt, values }) => {
     try {
-      const skillTools = maybeSkillTools(prompt, skillContext);
+      const skillToolsResult = await maybeSkillTools(prompt, skillContext);
+      if (Result.isError(skillToolsResult)) {
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
+        return undefined;
+      }
+      const skillTools = skillToolsResult.value;
       // A prompt that references a skill needs the tools to load it, which
       // only the generative run carries; every other condition is a yes/no
       // the decision model settles first.
@@ -616,7 +643,17 @@ export const buildAiOccurrenceAdapter = ({
   }
   return async (input) => {
     try {
-      const skillTools = maybeSkillTools(input.prompt ?? "", skillContext);
+      const skillToolsResult = await maybeSkillTools(
+        input.prompt ?? "",
+        skillContext,
+      );
+      if (Result.isError(skillToolsResult)) {
+        observeFailure(skillToolsResult.error, {
+          sink: SKILL_CATALOG_LOAD_SINK,
+        });
+        return undefined;
+      }
+      const skillTools = skillToolsResult.value;
       const { renderings } = await generateFieldObject({
         abortSignal: boundedAiSignal(AI_ADAPT_TIMEOUT_MS, operationSignal),
         aiAnalytics,

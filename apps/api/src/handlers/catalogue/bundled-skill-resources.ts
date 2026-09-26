@@ -8,6 +8,7 @@ import {
   parseSkillFile,
   type SkillMetadata,
 } from "@stll/skills";
+import { SKILL_NAME_PATTERN } from "@stll/skills/package-limits";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -15,9 +16,6 @@ import type {
   ParsedSkillPackage,
   ParsedSkillResource,
 } from "@/api/lib/skills/skill-package";
-
-type PersistedSkillResourceKind = ParsedSkillResource["kind"];
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
 export const toParsedBundledSkillResources = (
   resourceFiles: readonly LoadedCatalogueResource[],
@@ -52,7 +50,7 @@ export const toParsedBundledSkillResources = (
       );
     }
 
-    const kind = persistedSkillResourceKind(normalizedPath);
+    const kind = getSkillResourceKind(normalizedPath);
     if (kind === null) {
       return Result.err(
         new HandlerError({
@@ -82,28 +80,37 @@ export const toParsedBundledSkillPackage = ({
   expectedSlug: string;
   resources: readonly ParsedSkillResource[];
   source: string;
-}): Result<ParsedSkillPackage, HandlerError> =>
-  Result.try({
+}): Result<ParsedSkillPackage, HandlerError> => {
+  const parsedFile = parseSkillFile(source);
+  if (parsedFile.isErr()) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: `Bundled skill file is invalid: ${expectedSlug}`,
+        cause: parsedFile.error,
+      }),
+    );
+  }
+  const parsed = parsedFile.value;
+  if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Bundled skill instructions are too large",
+      }),
+    );
+  }
+
+  return Result.try({
     try: () => {
-      const parsed = parseSkillFile(source);
       assertBundledSkillMetadata({
         expectedSlug,
         metadata: parsed.metadata,
       });
-      if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
-        throw new HandlerError({
-          status: 500,
-          message: "Bundled skill instructions are too large",
-        });
-      }
 
       return {
         body: parsed.body,
         compatibility: parsed.metadata.compatibility ?? null,
-        contentHash: hashBundledSkillPackage({
-          resources,
-          source,
-        }),
         description: parsed.metadata.description,
         entrypointHash: hashBundledSkillPackage({
           resources: [],
@@ -128,6 +135,7 @@ export const toParsedBundledSkillPackage = ({
       });
     },
   });
+};
 
 export const hashBundledSkillPackage = ({
   resources,
@@ -158,7 +166,7 @@ const assertBundledSkillMetadata = ({
     throw new HandlerError({
       status: 500,
       message:
-        "Bundled skill name must use lowercase letters, digits, and hyphens only",
+        "Bundled skill name must use lowercase letters and digits, joined by single hyphens",
     });
   }
   if (metadata.name !== expectedSlug) {
@@ -233,25 +241,5 @@ const assertFrontmatterMetadata = (
         message: "Bundled skill metadata value is too large",
       });
     }
-  }
-};
-
-const persistedSkillResourceKind = (
-  path: string,
-): PersistedSkillResourceKind | null => {
-  const kind = getSkillResourceKind(path);
-  switch (kind) {
-    case "asset":
-    case "knowledge":
-    case "prompt":
-    case "reference":
-    case "script":
-    case "template":
-      return kind;
-    case "other":
-    case null:
-      return null;
-    default:
-      return null;
   }
 };

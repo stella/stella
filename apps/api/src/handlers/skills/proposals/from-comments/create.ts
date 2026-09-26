@@ -8,7 +8,10 @@ import { agentSkillComments, agentSkillProposals } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
-import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
+import {
+  loadLatestSkillRevision,
+  lockSkillForAnchor,
+} from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -129,10 +132,12 @@ const createProposalFromComments = createSafeRootHandler(
           throw editableOrigin.error;
         }
 
+        await lockSkillForAnchor(tx, params.skillId);
+
         const revision = await loadLatestSkillRevision(tx, {
           skillId: params.skillId,
+
           organizationId: session.activeOrganizationId,
-          lock: "share",
         });
         if (!revision) {
           panic("agent skill has no revision");

@@ -1,10 +1,16 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { isOrganizationManagementRole } from "@stll/permissions";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import {
+  hashSkillPackageContent,
+  skillContentHashAfter,
+} from "@/api/lib/agent-skills/content-hash";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,14 +21,24 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
+import type {
+  FetchedSkillPackage,
+  ParsedSkillPackage,
+  UrlReplayIdentity,
+} from "@/api/lib/skills/skill-package";
 
 // Advisory-lock namespaces are process-global. Dedicated first keys keep the
 // install caps independent from unrelated org/user locks elsewhere in the API.
 const SKILL_TEAM_CAP_LOCK_NAMESPACE = 0x53_4b_54_4d;
 const SKILL_USER_CAP_LOCK_NAMESPACE = 0x53_4b_55_53;
 
-type InstallSkillProps = {
+// A URL install must come from a fetched package, which carries how a repeated
+// import of it replays; every other origin installs whatever it parsed.
+type InstallSkillSource =
+  | { origin: "url"; parsed: FetchedSkillPackage }
+  | { origin: Exclude<AgentSkillOrigin, "url">; parsed: ParsedSkillPackage };
+
+type InstallSkillProps = InstallSkillSource & {
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
@@ -31,8 +47,6 @@ type InstallSkillProps = {
     tx: Transaction,
     skill: { id: SafeId<"agentSkill"> },
   ) => Promise<void>;
-  origin: AgentSkillOrigin;
-  parsed: ParsedSkillPackage;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scope: AgentSkillScope;
@@ -42,7 +56,6 @@ type InstallSkillProps = {
   // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
   slug?: string;
   user: { id: SafeId<"user"> };
-  urlReplayIdentity?: "content-hash" | "source-url";
 };
 
 export const SKILL_INSTALL_ERROR_CODE = {
@@ -185,20 +198,27 @@ export const preflightSkillInstall = async ({
   }
 };
 
-export const installSkill = async ({
-  enabled = true,
-  memberRole,
-  onInstalled,
-  origin,
-  parsed,
-  recordAuditEvent,
-  safeDb,
-  scope,
-  session,
-  slug,
-  user,
-  urlReplayIdentity,
-}: InstallSkillProps) => {
+const urlReplayIdentityOf = (
+  source: InstallSkillSource,
+): UrlReplayIdentity | undefined =>
+  source.origin === "url" ? source.parsed.urlReplayIdentity : undefined;
+
+export const installSkill = async (props: InstallSkillProps) => {
+  const {
+    enabled = true,
+    memberRole,
+    onInstalled,
+    origin,
+    parsed,
+    recordAuditEvent,
+    safeDb,
+    scope,
+    session,
+    slug,
+    user,
+  } = props;
+  const urlReplayIdentity = urlReplayIdentityOf(props);
+  const contentHash = hashSkillPackageContent(parsed);
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
@@ -214,7 +234,6 @@ export const installSkill = async ({
             }
             const rows = await innerTx
               .select({
-                contentHash: agentSkills.contentHash,
                 id: agentSkills.id,
                 origin: agentSkills.origin,
                 sourceUrl: agentSkills.sourceUrl,
@@ -230,7 +249,8 @@ export const installSkill = async ({
                     : undefined,
                 ),
               )
-              .limit(1);
+              .limit(1)
+              .for("update");
             return rows.at(0);
           };
           const unchangedSkill = async () => {
@@ -238,10 +258,17 @@ export const installSkill = async ({
             if (!existing || urlReplayIdentity === undefined) {
               return undefined;
             }
+            // The stored content_hash may predate the current formula, so the
+            // comparison hashes what the row and its resources hold now.
             return isUnchangedUrlSkill({
-              existing,
+              existing: {
+                ...existing,
+                contentHash: await skillContentHashAfter(innerTx, {
+                  skillId: existing.id,
+                }),
+              },
               origin,
-              parsed,
+              parsed: { contentHash, sourceUrl: parsed.sourceUrl },
               replayIdentity: urlReplayIdentity,
             })
               ? existing
@@ -312,7 +339,7 @@ export const installSkill = async ({
             compatibility: parsed.compatibility,
             metadata: parsed.metadata,
             sourceUrl: parsed.sourceUrl,
-            contentHash: parsed.contentHash,
+            contentHash,
             body: parsed.body,
             enabled,
           });
@@ -354,7 +381,7 @@ export const installSkill = async ({
               created: {
                 old: null,
                 new: {
-                  contentHash: parsed.contentHash,
+                  contentHash,
                   origin,
                   resourceCount: parsed.resources.length,
                   scope,
@@ -447,8 +474,8 @@ export const isUnchangedUrlSkill = ({
     "contentHash" | "origin" | "sourceUrl"
   >;
   origin: AgentSkillOrigin;
-  parsed: Pick<ParsedSkillPackage, "contentHash" | "sourceUrl">;
-  replayIdentity: "content-hash" | "source-url";
+  parsed: { contentHash: string; sourceUrl: string | null };
+  replayIdentity: UrlReplayIdentity;
 }): boolean => {
   if (
     origin !== "url" ||
@@ -476,7 +503,7 @@ export const authorizeSkillInstallScope = ({
   memberRole: { role: string };
   scope: AgentSkillScope;
 }): Result<void, HandlerError> => {
-  if (scope !== "team" || ["admin", "owner"].includes(memberRole.role)) {
+  if (scope !== "team" || isOrganizationManagementRole(memberRole.role)) {
     return Result.ok(undefined);
   }
 

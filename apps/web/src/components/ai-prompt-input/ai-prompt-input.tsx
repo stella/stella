@@ -19,7 +19,9 @@ import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
+  skillPagesForChips,
 } from "@/components/chat-editor-slash-items";
+import type { SkillChipCatalog } from "@/components/chat-editor-slash-items";
 import { PastedText } from "@/components/chat-pasted-text-extension";
 import {
   createPromptSlashSuggestion,
@@ -72,6 +74,8 @@ type AIPromptInputProps = {
   variant?: "filled" | "minimal" | undefined;
   /** Controls how `value` is read in and emitted out (default `html`). */
   valueFormat?: AIPromptValueFormat | undefined;
+  /** Which skills the `/` menu offers as chips. */
+  skillChips: SkillChipCatalog;
   placeholder?: string | undefined;
   /**
    * Optional pre-configured TipTap extension wired for `@` references
@@ -101,6 +105,7 @@ export const AIPromptInput = ({
   onBlur,
   variant = "filled",
   valueFormat = "html",
+  skillChips,
   placeholder,
   mentionExtension,
   onEditorReady,
@@ -131,9 +136,10 @@ export const AIPromptInput = ({
     () =>
       buildChatSlashItems({
         shortcuts: slashShortcutRows,
-        skillPages: skillPages?.pages,
+        skillPages:
+          skillPages && skillPagesForChips(skillPages.pages, skillChips),
       }),
-    [slashShortcutRows, skillPages],
+    [slashShortcutRows, skillChips, skillPages],
   );
   const getSlashItems = useLatestCallback(() => slashItems);
 

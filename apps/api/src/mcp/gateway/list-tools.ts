@@ -10,6 +10,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import {
   getDynamicMcpToolOutputContract,
   SKILL_TOOL_ANNOTATIONS,
+  SKILL_TOOL_INPUT,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   listGatewayExternalMcpTools,
@@ -298,7 +299,8 @@ export const externalToolDefinition = ({
 /**
  * Every skill tool is the same read of a stored skill, so one definition
  * shape covers the family: the exposed name and title vary per skill, while
- * the annotations and the output contract come from the family policy.
+ * the annotations and the input and output contracts come from the family
+ * policy.
  */
 export const skillToolDefinition = (
   skill: ResolvedSkillTool,
@@ -306,15 +308,11 @@ export const skillToolDefinition = (
   access: "read",
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
-    title: toDynamicToolTitle(skill.name) || skill.exposedName,
+    title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
   },
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
   description: skill.description,
-  inputSchema: {
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  },
+  inputSchema: SKILL_TOOL_INPUT.inputSchema,
   name: skill.exposedName,
   scope: "stella:skills",
 });

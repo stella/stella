@@ -119,6 +119,28 @@ describe("getActiveSkillChatContext", () => {
     ).toBeUndefined();
   });
 
+  test("ignores a stored skill detail payload without a skill id", () => {
+    const tab = {
+      type: "view",
+      viewType: "tool-detail",
+      id: "tool-detail:skill:review",
+      label: "Review Skill",
+      payload: {
+        kind: "skill",
+        slug: "review",
+        organizationId: "org-1",
+        activeSkill: { skillName: "Review Skill" },
+        iconHint: {
+          icon: null,
+          iconUrl: null,
+        },
+      },
+      ownerRouteId: "/_protected/knowledge/tools",
+    } satisfies InspectorTab;
+
+    expect(getActiveSkillChatContext(tab)).toBeUndefined();
+  });
+
   test("ignores non-skill catalogue detail tabs", () => {
     const tab = {
       type: "view",

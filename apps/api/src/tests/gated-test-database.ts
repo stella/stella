@@ -62,7 +62,7 @@ export const openGatedTestDatabase = (
   };
 };
 
-export type GatedTestClient = {
+type GatedTestClient = {
   /** The raw client, for tagged-template queries and `begin`. */
   readonly sql: SQL;
   readonly db: GatedTestDb;

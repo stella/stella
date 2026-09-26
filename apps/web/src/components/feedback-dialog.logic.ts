@@ -14,7 +14,6 @@ export const ROUTE_AREA_PATTERNS = {
   "/contacts": "contacts",
   "/inbox": "tasks",
   "/knowledge": "templates",
-  "/knowledge/mcp": "mcp_cli",
   "/law": "legislation",
   "/law/cases": "case_law",
   "/law/*/cases": "case_law",

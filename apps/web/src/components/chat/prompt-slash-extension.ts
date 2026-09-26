@@ -10,15 +10,13 @@ import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
 
-export type SlashSkillScope = PromptScope | "built-in";
-
 export type SlashSkill = {
   id: string;
   name: string;
   /** Slug used by the AI's `load-skill` tool. */
   slug: string;
   description: string;
-  scope: SlashSkillScope;
+  scope: PromptScope;
 };
 
 export type SlashItem =

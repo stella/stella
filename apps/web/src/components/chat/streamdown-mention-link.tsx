@@ -22,6 +22,7 @@ import {
   parseCanonicalChatSourceCitationHref,
   parseChatResourceHref,
   RESOURCE_TYPE,
+  SKILL_REF_HREF_PREFIX,
   type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
@@ -49,6 +50,7 @@ import {
   openSourceBoundEntityFile,
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { skillRefDestination } from "@/components/chat/skill-ref-link";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
@@ -90,7 +92,6 @@ const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
 const UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
 const UUID_SHAPE_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-export const SKILL_REF_HASH_PREFIX = "#stella-skill-ref=";
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
 // whitelist (http/https/mailto/tel) survives. Custom schemes
@@ -380,6 +381,7 @@ const EntityRefChip = ({
 };
 
 const SkillRefChip = ({
+  slug,
   label,
   interactive,
 }: {
@@ -400,7 +402,7 @@ const SkillRefChip = ({
       leadingIcon={SKILL_CHIP_ICON}
       onActivate={() =>
         detached(
-          navigate({ to: "/knowledge/tools", search: { kind: "skill" } }),
+          navigate(skillRefDestination(slug)),
           "streamdown-mention-link.navigate",
         )
       }
@@ -613,12 +615,12 @@ const MentionChip = ({
     );
   }
 
-  if (href.startsWith(SKILL_REF_HASH_PREFIX)) {
+  if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
     return (
       <SkillRefChip
         interactive={interactive}
         label={label}
-        slug={href.slice(SKILL_REF_HASH_PREFIX.length)}
+        slug={href.slice(SKILL_REF_HREF_PREFIX.length)}
       />
     );
   }
@@ -725,7 +727,7 @@ export const StreamdownMentionLink = ({
     parseChatResourceHref(href) !== null ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
     href.startsWith(WORKSPACE_REF_HASH_PREFIX) ||
-    href.startsWith(SKILL_REF_HASH_PREFIX) ? (
+    href.startsWith(SKILL_REF_HREF_PREFIX) ? (
       <MentionChip
         href={href}
         interactive={interactive}

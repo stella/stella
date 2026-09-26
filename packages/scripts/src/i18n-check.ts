@@ -5,17 +5,23 @@
  * feature keys that duplicate a common.* value.
  *
  * Usage: i18n-check <langs-dir> [--sync | --write-baseline]
+ *                    [--unused-in=<dir> ...]
  *
  * --sync             Fix structural mismatches: add missing keys
  *                    (English fallback) and remove extra keys.
  * --write-baseline   Regenerate i18n-check-baseline.json, grandfathering
  *                    the current untranslated/duplicate debt so the gate
- *                    stays green while catching new regressions.
+ *                    stays green while catching new regressions. Unused
+ *                    keys are only ever dropped from it, never added.
+ * --unused-in=<dir>  Also report en.json keys no .ts/.tsx file under <dir>
+ *                    names (repeatable; see i18n-usage.ts).
  */
 import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
+
+import { findUnusedKeys, unusedKeysBaselineAfter } from "./i18n-usage";
 
 export type NestedMessages = {
   [key: string]: string | NestedMessages;
@@ -216,12 +222,14 @@ export const syncMessages = (
  * allowed to hold the English value; `duplicatesCommon` lists feature keys
  * allowed to repeat a `common.*` value; `duplicateValues` lists feature keys
  * allowed to share a value with another feature key (instead of hoisting the
- * term to `common.*`). Burn these down over time.
+ * term to `common.*`). `unusedKeys` lists keys the source does not name
+ * that are not deleted yet; it only ever shrinks. Burn these down over time.
  */
 export type CheckBaseline = {
   identicalToSource: Record<string, string[]>;
   duplicatesCommon: string[];
   duplicateValues: string[];
+  unusedKeys: string[];
 };
 
 const isCheckBaselinePart = (
@@ -233,12 +241,14 @@ const isCheckBaselinePart = (
   const identical = value["identicalToSource"];
   const common = value["duplicatesCommon"];
   const duplicates = value["duplicateValues"];
+  const unused = value["unusedKeys"];
   return (
     (identical === undefined ||
       (isPlainRecord(identical) &&
         Object.values(identical).every(isStringArray))) &&
     (common === undefined || isStringArray(common)) &&
-    (duplicates === undefined || isStringArray(duplicates))
+    (duplicates === undefined || isStringArray(duplicates)) &&
+    (unused === undefined || isStringArray(unused))
   );
 };
 
@@ -246,6 +256,7 @@ export const emptyBaseline = (): CheckBaseline => ({
   identicalToSource: {},
   duplicatesCommon: [],
   duplicateValues: [],
+  unusedKeys: [],
 });
 
 const HAS_LETTER = /\p{L}/u;
@@ -586,9 +597,15 @@ if (import.meta.main) {
   const langsDir = args.find((a) => !a.startsWith("--"));
   const shouldSync = args.includes("--sync");
   const shouldWriteBaseline = args.includes("--write-baseline");
+  const USAGE_DIR_FLAG = "--unused-in=";
+  const usageDirs = args
+    .filter((a) => a.startsWith(USAGE_DIR_FLAG))
+    .map((a) => a.slice(USAGE_DIR_FLAG.length));
 
   if (!langsDir) {
-    console.error("Usage: i18n-check <langs-dir> [--sync | --write-baseline]");
+    console.error(
+      "Usage: i18n-check <langs-dir> [--sync | --write-baseline] [--unused-in=<dir> ...]",
+    );
     process.exit(1);
   }
 
@@ -616,6 +633,29 @@ if (import.meta.main) {
     return { ...emptyBaseline(), ...parsed };
   };
   const baseline = await readBaseline();
+
+  // Keys no source file names, or null when no usage directory was given.
+  const readUnusedKeys = async (): Promise<string[] | null> => {
+    if (usageDirs.length === 0) {
+      return null;
+    }
+    const langsPath = path.resolve(langsDir);
+    const sources: string[] = [];
+    for (const dir of usageDirs) {
+      for (const file of new Bun.Glob("**/*.{ts,tsx}").scanSync(dir)) {
+        const filePath = path.resolve(dir, file);
+        if (
+          filePath.startsWith(`${langsPath}${path.sep}`) ||
+          file.endsWith(".gen.ts")
+        ) {
+          continue;
+        }
+        sources.push(await Bun.file(filePath).text());
+      }
+    }
+    return findUnusedKeys([...enKeys], sources);
+  };
+  const unusedKeys = await readUnusedKeys();
 
   const localeFiles = [...new Bun.Glob("*.json").scanSync(langsDir)]
     .filter((f) => f !== "en.json")
@@ -657,6 +697,13 @@ if (import.meta.main) {
           .map(([k, v]) => [k, v.toSorted()] as const)
           .toSorted(([a], [b]) => a.localeCompare(b)),
       ),
+      unusedKeys:
+        unusedKeys === null
+          ? baseline.unusedKeys
+          : unusedKeysBaselineAfter({
+              baseline: baseline.unusedKeys,
+              unused: unusedKeys,
+            }),
     };
     await Bun.write(baselinePath, `${JSON.stringify(next, null, 2)}\n`);
     const localeCount = Object.values(identicalToSource).reduce(
@@ -766,6 +813,29 @@ if (import.meta.main) {
       const synced = syncMessages(enMessages, messages);
       await Bun.write(filePath, `${JSON.stringify(synced, null, 2)}\n`);
       console.log("  ✓ synced");
+    }
+  }
+
+  if (!shouldSync && unusedKeys !== null) {
+    const grandfathered = new Set(baseline.unusedKeys);
+    const unused = new Set(unusedKeys);
+    const newlyUnused = unusedKeys.filter((key) => !grandfathered.has(key));
+    const noLongerUnused = baseline.unusedKeys.filter(
+      (key) => !unused.has(key),
+    );
+    if (newlyUnused.length > 0) {
+      hasIssues = true;
+      console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+      for (const key of newlyUnused) {
+        console.log(`  - unused: ${key} (no source names it; delete it)`);
+      }
+    }
+    if (noLongerUnused.length > 0) {
+      hasIssues = true;
+      console.log(`\n${baselinePath}:`);
+      for (const key of noLongerUnused) {
+        console.log(`  - stale baseline entry: unusedKeys: ${key} (remove it)`);
+      }
     }
   }
 

@@ -22,6 +22,10 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
+import {
+  isSkillResourceOrigin,
+  type SkillResourceOrigin,
+} from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -139,12 +143,6 @@ const getCodeToolLogs = (part: ToolPart): string[] => {
   return raw.filter((line): line is string => typeof line === "string");
 };
 
-type SkillResourceOrigin =
-  | "authored"
-  | "built-in"
-  | "bundled"
-  | "upload"
-  | "url";
 type SkillResourceTarget = "body" | "resource";
 
 type SkillResourceOutput = {
@@ -152,7 +150,7 @@ type SkillResourceOutput = {
   path: string;
   content: string;
   mimeType: string;
-  skillId: string | null;
+  skillId: string;
   origin: SkillResourceOrigin;
   target?: SkillResourceTarget | undefined;
 };
@@ -162,26 +160,8 @@ const getStringProperty = (source: object, key: string): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
-const isSkillResourceOrigin = (value: unknown): value is SkillResourceOrigin =>
-  value === "authored" ||
-  value === "built-in" ||
-  value === "bundled" ||
-  value === "upload" ||
-  value === "url";
-
 const isSkillResourceTarget = (value: unknown): value is SkillResourceTarget =>
   value === "body" || value === "resource";
-
-const getNullableStringProperty = (
-  source: object,
-  key: string,
-): string | null | undefined => {
-  const value: unknown = Reflect.get(source, key);
-  if (value === null) {
-    return null;
-  }
-  return typeof value === "string" ? value : undefined;
-};
 
 const getSkillResourceOutput = (
   part: ToolPart,
@@ -197,7 +177,7 @@ const getSkillResourceOutput = (
   const path = getStringProperty(output, "path");
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
-  const skillId = getNullableStringProperty(output, "skillId");
+  const skillId = getStringProperty(output, "skillId");
   const originRaw: unknown = Reflect.get(output, "origin");
   const targetRaw: unknown = Reflect.get(output, "target");
   if (

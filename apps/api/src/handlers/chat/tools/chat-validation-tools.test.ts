@@ -1,4 +1,3 @@
-import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -26,12 +25,10 @@ import {
   FETCH_URL_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
-import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
-import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
@@ -78,7 +75,6 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",
   resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
-  source: "installed",
   toolName: "closing-review",
   version: null,
 };
@@ -98,15 +94,6 @@ const SKILL_CATALOGS = {
     {
       description: "Installed workflow.",
       name: "installed-workflow",
-      source: "installed",
-      version: "1.0",
-    },
-  ],
-  builtInOnly: [
-    {
-      description: "Public workflow.",
-      name: "public-workflow",
-      source: "built-in",
       version: "1.0",
     },
   ],
@@ -268,32 +255,6 @@ describe("chat validation tool set", () => {
       expect(exposedByRuns, gatedToolName).toContain(gatedToolName);
     }
     expect([...missing]).toEqual([]);
-  });
-
-  test("admits a skill call whose catalog has changed since it ran", () => {
-    const skillToolsProps = {
-      organizationId,
-      safeDb: unusedSafeDb,
-      skills: SKILL_CATALOGS.builtInOnly,
-      userId,
-    };
-    const skillNameEnum = (tools: ReturnType<typeof createSkillTools>) =>
-      convertSchemaToJsonSchema(tools["load-skill"]?.inputSchema)?.properties?.[
-        "skillName"
-      ]?.enum;
-
-    // The run's exact enum is what would reject a renamed or removed skill.
-    expect(skillNameEnum(createSkillTools(skillToolsProps))).toEqual([
-      "public-workflow",
-    ]);
-    expect(
-      skillNameEnum(
-        createSkillTools({
-          ...skillToolsProps,
-          purpose: CHAT_TOOL_SET_PURPOSE.validation,
-        }),
-      ),
-    ).toBeUndefined();
   });
 
   // Known gaps, pinned so they can only shrink. These gates are read from

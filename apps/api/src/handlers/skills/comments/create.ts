@@ -10,6 +10,7 @@ import {
   agentSkillRevisions,
 } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
+import { lockSkillForAnchor } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -112,10 +113,7 @@ const loadCommentTarget = async (
             eq(agentSkillRevisions.organizationId, organizationId),
           ),
         )
-        .limit(1)
-        // Serializes with the revision trigger so a concurrent save cannot
-        // coalesce into this revision after the comment read its body.
-        .for("share");
+        .limit(1);
 
       const revision = rows.at(0);
       if (!revision) {
@@ -173,6 +171,7 @@ const createSkillComment = createSafeRootHandler(
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
         });
+        await lockSkillForAnchor(tx, params.skillId);
 
         const target = await loadCommentTarget(tx, {
           anchor,

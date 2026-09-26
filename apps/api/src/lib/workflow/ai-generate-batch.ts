@@ -63,6 +63,8 @@ type GenerateWorkflowDataProps = {
   properties: AIBatchProperty[];
   filenames: JustificationFilenames;
   textInputs: TextInput[];
+  /** Instructions of the skills the property prompts link, or null for none. */
+  linkedSkillsMessage: string | null;
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -274,6 +276,7 @@ export const generateWorkflowData = async ({
   properties,
   filenames,
   textInputs,
+  linkedSkillsMessage,
   abortSignal,
   entityVersionId,
   organizationId,
@@ -403,6 +406,10 @@ export const generateWorkflowData = async ({
       type: "text",
       content: buildTextInputsMessage(textInputs),
     });
+  }
+
+  if (linkedSkillsMessage !== null) {
+    messageContent.push({ type: "text", content: linkedSkillsMessage });
   }
 
   const lastStaticIdx = messageContent.length - 1;

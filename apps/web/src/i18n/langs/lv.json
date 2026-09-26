@@ -950,6 +950,7 @@
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI tērzēšanā",
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
+    "commandsSection": "Komandas",
     "composerMenu": {
       "context": "Konteksts",
       "editMode": "Rediģēšanas režīms",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
-      "noPrompts": "Prasmju vēl nav",
       "noRecentChats": "Nav nesenu tērzēšanu",
+      "noSkills": "Prasmju vēl nav",
       "pinnedMatters": "Piespraustās lietas",
-      "prompts": "Prasmes",
-      "recentChats": "Nesenās tērzēšanas"
+      "recentChats": "Nesenās tērzēšanas",
+      "skills": "Prasmes"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "Nav atbilstošu prasmju",
-      "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
       "tryOne": "Izmēģini vienu no tiem"
     },
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Pārrakstīt ar AI",
-      "aiRewritePlaceholder": "Saīsiniet formulējumu; pievienojiet soli avotu citēšanai…",
-      "aiRewritePrompt": "Aprakstiet, kā pārrakstīt šo failu",
-      "aiRewriteRunning": "Pārraksta…",
-      "binaryPreviewUnsupported": "Bināru failu priekšskatījums netiek atbalstīts. Rediģējiet šo failu, atkārtoti augšupielādējot prasmes pakotni.",
-      "builtInBadge": "Iebūvēts",
-      "builtInSection": "Iebūvētās prasmes",
-      "chooseFile": "Izvēlieties failu vai ievelciet to šeit",
-      "coaching": {
-        "publish": "Publicēt prasmi"
-      },
-      "deleteConfirmDescription": "„{name}“ tiks noņemta no šīs darbvietas.",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
-      "description": "Instalējiet SKILL.md pakas, kas tērzēšanai pievieno specializētas metodes un tikai lasāmus resursus.",
       "disableSkill": "Atspējot prasmi",
-      "disabled": "Atspējota",
       "discoverSkills": "Meklēt prasmes",
       "discoveredSkills": "{count, plural, zero {Atrastas # prasmes} one {Atrasta # prasme} other {Atrastas # prasmes}}",
       "discoveryEmpty": "Šajā repozitorijā vai mapē prasmes netika atrastas.",
       "discoverySkippedInvalid": "{count, plural, zero {Izlaistas # nederīgas prasmes} one {Izlaista # nederīga prasme} other {Izlaistas # nederīgas prasmes}}",
-      "dropFile": "Nometiet SKILL.md vai .zip šeit",
       "editSkill": "Rediģēt prasmi",
-      "emptyDescription": "Augšupielādējiet SKILL.md failu, saspiestu prasmes mapi vai importējiet publisku GitHub prasmes URL.",
-      "emptyTitle": "Instalējiet pirmo prasmi",
       "enableSkill": "Iespējot prasmi",
-      "enabled": "Iespējota",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
       "filesHeading": "Faili",
-      "formBodyHelp": "Markdown norādījumi, ko aģents nolasa, kad prasme tiek izsaukta.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Pievienot failu",
-      "generateDraft": "Sagatavot prasmi",
-      "generateExamplesLabel": "Piemēra ierosinātāji vai scenāriji (nav obligāti)",
-      "generateExamplesPlaceholder": "Kad lietotājs jautā par… Kad pārskata līgumu, kurā… ",
-      "generateFeedbackLabel": "Pielāgojumi (nav obligāti)",
-      "generateFeedbackPlaceholder": "Sašauriniet ierosināšanas nosacījumus; pievienojiet soli par avotu citēšanu.",
-      "generateHelp": "Aprakstiet vēlamo prasmi. Modelis sagatavo SKILL.md, ko pirms instalēšanas varat pārskatīt un rediģēt.",
-      "generateIntentLabel": "Ko šai prasmei jādara?",
-      "generateIntentPlaceholder": "Prasme, kas apkopo tiesas nolēmumus īsā kopsavilkumā ar tiesas atziņu, pamatojumu un atsauci.",
-      "generateResourceContentPlaceholder": "Markdown saturs šim failam…",
-      "generateResourceDuplicatePathError": "Katra pavadošā faila ceļam jābūt unikālam.",
-      "generateResourcePathError": "Ceļam jāsākas ar references/, prompts/ vai knowledge/ un jābeidzas ar .md (mazie burti, cipari, defises, punkti, pasvītras).",
-      "generateResourcesHelp": "Papildu Markdown faili, kas iekļauti kopā ar SKILL.md.",
-      "generateResourcesLabel": "Papildu faili",
-      "generateSkill": "Ģenerēt ar AI",
-      "generateTitle": "Ģenerēt prasmi ar AI",
-      "generating": "Ģenerē…",
       "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
       "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",
@@ -3160,16 +3123,14 @@
       "newFolder": "Jauna mape",
       "pdfPreviewSoon": "PDF priekšskatījums būs pieejams, tiklīdz tiks atbalstīti binārie prasmju resursi.",
       "renameFile": "Pārdēvēt",
-      "resources": "{count, plural, zero {# resursu} one {# resurss} other {# resursi}}",
       "scopePrivate": "Tikai es",
       "scopeTeam": "Visi komandā",
-      "selectFileHint": "Atlasiet sarakstā failu, lai to atvērtu redaktora panelī pa labi.",
-      "selectedFile": "Atlasīts: {name}",
       "selectionLimit": "Vienlaikus atlasiet ne vairāk kā {count} prasmes.",
-      "sourceUpload": "Augšupielādēts",
-      "sourceUrl": "Publisks URL",
-      "unsavedChanges": "Nesaglabātas izmaiņas — atmest?",
-      "uploadFile": "Augšupielādēt failu",
+      "skippedFiles": "{count, plural, zero {# faili netika importēti} one {# fails netika importēts} other {# faili netika importēti}}",
+      "skippedReasonNotUtf8Text": "Nav UTF-8 teksts",
+      "skippedReasonOutsideSkillFolder": "Ārpus prasmes mapes",
+      "skippedReasonUnsupportedExtension": "Neatbalstīts faila tips",
+      "skippedReasonUnsupportedFolder": "Nav resursu mapē",
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
       },
-      "prompts": {
-        "description": "Atkārtoti izmantojamas prasmes, kas tērzēšanā pieejamas ar /",
+      "skills": {
         "title": "Prasmes"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Ierakstiet to tērzēšanā, lai palaistu šo prasmi.",
       "commandLabel": "Slīpsvītras komanda (nav obligāta)",
       "commandPlaceholder": "piem. apkopot",
-      "createTitle": "Jauna prasme",
-      "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
-      "deleteShortcut": "Dzēst prasmi",
-      "emptyDescription": "Izveidojiet atkārtoti izmantojamas prasmes darbam, ko jūsu komanda atkārto, sākot no kopsavilkumiem līdz pirmā uzmetuma sagatavošanas norādījumiem.",
-      "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
-      "emptyTitle": "Izveidojiet pirmo prasmi",
-      "emptyVideoLabel": "Prasmju pārskats",
       "errors": {
-        "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
-        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītras",
-        "commandReserved": "\"/{command}\" ir rezervēta prasme"
+        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītras"
       },
       "form": {
-        "command": "Prasmes saīsne",
-        "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Īss apraksts, kas redzams atlasītājā",
-        "namePlaceholder": "piem., Apkopot dokumentu",
-        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas tērzēšanas rakstīšanas laukā, izmantojot šo prasmi",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi komandā"
-      },
-      "shadowed": "Aizstāts ar komandas prasmi"
+      }
     }
   },
   "lawHome": {

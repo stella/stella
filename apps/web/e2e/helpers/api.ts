@@ -1,9 +1,13 @@
 import type { APIRequestContext } from "@playwright/test";
 
+/** The API server's origin; its auth and dev routes live outside `/v1`. */
+export const E2E_API_ORIGIN =
+  process.env["E2E_API_URL"] ?? "http://localhost:3001";
+
 // The web client mounts the Eden treaty at `${VITE_API_URL}/v1`
 // (apps/web/src/lib/api.ts:19); mirror that here so paths read the
 // same way as the route definitions.
-const API_BASE_URL = `${process.env["E2E_API_URL"] ?? "http://localhost:3001"}/v1`;
+const API_BASE_URL = `${E2E_API_ORIGIN}/v1`;
 const API_REQUEST_TIMEOUT_MS = 30_000;
 
 type Json =

@@ -19,9 +19,11 @@ const config = {
   description:
     "Fetch and install one agent skill from a URL pointing at a SKILL.md " +
     "file or a skill package. It is stored with a url origin, so it stays " +
-    "editable afterwards. Team scope requires admin or owner. To pull " +
-    "several skills out of a repository, use skills.discover and then " +
-    "skills.import instead.",
+    "editable afterwards. Importing an unchanged package again returns the " +
+    "skill it installed. The result lists the package files the skill " +
+    "does not keep (skippedFiles: path and reason). Team scope requires " +
+    "admin or owner. To pull several skills out of a repository, use " +
+    "skills.discover and then skills.import instead.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: importSkillBodySchema,
@@ -61,7 +63,10 @@ const importSkillFromUrl = createSafeRootHandler(
       return Result.err(installResult.error);
     }
 
-    return Result.ok(installResult.value);
+    return Result.ok({
+      ...installResult.value,
+      skippedFiles: parsed.skippedFiles,
+    });
   },
 );
 

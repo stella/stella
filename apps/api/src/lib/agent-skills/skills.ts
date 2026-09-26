@@ -1,14 +1,9 @@
 import { Result } from "better-result";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
-import {
-  listSkillMetadata,
-  listSkillResources,
-  loadSkill,
-  readSkillResource,
-} from "@stll/skills";
-import type { SkillMetadata, SkillResource, StellaSkill } from "@stll/skills";
+import type { SkillMetadata, SkillResource } from "@stll/skills";
+import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -16,16 +11,16 @@ import {
   agentSkills,
   type AgentSkillOrigin,
 } from "@/api/db/schema";
+import { canManageSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 
-type AvailableChatSkill = SkillMetadata & {
-  displayName?: string | undefined;
-  id: string;
-  source: "built-in" | "installed";
+export type AvailableChatSkill = SkillMetadata & {
+  displayName: string;
+  id: SafeId<"agentSkill">;
 };
 
 export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
@@ -36,15 +31,8 @@ type ChatSkillContext = {
   userId: SafeId<"user">;
 };
 
-let chatSkillMetadata: SkillMetadata[] | undefined;
-
-export const getChatSkillMetadata = (): SkillMetadata[] => {
-  chatSkillMetadata ??= listSkillMetadata();
-  return chatSkillMetadata;
-};
-
 type ActiveChatSkillRequest = {
-  skillId?: SafeId<"agentSkill"> | undefined;
+  skillId: SafeId<"agentSkill">;
   skillName: string;
 };
 
@@ -57,10 +45,9 @@ export type ActiveChatSkillContext = {
   description: string;
   displayName: string;
   editable: boolean;
-  id: SafeId<"agentSkill"> | null;
-  origin: AgentSkillOrigin | "built-in";
+  id: SafeId<"agentSkill">;
+  origin: AgentSkillOrigin;
   resources: SkillResource[];
-  source: "built-in" | "installed";
   toolName: string;
   version: string | null;
 };
@@ -81,38 +68,12 @@ export const resolveActiveChatSkillContext = async ({
     return Result.ok(null);
   }
 
-  const activeSkillId = activeSkill.skillId;
-  if (activeSkillId) {
-    return await resolveInstalledActiveSkill({
-      activeSkill: { ...activeSkill, skillId: activeSkillId },
-      memberRole,
-      organizationId,
-      safeDb,
-      userId,
-    });
-  }
-
-  const metadata = getChatSkillMetadata().find(
-    (skill) => skill.name === activeSkill.skillName,
-  );
-  if (!metadata) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Skill not found" }),
-    );
-  }
-
-  const skill = loadSkill(metadata.name);
-  return Result.ok({
-    body: skill.body,
-    description: skill.description,
-    displayName: skill.name,
-    editable: false,
-    id: null,
-    origin: "built-in",
-    resources: skill.resources,
-    source: "built-in",
-    toolName: skill.name,
-    version: skill.version,
+  return await resolveInstalledActiveSkill({
+    activeSkill,
+    memberRole,
+    organizationId,
+    safeDb,
+    userId,
   });
 };
 
@@ -123,7 +84,7 @@ const resolveInstalledActiveSkill = async ({
   safeDb,
   userId,
 }: ChatSkillContext & {
-  activeSkill: ActiveChatSkillRequest & { skillId: SafeId<"agentSkill"> };
+  activeSkill: ActiveChatSkillRequest;
   memberRole: ChatMemberRole;
 }): Promise<
   Result<ActiveChatSkillContext, HandlerError<403 | 404> | SafeDbError>
@@ -209,7 +170,6 @@ const resolveInstalledActiveSkill = async ({
     id: skill.id,
     origin: skill.origin,
     resources: resources.value,
-    source: "installed",
     toolName: skill.slug,
     version: skill.version,
   });
@@ -235,10 +195,13 @@ export const canEditActiveSkill = ({
     return false;
   }
 
-  if (scope === "team" && !["admin", "owner"].includes(memberRole.role)) {
-    return false;
-  }
-  if (scope === "private" && skillUserId !== userId) {
+  if (
+    !canManageSkill({
+      memberRole,
+      skill: { scope, userId: skillUserId },
+      userId,
+    })
+  ) {
     return false;
   }
 
@@ -314,30 +277,64 @@ export const listAvailableChatSkillMetadata = async ({
   return Result.ok(resolveSkillPrecedence(rows.value));
 };
 
+/** A skill the caller can load right now, with the row it came from. */
+export type LoadedChatSkill = {
+  body: string;
+  compatibility: string | null;
+  description: string;
+  id: SafeId<"agentSkill">;
+  license: string | null;
+  metadata: Record<string, string>;
+  /** The skill slug: the name the catalog and the skill tools use. */
+  name: string;
+  origin: AgentSkillOrigin;
+  resources: { kind: SkillResourceKind; path: string }[];
+  version: string | null;
+};
+
+/**
+ * Resolves `skillName` against the caller's skills when the tool runs, not
+ * when the catalog was built. `null` means the skill is no longer available
+ * (deleted, disabled, or renamed since), which callers report as not found.
+ */
 export const loadAvailableChatSkill = async ({
-  activeSkillId,
-  organizationId,
-  safeDb,
   skillName,
-  userId,
+  ...context
 }: ChatSkillContext & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
   skillName: string;
-}): Promise<Result<StellaSkill, SafeDbError>> => {
-  const rowResult = await findInstalledSkill({
+}): Promise<Result<LoadedChatSkill | null, SafeDbError>> =>
+  (await loadAvailableChatSkills({ ...context, skillNames: [skillName] })).map(
+    (loaded) => loaded.get(skillName) ?? null,
+  );
+
+/**
+ * `loadAvailableChatSkill` for several names in two queries. A name missing
+ * from the result is not available to the caller.
+ */
+export const loadAvailableChatSkills = async ({
+  activeSkillId,
+  organizationId,
+  safeDb,
+  skillNames,
+  userId,
+}: ChatSkillContext & {
+  activeSkillId?: SafeId<"agentSkill"> | undefined;
+  skillNames: readonly string[];
+}): Promise<Result<Map<string, LoadedChatSkill>, SafeDbError>> => {
+  const rowsResult = await findInstalledSkills({
     activeSkillId,
     organizationId,
     safeDb,
-    skillName,
+    skillNames,
     userId,
   });
-  if (Result.isError(rowResult)) {
-    return Result.err(rowResult.error);
+  if (Result.isError(rowsResult)) {
+    return Result.err(rowsResult.error);
   }
-
-  const row = rowResult.value;
-  if (!row) {
-    return Result.ok(loadSkill(skillName));
+  const rows = [...rowsResult.value.values()];
+  if (rows.length === 0) {
+    return Result.ok(new Map());
   }
 
   const resources = await safeDb((tx) =>
@@ -345,75 +342,65 @@ export const loadAvailableChatSkill = async ({
       .select({
         kind: agentSkillResources.kind,
         path: agentSkillResources.path,
+        skillId: agentSkillResources.skillId,
       })
       .from(agentSkillResources)
-      .where(eq(agentSkillResources.skillId, row.id))
+      .where(
+        inArray(
+          agentSkillResources.skillId,
+          rows.map(({ id }) => id),
+        ),
+      )
       .orderBy(agentSkillResources.path)
-      .limit(LIMITS.agentSkillResourcesPerSkill),
+      .limit(LIMITS.agentSkillResourcesPerSkill * rows.length),
   );
   if (Result.isError(resources)) {
     return Result.err(resources.error);
   }
 
-  return Result.ok({
-    compatibility: row.compatibility,
-    description: row.description,
-    license: row.license,
-    metadata: row.metadata,
-    name: row.slug,
-    version: row.version,
-    body: row.body,
-    resources: resources.value,
-  });
-};
-
-export const listAvailableChatSkillResources = async ({
-  activeSkillId,
-  organizationId,
-  safeDb,
-  skillName,
-  userId,
-}: ChatSkillContext & {
-  activeSkillId?: SafeId<"agentSkill"> | undefined;
-  skillName: string;
-}): Promise<Result<SkillResource[], SafeDbError>> => {
-  const rowResult = await findInstalledSkill({
-    activeSkillId,
-    organizationId,
-    safeDb,
-    skillName,
-    userId,
-  });
-  if (Result.isError(rowResult)) {
-    return Result.err(rowResult.error);
-  }
-
-  const row = rowResult.value;
-  if (!row) {
-    return Result.ok(listSkillResources(skillName));
-  }
-
-  const resources = await safeDb((tx) =>
-    tx
-      .select({
-        kind: agentSkillResources.kind,
-        path: agentSkillResources.path,
-      })
-      .from(agentSkillResources)
-      .where(eq(agentSkillResources.skillId, row.id))
-      .orderBy(agentSkillResources.path)
-      .limit(LIMITS.agentSkillResourcesPerSkill),
+  return Result.ok(
+    new Map(
+      rows.map((row) => [
+        row.slug,
+        {
+          body: row.body,
+          compatibility: row.compatibility,
+          description: row.description,
+          id: row.id,
+          license: row.license,
+          metadata: row.metadata,
+          name: row.slug,
+          origin: row.origin,
+          resources: resources.value
+            .filter(({ skillId }) => skillId === row.id)
+            .slice(0, LIMITS.agentSkillResourcesPerSkill)
+            .map(({ kind, path }) => ({ kind, path })),
+          version: row.version,
+        },
+      ]),
+    ),
   );
-  return resources;
 };
 
-export type AvailableChatSkillResourceRead = {
-  content: string;
-  /** DB row id when the skill is installed; `null` for built-in
-   *  skills that live on disk and have no row to mutate. */
-  skillId: SafeId<"agentSkill"> | null;
-  origin: "authored" | "built-in" | "bundled" | "upload" | "url";
-};
+export const SKILL_RESOURCE_READ_STATUS = {
+  found: "found",
+  resourceNotFound: "resource-not-found",
+  skillNotFound: "skill-not-found",
+} as const;
+
+export type AvailableChatSkillResourceRead =
+  | {
+      status: typeof SKILL_RESOURCE_READ_STATUS.found;
+      content: string;
+      kind: SkillResourceKind;
+      origin: AgentSkillOrigin;
+      skillId: SafeId<"agentSkill">;
+    }
+  | {
+      status: typeof SKILL_RESOURCE_READ_STATUS.resourceNotFound;
+      skillId: SafeId<"agentSkill">;
+    }
+  | { status: typeof SKILL_RESOURCE_READ_STATUS.skillNotFound };
 
 export const readAvailableChatSkillResource = async ({
   activeSkillId,
@@ -427,33 +414,27 @@ export const readAvailableChatSkillResource = async ({
   path: string;
   skillName: string;
 }): Promise<Result<AvailableChatSkillResourceRead, SafeDbError>> => {
-  const rowResult = await findInstalledSkill({
+  const rowResult = await findInstalledSkills({
     activeSkillId,
     organizationId,
     safeDb,
-    skillName,
+    skillNames: [skillName],
     userId,
   });
   if (Result.isError(rowResult)) {
     return Result.err(rowResult.error);
   }
 
-  const row = rowResult.value;
+  const row = rowResult.value.get(skillName);
   if (!row) {
-    return Result.ok({
-      content: readSkillResource({
-        resourcePath: path,
-        skillId: skillName,
-      }),
-      skillId: null,
-      origin: "built-in",
-    });
+    return Result.ok({ status: SKILL_RESOURCE_READ_STATUS.skillNotFound });
   }
 
   const resources = await safeDb((tx) =>
     tx
       .select({
         content: agentSkillResources.content,
+        kind: agentSkillResources.kind,
       })
       .from(agentSkillResources)
       .where(
@@ -468,23 +449,37 @@ export const readAvailableChatSkillResource = async ({
     return Result.err(resources.error);
   }
 
+  const resource = resources.value.at(0);
+  if (!resource) {
+    return Result.ok({
+      status: SKILL_RESOURCE_READ_STATUS.resourceNotFound,
+      skillId: row.id,
+    });
+  }
+
   return Result.ok({
-    content: resources.value.at(0)?.content ?? "",
-    skillId: row.id,
+    status: SKILL_RESOURCE_READ_STATUS.found,
+    content: resource.content,
+    kind: resource.kind,
     origin: row.origin,
+    skillId: row.id,
   });
 };
 
-const findInstalledSkill = async ({
+/** The row each name resolves to for the caller, keyed by slug. */
+const findInstalledSkills = async ({
   activeSkillId,
   organizationId,
   safeDb,
-  skillName,
+  skillNames,
   userId,
 }: ChatSkillContext & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
-  skillName: string;
+  skillNames: readonly string[];
 }) => {
+  if (skillNames.length === 0) {
+    return Result.ok(new Map<string, InstalledSkillRow>());
+  }
   const enabledOrActive =
     activeSkillId === undefined
       ? eq(agentSkills.enabled, true)
@@ -509,7 +504,7 @@ const findInstalledSkill = async ({
         and(
           eq(agentSkills.organizationId, organizationId),
           enabledOrActive,
-          eq(agentSkills.slug, skillName),
+          inArray(agentSkills.slug, [...skillNames]),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
         ),
       )
@@ -519,18 +514,33 @@ const findInstalledSkill = async ({
     return Result.err(rows.error);
   }
 
-  return Result.ok(
-    rows.value
-      .toSorted(
-        (a, b) =>
-          activeSkillPriority(a.id, activeSkillId) -
-            activeSkillPriority(b.id, activeSkillId) ||
-          scopePriority(a.scope) - scopePriority(b.scope) ||
-          // oxlint-disable-next-line require-cached-collator/require-cached-collator -- id tiebreak for deterministic ordering, not display text
-          a.id.localeCompare(b.id),
-      )
-      .at(0) ?? null,
-  );
+  const bySlug = new Map<string, InstalledSkillRow>();
+  for (const row of rows.value.toSorted(
+    (a, b) =>
+      activeSkillPriority(a.id, activeSkillId) -
+        activeSkillPriority(b.id, activeSkillId) ||
+      scopePriority(a.scope) - scopePriority(b.scope) ||
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- id tiebreak for deterministic ordering, not display text
+      a.id.localeCompare(b.id),
+  )) {
+    if (!bySlug.has(row.slug)) {
+      bySlug.set(row.slug, row);
+    }
+  }
+  return Result.ok(bySlug);
+};
+
+type InstalledSkillRow = {
+  body: string;
+  compatibility: string | null;
+  description: string;
+  id: SafeId<"agentSkill">;
+  license: string | null;
+  metadata: Record<string, string>;
+  origin: AgentSkillOrigin;
+  scope: "team" | "private";
+  slug: string;
+  version: string | null;
 };
 
 type InstalledSkillMetadataRow = {
@@ -566,20 +576,7 @@ const resolveSkillPrecedence = (
       license: row.license,
       metadata: row.metadata,
       name: row.slug,
-      source: "installed",
       version: row.version,
-    });
-  }
-
-  for (const skill of getChatSkillMetadata()) {
-    if (seen.has(skill.name)) {
-      continue;
-    }
-    seen.add(skill.name);
-    skills.push({
-      ...skill,
-      id: skill.name,
-      source: "built-in",
     });
   }
 

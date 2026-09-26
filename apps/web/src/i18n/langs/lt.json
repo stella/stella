@@ -950,6 +950,7 @@
     "caseLawGreeting": "Klauskite apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į DI pokalbį",
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
+    "commandsSection": "Komandos",
     "composerMenu": {
       "context": "Kontekstas",
       "editMode": "Redagavimo režimas",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Paskutinės atidarytos bylos",
       "noMatters": "Bylų dar nėra",
-      "noPrompts": "Įgūdžių dar nėra",
       "noRecentChats": "Nėra naujausių pokalbių",
+      "noSkills": "Įgūdžių dar nėra",
       "pinnedMatters": "Prisegtos bylos",
-      "prompts": "Įgūdžiai",
-      "recentChats": "Neseniai naudoti pokalbiai"
+      "recentChats": "Neseniai naudoti pokalbiai",
+      "skills": "Įgūdžiai"
     },
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "Nėra atitinkančių įgūdžių",
-      "noShortcuts": "Įgūdžių dar nėra. Pridėkite juos skiltyje Žinios → Įgūdžiai.",
       "tryOne": "Pradėk vienu iš šių"
     },
     "queuedAttachmentCount": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Perrašyti su DI",
-      "aiRewritePlaceholder": "Sutrumpinkite formuluotę; pridėkite žingsnį dėl šaltinių citavimo…",
-      "aiRewritePrompt": "Aprašykite, kaip perrašyti šį failą",
-      "aiRewriteRunning": "Perrašoma…",
-      "binaryPreviewUnsupported": "Dvejetainių failų peržiūra nepalaikoma. Šį failą redaguokite iš naujo įkeldami įgūdžio paketą.",
-      "builtInBadge": "Integruota",
-      "builtInSection": "Integruoti įgūdžiai",
-      "chooseFile": "Pasirinkite failą arba vilkite jį čia",
-      "coaching": {
-        "publish": "Paskelbti įgūdį"
-      },
-      "deleteConfirmDescription": "„{name}“ bus pašalintas iš šios darbo srities.",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
-      "description": "Įdiekite SKILL.md paketus, kurie pokalbiui prideda specializuotų metodų ir tik skaitymui skirtų išteklių.",
       "disableSkill": "Išjungti įgūdį",
-      "disabled": "Išjungta",
       "discoverSkills": "Ieškoti įgūdžių",
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių}}",
-      "dropFile": "Numeskite SKILL.md arba .zip čia",
       "editSkill": "Redaguoti įgūdį",
-      "emptyDescription": "Įkelkite SKILL.md failą, suglaudintą įgūdžio aplanką arba importuokite viešą GitHub įgūdžio URL.",
-      "emptyTitle": "Įdiekite pirmąjį įgūdį",
       "enableSkill": "Įjungti įgūdį",
-      "enabled": "Įjungta",
       "fileExists": "Failas šiuo keliu jau yra",
       "filesHeading": "Failai",
-      "formBodyHelp": "Markdown instrukcijos, kurias agentas perskaito iškvietus įgūdį.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Pridėti failą",
-      "generateDraft": "Sukurti įgūdžio juodraštį",
-      "generateExamplesLabel": "Pavyzdiniai paleidikliai arba scenarijai (nebūtina)",
-      "generateExamplesPlaceholder": "Kai naudotojas klausia apie... Kai peržiūrima sutartis, kurioje... ",
-      "generateFeedbackLabel": "Patikslinimai (nebūtina)",
-      "generateFeedbackPlaceholder": "Sugriežtinkite paleidimo sąlygas; pridėkite žingsnį dėl šaltinių citavimo.",
-      "generateHelp": "Aprašykite norimą įgūdį. Modelis parengs SKILL.md, kurį galėsite peržiūrėti ir redaguoti prieš įdiegdami.",
-      "generateIntentLabel": "Ką šis įgūdis turėtų daryti?",
-      "generateIntentPlaceholder": "Įgūdis, kuris apibendrina teismų sprendimus į trumpą santrauką su sprendimo esme, motyvais ir citata.",
-      "generateResourceContentPlaceholder": "Šio failo Markdown turinys…",
-      "generateResourceDuplicatePathError": "Kiekvieno lydimojo failo kelias turi būti unikalus.",
-      "generateResourcePathError": "Kelias turi prasidėti references/, prompts/ arba knowledge/ ir baigtis .md (mažosios raidės, skaitmenys, brūkšneliai, taškai, pabraukimai).",
-      "generateResourcesHelp": "Papildomi Markdown failai, pateikiami kartu su SKILL.md.",
-      "generateResourcesLabel": "Papildomi failai",
-      "generateSkill": "Generuoti su DI",
-      "generateTitle": "Generuoti įgūdį su DI",
-      "generating": "Generuojama…",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
       "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",
@@ -3160,16 +3123,14 @@
       "newFolder": "Naujas aplankas",
       "pdfPreviewSoon": "PDF peržiūra bus galima, kai bus palaikomi dvejetainiai įgūdžių ištekliai.",
       "renameFile": "Pervadinti",
-      "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
       "scopePrivate": "Tik man",
       "scopeTeam": "Visiems komandoje",
-      "selectFileHint": "Pasirinkite failą iš sąrašo, kad atidarytumėte jį dešinėje esančiame redagavimo skydelyje.",
-      "selectedFile": "Pasirinkta: {name}",
       "selectionLimit": "Vienu metu pasirinkite iki {count} įgūdžių.",
-      "sourceUpload": "Įkelta",
-      "sourceUrl": "Viešas URL",
-      "unsavedChanges": "Neišsaugoti pakeitimai — atmesti?",
-      "uploadFile": "Įkelti failą",
+      "skippedFiles": "{count, plural, one {# failas nebuvo importuotas} few {# failai nebuvo importuoti} many {# failo nebuvo importuota} other {# failų nebuvo importuota}}",
+      "skippedReasonNotUtf8Text": "Ne UTF-8 tekstas",
+      "skippedReasonOutsideSkillFolder": "Už įgūdžio aplanko ribų",
+      "skippedReasonUnsupportedExtension": "Nepalaikomas failo tipas",
+      "skippedReasonUnsupportedFolder": "Ne išteklių aplanke",
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Įvertinti kontroliniai sąrašai, tikrinantys dokumentus pagal jūsų standartus"
       },
-      "prompts": {
-        "description": "Pakartotinai naudojami įgūdžiai, pasiekiami pokalbyje per /",
+      "skills": {
         "title": "Įgūdžiai"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Įveskite komandą pokalbyje, kad paleistumėte šį įgūdį.",
       "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
       "commandPlaceholder": "pvz. apibendrinti",
-      "createTitle": "Naujas įgūdis",
-      "deleteConfirmDescription": "Šis įgūdis bus pašalintas visam laikui.",
-      "deleteShortcut": "Ištrinti įgūdį",
-      "emptyDescription": "Kurkite pakartotinai naudojamus įgūdžius darbams, kuriuos jūsų komanda kartoja — nuo santraukų iki pirminio rengimo instrukcijų.",
-      "emptyState": "Įgūdžių dar nėra. Pridėkite pirmąjį.",
-      "emptyTitle": "Sukurkite pirmąjį įgūdį",
-      "emptyVideoLabel": "Įgūdžių apžvalga",
       "errors": {
-        "commandConflict": "Įgūdis su šiuo / pavadinimu jau yra",
-        "commandInvalid": "Naudokite tik mažąsias raides, skaitmenis, brūkšnelius ir pabraukimus",
-        "commandReserved": "\"/{command}\" yra rezervuotas įgūdis"
+        "commandInvalid": "Naudokite tik mažąsias raides, skaitmenis, brūkšnelius ir pabraukimus"
       },
       "form": {
-        "command": "Įgūdžio spartusis pavadinimas",
-        "commandHint": "/ įgūdžio pavadinimas: tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Trumpas aprašymas, rodomas pasirinkimo lange",
-        "namePlaceholder": "pvz., Apibendrinti dokumentą",
-        "promptPlaceholder": "Instrukcijos, įterpiamos į pokalbio redaktorių naudojant šį įgūdį",
         "scope": "Matomumas",
         "scopePrivate": "Tik aš",
         "scopeTeam": "Visi komandoje"
-      },
-      "shadowed": "Uždengta komandos įgūdžio"
+      }
     }
   },
   "lawHome": {

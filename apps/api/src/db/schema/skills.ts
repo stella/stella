@@ -1,3 +1,5 @@
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
@@ -13,12 +15,13 @@ import {
   user,
   timestamptz,
 } from "./common";
-import {
-  AGENT_SKILL_ORIGINS,
-  AGENT_SKILL_RESOURCE_KINDS,
-  AGENT_SKILL_SCOPES,
-} from "./files-views";
-import type { AgentSkillResourceKind } from "./files-views";
+import { AGENT_SKILL_ORIGINS, AGENT_SKILL_SCOPES } from "./files-views";
+
+const sqlValueList = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  );
 
 export const agentSkills = p.pgTable(
   "agent_skills",
@@ -50,10 +53,6 @@ export const agentSkills = p.pgTable(
     // unique per (org, user). Null means "no command" and never
     // collides.
     command: p.varchar({ length: 50 }),
-    // Optional hint surfaced to the model so it can decide whether
-    // to auto-invoke this skill. When null, the skill is only
-    // user-triggered (via slash command, picker, etc.).
-    autoInvokeHint: p.text("auto_invoke_hint"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -61,6 +60,17 @@ export const agentSkills = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // The scope decides who may read and write the row (see
+    // `agentSkillPolicies`), so the database refuses values the code does not
+    // know.
+    p.check(
+      "agent_skills_scope_check",
+      sql`${table.scope} IN (${sqlValueList(AGENT_SKILL_SCOPES)})`,
+    ),
+    p.check(
+      "agent_skills_origin_check",
+      sql`${table.origin} IN (${sqlValueList(AGENT_SKILL_ORIGINS)})`,
+    ),
     p
       .uniqueIndex("agent_skills_org_team_slug_uidx")
       .on(table.organizationId, table.slug)
@@ -101,15 +111,16 @@ export const agentSkillResources = p.pgTable(
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
     path: p.varchar({ length: 512 }).notNull(),
-    kind: p
-      .text("kind", { enum: AGENT_SKILL_RESOURCE_KINDS })
-      .notNull()
-      .$type<AgentSkillResourceKind>(),
+    kind: p.text("kind", { enum: SKILL_RESOURCE_KINDS }).notNull(),
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "agent_skill_resources_kind_check",
+      sql`${table.kind} IN (${sqlValueList(SKILL_RESOURCE_KINDS)})`,
+    ),
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),
@@ -168,9 +179,8 @@ export const AGENT_SKILL_PROPOSAL_STATUSES = [
 export type AgentSkillProposalStatus =
   (typeof AGENT_SKILL_PROPOSAL_STATUSES)[number];
 
-const AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
-  AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
-  sql`, `,
+const AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sqlValueList(
+  AGENT_SKILL_PROPOSAL_STATUSES,
 );
 
 /** Terminal statuses: reached once, by a reviewer, and never left. */
@@ -179,9 +189,8 @@ export const DECIDED_AGENT_SKILL_PROPOSAL_STATUSES = [
   "rejected",
 ] as const satisfies readonly AgentSkillProposalStatus[];
 
-const DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
-  DECIDED_AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
-  sql`, `,
+const DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sqlValueList(
+  DECIDED_AGENT_SKILL_PROPOSAL_STATUSES,
 );
 
 /**

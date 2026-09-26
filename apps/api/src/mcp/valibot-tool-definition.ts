@@ -535,6 +535,23 @@ export const defineValibotMcpTool = <
 };
 
 /**
+ * Defines the input contract of a dynamic tool family, whose definitions are
+ * built per tenant rather than through `defineValibotMcpTool`: the advertised
+ * JSON Schema and the schema dispatch parses with come from one Valibot source.
+ */
+export const defineMcpToolInput = <
+  const TSchema extends NullAsAbsentInputSchema,
+>(
+  inputSchemaSource: TSchema,
+): { inputSchema: McpToolInputSchema; inputSchemaSource: TSchema } => ({
+  inputSchema: deriveMcpInputSchema(
+    inputSchemaSource.advertisedSchema,
+    undefined,
+  ),
+  inputSchemaSource,
+});
+
+/**
  * Defines the one output contract used for handler typing, tools/list, and
  * post-egress validation. Keeping the Valibot source in the returned value is
  * deliberate: publishing only its JSON Schema projection would lose the

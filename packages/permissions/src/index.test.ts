@@ -3,7 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { BETTER_AUTH_ORGANIZATION_STATEMENTS } from "@stll/auth-model";
 
 import type { PermissionInput } from "./index";
-import { roles, statements } from "./index";
+import {
+  isOrganizationManagementRole,
+  ORGANIZATION_MANAGEMENT_ROLES,
+  roles,
+  statements,
+} from "./index";
 
 const ROLE_NAMES = ["owner", "admin", "member", "intern", "external"] as const;
 
@@ -55,6 +60,25 @@ describe("organization management permissions", () => {
     expect(roles.external.authorize({ invitation: ["create"] }).success).toBe(
       false,
     );
+  });
+});
+
+describe("organization management roles", () => {
+  test("are exactly the roles holding the management grants", () => {
+    const holdersOfManagementGrants = ROLE_NAMES.filter(
+      (role) =>
+        roles[role].authorize({ organizationSettings: ["update"] }).success,
+    );
+
+    expect(holdersOfManagementGrants.toSorted()).toEqual(
+      ORGANIZATION_MANAGEMENT_ROLES.toSorted(),
+    );
+    for (const role of ROLE_NAMES) {
+      expect(isOrganizationManagementRole(role)).toBe(
+        holdersOfManagementGrants.some((holder) => holder === role),
+      );
+    }
+    expect(isOrganizationManagementRole("superuser")).toBe(false);
   });
 });
 

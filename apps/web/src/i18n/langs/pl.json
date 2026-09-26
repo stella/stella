@@ -950,6 +950,7 @@
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
+    "commandsSection": "Polecenia",
     "composerMenu": {
       "context": "Kontekst",
       "editMode": "Tryb edycji",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
-      "noPrompts": "Nie ma jeszcze umiejętności",
       "noRecentChats": "Brak ostatnich czatów",
+      "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
-      "prompts": "Umiejętności",
-      "recentChats": "Ostatnie czaty"
+      "recentChats": "Ostatnie czaty",
+      "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "Brak pasujących umiejętności",
-      "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
       "tryOne": "Zacznij od jednego z tych"
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Przepisz z pomocą AI",
-      "aiRewritePlaceholder": "Doprecyzuj sformułowania; dodaj krok dotyczący cytowania źródeł…",
-      "aiRewritePrompt": "Opisz, jak przepisać ten plik",
-      "aiRewriteRunning": "Przepisywanie…",
-      "binaryPreviewUnsupported": "Podgląd plików binarnych nie jest obsługiwany. Aby edytować ten plik, prześlij ponownie pakiet umiejętności.",
-      "builtInBadge": "Wbudowana",
-      "builtInSection": "Wbudowane umiejętności",
-      "chooseFile": "Wybierz plik lub przeciągnij go tutaj",
-      "coaching": {
-        "publish": "Opublikuj umiejętność"
-      },
-      "deleteConfirmDescription": "„{name}” zostanie usunięta z tego obszaru roboczego.",
       "deleteFile": "Usuń plik",
       "deleteFileConfirm": "Usunąć plik? Tej operacji nie można cofnąć.",
-      "description": "Instaluj pakiety SKILL.md, które dodają do czatu specjalistyczne metody i zasoby tylko do odczytu.",
       "disableSkill": "Wyłącz umiejętność",
-      "disabled": "Wyłączona",
       "discoverSkills": "Znajdź umiejętności",
       "discoveredSkills": "{count, plural, one {Znaleziono # umiejętność} few {Znaleziono # umiejętności} many {Znaleziono # umiejętności} other {Znaleziono # umiejętności}}",
       "discoveryEmpty": "W tym repozytorium lub folderze nie znaleziono umiejętności.",
       "discoverySkippedInvalid": "{count, plural, one {Pominięto # nieprawidłową umiejętność} few {Pominięto # nieprawidłowe umiejętności} many {Pominięto # nieprawidłowych umiejętności} other {Pominięto # nieprawidłowych umiejętności}}",
-      "dropFile": "Upuść tutaj SKILL.md lub .zip",
       "editSkill": "Edytuj umiejętność",
-      "emptyDescription": "Prześlij plik SKILL.md, spakowany folder umiejętności albo zaimportuj publiczny adres URL umiejętności z GitHuba.",
-      "emptyTitle": "Zainstaluj pierwszą umiejętność",
       "enableSkill": "Włącz umiejętność",
-      "enabled": "Włączona",
       "fileExists": "Plik o tej ścieżce już istnieje",
       "filesHeading": "Pliki",
-      "formBodyHelp": "Instrukcje w formacie Markdown, które agent odczytuje po uruchomieniu umiejętności.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Dodaj plik",
-      "generateDraft": "Utwórz wersję roboczą umiejętności",
-      "generateExamplesLabel": "Przykładowe wyzwalacze lub scenariusze (opcjonalnie)",
-      "generateExamplesPlaceholder": "Gdy użytkownik pyta o… Podczas analizy umowy, która… ",
-      "generateFeedbackLabel": "Korekty (opcjonalnie)",
-      "generateFeedbackPlaceholder": "Zawęź warunki wyzwalania; dodaj krok dotyczący cytowania źródeł.",
-      "generateHelp": "Opisz umiejętność, której potrzebujesz. Model przygotuje plik SKILL.md, który możesz sprawdzić i zmodyfikować przed instalacją.",
-      "generateIntentLabel": "Co ma robić ta umiejętność?",
-      "generateIntentPlaceholder": "Umiejętność, która streszcza orzeczenia sądowe w krótką notatkę zawierającą rozstrzygnięcie, uzasadnienie i sygnaturę.",
-      "generateResourceContentPlaceholder": "Treść tego pliku w formacie Markdown…",
-      "generateResourceDuplicatePathError": "Każda ścieżka pliku towarzyszącego musi być unikalna.",
-      "generateResourcePathError": "Ścieżka musi zaczynać się od references/, prompts/ lub knowledge/ i kończyć się na .md (małe litery, cyfry, łączniki, kropki, podkreślenia).",
-      "generateResourcesHelp": "Towarzyszące pliki Markdown dołączone do pliku SKILL.md.",
-      "generateResourcesLabel": "Pliki towarzyszące",
-      "generateSkill": "Wygeneruj z AI",
-      "generateTitle": "Wygeneruj umiejętność z AI",
-      "generating": "Generowanie…",
       "howItRuns": "Jak działa",
       "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
       "importFailureIntegrity": "Źródło umiejętności zmieniło się po jego wykryciu. Przejrzyj je ponownie.",
@@ -3160,16 +3123,14 @@
       "newFolder": "Nowy folder",
       "pdfPreviewSoon": "Podgląd PDF będzie dostępny po wprowadzeniu obsługi binarnych zasobów umiejętności.",
       "renameFile": "Zmień nazwę",
-      "resources": "{count, plural, one {# zasób} few {# zasoby} many {# zasobów} other {# zasobu}}",
       "scopePrivate": "Tylko ja",
       "scopeTeam": "Wszyscy w zespole",
-      "selectFileHint": "Wybierz plik z listy, aby otworzyć go w panelu edytora po prawej stronie.",
-      "selectedFile": "Wybrano: {name}",
       "selectionLimit": "Wybierz jednocześnie maksymalnie {count} umiejętności.",
-      "sourceUpload": "Przesłano",
-      "sourceUrl": "Publiczny URL",
-      "unsavedChanges": "Niezapisane zmiany — odrzucić?",
-      "uploadFile": "Prześlij plik",
+      "skippedFiles": "{count, plural, one {# plik nie został zaimportowany} few {# pliki nie zostały zaimportowane} many {# plików nie zostało zaimportowanych} other {# pliku nie zaimportowano}}",
+      "skippedReasonNotUtf8Text": "To nie jest tekst UTF-8",
+      "skippedReasonOutsideSkillFolder": "Poza folderem umiejętności",
+      "skippedReasonUnsupportedExtension": "Nieobsługiwany typ pliku",
+      "skippedReasonUnsupportedFolder": "Poza folderem zasobów",
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Oceniane listy kontrolne, które weryfikują dokumenty względem Twoich standardów"
       },
-      "prompts": {
-        "description": "Umiejętności wielokrotnego użytku dostępne w czacie przez /",
+      "skills": {
         "title": "Umiejętności"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Wpisz to na czacie, aby uruchomić tę umiejętność.",
       "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
-      "createTitle": "Nowa umiejętność",
-      "deleteConfirmDescription": "Ta umiejętność zostanie trwale usunięta.",
-      "deleteShortcut": "Usuń umiejętność",
-      "emptyDescription": "Twórz umiejętności wielokrotnego użytku do powtarzalnej pracy zespołu, od streszczeń po wstępne instrukcje redakcyjne.",
-      "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
-      "emptyTitle": "Utwórz pierwszą umiejętność",
-      "emptyVideoLabel": "Przegląd umiejętności",
       "errors": {
-        "commandConflict": "Umiejętność o tej nazwie / już istnieje",
-        "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń",
-        "commandReserved": "\"/{command}\" to zarezerwowana umiejętność"
+        "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń"
       },
       "form": {
-        "command": "Skrót umiejętności",
-        "commandHint": "Nazwa / umiejętności: tylko małe litery, cyfry, łączniki i podkreślenia",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Krótki opis widoczny w selektorze",
-        "namePlaceholder": "np. Streść dokument",
-        "promptPlaceholder": "Instrukcje wstawiane do pola czatu po użyciu tej umiejętności",
         "scope": "Widoczność",
         "scopePrivate": "Tylko ja",
         "scopeTeam": "Wszyscy w zespole"
-      },
-      "shadowed": "Przesłonięte przez umiejętność zespołu"
+      }
     }
   },
   "lawHome": {

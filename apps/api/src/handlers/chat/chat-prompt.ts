@@ -16,6 +16,7 @@ import {
   CHAT_THREAD_PLACEHOLDER_TITLE,
   type EmailCitationBlock,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+  SKILL_REF_HREF_PREFIX,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -69,10 +70,10 @@ import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
-  getChatSkillMetadata,
   listAvailableChatSkillMetadata,
   resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
@@ -327,7 +328,7 @@ const buildCoreRuleSections = ({
     ? [
         "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
         "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
-        "SKILL-REF LINKS: When the user's message contains a markdown link of the form `[name](#stella-skill-ref=slug)`, treat it as an explicit request to use that skill. Call `load-skill` with `skillName: slug` immediately (unless that skill is already loaded in this thread), then follow POST-LOAD-SKILL. Do not echo the link or narrate the load.",
+        `SKILL-REF LINKS: A markdown link of the form \`[name](${SKILL_REF_HREF_PREFIX}slug)\` in the user's message is an explicit request to use that skill. Its instructions are preloaded under REQUESTED SKILLS: apply them and follow POST-LOAD-SKILL. Call \`load-skill\` only for a referenced skill that section tells you to load. Do not echo the link or narrate the load.`,
       ]
     : []),
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
@@ -344,7 +345,6 @@ export type UserContext = IncomingUserContext;
 
 type PromptSkillMetadata = SkillMetadata & {
   displayName?: string | undefined;
-  source?: "built-in" | "installed" | undefined;
 };
 
 const chatCacheStablePrefixSchema = v.pipe(
@@ -373,7 +373,7 @@ export type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 export type ChatPromptParts = {
   cacheStablePrefix: ChatCacheStablePrefix;
   /**
-   * Server-built scaffold: product copy, built-in skill catalog,
+   * Server-built scaffold: product copy, skill catalog,
    * jurisdictions, workspace metadata. Carries no third-party PII
    * and is sent to the model verbatim — *no anonymization*.
    */
@@ -655,7 +655,7 @@ export const buildChatSystemPromptParts = async ({
               userId,
             }),
           )
-        : getChatSkillMetadata();
+        : [];
     const activeSkillContext =
       organizationId && userId
         ? yield* Result.await(
@@ -938,7 +938,7 @@ type BuildGlobalPromptProps = {
 
 export const buildGlobalPrompt = ({
   practiceJurisdictions = [],
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps) =>
@@ -951,7 +951,7 @@ export const buildGlobalPrompt = ({
 
 export const buildGlobalPromptParts = ({
   practiceJurisdictions = [],
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
@@ -964,7 +964,7 @@ export const buildGlobalPromptParts = ({
   });
 
 export type ChatContextPromptEstimate = {
-  /** System-prompt tokens: core rule sections + built-in skill catalog. */
+  /** System-prompt tokens: core rule sections + the given skill catalog. */
   promptTokens: number;
   /** Tool-catalog tokens: the code-mode read surface (`CHAT_CODE_MODE_SYSTEM_PROMPT`). */
   toolTokens: number;
@@ -986,7 +986,7 @@ export type ChatContextPromptEstimate = {
  */
 export const estimateChatContextPromptTokens = ({
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
 }: {
   toolAvailability?: ChatToolAvailability | undefined;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
@@ -1018,7 +1018,7 @@ const buildWorkspacePromptPartsFromDb = async ({
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability,
   userContext,
   workspaceId,
@@ -1183,7 +1183,7 @@ export const buildWorkspacePromptText = ({
   extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
@@ -1206,7 +1206,7 @@ export const buildWorkspacePromptParts = ({
   extractedProperties = [],
   practiceJurisdictions = [],
   refRegistry,
-  skillMetadata = getChatSkillMetadata(),
+  skillMetadata = [],
   toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
@@ -2465,7 +2465,6 @@ const mergeActiveSkillMetadata = ({
     description: activeSkillContext.description,
     displayName: activeSkillContext.displayName,
     name: activeSkillContext.toolName,
-    source: activeSkillContext.source,
     version: activeSkillContext.version,
   };
   const activeSkillIndex = skillMetadata.findIndex(
@@ -2486,9 +2485,65 @@ const mergeActiveSkillMetadata = ({
     return {
       ...skill,
       displayName: skill.displayName ?? activeMetadata.displayName,
-      source: skill.source ?? activeMetadata.source,
     };
   });
+};
+
+/**
+ * The skills the latest user message references explicitly. Their
+ * instructions ride in the prompt, so an explicit pick does not depend on the
+ * model deciding to call `load-skill`.
+ */
+export const buildRequestedSkillsSection = ({
+  loaded,
+  notPreloaded,
+  unavailable,
+}: RequestedSkills): string => {
+  const sections = loaded.map((skill) => {
+    const resources =
+      skill.resources.length > 0
+        ? `\nFiles (read with read-skill-resource):\n${skill.resources
+            .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
+            .map(
+              (resource) =>
+                `- ${sanitizePromptLine({ maxLength: 512, text: resource.path })} (${resource.kind})`,
+            )
+            .join("\n")}`
+        : "";
+    const truncated = skill.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
+    return [
+      `Skill: ${sanitizePromptLine({ maxLength: 80, text: skill.name })}${resources}`,
+      truncated
+        ? `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call load-skill for the rest):`
+        : "Instructions:",
+      sanitizePromptBlock({
+        maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+        text: skill.body,
+      }),
+    ].join("\n");
+  });
+  if (loaded.length > 0) {
+    sections.unshift(
+      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
+    );
+  }
+  if (notPreloaded.length > 0) {
+    sections.push(
+      `The user's latest message also references these skills; call load-skill for each before answering: ${notPreloaded
+        .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
+        .join(", ")}.`,
+    );
+  }
+  if (unavailable.length > 0) {
+    sections.push(
+      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this chat (removed, disabled, or not shared with the user): ${unavailable
+        .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
+        .join(
+          ", ",
+        )}. Tell the user in one sentence that you cannot use them, then continue without them.`,
+    );
+  }
+  return sections.join("\n\n");
 };
 
 export const buildActiveSkillSection = (
@@ -2598,15 +2653,12 @@ const buildPromptParts = ({
   toolAvailability,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
-  const { safeSkillMetadata, untrustedSkillMetadata } =
-    splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
       ...buildCoreRuleSections({
         skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
         toolAvailability,
       }),
-      buildSkillCatalogSection(safeSkillMetadata),
       CHAT_CODE_MODE_SYSTEM_PROMPT,
     ]),
   );
@@ -2622,14 +2674,14 @@ const buildPromptParts = ({
   const safePrompt = brandChatSafePrompt(joinPromptSections(safeSections));
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. Installed skill names/descriptions are
+  // text into the prompt. Skill names/descriptions are
   // user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
   // user's own profile (name, email). All must cross the
   // anonymizer in anonymized mode.
   const untrustedSections: string[] = [
-    buildSkillCatalogSection(untrustedSkillMetadata),
+    buildSkillCatalogSection(skillMetadata),
     ...requestContextSections,
   ];
   const userContextBlock = buildUserContextBlock(userContext);
@@ -2650,24 +2702,6 @@ const buildPromptParts = ({
     skillMetadata,
     activeSkillContext: null,
   };
-};
-
-const splitSkillMetadataForPrompt = (
-  skillMetadata: readonly PromptSkillMetadata[],
-) => {
-  const safeSkillMetadata: PromptSkillMetadata[] = [];
-  const untrustedSkillMetadata: PromptSkillMetadata[] = [];
-
-  for (const skill of skillMetadata) {
-    if (skill.source === "installed") {
-      untrustedSkillMetadata.push(skill);
-      continue;
-    }
-
-    safeSkillMetadata.push(skill);
-  }
-
-  return { safeSkillMetadata, untrustedSkillMetadata };
 };
 
 const buildPracticeJurisdictionLine = (

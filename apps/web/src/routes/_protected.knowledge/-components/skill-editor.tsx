@@ -42,6 +42,8 @@ import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import type { SkillEditAccess } from "@/components/inspector/skill-history/skill-history.logic";
+import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
@@ -56,6 +58,10 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
+  rebaseSkillMetadataDraft,
+  skillMetadataDraft,
+} from "./skill-metadata-draft.logic";
+import {
   FILENAME_PATTERN,
   reserveKnowledgePath,
 } from "./skill-resource-path.logic";
@@ -66,19 +72,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // not user-facing copy: resource paths only allow lowercase ASCII, so a
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
-
-// A skill is invoked in chat via /its-command; suggest the skill's name as that
-// command by default (lowercase, hyphenated) so the field reads as /skill-name.
-// Diacritics are decomposed and stripped first so a name like "Česká dovednost"
-// suggests "ceska-dovednost" rather than dropping the accented letters.
-const slugifyCommand = (name: string): string =>
-  name
-    .normalize("NFD")
-    .replaceAll(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replace(/^-/u, "")
-    .replace(/-$/u, "");
 
 const UPLOAD_MAX_BYTES_TEXT = 100_000;
 const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
@@ -123,6 +116,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const openChat = useInspectorTabsStore((s) => s.openChat);
 
   const detail = useQuery(skillDetailOptions(activeOrganizationId, skillId));
+  // Everyone who can see a skill opens this page; only its managers get the
+  // controls the server would accept from them.
+  const access = useSkillEditAccess(skillId);
+  const canEditContent = access === "content";
 
   // Editing happens in the right-side inspector; the editor just invalidates so
   // the catalogue + coaching reflect saves the inspector makes.
@@ -149,9 +146,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   );
   const [enabled, setEnabled] = useState(detail.data?.enabled ?? false);
   const [command, setCommand] = useState(() =>
-    detail.data
-      ? (detail.data.command ?? slugifyCommand(detail.data.name))
-      : "",
+    detail.data ? skillMetadataDraft(detail.data).command : "",
   );
   const [commandError, setCommandError] = useState<string | null>(null);
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
@@ -180,17 +175,24 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     });
   };
   const [lastDetailData, setLastDetailData] = useState(detail.data);
-  // A new server snapshot replaces the editable draft, including after save.
-  // Comparing the query object's identity preserves dirty edits between
-  // refetches while applying a changed snapshot before children render.
+  // A new server snapshot (a save refetches one) is applied before children
+  // render: fields the user has not edited follow it, unsaved edits in the
+  // others survive. The command defaults to the slugified name, so it reads as
+  // /skill-name until the user edits or clears it; it persists on blur.
   if (detail.data && detail.data !== lastDetailData) {
     setLastDetailData(detail.data);
-    setName(detail.data.name);
-    setDescription(detail.data.description);
-    setEnabled(detail.data.enabled);
-    // Default the command to the skill's name (slugified) so it's written under
-    // the / by default; the user can edit or clear it. Persisted on blur.
-    setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
+    const rebased =
+      lastDetailData === undefined
+        ? skillMetadataDraft(detail.data)
+        : rebaseSkillMetadataDraft({
+            draft: { command, description, enabled, name },
+            next: detail.data,
+            previous: lastDetailData,
+          });
+    setName(rebased.name);
+    setDescription(rebased.description);
+    setEnabled(rebased.enabled);
+    setCommand(rebased.command);
   }
 
   const resources: SkillResource[] = detail.data ? detail.data.resources : [];
@@ -345,7 +347,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }
       toastError(error, t("common.unexpectedError"));
       // The power toggle flips `enabled` optimistically; snap it back so the
-      // UI doesn't show an enable/publish the server rejected. Text fields
+      // UI doesn't show an enable the server rejected. Text fields
       // commit on blur and keep the user's draft for another attempt.
       if (detail.data) {
         setEnabled(detail.data.enabled);
@@ -486,14 +488,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   );
   const toggleAllFolders = () => {
     setCollapsedFolders(allFoldersExpanded ? new Set(allFolderIds) : new Set());
-  };
-
-  const onPublish = () => {
-    if (enabled) {
-      return;
-    }
-    setEnabled(true);
-    patchMetadata.mutate({ enabled: true });
   };
 
   // Metadata commit-on-blur helpers
@@ -651,6 +645,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={t("common.name")}
+              readOnly={!canEditContent}
               value={name}
             />
             <textarea
@@ -660,6 +655,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={t("common.description")}
+              readOnly={!canEditContent}
               rows={2}
               value={description}
             />
@@ -687,29 +683,34 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   : tSkills("scopePrivate")}
               </span>
             )}
-            <Button
-              aria-label={
-                enabled ? tSkills("disableSkill") : tSkills("enableSkill")
-              }
-              onClick={toggleEnabled}
-              size="icon-sm"
-              variant={enabled ? "secondary" : "ghost"}
-            >
-              <PowerIcon className="size-4" />
-            </Button>
-            {detail.data && !enabled && (
-              <Button
-                disabled={patchMetadata.isPending}
-                onClick={onPublish}
-                size="sm"
-              >
-                {tSkills("coaching.publish")}
-              </Button>
-            )}
+            {/* One enable control. A disabled skill (a fresh draft lands
+                disabled) spells out the action; once enabled it shrinks to
+                the power toggle. */}
+            {access !== "none" &&
+              (enabled ? (
+                <Button
+                  aria-label={tSkills("disableSkill")}
+                  disabled={patchMetadata.isPending}
+                  onClick={toggleEnabled}
+                  size="icon-sm"
+                  variant="secondary"
+                >
+                  <PowerIcon className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  disabled={patchMetadata.isPending}
+                  onClick={toggleEnabled}
+                  size="sm"
+                >
+                  <PowerIcon className="size-4" />
+                  {tSkills("enableSkill")}
+                </Button>
+              ))}
           </div>
         </div>
-        {/* How the skill runs: an optional slash command and/or an auto-invoke
-            hint. Full-width divider; fields stay a readable width. */}
+        {/* How the skill runs: its optional slash command. Full-width divider;
+            fields stay a readable width. */}
         <div className="mt-3 border-t pt-3">
           <p className="text-muted-foreground mb-2.5 text-xs font-semibold tracking-wider uppercase">
             {tSkills("howItRuns")}
@@ -736,6 +737,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}
                   placeholder={t("knowledge.skills.commandPlaceholder")}
+                  readOnly={!canEditContent}
                   value={command}
                 />
               </div>
@@ -755,6 +757,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       <FileDropZone
         className="p-3"
         coverage="content"
+        enabled={canEditContent}
         label={t("workspaces.dropToUploadFiles")}
         onDrop={(files) => {
           handleUploadFiles(files);
@@ -785,6 +788,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         {detail.data && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <SkillFileTree
+              access={access}
               collapsedFolders={collapsedFolders}
               createPending={createResource.isPending}
               deletePending={deleteResource.isPending}
@@ -828,7 +832,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           </div>
         )}
-        {detail.data && (
+        {detail.data && canEditContent && (
           <div className="mt-2 shrink-0 px-1">
             <RootAddMenu
               createPending={createResource.isPending}
@@ -846,6 +850,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 }
 
 type SkillFileTreeProps = {
+  access: SkillEditAccess;
   collapsedFolders: Set<string>;
   createPending: boolean;
   deletePending: boolean;
@@ -877,6 +882,7 @@ type SkillFileTreeProps = {
 const BODY_NODE_ID = "__body__";
 
 function SkillFileTree({
+  access,
   collapsedFolders,
   createPending,
   deletePending,
@@ -948,6 +954,9 @@ function SkillFileTree({
       }}
       onToggle={onToggleCollapsed}
       renderActions={(node) => {
+        if (access !== "content") {
+          return null;
+        }
         if (node.kind === "folder") {
           const isPending = pendingFolders.includes(node.id);
           return (

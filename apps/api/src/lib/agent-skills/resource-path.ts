@@ -1,14 +1,7 @@
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { getSkillResourceKind } from "@stll/skills/resource-kinds";
+import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
-import type { AgentSkillResourceKind } from "@/api/db/schema";
-
-// Allowed shapes:
-//   references/<file>            (kind = reference)
-//   prompts/<file>                (kind = prompt)
-//   knowledge/<file>              (kind = knowledge)
-//   <file> (no slash)             (kind = asset)
-//   <folder>/<file> other folder  (kind = asset)
-//
 // Rules:
 //   - No leading slash, no traversal segments, no empty segments.
 //   - Only lowercase letters, digits, dots, hyphens, underscores in each
@@ -21,19 +14,8 @@ import type { AgentSkillResourceKind } from "@/api/db/schema";
 // shared with the editor through @stll/api-contract.
 export const RESOURCE_PATH_PATTERN = SKILL_RESOURCE_PATH_PATTERN;
 
-const REFERENCE_PREFIX = "references/";
-const PROMPT_PREFIX = "prompts/";
-const KNOWLEDGE_PREFIX = "knowledge/";
-
-export const inferResourceKind = (path: string): AgentSkillResourceKind => {
-  if (path.startsWith(REFERENCE_PREFIX)) {
-    return "reference";
-  }
-  if (path.startsWith(PROMPT_PREFIX)) {
-    return "prompt";
-  }
-  if (path.startsWith(KNOWLEDGE_PREFIX)) {
-    return "knowledge";
-  }
-  return "asset";
-};
+// Authored files may live outside the skill package resource folders; those
+// are assets. Inside them the package classifier decides, so an authored file
+// and an imported one at the same path always get the same kind.
+export const inferResourceKind = (path: string): SkillResourceKind =>
+  getSkillResourceKind(path) ?? "asset";

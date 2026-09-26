@@ -6,10 +6,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 import type { UIMessage } from "@tanstack/ai-client";
 import { WandSparklesIcon } from "lucide-react";
 
+import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 import { cn } from "@stll/ui/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
-import { SKILL_REF_HASH_PREFIX } from "@/components/chat/streamdown-mention-link";
 import { InlinePill } from "@/components/inline-pill";
 
 type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -74,11 +74,10 @@ const LazyMessageResponse = lazy(async () => {
 // source never paints between the composer chip leaving and the
 // transcript `SkillRefChip` arriving. The placeholder's visual
 // shape matches the real chip, so no second flash when Streamdown
-// finishes parsing. Prefix is imported from the chip module so a
-// rename of `SKILL_REF_HASH_PREFIX` invalidates this matcher at
-// compile time instead of silently leaving raw markdown to flash.
+// finishes parsing. The prefix comes from its @stll/api-contract owner,
+// so this matcher cannot drift from the chip writer and the API reader.
 const SKILL_LINK_RE = new RegExp(
-  `\\[([^\\]]+)\\]\\(${SKILL_REF_HASH_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
+  `\\[([^\\]]+)\\]\\(${SKILL_REF_HREF_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
   "gu",
 );
 

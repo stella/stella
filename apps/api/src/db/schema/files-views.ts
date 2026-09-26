@@ -132,17 +132,6 @@ export const AGENT_SKILL_ORIGINS = [
 ] as const;
 export type AgentSkillOrigin = (typeof AGENT_SKILL_ORIGINS)[number];
 
-export const AGENT_SKILL_RESOURCE_KINDS = [
-  "asset",
-  "knowledge",
-  "prompt",
-  "reference",
-  "script",
-  "template",
-] as const;
-export type AgentSkillResourceKind =
-  (typeof AGENT_SKILL_RESOURCE_KINDS)[number];
-
 // Slash-command shape for `agentSkills.command`. Mirrors the legacy
 // `prompt_shortcuts.command` constraint so migrated rows remain valid.
 export const AGENT_SKILL_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/u;

@@ -4,12 +4,13 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkills } from "@/api/db/schema";
+import type { AgentSkillProposalStatus } from "@/api/db/schema";
 import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
-import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
-import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status";
+import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
+import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,7 +33,8 @@ const reviewSkillProposalBodySchema = t.Object({
 
 const config = {
   description:
-    "Accept or reject a change proposal for an agent skill. Accepting writes " +
+    "Accept or reject a change proposal for an agent skill that its author " +
+    "has submitted for review (status proposed); a draft is a 409. Accepting writes " +
     "the proposed body to the skill and records the revision it produced; " +
     "rejecting leaves the skill untouched. Either way the decision is final. " +
     "Requires the rights to edit the skill itself.",
@@ -46,6 +48,36 @@ type ReviewSkillProposalResult = {
   id: SafeId<"agentSkillProposal">;
   status: "accepted" | "rejected";
   resultRevisionId: SafeId<"agentSkillRevision"> | null;
+};
+
+/** Only a proposal its author submitted for review can be decided. */
+const requireReviewableStatus = (
+  status: AgentSkillProposalStatus,
+): Result<void, HandlerError> => {
+  switch (status) {
+    case "proposed":
+      return Result.ok(undefined);
+    case "draft":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "Proposal is still a draft; its author must submit it for review first",
+        }),
+      );
+    case "accepted":
+    case "rejected":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Proposal has already been decided",
+        }),
+      );
+    default: {
+      status satisfies never;
+      return panic(`Unhandled proposal status: ${String(status)}`);
+    }
+  }
 };
 
 const reviewSkillProposal = createSafeRootHandler(
@@ -88,7 +120,10 @@ const reviewSkillProposal = createSafeRootHandler(
               ),
             ),
           )
-          .limit(1);
+          .limit(1)
+          // Serializes with the author editing or withdrawing the proposal,
+          // which locks this row rather than the skill.
+          .for("update");
 
         const proposal = rows.at(0);
         if (!proposal) {
@@ -97,11 +132,9 @@ const reviewSkillProposal = createSafeRootHandler(
             message: "Proposal not found",
           });
         }
-        if (isDecidedProposalStatus(proposal.status)) {
-          throw new HandlerError({
-            status: 409,
-            message: "Proposal has already been decided",
-          });
+        const reviewable = requireReviewableStatus(proposal.status);
+        if (Result.isError(reviewable)) {
+          throw reviewable.error;
         }
 
         const decidedAt = new Date();
@@ -157,11 +190,9 @@ const reviewSkillProposal = createSafeRootHandler(
           .update(agentSkills)
           .set({
             body: proposal.body,
-            contentHash: hashAuthoredSkillContent({
-              body: proposal.body,
-              description: skill.description,
-              name: skill.name,
-              version: skill.version,
+            contentHash: await skillContentHashAfter(tx, {
+              skillId: params.skillId,
+              patch: { body: proposal.body },
             }),
           })
           .where(
@@ -204,7 +235,12 @@ const reviewSkillProposal = createSafeRootHandler(
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
             resourceId: params.skillId,
-            changes: { body: { old: skill.body, new: proposal.body } },
+            changes: {
+              body: {
+                old: auditedSkillBody(skill.body),
+                new: auditedSkillBody(proposal.body),
+              },
+            },
             metadata: {
               proposalId: proposal.id,
               resultRevisionId: resultRevision.id,

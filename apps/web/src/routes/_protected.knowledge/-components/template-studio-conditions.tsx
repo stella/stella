@@ -28,6 +28,7 @@ import { TextSeparator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
 import { ConditionGroupEditor } from "@/routes/_protected.knowledge/-components/condition-builder";
 import {
   emptyGroup,
@@ -573,6 +574,7 @@ const ConditionFieldEditor = ({
                 })
               }
               placeholder={t("templates.studio.conditionAiPlaceholder")}
+              skillChips={SKILL_CHIP_CATALOG.caller}
               value={field.aiPrompt ?? ""}
               valueFormat="text"
               variant="minimal"
@@ -1022,6 +1024,7 @@ const ConditionAiBuilder = ({
             mentionExtension={fieldMention}
             onChange={setPrompt}
             placeholder={t("templates.studio.conditionAiPlaceholder")}
+            skillChips={SKILL_CHIP_CATALOG.caller}
             value={prompt}
             valueFormat="text"
             variant="minimal"

@@ -48,6 +48,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -60,8 +61,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { skillToolDefinition, toMcpTools } from "@/api/mcp/gateway/list-tools";
-import { resolveSkillToolPrecedence } from "@/api/mcp/gateway/skills";
-import type { SkillToolRow } from "@/api/mcp/gateway/skills";
+import { exposeSkillTools } from "@/api/mcp/gateway/skills";
 import { normalizeObjectInputAtBoundary } from "@/api/mcp/input-normalization";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
@@ -514,11 +514,11 @@ type Task = {
 };
 
 /**
- * Account skills as a real `tools/list` would serve them: the fixture rows go
- * through the served precedence and naming step, so the exposed names
- * (including the collision suffix `risk.review` receives next to
- * `risk_review`) are whatever production would generate, never a hand-typed
- * example. Tasks look their expected name up by slug.
+ * Account skills as a real `tools/list` would serve them: the fixture catalog
+ * goes through the served naming step, so the exposed names (including the
+ * collision suffix `risk.review` receives next to `risk_review`) are whatever
+ * production would generate, never a hand-typed example. Tasks look their
+ * expected name up by slug.
  */
 const skillFixtureRow = ({
   description,
@@ -528,22 +528,18 @@ const skillFixtureRow = ({
   description: string;
   name: string;
   slug: string;
-}): SkillToolRow => ({
-  body: `# ${name}\n\nFollow these steps.`,
+}): AvailableChatSkill => ({
   compatibility: null,
   description,
+  displayName: name,
   id: toSafeId<"agentSkill">(`skill_${slug}`),
   license: null,
   metadata: {},
-  name,
-  origin: "authored",
-  scope: "team",
-  slug,
-  userId: "user_eval",
+  name: slug,
   version: "1.0.0",
 });
 
-const SKILL_FIXTURES = resolveSkillToolPrecedence([
+const SKILL_FIXTURES = exposeSkillTools([
   skillFixtureRow({
     slug: "summarize",
     name: "Summarize a document",
@@ -564,8 +560,13 @@ const SKILL_FIXTURES = resolveSkillToolPrecedence([
   }),
 ]);
 
+const skillInstructionsArgsIssues = (args: Record<string, unknown>) =>
+  args["resource"] === undefined
+    ? []
+    : ["reading the instructions takes no resource path"];
+
 const skillToolNameOf = (slug: string): string =>
-  SKILL_FIXTURES.find((skill) => skill.slug === slug)?.exposedName ??
+  SKILL_FIXTURES.find((skill) => skill.name === slug)?.exposedName ??
   panic(`agent-orientation eval: no skill fixture with slug ${slug}`);
 
 // Fixture ids are shaped like the ids a real list or search result returns:
@@ -1443,15 +1444,17 @@ const TASKS: readonly Task[] = [
       },
     },
   },
-  // Skill tools are account-specific, argument-less reads of stored
-  // instructions; the CLI has no skill surface, so it must decline.
+  // Skill tools are account-specific reads of stored instructions: without
+  // arguments they return the instructions and resource paths, with
+  // `resource` one of those files. The CLI has no skill surface, so it must
+  // decline.
   {
     id: "skill-instructions",
     request: `Before you summarize the share purchase agreement in matter ${ACME_MATTER_ID}, load the stella skill instructions for summarizing a document.`,
     mcp: {
       toolName: skillToolNameOf("summarize"),
       exampleArgs: {},
-      checkArgs: () => [],
+      checkArgs: skillInstructionsArgsIssues,
     },
     cli: { kind: "declined" },
   },
@@ -1462,7 +1465,21 @@ const TASKS: readonly Task[] = [
     mcp: {
       toolName: skillToolNameOf("risk.review"),
       exampleArgs: {},
-      checkArgs: () => [],
+      checkArgs: skillInstructionsArgsIssues,
+    },
+    cli: { kind: "declined" },
+  },
+  {
+    id: "skill-resource",
+    request:
+      "The stella skill for reviewing English-law lease risk lists a resource file knowledge/break-clauses.md. Read that file, then wait for my next message.",
+    mcp: {
+      toolName: skillToolNameOf("risk_review"),
+      exampleArgs: { resource: "knowledge/break-clauses.md" },
+      checkArgs: (args) =>
+        args["resource"] === "knowledge/break-clauses.md"
+          ? []
+          : ["resource must be the path knowledge/break-clauses.md"],
     },
     cli: { kind: "declined" },
   },

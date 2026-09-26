@@ -950,6 +950,7 @@
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšenia zadania",
+    "commandsSection": "Príkazy",
     "composerMenu": {
       "context": "Kontext",
       "editMode": "Režim úprav",
@@ -1034,11 +1035,11 @@
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",
-      "noPrompts": "Zatiaľ žiadne zručnosti",
       "noRecentChats": "Zatiaľ žiadne nedávne chaty",
+      "noSkills": "Zatiaľ žiadne zručnosti",
       "pinnedMatters": "Pripnuté spisy",
-      "prompts": "Zručnosti",
-      "recentChats": "Nedávne chaty"
+      "recentChats": "Nedávne chaty",
+      "skills": "Zručnosti"
     },
     "loadEarlierMessages": "Načítať staršie správy",
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
@@ -1104,7 +1105,6 @@
     },
     "prompts": {
       "noResults": "Žiadne zhodné zručnosti",
-      "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
       "tryOne": "Začni s jedným z týchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh}}",
@@ -3093,54 +3093,17 @@
   },
   "knowledge": {
     "agentSkills": {
-      "aiRewrite": "Prepísať pomocou AI",
-      "aiRewritePlaceholder": "Spresnite formuláciu; pridajte krok na citovanie zdrojov…",
-      "aiRewritePrompt": "Opíšte, ako tento súbor prepísať",
-      "aiRewriteRunning": "Prepisuje sa…",
-      "binaryPreviewUnsupported": "Náhľad binárneho súboru nie je podporovaný. Tento súbor upravíte opätovným nahraním balíka zručnosti.",
-      "builtInBadge": "Vstavané",
-      "builtInSection": "Vstavané zručnosti",
-      "chooseFile": "Vyberte súbor alebo ho sem presuňte",
-      "coaching": {
-        "publish": "Publikovať zručnosť"
-      },
-      "deleteConfirmDescription": "Zručnosť „{name}“ bude odstránená z tohto pracovného priestoru.",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
-      "description": "Nainštalujte balíky SKILL.md, ktoré do chatu pridajú špecializované postupy a zdroje iba na čítanie.",
       "disableSkill": "Vypnúť zručnosť",
-      "disabled": "Vypnuté",
       "discoverSkills": "Nájsť zručnosti",
       "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností}}",
       "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených}}",
-      "dropFile": "Presuňte sem SKILL.md alebo .zip",
       "editSkill": "Upraviť zručnosť",
-      "emptyDescription": "Nahrajte súbor SKILL.md, zazipovaný priečinok zručnosti alebo importujte verejnú URL zručnosti z GitHubu.",
-      "emptyTitle": "Nainštalujte prvú zručnosť",
       "enableSkill": "Zapnúť zručnosť",
-      "enabled": "Zapnuté",
       "fileExists": "Súbor s touto cestou už existuje",
       "filesHeading": "Súbory",
-      "formBodyHelp": "Pokyny vo formáte Markdown, ktoré agent prečíta pri spustení zručnosti.",
-      "formVersionPlaceholder": "1.0.0",
-      "generateAddResource": "Pridať súbor",
-      "generateDraft": "Návrh zručnosti",
-      "generateExamplesLabel": "Príklady spúšťačov alebo scenárov (voliteľné)",
-      "generateExamplesPlaceholder": "Keď sa používateľ pýta na… Pri revízii zmluvy, ktorá… ",
-      "generateFeedbackLabel": "Úpravy (voliteľné)",
-      "generateFeedbackPlaceholder": "Sprísnite podmienky spúšťania; pridajte krok o citovaní zdrojov.",
-      "generateHelp": "Popíšte zručnosť, ktorú chcete. Model pripraví návrh súboru SKILL.md, ktorý si pred inštaláciou môžete skontrolovať a upraviť.",
-      "generateIntentLabel": "Čo má táto zručnosť robiť?",
-      "generateIntentPlaceholder": "Zručnosť, ktorá zhrnie súdne rozhodnutia do krátkeho prehľadu s výrokom, odôvodnením a citáciou.",
-      "generateResourceContentPlaceholder": "Obsah tohto súboru vo formáte Markdown…",
-      "generateResourceDuplicatePathError": "Cesta každého sprievodného súboru musí byť jedinečná.",
-      "generateResourcePathError": "Cesta musí začínať na references/, prompts/ alebo knowledge/ a končiť na .md (malé písmená, číslice, spojovníky, bodky, podčiarkovníky).",
-      "generateResourcesHelp": "Doplnkové súbory vo formáte Markdown priložené k súboru SKILL.md.",
-      "generateResourcesLabel": "Doplnkové súbory",
-      "generateSkill": "Vygenerovať pomocou AI",
-      "generateTitle": "Vygenerovať zručnosť pomocou AI",
-      "generating": "Generovanie…",
       "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
       "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",
@@ -3160,16 +3123,14 @@
       "newFolder": "Nový priečinok",
       "pdfPreviewSoon": "Náhľad PDF bude dostupný, keď budú podporované binárne zdroje zručností.",
       "renameFile": "Premenovať",
-      "resources": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroja} other {# zdrojov}}",
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v tíme",
-      "selectFileHint": "Výberom súboru v zozname ho otvoríte v paneli editora vpravo.",
-      "selectedFile": "Vybraté: {name}",
       "selectionLimit": "Naraz môžete vybrať najviac {count} zručností.",
-      "sourceUpload": "Nahraté",
-      "sourceUrl": "Verejná URL",
-      "unsavedChanges": "Neuložené zmeny — zahodiť?",
-      "uploadFile": "Nahrať súbor",
+      "skippedFiles": "{count, plural, one {# súbor nebol importovaný} few {# súbory neboli importované} other {# súborov nebolo importovaných}}",
+      "skippedReasonNotUtf8Text": "Nie je text v kódovaní UTF-8",
+      "skippedReasonOutsideSkillFolder": "Mimo priečinka zručnosti",
+      "skippedReasonUnsupportedExtension": "Nepodporovaný typ súboru",
+      "skippedReasonUnsupportedFolder": "Nie je v priečinku so zdrojmi",
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
@@ -3411,8 +3372,7 @@
       "playbooks": {
         "description": "Hodnotené kontrolné zoznamy, ktoré porovnávajú dokumenty s vašimi štandardmi"
       },
-      "prompts": {
-        "description": "Opakovane použiteľné zručnosti dostupné cez / v chate",
+      "skills": {
         "title": "Zručnosti"
       },
       "templates": {
@@ -3456,30 +3416,14 @@
       "commandHelp": "Napíšte tento príkaz do chatu a spustite zručnosť.",
       "commandLabel": "Lomkový príkaz (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
-      "createTitle": "Nová zručnosť",
-      "deleteConfirmDescription": "Táto zručnosť bude natrvalo odstránená.",
-      "deleteShortcut": "Odstrániť zručnosť",
-      "emptyDescription": "Vytvorte opakovane použiteľné zručnosti pre prácu, ktorú váš tím robí opakovane, od zhrnutí po pokyny na prvotné koncipovanie.",
-      "emptyState": "Zatiaľ žiadne zručnosti. Pridajte prvú.",
-      "emptyTitle": "Vytvorte prvú zručnosť",
-      "emptyVideoLabel": "Prehľad zručností",
       "errors": {
-        "commandConflict": "Zručnosť s týmto / názvom už existuje",
-        "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky",
-        "commandReserved": "\"/{command}\" je rezervovaná zručnosť"
+        "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky"
       },
       "form": {
-        "command": "Skratka zručnosti",
-        "commandHint": "Názov / zručnosti: iba malé písmená, číslice, pomlčky a podčiarkovníky",
-        "commandPrefix": "/",
-        "descriptionPlaceholder": "Stručný popis zobrazený vo výbere",
-        "namePlaceholder": "napr. Zhrnúť dokument",
-        "promptPlaceholder": "Pokyny vložené do editora chatu pri použití tejto zručnosti",
         "scope": "Viditeľnosť",
         "scopePrivate": "Iba ja",
         "scopeTeam": "Všetci v tíme"
-      },
-      "shadowed": "Prekryté tímovou zručnosťou"
+      }
     }
   },
   "lawHome": {

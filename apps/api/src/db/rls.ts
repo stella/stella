@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 
+import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
+
 export const stella = p.pgRole("stella").existing();
 
 // Narrow write role used only by the case-law ingestion daemon.
@@ -1084,8 +1086,37 @@ const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
 )`;
 
+const organizationManagementRoleValues = sql.raw(
+  ORGANIZATION_MANAGEMENT_ROLES.map((role) => `'${role}'`).join(", "),
+);
+
+/** The session user holds a management role in the session organization. */
+const organizationManagerCheck = sql`EXISTS (
+  SELECT 1
+  FROM member m
+  WHERE m.organization_id = (SELECT current_setting(
+      '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+    ))
+    AND m.user_id = (SELECT current_setting(
+      '${sql.raw(SETTING_USER_ID)}', true
+    ))
+    AND m.role IN (${organizationManagementRoleValues})
+)`;
+
+/**
+ * Who may write a skill row: owners and admins for team skills, the author for
+ * private ones. Members who can see a team skill propose and comment on it
+ * through the child tables instead. Mirrors `canManageSkill`.
+ */
+const agentSkillWriteCheck = sql`(
+  ${organizationCheck} AND (
+    (scope = 'team' AND ${organizationManagerCheck})
+    OR (scope = 'private' AND ${userCheck})
+  )
+)`;
+
 const agentSkillInsertCheck = sql`(
-  ${organizationCheck} AND ${userCheck}
+  ${agentSkillWriteCheck} AND ${userCheck}
 )`;
 
 const agentSkillResourceVisibleCheck = sql`(
@@ -1097,6 +1128,21 @@ const agentSkillResourceVisibleCheck = sql`(
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         '${sql.raw(SETTING_USER_ID)}', true
       )))
+  )
+)`;
+
+const agentSkillResourceWriteCheck = sql`(
+  ${organizationCheck} AND EXISTS (
+    SELECT 1
+    FROM agent_skills s
+    WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
+      AND (
+        (s.scope = 'team' AND ${organizationManagerCheck})
+        OR (s.scope = 'private' AND s.user_id = (SELECT current_setting(
+          '${sql.raw(SETTING_USER_ID)}', true
+        )))
+      )
   )
 )`;
 
@@ -1114,13 +1160,13 @@ export const agentSkillPolicies = () => [
   p.pgPolicy("agent_skill_update", {
     for: "update",
     to: stella,
-    using: agentSkillVisibleCheck,
-    withCheck: agentSkillVisibleCheck,
+    using: agentSkillWriteCheck,
+    withCheck: agentSkillWriteCheck,
   }),
   p.pgPolicy("agent_skill_delete", {
     for: "delete",
     to: stella,
-    using: agentSkillVisibleCheck,
+    using: agentSkillWriteCheck,
   }),
 ];
 
@@ -1133,18 +1179,18 @@ export const agentSkillResourcePolicies = () => [
   p.pgPolicy("agent_skill_resource_insert", {
     for: "insert",
     to: stella,
-    withCheck: agentSkillResourceVisibleCheck,
+    withCheck: agentSkillResourceWriteCheck,
   }),
   p.pgPolicy("agent_skill_resource_update", {
     for: "update",
     to: stella,
-    using: agentSkillResourceVisibleCheck,
-    withCheck: agentSkillResourceVisibleCheck,
+    using: agentSkillResourceWriteCheck,
+    withCheck: agentSkillResourceWriteCheck,
   }),
   p.pgPolicy("agent_skill_resource_delete", {
     for: "delete",
     to: stella,
-    using: agentSkillResourceVisibleCheck,
+    using: agentSkillResourceWriteCheck,
   }),
 ];
 

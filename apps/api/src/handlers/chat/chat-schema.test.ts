@@ -263,7 +263,10 @@ const ACTIVE_CONTEXT_CASES = {
   },
   activeSkill: {
     schema: activeSkillSchema,
-    sample: { skillName: "Review" },
+    sample: {
+      skillId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      skillName: "Review",
+    },
   },
   activeStatute: {
     schema: activeStatuteSchema,

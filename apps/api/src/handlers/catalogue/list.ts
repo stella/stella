@@ -9,6 +9,7 @@ import {
   type CatalogueSetup,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
+import { isOrganizationManagementRole } from "@stll/permissions";
 
 import {
   agentSkills,
@@ -235,11 +236,10 @@ const listCatalogue = createSafeRootHandler(
                 );
 
         // Org-owned MCP connectors that don't match any curated catalogue
-        // entry URL. These are "custom" connectors the user added via the
-        // old /knowledge/mcp page (or its successor); they need to show up
-        // in /knowledge/tools so the user can manage them after the
-        // surface unification. Capped to match /mcp/connectors so a large
-        // org can't turn this endpoint into an unbounded read.
+        // entry URL. These are "custom" connectors the organization added;
+        // they show up in /knowledge/tools so the user can manage them.
+        // Capped to match /mcp/connectors so a large org can't turn this
+        // endpoint into an unbounded read.
         const orgCustomMcps = await tx
           .select({
             id: mcpConnectors.id,
@@ -320,8 +320,7 @@ const listCatalogue = createSafeRootHandler(
     // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
     //   org-owned rows, so globally-curated connectors (organizationId
     //   = null) never produce a usable slug.
-    const canDeleteTeamSkills =
-      memberRole.role === "admin" || memberRole.role === "owner";
+    const canDeleteTeamSkills = isOrganizationManagementRole(memberRole.role);
     const skillHandles = resolveCatalogueSkillHandleMaps({
       canManageTeamSkills: canDeleteTeamSkills,
       rows: visibleSkillRows,

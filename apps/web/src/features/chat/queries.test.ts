@@ -727,7 +727,7 @@ describe("buildSendRequestBody", () => {
         entityId: "entity-A",
         fileName: "document.docx",
       }),
-      getActiveSkill: () => ({ skillName: "Review" }),
+      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Review" }),
       getActiveStatute: () => ({ documentId: "statute-A" }),
       getActiveTemplate: () => ({
         fileName: "template.docx",
@@ -794,10 +794,7 @@ describe("buildSendRequestBody", () => {
           fileName: "document.docx",
           supportsDocxEdits: undefined,
         }),
-        getActiveSkill: () => ({
-          skillId: undefined,
-          skillName: "Review",
-        }),
+        getActiveSkill: () => ({ skillId: "skill-A", skillName: "Review" }),
         getActiveStatute: () => ({ documentId: "statute-A" }),
         getSendMode: () => CHAT_SEND_MODE.anonymized,
       },
@@ -829,13 +826,12 @@ describe("buildSendRequestBody", () => {
         entityId: "entity-A",
         fileName: "document.docx",
       },
-      activeSkill: { skillName: "Review" },
+      activeSkill: { skillId: "skill-A", skillName: "Review" },
       message: { id: "message-A" },
     });
     expect(body.activeFile).not.toHaveProperty("fileFieldId");
     expect(body.activeFile).not.toHaveProperty("supportsDocxEdits");
     expect(body.activeExternal).not.toHaveProperty("connectorSlug");
-    expect(body.activeSkill).not.toHaveProperty("skillId");
     expect(body.activeFile?.docxEditSnapshot).not.toHaveProperty(
       "canApplyEdits",
     );
@@ -3076,7 +3072,7 @@ describe("acquireChatRuntime reconcile", () => {
     // match on thread identity, not on the query key.
     const skillContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillName: "Summarize" }),
+      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
     };
     expect(
       chatThreadOptions({
@@ -3140,7 +3136,7 @@ describe("acquireChatRuntime reconcile", () => {
     const plainContext = { allowMissingThread: true };
     const skillContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillName: "Summarize" }),
+      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
     };
 
     // No prior entry under the plain key: the mid-stream acquire hits
@@ -3224,7 +3220,7 @@ describe("acquireChatRuntime reconcile", () => {
     const plainContext = { allowMissingThread: true };
     const skillContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillName: "Summarize" }),
+      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
     };
     const plainOptions = chatThreadOptions({
       activeOrganizationId,
