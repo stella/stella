@@ -25,8 +25,6 @@ import {
 } from "@libpdf/core";
 import type { PDF, PdfObject } from "@libpdf/core";
 import { TaggedError } from "better-result";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import * as pkijs from "pkijs";
 
 import { Temporal } from "@stll/time";
@@ -60,10 +58,6 @@ const LINE_HEIGHT = 1.25;
 /** /F Print: the stamp prints with the page. */
 const ANNOTATION_FLAG_PRINT = 4;
 const COMMON_NAME_OID = "2.5.4.3";
-
-const FONT_BYTES = new Uint8Array(
-  readFileSync(path.join(import.meta.dir, "fonts", "DejaVuSans.ttf")),
-);
 
 export type StampRotation = PdfSigningStampRotation;
 
@@ -378,10 +372,13 @@ const APPEARANCE_MATRIX = {
  * phases, with the same inputs.
  */
 export const addSignatureStamp = ({
+  fontBytes,
   lines,
   pdf,
   stamp,
 }: {
+  /** See `stamp-font.ts`. */
+  fontBytes: Uint8Array;
   lines: readonly string[];
   pdf: PDF;
   stamp: SignatureStamp;
@@ -397,7 +394,7 @@ export const addSignatureStamp = ({
   const width = turned ? y2 - y1 : x2 - x1;
   const height = turned ? x2 - x1 : y2 - y1;
 
-  const font = pdf.embedFont(FONT_BYTES);
+  const font = pdf.embedFont(fontBytes);
   const padding = Math.min(6, height * 0.1, width * 0.05);
   const unitWidth = (text: string) =>
     [...text].reduce(
