@@ -93,13 +93,20 @@ export type CorrespondenceSenderScope =
   (typeof CORRESPONDENCE_SENDER_SCOPES)[number];
 
 export type CorrespondenceFiler =
-  | { type: "user"; userId: string; filedAt: string }
+  | {
+      type: "user";
+      userId: string;
+      userName: string | null;
+      userStatus: "active" | "deleted";
+      filedAt: string;
+    }
   | {
       type: "shared_mailbox";
       allowedSenderId: string;
       address: string;
       approvedBy: string;
       approvedByName: string | null;
+      approvedByStatus: "active" | "deleted";
       filedAt: string;
     };
 

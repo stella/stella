@@ -6,6 +6,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  correspondence,
   desktopEditSessions,
   timeEntries,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -184,6 +185,16 @@ export const removeWorkspaceMemberHandler = async function* ({
         throw new HandlerError({ status: 404, message: "Member not found" });
       }
 
+      await tx
+        .update(correspondence)
+        .set({ assigneeId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(correspondence.workspaceId, workspaceId),
+            eq(correspondence.assigneeId, userId),
+          ),
+        );
+
       if (ownedWork.length > 0) {
         const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
         const now = new Date();
@@ -264,6 +275,7 @@ export const removeWorkspaceMemberHandler = async function* ({
           metadata: {
             closedDesktopEditSessions: closedSessions.length,
             unassignedWorkObligations: ownedWork.length,
+            correspondenceAssignmentDisposition: "cleared",
           },
         },
       ];

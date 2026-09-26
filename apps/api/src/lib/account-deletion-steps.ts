@@ -30,6 +30,7 @@ import {
   accountDeletionRequests,
   agentSkills,
   chatThreads,
+  correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
@@ -70,6 +71,7 @@ import {
 } from "@/api/lib/auth-artifacts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import { clearCorrespondenceAssignmentsForOffboarding } from "@/api/lib/correspondence/offboarding";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
@@ -343,6 +345,7 @@ export const selectActiveTaskAssignments = async (
     .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
+  correspondence,
   taskAssignees,
   workObligations,
   member,
@@ -369,6 +372,13 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
+  // Assignment validation locks organization membership before matter
+  // membership. Match that order before deleting either membership.
+  await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(eq(member.userId, currentUserId))
+    .for("update");
   // Delegation locks a requested workspace membership before locking its
   // obligation. Hold the departing user's membership rows first so a
   // concurrent delegation either lands before this cleanup and is cleared,
@@ -709,6 +719,14 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       }),
     );
   }
+
+  // Account deletion anonymizes the user row, so the assignee FK's SET NULL
+  // never fires. Historical filer and approver references remain intact.
+  await clearCorrespondenceAssignmentsForOffboarding({
+    tx,
+    userId: currentUserId,
+    scope: { type: "account" },
+  });
 
   await tx.delete(member).where(eq(member.userId, currentUserId));
   await tx

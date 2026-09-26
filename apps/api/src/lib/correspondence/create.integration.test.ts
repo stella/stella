@@ -1,11 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
-import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
+import type {
+  CorrespondenceProvenance,
+  ParsedCorrespondence,
+} from "@stll/api-contract/correspondence";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
-import { correspondenceAllowedSenders } from "@/api/db/schema";
+import {
+  correspondenceAllowedSenders,
+  workspaceMembers,
+} from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import createAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
@@ -77,6 +84,64 @@ const recorderFor = (
 
 const handlerContext = <T>(value: unknown) => asTestRaw<T>(value);
 
+const directProvenance = {
+  intake: "direct",
+  originalSignature: null,
+  authenticatedSender: {
+    address: "sender@example.test",
+    spf: "pass",
+    dkim: "none",
+    dmarc: "pass",
+    alignedIdentifier: "example.test",
+  },
+} satisfies CorrespondenceProvenance;
+
+const parsedMessage = (provenance: CorrespondenceProvenance) =>
+  ({
+    direction: "in",
+    channel: "email",
+    messageId: `<${Bun.randomUUIDv7()}@example.test>`,
+    contentHash: "a".repeat(64),
+    from: { address: "sender@example.test", name: null },
+    to: [{ address: "recipient@example.test", name: null }],
+    cc: [],
+    subject: "Test filing",
+    sentAt: "2026-09-26T12:00:00.000Z",
+    receivedAt: "2026-09-26T12:01:00.000Z",
+    inReplyTo: null,
+    references: [],
+    bodyText: "Matter correspondence",
+    bodyHtml: "<p>Matter correspondence</p><script>alert(1)</script>",
+    ...provenance,
+  }) satisfies ParsedCorrespondence;
+
+const commonContext = () => ({
+  safeDb: safeDbFor(ids.userA1, ids.wsA1),
+  workspaceId: ids.wsA1,
+  memberRole: { role: "owner" },
+  request: new Request("https://api.example.test/v1/correspondence"),
+  session: { activeOrganizationId: ids.orgA },
+  user: { id: ids.userA1 },
+  recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
+});
+
+const fileMessage = async (parsed: ParsedCorrespondence) => {
+  const result = await createCorrespondence({
+    safeDb: safeDbFor(ids.userA1, ids.wsA1),
+    workspaceId: ids.wsA1,
+    organizationId: ids.orgA,
+    filer: { type: "user", userId: ids.userA1 },
+    parsed,
+    attachments: [],
+    recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
+  });
+  expect(result.type).toBe("ok");
+  if (result.type !== "ok") {
+    throw new Error("Expected correspondence fixture");
+  }
+  return result;
+};
+
 describe("matter correspondence", () => {
   test("the migration forces RLS on every new table", () => {
     expect(createdTables.length).toBeGreaterThan(0);
@@ -85,28 +150,7 @@ describe("matter correspondence", () => {
 
   test("deduplicates a filed message, exposes it through matter routes, and enforces mailbox scope and revocation", async () => {
     const safeDb = safeDbFor(ids.userA1, ids.wsA1);
-    const parsed: ParsedCorrespondence = {
-      direction: "in",
-      channel: "email",
-      messageId: `<${Bun.randomUUIDv7()}@example.test>`,
-      contentHash: "a".repeat(64),
-      from: { address: "sender@example.test", name: null },
-      to: [{ address: "recipient@example.test", name: null }],
-      cc: [],
-      subject: "Test filing",
-      sentAt: "2026-09-26T12:00:00.000Z",
-      receivedAt: "2026-09-26T12:01:00.000Z",
-      inReplyTo: null,
-      references: [],
-      bodyText: "Matter correspondence",
-      bodyHtml: "<p>Matter correspondence</p><script>alert(1)</script>",
-      authentication: {
-        spf: "pass",
-        dkim: "none",
-        dmarc: "pass",
-        alignedIdentifier: "example.test",
-      },
-    };
+    const parsed = parsedMessage(directProvenance);
     const options = {
       safeDb,
       workspaceId: ids.wsA1,
@@ -138,7 +182,7 @@ describe("matter correspondence", () => {
         parsed: {
           ...parsed,
           messageId: `<${Bun.randomUUIDv7()}@example.test>`,
-          authentication: { ...parsed.authentication, dmarc: "fail" },
+          authenticatedSender: { ...parsed.authenticatedSender, dmarc: "fail" },
         },
       }),
     ).toEqual({ type: "invalid_authentication" });
@@ -376,4 +420,294 @@ describe("matter correspondence", () => {
       env.INBOUND_MAIL_DOMAIN = previousDomain;
     }
   });
+  test("keeps asserted originals separate from authenticated delivery and direct-message dedup", async () => {
+    const authenticatedSender = {
+      ...directProvenance.authenticatedSender,
+      address: "forwarder@example.test",
+    };
+    const inline = parsedMessage({
+      intake: "forwarded_inline",
+      authenticatedSender,
+      originalSignature: { status: "unverified" },
+    });
+    inline.from.address = "fabricated@outside.test";
+    const first = await fileMessage(inline);
+    const replay = await fileMessage(inline);
+    expect(replay.id).toBe(first.id);
+    const detail = await getCorrespondence.handler(
+      handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+        ...commonContext(),
+        params: { correspondenceId: first.id },
+      }),
+    );
+    expect(detail.record).toMatchObject({
+      intake: "forwarded_inline",
+      from: inline.from,
+      authenticatedSender,
+      originalSignature: { status: "unverified" },
+    });
+    expect(detail.record).not.toHaveProperty("authentication");
+    const {
+      intake: _intake,
+      originalSignature: _originalSignature,
+      authenticatedSender: _authenticatedSender,
+      ...content
+    } = inline;
+    const direct = await fileMessage({ ...content, ...directProvenance });
+    expect(direct.id).not.toBe(first.id);
+    for (const originalSignature of [
+      { status: "unverified" } as const,
+      { status: "verified", domain: "outside.test" } as const,
+    ]) {
+      const attachment = await fileMessage(
+        parsedMessage({
+          intake: "forwarded_attachment",
+          authenticatedSender,
+          originalSignature,
+        }),
+      );
+      const read = await getCorrespondence.handler(
+        handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...commonContext(),
+          params: { correspondenceId: attachment.id },
+        }),
+      );
+      expect(read.record).toMatchObject({
+        intake: "forwarded_attachment",
+        authenticatedSender,
+        originalSignature,
+      });
+    }
+    const list = await listCorrespondence.handler(
+      handlerContext<Parameters<typeof listCorrespondence.handler>[0]>({
+        ...commonContext(),
+        query: {},
+      }),
+    );
+    expect(list.items.find(({ id }) => id === first.id)).toMatchObject({
+      intake: "forwarded_inline",
+      authenticatedSender,
+      originalSignature: { status: "unverified" },
+    });
+  });
+
+  test("interleaved status and assignment edits preserve each other's supplied fields", async () => {
+    const filed = await fileMessage(parsedMessage(directProvenance));
+    const patch = (
+      body: Parameters<typeof updateCorrespondence.handler>[0]["body"],
+    ) =>
+      updateCorrespondence.handler(
+        handlerContext<Parameters<typeof updateCorrespondence.handler>[0]>({
+          ...commonContext(),
+          safeDb: safeDbFor(ids.userAdmin, ids.wsA1),
+          user: { id: ids.userAdmin },
+          recordAuditEvent: recorderFor(ids.userAdmin, ids.wsA1),
+          params: { correspondenceId: filed.id },
+          body,
+        }),
+      );
+    expect((await patch({ assigneeId: ids.userA1 })).record).toMatchObject({
+      handlingState: "new",
+      assigneeId: ids.userA1,
+    });
+    expect((await patch({ handlingState: "handled" })).record).toMatchObject({
+      handlingState: "handled",
+      assigneeId: ids.userA1,
+    });
+    expect((await patch({ assigneeId: null })).record).toMatchObject({
+      handlingState: "handled",
+      assigneeId: null,
+    });
+    expect((await patch({ handlingState: "new" })).record).toMatchObject({
+      handlingState: "new",
+      assigneeId: null,
+    });
+    const departed = await testDb
+      .delete(member)
+      .where(
+        and(eq(member.organizationId, ids.orgA), eq(member.userId, ids.userA1)),
+      )
+      .returning();
+    try {
+      // A stale workspace membership must not restore an offboarded assignee.
+      expect(await patch({ assigneeId: ids.userA1 })).toMatchObject({
+        code: 400,
+      });
+      expect((await patch({ handlingState: "handled" })).record).toMatchObject({
+        handlingState: "handled",
+        assigneeId: null,
+      });
+    } finally {
+      if (departed.length) {
+        await testDb.insert(member).values(departed);
+      }
+    }
+  });
+
+  test.each(["schema", "migration"] as const)(
+    "historical attribution survives membership removal under %s policies",
+    async (policySource) => {
+      if (policySource === "migration") {
+        const statement = migration
+          .split("--> statement-breakpoint")
+          .find((part) =>
+            part.includes(
+              'CREATE POLICY "auth_user_correspondence_history_select"',
+            ),
+          );
+        if (!statement) {
+          throw new Error("Expected historical user policy migration");
+        }
+        await testDb.execute(
+          sql`DROP POLICY auth_user_correspondence_history_select ON "user"`,
+        );
+        await testDb.execute(sql.raw(statement));
+      }
+      const filed = await fileMessage(parsedMessage(directProvenance));
+      const [sender] = await testDb
+        .insert(correspondenceAllowedSenders)
+        .values({
+          organizationId: ids.orgA,
+          address: `history-${Bun.randomUUIDv7()}@example.test`,
+          kind: "shared_mailbox",
+          scope: "organization",
+          approvedBy: ids.userAdmin,
+        })
+        .returning();
+      if (!sender) {
+        throw new Error("Expected mailbox fixture");
+      }
+      // Use the persisted identity to attach the second historical actor.
+      const parsed = parsedMessage(directProvenance);
+      const mailbox = await createCorrespondence({
+        safeDb: safeDbFor(ids.userA1, ids.wsA1),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        filer: { type: "shared_mailbox", allowedSenderId: sender.id },
+        parsed,
+        attachments: [],
+        recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
+      });
+      if (mailbox.type !== "ok") {
+        throw new Error("Expected mailbox filing");
+      }
+      const [readerMembership] = await testDb
+        .insert(workspaceMembers)
+        .values({ workspaceId: ids.wsA1, userId: ids.userA2 })
+        .returning();
+      if (!readerMembership) {
+        throw new Error("Expected reader membership");
+      }
+      const read = (id: typeof filed.id) =>
+        getCorrespondence.handler(
+          handlerContext<Parameters<typeof getCorrespondence.handler>[0]>({
+            ...commonContext(),
+            safeDb: safeDbFor(ids.userA2, ids.wsA1),
+            user: { id: ids.userA2 },
+            params: { correspondenceId: id },
+          }),
+        );
+      const original = await read(filed.id);
+      const originalMailbox = await read(mailbox.id);
+      const actor = original.filers.find((filer) => filer.type === "user");
+      const approver = originalMailbox.filers.find(
+        (filer) => filer.type === "shared_mailbox",
+      );
+      expect(actor).toMatchObject({
+        userStatus: "active",
+        userName: expect.any(String),
+      });
+      expect(approver).toMatchObject({
+        approvedByStatus: "active",
+        approvedByName: expect.any(String),
+      });
+      const removedMemberships = await testDb
+        .delete(member)
+        .where(
+          and(
+            eq(member.organizationId, ids.orgA),
+            eq(member.userId, ids.userAdmin),
+          ),
+        )
+        .returning();
+      const removedAssignments = await testDb
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, ids.wsA1),
+            eq(workspaceMembers.userId, ids.userA1),
+          ),
+        )
+        .returning();
+      try {
+        expect((await read(filed.id)).filers).toContainEqual(actor);
+        expect((await read(mailbox.id)).filers).toContainEqual(approver);
+        const unrelatedMatter = await safeDbFor(
+          ids.userA2,
+          ids.wsA2,
+        )((tx) =>
+          tx
+            .select({ id: user.id })
+            .from(user)
+            .where(eq(user.id, ids.userAdmin)),
+        );
+        expect(unrelatedMatter.isOk()).toBe(true);
+        if (unrelatedMatter.isOk()) {
+          expect(unrelatedMatter.value).toEqual([]);
+        }
+        const foreignOrganization = await asTestRaw<SafeDb>(
+          createSafeDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+        )((tx) =>
+          tx
+            .select({ id: user.id })
+            .from(user)
+            .where(eq(user.id, ids.userAdmin)),
+        );
+        expect(foreignOrganization.isOk()).toBe(true);
+        if (foreignOrganization.isOk()) {
+          expect(foreignOrganization.value).toEqual([]);
+        }
+        await testDb
+          .update(user)
+          .set({ deletedAt: new Date() })
+          .where(eq(user.id, ids.userA1));
+        await testDb
+          .update(user)
+          .set({ deletedAt: new Date() })
+          .where(eq(user.id, ids.userAdmin));
+        expect((await read(filed.id)).filers).toContainEqual(
+          expect.objectContaining({
+            type: "user",
+            userStatus: "deleted",
+            userName: null,
+          }),
+        );
+        expect((await read(mailbox.id)).filers).toContainEqual(
+          expect.objectContaining({
+            type: "shared_mailbox",
+            approvedByStatus: "deleted",
+            approvedByName: null,
+          }),
+        );
+      } finally {
+        await testDb
+          .update(user)
+          .set({ deletedAt: null })
+          .where(eq(user.id, ids.userA1));
+        await testDb
+          .update(user)
+          .set({ deletedAt: null })
+          .where(eq(user.id, ids.userAdmin));
+        await testDb
+          .delete(workspaceMembers)
+          .where(eq(workspaceMembers.id, readerMembership.id));
+        if (removedMemberships.length) {
+          await testDb.insert(member).values(removedMemberships);
+        }
+        if (removedAssignments.length) {
+          await testDb.insert(workspaceMembers).values(removedAssignments);
+        }
+      }
+    },
+  );
 });

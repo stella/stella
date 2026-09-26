@@ -39,6 +39,20 @@ const valuesSql = (values: readonly string[]) =>
     sql`, `,
   );
 
+export const CORRESPONDENCE_OFFBOARDING_SETTING = {
+  userId: "app.correspondence_offboarding_user_id",
+  organizationId: "app.correspondence_offboarding_organization_id",
+  scope: "app.correspondence_offboarding_scope",
+  recordIds: "app.correspondence_offboarding_record_ids",
+} as const;
+
+const offboardingScopeCheck = sql`(
+  current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
+  or (current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'organization'
+    and organization_id = current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.organizationId}'`)}, true))
+)`;
+const offboardingAssigneeCheck = sql`assignee_id = nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.userId}'`)}, true), '')`;
+
 export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
@@ -103,6 +117,10 @@ export const correspondence = p.pgTable.withRLS(
     p
       .index("correspondence_ws_assignee_idx")
       .on(table.workspaceId, table.assigneeId, table.handlingState),
+    p
+      .index("correspondence_assignee_org_idx")
+      .on(table.assigneeId, table.organizationId, table.id)
+      .where(sql`${table.assigneeId} is not null`),
     p.check(
       "correspondence_intake_check",
       sql`${table.intake} in (${valuesSql(CORRESPONDENCE_INTAKES)})`,
@@ -131,6 +149,19 @@ export const correspondence = p.pgTable.withRLS(
       "correspondence_auth_check",
       sql`${table.spf} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)}) and ${table.dkim} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)}) and ${table.dmarc} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)})`,
     ),
+    p.pgPolicy("correspondence_owner_offboarding_select", {
+      for: "select",
+      to: "current_user",
+      // UPDATE also checks SELECT visibility of the cleared row. Admit only
+      // the current bounded batch, never all unassigned correspondence.
+      using: sql`(${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
+    }),
+    p.pgPolicy("correspondence_owner_offboarding_update", {
+      for: "update",
+      to: "current_user",
+      using: sql`${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
+      withCheck: sql`${table.assigneeId} is null and ${offboardingScopeCheck}`,
+    }),
     ...wsOrganizationPolicies("correspondence"),
   ],
 );
@@ -183,6 +214,14 @@ export const correspondenceFilers = p.pgTable.withRLS(
     p
       .index("correspondence_filers_ws_record_idx")
       .on(table.workspaceId, table.correspondenceId),
+    p
+      .index("correspondence_filers_user_history_idx")
+      .on(table.filedByUserId, table.organizationId, table.workspaceId)
+      .where(sql`${table.filedByUserId} is not null`),
+    p
+      .index("correspondence_filers_sender_history_idx")
+      .on(table.filedByAllowedSenderId, table.organizationId, table.workspaceId)
+      .where(sql`${table.filedByAllowedSenderId} is not null`),
     p.check(
       "correspondence_filers_actor_check",
       sql`(${table.filedByUserId} is null) <> (${table.filedByAllowedSenderId} is null)`,
@@ -315,6 +354,10 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_senders_org_kind_idx")
       .on(table.organizationId, table.kind),
+    p
+      .index("correspondence_allowed_senders_approver_idx")
+      .on(table.approvedBy, table.organizationId, table.id)
+      .where(sql`${table.approvedBy} is not null`),
     p.check(
       "correspondence_allowed_senders_kind_check",
       sql`${table.kind} in (${valuesSql(CORRESPONDENCE_SENDER_KINDS)})`,

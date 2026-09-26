@@ -66,6 +66,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/correspondence/offboarding";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
@@ -1226,6 +1227,11 @@ const createAuth = () => {
                 userId,
               });
               await revokeOrganizationMemberAuthArtifacts(tx, {
+                organizationId,
+                userId,
+              });
+              await clearOrganizationCorrespondenceAssignments({
+                tx,
                 organizationId,
                 userId,
               });

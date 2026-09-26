@@ -21,11 +21,12 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   correspondenceAddressOptions,
-  CORRESPONDENCE_AUTH_LABEL_KEYS,
   CORRESPONDENCE_STATE_LABEL_KEYS,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
+import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
@@ -202,36 +203,43 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             to="/workspaces/$workspaceId/correspondence/$correspondenceId"
           >
             <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="truncate text-sm font-medium">
-                  <bdi dir="auto">
-                    {item.subject || t("emailViewer.noSubject")}
-                  </bdi>
+              <CorrespondenceProvenance record={item} />
+              <span className="mt-2 block">
+                {item.intake !== "direct" && (
+                  <span className="text-muted-foreground mb-1 block text-xs">
+                    {t("correspondence.assertedOriginal")}
+                  </span>
+                )}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="truncate text-sm font-medium">
+                    <bdi dir="auto">
+                      {item.subject || t("emailViewer.noSubject")}
+                    </bdi>
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
+                  </span>
                 </span>
-                <span className="text-muted-foreground text-xs">
-                  {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
+                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  {t(
+                    correspondenceProvenancePresentation(item)
+                      .originalSenderLabel,
+                  )}
+                  : <bdi dir="ltr">{item.from.address}</bdi>
+                </span>
+                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  {t("emailViewer.to")}:{" "}
+                  {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
+                    <bdi
+                      className="me-2"
+                      dir="auto"
+                      key={recipient.address.toLowerCase()}
+                    >
+                      {recipient.name ?? recipient.address}
+                    </bdi>
+                  ))}
                 </span>
               </span>
-              <span className="text-muted-foreground mt-1 block truncate text-xs">
-                {t("emailViewer.from")}:{" "}
-                <bdi dir="auto">{item.from.name ?? item.from.address}</bdi>
-              </span>
-              <span className="text-muted-foreground mt-1 block truncate text-xs">
-                {t("emailViewer.to")}:{" "}
-                {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
-                  <bdi
-                    className="me-2"
-                    dir="auto"
-                    key={recipient.address.toLowerCase()}
-                  >
-                    {recipient.name ?? recipient.address}
-                  </bdi>
-                ))}
-              </span>
-            </span>
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {t("correspondence.dmarcLabel")}:{" "}
-              {t(CORRESPONDENCE_AUTH_LABEL_KEYS[item.authentication.dmarc])}
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">
               {format.dateTime(new Date(item.receivedAt), {

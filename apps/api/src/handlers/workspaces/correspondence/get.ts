@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 
-import { member, user } from "@/api/db/auth-schema";
+import { user } from "@/api/db/auth-schema";
 import {
   correspondence,
   correspondenceAllowedSenders,
@@ -12,10 +13,13 @@ import {
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { readCorrespondenceProvenance } from "@/api/lib/correspondence/provenance";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const MAX_FILERS_PER_RECORD = 10_000;
+const filerUser = alias(user, "correspondence_filer_user");
+const approverUser = alias(user, "correspondence_approver_user");
 
 const config = {
   description:
@@ -53,6 +57,10 @@ const getCorrespondence = createSafeHandler(
           tx
             .select({
               userId: correspondenceFilers.filedByUserId,
+              userName: filerUser.name,
+              userDeletedAt: filerUser.deletedAt,
+              approvedByName: approverUser.name,
+              approvedByDeletedAt: approverUser.deletedAt,
               allowedSenderId: correspondenceFilers.filedByAllowedSenderId,
               address: correspondenceAllowedSenders.address,
               approvedBy: correspondenceAllowedSenders.approvedBy,
@@ -66,8 +74,22 @@ const getCorrespondence = createSafeHandler(
                 correspondenceAllowedSenders.id,
               ),
             )
+            // Historical actors are authorized by this matter-owned relationship,
+            // even after their current organization membership is removed.
+            .leftJoin(
+              filerUser,
+              eq(correspondenceFilers.filedByUserId, filerUser.id),
+            )
+            .leftJoin(
+              approverUser,
+              eq(correspondenceAllowedSenders.approvedBy, approverUser.id),
+            )
             .where(
               and(
+                eq(
+                  correspondenceFilers.organizationId,
+                  session.activeOrganizationId,
+                ),
                 eq(correspondenceFilers.workspaceId, workspaceId),
                 eq(correspondenceFilers.correspondenceId, correspondenceId),
               ),
@@ -103,31 +125,10 @@ const getCorrespondence = createSafeHandler(
             "Correspondence attachment count exceeds the accepted limit",
           );
         }
-        const approverIds = [
-          ...new Set(
-            filers.flatMap((filer) =>
-              filer.approvedBy === null ? [] : [filer.approvedBy],
-            ),
-          ),
-        ];
-        const approvers =
-          approverIds.length === 0
-            ? []
-            : await tx
-                .select({ id: user.id, name: user.name })
-                .from(user)
-                .innerJoin(
-                  member,
-                  and(
-                    eq(member.userId, user.id),
-                    eq(member.organizationId, session.activeOrganizationId),
-                  ),
-                )
-                .where(inArray(user.id, approverIds));
-        const approverNames = new Map(
-          approvers.map((approver) => [approver.id, approver.name]),
-        );
         const {
+          intake,
+          originalSignature,
+          authenticatedSenderAddress,
           spf,
           dkim,
           dmarc,
@@ -141,13 +142,26 @@ const getCorrespondence = createSafeHandler(
         return {
           record: {
             ...record,
-            authentication: { spf, dkim, dmarc, alignedIdentifier },
+            ...readCorrespondenceProvenance({
+              intake,
+              originalSignature,
+              authenticatedSenderAddress,
+              spf,
+              dkim,
+              dmarc,
+              alignedIdentifier,
+            }),
           },
           filers: filers.map((filer) => {
             if (filer.userId !== null) {
               return {
                 type: "user" as const,
                 userId: filer.userId,
+                userName: filer.userDeletedAt === null ? filer.userName : null,
+                userStatus:
+                  filer.userDeletedAt === null
+                    ? ("active" as const)
+                    : ("deleted" as const),
                 filedAt: filer.filedAt,
               };
             }
@@ -163,7 +177,14 @@ const getCorrespondence = createSafeHandler(
               allowedSenderId: filer.allowedSenderId,
               address: filer.address,
               approvedBy: filer.approvedBy,
-              approvedByName: approverNames.get(filer.approvedBy) ?? null,
+              approvedByName:
+                filer.approvedByDeletedAt === null
+                  ? filer.approvedByName
+                  : null,
+              approvedByStatus:
+                filer.approvedByDeletedAt === null
+                  ? ("active" as const)
+                  : ("deleted" as const),
               filedAt: filer.filedAt,
             };
           }),

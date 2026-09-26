@@ -225,6 +225,8 @@ const HREF_SANITIZERS: ReadonlyMap<string, string> = new Map([
 // both `member.userId` and `member.organizationId` of the auth schema's
 // `member` table. Both tables are recognised by what they are bound to, so an
 // aliased import, a namespace member, or a local alias still counts.
+// Historical correspondence actors instead follow the stored filer/approval
+// relationship, with organization, matter and correspondence predicates.
 //
 // A plain insert creates a row and reads none, so `insert(user)` is judged
 // only when it hands rows back (`returning`) or rewrites an existing one
@@ -391,6 +393,247 @@ const hasAttachmentDisposition = (node): boolean => {
 };
 
 const FILE_HANDLER_DIRECTORY = "apps/api/src/handlers/files/";
+
+const hasEquality = (
+  pairs: [AstNode, AstNode][],
+  leftMatches: (node: AstNode) => boolean,
+  rightMatches: (node: AstNode) => boolean,
+): boolean =>
+  pairs.some(
+    ([left, right]) =>
+      (leftMatches(left) && rightMatches(right)) ||
+      (leftMatches(right) && rightMatches(left)),
+  );
+
+const fluentQueryContaining = (reference: AstNode): AstNode | null => {
+  let current = reference;
+  while (isAstNode(current.parent) && !isQueryChainBoundary(current.parent)) {
+    current = current.parent;
+    if (current.type !== "CallExpression") {
+      continue;
+    }
+    const callee = unwrapExpression(current.callee);
+    if (callee?.type !== "MemberExpression") {
+      continue;
+    }
+    if (
+      !["select", "from", "leftJoin", "innerJoin", "where"].includes(
+        memberPropertyName(callee) ?? "",
+      )
+    ) {
+      continue;
+    }
+    while (
+      isAstNode(current.parent) &&
+      current.parent.type === "MemberExpression" &&
+      current.parent.object === current &&
+      isAstNode(current.parent.parent) &&
+      current.parent.parent.type === "CallExpression" &&
+      current.parent.parent.callee === current.parent
+    ) {
+      current = current.parent.parent;
+    }
+    return current;
+  }
+  return null;
+};
+
+const createHistoricalRelationshipScopeChecker = (
+  context: Parameters<typeof resolveImport>[0],
+) => {
+  type UserTableIdentity = Variable | typeof USER_TABLE_EXPORT;
+  const userTableIdentity = (
+    node: unknown,
+    seen = new Set<Variable>(),
+  ): UserTableIdentity | null => {
+    const expression = unwrapExpression(node);
+    if (!isAstNode(expression)) {
+      return null;
+    }
+    const imported = resolveImport(context, expression);
+    if (
+      imported?.moduleId === AUTH_SCHEMA_MODULE &&
+      imported.imported === USER_TABLE_EXPORT
+    ) {
+      return USER_TABLE_EXPORT;
+    }
+    if (!isIdentifierReference(expression)) {
+      return null;
+    }
+    const variable = resolveVariable(context, expression);
+    if (variable === null || seen.has(variable)) {
+      return null;
+    }
+    seen.add(variable);
+    const initializer = stableInitializer(variable);
+    if (initializer === null) {
+      return null;
+    }
+    if (initializer.type === "CallExpression") {
+      const called = resolveImport(context, invokedCallee(initializer));
+      if (
+        called?.moduleId === "drizzle-orm/pg-core" &&
+        called.imported === "alias" &&
+        Array.isArray(initializer.arguments) &&
+        userTableIdentity(initializer.arguments.at(0), seen) !== null
+      ) {
+        return variable;
+      }
+      return null;
+    }
+    return userTableIdentity(initializer, seen);
+  };
+
+  const correspondenceTable = (node: unknown, exported: string): boolean => {
+    const resolved = resolveImport(context, node);
+    return (
+      resolved?.imported === exported &&
+      (resolved.moduleId === "apps/api/src/db/schema" ||
+        resolved.moduleId === "apps/api/src/db/schema/correspondence")
+    );
+  };
+  const correspondenceColumn = (
+    node: AstNode,
+    table: string,
+    column: string,
+  ): boolean =>
+    node.type === "MemberExpression" &&
+    memberPropertyName(node) === column &&
+    correspondenceTable(node.object, table);
+  const userIdColumn = (node: AstNode, identity: UserTableIdentity): boolean =>
+    node.type === "MemberExpression" &&
+    memberPropertyName(node) === "id" &&
+    userTableIdentity(node.object) === identity;
+
+  // An equality inside OR, a callback, or a similarly named local helper
+  // does not establish a mandatory predicate for this query.
+  const conjunctiveEqualities = (node: unknown): [AstNode, AstNode][] => {
+    const expression = unwrapExpression(node);
+    if (
+      expression?.type !== "CallExpression" ||
+      !Array.isArray(expression.arguments)
+    ) {
+      return [];
+    }
+    const called = resolveImport(context, invokedCallee(expression));
+    if (called?.moduleId !== "drizzle-orm") {
+      return [];
+    }
+    if (called.imported === "and") {
+      return expression.arguments.flatMap(conjunctiveEqualities);
+    }
+    const left = unwrapExpression(expression.arguments.at(0));
+    const right = unwrapExpression(expression.arguments.at(1));
+    return called.imported === "eq" && isAstNode(left) && isAstNode(right)
+      ? [[left, right]]
+      : [];
+  };
+  const hasHistoricalRelationship = (
+    query: AstNode,
+    identity: UserTableIdentity,
+  ): boolean => {
+    const calls: { method: string; args: unknown[] }[] = [];
+    let current: AstNode | null = query;
+    while (current?.type === "CallExpression") {
+      const callee = unwrapExpression(current.callee);
+      if (
+        callee?.type !== "MemberExpression" ||
+        !Array.isArray(current.arguments)
+      ) {
+        break;
+      }
+      const method = memberPropertyName(callee);
+      if (method !== null) {
+        calls.push({ method, args: current.arguments });
+      }
+      current = unwrapExpression(callee.object);
+    }
+    if (
+      !calls.some(
+        ({ method, args }) =>
+          method === "from" &&
+          correspondenceTable(args.at(0), "correspondenceFilers"),
+      )
+    ) {
+      return false;
+    }
+    const whereCalls = calls.filter(({ method }) => method === "where");
+    // Dynamic builders can replace an earlier WHERE. Do not combine
+    // predicates from separate calls into an authorization proof.
+    if (whereCalls.length !== 1) {
+      return false;
+    }
+    const predicates = whereCalls.flatMap(({ args }) =>
+      conjunctiveEqualities(args.at(0)),
+    );
+    if (
+      !["organizationId", "workspaceId", "correspondenceId"].every((column) =>
+        hasEquality(
+          predicates,
+          (node) => correspondenceColumn(node, "correspondenceFilers", column),
+          (node) =>
+            node.type !== "MemberExpression" ||
+            resolveImport(context, node.object) === null,
+        ),
+      )
+    ) {
+      return false;
+    }
+
+    const joins = calls.filter(
+      ({ method }) => method === "leftJoin" || method === "innerJoin",
+    );
+    const joinsActor = (table: string, column: string): boolean =>
+      joins.some(
+        ({ args }) =>
+          userTableIdentity(args.at(0)) === identity &&
+          hasEquality(
+            conjunctiveEqualities(args.at(1)),
+            (node) => correspondenceColumn(node, table, column),
+            (node) => userIdColumn(node, identity),
+          ),
+      );
+    if (joinsActor("correspondenceFilers", "filedByUserId")) {
+      return true;
+    }
+    return (
+      joinsActor("correspondenceAllowedSenders", "approvedBy") &&
+      joins.some(
+        ({ args }) =>
+          correspondenceTable(args.at(0), "correspondenceAllowedSenders") &&
+          hasEquality(
+            conjunctiveEqualities(args.at(1)),
+            (node) =>
+              correspondenceColumn(
+                node,
+                "correspondenceFilers",
+                "filedByAllowedSenderId",
+              ),
+            (node) =>
+              correspondenceColumn(node, "correspondenceAllowedSenders", "id"),
+          ),
+      )
+    );
+  };
+
+  const historicalRelationshipScoped = (chain: AstNode): boolean => {
+    let foundUser = false;
+    for (const node of everyNode(chain)) {
+      const identity = userTableIdentity(node);
+      if (identity === null) {
+        continue;
+      }
+      foundUser = true;
+      const query = fluentQueryContaining(node);
+      if (query === null || !hasHistoricalRelationship(query, identity)) {
+        return false;
+      }
+    }
+    return foundUser;
+  };
+
+  return historicalRelationshipScoped;
+};
 
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
@@ -707,7 +950,9 @@ export default eslintCompatPlugin({
           unscopedUserQuery:
             "A query reading the auth-schema 'user' table must reference " +
             "both member.userId and member.organizationId in the same query " +
-            "chain. Join through organization membership, or suppress " +
+            "chain, or join historical correspondence actors through a filer " +
+            "relationship scoped to organization, matter and record. Use one " +
+            "of those authorized relationships, or suppress " +
             "narrowly with evidence for another authorized scope.",
         },
         schema: [
@@ -741,6 +986,9 @@ export default eslintCompatPlugin({
             ? resolved.imported
             : null;
         };
+
+        const historicalRelationshipScoped =
+          createHistoricalRelationshipScopeChecker(context);
 
         // The membership predicates a query chain carries, including those of
         // local constants it reads: a membership subquery built in the
@@ -788,6 +1036,9 @@ export default eslintCompatPlugin({
           const scoped = new Set<string>();
           membershipPredicates(chain, scoped, new Set());
           if (scoped.size === 2) {
+            return true;
+          }
+          if (historicalRelationshipScoped(chain)) {
             return true;
           }
           const holder = chain.parent;

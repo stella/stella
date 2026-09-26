@@ -5,17 +5,18 @@ import { t } from "elysia";
 import { correspondence } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
+import { readCorrespondenceProvenance } from "@/api/lib/correspondence/provenance";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import { brandValidatedCorrespondenceCursorId } from "@/api/lib/safe-id-boundaries";
 
 const PAGE_SIZE = 30;
 const PAGE_SIZE_MAX = 100;
 const cursorCodec = createTimestampIdCursorCodec({
   column: correspondence.receivedAt,
-  brandId: (id: string) => toSafeId<"correspondence">(id),
+  brandId: brandValidatedCorrespondenceCursorId,
 });
 
 const config = {
@@ -57,6 +58,10 @@ const listCorrespondence = createSafeHandler(
               sentAt: correspondence.sentAt,
               handlingState: correspondence.handlingState,
               assigneeId: correspondence.assigneeId,
+              intake: correspondence.intake,
+              originalSignature: correspondence.originalSignature,
+              authenticatedSenderAddress:
+                correspondence.authenticatedSenderAddress,
               spf: correspondence.spf,
               dkim: correspondence.dkim,
               dmarc: correspondence.dmarc,
@@ -89,6 +94,9 @@ const listCorrespondence = createSafeHandler(
       items: page.items.map(
         ({
           cursorTimestamp: _cursorTimestamp,
+          intake,
+          originalSignature,
+          authenticatedSenderAddress,
           spf,
           dkim,
           dmarc,
@@ -96,7 +104,15 @@ const listCorrespondence = createSafeHandler(
           ...record
         }) => ({
           ...record,
-          authentication: { spf, dkim, dmarc, alignedIdentifier },
+          ...readCorrespondenceProvenance({
+            intake,
+            originalSignature,
+            authenticatedSenderAddress,
+            spf,
+            dkim,
+            dmarc,
+            alignedIdentifier,
+          }),
         }),
       ),
       nextCursor: page.nextCursor,

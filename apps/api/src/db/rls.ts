@@ -718,6 +718,25 @@ export const authUserPolicies = () => [
     to: stella,
     using: authUserVisibleCheck,
   }),
+  p.pgPolicy("auth_user_correspondence_history_select", {
+    for: "select",
+    to: stella,
+    // Membership may end; an accessible filing retains its historical actors.
+    using: sql`EXISTS (
+      SELECT 1 FROM public.correspondence_filers cf
+      WHERE cf.filed_by_user_id = "user".id
+        AND cf.organization_id = (SELECT current_setting('${sql.raw(SETTING_ORGANIZATION_ID)}', true))
+        AND ${workspaceAccessCheck(sql`cf.workspace_id`)}
+    ) OR EXISTS (
+      SELECT 1 FROM public.correspondence_allowed_senders approved
+      JOIN public.correspondence_filers cf
+        ON cf.filed_by_allowed_sender_id = approved.id
+        AND cf.organization_id = approved.organization_id
+      WHERE approved.approved_by = "user".id
+        AND approved.organization_id = (SELECT current_setting('${sql.raw(SETTING_ORGANIZATION_ID)}', true))
+        AND ${workspaceAccessCheck(sql`cf.workspace_id`)}
+    )`,
+  }),
 ];
 
 export const authOrganizationPolicies = () => [
