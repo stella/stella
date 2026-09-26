@@ -441,11 +441,12 @@ const SVK_DOCKET_RE =
  * in older dockets, four in newer ones): `II. ÚS 55/98`, `PL. ÚS 3/2019`.
  * Readers drop the dot, the space or the accent (`IV. US 221/04`,
  * `II.ÚS 55/98`), so each is optional, save that the senate stays apart from
- * `ÚS` (`plus 5/98` is prose). The year keeps its width, because the stored
- * key does.
+ * `ÚS` (`plus 5/98` is prose). The court's case lists join `ÚS` to the
+ * number with a slash (`II.ÚS/251/04`), which ingestion keys alike. The year
+ * keeps its width, because the stored key does.
  */
 const SVK_CONSTITUTIONAL_DOCKET_RE =
-  /^(?<senate>pl|iv|i{1,3})(?:\. ?| )[úu]s ?(?<ordinal>\d{1,5})\/(?<year>\d{2}|\d{4})$/iu;
+  /^(?<senate>pl|iv|i{1,3})(?:\. ?| )[úu]s(?: ?\/ ?| ?)(?<ordinal>\d{1,5})\/(?<year>\d{2}|\d{4})$/iu;
 /**
  * A Hungarian docket, as the court registry decrees (Büsz. and the OBH's
  * successor rules) prescribe it: an optional Arabic panel number, the registry

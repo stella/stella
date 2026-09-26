@@ -6,28 +6,47 @@ import { propertyConfig } from "@stll/property-testing";
 
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 
+/** A Constitutional Court docket as a reader types it or a publisher prints it. */
+const constitutionalSpelling = fc.record({
+  dot: fc.constantFrom("", "."),
+  gap: fc.constantFrom("", " "),
+  join: fc.constantFrom("", " ", "  ", "/", " / "),
+  lower: fc.boolean(),
+  mark: fc.constantFrom("ÚS", "US", "ús", "us"),
+  ordinal: fc.integer({ min: 1, max: 99_999 }),
+  senate: fc.constantFrom("I", "II", "III", "IV", "PL", "Pl"),
+  year: fc.constantFrom("98", "04", "2017"),
+});
+
 /**
  * Search answers a docket from `citation_key`, keyed by `bareCitationKey` of
  * the grammar's formatted docket, while ingestion keys the court's case
- * number with the same function. The grammar's canonical key, the key of what
- * it formats, and the key ingestion stores must be one string, or a docket
- * that parses still finds nothing.
+ * number with the same function. The two must agree in both directions over
+ * one space of spellings: whatever the grammar accepts keys as ingestion
+ * stores the court's spelling, and whatever ingestion folds onto that key the
+ * grammar accepts, or a docket either parses and finds nothing or is stored
+ * under a spelling a reader cannot look up.
+ *
+ * One narrowing is deliberate: the grammar keeps the senate apart from `ÚS`
+ * (`plus 5/98` is prose), while ingestion, reading case numbers rather than
+ * reader input, also folds a glued `IIÚS 5/98`.
  */
 test("a Slovak Constitutional Court docket keys as ingestion stores it", () => {
   fc.assert(
     fc.property(
-      fc.constantFrom("I", "II", "III", "IV", "PL"),
-      fc.integer({ min: 1, max: 99_999 }),
-      fc.constantFrom("98", "04", "2017"),
-      fc.constantFrom(". ", ".", " "),
-      fc.constantFrom("ÚS", "US", "ús", "us"),
-      fc.boolean(),
-      (senate, ordinal, year, separator, mark, lower) => {
+      constitutionalSpelling,
+      ({ dot, gap, join, lower, mark, ordinal, senate, year }) => {
         const stored = bareCitationKey(`${senate}. ÚS ${ordinal}/${year}`);
-        const typed = `${lower ? senate.toLowerCase() : senate}${separator}${mark} ${ordinal}/${year}`;
+        const typed = `${lower ? senate.toLowerCase() : senate}${dot}${gap}${mark}${join}${ordinal}/${year}`;
         const parsed = DECISION_DOCKET_GRAMMARS.SVK.parse(typed);
-        expect(parsed?.canonical, typed).toBe(stored);
-        expect(parsed && bareCitationKey(parsed.formatted), typed).toBe(stored);
+        if (parsed !== null) {
+          expect(parsed.canonical, typed).toBe(stored);
+          expect(bareCitationKey(parsed.formatted), typed).toBe(stored);
+        }
+        const gluedToMark = dot === "" && gap === "";
+        if (bareCitationKey(typed) === stored && !gluedToMark) {
+          expect(parsed?.canonical, typed).toBe(stored);
+        }
       },
     ),
     propertyConfig(),

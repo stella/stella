@@ -124,6 +124,7 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
         "iv.ús 999/99",
         "IV ÚS999/99",
         "IV.US 999/99",
+        "IV.ÚS/999/99",
       ],
     },
     {

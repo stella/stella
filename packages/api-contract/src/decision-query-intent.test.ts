@@ -326,6 +326,7 @@ describe("an entry finds its decision within its own jurisdiction", () => {
       ["II.ÚS55/98", "II. ÚS 55/98"],
       ["II. ÚS 55/98", "II.ÚS55/98"],
       ["PL.ÚS3/2019", "PL. ÚS 3/2019"],
+      ["II.ÚS/251/04", "II. ÚS 251/04"],
     ] as const) {
       const identity = identityOf(typed, DECISION_DOCKET_GRAMMARS.SVK);
       expect(exactDecisionMatches(identity, [hit(stored)]), typed).toEqual([
