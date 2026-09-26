@@ -12,6 +12,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveCorpusIndexGroupContract } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
@@ -288,7 +289,7 @@ test("an attestation withdrawn after reservation stops the append at start, and 
           leaseMs: 60_000,
         }),
     );
-  const lastErrorOf = async (intentId: string) =>
+  const lastErrorOf = async (intentId: SafeId<"corpusIndexProjectionIntent">) =>
     await db
       .select({
         status: corpusIndexProjectionIntents.status,
@@ -313,7 +314,10 @@ test("an attestation withdrawn after reservation stops the append at start, and 
     })),
   );
   const [batchLease] = batchLeases;
-  expect(await lastErrorOf(batchLease?.intentId ?? "")).toEqual([
+  if (batchLease === undefined) {
+    throw new Error("the batch start reserved nothing");
+  }
+  expect(await lastErrorOf(batchLease.intentId)).toEqual([
     {
       status: "cancelled",
       lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.groupNotAttested,
