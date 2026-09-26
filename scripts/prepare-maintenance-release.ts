@@ -172,7 +172,7 @@ export const maintenanceChangelog = (
         const directory = name.slice("@stll/".length);
         return `[${name}](https://github.com/stella/stella/blob/v${version}/packages/${directory}/CHANGELOG.md)`;
       });
-      const paragraph = summary.split(/\r?\n\s*\r?\n/u).at(0) ?? "";
+      const paragraph = summary.split(/\r?\n[^\S\r\n]*\r?\n/u).at(0) ?? "";
       // The landing renderer supports flat bullets, not tables, code blocks
       // or nested lists. Block-first notes stay in the linked changelog.
       const blockMarkup =
