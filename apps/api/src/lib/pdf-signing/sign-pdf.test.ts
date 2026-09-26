@@ -6,6 +6,7 @@ import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocatio
 import {
   applySignature,
   captureSigningDigest,
+  PdfSigningCertificateRevokedError,
   PdfSigningCertifiedDocumentError,
   PdfSigningDigestMismatchError,
   PdfSigningPlaceholderTooSmallError,
@@ -246,13 +247,16 @@ describe("two-phase PDF signing", () => {
 
   describe("validation data", () => {
     const CRL_URL = "http://crl.example/issuing.crl";
+    const ROOT_CRL_URL = "http://crl.example/root.crl";
 
     const signUnderIssuingCa = async ({
       chainComplete,
       crlServed = true,
+      leafRevoked = false,
     }: {
       chainComplete: boolean;
       crlServed?: boolean;
+      leafRevoked?: boolean;
     }) => {
       const root = await createTestCertificate({
         commonName: "Root",
@@ -260,7 +264,7 @@ describe("two-phase PDF signing", () => {
       });
       const issuing = await createTestCertificate({
         commonName: "Issuing CA",
-        crlUrl: CRL_URL,
+        crlUrl: ROOT_CRL_URL,
         isCa: true,
         issuer: root,
       });
@@ -270,12 +274,19 @@ describe("two-phase PDF signing", () => {
         crlUrl: CRL_URL,
         issuer: issuing,
       });
-      const crl = await createTestCrl(issuing);
+      const crl = await createTestCrl(issuing, leafRevoked ? [leaf] : []);
+      const rootCrl = await createTestCrl(root);
       const fetched: string[] = [];
       const revocationProvider = createTrackedRevocationProvider(
         async ({ url }) => {
           fetched.push(url);
-          return url === CRL_URL && crlServed ? crl : null;
+          if (!crlServed) {
+            return null;
+          }
+          if (url === ROOT_CRL_URL) {
+            return rootCrl;
+          }
+          return url === CRL_URL ? crl : null;
         },
       );
 
@@ -356,12 +367,24 @@ describe("two-phase PDF signing", () => {
 
       // Revocation data was still gathered for what is there, through the
       // guarded provider; only the level claim stops at trusted time.
+      // The issuing CA's CRL cannot be verified without its issuer, so it
+      // proves nothing and the CA stays uncovered.
       expect(applied.level).toBe("B-T");
       expect(applied.warnings.map(({ code }) => code)).toEqual([
         "CHAIN_INCOMPLETE",
+        "REVOCATION_UNAVAILABLE",
       ]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
+    });
+
+    test("refuses to embed a signature whose certificate is revoked", async () => {
+      const refused = await signUnderIssuingCa({
+        chainComplete: true,
+        leafRevoked: true,
+      }).catch((error: unknown) => error);
+
+      expect(refused).toBeInstanceOf(PdfSigningCertificateRevokedError);
     });
 
     test("claims only trusted time when revocation data is unavailable", async () => {

@@ -46,6 +46,7 @@ import {
 import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
 import {
   embedValidationData,
+  findRevokedCertificates,
   gatherValidationData,
   timestampTokenCertificates,
 } from "@/api/lib/pdf-signing/validation-data";
@@ -81,6 +82,11 @@ export class PdfSigningDigestMismatchError extends TaggedError(
  * The document carries a certification that permits no changes, so any
  * signature appended to it would break the certification.
  */
+/** Revocation data says a certificate of the signer's chain is revoked. */
+export class PdfSigningCertificateRevokedError extends TaggedError(
+  "PdfSigningCertificateRevokedError",
+)<{ message: string }> {}
+
 export class PdfSigningCertifiedDocumentError extends TaggedError(
   "PdfSigningCertifiedDocumentError",
 )<{ message: string }> {}
@@ -371,6 +377,25 @@ export const applySignature = async (
         const timestampAuthority = createFallbackTimestampAuthority(
           invocation.timestampAuthorities,
         );
+        const provider =
+          invocation.revocationProvider ?? createTrackedRevocationProvider();
+        const signerChain = [
+          invocation.certificate,
+          ...invocation.certificateChain,
+        ];
+        // Gathered before anything is embedded: validation data is only
+        // needed with trusted time, and a revocation it turns up must stop
+        // the signature, not just be stored beside it. Phase 1 made the same
+        // check before the PIN; this one covers the minutes in between.
+        const signerRevocation =
+          invocation.timestampAuthorities.length > 0
+            ? await findRevokedCertificates({ provider, signerChain })
+            : null;
+        if (signerRevocation !== null && signerRevocation.revoked.length > 0) {
+          throw new PdfSigningCertificateRevokedError({
+            message: "A certificate of the signer's chain is revoked.",
+          });
+        }
         const timestamped =
           invocation.timestampAuthorities.length > 0
             ? await signOnce({ timestampAuthority }).catch((error: unknown) => {
@@ -391,7 +416,11 @@ export const applySignature = async (
         warnings.push(...libpdfWarnings(signed.warnings));
 
         const token = timestampAuthority.usedToken();
-        if (timestamped === null || token === null) {
+        if (
+          timestamped === null ||
+          token === null ||
+          signerRevocation === null
+        ) {
           return {
             bytes: signed.bytes,
             level: "B-B",
@@ -404,9 +433,9 @@ export const applySignature = async (
         // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
         // the store lands in one more incremental update after them.
         const validation = await gatherValidationData({
-          provider:
-            invocation.revocationProvider ?? createTrackedRevocationProvider(),
-          signerChain: [invocation.certificate, ...invocation.certificateChain],
+          provider,
+          signer: signerRevocation.material,
+          signerChain,
           timestampCertificates: timestampTokenCertificates(token),
         });
         if (!invocation.certificateChainComplete) {
@@ -433,7 +462,10 @@ export const applySignature = async (
           warnings: boundWarnings(warnings),
         } satisfies AppliedSignature;
       } catch (error) {
-        if (PdfSigningDigestMismatchError.is(error)) {
+        if (
+          PdfSigningDigestMismatchError.is(error) ||
+          PdfSigningCertificateRevokedError.is(error)
+        ) {
           throw error;
         }
         throw new PdfSigningError({

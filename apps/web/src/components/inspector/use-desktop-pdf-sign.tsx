@@ -36,6 +36,8 @@ const CLOSE_REASON_KEYS = {
     "workspaces.files.pdfSigning.cancelledBaseVersionDescription",
   certificate_rejected:
     "workspaces.files.pdfSigning.cancelledCertificateDescription",
+  certificate_revoked:
+    "workspaces.files.pdfSigning.cancelledRevokedDescription",
   certified_document:
     "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   digest_mismatch: "workspaces.files.pdfSigning.cancelledDigestDescription",
