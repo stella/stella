@@ -10,9 +10,13 @@
 //   - a parameter or destructured default:    (db = rootDb) / { db = rootDb }
 //   - a fallback operand:                      db ?? rootDb / s ??= make(rootDb)
 //   - a conditional operand:                   cond ? rootDb.transaction(f) : ...
+//                                              given ? given : createStore(rootDb)
+//   - an assignment:                           store = createStore(rootDb)
+//                                              holder.db = rootDb
 //   - an object-literal dependency property:   { db: rootDb } / { rootDb }
 //   - a module-level call taking it:           const store = createStore(rootDb)
 //   - an alias or a returned handle:           const db = rootDb / () => rootDb
+//                                              return createStore(rootDb)
 //
 // An operand counts when it IS the handle or reaches it through a member or
 // call chain (`rootDb.transaction(fn)`), so wrapping the handle in a method
@@ -30,7 +34,11 @@
 // value stored in a collection. A direct call on the handle inside a function
 // (`rootDb.select()`), or an explicit argument inside a function
 // (`notify(rows, rootDb)`), is not a shape here: that is an explicit use,
-// which the import ratchet and the door list account for.
+// which the import ratchet and the door list account for. So is an awaited
+// call's result (`return await notify(rows, rootDb)`): the operation already
+// ran, and what it returns is not built from the handle. A declaration inside
+// a function (`const store = createStore(rootDb)`) binds a fresh local and
+// counts only once it is assigned over another value or returned.
 
 import ts from "typescript";
 
@@ -43,6 +51,7 @@ export const ROOT_CONNECTION_SHAPE = {
   conditionalOperand: "conditional-operand",
   dependencyProperty: "dependency-property",
   moduleLevelCall: "module-level-call",
+  assignment: "assignment",
   alias: "alias",
 } as const;
 
@@ -243,22 +252,27 @@ const isReferencePosition = (identifier: ts.Identifier): boolean => {
   return true;
 };
 
-const unwrap = (node: ts.Expression): ts.Expression => {
+// Parentheses and type-only wrappers, which change nothing at runtime.
+const unwrapTypes = (node: ts.Expression): ts.Expression => {
   let current = node;
-  for (;;) {
-    if (
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current) ||
-      ts.isNonNullExpression(current) ||
-      ts.isTypeAssertionExpression(current) ||
-      ts.isAwaitExpression(current)
-    ) {
-      current = current.expression;
-    } else {
-      return current;
-    }
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
   }
+  return current;
+};
+
+const unwrap = (node: ts.Expression): ts.Expression => {
+  let current = unwrapTypes(node);
+  while (ts.isAwaitExpression(current)) {
+    current = unwrapTypes(current.expression);
+  }
+  return current;
 };
 
 const createRootReferenceTest = (bindings: RootBindings) => {
@@ -322,7 +336,14 @@ const createRootReferenceTest = (bindings: RootBindings) => {
       (expression.arguments ?? []).some(isHandle)
     );
   };
-  return { buildsFromHandle, isHandle, reachesHandle };
+  /**
+   * A value built from the handle rather than an operation's result: an
+   * awaited call has already run on the handle and hands back what it
+   * returned (`return await notify(rows, rootDb)`), which is an explicit use.
+   */
+  const buildsValueFromHandle = (node: ts.Expression): boolean =>
+    !ts.isAwaitExpression(unwrapTypes(node)) && buildsFromHandle(node);
+  return { buildsFromHandle, buildsValueFromHandle, isHandle, reachesHandle };
 };
 
 const FALLBACK_OPERATORS = new Set<ts.SyntaxKind>([
@@ -352,8 +373,12 @@ export const findRootConnectionShapesAs = (
   if (bindings.handles.size === 0 && bindings.namespaces.size === 0) {
     return [];
   }
-  const { buildsFromHandle, isHandle, reachesHandle } =
+  const { buildsFromHandle, buildsValueFromHandle, isHandle, reachesHandle } =
     createRootReferenceTest(bindings);
+  // At module level a call taking the handle is already `module-level-call`;
+  // counting the position that receives its value too would count it twice.
+  const buildsInFunction = (node: ts.Expression): boolean =>
+    isInsideFunction(node) && buildsValueFromHandle(node);
   const hits: RootConnectionShapeHit[] = [];
   const record = (shape: RootConnectionShape, node: ts.Node): void => {
     hits.push({
@@ -379,10 +404,16 @@ export const findRootConnectionShapesAs = (
       record(ROOT_CONNECTION_SHAPE.fallbackOperand, node.right);
     } else if (ts.isConditionalExpression(node)) {
       for (const operand of [node.whenTrue, node.whenFalse]) {
-        if (reachesHandle(operand)) {
+        if (reachesHandle(operand) || buildsInFunction(operand)) {
           record(ROOT_CONNECTION_SHAPE.conditionalOperand, operand);
         }
       }
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      (reachesHandle(node.right) || buildsInFunction(node.right))
+    ) {
+      record(ROOT_CONNECTION_SHAPE.assignment, node.right);
     } else if (ts.isPropertyAssignment(node) && isHandle(node.initializer)) {
       record(ROOT_CONNECTION_SHAPE.dependencyProperty, node.initializer);
     } else if (ts.isShorthandPropertyAssignment(node) && isHandle(node.name)) {
@@ -405,13 +436,13 @@ export const findRootConnectionShapesAs = (
     } else if (
       ts.isReturnStatement(node) &&
       node.expression !== undefined &&
-      isHandle(node.expression)
+      (isHandle(node.expression) || buildsInFunction(node.expression))
     ) {
       record(ROOT_CONNECTION_SHAPE.alias, node.expression);
     } else if (
       ts.isArrowFunction(node) &&
       !ts.isBlock(node.body) &&
-      isHandle(node.body)
+      (isHandle(node.body) || buildsInFunction(node.body))
     ) {
       record(ROOT_CONNECTION_SHAPE.alias, node.body);
     }

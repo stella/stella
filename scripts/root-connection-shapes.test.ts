@@ -121,6 +121,83 @@ describe("shapes that supply the owner connection implicitly", () => {
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
+      ROOT_CONNECTION_SHAPE.alias,
+    ]);
+  });
+
+  test("a conditional that builds a store from it", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const pick = (given?: Store) =>",
+        "  given ? given : createExtractionRunStore(rootDb);",
+        "export const orNew = (given?: Store) =>",
+        "  given === undefined ? new Store(rootDb) : given;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+    ]);
+  });
+
+  test("an assignment of the handle or of a store built from it", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const plain = (given?: Db) => {",
+        "  let db = given;",
+        "  db = rootDb;",
+        "  return db;",
+        "};",
+        "export const built = () => {",
+        "  let store: Store | undefined;",
+        "  store = createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const braced = (given?: Store) => {",
+        "  let store = given;",
+        "  if (store === undefined) {",
+        "    store = createExtractionRunStore(rootDb);",
+        "  }",
+        "  return store;",
+        "};",
+        "export const unbraced = (given?: Store) => {",
+        "  let store = given;",
+        "  if (!store) store = createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const ifElse = (given?: Db) => {",
+        "  let db: Db;",
+        "  if (given) db = given;",
+        "  else db = rootDb;",
+        "  return db;",
+        "};",
+        "export const property = (holder: { db?: Db }) => {",
+        "  holder.db = rootDb;",
+        "};",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+    ]);
+  });
+
+  test("an assignment at module level counts its call once", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "let store: Store | undefined;",
+        "store = createExtractionRunStore(rootDb);",
+        "let db: Db | undefined;",
+        "db = rootDb;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.moduleLevelCall,
+      ROOT_CONNECTION_SHAPE.assignment,
     ]);
   });
 
@@ -136,6 +213,23 @@ describe("shapes that supply the owner connection implicitly", () => {
         "  return rootDb;",
         "};",
         "export const handle = () => rootDb;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+    ]);
+  });
+
+  test("a returned factory", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const makeStore = () => {",
+        "  return createExtractionRunStore(rootDb);",
+        "};",
+        "export const repairs = () => createRepairDeps(rootDb);",
+        "export const analyses = () => new AnalysisStore(rootDb);",
       ),
     ).toEqual([
       ROOT_CONNECTION_SHAPE.alias,
@@ -166,6 +260,31 @@ describe("binding resolution", () => {
     ).toEqual([
       ROOT_CONNECTION_SHAPE.fallbackOperand,
       ROOT_CONNECTION_SHAPE.fallbackOperand,
+    ]);
+  });
+
+  test("follows renamed and namespace imports into assignments, returns and conditionals", () => {
+    expect(
+      shapesOf(
+        'import { rootDb as owner } from "../db/root";',
+        'import * as root from "@/api/db/root";',
+        "export const renamed = (holder: { store?: Store }) => {",
+        "  holder.store = createExtractionRunStore(owner);",
+        "};",
+        "export const namespaced = (given?: Db) => {",
+        "  let db = given;",
+        "  if (!db) db = root.rootDb;",
+        "  return db;",
+        "};",
+        "export const returned = () => createExtractionRunStore(root.rootDb);",
+        "export const ternary = (given?: Store) =>",
+        "  given ? given : createExtractionRunStore(owner);",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
     ]);
   });
 
@@ -200,6 +319,16 @@ describe("binding resolution", () => {
         "  const rootDb = scoped();",
         "  return { db: rootDb };",
         "};",
+        "export const reassigned = (rootDb: Db, holder: { db?: Db }) => {",
+        "  let store: Store | undefined;",
+        "  if (!store) store = createExtractionRunStore(rootDb);",
+        "  holder.db = rootDb;",
+        "  return rootDb ? createExtractionRunStore(rootDb) : store;",
+        "};",
+        "export const returnsLocal = () => {",
+        "  const rootDb = scoped();",
+        "  return createExtractionRunStore(rootDb);",
+        "};",
       ),
     ).toEqual([]);
   });
@@ -222,7 +351,7 @@ describe("binding resolution", () => {
 });
 
 describe("explicit uses are not shapes", () => {
-  test("a direct query, an explicit argument, and a door's operation", () => {
+  test("a direct query, an explicit argument, an awaited result, a local, and a door's operation", () => {
     expect(
       shapesOf(
         ROOT_IMPORT,
@@ -231,7 +360,19 @@ describe("explicit uses are not shapes", () => {
         "export const notifyActor = async (notice: Notice) => {",
         "  await fileNotice(notice, rootDb);",
         "};",
-        "export const repairs = () => createRepairDeps(rootDb);",
+        "export const repairs = async () => await runRepairs(rootDb);",
+        "export const verify = async (params: Params) => {",
+        "  return await consumeOtp(rootDb, params);",
+        "};",
+        "export const settle = async (given?: Outcome) => {",
+        "  let outcome = given;",
+        "  if (!outcome) outcome = await settleOn(rootDb);",
+        "  return first ? await settleOn(rootDb) : outcome;",
+        "};",
+        "export const declared = () => {",
+        "  const store = createExtractionRunStore(rootDb);",
+        "  store.flush();",
+        "};",
         "const handles = async () => {",
         '  const { rootDb: owner } = await import("@/api/db/root");',
         "  return { owner: laneHandle(owner) };",
