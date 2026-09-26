@@ -1280,15 +1280,47 @@ export const BlockRenderer = ({
   // The permalink is a link, and a link is not allowed inside `<table>`, so
   // the wrapper carries it. The anchor id stays on the table itself: it is
   // what every deep link already written points at.
+  const tableNoteLabel =
+    block.note?.type === "footnote" ? block.note.label : null;
+  const showTableNoteLabel =
+    noteHead &&
+    tableNoteLabel !== null &&
+    !footnoteTextCarriesLabel(tableNoteLabel, block.plainText);
   return (
     // A court's table has the columns it has, and a narrow reader (the
     // inspector pane at its minimum) cannot always hold them. It scrolls
     // inside its own box rather than widening the pane, and never on paper,
     // where the page is as wide as it will ever be.
-    <div className="group relative max-w-full overflow-x-auto print:overflow-x-visible">
+    <div
+      className={cn(
+        "group relative max-w-full overflow-x-auto print:overflow-x-visible",
+        block.note?.type === "footnote" &&
+          "text-muted-foreground text-[0.86em]",
+      )}
+      data-note={block.note?.type}
+    >
       {permalink}
+      {showTableNoteLabel && !isAddressable && (
+        <span className="reader-note-label" data-reader-chrome="">
+          {tableNoteLabel}
+        </span>
+      )}
+      {showTableNoteLabel && isAddressable && (
+        <button
+          className="reader-note-label"
+          data-reader-chrome=""
+          onClick={() => jumpToNoteReference(block.anchorId)}
+          type="button"
+        >
+          {tableNoteLabel}
+        </button>
+      )}
       <table
-        className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]"
+        className={cn(
+          "reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]",
+          block.note?.type === "footnote" &&
+            "my-2 text-[calc(0.86rem*var(--reader-text-scale))]",
+        )}
         {...documentAnchorProps}
       >
         <tbody>
@@ -1334,6 +1366,9 @@ export const BlockRenderer = ({
           ))}
         </tbody>
       </table>
+      {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
+        <NoteBackJump headAnchorId={noteBackJumpTo} />
+      )}
     </div>
   );
 };

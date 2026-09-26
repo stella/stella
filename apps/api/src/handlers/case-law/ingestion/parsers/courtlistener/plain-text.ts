@@ -144,6 +144,7 @@ const parseLayoutText = (
     };
   }
   const builder = createUnitBuilder({
+    rootOpinionPolicy: "single",
     prefix,
     bodyRole: (domType, position) => unitClass(rowType, domType, position).body,
     blockAllowance: blockAllowance(budget),
@@ -169,6 +170,7 @@ const parseLayoutText = (
     text: {
       units,
       counts: {
+        noteSpanDefects: 0,
         pageAnchors,
         notes,
         publisherLinks,

@@ -159,7 +159,13 @@ const outsideFrame = (id: number): Frame => ({
 
 /** The first block, when it is `ORDER` alone. */
 const orderTitleOf = (blocks: readonly Block[]): string | null => {
-  const [first] = blocks;
+  const first = blocks.find(
+    (block) =>
+      block.type !== "paragraph" ||
+      !["front-matter", "parties", "case-number", "panel", "counsel"].includes(
+        block.role ?? "",
+      ),
+  );
   return first !== undefined &&
     "inlines" in first &&
     ORDER_TITLE.test(plainTextOf(first.inlines).trim())
@@ -181,8 +187,11 @@ export const createUnitBuilder = ({
   bodyRole,
   boundaries,
   prefix,
+  rootOpinionPolicy,
 }: {
   readonly prefix: string;
+  /** XML declares separate root opinions; extra HTML wrappers cannot inherit the row class. */
+  readonly rootOpinionPolicy: "single" | "multiple";
   /** The role of body text under an opinion element of this DOM type. */
   readonly bodyRole: (
     domType: string | null,
@@ -193,14 +202,16 @@ export const createUnitBuilder = ({
   readonly boundaries: TextUnit["boundaries"];
 }) => {
   const units: { frame: Frame; blocks: Block[] }[] = [];
+  const captionFrame = outsideFrame(-1);
   const frames: Frame[] = [];
   let nextFrame = 0;
+  let rootOpinions = 0;
   let outside = outsideFrame(nextFrame);
   let blockNumber = 0;
   let overLimit = false;
   let noteNumber = 0;
   let pending: PageAnchor[] = [];
-  let note: { label: string; noteId: string; paragraphs: number } | null = null;
+  let note: { label: string; noteId: string; blocks: number } | null = null;
   const counts = { pageAnchors: 0, notes: 0 };
 
   const current = (): Frame => frames.at(-1) ?? outside;
@@ -216,7 +227,14 @@ export const createUnitBuilder = ({
   };
 
   const push = (block: Block) => {
-    const frame = current();
+    const caption =
+      block.type === "paragraph" &&
+      block.note === undefined &&
+      (block.role === "front-matter" ||
+        block.role === "parties" ||
+        block.role === "case-number");
+    const frame =
+      caption && current().kind === "opinion" ? captionFrame : current();
     const last = units.at(-1);
     if (last?.frame.id === frame.id) {
       last.blocks.push(block);
@@ -266,13 +284,11 @@ export const createUnitBuilder = ({
       });
       return;
     }
-    note.paragraphs += 1;
+    note.blocks += 1;
     push({
       id,
       anchorId:
-        note.paragraphs === 1
-          ? note.noteId
-          : `${note.noteId}-${note.paragraphs}`,
+        note.blocks === 1 ? note.noteId : `${note.noteId}-${note.blocks}`,
       type: "paragraph",
       role: resolve(role),
       note: { type: "footnote", label: note.label, noteId: note.noteId },
@@ -284,11 +300,17 @@ export const createUnitBuilder = ({
   return {
     enterOpinion: (domType: string | null) => {
       nextFrame += 1;
+      if (frames.length === 0) rootOpinions += 1;
       frames.push({
         id: nextFrame,
         kind: "opinion",
         domType,
-        position: frames.length === 0 ? "row" : "nested",
+        position:
+          frames.length > 0
+            ? "nested"
+            : rootOpinions === 1 || rootOpinionPolicy === "multiple"
+              ? "row"
+              : "sibling",
       });
     },
     exitOpinion: () => {
@@ -331,23 +353,41 @@ export const createUnitBuilder = ({
       if (number === null) {
         return;
       }
+      const noteAnchorId =
+        note === null
+          ? `${prefix}-t${number}`
+          : note.blocks === 0
+            ? note.noteId
+            : `${note.noteId}-${String(note.blocks + 1)}`;
+      if (note !== null) {
+        note.blocks += 1;
+      }
       push({
         id: `${prefix}-b${number}`,
-        anchorId: `${prefix}-t${number}`,
+        anchorId: noteAnchorId,
         type: "table",
+        ...(note === null
+          ? {}
+          : {
+              note: {
+                type: "footnote" as const,
+                label: note.label,
+                noteId: note.noteId,
+              },
+            }),
         rows,
         plainText: rows
           .map((row) => row.map((cell) => cell.plainText).join("\t"))
           .join("\n"),
       });
     },
-    /** Paragraphs emitted until `endNote` are one footnote. */
+    /** Blocks emitted until `endNote` are one footnote. */
     beginNote: (label: string) => {
       noteNumber += 1;
-      note = { label, noteId: `${prefix}-fn${noteNumber}`, paragraphs: 0 };
+      note = { label, noteId: `${prefix}-fn${noteNumber}`, blocks: 0 };
     },
     endNote: () => {
-      if (note !== null && note.paragraphs > 0) {
+      if (note !== null && note.blocks > 0) {
         counts.notes += 1;
       }
       note = null;
@@ -837,8 +877,25 @@ export const walkBody = ({
     unknownConstructs[name] = (unknownConstructs[name] ?? 0) + 1;
   };
 
-  const readInlines = (element: Element): Inline[] =>
-    collapseMarkupWhitespace(walkInlines($, $(element), inlineOptions));
+  const preformatted = (nodes: readonly Inline[]): Inline[] =>
+    nodes.flatMap((node): Inline[] => {
+      if (hasInlineChildren(node))
+        return [{ ...node, children: preformatted(node.children) }];
+      if (node.type !== "text") return [node];
+      return node.text
+        .replace(/\r\n?/gu, "\n")
+        .split("\n")
+        .flatMap((text, index): Inline[] => [
+          ...(index === 0 ? [] : [{ type: "line-break" } as const]),
+          ...(text === "" ? [] : [{ ...node, text }]),
+        ]);
+    });
+  const readInlines = (element: Element): Inline[] => {
+    const inlines = walkInlines($, $(element), inlineOptions);
+    return nameOf(element) === "pre"
+      ? preformatted(inlines)
+      : collapseMarkupWhitespace(inlines);
+  };
 
   const readRun = (nodes: readonly AnyNode[]): Inline[] => {
     const wrapper = $("<cl-run></cl-run>");

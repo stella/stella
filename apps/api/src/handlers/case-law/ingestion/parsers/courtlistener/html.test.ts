@@ -19,6 +19,14 @@ const fixture = (name: string): string =>
     "utf8",
   );
 
+const sourceSpan = (source: string, snippet: string) => {
+  const start = source.indexOf(snippet);
+  if (start < 0 || source.indexOf(snippet, start + 1) >= 0) {
+    throw new TypeError(`expected one source occurrence: ${snippet}`);
+  }
+  return { start, end: start + snippet.length };
+};
+
 const parse = (
   parser: (input: {
     text: string;
@@ -60,12 +68,14 @@ const htmlColumns = [
     name: "html-with-citations-379615",
     first: "624 F.2d 1090",
     boundaries: "layout",
+    exclusions: [],
   },
   {
     format: "html_lawbox",
     name: "html-lawbox-2099017",
     first: "996 A.2d 488 (2010)",
     boundaries: "layout",
+    exclusions: ['<span class="star-pagination">*489</span>'],
   },
   {
     format: "html_columbia",
@@ -73,6 +83,7 @@ const htmlColumns = [
     first:
       "Mr. A. Wyckcliff Nisbet, Jr. Attorney at Law Friday, Eldredge Clark 2000 Regions Center 400 West Capitol Little Rock, AR 72201-3493",
     boundaries: "markup",
+    exclusions: ['<sup id="fn1"><a href="#ref-fn1">1</a></sup>'],
   },
   {
     format: "html_anon_2020",
@@ -80,12 +91,18 @@ const htmlColumns = [
     first:
       "HERBERT and PATRICIA KEMPKER, Petitioners v. COMMISSIONER OF INTERNAL REVENUE, Respondent",
     boundaries: "markup",
+    exclusions: [
+      '<span class="star-pagination" number="1" pagescheme="1985 Tax Ct. Memo LEXIS 521">*521 </span>',
+      '<span class="star-pagination" number="2" pagescheme="1985 Tax Ct. Memo LEXIS 521">*522 </span>',
+      '<a href="#fnr_fnote1">↩</a>',
+    ],
   },
   {
     format: "html",
     name: "html-383875",
     first: "634 F.2d 404",
     boundaries: "layout",
+    exclusions: ['<a class="footnote" href="#fn1_ref">1</a>'],
   },
 ] as const;
 
@@ -100,7 +117,14 @@ for (const column of htmlColumns) {
       new Set(parsed.text.units.map(({ boundaries }) => boundaries)),
     ).toEqual(new Set([column.boundaries]));
     expect(
-      wordDifference(sourceWords("html", text), parsedWords(blocks)),
+      wordDifference(
+        sourceWords("html", text, {
+          excludedSpans: column.exclusions.map((snippet) =>
+            sourceSpan(text, snippet),
+          ),
+        }),
+        parsedWords(blocks),
+      ),
     ).toEqual({ missing: [], extra: [] });
   });
 }
@@ -148,7 +172,7 @@ test("keeps CourtListener markup classes, page labels, and note boundaries", () 
     ...blocks,
   ]);
   expect(columbia.text.counts.notes).toBe(1);
-  expect(columbia.text.counts.backlinkCharacters).toBe(2);
+  expect(columbia.text.counts.backlinkCharacters).toBe(1);
   expect(columbiaBlocks.at(-1)).toMatchObject({
     type: "paragraph",
     note: { type: "footnote", label: "1" },
@@ -205,6 +229,62 @@ test("keeps an HTML table caption and its headed cells in order", () => {
   expect(
     wordDifference(sourceWords("html", text), parsedWords(blocks)),
   ).toEqual({ missing: [], extra: [] });
+});
+
+test("keeps a table inside a real CourtListener footnote in the same note", () => {
+  const parsed = parse(
+    COURTLISTENER_HTML_PARSERS.html_with_citations,
+    fixture("html-with-citations-4809723"),
+  );
+  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+  const table = blocks.find(
+    (block) =>
+      block.type === "table" &&
+      block.plainText.includes("Less Amount Retained"),
+  );
+
+  expect(table?.type).toBe("table");
+  if (table?.type !== "table") throw new Error("expected the note's table");
+  expect(table.note).toEqual({
+    type: "footnote",
+    label: "5",
+    noteId: "fixture-fn6",
+  });
+  const tableIndex = blocks.indexOf(table);
+  const previous = blocks.at(tableIndex - 1);
+  expect(
+    (previous?.type === "paragraph" || previous?.type === "table") &&
+      previous.note?.noteId,
+  ).toBe(table.note.noteId);
+});
+
+test("keeps a table between two paragraphs in one synthetic note", () => {
+  const text =
+    '<div class="footnotes"><ul><li><div id="fn_1" label="1"><p>See 410 U.S. 113.</p><table><tr><td>Reporter</td><td>410 U.S. 113</td></tr></table><p>Id. at 5.</p></div></li></ul></div>';
+  const parsed = parse(COURTLISTENER_HTML_PARSERS.html, text);
+  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+  const noteBlocks = blocks.filter(
+    (block) =>
+      (block.type === "paragraph" || block.type === "table") &&
+      block.note?.noteId !== undefined,
+  );
+
+  expect(noteBlocks.map(({ type }) => type)).toEqual([
+    "paragraph",
+    "table",
+    "paragraph",
+  ]);
+  expect(
+    noteBlocks.map((block) =>
+      block.type === "paragraph" || block.type === "table"
+        ? block.note
+        : undefined,
+    ),
+  ).toEqual([
+    { type: "footnote", label: "1", noteId: "fixture-fn1" },
+    { type: "footnote", label: "1", noteId: "fixture-fn1" },
+    { type: "footnote", label: "1", noteId: "fixture-fn1" },
+  ]);
 });
 
 for (const format of COURTLISTENER_HTML_FORMATS) {

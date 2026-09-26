@@ -10,7 +10,13 @@
  */
 
 import * as cheerio from "cheerio";
-import { type Element, hasChildren, isTag } from "domhandler";
+import {
+  type Element,
+  hasChildren,
+  isTag,
+  isText,
+  type ParentNode,
+} from "domhandler";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -202,24 +208,6 @@ const pageAnchor = (element: Element): PageAnchor | undefined => {
 
 const IN_PAGE = /^#/u;
 
-/** An element whose only job, inside a note, is to link back to its callout. */
-const isBacklink = (element: Element): boolean => {
-  const name = nameOf(element);
-  const href = element.attribs["href"] ?? "";
-  if (name === "a") {
-    return (
-      hasClass(element, "footnote") ||
-      href.startsWith("#ref-") ||
-      href.startsWith("#fnr_")
-    );
-  }
-  // Columbia prints the note's mark as `<sup id="fn1"><a href="#ref-fn1">`.
-  return (
-    name === "sup" &&
-    element.children.some((child) => isTag(child) && isBacklink(child))
-  );
-};
-
 /** Whether `element` is a note, in any of the columns' markups. */
 const isNote = (element: Element): boolean => {
   const name = nameOf(element);
@@ -244,60 +232,147 @@ const isNote = (element: Element): boolean => {
   return false;
 };
 
-/**
- * Each note's printed mark, read before its backlink is removed: a `label`
- * attribute, the callout that links to the note, or the note's own backlink.
- */
-const noteLabels = (
-  $: cheerio.CheerioAPI,
-  notes: readonly Element[],
-): WeakMap<Element, string> => {
-  const callouts = new Map<string, string>();
+/** Only reciprocal links with a printed mark are removable note furniture. */
+const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
+  const labels = new WeakMap<Element, string>();
+  const callouts = new Map<string, { label: string; returnIds: Set<string> }>();
+  const insideNote = (element: Element): boolean => {
+    let parent = element.parent;
+    while (parent !== null && isTag(parent)) {
+      if (isNote(parent)) return true;
+      parent = parent.parent;
+    }
+    return false;
+  };
   $("a[href], footnotereference[anchoridref]").each((_, element) => {
+    const href = element.attribs["href"] ?? "";
     const target =
       element.attribs["anchoridref"] ??
-      (element.attribs["href"] ?? "").replace(IN_PAGE, "");
-    const printed = textOf(element).replace(/\s+/gu, " ").trim();
-    if (!callouts.has(target) && printed !== "") {
-      callouts.set(target, printed);
+      (href.startsWith("#") ? href.slice(1) : "");
+    const label = textOf(element).replace(/\s+/gu, " ").trim();
+    if (target === "" || label === "" || insideNote(element)) return;
+    const returnIds = new Set<string>();
+    const ownId = attribute(element, "id");
+    if (ownId !== undefined) returnIds.add(ownId);
+    const parent = element.parent;
+    if (parent !== null && isTag(parent) && nameOf(parent) === "sup") {
+      const parentId = attribute(parent, "id");
+      if (parentId !== undefined) returnIds.add(parentId);
     }
+    const existing = callouts.get(target);
+    if (existing === undefined) callouts.set(target, { label, returnIds });
+    else if (existing.label === label)
+      for (const id of returnIds) existing.returnIds.add(id);
   });
-  const labels = new WeakMap<Element, string>();
+  let removed = 0;
   for (const note of notes) {
-    const backlink = $(note).find("*").toArray().find(isBacklink);
-    labels.set(
-      note,
-      attribute(note, "label") ??
-        callouts.get(note.attribs["id"] ?? "") ??
-        (backlink === undefined
-          ? ""
-          : textOf(backlink).replace(/\s+/gu, " ").trim()),
-    );
+    const ids = [
+      attribute(note, "id"),
+      ...$(note)
+        .find("sup[id]")
+        .toArray()
+        .map((element) => attribute(element, "id")),
+    ];
+    const callout = ids
+      .flatMap((id) => (id === undefined ? [] : [callouts.get(id)]))
+      .find((entry) => entry !== undefined);
+    const label = attribute(note, "label") ?? callout?.label ?? "";
+    labels.set(note, label);
+    if (callout === undefined) continue;
+    for (const anchor of $(note).find("a[href]").toArray()) {
+      const href = anchor.attribs["href"] ?? "";
+      const printed = textOf(anchor).trim();
+      // The return-arrow glyph is navigation too, but still needs reciprocity.
+      if (
+        !href.startsWith("#") ||
+        !callout.returnIds.has(href.slice(1)) ||
+        (printed !== label && printed !== "↩")
+      )
+        continue;
+      removed += printed.length;
+      $(anchor).remove();
+    }
   }
-  return labels;
+  return { labels, removed };
 };
 
 /**
- * Removes every backlink inside a note, a declared removal: its mark moves
- * to the note's label. Returns the characters taken off the text axis.
+ * HTML repair may close Columbia's custom element at an intervening </p>.
+ * Each literal note span must have the same explicit end in the parsed tree;
+ * otherwise every scope in this candidate is unproven. Never infer safety
+ * from the column name or from another well-formed note in the same row.
  */
-const removeBacklinks = (
-  $: cheerio.CheerioAPI,
-  notes: readonly Element[],
-): number => {
-  let removed = 0;
-  for (const note of notes) {
-    for (const backlink of $(note).find("*").toArray().filter(isBacklink)) {
-      removed += textOf(backlink).trim().length;
-      $(backlink).remove();
-    }
+const noteSpanDefects = (text: string, notes: readonly Element[]): number => {
+  const spans = new Map<number, number>();
+  const opened: number[] = [];
+  let defects = 0;
+  for (const token of text.matchAll(/<\/?footnote_body\b[^>]*>/giu)) {
+    if (token[0].startsWith("</")) {
+      const start = opened.pop();
+      if (start === undefined) defects += 1;
+      else spans.set(start, token.index);
+    } else opened.push(token.index);
   }
-  return removed;
+  for (const start of opened) spans.set(start, -1);
+  for (const note of notes) {
+    if (nameOf(note) !== "footnote_body") continue;
+    const location = note.sourceCodeLocation;
+    const start = location?.startOffset;
+    const end = start === undefined ? undefined : spans.get(start);
+    if (end === undefined || location?.endTag?.startOffset !== end)
+      defects += 1;
+    if (start !== undefined) spans.delete(start);
+  }
+  return defects + spans.size;
 };
 
-const vocabularyFor = (labels: WeakMap<Element, string>): BodyVocabulary => ({
+/** Leading layout headings describe the case, not the court's reasoning. */
+const captionElements = (root: ParentNode): WeakSet<Element> => {
+  const captions = new WeakSet<Element>();
+  const classes = new Set(["case_cite", "parties", "docket", "court", "date"]);
+  const mark = (element: Element) => {
+    captions.add(element);
+    for (const child of element.children) if (isTag(child)) mark(child);
+  };
+  const visit = (container: ParentNode): boolean => {
+    for (const child of container.children) {
+      if (isText(child)) {
+        if (child.data.trim() !== "") return true;
+        continue;
+      }
+      if (!isTag(child)) continue;
+      const name = nameOf(child);
+      if (["script", "style", "template", "title"].includes(name)) continue;
+      const caption =
+        name === "center" ||
+        name === "h1" ||
+        (name === "p" && classesOf(child).some((value) => classes.has(value)));
+      if (caption && !/^ORDER\.?$/u.test(textOf(child).trim())) {
+        mark(child);
+        continue;
+      }
+      if (
+        name === "p" ||
+        name === "pre" ||
+        name === "table" ||
+        HEADINGS.has(name)
+      )
+        return true;
+      if (visit(child)) return true;
+    }
+    return false;
+  };
+  visit(root);
+  return captions;
+};
+
+const vocabularyFor = (
+  labels: WeakMap<Element, string>,
+  captions: WeakSet<Element>,
+): BodyVocabulary => ({
   paragraphs: PARAGRAPHS,
-  semantics: divisionRole,
+  semantics: (element) =>
+    captions.has(element) ? "front-matter" : divisionRole(element),
   headings: HEADINGS,
   containers: CONTAINERS,
   inlines: INLINES,
@@ -368,7 +443,7 @@ const parseHtml =
     }
     // HTML parsing does not recurse, so the tree is measured before any walk
     // can recurse through it.
-    const $ = cheerio.load(text);
+    const $ = cheerio.load(text, { sourceCodeLocationInfo: true });
     const [document] = $.root().toArray();
     const limit =
       document === undefined ? "DOM_NODES" : spendDomNodes(budget, document);
@@ -395,22 +470,28 @@ const parseHtml =
         }
       });
     const notes = $(body).find("*").toArray().filter(isNote);
-    const baseVocabulary = vocabularyFor(noteLabels($, notes));
+    const spanDefects = noteSpanDefects(text, notes);
+    const preparedNotes = prepareNotes($, notes);
+    const baseVocabulary = vocabularyFor(
+      preparedNotes.labels,
+      captionElements(body),
+    );
     const vocabulary =
       context === "headmatter"
         ? { ...baseVocabulary, opinion: () => null }
         : baseVocabulary;
-    const backlinkCharacters = removeBacklinks($, notes);
+    const backlinkCharacters = preparedNotes.removed;
     const links = publisherLinks($);
 
     const builder = createUnitBuilder({
+      rootOpinionPolicy: "single",
       prefix,
       bodyRole: (domType, position) =>
         context === "headmatter"
           ? "front-matter"
           : unitClass(rowType, domType, position).body,
       blockAllowance: blockAllowance(budget),
-      boundaries: noteBoundaries(format, $),
+      boundaries: spanDefects === 0 ? noteBoundaries(format, $) : "layout",
     });
     const implicitOpinion =
       context === "opinion" &&
@@ -463,6 +544,7 @@ const parseHtml =
           paginationCharacters: source.paginationCharacters,
           backlinkCharacters,
           unknownConstructs,
+          noteSpanDefects: spanDefects,
         },
         validationHtml: buildValidationHtml(
           source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),

@@ -34,7 +34,11 @@ import {
   composeFrontMatter,
   type CourtListenerFrontMatter,
 } from "./front-matter";
-import { hasUnprovenBoundaries, unitClass } from "./opinion-class";
+import {
+  hasUnprovenBoundaries,
+  unitClass,
+  unrecognizedOpinionType,
+} from "./opinion-class";
 import { createTextBudget, type TextCounts, type TextUnit } from "./outcome";
 import { type OpinionTextSelection, selectOpinionText } from "./select";
 
@@ -57,6 +61,10 @@ type OpinionTextReport = {
   readonly scopes: number;
   /** Units whose row type and element type state different classes. */
   readonly classConflicts: number;
+  readonly unknownOpinionTypes: Readonly<Record<string, number>>;
+  /** Principal text resumed after a nested opinion; scope splitting is conservative. */
+  readonly resumedPrincipalRuns: number;
+  readonly duplicateCaptionParagraphs: number;
 };
 
 type HeldReason = Extract<
@@ -108,7 +116,7 @@ const blockGroups = (blocks: readonly Block[]): Block[][] => {
   const groups: Block[][] = [];
   let previousNote: string | undefined;
   for (const block of blocks) {
-    const noteId = block.type === "paragraph" ? block.note?.noteId : undefined;
+    const noteId = "note" in block ? block.note?.noteId : undefined;
     const last = groups.at(-1);
     if (last !== undefined && noteId !== undefined && noteId === previousNote) {
       last.push(block);
@@ -161,7 +169,12 @@ const scopeRow = (
       // Their own boundaries are explicit even when ownership by a sub-opinion is not.
       for (const group of blockGroups(unit.blocks)) {
         const first = group.at(0);
-        if (first?.type !== "paragraph" || first.note === undefined) continue;
+        if (
+          first === undefined ||
+          !("note" in first) ||
+          first.note === undefined
+        )
+          continue;
         outsideNotes += 1;
         scopes.push({
           opinionId: `${base}/note-${outsideNotes}`,
@@ -213,6 +226,7 @@ const report = (
   { row, type }: CourtListenerTextOpinion,
   selection: OpinionTextSelection,
   scoped: ScopedRow | null,
+  duplicateCaptionParagraphs = 0,
 ): OpinionTextReport => ({
   opinionId: row.id,
   type,
@@ -224,6 +238,34 @@ const report = (
   coverage: scoped?.coverage ?? null,
   scopes: scoped?.scopes.length ?? 0,
   classConflicts: scoped?.classConflicts ?? 0,
+  unknownOpinionTypes: (() => {
+    const counts = new Map<string, number>();
+    if (selection.status === "parsed")
+      for (const unit of selection.text.units) {
+        const unknown = unrecognizedOpinionType(unit.domType);
+        if (unknown !== null)
+          counts.set(unknown, (counts.get(unknown) ?? 0) + 1);
+      }
+    return Object.fromEntries(counts);
+  })(),
+  resumedPrincipalRuns: (() => {
+    let interrupted = false;
+    let resumed = 0;
+    if (selection.status === "parsed")
+      for (const unit of selection.text.units) {
+        if (unit.position === "nested") interrupted = true;
+        else if (
+          unit.kind === "opinion" &&
+          unit.position === "row" &&
+          interrupted
+        ) {
+          resumed += 1;
+          interrupted = false;
+        }
+      }
+    return resumed;
+  })(),
+  duplicateCaptionParagraphs,
 });
 
 /** Why a cluster is held, the most fundamental reason first. */
@@ -251,10 +293,10 @@ const appendSections = (
   let current: DecisionSection | undefined;
   for (const block of blocks) {
     let type = bodyType;
-    if (block.type === "paragraph") {
-      if (block.note !== undefined && bodyType === "header") {
-        type = "unknown";
-      } else if (
+    if ("note" in block && block.note !== undefined && bodyType === "header") {
+      type = "unknown";
+    } else if (block.type === "paragraph") {
+      if (
         isApparatusRole(block.role) ||
         block.role === "panel" ||
         block.role === "parties" ||
@@ -330,8 +372,30 @@ export const composeCourtListenerText = (
     if (selection.status !== "parsed") {
       return report(opinion, selection, null);
     }
-    const { units } = selection.text;
+    // Only headmatter equality removes a paragraph; repeated body language is
+    // never deduplicated. Scope construction follows removal, so no stale IDs remain.
+    const captionText = new Set(
+      front.blocks
+        .filter((block) => block.id.startsWith("cl-headmatter-"))
+        .map((block) => block.plainText),
+    );
+    let duplicateCaptionParagraphs = 0;
+    const units = selection.text.units.flatMap((unit) => {
+      const kept = unit.blocks.filter((block) => {
+        if (
+          block.type !== "paragraph" ||
+          block.note !== undefined ||
+          !captionText.has(block.plainText)
+        )
+          return true;
+        duplicateCaptionParagraphs += 1;
+        return false;
+      });
+      return kept.length === 0 ? [] : [{ ...unit, blocks: kept }];
+    });
     const scoped = scopeRow(opinion, units);
+    // A damaged note span leaves principal-body membership as unproven too.
+    if (selection.text.counts.noteSpanDefects > 0) scoped.principal.length = 0;
     for (const unit of units) {
       blocks.push(...unit.blocks);
       const role =
@@ -350,7 +414,7 @@ export const composeCourtListenerText = (
     }
     citationScopes.push(...scoped.scopes);
     principal.push(...scoped.principal);
-    return report(opinion, selection, scoped);
+    return report(opinion, selection, scoped, duplicateCaptionParagraphs);
   });
 
   const indexed = indexCitationScopes(blocks, citationScopes);

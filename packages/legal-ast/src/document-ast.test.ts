@@ -655,6 +655,24 @@ describe("table cell spans and header cells", () => {
       header: true,
     });
   });
+
+  test("keeps a footnote table's membership across the wire round trip", () => {
+    const ast = cellAst({ plainText: "Rok" });
+    const block = ast.blocks[0];
+    if (block === undefined) throw new Error("expected a table block");
+    const noted = {
+      ...ast,
+      blocks: [
+        {
+          ...block,
+          note: { type: "footnote", label: "5", noteId: "fn-5" },
+        },
+      ],
+    };
+
+    expect(isDocumentAst(noted)).toBe(true);
+    expect(parseDocumentAst(JSON.stringify(noted))).toEqual(noted);
+  });
 });
 
 describe("multi-paragraph footnotes", () => {
@@ -704,6 +722,34 @@ describe("multi-paragraph footnotes", () => {
       { type: "footnote", label: "2", noteId: "n1" },
     ]);
     expect(isDocumentAst(stored)).toBe(true);
+  });
+
+  test("a table between note paragraphs keeps the note label invariant", () => {
+    const stored = {
+      ...documentAst,
+      blocks: [
+        {
+          id: "fn-first",
+          anchorId: "fn-first-anchor",
+          type: "paragraph",
+          note: { type: "footnote", label: "1", noteId: "n1" },
+          inlines: [{ type: "text", text: "First part" }],
+          plainText: "First part",
+        },
+        {
+          id: "fn-table",
+          anchorId: "fn-table-anchor",
+          type: "table",
+          note: { type: "footnote", label: "2", noteId: "n1" },
+          rows: [
+            [{ inlines: [{ type: "text", text: "Data" }], plainText: "Data" }],
+          ],
+          plainText: "Data",
+        },
+      ],
+    };
+
+    expect(isDocumentAst(stored)).toBe(false);
   });
 });
 

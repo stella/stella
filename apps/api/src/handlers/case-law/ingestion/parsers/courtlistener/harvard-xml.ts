@@ -215,6 +215,7 @@ export const parseHarvardXml = ({
   cdataAsText(root);
 
   const builder = createUnitBuilder({
+    rootOpinionPolicy: "multiple",
     prefix,
     bodyRole: (domType, position) => unitClass(rowType, domType, position).body,
     blockAllowance: blockAllowance(budget),
@@ -250,6 +251,7 @@ export const parseHarvardXml = ({
     text: {
       units,
       counts: {
+        noteSpanDefects: 0,
         pageAnchors,
         notes,
         publisherLinks:
