@@ -834,6 +834,10 @@ test("the matrix declares every rule and every outcome", () => {
         case CITATION_RESOLUTION_STATUS.AMBIGUOUS:
         case CITATION_RESOLUTION_STATUS.PENDING:
           return expected.status;
+        default: {
+          expected satisfies never;
+          return panic("Unhandled expected outcome");
+        }
       }
     }),
   );

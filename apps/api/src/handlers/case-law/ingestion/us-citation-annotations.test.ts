@@ -115,6 +115,10 @@ const styledPiece = (
     case "bold":
     case "underline":
       return { type: style, children: [leaf] };
+    default: {
+      style satisfies never;
+      throw new Error("Unhandled inline style");
+    }
   }
 };
 
