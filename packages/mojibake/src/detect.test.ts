@@ -191,6 +191,7 @@ describe("work on a long text of distinct words", () => {
         wordsExamined: 0,
         pairEvaluations: 0,
         codeUnits: 0,
+        scannedCodeUnits: 0,
       };
       const check = checkTextEncoding(text, "cs", { counters });
       expect(check.status).toBe(status);
@@ -208,6 +209,7 @@ describe("work on a long text of distinct words", () => {
       wordsExamined: 0,
       pairEvaluations: 0,
       codeUnits: 0,
+      scannedCodeUnits: 0,
     };
     const check = checkTextEncoding(`Søren${"a".repeat(500_000)}`, "cs", {
       counters,
@@ -229,6 +231,7 @@ describe("work on a long text of distinct words", () => {
       wordsExamined: 0,
       pairEvaluations: 0,
       codeUnits: 0,
+      scannedCodeUnits: 0,
     };
     expect(checkTextEncoding(text, "cs", { counters })).toEqual({
       status: "incomplete",
@@ -242,21 +245,59 @@ describe("work on a long text of distinct words", () => {
       wordsExamined: 0,
       pairEvaluations: 0,
       codeUnits: 0,
+      scannedCodeUnits: 0,
     };
     checkTextEncoding("pod¾a ¾udí, pod¾a ¾udí", "sk", { counters });
     expect(counters.pairEvaluations).toBeGreaterThan(0);
     expect(counters.codeUnits).toBeGreaterThan(0);
-    checkTextEncoding("plain ASCII", "sk", { counters });
+    const ascii = "plain ASCII";
+    checkTextEncoding(ascii, "sk", { counters });
+    // The scan reads a code unit at most three times: fewer than both
+    // checks' texts together.
     expect(counters).toEqual({
       wordsExamined: 0,
       pairEvaluations: 0,
       codeUnits: 0,
+      scannedCodeUnits: expect.any(Number),
     });
+    expect(counters.scannedCodeUnits).toBeLessThanOrEqual(3 * ascii.length);
   });
 
   test("a decision-sized text is checked whole", () => {
     const text = textOf(20_000, (index) => `př${spelled(index % 300)}`);
     expect(checkTextEncoding(text, "cs")).toEqual({ status: "clean" });
+  });
+});
+
+// Smoke checks in real time, far above linear cost and far below what
+// rescanning a run from every position costs at these sizes (seconds). The
+// linearity itself is asserted by operation count in the property suite.
+describe("a long run of one character class finishes promptly", () => {
+  const PROMPT_MS = 1000;
+  const RUN = 30_000;
+
+  test.each([
+    ["before a final non-ASCII letter", `${".".repeat(RUN)}ø`, "clean"],
+    ["inside a token", `a${".".repeat(RUN)}ø`, "incomplete"],
+  ])("ASCII punctuation %s", (_, text, status) => {
+    const started = performance.now();
+    const check = checkTextEncoding(text, "cs");
+    expect(performance.now() - started).toBeLessThan(PROMPT_MS);
+    expect(check.status).toBe(status);
+  });
+
+  test("combining marks in a word too long to weigh are left as they are", () => {
+    // Canonical reordering sorts a run of combining marks by insertion, so
+    // normalizing this word costs seconds.
+    const text = `a${"̖́".repeat(20_000)}`;
+    const started = performance.now();
+    const repaired = repairMisdecoding(text, {
+      language: "cs",
+      pair: { actual: "utf-8", assumed: "windows-1252" },
+      layers: 1,
+    });
+    expect(performance.now() - started).toBeLessThan(PROMPT_MS);
+    expect(repaired).toBe(text);
   });
 });
 

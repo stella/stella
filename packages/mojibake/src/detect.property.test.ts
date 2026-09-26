@@ -450,6 +450,97 @@ describe("bounded work", () => {
       index % 2 === 0 ? `Sø${spelled(index)}` : `př${spelled(index)}`,
     ).join(" ");
 
+  /**
+   * Adversarial shapes, each `length` code units long: runs of one character
+   * class before, inside and after a word's non-ASCII character, classes
+   * alternating, and the signatures repeated. A scan that restarts a run from
+   * every position (an unanchored `[…]*$`, say) is quadratic in exactly
+   * these.
+   */
+  const SHAPES = [
+    [
+      "punctuation before a final non-ASCII letter",
+      (length: number) => `${".".repeat(length)}ø`,
+    ],
+    [
+      "punctuation inside a token",
+      (length: number) => `a${".".repeat(length)}ø`,
+    ],
+    [
+      "punctuation after a non-ASCII letter",
+      (length: number) => `ø${".".repeat(length)}`,
+    ],
+    [
+      "digits before a final non-ASCII letter",
+      (length: number) => `${"1".repeat(length)}ø`,
+    ],
+    [
+      "whitespace before a final non-ASCII letter",
+      (length: number) => `${" \t\n".repeat(length / 3)}ø`,
+    ],
+    [
+      "letters before a final non-ASCII letter",
+      (length: number) => `${"a".repeat(length)}ø`,
+    ],
+    [
+      "letters and punctuation alternating",
+      (length: number) => `${"a.".repeat(length / 2)}ø`,
+    ],
+    [
+      "punctuation and non-ASCII letters alternating",
+      (length: number) => ".ø".repeat(length / 2),
+    ],
+    ["short punctuated words", (length: number) => "(ø). ".repeat(length / 5)],
+    [
+      "combining marks in one word",
+      (length: number) => `a${"\u0301\u0316".repeat(length / 2)}`,
+    ],
+    [
+      "replacement characters and C1 controls",
+      (length: number) => "\ufffd\u0085".repeat(length / 2),
+    ],
+    ["UTF-8 signatures", (length: number) => "Â§ ".repeat(length / 3)],
+  ] as const;
+
+  test(
+    "work grows linearly with the text, whatever its shape",
+    () => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...SHAPES),
+          fc.oneof(
+            fc.integer({ min: 0, max: 2_000_000 }),
+            fc.constant(2_000_000),
+          ),
+          ([, shape], length) => {
+            const text = shape(length);
+            const counters: EncodingCheckCounters = {
+              wordsExamined: 0,
+              pairEvaluations: 0,
+              codeUnits: 0,
+              scannedCodeUnits: 0,
+            };
+            checkTextEncoding(text, "cs", { counters });
+            // Splitting and trimming read each code unit a bounded number of
+            // times; everything past them is within the budgets.
+            expect(counters.scannedCodeUnits).toBeLessThanOrEqual(
+              3 * text.length,
+            );
+            expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
+            expect(counters.pairEvaluations).toBeLessThanOrEqual(
+              PAIR_EVALUATION_BUDGET,
+            );
+            expect(counters.wordsExamined).toBeLessThanOrEqual(
+              MAX_EXAMINED_WORDS,
+            );
+          },
+        ),
+        config(24),
+      );
+    },
+    propertyTestTimeout(30_000),
+  );
+
   test(
     "distinct words examined and pair evaluations never exceed the documented bounds, at every size",
     () => {
@@ -459,6 +550,7 @@ describe("bounded work", () => {
             wordsExamined: 0,
             pairEvaluations: 0,
             codeUnits: 0,
+            scannedCodeUnits: 0,
           };
           checkTextEncoding(mixedText(wordCount), "cs", { counters });
           expect(counters.wordsExamined).toBeLessThanOrEqual(
@@ -494,6 +586,7 @@ describe("bounded work", () => {
               wordsExamined: 0,
               pairEvaluations: 0,
               codeUnits: 0,
+              scannedCodeUnits: 0,
             };
             const check = checkTextEncoding(tokens.join(" "), "cs", {
               counters,
@@ -535,6 +628,7 @@ describe("bounded work", () => {
               wordsExamined: 0,
               pairEvaluations: 0,
               codeUnits: 0,
+              scannedCodeUnits: 0,
             };
             const check = checkTextEncoding(text, "cs", { counters });
             expect(counters.wordsExamined).toBe(MAX_EXAMINED_WORDS);

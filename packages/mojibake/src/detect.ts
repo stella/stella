@@ -66,7 +66,8 @@ const MIN_UTF8_SIGNATURE_OCCURRENCES = 2;
  * or one long word, cannot hold a synchronous caller for seconds. The most
  * frequent words are examined first; a check that stops at a bound says so
  * (`incomplete`) instead of calling the text clean. Splitting the text into
- * words is one linear pass and is not bounded.
+ * words is not bounded: it is a hand-written scan that reads each code unit
+ * at most three times (`scanText`), whatever the text's shape.
  */
 export const MAX_EXAMINED_WORDS = 20_000;
 /**
@@ -89,12 +90,6 @@ const REPLACEMENT_CHARACTER = 0xff_fd;
 const C1_FIRST = 0x80;
 const C1_LAST = 0x9f;
 
-/**
- * Words are split on ASCII whitespace only: U+00A0 is the second byte of
- * UTF-8 "à" read as windows-1252, so treating it as a separator would cut
- * the evidence in half.
- */
-const WORD = /[^\t\n\v\f\r ]+/gu;
 const NON_ASCII = /[\u0080-\u{10FFFF}]/u;
 const LETTER = /^[\p{L}\p{M}]$/u;
 /**
@@ -157,6 +152,12 @@ export type EncodingCheckCounters = {
   pairEvaluations: number;
   /** Code units classified or read back through a charset. */
   codeUnits: number;
+  /**
+   * Code units the split into words, its signature scan and its edge trims
+   * read: linear in the text (at most three times its length) and outside
+   * the budgets.
+   */
+  scannedCodeUnits: number;
 };
 
 export type CheckTextEncodingOptions = {
@@ -434,33 +435,129 @@ const repairWord = (
   return { status: "unrepaired" };
 };
 
-const LEADING_ASCII_NON_LETTERS = /^[\0-@[-`{-\x7f]*/u;
-const TRAILING_ASCII_NON_LETTERS = /[\0-@[-`{-\x7f]*$/u;
+/**
+ * Words are split on ASCII whitespace only: U+00A0 is the second byte of
+ * UTF-8 "à" read as windows-1252, so treating it as a separator would cut
+ * the evidence in half.
+ */
+const isSeparator = (cp: number): boolean =>
+  cp === 0x20 || (cp >= 0x09 && cp <= 0x0d);
+
+const isAsciiLetter = (cp: number): boolean =>
+  (cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a);
+
+const isAsciiNonLetter = (cp: number): boolean =>
+  cp < C1_FIRST && !isAsciiLetter(cp);
+
+type WordVisitor = (start: number, end: number) => void;
 
 /**
- * Distinct words, each with its count and first offset. ASCII that is not a
- * letter is trimmed from both edges first ("Søren," is "Søren"): every pair
- * reads ASCII as itself, so the trim changes no word's evidence, only how
- * often it is counted.
+ * Calls `visit` with the bounds of every word, reading each code unit once.
+ * A scan rather than a regular expression, so that no input shape can make
+ * it read a code unit again.
  */
-const collectWords = (text: string): Map<string, WordStat> => {
-  const words = new Map<string, WordStat>();
-  for (const match of text.matchAll(WORD)) {
-    const [token] = match;
-    if (!NON_ASCII.test(token)) {
-      continue;
+const forEachWord = (text: string, visit: WordVisitor): void => {
+  let index = 0;
+  while (index < text.length) {
+    while (index < text.length && isSeparator(text.codePointAt(index) ?? 0)) {
+      index += 1;
     }
-    const leading = LEADING_ASCII_NON_LETTERS.exec(token)?.[0].length ?? 0;
-    const trailing = TRAILING_ASCII_NON_LETTERS.exec(token)?.[0].length ?? 0;
-    const word = token.slice(leading, token.length - trailing);
-    const stat = words.get(word);
+    const start = index;
+    while (index < text.length && !isSeparator(text.codePointAt(index) ?? 0)) {
+      index += 1;
+    }
+    if (index > start) {
+      visit(start, index);
+    }
+  }
+};
+
+type Signature = { occurrences: number; samples: TextSpan[] };
+
+type ScannedText = {
+  replacement: Signature;
+  c1: Signature;
+  /** Distinct words with a non-ASCII character, each with its count and first offset. */
+  words: Map<string, WordStat>;
+};
+
+type SignatureOccurrence = {
+  text: string;
+  start: number;
+  end: number;
+  occurrences: number;
+};
+
+const addSignature = (
+  signature: Signature,
+  { text, start, end, occurrences }: SignatureOccurrence,
+): void => {
+  if (occurrences === 0) {
+    return;
+  }
+  signature.occurrences += occurrences;
+  if (signature.samples.length < MAX_SAMPLES) {
+    signature.samples.push({ start, end, text: text.slice(start, end) });
+  }
+};
+
+/**
+ * The text's signatures and its distinct words, in one pass over its words.
+ * ASCII that is not a letter is trimmed from both edges of a word first
+ * ("Søren," is "Søren"): every pair reads ASCII as itself, so the trim
+ * changes no word's evidence, only how often it is counted. Each trim scans
+ * in from its own edge and stops where the other did, so a code unit is
+ * read at most three times: by the split, the signature scan and a trim.
+ */
+const scanText = (text: string, work: EncodingCheckCounters): ScannedText => {
+  const scanned: ScannedText = {
+    replacement: { occurrences: 0, samples: [] },
+    c1: { occurrences: 0, samples: [] },
+    words: new Map(),
+  };
+  work.scannedCodeUnits += text.length;
+  forEachWord(text, (start, end) => {
+    let replacements = 0;
+    let controls = 0;
+    let nonAscii = false;
+    for (let index = start; index < end; index += 1) {
+      const cp = text.codePointAt(index) ?? 0;
+      if (cp === REPLACEMENT_CHARACTER) {
+        replacements += 1;
+      } else if (cp >= C1_FIRST && cp <= C1_LAST) {
+        controls += 1;
+      }
+      nonAscii ||= cp >= C1_FIRST;
+    }
+    work.scannedCodeUnits += end - start;
+    addSignature(scanned.replacement, {
+      text,
+      start,
+      end,
+      occurrences: replacements,
+    });
+    addSignature(scanned.c1, { text, start, end, occurrences: controls });
+    if (!nonAscii) {
+      return;
+    }
+    let first = start;
+    while (first < end && isAsciiNonLetter(text.codePointAt(first) ?? 0)) {
+      first += 1;
+    }
+    let last = end;
+    while (last > first && isAsciiNonLetter(text.codePointAt(last - 1) ?? 0)) {
+      last -= 1;
+    }
+    work.scannedCodeUnits += first - start + (end - last);
+    const word = text.slice(first, last);
+    const stat = scanned.words.get(word);
     if (stat === undefined) {
-      words.set(word, { count: 1, start: match.index + leading });
+      scanned.words.set(word, { count: 1, start: first });
     } else {
       stat.count += 1;
     }
-  }
-  return words;
+  });
+  return scanned;
 };
 
 /**
@@ -743,35 +840,6 @@ const bestPair = (
   return { evidence: chosen, alternatives };
 };
 
-const signatureSpans = (
-  text: string,
-  test: (cp: number) => boolean,
-): { occurrences: number; samples: TextSpan[] } => {
-  let occurrences = 0;
-  const samples: TextSpan[] = [];
-  for (const match of text.matchAll(WORD)) {
-    const [word] = match;
-    let inWord = 0;
-    for (const char of word) {
-      if (test(char.codePointAt(0) ?? 0)) {
-        inWord += 1;
-      }
-    }
-    if (inWord === 0) {
-      continue;
-    }
-    occurrences += inWord;
-    if (samples.length < MAX_SAMPLES) {
-      samples.push({
-        start: match.index,
-        end: match.index + word.length,
-        text: word,
-      });
-    }
-  }
-  return { occurrences, samples };
-};
-
 /** A word with letters, none of them lowercase. */
 const CAPITALS_ONLY = /^(?=.*\p{L})\P{Ll}*$/u;
 
@@ -908,8 +976,11 @@ export type RepairMisdecodingOptions = {
  * (through at most `layers` layers) is replaced, including a native-looking
  * one the pair produced ("Äľudia" is "ľudia" through UTF-8 read as
  * windows-1250). A word the pair cannot have produced, or that would not
- * read natively, is left exactly as it is. A byte the wrong decoder dropped
- * cannot come back, so the repair is only as complete as what survived.
+ * read natively, is left exactly as it is, and so is a word longer than
+ * `MAX_WORD_CODE_UNITS`: no check weighs one, so no finding covers it, and
+ * normalizing a long run of combining marks costs time quadratic in it. A
+ * byte the wrong decoder dropped cannot come back, so the repair is only as
+ * complete as what survived.
  */
 export const repairMisdecoding = (
   text: string,
@@ -920,22 +991,32 @@ export const repairMisdecoding = (
     return text;
   }
   const repaired = new Map<string, string>();
-  return text.replaceAll(WORD, (word) => {
+  const pieces: string[] = [];
+  let copied = 0;
+  forEachWord(text, (start, end) => {
+    if (end - start > MAX_WORD_CODE_UNITS) {
+      return;
+    }
+    const word = text.slice(start, end);
     if (!NON_ASCII.test(word)) {
-      return word;
+      return;
     }
-    const known = repaired.get(word);
-    if (known !== undefined) {
-      return known;
+    let next = repaired.get(word);
+    if (next === undefined) {
+      const repair =
+        classifyWord(word, alphabet) === "neutral"
+          ? ({ status: "unrepaired" } as const)
+          : repairWord(word, { pair, alphabet, maxLayers: layers });
+      next = repair.status === "repaired" ? repair.text : word;
+      repaired.set(word, next);
     }
-    const repair =
-      classifyWord(word, alphabet) === "neutral"
-        ? ({ status: "unrepaired" } as const)
-        : repairWord(word, { pair, alphabet, maxLayers: layers });
-    const next = repair.status === "repaired" ? repair.text : word;
-    repaired.set(word, next);
-    return next;
+    if (next !== word) {
+      pieces.push(text.slice(copied, start), next);
+      copied = end;
+    }
   });
+  pieces.push(text.slice(copied));
+  return pieces.join("");
 };
 
 /**
@@ -949,24 +1030,24 @@ export const checkTextEncoding = (
   { counters }: CheckTextEncodingOptions = {},
 ): EncodingCheck => {
   const findings: EncodingFinding[] = [];
-
-  const replacement = signatureSpans(
-    text,
-    (cp) => cp === REPLACEMENT_CHARACTER,
-  );
-  if (replacement.occurrences > 0) {
-    findings.push({ kind: "replacement-character", ...replacement });
-  }
-  const c1 = signatureSpans(text, (cp) => cp >= C1_FIRST && cp <= C1_LAST);
-  if (c1.occurrences > 0) {
-    findings.push({ kind: "c1-control", ...c1 });
-  }
-
   const progress: Progress = {
-    work: { wordsExamined: 0, pairEvaluations: 0, codeUnits: 0 },
+    work: {
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+      scannedCodeUnits: 0,
+    },
     limit: undefined,
   };
-  const words = Array.from(collectWords(text), ([word, stat]) => ({
+  const scanned = scanText(text, progress.work);
+  if (scanned.replacement.occurrences > 0) {
+    findings.push({ kind: "replacement-character", ...scanned.replacement });
+  }
+  if (scanned.c1.occurrences > 0) {
+    findings.push({ kind: "c1-control", ...scanned.c1 });
+  }
+
+  const words = Array.from(scanned.words, ([word, stat]) => ({
     word,
     stat,
   }));
