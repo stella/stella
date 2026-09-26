@@ -46,6 +46,9 @@ export const CORRESPONDENCE_OFFBOARDING_SETTING = {
   recordIds: "app.correspondence_offboarding_record_ids",
 } as const;
 
+// Resolve the owner through the catalog because deployment login names differ.
+const currentUserOwnsCorrespondence = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence'::regclass)`;
+
 const offboardingScopeCheck = sql`(
   current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
   or (current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'organization'
@@ -151,16 +154,16 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.pgPolicy("correspondence_owner_offboarding_select", {
       for: "select",
-      to: "current_user",
+      to: "public",
       // UPDATE also checks SELECT visibility of the cleared row. Admit only
       // the current bounded batch, never all unassigned correspondence.
-      using: sql`(${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
+      using: sql`${currentUserOwnsCorrespondence} and (${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
     }),
     p.pgPolicy("correspondence_owner_offboarding_update", {
       for: "update",
-      to: "current_user",
-      using: sql`${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
-      withCheck: sql`${table.assigneeId} is null and ${offboardingScopeCheck}`,
+      to: "public",
+      using: sql`${currentUserOwnsCorrespondence} and ${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
+      withCheck: sql`${currentUserOwnsCorrespondence} and ${table.assigneeId} is null and ${offboardingScopeCheck}`,
     }),
     ...wsOrganizationPolicies("correspondence"),
   ],
@@ -317,8 +320,8 @@ export const matterInboundAddresses = p.pgTable.withRLS(
       .on(table.workspaceId, table.createdAt.desc()),
     p.pgPolicy("matter_inbound_addresses_owner_lookup", {
       for: "select",
-      to: "current_user",
-      using: sql`true`,
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.matter_inbound_addresses'::regclass)`,
     }),
     ...wsOrganizationPolicies("matter_inbound_addresses"),
   ],
@@ -376,8 +379,8 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
     ),
     p.pgPolicy("correspondence_allowed_senders_owner_lookup", {
       for: "select",
-      to: "current_user",
-      using: sql`true`,
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass)`,
     }),
     ...orgPolicies(),
   ],
@@ -416,8 +419,8 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
       .on(table.workspaceId, table.allowedSenderId),
     p.pgPolicy("correspondence_allowed_sender_matters_owner_lookup", {
       for: "select",
-      to: "current_user",
-      using: sql`true`,
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_sender_matters'::regclass)`,
     }),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
   ],
