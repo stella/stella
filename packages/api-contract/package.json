@@ -40,6 +40,7 @@
     "./time-entry-types": "./src/time-entry-types.ts",
     "./us-courts": "./src/us-courts.ts",
     "./time-entries": "./src/time-entries.ts",
+    "./us-reporter-citation": "./src/us-reporter-citation.ts",
     "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",

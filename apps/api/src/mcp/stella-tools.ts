@@ -725,7 +725,7 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
       v.description(
-        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
+        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored), an ECLI, or a reporter citation (volume, reporter, first page; a pin is ignored). Each is answered on its own.`,
       ),
     ),
     country: countryInputSchema(
@@ -926,9 +926,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve case references to decisions: docket numbers as the courts " +
-      "write them (a trailing sheet number is ignored) and ECLIs. Answered " +
-      "from the identity columns, never by ranking text, so a hit is the " +
+      "Resolve case references to decisions: docket numbers, ECLIs and " +
+      "reporter citations. Answered from the identity columns, never by ranking text, so a hit is the " +
       "decision named, not one citing it. Every `identifiers[]` entry is " +
       "answered on its own, in input order, under `status`: `found` carries " +
       "that decision's id, resourceName, appUrl, docket, court, date and " +
@@ -2507,7 +2506,7 @@ const lookupItemResult = ({
       identifier,
       hint: SEARCH_INSTEAD_HINT,
       message:
-        "This is not a docket number or ECLI in a grammar the corpus's courts use.",
+        "This is not a docket number, ECLI or reporter citation in a grammar the corpus reads.",
       status: DECISION_LOOKUP_STATUS.notFound,
     };
   }
@@ -2614,7 +2613,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent.value, read.value),
+            matches: exactDecisionMatches(intent, read.value, { grammar }),
           },
         ];
       },

@@ -15,6 +15,7 @@ import {
   polishConstitutionalDocketKey,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
+import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
@@ -1507,11 +1508,14 @@ export const normalizeDecisionIdentifier = (
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
+      // A volume-edition-page citation is read into its canonical edition,
+      // pin dropped, by the same function lookup and search read it with.
       return normalizeStructuredDecisionIdentifier({
         type: identifier.type,
         value:
           hungarianConstitutionalDesignation(identifier.value) ??
           czechConstitutionalDesignation(identifier.value) ??
+          canonicalUsReporterCitation(identifier.value) ??
           identifier.value,
       });
     default: {

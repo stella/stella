@@ -610,7 +610,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "lookup"],
             toolName: "lookup_case_law",
             description:
-              "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs.",
+              "Resolve case references to decisions: docket numbers, ECLIs and reporter citations.",
             flags: [
               {
                 flag: "--identifiers",
@@ -618,7 +618,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string-array",
                 repeatable: true,
                 description:
-                  "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.",
+                  "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored), an ECLI, or a reporter citation (volume, reporter, first page; a pin is ignored). Each is answered on its own.",
                 required: true,
               },
               {
@@ -653,7 +653,7 @@ export const generatedRouteMap: RouteNode = {
                   minItems: 1,
                   maxItems: 50,
                   description:
-                    "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.",
+                    "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored), an ECLI, or a reporter citation (volume, reporter, first page; a pin is ignored). Each is answered on its own.",
                 },
                 country: {
                   type: "string",

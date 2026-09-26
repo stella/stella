@@ -32,6 +32,7 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
+import { decisionIdsNamedBy } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   interpretDecisionQuery,
   searchAnswer,
@@ -44,7 +45,6 @@ import {
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
-import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
@@ -1389,12 +1389,13 @@ export const rehydrateCaseLawCandidates = async ({
 type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
 
 /**
- * The decisions an entry names outright. A docket or an ECLI tokenises into
- * numbers and abbreviations the text index matches loosely (a plenary docket
- * ranks every plenary decision sharing a number with it), so an identifier
- * is answered from the identity columns instead: the canonical citation key
- * the citator resolves by, and the ECLI as published. Bounded by the page
- * size: past that the entry names a list, not a decision.
+ * The decisions an entry names outright. A docket, an ECLI or a reporter
+ * citation tokenises into numbers and abbreviations the text index matches
+ * loosely (a plenary docket ranks every plenary decision sharing a number
+ * with it), so an identifier is answered from identity instead: the typed
+ * identifier rows, plus the canonical citation key the citator resolves by
+ * and the ECLI as published, the same id set the lookup reads. Bounded by the
+ * page size: past that the entry names a list, not a decision.
  */
 type FindDecisionIdsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -1409,13 +1410,6 @@ export const findDecisionIdsByIdentity = async ({
   identity,
   timeDbRead = untimedDbRead,
 }: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
-  const identityPredicate =
-    identity.kind === "ecli"
-      ? inArray(caseLawDecisions.ecli, [
-          identity.value,
-          identity.value.toUpperCase(),
-        ])
-      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
   const rows = await timeDbRead(
     async () =>
       await caseLawDb((tx) =>
@@ -1424,7 +1418,14 @@ export const findDecisionIdsByIdentity = async ({
           .from(caseLawDecisions)
           .where(
             and(
-              identityPredicate,
+              inArray(
+                caseLawDecisions.id,
+                decisionIdsNamedBy({
+                  country,
+                  locator: { kind: identity.kind, value: identity.value },
+                  tx,
+                }),
+              ),
               country === undefined
                 ? undefined
                 : eq(caseLawDecisions.country, country),
