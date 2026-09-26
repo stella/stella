@@ -165,6 +165,40 @@ const unfinishedCall = (part: ToolCallPart): ChatPart => {
     : panic("An unfinished tool call must remain a valid chat part");
 };
 
+/** What the model sees for a call whose turn ended before a result was
+ *  stored: a cancelled clarification the user typed past, or a client call
+ *  cut off by a stop. */
+export const UNRESOLVED_CALL_ERROR =
+  "This call never returned a result: its turn ended before one was stored.";
+
+/**
+ * The engine treats every tool call it is handed as pending until a tool
+ * result answers it: a client call without one is asked of the client again,
+ * before the model runs. An errored or input-complete call on a message the
+ * run does not resume can no longer be answered, so it is closed here with the
+ * error as its result. `settleOpenToolCallsForOutcome` already stores an
+ * error result for approved calls; this covers the states it leaves alone.
+ */
+const closeUnresolvedCallsForEngine = (
+  parts: readonly ChatPart[],
+): ChatPart[] =>
+  parts.flatMap((part): ChatPart[] =>
+    part.type === "tool-call" &&
+    (part.state === "error" || part.state === "input-complete") &&
+    !hasStoredResult(part, parts)
+      ? [
+          part,
+          {
+            content: JSON.stringify({ error: UNRESOLVED_CALL_ERROR }),
+            error: UNRESOLVED_CALL_ERROR,
+            state: "error",
+            toolCallId: part.id,
+            type: "tool-result",
+          },
+        ]
+      : [part],
+  );
+
 /**
  * Close the approved calls a turn left without a result once it ended some
  * way other than waiting on the user. The run may have executed them, so they
@@ -201,8 +235,8 @@ export const settleOpenToolCallsForOutcome = ({
 
 /**
  * The history a run hands the engine. Only the message a continuation resumes
- * may hold approved calls for this run to execute; an approved call without a
- * result anywhere else belongs to a turn that already ended.
+ * may hold open calls for this run to execute or the client to answer; an
+ * open call anywhere else belongs to a turn that already ended.
  */
 export const settleHistoryForRun = ({
   messages,
@@ -216,10 +250,12 @@ export const settleHistoryForRun = ({
       ? message
       : {
           ...message,
-          parts: settleOpenToolCallsForOutcome({
-            outcome: "interrupted",
-            parts: message.parts,
-          }),
+          parts: closeUnresolvedCallsForEngine(
+            settleOpenToolCallsForOutcome({
+              outcome: "interrupted",
+              parts: message.parts,
+            }),
+          ),
         },
   );
 

@@ -6,6 +6,7 @@ import {
   settleHistoryForRun,
   settleOpenToolCallsForOutcome,
   UNFINISHED_APPROVED_CALL_ERROR,
+  UNRESOLVED_CALL_ERROR,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type {
   ChatMessage,
@@ -213,5 +214,61 @@ describe("the history a run hands the engine", () => {
       "tool-call",
       "tool-result",
     ]);
+  });
+
+  // A superseded turn stores its client call as an error without a result,
+  // and a stopped turn may leave an input-complete call open. The engine would
+  // ask the client for either again instead of running the model.
+  const unresolvedResult = (toolCallId: string): ChatPart => ({
+    content: JSON.stringify({ error: UNRESOLVED_CALL_ERROR }),
+    error: UNRESOLVED_CALL_ERROR,
+    state: "error",
+    toolCallId,
+    type: "tool-result",
+  });
+
+  test("closes an errored call without a stored result on an earlier message", () => {
+    const history = settleHistoryForRun({
+      messages: [assistant("earlier", [failed])],
+      resumedMessageId: undefined,
+    });
+
+    expect(history[0]?.parts).toEqual([failed, unresolvedResult("failed")]);
+  });
+
+  test("closes an input-complete call on an earlier message", () => {
+    const awaitingClient = call("awaiting-client", { state: "input-complete" });
+
+    const history = settleHistoryForRun({
+      messages: [assistant("earlier", [awaitingClient])],
+      resumedMessageId: "resumed",
+    });
+
+    expect(history[0]?.parts).toEqual([
+      awaitingClient,
+      unresolvedResult("awaiting-client"),
+    ]);
+  });
+
+  test("leaves the resumed message's open client call and stored results alone", () => {
+    const storedError = {
+      content: JSON.stringify({ error: "boom" }),
+      error: "boom",
+      state: "error",
+      toolCallId: "failed",
+      type: "tool-result",
+    } satisfies ChatPart;
+    const earlier = assistant("earlier", [failed, storedError, completed]);
+    const resumed = assistant("resumed", [
+      call("awaiting-client", { state: "input-complete" }),
+    ]);
+
+    const history = settleHistoryForRun({
+      messages: [earlier, resumed],
+      resumedMessageId: "resumed",
+    });
+
+    expect(history[0]?.parts).toEqual(earlier.parts);
+    expect(history[1]).toBe(resumed);
   });
 });
