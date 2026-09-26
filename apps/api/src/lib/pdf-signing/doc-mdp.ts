@@ -9,7 +9,9 @@
  */
 
 import { PDF, PdfDict } from "@libpdf/core";
-import type { PdfObject, PdfRef } from "@libpdf/core";
+import type { PdfArray, PdfObject, PdfRef } from "@libpdf/core";
+
+import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 
 export type DocMdpPermission = 1 | 2 | 3;
 
@@ -25,25 +27,11 @@ const asPermission = (value: number | undefined): DocMdpPermission => {
   return DEFAULT_DOC_MDP_PERMISSION;
 };
 
-/**
- * The certification's permission, or `null` for a document that carries no
- * certification signature.
- *
- * Read from the catalog's `/Perms /DocMDP` entry, which is where a viewer
- * looks: a certification signature is the one the catalog points at, not
- * any signature that happens to carry a DocMDP reference.
- */
-export const readDocMdpPermission = (pdf: PDF): DocMdpPermission | null => {
-  const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
-  const certification = pdf
-    .getCatalog()
-    .getDict("Perms", resolve)
-    ?.getDict("DocMDP", resolve);
-  if (!certification) {
-    return null;
-  }
-
-  const references = certification.getArray("Reference", resolve);
+/** The permission a DocMDP `/Reference` array grants, if it has one. */
+const docMdpTransformPermission = (
+  references: PdfArray | undefined,
+  resolve: (ref: PdfRef) => PdfObject | null,
+): DocMdpPermission | null => {
   for (let index = 0; index < (references?.length ?? 0); index += 1) {
     const reference = references?.at(index, resolve);
     if (
@@ -56,8 +44,58 @@ export const readDocMdpPermission = (pdf: PDF): DocMdpPermission | null => {
       );
     }
   }
-  // A catalog entry without a readable transform is still a certification.
-  return DEFAULT_DOC_MDP_PERMISSION;
+  return null;
+};
+
+/**
+ * The certification's permission, or `null` for a document that carries no
+ * certification signature.
+ *
+ * A certification is a signature, so an unsigned file (by the shared
+ * signed-state check, which also sees signatures a later revision hid) has
+ * none. Otherwise the catalog's `/Perms /DocMDP` is where a viewer looks;
+ * when a later revision dropped that entry, the signature fields are read
+ * for the DocMDP transform the certification carries, since dropping the
+ * pointer does not lift what the certification forbids.
+ */
+export const readDocMdpPermission = ({
+  pdf,
+  source,
+}: {
+  pdf: PDF;
+  /** The exact bytes `pdf` was loaded from. */
+  source: Uint8Array;
+}): DocMdpPermission | null => {
+  if (!isSignedPdf({ pdf, source })) {
+    return null;
+  }
+  const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
+  const certification = pdf
+    .getCatalog()
+    .getDict("Perms", resolve)
+    ?.getDict("DocMDP", resolve);
+  if (certification) {
+    // A catalog entry without a readable transform is still a certification.
+    return (
+      docMdpTransformPermission(
+        certification.getArray("Reference", resolve),
+        resolve,
+      ) ?? DEFAULT_DOC_MDP_PERMISSION
+    );
+  }
+
+  for (const field of pdf.getForm()?.getSignatureFields() ?? []) {
+    const permission = field.isSigned()
+      ? docMdpTransformPermission(
+          field.getSignatureDict()?.getArray("Reference", resolve),
+          resolve,
+        )
+      : null;
+    if (permission !== null) {
+      return permission;
+    }
+  }
+  return null;
 };
 
 /**
@@ -75,5 +113,5 @@ export const certificationForbidsChanges = async (
   } catch {
     return false;
   }
-  return readDocMdpPermission(pdf) === 1;
+  return readDocMdpPermission({ pdf, source: bytes }) === 1;
 };
