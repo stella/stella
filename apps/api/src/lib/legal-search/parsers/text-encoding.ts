@@ -73,7 +73,7 @@ const truncated = (text: string, keep: number): string => {
 
 const excerpt = (text: string): string => truncated(text, EXCERPT_CHARS);
 
-export type TextMisdecodedFields = {
+type TextMisdecodedFields = {
   /** Every finding's kind, comma-separated. */
   encodingKinds: string;
   /** `actual>assumed` of the pair that explains the text, when one does. */
