@@ -119,15 +119,16 @@ const projectAuthentication = (auth: MailAuthentication) => {
   } satisfies ParsedCorrespondence["authentication"];
 };
 
-export const ingestInboundMail = async ({
-  raw,
+type InboundMetadataOptions = Pick<
+  IngestInboundMailOptions,
+  "envelope" | "receivedAt" | "inboundDomain"
+>;
+
+const resolveInboundTokens = ({
   envelope,
   receivedAt,
   inboundDomain,
-  verify,
-  scan,
-  persist,
-}: IngestInboundMailOptions) => {
+}: InboundMetadataOptions) => {
   const metadata = v.safeParse(deliveryMetadataSchema, {
     envelope,
     receivedAt,
@@ -147,6 +148,88 @@ export const ingestInboundMail = async ({
       tokens.add(token.value);
     }
   }
+  return Result.ok(tokens);
+};
+
+type PersistClassifiedDeliveryOptions = Omit<
+  PersistInboundDeliveryOptions,
+  "token"
+> & {
+  tokens: Set<string>;
+  persist: InboundDeliveryStore;
+};
+
+const persistClassifiedDelivery = async ({
+  tokens,
+  receivedAt,
+  deliveryKey,
+  delivery,
+  persist,
+}: PersistClassifiedDeliveryOptions) => {
+  if (tokens.size === 0) {
+    return Result.ok([
+      { status: "dropped", reason: "unknown_recipient" },
+    ] satisfies InboundDeliveryOutcome[]);
+  }
+  const outcomes: InboundDeliveryOutcome[] = [];
+  for (const token of tokens) {
+    const persisted = await Result.tryPromise({
+      try: () => persist({ token, receivedAt, deliveryKey, delivery }),
+      catch: () =>
+        new InboundIngestError({
+          message: "Inbound filing could not complete",
+          reason: "persistence-unavailable",
+        }),
+    });
+    if (persisted.isErr()) {
+      return persisted;
+    }
+    outcomes.push(persisted.value);
+  }
+  return Result.ok(outcomes);
+};
+
+type RecordOversizedInboundMailOptions = InboundMetadataOptions & {
+  deliveryKey: string;
+  persist: InboundDeliveryStore;
+};
+
+export const recordOversizedInboundMail = async ({
+  deliveryKey,
+  persist,
+  ...metadata
+}: RecordOversizedInboundMailOptions) => {
+  const tokens = resolveInboundTokens(metadata);
+  if (tokens.isErr()) {
+    return tokens;
+  }
+  return await persistClassifiedDelivery({
+    tokens: tokens.value,
+    receivedAt: metadata.receivedAt,
+    deliveryKey,
+    delivery: { status: "drop", sender: null, reason: "message_too_large" },
+    persist,
+  });
+};
+
+export const ingestInboundMail = async ({
+  raw,
+  envelope,
+  receivedAt,
+  inboundDomain,
+  verify,
+  scan,
+  persist,
+}: IngestInboundMailOptions) => {
+  const resolvedTokens = resolveInboundTokens({
+    envelope,
+    receivedAt,
+    inboundDomain,
+  });
+  if (resolvedTokens.isErr()) {
+    return resolvedTokens;
+  }
+  const tokens = resolvedTokens.value;
   if (tokens.size === 0) {
     return Result.ok([
       { status: "dropped", reason: "unknown_recipient" },
@@ -254,20 +337,11 @@ export const ingestInboundMail = async ({
     .update(String(raw.byteLength))
     .update(raw.subarray(0, INBOUND_MAIL_LIMITS.rawBytes))
     .digest("hex");
-  const outcomes: InboundDeliveryOutcome[] = [];
-  for (const token of tokens) {
-    const persisted = await Result.tryPromise({
-      try: () => persist({ token, receivedAt, deliveryKey, delivery }),
-      catch: () =>
-        new InboundIngestError({
-          message: "Inbound filing could not complete",
-          reason: "persistence-unavailable",
-        }),
-    });
-    if (persisted.isErr()) {
-      return persisted;
-    }
-    outcomes.push(persisted.value);
-  }
-  return Result.ok(outcomes);
+  return await persistClassifiedDelivery({
+    tokens,
+    receivedAt,
+    deliveryKey,
+    delivery,
+    persist,
+  });
 };

@@ -1,7 +1,14 @@
+import { S3Client } from "@aws-sdk/client-s3";
 import { expect, test } from "bun:test";
+import { Readable } from "node:stream";
 
 import { hasAlignedAuthentication } from "@/api/lib/inbound-mail/authentication";
-import { readSesInboundDelivery } from "@/api/lib/inbound-mail/ses";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+import {
+  createSesS3ObjectReader,
+  readSesInboundDelivery,
+  receiveSesInboundMail,
+} from "@/api/lib/inbound-mail/ses";
 
 const event = {
   notificationType: "Received",
@@ -36,8 +43,10 @@ const read = async (input: unknown) =>
 
 test("provider metadata authenticates the outer sender without inventing a signing domain", async () => {
   const delivery = await read(event);
-  expect(delivery.isOk()).toBe(true);
-  if (delivery.isErr()) {return;}
+  expect(delivery.isOk() && delivery.value.status).toBe("received");
+  if (delivery.isErr() || delivery.value.status !== "received") {
+    return;
+  }
   expect(delivery.value.envelope.recipients).toEqual(event.receipt.recipients);
   const auth = await delivery.value.verify({
     raw,
@@ -45,7 +54,9 @@ test("provider metadata authenticates the outer sender without inventing a signi
     fromAddress: "member@example.com",
   });
   expect(auth.isOk()).toBe(true);
-  if (auth.isErr()) {return;}
+  if (auth.isErr()) {
+    return;
+  }
   expect(auth.value.spf.domain).toBeNull();
   expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(true);
 });
@@ -57,15 +68,19 @@ test.each(["FAIL", "GRAY", "PROCESSING_FAILED"])(
       ...event,
       receipt: { ...event.receipt, dmarcVerdict: { status } },
     });
-    expect(delivery.isOk()).toBe(true);
-    if (delivery.isErr()) {return;}
+    expect(delivery.isOk() && delivery.value.status).toBe("received");
+    if (delivery.isErr() || delivery.value.status !== "received") {
+      return;
+    }
     const auth = await delivery.value.verify({
       raw,
       envelope: delivery.value.envelope,
       fromAddress: "member@example.com",
     });
     expect(auth.isOk()).toBe(true);
-    if (auth.isErr()) {return;}
+    if (auth.isErr()) {
+      return;
+    }
     expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
       false,
     );
@@ -110,6 +125,77 @@ test("an unknown virus verdict fails closed at the provider boundary", async () 
     ...event,
     receipt: { ...event.receipt, virusVerdict: { status: "GRAY" } },
   });
-  expect(delivery.isOk()).toBe(true);
-  if (delivery.isOk()) {expect(delivery.value.scan).toBe("unavailable");}
+  expect(delivery.isOk() && delivery.value.status).toBe("received");
+  if (delivery.isOk() && delivery.value.status === "received") {
+    expect(delivery.value.scan).toBe("unavailable");
+  }
 });
+
+test.each(["declared", "streamed"] as const)(
+  "the receiver cancels %s oversized S3 objects and persists a terminal drop",
+  async (mode) => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let emitted = 0;
+    const body = Readable.from(
+      (function* () {
+        for (let index = 0; index < 40; index += 1) {
+          emitted += 1;
+          yield chunk;
+        }
+      })(),
+      { objectMode: false, highWaterMark: chunk.byteLength },
+    );
+    const client = new S3Client({
+      region: "us-east-1",
+      credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      requestHandler: {
+        handle: async () => ({
+          response: {
+            statusCode: 200,
+            headers:
+              mode === "declared"
+                ? { "content-length": String(INBOUND_MAIL_LIMITS.rawBytes + 1) }
+                : {},
+            body,
+          },
+        }),
+      },
+    });
+    try {
+      let drops = 0;
+      const result = await receiveSesInboundMail({
+        event: {
+          ...event,
+          receipt: {
+            ...event.receipt,
+            recipients: [`${"a".repeat(64)}@inbound.example.com`],
+          },
+        },
+        inboundDomain: "inbound.example.com",
+        bucket: "inbound-bucket",
+        keyPrefix: "mail/",
+        readObject: createSesS3ObjectReader({
+          client,
+          bucket: "inbound-bucket",
+        }),
+        persist: async ({ delivery }) => {
+          expect(delivery).toEqual({
+            status: "drop",
+            reason: "message_too_large",
+            sender: null,
+          });
+          drops += 1;
+          return { status: "dropped", reason: "message_too_large" };
+        },
+      });
+      expect(result.isOk() && result.value).toEqual([
+        { status: "dropped", reason: "message_too_large" },
+      ]);
+      expect(drops).toBe(1);
+      expect(emitted).toBeLessThan(40);
+      expect(body.destroyed).toBe(true);
+    } finally {
+      client.destroy();
+    }
+  },
+);
