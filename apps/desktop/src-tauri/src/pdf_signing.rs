@@ -47,7 +47,9 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-const DIALOG_HEIGHT: f64 = 470.0;
+/// Fits the ready dialog, with its status line, in every shipped language
+/// and with two-line document and matter names; longer content scrolls.
+const DIALOG_HEIGHT: f64 = 640.0;
 
 const DIGEST_ALGORITHM: &str = "SHA-256";
 const DIGEST_BYTES: usize = 32;

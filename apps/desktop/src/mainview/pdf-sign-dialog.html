@@ -10,19 +10,22 @@
         margin: 0;
         padding: 0;
       }
+      /* The dialog centres while it fits and scrolls from its top when a
+         long name or translation makes it taller than the window. */
       body {
-        align-items: center;
         background: #1c1c1e;
         color: #f5f5f7;
         display: flex;
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         height: 100vh;
+        overflow-y: auto;
         justify-content: center;
         -webkit-user-select: none;
         user-select: none;
       }
       .dialog {
+        margin: auto;
         max-width: 390px;
         padding: 28px 24px 20px;
         width: 100%;
