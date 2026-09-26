@@ -1672,7 +1672,6 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
-          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1683,16 +1682,6 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: "29 Cdo 123/2024",
-            },
-            {
-              type: DECISION_IDENTIFIER_TYPES.ECLI,
-              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-            },
-          ],
           language: "cs",
           matchedQueries: [0],
           matchingPassages: 4,
@@ -1776,7 +1765,6 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
-          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1787,16 +1775,6 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: "29 Cdo 123/2024",
-            },
-            {
-              type: DECISION_IDENTIFIER_TYPES.ECLI,
-              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-            },
-          ],
           language: "cs",
           matchedQueries: [0],
           matchingPassages: 1,
@@ -1871,15 +1849,11 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
         caseNumber: CZ_DOCKET,
-        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         court: "Nejvyšší soud",
         decisionDate: "2020-05-01",
         decisionId: DECISION_ID,
         ecli: null,
         identifier: `${CZ_DOCKET}-28`,
-        identifiers: [
-          { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: CZ_DOCKET },
-        ],
         resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
         status: "found",
       },
@@ -2584,7 +2558,6 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             citationAuthority: 2.5,
             court: "Nejvyšší soud",
             decisionDate: "2025-04-02",
@@ -3504,13 +3477,6 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
             caseNumber: "29 Cdo 123/2024",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                value: "29 Cdo 123/2024",
-              },
-            ],
             citationsFrom: [
               {
                 citationText: "29 Odo 1/2001",
@@ -3587,6 +3553,43 @@ describe("OpenAI-compatible MCP tools", () => {
           message: `This id named written reasons that are now part of decision ${DECISION_ID}, returned here. Cite ${DECISION_ID} from now on.`,
           status: "found",
           decision: { decisionId: DECISION_ID },
+        },
+      ],
+    });
+  });
+
+  test("read_case_law_decision types a primary reference that is not a docket", async () => {
+    const identifiers = [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "No. 1" },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "347 U.S. 483",
+      },
+    ];
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      caseNumber: "347 U.S. 483",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      identifiers,
+    });
+
+    const result = await handleMcpToolCall({
+      args: { decision_ids: [DECISION_ID] },
+      context: createContext(),
+      toolName: "read_case_law_decision",
+    });
+
+    // A docket primary carries neither field (see the tests above); this one
+    // names its kind and the docket beside it.
+    expect(parseToolPayload(result)).toMatchObject({
+      items: [
+        {
+          status: "found",
+          decision: {
+            caseNumber: "347 U.S. 483",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            identifiers,
+          },
         },
       ],
     });
@@ -3678,13 +3681,6 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
             caseNumber: "29 Cdo 123/2024",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                value: "29 Cdo 123/2024",
-              },
-            ],
             citationsFrom: [
               {
                 citationText: "29 Odo 1/2001",

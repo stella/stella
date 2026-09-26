@@ -329,13 +329,10 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // then adds 161 default: the projection states bounds and defaults the
 // validators already enforced (`minLength`, the cursor's `maxLength`,
 // `access`/`limit` defaults) plus Valibot's empty `required`.
-// The case-law results then state what kind of reference `caseNumber` is and
-// every typed identifier beside it: measured 172_687 default, 75_738
-// anonymized and 28_604 law, all of it output schema (see below).
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 172_750,
-  anonymized: 75_800,
-  law: 28_650,
+  default: 172_400,
+  anonymized: 75_400,
+  law: 28_250,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -415,15 +412,10 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // The reader-annotation tools add the listed marks with their passages, the
 // created mark's stored passages, and two receipts: measured 55_085 default and
 // 33_799 anonymized, where the list is the only one of them.
-// search_case_law, read_case_law_decision and lookup_case_law add
-// `caseNumberType` and the typed `identifiers`, read_case_law_citations the
-// type alone: a primary reference that may be a reporter citation cannot be
-// presented as a docket. Measured 55_480 default, 34_194 anonymized and 10_384
-// law.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 55_550,
-  anonymized: 34_250,
-  law: 10_450,
+  default: 55_150,
+  anonymized: 33_850,
+  law: 10_050,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

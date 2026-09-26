@@ -1342,17 +1342,21 @@ const searchTotalProjection = v.variant("type", [
   ),
 ]);
 
-// `caseNumber` is the decision's primary citable reference: its docket for
-// `case-number`, otherwise a reporter or neutral citation.
-const caseNumberTypeProjection = v.picklist(DECISION_PRIMARY_REFERENCE_TYPES);
+// What `caseNumber` is, present only where it is not a docket: a reporter or
+// neutral citation.
+const caseNumberTypeProjection = v.optional(
+  v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
+);
 
-// Every reference the decision answers to, the primary one and any docket
-// beside a reporter primary included.
-const decisionIdentifiersProjection = v.array(
-  v.strictObject({
-    type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
-    value: v.string(),
-  }),
+// Every reference a decision whose primary is not a docket answers to, its
+// docket included where it has one. Absent beside a docket primary.
+const decisionIdentifiersProjection = v.optional(
+  v.array(
+    v.strictObject({
+      type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
+      value: v.string(),
+    }),
+  ),
 );
 
 /**
@@ -1413,7 +1417,6 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // take the tool off the chat surface on any deployment with the flag off.
       appUrl: v.nullable(v.string()),
       caseNumber: v.string(),
-      caseNumberType: caseNumberTypeProjection,
       citationCount: v.number(),
       // `ln(1 + weighted citations)`, the score the ranking blends in.
       citationAuthority: v.number(),
@@ -1432,7 +1435,6 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       language: v.string(),
       // Which of the call's `queries` returned this decision, by index,
       // ascending. A decision several phrasings agree on carries several.
-      identifiers: decisionIdentifiersProjection,
       matchedQueries: v.array(v.number()),
       // Passages of the decision that matched, within the scanned window.
       matchingPassages: v.number(),
@@ -1584,12 +1586,10 @@ const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
-  caseNumberType: caseNumberTypeProjection,
   court: v.string(),
   decisionDate: v.nullable(v.string()),
   decisionId: passthroughId(),
   ecli: v.nullable(v.string()),
-  identifiers: decisionIdentifiersProjection,
   resourceName: passthroughId(),
 });
 

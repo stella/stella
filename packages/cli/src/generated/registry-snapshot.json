@@ -262,7 +262,7 @@
       "itemsKey": "items"
     },
     "name": "lookup_case_law",
-    "description": "Resolve case references to decisions: docket numbers, ECLIs and reporter citations. Answered from the identity columns, never by ranking text, so a hit is the decision named, not one citing it. Every `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, docket, court, date and ECLI; `ambiguous` carries the candidates: a docket is unique to a court, not to the corpus, and picking one would cite the wrong court; `not_found` says what to call instead; `lookup_failed` means the read did not complete, so retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text.",
+    "description": "Resolve case references to decisions: docket numbers, ECLIs and reporter citations. Answered from the identity columns, never by ranking text, so a hit is the decision named, not one citing it. Every `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, reference, court, date and ECLI; `ambiguous` carries the candidates: a docket is unique to a court, not to the corpus, and picking one would cite the wrong court; `not_found` says what to call instead; `lookup_failed` means the read did not complete, so retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text.",
     "inputSchema": {
       "type": "object",
       "required": ["identifiers", "country"],

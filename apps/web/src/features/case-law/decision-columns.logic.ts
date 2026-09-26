@@ -125,7 +125,7 @@ export const decisionReferenceColumnKind = (
 
 const DECISION_REFERENCE_COLUMN_LABEL_KEYS = {
   "case-number": DECISION_COLUMN_LABEL_KEYS.caseNumber,
-  reference: "caseLaw.columns.reference",
+  reference: "common.reference",
 } as const satisfies Record<DecisionReferenceColumnKind, TranslationKey>;
 
 /** A decision column's label, given what the case-number column holds. */
