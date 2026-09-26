@@ -125,10 +125,10 @@ const usRankGroups = (field: RankField): readonly RankGroup[] => {
  * lookup does not scan the list.
  *
  * A NULL or unaccepted id takes the ELSE, the unranked rank: never a name
- * pattern and never another jurisdiction's rank. The table CHECK keeps a
- * directory row's id non-null and the write boundary admits accepted ids
- * only, so a stored row reaches the ELSE only through corruption, and
- * `decisionCourtWeight` panics on the same row in TypeScript.
+ * pattern and never another jurisdiction's rank. The write boundary admits
+ * accepted ids only, so a stored row reaches the ELSE only through corruption
+ * or directory drift; `decisionCourtWeight` gives the same row the same rank
+ * in TypeScript and reports it.
  */
 export const usCourtRankSql = (courtIdColumn: string, field: RankField): SQL =>
   sqlCaseFragment({

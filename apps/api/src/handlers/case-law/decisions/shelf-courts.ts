@@ -144,7 +144,8 @@ type SelectShelfCourtsOptions = {
 
 /**
  * A directory jurisdiction's court ranks by the directory entry its canonical
- * name names; any other court by the first seeded entry it matches.
+ * name names; any other court by the first seeded entry it matches. A name
+ * the directory does not carry is reported and, unranked, left off the shelf.
  */
 const rankOf = (
   court: string,

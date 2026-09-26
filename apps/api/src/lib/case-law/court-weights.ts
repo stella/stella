@@ -4,7 +4,6 @@
  * and the local one each own an instance (`public-case-law-config.ts`,
  * `local-case-law-config.ts`).
  */
-import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
@@ -315,20 +314,55 @@ type DecisionCourt = {
 };
 
 /**
- * A directory jurisdiction's rank for a stored court id. The table CHECK
- * gives every such row an id and the write boundary admits accepted ids
- * only, so a missing or unaccepted one is a row that should not exist: it
- * fails rather than taking a name or default rank.
+ * A read's rank for a stored court. `invalid-directory-identity` is a
+ * directory jurisdiction's row whose id (or, for a name-only reader, name)
+ * the directory does not resolve: it holds the unranked rank the SQL ELSE
+ * gives the same row, and is never ranked by name.
  */
+export type DecisionCourtRank =
+  | { type: "ranked"; tier: number; weight: number }
+  | { type: "invalid-directory-identity"; tier: number; weight: number };
+
+type InvalidDirectoryIdentity = {
+  country: CourtDirectoryJurisdiction;
+  lookup: "court_id" | "court_name";
+  value: string | null;
+};
+
+/**
+ * The write boundary admits only accepted ids under their canonical names,
+ * but the table CHECK cannot hold a row to the directory, and the directory
+ * can move under a stored row. A read meets such a row as one item among
+ * valid peers, so it ranks the item unranked and reports it rather than
+ * failing the page.
+ */
+const invalidDirectoryIdentity = ({
+  country,
+  lookup,
+  value,
+}: InvalidDirectoryIdentity): DecisionCourtRank => {
+  logger.warn("case_law.court_rank.invalid_directory_identity", {
+    country,
+    lookup,
+    "court.identity": value ?? "none",
+    effect: "unranked",
+  });
+  return {
+    type: "invalid-directory-identity",
+    tier: DEFAULT_TIER,
+    weight: DEFAULT_WEIGHT,
+  };
+};
+
 const directoryCourtRankById = (
   country: CourtDirectoryJurisdiction,
   courtId: string | null,
-): CourtRankValue => {
+): DecisionCourtRank => {
   const rank =
     courtId === null ? null : DIRECTORY_COURT_RANK[country].byId(courtId);
   return rank === null
-    ? panic(`Unranked directory court id: ${courtId ?? "none"}`)
-    : { weight: rank.weight, tier: rank.tier };
+    ? invalidDirectoryIdentity({ country, lookup: "court_id", value: courtId })
+    : { type: "ranked", tier: rank.tier, weight: rank.weight };
 };
 
 /**
@@ -340,10 +374,13 @@ const directoryCourtRankById = (
 export const decisionCourtWeight = (
   map: CourtWeightMap,
   { court, country, courtId }: DecisionCourt,
-): { weight: number; tier: number } =>
-  isCourtDirectoryJurisdiction(country)
-    ? directoryCourtRankById(country, courtId)
-    : courtWeightFromMap(map, court, country);
+): DecisionCourtRank => {
+  if (isCourtDirectoryJurisdiction(country)) {
+    return directoryCourtRankById(country, courtId);
+  }
+  const { tier, weight } = courtWeightFromMap(map, court, country);
+  return { type: "ranked", tier, weight };
+};
 
 /**
  * The weight a citing decision's court lends a citation. A directory
@@ -359,42 +396,40 @@ export const citingCourtWeight = (
     ? directoryCourtRankById(country, courtId).weight
     : courtWeightFromMap(map, court).weight;
 
-/** The tier a decision's court is presented under. */
-export const decisionCourtTierLabel = (
-  map: CourtWeightMap,
-  decision: DecisionCourt,
-): CourtTierLabel => courtTierLabel(decisionCourtWeight(map, decision).tier);
-
 /**
  * The rank of the directory court stored under exactly this canonical name,
- * or null for a name the jurisdiction's directory does not carry.
+ * for a reader that holds only the name (a facet bucket, a shelf candidate).
+ * The write boundary stores a directory court under its canonical name, and
+ * canonical names are unique; a name the directory does not carry is
+ * reported and has no rank.
  */
 export const directoryCourtRankByName = (
   country: CourtDirectoryJurisdiction,
   court: string,
-): CourtRank | null => DIRECTORY_COURT_RANK[country].byCanonicalName(court);
+): CourtRank | null => {
+  const rank = DIRECTORY_COURT_RANK[country].byCanonicalName(court);
+  if (rank === null) {
+    invalidDirectoryIdentity({ country, lookup: "court_name", value: court });
+  }
+  return rank;
+};
 
 /**
  * The tier a court name is presented under, for a reader that holds only the
- * name (a facet bucket). A directory jurisdiction's name is its court's
- * canonical name, which the write boundary stores exactly, so it resolves
- * through the directory and a name the directory does not carry fails. Any
- * other name takes the registry's precedence rules, then the bucket every
- * unranked court falls into.
+ * name. A directory jurisdiction's name resolves through the directory, and
+ * one it does not carry is unranked; any other name takes the registry's
+ * precedence rules, then the bucket every unranked court falls into.
  */
 export const courtTierLabelFromMap = (
   map: CourtWeightMap,
   court: string,
   country: string,
-): CourtTierLabel => {
-  if (!isCourtDirectoryJurisdiction(country)) {
-    return courtTierLabel(courtWeightFromMap(map, court, country).tier);
-  }
-  const rank =
-    directoryCourtRankByName(country, court) ??
-    panic(`Court name is not in the ${country} court directory: ${court}`);
-  return courtTierLabel(rank.tier);
-};
+): CourtTierLabel =>
+  courtTierLabel(
+    isCourtDirectoryJurisdiction(country)
+      ? (directoryCourtRankByName(country, court)?.tier ?? DEFAULT_TIER)
+      : courtWeightFromMap(map, court, country).tier,
+  );
 
 /** A single-quoted SQL literal; the registry is operator-seeded, not input. */
 const sqlLiteral = (value: string): string =>

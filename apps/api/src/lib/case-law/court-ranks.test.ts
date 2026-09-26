@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { resolveUsCourt, US_COURTS } from "@stll/api-contract/us-courts";
@@ -15,6 +15,7 @@ import {
   courtWeightFromMap,
   decisionCourtWeight,
 } from "@/api/lib/case-law/court-weights";
+import { logger } from "@/api/lib/observability/logger";
 
 const map = courtWeightMapFromSeed();
 
@@ -34,7 +35,7 @@ test("a directory decision ranks by its court id, whatever its name says", () =>
   });
   expect(
     decisionCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
-  ).toEqual({ tier: 2, weight: 5 });
+  ).toEqual({ type: "ranked", tier: 2, weight: 5 });
   expect(
     citingCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
   ).toBe(5);
@@ -45,18 +46,49 @@ test("a directory decision ranks by its court id, whatever its name says", () =>
   });
 });
 
-test("a directory decision without an accepted court id fails rather than ranking by name", () => {
-  for (const courtId of [null, "test", "Scotus", "unknown-court"]) {
-    expect(() =>
-      decisionCourtWeight(map, { court: SCOTUS, country: "USA", courtId }),
-    ).toThrow(`Unranked directory court id: ${courtId ?? "none"}`);
-    expect(() =>
-      citingCourtWeight(map, { court: SCOTUS, country: "USA", courtId }),
-    ).toThrow(`Unranked directory court id: ${courtId ?? "none"}`);
+test("a directory decision without an accepted court id is unranked and reported, never ranked by name", () => {
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    const malformed = [null, "test", "Scotus", "unknown-court"];
+    for (const courtId of malformed) {
+      // By name the registry would rank this court supreme.
+      const decision = { court: SCOTUS, country: "USA", courtId };
+      expect(decisionCourtWeight(map, decision)).toEqual({
+        type: "invalid-directory-identity",
+        ...UNRANKED_COURT_RANK,
+      });
+      expect(citingCourtWeight(map, decision)).toBe(UNRANKED_COURT_RANK.weight);
+    }
+    expect(courtTierLabelFromMap(map, "Supreme Court of Nowhere", "USA")).toBe(
+      "other",
+    );
+    expect(
+      warn.mock.calls.map(([message, fields]) => [message, fields]),
+    ).toEqual([
+      ...malformed.flatMap((courtId) =>
+        Array.from({ length: 2 }, () => [
+          "case_law.court_rank.invalid_directory_identity",
+          {
+            country: "USA",
+            lookup: "court_id",
+            "court.identity": courtId ?? "none",
+            effect: "unranked",
+          },
+        ]),
+      ),
+      [
+        "case_law.court_rank.invalid_directory_identity",
+        {
+          country: "USA",
+          lookup: "court_name",
+          "court.identity": "Supreme Court of Nowhere",
+          effect: "unranked",
+        },
+      ],
+    ]);
+  } finally {
+    warn.mockRestore();
   }
-  expect(() =>
-    courtTierLabelFromMap(map, "Supreme Court of Nowhere", "USA"),
-  ).toThrow("Court name is not in the USA court directory");
 });
 
 test("the directory rank SQL binds each ranked id once, grouped by value", () => {

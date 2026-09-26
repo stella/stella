@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import nodePath from "node:path";
@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { requireCourtPartitionIdentity } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { logger } from "@/api/lib/observability/logger";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -342,7 +343,7 @@ test("every accepted United States court ranks by its id alike in every path", a
     };
     const expected = {
       sql: { tier: rank.tier, weight: rank.weight },
-      rerank: { tier: rank.tier, weight: rank.weight },
+      rerank: { type: "ranked", tier: rank.tier, weight: rank.weight },
       citing: rank.weight,
       presented: courtTierLabel(rank.tier),
       facet: courtTierLabel(rank.tier),
@@ -422,10 +423,22 @@ test("a USA row without an accepted court id never ranks by its name", async () 
     ...malformed.map(() => ({ ...UNRANKED_COURT_RANK })),
     { tier: 3, weight: 8 },
   ]);
-  for (const courtId of malformed) {
-    expect(() =>
-      decisionCourtWeight(map, { court: scotus, country: "USA", courtId }),
-    ).toThrow("Unranked directory court id");
+  // TypeScript gives the same rows the same rank, and marks them.
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    expect(
+      malformed.map((courtId) =>
+        decisionCourtWeight(map, { court: scotus, country: "USA", courtId }),
+      ),
+    ).toEqual(
+      malformed.map(() => ({
+        type: "invalid-directory-identity",
+        ...UNRANKED_COURT_RANK,
+      })),
+    );
+    expect(warn).toHaveBeenCalledTimes(malformed.length);
+  } finally {
+    warn.mockRestore();
   }
   await client.close();
 }, 60_000);
