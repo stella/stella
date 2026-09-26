@@ -128,4 +128,28 @@ CREATE POLICY "owner_delete" ON "pdf_signing_sessions"
   AS PERMISSIVE FOR DELETE TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pdf_signing_sessions'::regclass));--> statement-breakpoint
 
+CREATE POLICY "workspace_select" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR SELECT TO "stella"
+  USING (workspace_id = ANY((SELECT current_setting(
+  'app.workspace_ids', true
+))::uuid[]));--> statement-breakpoint
+
+CREATE POLICY "workspace_insert" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR INSERT TO "stella"
+  WITH CHECK (workspace_id = ANY((SELECT current_setting(
+  'app.workspace_ids', true
+))::uuid[]));--> statement-breakpoint
+
+CREATE POLICY "workspace_update" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR UPDATE TO "stella"
+  USING (workspace_id = ANY((SELECT current_setting(
+  'app.workspace_ids', true
+))::uuid[]));--> statement-breakpoint
+
+CREATE POLICY "workspace_delete" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR DELETE TO "stella"
+  USING (workspace_id = ANY((SELECT current_setting(
+  'app.workspace_ids', true
+))::uuid[]));--> statement-breakpoint
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "pdf_signing_sessions" TO stella;
