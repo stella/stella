@@ -130,7 +130,6 @@ export const useDocxAnonymizationHighlights = ({
     [allowlistQuery.data],
   );
   useExternalSyncEffect(() => {
-    // oxlint-disable-next-line react/immutability -- latest-ref mirror consumed by the polling effect, never rendered
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
     // the user just added to the allowlist disappear without
