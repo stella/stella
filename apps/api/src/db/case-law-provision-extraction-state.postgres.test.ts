@@ -1,0 +1,390 @@
+/**
+ * The provision-citation state behaviour PGlite cannot show, on real
+ * Postgres: a scope row another session is inserting, lock waits, and
+ * settings on a pooled connection. PGlite behaviour lives in
+ * `case-law-provision-extraction-state.db.test.ts`.
+ *
+ * Scope rows are never deleted by design, so each test uses a language
+ * code of its own and leaves its scope rows behind.
+ */
+
+import type { SQL } from "bun";
+import { describe, expect, test } from "bun:test";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+
+const databaseUrl =
+  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true"
+    ? process.env["DATABASE_URL"]
+    : undefined;
+
+const COUNTRY = "ZZP";
+
+const uniqueLanguage = (): string =>
+  `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
+
+/** Wait until `pid` is blocked on a lock, so timing cannot make a test vacuous. */
+const waitUntilBlocked = async (observer: SQL, pid: number) => {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    const [row] =
+      await observer`SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
+    if (row?.blocked === true) {
+      return;
+    }
+    await Bun.sleep(10);
+  }
+  throw new Error(`backend ${String(pid)} never blocked`);
+};
+
+const backendPid = async (client: SQL): Promise<number> => {
+  const [row] = await client`SELECT pg_backend_pid() AS pid`;
+  const pid: unknown = row?.pid;
+  if (typeof pid !== "number") {
+    throw new TypeError("Expected a PostgreSQL backend pid");
+  }
+  return pid;
+};
+
+type Fixture = {
+  sourceId: SafeId<"caseLawSource">;
+};
+
+const insertDecision = async (
+  db: GatedTestDb,
+  fixture: Fixture,
+  language: string,
+): Promise<SafeId<"caseLawDecision">> => {
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId: fixture.sourceId,
+    country: COUNTRY,
+    language,
+    court: "Court",
+    caseNumber: id,
+    decisionDate: "2020-03-01",
+    metadata: {},
+  });
+  return id;
+};
+
+const withFixture = async (
+  fn: (tools: {
+    openClient: () => { sql: SQL; db: GatedTestDb };
+    observer: SQL;
+    fixture: Fixture;
+  }) => Promise<void>,
+) => {
+  if (databaseUrl === undefined) {
+    return;
+  }
+  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    const { sql: observer, db } = openClient();
+    const source = caseLawSourceRow({
+      adapterKey: `provision-state-${Bun.randomUUIDv7()}`,
+    });
+    const fixture: Fixture = { sourceId: source.id };
+    await db.insert(caseLawSources).values(source);
+    try {
+      await fn({ openClient, observer, fixture });
+    } finally {
+      await observer`DELETE FROM case_law_decisions WHERE source_id = ${source.id}::uuid`;
+      await observer`DELETE FROM case_law_sources WHERE id = ${source.id}::uuid`;
+    }
+  });
+};
+
+const stateOf = async (observer: SQL, id: string) =>
+  (
+    await observer`
+      SELECT lane, enqueue_reason AS "enqueueReason"
+      FROM case_law_provision_extractions WHERE decision_id = ${id}::uuid
+    `
+  ).at(0);
+
+if (databaseUrl === undefined) {
+  describe.skip("provision extraction state (postgres)", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(true).toBe(true);
+    });
+  });
+} else {
+  describe("provision extraction state (postgres)", () => {
+    /**
+     * The trigger's scope insert waits for a concurrent insert of the same
+     * key, and routes on the row that won, read in a later statement: here
+     * an activation committing while the decision write waits.
+     */
+    for (const outcome of ["commit", "rollback"] as const) {
+      test(`routes on the scope row a concurrent insert won (${outcome})`, async () => {
+        await withFixture(async ({ openClient, observer, fixture }) => {
+          const language = uniqueLanguage();
+          const activation = openClient().sql;
+          const writer = openClient();
+          const activated = Promise.withResolvers<undefined>();
+          const release = Promise.withResolvers<undefined>();
+          const transition = activation.begin(async (tx) => {
+            await tx`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
+              VALUES (${COUNTRY}, ${language}, 'active', 1)`;
+            activated.resolve(undefined);
+            await release.promise;
+            if (outcome === "rollback") {
+              throw new Error("roll the activation back");
+            }
+          });
+          try {
+            await activated.promise;
+            const pid = await backendPid(writer.sql);
+            const write = insertDecision(writer.db, fixture, language);
+            await waitUntilBlocked(observer, pid);
+            release.resolve(undefined);
+            await transition.catch(() => undefined);
+            const id = await write;
+            const [scope] = await observer`
+              SELECT status FROM case_law_provision_extraction_scopes
+              WHERE country = ${COUNTRY} AND language = ${language}`;
+            if (outcome === "commit") {
+              expect(scope?.status).toBe("active");
+              expect(await stateOf(observer, id)).toEqual({
+                lane: "fresh",
+                enqueueReason: "input",
+              });
+            } else {
+              expect(scope?.status).toBe("retired");
+              expect(await stateOf(observer, id)).toBeUndefined();
+            }
+          } finally {
+            release.resolve(undefined);
+            await transition.catch(() => undefined);
+          }
+        });
+      }, 15_000);
+    }
+
+    test("a lane set in one transaction does not leak to the next on the pooled connection", async () => {
+      await withFixture(async ({ openClient, observer, fixture }) => {
+        const language = uniqueLanguage();
+        await observer`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
+          VALUES (${COUNTRY}, ${language}, 'active', 1)`;
+        const pooled = openClient();
+        const bulkId = createSafeId<"caseLawDecision">();
+        await pooled.sql.begin(async (tx) => {
+          await tx`SET LOCAL stella.provision_extraction_lane = 'backfill'`;
+          await tx`INSERT INTO case_law_decisions (id, source_id, country, language, court, case_number, metadata)
+            VALUES (${bulkId}::uuid, ${fixture.sourceId}::uuid, ${COUNTRY}, ${language}, 'Court', ${bulkId}, '{}'::jsonb)`;
+        });
+        const ordinaryId = await insertDecision(pooled.db, fixture, language);
+        expect((await stateOf(observer, bulkId))?.lane).toBe("backfill");
+        expect((await stateOf(observer, ordinaryId))?.lane).toBe("fresh");
+      });
+    }, 15_000);
+
+    test("the input digest is the same under any session DateStyle and TimeZone", async () => {
+      await withFixture(async ({ openClient, fixture }) => {
+        const id = await insertDecision(
+          openClient().db,
+          fixture,
+          uniqueLanguage(),
+        );
+        const digests = new Set<string>();
+        for (const [dateStyle, timeZone] of [
+          ["ISO, YMD", "UTC"],
+          ["SQL, DMY", "Pacific/Kiritimati"],
+          ["German", "America/Adak"],
+          ["Postgres, MDY", "Asia/Kathmandu"],
+        ] as const) {
+          const session = openClient().sql;
+          await session`SELECT set_config('DateStyle', ${dateStyle}, false), set_config('TimeZone', ${timeZone}, false)`;
+          const [row] = await session`
+            SELECT encode(case_law_provision_extraction_input_digest(decision), 'hex') AS digest
+            FROM case_law_decisions decision WHERE decision.id = ${id}::uuid`;
+          digests.add(String(row?.digest));
+        }
+        expect(digests.size).toBe(1);
+      });
+    }, 15_000);
+
+    /**
+     * The ingestion write path enqueues through the trigger like any other
+     * writer: a new decision is owed, a refresh that changes an input is
+     * owed again, and a refresh that changes nothing the digest reads is not.
+     */
+    test("ingestion enqueues new and changed decisions, not unchanged refreshes", async () => {
+      await withFixture(async ({ openClient, observer, fixture }) => {
+        const language = uniqueLanguage();
+        await observer`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
+          VALUES (${COUNTRY}, ${language}, 'active', 1)`;
+        const { db } = openClient();
+        const scopedDb: ScopedDb = async (callback) =>
+          await db.transaction(async (tx) => await callback(tx));
+        const input = {
+          caseNumber: `provision-state-${Bun.randomUUIDv7()}`,
+          court: "Court",
+          country: COUNTRY,
+          language,
+          decisionDate: "2009-08-26",
+          decisionType: "rozsudek",
+          fulltext: "Text.",
+          metadata: { source: "provision-state" },
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "provision-state-1",
+          parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
+        };
+        const ingest = async (
+          observationOrder: bigint,
+          overrides: Partial<typeof input>,
+        ) => {
+          await processDecision({
+            input: { ...input, ...overrides },
+            observationOrder,
+            sourceId: fixture.sourceId,
+            scopedDb,
+            observedAt: new Date(),
+          });
+        };
+        const owed = async () => {
+          const [row] = await observer`
+            SELECT decision.id, state.due_at IS NOT NULL AS due,
+              state.desired_input_digest = case_law_provision_extraction_input_digest(decision) AS current
+            FROM case_law_decisions decision
+            JOIN case_law_provision_extractions state ON state.decision_id = decision.id
+            WHERE decision.source_id = ${fixture.sourceId}::uuid`;
+          return row;
+        };
+
+        await ingest(1n, {});
+        const first = await owed();
+        expect(first).toMatchObject({ due: true, current: true });
+
+        await observer`UPDATE case_law_provision_extractions SET due_at = NULL
+          WHERE decision_id = ${first?.id}::uuid`;
+        await ingest(2n, {
+          rawHash: "provision-state-2",
+          metadata: { source: "provision-state-refresh" },
+        });
+        expect(await owed()).toMatchObject({ due: false, current: true });
+
+        await ingest(3n, {
+          rawHash: "provision-state-3",
+          decisionDate: "2009-08-27",
+        });
+        expect(await owed()).toMatchObject({ due: true, current: true });
+      });
+    }, 30_000);
+
+    /**
+     * Under the ingestion role, as deployed: its decision write creates state
+     * through the owner-run trigger, while its own insert into the state
+     * table and its own read of a scope row are refused.
+     */
+    test("ingestion creates state only through the owner-run functions", async () => {
+      await withFixture(async ({ openClient, observer, fixture }) => {
+        const language = uniqueLanguage();
+        await observer`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
+          VALUES (${COUNTRY}, ${language}, 'active', 1)`;
+        const ingestion = openClient().sql;
+        const id = createSafeId<"caseLawDecision">();
+        await ingestion.begin(async (tx) => {
+          await tx`SET LOCAL ROLE stella_ingestion`;
+          await tx`INSERT INTO case_law_decisions (id, source_id, country, language, court, case_number, metadata)
+            VALUES (${id}::uuid, ${fixture.sourceId}::uuid, ${COUNTRY}, ${language}, 'Court', ${id}, '{}'::jsonb)`;
+        });
+        expect(await stateOf(observer, id)).toEqual({
+          lane: "fresh",
+          enqueueReason: "input",
+        });
+        const refused = async (query: (tx: SQL) => Promise<unknown>) =>
+          await ingestion
+            .begin(async (tx) => {
+              await tx`SET LOCAL ROLE stella_ingestion`;
+              await query(tx);
+              return "allowed";
+            })
+            .catch((error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+            );
+        expect(
+          await refused(
+            async (tx) =>
+              await tx`INSERT INTO case_law_provision_extractions
+              (decision_id, jurisdiction, desired_input_digest, lane)
+              VALUES (${id}::uuid, ${COUNTRY}, sha256('x'::bytea), 'fresh')`,
+          ),
+        ).toMatch(/permission denied/u);
+        expect(
+          await refused(
+            async (tx) =>
+              await tx`SELECT status FROM case_law_provision_extraction_scopes`,
+          ),
+        ).toMatch(/permission denied/u);
+      });
+    }, 15_000);
+
+    /**
+     * `ensure_…_state` locks the decision rows before it touches state: while
+     * another session holds a decision, the call waits and holds no state
+     * row, so a publisher following the same order is never inverted.
+     */
+    test("ensure takes the decision lock before any state row", async () => {
+      await withFixture(async ({ openClient, observer, fixture }) => {
+        const language = uniqueLanguage();
+        await observer`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
+          VALUES (${COUNTRY}, ${language}, 'active', 1)`;
+        const id = await insertDecision(openClient().db, fixture, language);
+        await observer`UPDATE case_law_provision_extractions
+          SET desired_input_digest = sha256('stale'::bytea), due_at = NULL
+          WHERE decision_id = ${id}::uuid`;
+        const holder = openClient().sql;
+        const caller = openClient().sql;
+        const held = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const holding = holder.begin(async (tx) => {
+          await tx`SELECT 1 FROM case_law_decisions WHERE id = ${id}::uuid FOR NO KEY UPDATE`;
+          held.resolve(undefined);
+          await release.promise;
+        });
+        try {
+          await held.promise;
+          const pid = await backendPid(caller);
+          // Started now: a Bun SQL query runs only once awaited.
+          const ensuring = (async () =>
+            await caller`SELECT ensure_case_law_provision_extraction_state(ARRAY[${id}::uuid], 'reconcile') AS written`)();
+          await waitUntilBlocked(observer, pid);
+          const [free] = await observer.begin(
+            async (tx) =>
+              await tx`
+            SELECT decision_id FROM case_law_provision_extractions
+            WHERE decision_id = ${id}::uuid FOR UPDATE NOWAIT`,
+          );
+          expect(free?.decision_id).toBe(id);
+          release.resolve(undefined);
+          await holding;
+          const [result] = await ensuring;
+          expect(result?.written).toBe(1);
+          expect(await stateOf(observer, id)).toEqual({
+            lane: "repair",
+            enqueueReason: "reconcile",
+          });
+        } finally {
+          release.resolve(undefined);
+          await holding.catch(() => undefined);
+        }
+      });
+    }, 15_000);
+  });
+}
