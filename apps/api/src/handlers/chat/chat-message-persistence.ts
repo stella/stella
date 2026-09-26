@@ -391,6 +391,12 @@ type TerminalSettlement = {
   outcome: ChatTurnOutcome;
 };
 
+/** A finished turn as stored: how its message was written, and as what. */
+type FinalizedTurn = {
+  persistencePlan: Exclude<MessagePersistencePlan, { type: "none" }>;
+  settlement: TerminalSettlement;
+};
+
 /**
  * What a turn stores once it ends. Normally its own outcome; when the user's
  * stop committed first, the stop, with the message ended as a stop ends it:
@@ -523,44 +529,51 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
-  const persistResult = await settleHonouringStop(async (stopped) => {
-    const settlement = terminalSettlement({
-      outcome,
-      owningAssistantMessage,
-      responseMessage,
+  const persistResult = await settleHonouringStop(
+    async (
       stopped,
-    });
-    const persistencePlan = planAssistantFinishPersistence({
-      existingIds,
-      finishOutcome: settlement.outcome,
-      message: settlement.message,
-    });
+    ): Promise<Result<FinalizedTurn, HandlerError<409> | SafeDbError>> => {
+      const settlement = terminalSettlement({
+        outcome,
+        owningAssistantMessage,
+        responseMessage,
+        stopped,
+      });
+      const persistencePlan = planAssistantFinishPersistence({
+        existingIds,
+        finishOutcome: settlement.outcome,
+        message: settlement.message,
+      });
 
-    // A terminal stream always supplies an assistant message. Silently
-    // accepting `none` would acknowledge the stream while leaving its durable
-    // turn running forever.
-    if (persistencePlan.type === "none") {
-      panic("Assistant turn produced no persistence plan");
-    }
+      // A terminal stream always supplies an assistant message. Silently
+      // accepting `none` would acknowledge the stream while leaving its durable
+      // turn running forever.
+      if (persistencePlan.type === "none") {
+        panic("Assistant turn produced no persistence plan");
+      }
 
-    const persisted = await persistMessage({
-      acceptedSendMode,
-      dataScopeExpansion,
-      persistencePlan,
-      recordAuditEvent,
-      safeDb,
-      threadId,
-      turnSettlement: {
-        assistantMessageId: settlement.message.id,
-        execution,
-        outcome: settlement.outcome,
-      },
-      userId,
-      workspaceId,
-      indexThread,
-    });
-    return persisted.map(() => ({ persistencePlan, settlement }));
-  });
+      const persisted = await persistMessage({
+        acceptedSendMode,
+        dataScopeExpansion,
+        persistencePlan,
+        recordAuditEvent,
+        safeDb,
+        threadId,
+        turnSettlement: {
+          assistantMessageId: settlement.message.id,
+          execution,
+          outcome: settlement.outcome,
+        },
+        userId,
+        workspaceId,
+        indexThread,
+      });
+      if (Result.isError(persisted)) {
+        return Result.err(persisted.error);
+      }
+      return Result.ok({ persistencePlan, settlement });
+    },
+  );
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }

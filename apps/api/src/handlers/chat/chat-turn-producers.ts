@@ -4,7 +4,9 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import { readChatTurnExecutionStanding } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 // The runs this process is producing, by execution id, so a stop request that
 // reaches this process aborts its run at once. A stop that reaches another
@@ -16,6 +18,11 @@ import { captureError, detached } from "@/api/lib/analytics/capture";
  * once.
  */
 const CHAT_TURN_STOP_POLL_MS = 5000;
+
+const STOP_POLL_FAILED_SINK = failureSink({
+  event: "chat.turn.stop_poll_failed",
+  expected: [],
+});
 
 type ChatTurnProducer = {
   abortController: AbortController;
@@ -63,7 +70,7 @@ export const registerChatTurnProducer = ({
     // A failed read is transient: the lease still holds, and the next poll
     // asks again.
     if (Result.isError(standing)) {
-      captureError(standing.error, { source: "chat-turn-stop-poll" });
+      observeFailure(standing.error, { sink: STOP_POLL_FAILED_SINK });
       return;
     }
     if (standing.value === "stop-requested") {

@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
-import { getTableColumns } from "drizzle-orm";
+import { getColumns } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -61,7 +61,7 @@ test("adds a nullable stop-request time that existing turns lack, and replays", 
     ).rows,
   ).toEqual([{ requested: null }, { requested: null }]);
   // The schema reads the column the migration adds.
-  const { cancelRequestedAt } = getTableColumns(chatTurns);
+  const { cancelRequestedAt } = getColumns(chatTurns);
   expect({
     name: cancelRequestedAt.name,
     notNull: cancelRequestedAt.notNull,
