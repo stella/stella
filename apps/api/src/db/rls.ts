@@ -33,6 +33,12 @@ export const stellaCaseLawAnalysisReader = p
   .pgRole("stella_case_law_analysis_reader")
   .existing();
 
+// Read-only role for internal corpus sampling. Column-restricted to the corpus
+// relations a sample reads; it holds nothing on tenant tables.
+export const stellaCorpusSampleReader = p
+  .pgRole("stella_corpus_sample_reader")
+  .existing();
+
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
@@ -812,6 +818,19 @@ export const caseLawAnalysisReaderPolicies = () => [
   p.pgPolicy("case_law_analysis_reader_read", {
     for: "select",
     to: stellaCaseLawAnalysisReader,
+    using: allowAllRows,
+  }),
+];
+
+/**
+ * Row visibility for the corpus sample reader. Applied only to the relations in
+ * its column map; the SELECT grants narrow the columns, this makes the rows
+ * visible.
+ */
+export const corpusSampleReaderPolicies = () => [
+  p.pgPolicy("corpus_sample_reader_read", {
+    for: "select",
+    to: stellaCorpusSampleReader,
     using: allowAllRows,
   }),
 ];
