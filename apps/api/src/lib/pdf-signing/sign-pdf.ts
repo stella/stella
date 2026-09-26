@@ -91,10 +91,6 @@ export class PdfSigningDigestMismatchError extends TaggedError(
 )<{ message: string }> {}
 
 /**
- * The document carries a certification that permits no changes, so any
- * signature appended to it would break the certification.
- */
-/**
  * The document already carries signatures and LibPDF could only sign it by
  * rewriting the whole file, which would break every one of them.
  */
@@ -107,6 +103,10 @@ export class PdfSigningCertificateRevokedError extends TaggedError(
   "PdfSigningCertificateRevokedError",
 )<{ message: string }> {}
 
+/**
+ * The document carries a certification that permits no changes, so any
+ * signature appended to it would break the certification.
+ */
 export class PdfSigningCertifiedDocumentError extends TaggedError(
   "PdfSigningCertifiedDocumentError",
 )<{ message: string }> {}
