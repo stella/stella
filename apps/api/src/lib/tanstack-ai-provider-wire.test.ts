@@ -40,7 +40,6 @@ const cassettes = loadProviderWireCassettes();
 const {
   providerWireError: error,
   providerWireFinish: finish,
-  providerWireOneTerminal: oneTerminal,
   providerWireToolInput: toolInput,
 } = CHAT_ORACLE;
 
@@ -83,15 +82,11 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "openai/length": { oracles: [finish], reason: "maintenance" },
   "openai/rate-limit": { oracles: [error], reason: "maintenance" },
   "openrouter/early-eof": { oracles: [finish], reason: "maintenance" },
-  "openrouter/server-error": {
-    oracles: [error, oneTerminal],
-    reason: "maintenance",
-  },
   "openrouter/strict-null": { oracles: [toolInput], reason: "maintenance" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 22;
+const UNMET_SIZE = 21;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;

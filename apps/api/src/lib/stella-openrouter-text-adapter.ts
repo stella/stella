@@ -54,9 +54,29 @@ export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRoute
   }
 }
 
+/**
+ * The SDK's own default retries a 5xx for up to an hour, sleeping up to a
+ * minute between attempts, and a sleep does not see the run's cancel. A turn
+ * waits a few seconds for a transient failure and then reports it; each
+ * sleep is short, so a cancel lands within one.
+ */
+const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
+  strategy: "backoff",
+  backoff: {
+    initialInterval: 250,
+    maxInterval: 1000,
+    exponent: 1.5,
+    maxElapsedTime: 4000,
+  },
+  retryConnectionErrors: true,
+};
+
 export const createStellaOpenRouterText = (
   model: OpenRouterModel,
   apiKey: string,
   config?: Omit<OpenRouterConfig, "apiKey">,
 ): StellaOpenRouterTextAdapter =>
-  new StellaOpenRouterTextAdapter({ apiKey, ...config }, model);
+  new StellaOpenRouterTextAdapter(
+    { apiKey, retryConfig: OPENROUTER_RETRY, ...config },
+    model,
+  );
