@@ -95,7 +95,9 @@ const encodedValueBytes = (value: unknown, ancestors: Set<object>): number => {
       return String(value).length;
     case "object":
       break;
-    default:
+    case "undefined":
+    case "function":
+    case "symbol":
       return 0;
   }
   if (value === null) {

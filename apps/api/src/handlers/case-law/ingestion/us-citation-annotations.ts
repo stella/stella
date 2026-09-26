@@ -335,14 +335,14 @@ const runKey = (blockId: string, cell: UsCitationOccurrence["cell"]): string =>
     ? blockId
     : `${blockId}\u0000${String(cell.row)}:${String(cell.column)}`;
 
+/** What a run nothing was found in holds. */
+const NO_OCCURRENCES: readonly UsCitationOccurrence[] = [];
+
 /** A run holds occurrences only where one was found; the rest hold none. */
 const occurrencesIn = (
   byRun: ReadonlyMap<string, UsCitationOccurrence[]>,
   key: string,
-): readonly UsCitationOccurrence[] => {
-  const run = byRun.get(key);
-  return run === undefined ? [] : run;
-};
+): readonly UsCitationOccurrence[] => byRun.get(key) ?? NO_OCCURRENCES;
 
 const annotateBlock = (
   budget: CitationWorkBudget,

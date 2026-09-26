@@ -111,7 +111,9 @@ const styledPiece = (
       return leaf;
     case "link":
       return { type: "link", href: "https://court.test/", children: [leaf] };
-    default:
+    case "italic":
+    case "bold":
+    case "underline":
       return { type: style, children: [leaf] };
   }
 };

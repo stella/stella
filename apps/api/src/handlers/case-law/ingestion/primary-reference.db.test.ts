@@ -392,9 +392,6 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
     }));
 
     const first = await replay();
-    if (first.type !== "ran") {
-      throw new TypeError("Expected the capable adapter to run");
-    }
     // The reference changed and the document did not: the same decision,
     // written again, not an identity mismatch.
     expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
@@ -432,9 +429,6 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
     expect(await identifierRows()).toEqual(before);
 
     const second = await replay();
-    if (second.type !== "ran") {
-      throw new TypeError("Expected the capable adapter to run");
-    }
     expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
     expect(await storedDecision(sourceId, "cluster-3")).toEqual(replayed);
     await release();

@@ -65,6 +65,16 @@ const readiness = async () =>
     async (tx) => await readCorpusIndexGroupReadinessTx(tx, USA_CONTRACT),
   );
 
+/**
+ * What `promise` rejects with, or null when it resolves. bun-types declares
+ * `.rejects.toThrow` as void, so awaiting it trips type-aware lint.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
 beforeEach(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
@@ -101,15 +111,17 @@ test("binding converges, attestation is separate, and neither overwrites a bound
   expect(await readiness()).toEqual({ type: "unready", reason: "pending" });
 
   // Only the declared contract can be attested.
-  await expect(
-    inTx(
-      async (tx) =>
-        await attestCorpusIndexGroupEnrollmentTx(tx, {
-          ...USA,
-          effectiveDigest: "0".repeat(64),
-        }),
+  expect(
+    await rejectionOf(
+      inTx(
+        async (tx) =>
+          await attestCorpusIndexGroupEnrollmentTx(tx, {
+            ...USA,
+            effectiveDigest: "0".repeat(64),
+          }),
+      ),
     ),
-  ).rejects.toThrow("not the declared one");
+  ).toMatchObject({ message: expect.stringContaining("not the declared one") });
   await inTx(
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
   );
@@ -128,16 +140,24 @@ test("binding converges, attestation is separate, and neither overwrites a bound
     type: "unready",
     reason: "contract_mismatch",
   });
-  await expect(
-    inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA)),
-  ).rejects.toThrow("bound to another contract");
+  expect(
+    await rejectionOf(
+      inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA)),
+    ),
+  ).toMatchObject({
+    message: expect.stringContaining("bound to another contract"),
+  });
 });
 
 test("a group under its manifest's contract is never enrolled and never waits", async () => {
   const cze = { manifest: MANIFEST, indexGroup: "cs_sk" } as const;
-  await expect(
-    inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, cze)),
-  ).rejects.toThrow("not one the registry records");
+  expect(
+    await rejectionOf(
+      inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, cze)),
+    ),
+  ).toMatchObject({
+    message: expect.stringContaining("not one the registry records"),
+  });
   expect(
     await inTx(
       async (tx) =>
@@ -191,7 +211,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
-  await expect(target("USA")).rejects.toBeInstanceOf(HandlerError);
+  expect(await rejectionOf(target("USA"))).toBeInstanceOf(HandlerError);
   expect((await target(undefined)).route).toEqual(unattestedGlobal.route);
   await inTx(
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
