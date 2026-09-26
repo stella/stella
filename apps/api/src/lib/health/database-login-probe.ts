@@ -51,7 +51,9 @@ export const openFreshLoginClient = (url: string): FreshLoginClient => {
     connectionTimeout: CONNECTION_TIMEOUT_S,
   });
   return {
-    selectOne: async () => await client`SELECT 1`,
+    selectOne: async () => {
+      await client`SELECT 1`;
+    },
     close: async () => {
       await client.close({ timeout: CLOSE_TIMEOUT_S });
     },

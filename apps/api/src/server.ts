@@ -585,7 +585,7 @@ const startServer = async (): Promise<void> => {
   // Deployed processes only; local runs and tests never start it. Same URL as
   // the pools in `db/root.ts`.
   const closeDatabaseLoginProbe = envBase.isDev
-    ? async () => undefined
+    ? undefined
     : startDatabaseLoginProbe({
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
