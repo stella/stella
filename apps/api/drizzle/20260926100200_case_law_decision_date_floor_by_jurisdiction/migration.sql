@@ -7,12 +7,11 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- accepted, so no stored row changes and none is owed a repair.
 --
 -- Only the constraint swap lives here. It is re-added NOT VALID, which is
--- enforced on every later INSERT or UPDATE while existing rows are left alone,
--- and the migrate entrypoint's online phase
--- (apps/api/src/db/decision-date-ceiling-repair.ts) validates it, as it did
--- the ceiling swap: its repair walk selects nothing under a wider bound, then
--- VALIDATE CONSTRAINT scans under SHARE UPDATE EXCLUSIVE, which does not block
--- reads or writes. The expression below is the rendering of
+-- enforced on every later INSERT or UPDATE while existing rows are left alone.
+-- Validation runs in the migrate entrypoint's online repair phase
+-- (apps/api/src/db/decision-date-ceiling-repair.ts), as it did for the ceiling
+-- swap; its repair walk selects no row under a wider bound before it validates
+-- the constraint. The expression below is the rendering of
 -- `decisionDateWithinBoundsSql` (apps/api/src/lib/decision-date-bounds-sql.ts),
 -- which `decision-date-bounds-sql.db.test.ts` compares against this file.
 --

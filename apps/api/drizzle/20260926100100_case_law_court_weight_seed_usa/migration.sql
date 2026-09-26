@@ -12,7 +12,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 UPDATE "case_law_court_weights" w
 SET "tier" = v.tier, "tier_label" = v.tier_label, "weight" = v.weight
 FROM (VALUES
-  ('USA', '^supreme court of the united states$', 4, 'constitutional', 10)
+  ('USA', '^supreme court of the united states$', 3, 'supreme', 8)
 ) AS v ("country", "court_pattern", "tier", "tier_label", "weight")
 WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern
   AND (w."tier", w."tier_label", w."weight") IS DISTINCT FROM (v.tier, v.tier_label, v.weight);
@@ -21,7 +21,7 @@ WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern
 INSERT INTO "case_law_court_weights" ("id", "country", "court_pattern", "tier", "tier_label", "weight")
 SELECT gen_random_uuid(), v.country, v.court_pattern, v.tier, v.tier_label, v.weight
 FROM (VALUES
-  ('USA', '^supreme court of the united states$', 4, 'constitutional', 10)
+  ('USA', '^supreme court of the united states$', 3, 'supreme', 8)
 ) AS v ("country", "court_pattern", "tier", "tier_label", "weight")
 WHERE NOT EXISTS (
   SELECT 1 FROM "case_law_court_weights" w

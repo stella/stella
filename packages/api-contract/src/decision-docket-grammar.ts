@@ -665,6 +665,20 @@ export type DecisionDocketGrammar =
 const DECISION_DOCKET_GRAMMAR_LIST: readonly DecisionDocketGrammar[] =
   Object.values(DECISION_DOCKET_GRAMMARS);
 
+/**
+ * Jurisdictions whose grammar is read only under their own scope. Their forms
+ * are short digit runs (`10-12`, `No. 5`) that also occur in text that is not
+ * a docket, so an entry is read as one only where the scope says which
+ * jurisdiction it comes from; an unscoped entry never reaches them.
+ */
+const SCOPED_ONLY_DOCKET_JURISDICTIONS: ReadonlySet<DecisionDocketJurisdiction> =
+  new Set<DecisionDocketJurisdiction>(["USA"]);
+
+const UNSCOPED_DECISION_DOCKET_GRAMMARS: readonly DecisionDocketGrammar[] =
+  DECISION_DOCKET_GRAMMAR_LIST.filter(
+    (grammar) => !SCOPED_ONLY_DOCKET_JURISDICTIONS.has(grammar.jurisdiction),
+  );
+
 /** Resolve a declared grammar without treating an unknown scope as unscoped. */
 export const decisionDocketGrammarForJurisdiction = (
   jurisdiction: string,
@@ -681,7 +695,10 @@ type ParseDecisionDocketOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
 };
 
-/** Parse against one jurisdiction, or every declared grammar when unscoped. */
+/**
+ * Parse against one jurisdiction, or, when unscoped, every declared grammar
+ * that is not read only under its own scope.
+ */
 export const parseDecisionDocket = (
   raw: string,
   { grammar }: ParseDecisionDocketOptions = {},
@@ -692,7 +709,7 @@ export const parseDecisionDocket = (
   if (grammar !== undefined) {
     return grammar.parse(raw);
   }
-  for (const candidate of DECISION_DOCKET_GRAMMAR_LIST) {
+  for (const candidate of UNSCOPED_DECISION_DOCKET_GRAMMARS) {
     const docket = candidate.parse(raw);
     if (docket !== null) {
       return docket;

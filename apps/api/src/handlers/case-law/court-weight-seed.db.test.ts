@@ -98,9 +98,9 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   expect(first.filter((row) => row.country === "USA")).toMatchObject([
     {
       courtPattern: "^supreme court of the united states$",
-      tier: 4,
-      tierLabel: "constitutional",
-      weight: 10,
+      tier: 3,
+      tierLabel: "supreme",
+      weight: 8,
     },
   ]);
   // Together the two leave exactly the declaration.
@@ -165,9 +165,9 @@ test("the USA seed writes no row of another jurisdiction", async () => {
   expect(after.filter((row) => row.country === "USA")).toMatchObject([
     {
       courtPattern: "^supreme court of the united states$",
-      tier: 4,
-      tierLabel: "constitutional",
-      weight: 10,
+      tier: 3,
+      tierLabel: "supreme",
+      weight: 8,
     },
   ]);
 
