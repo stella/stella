@@ -17,6 +17,7 @@ import {
 } from "@stll/template-conditions";
 
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   fieldSourceSchema,
   fieldSourceToolInputSchema,
@@ -51,7 +52,7 @@ export type RichRun = {
 export type RichPatchValue = string | { paragraphs: { runs: RichRun[] }[] };
 
 export type FillTemplateResult = {
-  buffer: Buffer;
+  file: ScannedFile;
   unmatchedPlaceholders: string[];
   unusedValues: string[];
   structureErrors: TemplateStructureError[];

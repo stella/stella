@@ -5,6 +5,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { lookupFormatMarkerPaths } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { CLEARED_FIELD_SOURCE } from "@/api/lib/docx/types";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   mergeFieldConfiguration,
@@ -16,7 +17,7 @@ import { configureTemplateDocument } from "./configure-template-document";
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (...paragraphs: string[]): Promise<Buffer> => {
+const makeDocx = async (...paragraphs: string[]) => {
   const zip = new JSZip();
   zip.file(
     "word/document.xml",
@@ -32,7 +33,7 @@ const makeDocx = async (...paragraphs: string[]): Promise<Buffer> => {
       `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
       `</Types>`,
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const krsLookup = (...keys: string[]): FieldMeta["lookup"] => ({
@@ -873,11 +874,11 @@ describe("a child restating the parent's lookup", () => {
     "configuring the same entries twice changes nothing more (%s)",
     async (_name, entries, formatCount) => {
       const first = await configureTemplateDocument({
-        buffer: await companyDocx(),
+        file: await companyDocx(),
         entries,
       });
       const second = await configureTemplateDocument({
-        buffer: first.buffer,
+        file: first.file,
         entries,
       });
 
@@ -953,8 +954,8 @@ describe("a source the configuration decided", () => {
   ] as [string, Partial<FieldMeta>][])(
     "the marker stops declaring the AI draft when %s",
     async (_name, source) => {
-      const buffer = await aiDocx();
-      expect((await discoverTemplate(buffer)).documentFields).toEqual([
+      const file = await aiDocx();
+      expect((await discoverTemplate(file)).documentFields).toEqual([
         expect.objectContaining({
           path: "recitals",
           aiPrompt: "Draft the recitals",
@@ -962,7 +963,7 @@ describe("a source the configuration decided", () => {
       ]);
 
       const { issues, manifest } = await configureTemplateDocument({
-        buffer,
+        file,
         entries: [{ path: "recitals", ...CLEARED_FIELD_SOURCE, ...source }],
       });
 
@@ -975,7 +976,7 @@ describe("a source the configuration decided", () => {
 
   test("a marker's filter still configures a field the entry says nothing about", async () => {
     const { manifest } = await configureTemplateDocument({
-      buffer: await aiDocx(),
+      file: await aiDocx(),
       entries: [{ path: "recitals", label: "Recitals" }],
     });
 

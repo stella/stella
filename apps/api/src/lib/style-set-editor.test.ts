@@ -19,6 +19,7 @@ import {
   styleSetPreviewFromEditorSchema,
 } from "@/api/lib/style-set-editor-contract";
 import type { StyleSetPreviewContent } from "@/api/lib/style-set-editor-contract";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 const previewContent = {
   title: "SIMPLE AGREEMENT FOR FUTURE EQUITY",
@@ -101,7 +102,10 @@ describe("style set visual editing", () => {
         await createDocx(createEmptyDocument({ preset: editedPreset })),
       ),
     );
-    const reopened = await readStyleSetEditorPreset(buffer, "Firm Standard");
+    const reopened = await readStyleSetEditorPreset(
+      testDocxFile(buffer),
+      "Firm Standard",
+    );
 
     expect(reopened.settings).toEqual(editedSettings);
     expect(reopened.preset.styleSet.name).toBe("Firm Standard");
@@ -211,7 +215,10 @@ describe("style set visual editing", () => {
         await createDocx(createEmptyDocument({ preset: source.preset })),
       ),
     );
-    const reopened = await readStyleSetEditorPreset(buffer, "Custom");
+    const reopened = await readStyleSetEditorPreset(
+      testDocxFile(buffer),
+      "Custom",
+    );
     expect(reopened.settings.level3.numberingFormat).toBe("preserve");
     const projected = applyStyleSetEditorSettings(
       reopened.preset,
@@ -244,7 +251,10 @@ describe("style set visual editing", () => {
       ),
     );
 
-    const reopened = await readStyleSetEditorPreset(buffer, "Custom");
+    const reopened = await readStyleSetEditorPreset(
+      testDocxFile(buffer),
+      "Custom",
+    );
     const projected = applyStyleSetEditorSettings(
       reopened.preset,
       "Custom",
@@ -336,7 +346,10 @@ describe("style set visual editing", () => {
         await createDocx(createEmptyDocument({ preset: source.preset })),
       ),
     );
-    const custom = await readStyleSetEditorPreset(customBuffer, "Custom");
+    const custom = await readStyleSetEditorPreset(
+      testDocxFile(customBuffer),
+      "Custom",
+    );
     const disabledSettings = structuredClone(custom.settings);
     disabledSettings.numbering.enabled = false;
     const disabled = applyStyleSetEditorSettings(
@@ -349,7 +362,10 @@ describe("style set visual editing", () => {
         await createDocx(createEmptyDocument({ preset: disabled })),
       ),
     );
-    const reopened = await readStyleSetEditorPreset(disabledBuffer, "Custom");
+    const reopened = await readStyleSetEditorPreset(
+      testDocxFile(disabledBuffer),
+      "Custom",
+    );
 
     expect(reopened.settings.numbering.enabled).toBe(false);
     expect(reopened.settings.level3.numberingFormat).toBe("preserve");

@@ -58,13 +58,13 @@ const createTemplateHandler = async function* ({
     );
   }
 
-  const buffer = yield* Result.await(scanTemplateUpload(file));
+  const scanned = yield* Result.await(scanTemplateUpload(file));
 
   return yield* createStoredTemplate({
     safeDb,
     organizationId,
     userId,
-    buffer,
+    file: scanned,
     name,
     fileName: sanitizeFilename(file.name),
     categoryId,

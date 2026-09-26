@@ -12,11 +12,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   type CreatedTemplate,
   createStoredTemplate,
 } from "@/api/lib/templates/create-template";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createBlankTemplateBodySchema = t.Object({
   name: tDefaultVarchar,
@@ -53,13 +55,23 @@ const createBlankTemplateHandler = async function* ({
     }),
   );
 
+  const fileName = sanitizeFilenamePreservingExtension(`${name}.docx`);
+  // Server-built bytes are stored like any upload: scanned first.
+  const file = yield* Result.await(
+    scanUploadForHandler({
+      bytes: buffer,
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName,
+    }),
+  );
+
   return yield* createStoredTemplate({
     safeDb,
     organizationId,
     userId,
-    buffer,
+    file,
     name,
-    fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
+    fileName,
     categoryId,
     recordAuditEvent,
   });

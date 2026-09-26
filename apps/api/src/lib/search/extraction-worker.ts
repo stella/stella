@@ -25,9 +25,8 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
-import { FolioDocxReviewer } from "@stll/folio-core/server";
+import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 
-import { extractDocxDocument as extractDocxText } from "@/api/lib/docx/extract-text";
 import {
   parseEmail,
   parsedEmailToText,

@@ -24,6 +24,7 @@ import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -55,7 +56,7 @@ const fixture = async () => {
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(ids.orgA, templateId);
   const initial = await docxWithMarkers(["initial"]);
-  const manifest = await deriveManifestFromDocx(initial);
+  const manifest = await deriveManifestFromDocx(testDocxFile(initial));
   const objects = new Map<string, Uint8Array>([
     [s3Key, new Uint8Array(initial)],
   ]);
@@ -93,14 +94,14 @@ const fixture = async () => {
     const paths =
       current === undefined
         ? ["initial"]
-        : (await deriveManifestFromDocx(Buffer.from(current))).fields.map(
+        : (await deriveManifestFromDocx(testDocxFile(current))).fields.map(
             ({ path }) => path,
           );
     const next = await docxWithMarkers([
       ...paths,
       `added_${String(paths.length)}`,
     ]);
-    return Result.ok({ bytes: new Uint8Array(next) });
+    return Result.ok({ file: testDocxFile(next) });
   };
   const writeObject: NonNullable<
     Parameters<typeof writeStoredTemplate>[0]["writeObject"]
@@ -177,6 +178,8 @@ test.each(
     const expectedVersion =
       1 + Number(first === "new-version") + Number(second === "new-version");
     expect(state.current?.currentVersion).toBe(expectedVersion);
+    // The writer stores the scanned file it was handed, and says so.
+    expect(state.current?.scanState).toBe("scanned");
     expect(state.current?.manifest?.fields).toHaveLength(3);
     expect(state.versions.map(({ version }) => version)).toEqual(
       Array.from({ length: expectedVersion }, (_, index) => index + 1),
@@ -196,7 +199,7 @@ test.each(
       // The manifest a version records is what its own bytes declare: the
       // writer derives it, so the pair cannot drift apart in storage.
       const declared: unknown = await deriveManifestFromDocx(
-        Buffer.from(stored),
+        testDocxFile(stored),
       );
       expect(declared).toEqual(version.manifest);
       expect(

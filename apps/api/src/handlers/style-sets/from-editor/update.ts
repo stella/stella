@@ -14,6 +14,7 @@ import { updateStyleSetFromEditorSchema } from "@/api/lib/style-set-editor-contr
 import {
   normalizeStyleSetName,
   readStyleSetPackage,
+  scanStyleSetPackage,
 } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
@@ -44,7 +45,7 @@ export default createSafeRootHandler(
       Result.tryPromise({
         try: async () => {
           const source = await readStyleSetEditorPreset(
-            stored.buffer,
+            stored.file,
             stored.name,
           );
           return await createStyleSetEditorBuffer(
@@ -63,13 +64,14 @@ export default createSafeRootHandler(
               }),
       }),
     );
+    const file = yield* Result.await(scanStyleSetPackage(buffer, name));
     const row = yield* Result.await(
       replaceStoredStyleSet({
         safeDb,
         organizationId: session.activeOrganizationId,
         styleSetId: params.styleSetId,
         replacementName: { type: "replace", value: name },
-        buffer,
+        file,
         expectedUpdatedAt: body.expectedUpdatedAt,
         recordAuditEvent,
       }),

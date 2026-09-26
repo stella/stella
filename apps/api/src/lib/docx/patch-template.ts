@@ -14,6 +14,9 @@ import * as slimdom from "slimdom";
 
 import type { NamedCondition } from "@stll/template-conditions";
 
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
 import {
   collectValidNumIds,
   createDirectiveProcessingContext,
@@ -208,14 +211,13 @@ const preProcessTemplateDirectives = async (
   };
 };
 
+/** Fills a scanned template; the filled document comes back as a derived
+ *  `ScannedFile`, so it can be read again without a second scan. */
 export const fillTemplate = async (
-  template: string | Buffer,
+  template: ScannedFile,
   values: PatchValues | TemplateData,
 ): Promise<FillTemplateResult> => {
-  let data =
-    typeof template === "string"
-      ? Buffer.from(await Bun.file(template).arrayBuffer())
-      : template;
+  let data: Buffer = Buffer.from(template.bytes);
 
   // Open ZIP once for manifest + block-directive checks
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
@@ -226,7 +228,7 @@ export const fillTemplate = async (
   // against; `{% if field_path %}` then resolves the field's rule. The
   // conditions come from the markers, like every other field configuration.
   const synthesized = manifestNamedConditions(
-    deriveManifest(await discoverTemplate(data)),
+    deriveManifest(await discoverTemplate(template)),
   );
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
@@ -341,12 +343,12 @@ export const fillTemplate = async (
   // A template authored before the configuration moved into the markers can
   // still carry the old custom XML manifest; a filled document must not take
   // template metadata out of the workspace with it.
-  const buffer = await stripManifest(
+  const filled = await stripManifest(
     await fillTemplateWithValues(data, effectiveValues),
   );
 
   return {
-    buffer,
+    file: derivedScannedFile(template, filled),
     unmatchedPlaceholders,
     unusedValues,
     structureErrors,

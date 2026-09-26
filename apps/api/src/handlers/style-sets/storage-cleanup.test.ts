@@ -19,6 +19,7 @@ import { STYLE_SET_PACKAGE_ABANDON_DELAY_MS } from "@/api/lib/style-set-package-
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type CleanupClaim = { delayMs?: number; s3Key: string; styleSetId: string };
@@ -56,7 +57,7 @@ const createRejectedStyleSet = async () =>
     organizationId: mintAuthProviderId<"organization">(),
     userId: mintAuthProviderId<"user">(),
     name: "Kancelářské styly",
-    buffer: Buffer.from("style set"),
+    file: testDocxFile(new TextEncoder().encode("style set")),
     recordAuditEvent,
     enqueueCleanup,
   });

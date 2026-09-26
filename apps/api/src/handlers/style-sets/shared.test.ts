@@ -9,7 +9,7 @@ import {
 } from "@stll/folio-core/server";
 
 import {
-  extractStyleSetBuffer,
+  extractStyleSetFile,
   normalizeStyleSetName,
   styleSetExportFileName,
   validateStyleSource,
@@ -48,7 +48,7 @@ describe("style set source extraction", () => {
       type: DOCX_MIME_TYPE,
     });
 
-    const result = await extractStyleSetBuffer(source, "Firm Style");
+    const result = await extractStyleSetFile(source, "Firm Style");
     expect(Result.isError(result) ? result.error.status : null).toBe(422);
     expect(Result.isError(result) ? result.error.issues : null).toEqual([
       expect.objectContaining({ code: "corrupt-zip" }),
@@ -67,13 +67,13 @@ describe("style set source extraction", () => {
       type: DOCX_MIME_TYPE,
     });
 
-    const result = await extractStyleSetBuffer(source, "Firm Style");
+    const result = await extractStyleSetFile(source, "Firm Style");
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
       return;
     }
 
-    const zip = await JSZip.loadAsync(result.value);
+    const zip = await JSZip.loadAsync(result.value.bytes);
     const documentXml = await zip.file("word/document.xml")?.async("text");
     const stylesXml = await zip.file("word/styles.xml")?.async("text");
     expect(documentXml).not.toContain(sourceText);

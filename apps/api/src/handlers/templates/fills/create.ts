@@ -25,7 +25,10 @@ import {
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
-import { fillStoredTemplateDocx } from "@/api/lib/templates/template-fill-service";
+import {
+  fillTemplateDocx,
+  loadStoredTemplateSource,
+} from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -181,11 +184,17 @@ const fillTemplateToWorkspace = createSafeHandler(
             })
         : undefined;
 
+    // A missing template is a 404, and a stored file the scan refuses (or a
+    // scanner outage) answers as it would for an upload: 422 or 503.
+    const source = yield* Result.await(
+      loadStoredTemplateSource({ templateId, organizationId, scopedDb }),
+    );
+
     const filled = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fillStoredTemplateDocx({
-            templateId,
+          await fillTemplateDocx({
+            source,
             values: body.values,
             scopedDb,
             organizationId,
@@ -247,7 +256,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             workspaceId,
             userId: user.id,
             recordAuditEvent,
-            buffer: filled.buffer,
+            buffer: filled.file.bytes,
             fileName,
             mimeType: DOCX_MIME_TYPE,
             parentId,

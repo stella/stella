@@ -14,8 +14,10 @@ import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
 import { isTemplateData } from "@/api/lib/docx/types";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import type { ReportJustification } from "./build-report-data";
 import { assembleReportData } from "./build-report-data";
@@ -27,20 +29,19 @@ import {
 
 await initBuiltinReportTemplates();
 
-const loadDdReportBuffer = async (): Promise<Buffer> => {
+const loadDdReportFile = async (): Promise<ScannedFile> => {
   const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
   if (builtin?.kind !== "docx") {
     throw new Error("dd-report built-in template not found");
   }
-  return await builtin.loadBuffer();
+  return testDocxFile(await builtin.loadBuffer());
 };
 
 // The report's AI-drafted fields as its own markers declare them: the asset is
 // the template, so a drift between the committed DOCX and what the fill drafts
 // shows up here rather than in a hand-kept copy.
-const ddReportFields = (
-  await deriveManifestFromDocx(await loadDdReportBuffer())
-).fields;
+const ddReportFields = (await deriveManifestFromDocx(await loadDdReportFile()))
+  .fields;
 
 /** Wrap justification content as the row shape the assembler reads. */
 const justification = (
@@ -197,8 +198,8 @@ const stubGenerate: AiFieldGenerator = async ({ item }) => ({
     : "Executive summary drafted by the stub.",
 });
 
-const readDocumentXml = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const readDocumentXml = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   return (await zip.file("word/document.xml")?.async("string")) ?? "";
 };
 
@@ -294,14 +295,14 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await loadDdReportBuffer();
+    const template = await loadDdReportFile();
 
-    const result = await fillTemplate(buffer, record);
+    const result = await fillTemplate(template, record);
 
     expect(result.structureErrors).toEqual([]);
     expect(result.unmatchedPlaceholders).toEqual([]);
 
-    const xml = await readDocumentXml(result.buffer);
+    const xml = await readDocumentXml(result.file);
     // Contract sections cloned per entity.
     expect(xml).toContain("Non-Disclosure Agreement — Vendor");
     expect(xml).toContain("Master Services Agreement — Acme s.r.o.");
@@ -383,15 +384,15 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await loadDdReportBuffer();
+    const template = await loadDdReportFile();
 
-    const result = await fillTemplate(buffer, record);
+    const result = await fillTemplate(template, record);
 
     expect(aiCalls).toBe(0);
     expect(result.structureErrors).toEqual([]);
     expect(result.unmatchedPlaceholders).toEqual([]);
 
-    const xml = await readDocumentXml(result.buffer);
+    const xml = await readDocumentXml(result.file);
     // No literal directive/placeholder markers leaked into the output.
     expect(xml).not.toContain("{{");
     // Deterministic content still renders: the contract section, the field
@@ -469,14 +470,14 @@ describe("Due Diligence Report built-in template", () => {
       throw new Error("assembled report data is not fillable template data");
     }
 
-    const buffer = await loadDdReportBuffer();
+    const template = await loadDdReportFile();
 
-    const result = await fillTemplate(buffer, data);
+    const result = await fillTemplate(template, data);
 
     expect(result.structureErrors).toEqual([]);
     expect(result.unmatchedPlaceholders).toEqual([]);
 
-    const xml = await readDocumentXml(result.buffer);
+    const xml = await readDocumentXml(result.file);
     expect(xml).not.toContain("{{");
     // The no-Verdict field table variant rendered: no "Verdict" header, no
     // red-flag/severity stats rows (single-row stats variant), no citations,

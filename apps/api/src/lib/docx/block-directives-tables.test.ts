@@ -9,6 +9,9 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { processBlockDirectives } from "./block-directives";
 import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
@@ -60,7 +63,7 @@ const emptyTableCount = (body: slimdom.Element): number =>
   ).length;
 
 // A minimal DOCX ZIP for end-to-end fillTemplate coverage.
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -71,12 +74,11 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
-const documentText = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const documentText = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   // Match the text element `<w:t>` / `<w:t ...>` only — not `<w:tr>`/`<w:tc>`.
@@ -734,24 +736,26 @@ describe("fillTemplate — tables", () => {
         ),
       ),
     );
-    const { buffer, unmatchedPlaceholders, structureErrors } =
-      await fillTemplate(docx, {
+    const { file, unmatchedPlaceholders, structureErrors } = await fillTemplate(
+      docx,
+      {
         fields: [
           { label: "Term", value: "2y" },
           { label: "Law", value: "CZ" },
         ],
-      });
+      },
+    );
 
     expect(structureErrors).toEqual([]);
     expect(unmatchedPlaceholders).toEqual([]);
-    const text = await documentText(buffer);
+    const text = await documentText(file);
     expect(text).toContain("Term");
     expect(text).toContain("2y");
     expect(text).toContain("Law");
     expect(text).toContain("CZ");
     expect(text).not.toContain("{{");
     // ZIP still opens as a valid package.
-    const reopened = await JSZip.loadAsync(buffer);
+    const reopened = await JSZip.loadAsync(file.bytes);
     expect(reopened.file("word/document.xml")).not.toBeNull();
   });
 
@@ -771,15 +775,17 @@ describe("fillTemplate — tables", () => {
         ),
       ),
     );
-    const { buffer, unmatchedPlaceholders, structureErrors } =
-      await fillTemplate(docx, {
+    const { file, unmatchedPlaceholders, structureErrors } = await fillTemplate(
+      docx,
+      {
         scope: { analysis: true, litigation: false },
-      });
+      },
+    );
 
     expect(structureErrors).toEqual([]);
     expect(unmatchedPlaceholders).toEqual([]);
 
-    const text = await documentText(buffer);
+    const text = await documentText(file);
     expect(text).toContain("Analiza umowy");
     expect(text).toContain("Contract analysis");
     expect(text).not.toContain("Spory sądowe");
@@ -787,7 +793,7 @@ describe("fillTemplate — tables", () => {
     expect(text).not.toContain("{{");
 
     // The filled package still parses, and no cell lost its paragraph.
-    const reopened = await JSZip.loadAsync(buffer);
+    const reopened = await JSZip.loadAsync(file.bytes);
     const filledXml =
       (await reopened.file("word/document.xml")?.async("string")) ?? "";
     const filledBody = parseBody(filledXml);
@@ -814,8 +820,9 @@ describe("fillTemplate — tables", () => {
           P("{% endfor %}"),
       ),
     );
-    const { buffer, unmatchedPlaceholders, structureErrors } =
-      await fillTemplate(docx, {
+    const { file, unmatchedPlaceholders, structureErrors } = await fillTemplate(
+      docx,
+      {
         contracts: [
           {
             name: "NDA",
@@ -826,12 +833,13 @@ describe("fillTemplate — tables", () => {
           },
           { name: "MSA", fields: [{ label: "Fee", value: "1000" }] },
         ],
-      });
+      },
+    );
 
     expect(structureErrors).toEqual([]);
     expect(unmatchedPlaceholders).toEqual([]);
 
-    const text = await documentText(buffer);
+    const text = await documentText(file);
     for (const expected of [
       "Contract: NDA",
       "Term",

@@ -15,6 +15,9 @@ import * as slimdom from "slimdom";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import {
   evaluateCondition,
   flattenTemplateData,
@@ -46,7 +49,7 @@ const parseBody = (xml: string): slimdom.Element => {
   return body;
 };
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -57,12 +60,11 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
-const extractTexts = async (buffer: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const extractTexts = async (file: ScannedFile): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
@@ -171,11 +173,11 @@ describe("property: nested objects in #each items resolve", () => {
             [nestedObj]: { [nestedField]: v },
           }));
 
-          const { buffer } = await fillTemplate(docx, {
+          const { file } = await fillTemplate(docx, {
             [arrayName]: items,
           });
 
-          const texts = await extractTexts(buffer);
+          const texts = await extractTexts(file);
           const joined = texts.join(" ");
           for (const v of values) {
             expect(joined).toContain(v);
@@ -203,11 +205,11 @@ describe("property: nested objects in #each items resolve", () => {
           );
           const docx = await makeDocx(xml);
 
-          const { buffer } = await fillTemplate(docx, {
+          const { file } = await fillTemplate(docx, {
             [arrayName]: [{ name: strVal, addr: { city: nestedVal } }],
           });
 
-          const texts = await extractTexts(buffer);
+          const texts = await extractTexts(file);
           const joined = texts.join(" ");
           expect(joined).toContain(strVal);
           expect(joined).toContain(nestedVal);
@@ -671,11 +673,11 @@ describe("property: loop-expanded num() markers number sequentially", () => {
             ].join(""),
           );
           const docx = await makeDocx(xml);
-          const { buffer } = await fillTemplate(docx, {
+          const { file } = await fillTemplate(docx, {
             items: names.map((name) => ({ name })),
           });
 
-          const joined = (await extractTexts(buffer)).join(" ");
+          const joined = (await extractTexts(file)).join(" ");
           const numbers = [...joined.matchAll(/Clause (?<num>\d+)\./gu)].map(
             (m) => Number(m[1]),
           );
@@ -697,11 +699,11 @@ describe("property: loop-expanded num() markers number sequentially", () => {
           ].join(""),
         );
         const docx = await makeDocx(xml);
-        const { buffer } = await fillTemplate(docx, {
+        const { file } = await fillTemplate(docx, {
           items: Array.from({ length: count }, (_, i) => ({ v: String(i) })),
         });
 
-        const joined = (await extractTexts(buffer)).join(" ");
+        const joined = (await extractTexts(file)).join(" ");
         const pairs = [
           ...joined.matchAll(/Clause (?<num>\d+) refers to (?<ref>\d+) end/gu),
         ];
@@ -727,11 +729,11 @@ describe("property: loop-expanded num() markers number sequentially", () => {
           ].join(""),
         );
         const docx = await makeDocx(xml);
-        const { buffer } = await fillTemplate(docx, {
+        const { file } = await fillTemplate(docx, {
           items: Array.from({ length: count }, (_, i) => ({ v: String(i) })),
         });
 
-        const joined = (await extractTexts(buffer)).join(" ");
+        const joined = (await extractTexts(file)).join(" ");
         const refs = [...joined.matchAll(/Item under (?<ref>\d+) end/gu)].map(
           (m) => m[1],
         );
@@ -745,8 +747,8 @@ describe("property: loop-expanded num() markers number sequentially", () => {
 // ── Inline nesting ───────────────────────────────────────
 
 /** The whole paragraph's text, in document order, with runs joined. */
-const paragraphTextsOf = async (buffer: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const paragraphTextsOf = async (file: ScannedFile): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   return [...parseBody(xml).getElementsByTagNameNS(W_NS, "p")].map((p) =>
     paragraphText(p),
@@ -771,11 +773,11 @@ describe("property: an inline loop may condition on its own position", () => {
                 "{% if not loop.last %}, {% endif %}{% endfor %}.",
             ),
           );
-          const { buffer } = await fillTemplate(await makeDocx(xml), {
+          const { file } = await fillTemplate(await makeDocx(xml), {
             attorneys: names.map((name) => ({ name })),
           });
 
-          expect(await paragraphTextsOf(buffer)).toEqual([
+          expect(await paragraphTextsOf(file)).toEqual([
             `appoints: ${names.join(", ")}.`,
           ]);
         },
@@ -800,14 +802,14 @@ describe("property: an inline loop may condition on its own position", () => {
             name: `N${String(index)}`,
             lead,
           }));
-          const { buffer } = await fillTemplate(await makeDocx(xml), {
+          const { file } = await fillTemplate(await makeDocx(xml), {
             attorneys,
           });
 
           const expected = attorneys
             .map(({ lead, name }) => (lead ? `${name}*` : name))
             .join(", ");
-          expect(await paragraphTextsOf(buffer)).toEqual([expected]);
+          expect(await paragraphTextsOf(file)).toEqual([expected]);
         },
       ),
       propertyConfig({ numRuns: 25 }),

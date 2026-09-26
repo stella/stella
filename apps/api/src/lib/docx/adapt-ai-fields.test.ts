@@ -3,13 +3,16 @@ import JSZip from "jszip";
 
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { fillTemplate } from "./patch-template";
 import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -20,8 +23,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const WRAP = (body: string) =>
@@ -31,8 +33,8 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const documentText = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const documentText = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
@@ -55,10 +57,10 @@ const lawField: FieldMeta = {
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -70,7 +72,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 describe("adaptAiFields", () => {
@@ -92,7 +94,7 @@ describe("adaptAiFields", () => {
     };
 
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField, { path: "buyer" }],
       values: { law: "czech law", buyer: "ACME" },
       adapt: adapter,
@@ -112,11 +114,11 @@ describe("adaptAiFields", () => {
       "Disputes under {{law}} go to the courts.",
     );
 
-    const { buffer, unusedValues } = await fillTemplate(adapted.buffer, {
+    const { file, unusedValues } = await fillTemplate(adapted.file, {
       law: "czech law",
       buyer: "ACME",
     });
-    const text = await documentText(buffer);
+    const text = await documentText(file);
     expect(text).toContain("governed by RENDERING-1.");
     expect(text).toContain("under RENDERING-2 go");
     expect(text).toContain("Buyer: ACME");
@@ -129,12 +131,12 @@ describe("adaptAiFields", () => {
   test("orders occurrences within a single paragraph", async () => {
     const docx = await makeDocx(WRAP(P("First {{law}}, then {{law}} again.")));
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField],
       values: { law: "stub" },
       adapt: async () => ["ONE", "TWO"],
     });
-    const text = await documentText(adapted.buffer);
+    const text = await documentText(adapted.file);
     expect(text).toBe("First ONE, then TWO again.");
   });
 
@@ -145,12 +147,12 @@ describe("adaptAiFields", () => {
       ),
     );
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField],
       values: { law: "stub" },
       adapt: async () => ["ADAPTED"],
     });
-    const text = await documentText(adapted.buffer);
+    const text = await documentText(adapted.file);
     expect(text).toBe("Per ADAPTED of the land.");
   });
 
@@ -159,18 +161,18 @@ describe("adaptAiFields", () => {
       WRAP([P("A: {{law}}"), P("B: {{law}}")].join("")),
     );
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField],
       values: { law: "czech law" },
       adapt: async () => ["only one"],
     });
     expect(adapted.adaptedPaths).toEqual([]);
-    expect(adapted.buffer).toBe(docx);
+    expect(adapted.file).toBe(docx);
 
-    const { buffer } = await fillTemplate(adapted.buffer, {
+    const { file } = await fillTemplate(adapted.file, {
       law: "czech law",
     });
-    const text = await documentText(buffer);
+    const text = await documentText(file);
     expect(text).toContain("A: czech law");
     expect(text).toContain("B: czech law");
   });
@@ -178,32 +180,32 @@ describe("adaptAiFields", () => {
   test("reads a nested stub for a dotted field path", async () => {
     const docx = await makeDocx(WRAP(P("Company: {{company.name}}")));
     const adapted = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [{ path: "company.name", aiAdapt: true }],
       values: { company: { name: "ACME s.r.o." } },
       adapt: async ({ stub }) => [`ADAPTED(${stub})`],
     });
-    const text = await documentText(adapted.buffer);
+    const text = await documentText(adapted.file);
     expect(text).toBe("Company: ADAPTED(ACME s.r.o.)");
   });
 
   test("is a no-op without an adapter, aiAdapt fields, or a stub", async () => {
     const docx = await makeDocx(WRAP(P("{{law}}")));
     const noAdapter = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField],
       values: { law: "stub" },
       adapt: undefined,
     });
-    expect(noAdapter.buffer).toBe(docx);
+    expect(noAdapter.file).toBe(docx);
 
     const noStub = await adaptAiFields({
-      buffer: docx,
+      file: docx,
       fields: [lawField],
       values: {},
       adapt: async () => ["X"],
     });
-    expect(noStub.buffer).toBe(docx);
+    expect(noStub.file).toBe(docx);
     expect(noStub.adaptedPaths).toEqual([]);
   });
 });

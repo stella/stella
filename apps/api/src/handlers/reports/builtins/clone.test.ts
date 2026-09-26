@@ -95,7 +95,7 @@ describe("clone built-in report template", () => {
     // The built-in's own markers carry its two AI-drafted fields, including
     // the per-item `contracts.summary` written through the loop's alias, so a
     // clone drafts exactly what the built-in drafts.
-    const manifest = await deriveManifestFromDocx(options.buffer);
+    const manifest = await deriveManifestFromDocx(options.file);
     const aiFields = manifest.fields.filter(
       (field) => field.aiPrompt !== undefined,
     );
@@ -106,7 +106,7 @@ describe("clone built-in report template", () => {
     const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
     expect(options.name).toBe(builtin?.name ?? "");
     expect(options.fileName).toBe(`${builtin?.name ?? ""}.docx`);
-    expect(options.buffer.byteLength).toBeGreaterThan(0);
+    expect(options.file.bytes.byteLength).toBeGreaterThan(0);
   });
 
   test("appends (copy) when a same-named template exists", async () => {

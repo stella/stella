@@ -21,6 +21,8 @@ import JSZip from "jszip";
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { templateContentPartPaths } from "./ooxml";
 import { partParagraphTexts, patchXmlPartPerOccurrence } from "./rich-patch";
@@ -46,7 +48,8 @@ export type AiOccurrenceAdapter = (input: {
 }) => Promise<string[] | undefined>;
 
 export type AdaptAiFieldsResult = {
-  buffer: Buffer;
+  /** The template with adapted occurrences rewritten, derived from the input. */
+  file: ScannedFile;
   /** Paths whose markers were all replaced occurrence-by-occurrence; their
    *  stub values no longer match a placeholder, so callers should drop them
    *  from "unused value" diagnostics. */
@@ -54,7 +57,7 @@ export type AdaptAiFieldsResult = {
 };
 
 type AdaptAiFieldsOptions = {
-  buffer: Buffer;
+  file: ScannedFile;
   fields: readonly FieldMeta[];
   /** Already-entered + previously-resolved fill values (stub lookup). */
   values: Record<string, unknown>;
@@ -62,12 +65,12 @@ type AdaptAiFieldsOptions = {
 };
 
 export const adaptAiFields = async ({
-  buffer,
+  file,
   fields,
   values,
   adapt,
 }: AdaptAiFieldsOptions): Promise<AdaptAiFieldsResult> => {
-  const unchanged: AdaptAiFieldsResult = { buffer, adaptedPaths: [] };
+  const unchanged: AdaptAiFieldsResult = { file, adaptedPaths: [] };
   if (adapt === undefined) {
     return unchanged;
   }
@@ -89,7 +92,7 @@ export const adaptAiFields = async ({
   }
 
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await JSZip.loadAsync(file.bytes);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.
   const partNames = templateContentPartPaths(Object.keys(zip.files));
@@ -154,7 +157,10 @@ export const adaptAiFields = async ({
   }
 
   return {
-    buffer: Buffer.from(await zip.generateAsync({ type: "nodebuffer" })),
+    file: derivedScannedFile(
+      file,
+      await zip.generateAsync({ type: "uint8array" }),
+    ),
     adaptedPaths: [...renderingsByPath.keys()],
   };
 };
