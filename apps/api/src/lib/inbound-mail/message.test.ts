@@ -53,6 +53,44 @@ describe("inbound MIME normalization", () => {
     expect(parsed.message.text).toBe("Original body.");
   });
 
+  test.each([
+    [
+      "outlook-reply-en.eml",
+      "I reject the proposed settlement.",
+      "<reply-outlook@example.test>",
+    ],
+    [
+      "outlook-reply-cs.eml",
+      "Návrh dohody nepřijímám.",
+      "<reply-outlook-cs@example.test>",
+    ],
+  ])(
+    "preserves the reply and quoted original in %s",
+    async (name, reply, id) => {
+      const parsed = await parseInboundMessage(await fixture(name));
+      expect(parsed.forwardSource).toBe("none");
+      expect(parsed.message.from).toBe("member@example.test");
+      expect(parsed.message.messageId).toBe(id);
+      expect(parsed.message.inReplyTo).not.toBeNull();
+      expect(parsed.message.references).toHaveLength(1);
+      expect(parsed.message.text).toContain(reply);
+      expect(parsed.message.text).toContain("counsel@outside.test");
+    },
+  );
+
+  test.each([
+    ["outlook-forward-de.eml", "Vertragsentwurf"],
+    ["gmail-forward-en.eml", "Filing deadline"],
+    ["apple-forward-fr.eml", "Projet de contrat"],
+  ])("extracts the original from %s", async (name, subject) => {
+    const parsed = await parseInboundMessage(await fixture(name));
+    expect(parsed.forwardSource).toBe("inline");
+    expect(parsed.outerSender).toBe("member@example.test");
+    expect(parsed.message.from).toBe("author@outside.test");
+    expect(parsed.message.subject).toBe(subject);
+    expect(parsed.message.date).toBe("2026-09-25T11:00:00.000Z");
+  });
+
   test("rejects a forged duplicate From fixture", async () => {
     await expect(
       parseInboundMessage(await fixture("forged-from.eml")),
@@ -148,7 +186,11 @@ describe("inbound MIME normalization", () => {
     "extracts a forward with localized headers: %s",
     async (marker, from, date, subject, to) => {
       const raw = message(
-        baseHeaders,
+        baseHeaders.replace(
+          "Subject: Filed message",
+          () =>
+            `Subject: ${/original message|původní zpráva|ursprüngliche nachricht/iu.test(marker) ? "Fwd:" : "Filed message"} Original subject`,
+        ),
         [
           "Please file this",
           "",
@@ -186,6 +228,56 @@ describe("inbound MIME normalization", () => {
     expect(parsed.forwardSource).toBe("none");
     expect(parsed.message.from).toBe("member@example.test");
     expect(parsed.message.text).toContain("No date");
+  });
+
+  test("keeps a complete ambiguous Outlook quote under its author", async () => {
+    const raw = message(
+      baseHeaders,
+      [
+        "Please keep this entire note",
+        "",
+        "-----Original Message-----",
+        "From: Author <author@outside.test>",
+        "Sent: Fri, 25 Sep 2026 11:00:00 +0000",
+        "To: Member <member@example.test>",
+        "Subject: Prior message",
+        "",
+        "Quoted body",
+      ].join("\r\n"),
+    );
+    const parsed = await parseInboundMessage(raw);
+    expect(parsed.forwardSource).toBe("none");
+    expect(parsed.message.text).toContain("Please keep this entire note");
+    expect(parsed.message.text).toContain("Quoted body");
+    expect(parsed.message.messageId).toBe("<wrapper@example.test>");
+  });
+
+  test("does not extract a quoted Gmail forward from a threaded reply", async () => {
+    const raw = message(
+      `${baseHeaders.replace(
+        "Subject: Filed message",
+        "Subject: Re: Filing deadline",
+      )}\nIn-Reply-To: <prior@outside.test>\nReferences: <prior@outside.test>`,
+      [
+        "I object to this deadline.",
+        "",
+        "---------- Forwarded message ---------",
+        "From: Author <author@outside.test>",
+        "Date: Fri, 25 Sep 2026 11:00:00 +0000",
+        "Subject: Filing deadline",
+        "To: Member <member@example.test>",
+        "",
+        "The filing deadline is 30 September.",
+      ].join("\r\n"),
+    );
+    const parsed = await parseInboundMessage(raw);
+    expect(parsed.forwardSource).toBe("none");
+    expect(parsed.message.from).toBe("member@example.test");
+    expect(parsed.message.text).toContain("I object to this deadline.");
+    expect(parsed.message.text).toContain(
+      "The filing deadline is 30 September.",
+    );
+    expect(parsed.message.inReplyTo).toBe("<prior@outside.test>");
   });
 
   test("keeps an inline forward with a timezone-free date under the filer", async () => {
@@ -412,6 +504,54 @@ describe("inbound MIME normalization", () => {
     expect(second.message.date).toBe(first.message.date);
     expect(first.message.to).not.toEqual(second.message.to);
     expect(first.message.contentHash).toBe(second.message.contentHash);
+  });
+
+  test.each([
+    "not-a-date",
+    "Fri, 25 Sep 2026 11:00:00",
+    "2026-09-25T11:00:00",
+    "Fri, 31 Feb 2026 11:00:00 +0000",
+    "2026-02-31T11:00:00Z",
+    "Fri, 25 Sep 2026 11:00:00 +0060",
+    "Fri, 25 Sep 2026 11:00:00 +2400",
+    "Fri, 25 Sep 2026 11:00:00 -0000",
+  ])("treats invalid or zone-free raw Date as absent: %s", async (date) => {
+    const raw = message(
+      baseHeaders.replace("Sat, 26 Sep 2026 12:00:00 +0000", () => date),
+      "Body",
+    );
+    const parsed = await parseInboundMessage(raw);
+    expect(parsed.message.date).toBeNull();
+  });
+
+  test("reads Date from the raw header before PostalMime's host-dependent conversion", async () => {
+    const noZone = message(
+      baseHeaders.replace(
+        "Sat, 26 Sep 2026 12:00:00 +0000",
+        "Sat, 26 Sep 2026 12:00:00",
+      ),
+      "Body",
+    );
+    const withoutDate = message(
+      baseHeaders.replace("Date: Sat, 26 Sep 2026 12:00:00 +0000\n", ""),
+      "Body",
+    );
+    const first = await parseInboundMessage(noZone);
+    const second = await parseInboundMessage(withoutDate);
+    expect(first.message.date).toBeNull();
+    expect(first.message.contentHash).toBe(second.message.contentHash);
+  });
+
+  test("normalizes an explicitly zoned raw Date with a trailing comment", async () => {
+    const raw = message(
+      baseHeaders.replace(
+        "Sat, 26 Sep 2026 12:00:00 +0000",
+        "Sat, 26 Sep 2026 14:00:00 +0200 (CEST)",
+      ),
+      "Body",
+    );
+    const parsed = await parseInboundMessage(raw);
+    expect(parsed.message.date).toBe("2026-09-26T12:00:00.000Z");
   });
 
   test("content identity ignores attachment order and transport filenames", async () => {

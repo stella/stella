@@ -6,6 +6,8 @@ import PostalMime, {
   type Email,
 } from "postal-mime";
 
+import { Temporal } from "@stll/time";
+
 import {
   renderEmailBodyHtml,
   type ParsedEmail,
@@ -63,9 +65,23 @@ export class InboundMessageError extends TaggedError("InboundMessageError")<{
 const INVALID_MAILBOX = /[\s<>;,]/u;
 const MESSAGE_ID_PATTERN = /<[^<>\s]+@[^<>\s]+>/gu;
 const RFC_EXPLICIT_ZONE_DATE =
-  /^(?:[a-z]{3},?\s+)?\d{1,2}\s+[a-z]{3}\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s+(?:[+-]\d{4}|UTC|GMT|UT)$/iu;
+  /^(?:[a-z]{3},?\s+)?(\d{1,2})\s+([a-z]{3})\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+([+-]\d{4}|UTC|GMT|UT)$/iu;
 const ISO_EXPLICIT_ZONE_DATE =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/iu;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/iu;
+const MONTHS = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
 const UNSAFE_ATTACHMENT_EXTENSIONS = new Set([
   "apk",
   "app",
@@ -179,11 +195,58 @@ const normalizeReferences = (value: string | undefined): string[] =>
     return normalized ? [normalized] : [];
   }) ?? [];
 
+const parseExplicitDateParts = (value: string) => {
+  const rfc = RFC_EXPLICIT_ZONE_DATE.exec(value);
+  if (rfc) {
+    return {
+      year: Number(rfc[3]),
+      month: MONTHS.indexOf(rfc[2]?.toLowerCase() ?? "") + 1,
+      day: Number(rfc[1]),
+      hour: Number(rfc[4]),
+      minute: Number(rfc[5]),
+      second: Number(rfc[6] ?? 0),
+      zone: rfc[7] ?? "",
+    };
+  }
+  const iso = ISO_EXPLICIT_ZONE_DATE.exec(value);
+  if (!iso) {
+    return null;
+  }
+  return {
+    year: Number(iso[1]),
+    month: Number(iso[2]),
+    day: Number(iso[3]),
+    hour: Number(iso[4]),
+    minute: Number(iso[5]),
+    second: Number(iso[6] ?? 0),
+    zone: iso[7] ?? "",
+  };
+};
+
+const hasInvalidDateOffset = (zone: string): boolean => {
+  const numericZone = /^[+-](\d{2}):?(\d{2})$/u.exec(zone);
+  return (
+    zone === "-0000" ||
+    zone === "-00:00" ||
+    (numericZone !== null &&
+      (Number(numericZone[1]) > 23 || Number(numericZone[2]) > 59))
+  );
+};
+
 const explicitZoneDate = (value: string): string | null => {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\s+\([^()]*\)$/u, "");
+  const parts = parseExplicitDateParts(trimmed);
+  if (!parts || hasInvalidDateOffset(parts.zone)) {
+    return null;
+  }
+  const { year, month, day, hour, minute, second } = parts;
   if (
-    !RFC_EXPLICIT_ZONE_DATE.test(trimmed) &&
-    !ISO_EXPLICIT_ZONE_DATE.test(trimmed)
+    Result.try(() =>
+      Temporal.PlainDateTime.from(
+        { year, month, day, hour, minute, second },
+        { overflow: "reject" },
+      ),
+    ).isErr()
   ) {
     return null;
   }
@@ -192,7 +255,7 @@ const explicitZoneDate = (value: string): string | null => {
   return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
 };
 
-const checkRaw = (raw: Uint8Array): void => {
+const checkRaw = (raw: Uint8Array): number => {
   if (raw.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
     fail("rawTooLarge");
   }
@@ -219,18 +282,34 @@ const checkRaw = (raw: Uint8Array): void => {
   if (headerEnd < 0) {
     fail("headersTooLarge");
   }
+  return headerEnd;
 };
 
-const parseMime = async (raw: Uint8Array): Promise<Email> => {
-  checkRaw(raw);
+const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {
+  const headers = new TextDecoder("latin1")
+    .decode(raw.subarray(0, headerEnd))
+    .replace(/\r?\n[\t ]+/gu, " ");
+  const dates = headers.split(/\r?\n/u).flatMap((line) => {
+    const match = /^date:\s*(.*)$/iu.exec(line);
+    return match ? [match[1] ?? ""] : [];
+  });
+  return dates.length === 1 ? (dates.at(0) ?? null) : null;
+};
+
+const parseMime = async (raw: Uint8Array) => {
+  const headerEnd = checkRaw(raw);
   try {
-    return await PostalMime.parse(raw, {
+    const email = await PostalMime.parse(raw, {
       attachmentEncoding: "arraybuffer",
       forceRfc822Attachments: true,
       maxNestingDepth: INBOUND_MAIL_LIMITS.mimeDepth,
       maxHeadersSize: INBOUND_MAIL_LIMITS.headerBytes,
       maxRfc822NestingDepth: 0,
     });
+    return {
+      email,
+      date: explicitZoneDate(rawDateHeader(raw, headerEnd) ?? ""),
+    };
   } catch {
     return fail("invalidMime");
   }
@@ -336,9 +415,7 @@ const contentHash = (
       from: message.from,
       to: message.to.toSorted(),
       cc: message.cc.toSorted(),
-      date: message.date
-        ? (explicitZoneDate(message.date) ?? message.date)
-        : null,
+      date: message.date,
       subject: message.subject,
       text: message.text,
       html: message.html,
@@ -358,7 +435,10 @@ const contentHash = (
   return hash.digest("hex");
 };
 
-const normalizeMessage = (email: Email): NormalizedInboundMessage => {
+const normalizeMessage = (
+  email: Email,
+  date: string | null,
+): NormalizedInboundMessage => {
   const fromHeaders = email.headers.filter(({ key }) => key === "from");
   if (fromHeaders.length > 1) {
     fail("invalidFrom");
@@ -388,7 +468,7 @@ const normalizeMessage = (email: Email): NormalizedInboundMessage => {
     from,
     to,
     cc,
-    date: email.date?.trim() ?? null,
+    date,
     subject: email.subject?.trim() ?? null,
     text,
     html,
@@ -402,6 +482,11 @@ const normalizeMessage = (email: Email): NormalizedInboundMessage => {
 
 const FORWARD_MARKER =
   /^(?:-{2,}\s*(?:forwarded message|original message|původní zpráva|ursprüngliche nachricht|message transféré|mensaje reenviado|messaggio inoltrato)\s*-{2,}|begin forwarded message:|début du message transféré\s*:|anfang der weitergeleiteten nachricht\s*:|inicio del mensaje reenviado\s*:|začátek přeposlané zprávy\s*:?)$/iu;
+const ORIGINAL_QUOTE_MARKER =
+  /^-{2,}\s*(?:original message|původní zpráva|ursprüngliche nachricht)\s*-{2,}$/iu;
+const FORWARD_SUBJECT_PREFIX =
+  /^\s*(?:(?:fw|fwd|wg|přep|tr|transféré)\s*:|přeposlaná zpráva(?:\s*:|\s*$))/iu;
+const REPLY_SUBJECT_PREFIX = /^\s*(?:re|aw|sv|odp|rép)\s*:/iu;
 const HEADER_KIND = {
   from: "from",
   von: "from",
@@ -437,10 +522,10 @@ const FORWARD_HEADER = new RegExp(
   "iu",
 );
 
-const parseInlineForward = (
-  outer: NormalizedInboundMessage,
-): NormalizedInboundMessage | null => {
-  const lines = outer.text.split("\n");
+const forwardMarkerIndex = (
+  lines: string[],
+  subject: string | null,
+): number | null => {
   const markers = lines.flatMap((line, index) =>
     FORWARD_MARKER.test(line.trim()) ? [index] : [],
   );
@@ -451,6 +536,16 @@ const parseInlineForward = (
   if (marker === undefined) {
     return null;
   }
+  if (
+    ORIGINAL_QUOTE_MARKER.test(lines[marker]?.trim() ?? "") &&
+    !FORWARD_SUBJECT_PREFIX.test(subject ?? "")
+  ) {
+    return null;
+  }
+  return marker;
+};
+
+const parseForwardHeaders = (lines: string[], marker: number) => {
   const headers = new Map<string, string>();
   let index = marker + 1;
   while (index < lines.length && index < marker + 24) {
@@ -480,17 +575,28 @@ const parseInlineForward = (
     headers.set(kind, value);
     index += 1;
   }
+  return { headers, index };
+};
+
+const parseInlineForward = (
+  outer: NormalizedInboundMessage,
+): NormalizedInboundMessage | null => {
+  const lines = outer.text.split("\n");
+  const marker = forwardMarkerIndex(lines, outer.subject);
+  if (marker === null) {
+    return null;
+  }
+  const block = parseForwardHeaders(lines, marker);
+  if (block === null) {
+    return null;
+  }
+  const { headers, index } = block;
   const fromHeader = headers.get("from");
   const toHeader = headers.get("to");
   const date = headers.get("date");
   const subject = headers.get("subject");
-  if (
-    !fromHeader ||
-    !toHeader ||
-    !date ||
-    !subject ||
-    !explicitZoneDate(date)
-  ) {
+  const normalizedDate = explicitZoneDate(date ?? "");
+  if (!fromHeader || !toHeader || !subject || !normalizedDate) {
     return null;
   }
   const from = parseOneMailbox(fromHeader);
@@ -514,7 +620,7 @@ const parseInlineForward = (
     from,
     to,
     cc,
-    date,
+    date: normalizedDate,
     subject,
     text,
     html: null,
@@ -529,9 +635,15 @@ const parseInlineForward = (
 export const parseInboundMessage = async (
   raw: Uint8Array,
 ): Promise<ParsedInboundMessage> => {
-  const outerEmail = await parseMime(raw);
+  const { email: outerEmail, date: outerDate } = await parseMime(raw);
   const outerSender = checkedOuterSender(outerEmail);
-  checkedAttachments(outerEmail);
+  const message = normalizeMessage(outerEmail, outerDate);
+  if (
+    (message.inReplyTo !== null || message.references.length > 0) &&
+    REPLY_SUBJECT_PREFIX.test(message.subject ?? "")
+  ) {
+    return { outerSender, message, forwardSource: "none" };
+  }
   const rfc822Parts = outerEmail.attachments.filter(
     ({ mimeType }) => mimeType.toLowerCase() === "message/rfc822",
   );
@@ -549,7 +661,7 @@ export const parseInboundMessage = async (
       catch: (cause) => cause,
     });
     const fromHeaders = attached.isOk()
-      ? attached.value.headers.filter(({ key }) => key === "from")
+      ? attached.value.email.headers.filter(({ key }) => key === "from")
       : [];
     const fromHeader = fromHeaders.at(0);
     if (
@@ -560,12 +672,11 @@ export const parseInboundMessage = async (
     ) {
       return {
         outerSender,
-        message: normalizeMessage(attached.value),
+        message: normalizeMessage(attached.value.email, attached.value.date),
         forwardSource: "attached",
       };
     }
   }
-  const message = normalizeMessage(outerEmail);
   if (rfc822Parts.length > 1) {
     return { outerSender, message, forwardSource: "none" };
   }
