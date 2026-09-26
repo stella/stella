@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { WORKFLOW_START_STATUSES } from "@/api/lib/workflow-queue";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -60,6 +61,7 @@ describe("workflow start handler", () => {
       entityIdsOrder: [entityId],
       propertyIds: [propertyId],
       serviceTier: "standard",
+      extractionRunStore: requestExtractionRunStore,
     });
   });
 

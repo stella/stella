@@ -8,7 +8,6 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
-import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
@@ -33,7 +32,10 @@ import {
   errorTag,
 } from "@/api/lib/errors/utils";
 import { createExtractionRunStore } from "@/api/lib/extraction-runs/store";
-import type { ExtractionRunStore } from "@/api/lib/extraction-runs/store";
+import type {
+  ExtractionRunStartStore,
+  ExtractionRunStore,
+} from "@/api/lib/extraction-runs/store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
@@ -260,6 +262,12 @@ type StartWorkflowArgs = {
   propertyIds?: SafeId<"property">[];
   serviceTier?: AIRequestServiceTier;
   runStateStore?: ReturnType<typeof getRootWorkflowRunStateStore> | undefined;
+  /**
+   * Where the run's lifecycle row is written. A request passes the request
+   * door's store; a worker passes the store its host built, so a run it
+   * starts is recorded on the connection the worker was handed.
+   */
+  extractionRunStore: ExtractionRunStartStore;
 };
 
 /**
@@ -422,6 +430,7 @@ export const startWorkflow = async ({
   propertyIds: inputPropertyIds,
   serviceTier = "standard",
   runStateStore = getRootWorkflowRunStateStore(),
+  extractionRunStore,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
@@ -468,10 +477,6 @@ export const startWorkflow = async ({
     return { status: "failed" };
   }
 
-  // A run's lifecycle row is written through the owner connection, whichever
-  // path starts the run: a request, or the worker routing classified
-  // documents into playbooks.
-  const extractionRunStore = createExtractionRunStore(rootDb);
   const createdRunKey = await extractionRunStore
     .create({
       ...runKey,
@@ -1955,12 +1960,19 @@ const onEntityCompleted = async ({
   await runStateStore.refreshActiveLease({ runLockTtlSec, workspaceId });
 };
 
+// A starter a worker binds to its host's run store before handing it on, so
+// the runs it starts cannot be recorded anywhere else.
+type StartSuccessorWorkflow = (
+  args: Omit<StartWorkflowArgs, "extractionRunStore">,
+) => Promise<StartWorkflowResult>;
+
 type MaybeRouteClassifiedDocumentsArgs = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
   planPropertyIds: readonly SafeId<"property">[];
+  startSuccessorWorkflow: StartSuccessorWorkflow;
 };
 
 // Route classified documents into `onClassified` playbooks, but only when the
@@ -1975,6 +1987,7 @@ const maybeRouteClassifiedDocuments = async ({
   userId,
   scopedDb,
   planPropertyIds,
+  startSuccessorWorkflow,
 }: MaybeRouteClassifiedDocumentsArgs): Promise<void> => {
   if (planPropertyIds.length === 0) {
     return;
@@ -1997,7 +2010,7 @@ const maybeRouteClassifiedDocuments = async ({
     organizationId,
     userId,
     scopedDb,
-    startWorkflow,
+    startWorkflow: startSuccessorWorkflow,
     // Reuse the classifier already resolved above rather than having
     // resolveApplicablePlaybooks look it up a second time.
     classifier,
@@ -2025,6 +2038,8 @@ const finishWorkflow = async (
     userId,
     workspaceIds: [workspaceId],
   });
+  const startSuccessorWorkflow: StartSuccessorWorkflow = async (args) =>
+    await startWorkflow({ ...args, extractionRunStore: extractionRuns });
 
   const finalizationResult = await runStateStore.readFinalizationState({
     requestId,
@@ -2110,6 +2125,7 @@ const finishWorkflow = async (
     userId,
     scopedDb,
     planPropertyIds,
+    startSuccessorWorkflow,
   }).catch((error: unknown) => captureError(error, { workspaceId }));
 
   // Grade whatever the workspace still owes: columns created mid-run, and the
@@ -2122,7 +2138,7 @@ const finishWorkflow = async (
     userId,
     scopedDb,
     serviceTier,
-    startWorkflow,
+    startWorkflow: startSuccessorWorkflow,
   });
 };
 

@@ -57,6 +57,15 @@ const ORGANIZATION_ID = toSafeId<"organization">(
 );
 const USER_ID = toSafeId<"user">("01931f4a-0000-7000-8000-000000000103");
 
+const unusedRunStore = asTestRaw<
+  Parameters<typeof startWorkflow>[0]["extractionRunStore"]
+>({
+  create: async () => {
+    await Promise.resolve();
+    throw new Error("no run is recorded after a failed claim");
+  },
+});
+
 const startAfterFailedClaimWrite = async () =>
   await startWorkflow({
     workspaceId: WORKSPACE_ID,
@@ -66,6 +75,7 @@ const startAfterFailedClaimWrite = async () =>
       throw new Error("the plan must not be read after a failed claim");
     }),
     runStateStore,
+    extractionRunStore: unusedRunStore,
   });
 
 describe("startWorkflow when the run state write fails after the claim", () => {
