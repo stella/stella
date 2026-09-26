@@ -35,6 +35,26 @@ const CRIMINAL_RECODIFICATION = "2006-01-01";
 /** The day 311/2001 Z. z. replaced 65/1965 Zb. */
 const LABOUR_CODE_RECODIFICATION = "2002-04-01";
 
+// Each succession is stated once and shared by the alias and title entries
+// that name it, so the two tables cannot drift apart.
+const CRIMINAL_CODE_SUCCESSION = {
+  older: zb(140, 1961),
+  newer: zz(300, 2005),
+  on: CRIMINAL_RECODIFICATION,
+};
+
+const CRIMINAL_PROCEDURE_SUCCESSION = {
+  older: zb(141, 1961),
+  newer: zz(301, 2005),
+  on: CRIMINAL_RECODIFICATION,
+};
+
+const LABOUR_CODE_SUCCESSION = {
+  older: zb(65, 1965),
+  newer: zz(311, 2001),
+  on: LABOUR_CODE_RECODIFICATION,
+};
+
 export const SK_PROFILE = {
   jurisdiction: "SVK",
   language: "sk",
@@ -111,23 +131,17 @@ export const SK_PROFILE = {
   aliases: [
     ...succession({
       spellings: ["TZ", "tr. zák."],
-      older: zb(140, 1961),
-      newer: zz(300, 2005),
-      on: CRIMINAL_RECODIFICATION,
+      ...CRIMINAL_CODE_SUCCESSION,
     }),
     ...succession({
       spellings: ["TP", "tr. por."],
-      older: zb(141, 1961),
-      newer: zz(301, 2005),
-      on: CRIMINAL_RECODIFICATION,
+      ...CRIMINAL_PROCEDURE_SUCCESSION,
     }),
     { spellings: ["OZ", "obč. zák."], identifier: zb(40, 1964) },
     { spellings: ["ObZ", "ObchZ", "obch. zák."], identifier: zb(513, 1991) },
     ...succession({
       spellings: ["ZP", "Zák. práce"],
-      older: zb(65, 1965),
-      newer: zz(311, 2001),
-      on: LABOUR_CODE_RECODIFICATION,
+      ...LABOUR_CODE_SUCCESSION,
     }),
     { spellings: ["CSP", "C. s. p."], identifier: zz(160, 2015) },
     { spellings: ["CMP", "C. m. p."], identifier: zz(161, 2015) },
@@ -145,9 +159,7 @@ export const SK_PROFILE = {
   titles: [
     ...succession({
       spellings: ["Trestný zákon", "Trestného zákona", "Trestnom zákone"],
-      older: zb(140, 1961),
-      newer: zz(300, 2005),
-      on: CRIMINAL_RECODIFICATION,
+      ...CRIMINAL_CODE_SUCCESSION,
     }),
     ...succession({
       spellings: [
@@ -155,9 +167,7 @@ export const SK_PROFILE = {
         "Trestného poriadku",
         "Trestnom poriadku",
       ],
-      older: zb(141, 1961),
-      newer: zz(301, 2005),
-      on: CRIMINAL_RECODIFICATION,
+      ...CRIMINAL_PROCEDURE_SUCCESSION,
     }),
     {
       spellings: [
@@ -177,9 +187,7 @@ export const SK_PROFILE = {
     },
     ...succession({
       spellings: ["Zákonník práce", "Zákonníka práce", "Zákonníku práce"],
-      older: zb(65, 1965),
-      newer: zz(311, 2001),
-      on: LABOUR_CODE_RECODIFICATION,
+      ...LABOUR_CODE_SUCCESSION,
     }),
     {
       spellings: [

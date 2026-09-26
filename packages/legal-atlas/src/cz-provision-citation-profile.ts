@@ -47,6 +47,20 @@ const VAT_RECODIFICATION = "2004-05-01";
 /** The day 40/2009 Sb. replaced 140/1961 Sb. */
 const CRIMINAL_CODE_RECODIFICATION = "2010-01-01";
 
+// Each succession is stated once and shared by the alias and title entries
+// that name it, so the two tables cannot drift apart.
+const LABOUR_CODE_SUCCESSION = {
+  older: sb(65, 1965),
+  newer: sb(262, 2006),
+  on: LABOUR_CODE_RECODIFICATION,
+};
+
+const ADMINISTRATIVE_PROCEDURE_SUCCESSION = {
+  older: sb(71, 1967),
+  newer: sb(500, 2004),
+  on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
+};
+
 /**
  * 283/2021 Sb. took effect on 1 January 2024 for reserved structures only;
  * ordinary structures stayed under 183/2006 Sb. until 1 July 2024. In between,
@@ -223,15 +237,11 @@ export const CZ_PROFILE = {
     },
     ...succession({
       spellings: ["ZP", "zák. práce", "zákoník práce"],
-      older: sb(65, 1965),
-      newer: sb(262, 2006),
-      on: LABOUR_CODE_RECODIFICATION,
+      ...LABOUR_CODE_SUCCESSION,
     }),
     ...succession({
       spellings: ["SŘ", "spr. ř.", "s. ř.", "s.ř."],
-      older: sb(71, 1967),
-      newer: sb(500, 2004),
-      on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
+      ...ADMINISTRATIVE_PROCEDURE_SUCCESSION,
     }),
     { spellings: ["SŘS", "s. ř. s.", "s.ř.s."], identifier: sb(150, 2002) },
     { spellings: ["DŘ", "d. ř."], identifier: sb(280, 2009) },
@@ -456,9 +466,7 @@ export const CZ_PROFILE = {
     { spellings: actTitleForms("o rodině"), identifier: sb(94, 1963) },
     ...succession({
       spellings: ["zákoník práce", "zákoníku práce", "zákoníkem práce"],
-      older: sb(65, 1965),
-      newer: sb(262, 2006),
-      on: LABOUR_CODE_RECODIFICATION,
+      ...LABOUR_CODE_SUCCESSION,
     }),
     {
       spellings: [
@@ -496,9 +504,7 @@ export const CZ_PROFILE = {
         "správnímu řádu",
         "správním řádem",
       ],
-      older: sb(71, 1967),
-      newer: sb(500, 2004),
-      on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
+      ...ADMINISTRATIVE_PROCEDURE_SUCCESSION,
     }),
     {
       spellings: [
