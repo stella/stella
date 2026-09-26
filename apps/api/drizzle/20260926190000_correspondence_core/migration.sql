@@ -115,7 +115,7 @@ CREATE TABLE "correspondence_allowed_senders" (
   "approved_at" timestamptz DEFAULT now() NOT NULL,
   "revoked_at" timestamptz,
   CONSTRAINT "correspondence_allowed_senders_id_org_unq" UNIQUE ("id", "organization_id"),
-  CONSTRAINT "correspondence_allowed_senders_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE cascade,
+  CONSTRAINT "correspondence_allowed_senders_organization_id_organization_id_" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE cascade,
   CONSTRAINT "correspondence_allowed_senders_owner_user_id_user_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "user"("id") ON DELETE cascade,
   CONSTRAINT "correspondence_allowed_senders_approved_by_user_id_fk" FOREIGN KEY ("approved_by") REFERENCES "user"("id") ON DELETE restrict,
   CONSTRAINT "correspondence_allowed_senders_kind_check" CHECK ("kind" in ('verified_alias', 'shared_mailbox')),
