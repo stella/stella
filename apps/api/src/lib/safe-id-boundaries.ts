@@ -277,6 +277,11 @@ export const brandPersistedTimeEntryId = (
 export const brandPersistedUserId = (userId: string): SafeId<"user"> =>
   toSafeId<"user">(userId);
 
+export const brandNullablePersistedUserId = (
+  userId: string | null,
+): SafeId<"user"> | null =>
+  userId === null ? null : brandPersistedUserId(userId);
+
 export const brandPersistedOrganizationId = (
   organizationId: string,
 ): SafeId<"organization"> => toSafeId<"organization">(organizationId);
