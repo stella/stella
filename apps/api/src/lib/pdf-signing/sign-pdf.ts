@@ -28,21 +28,33 @@ import { TaggedError } from "better-result";
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
 import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
+import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
+import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import { createFallbackTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
 import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
+import {
+  embedValidationData,
+  gatherValidationData,
+  timestampTokenCertificates,
+} from "@/api/lib/pdf-signing/validation-data";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
- * PAdES levels this pipeline produces: without a timestamp authority a
- * signature claims its own time (B-B); with one it also carries trusted time
- * and revocation data (B-LT). There is no configuration that yields B-T.
+ * PAdES levels this pipeline produces: without trusted time a signature
+ * claims its own time (B-B); with a timestamp it is B-T; with validation data
+ * for its whole chain as well, B-LT.
  */
-export type PdfSigningLevel = "B-B" | "B-LT";
+export type PdfSigningLevel = "B-B" | "B-T" | "B-LT";
 
 const DIGEST_ALGORITHM = "SHA-256" as const satisfies DigestAlgorithm;
 
-/** One request's whole LibPDF budget, including a timestamp round trip. */
-const PDF_SIGNING_TIMEOUT_MS = 30_000;
+/** Phase 1 is local work over the stored bytes. */
+const PDF_SIGNING_PREPARE_TIMEOUT_MS = 30_000;
+/**
+ * Phase 2 adds the timestamp authorities, tried in turn, and the revocation
+ * fetches; both are bounded on their own, this bounds the whole.
+ */
+const PDF_SIGNING_APPLY_TIMEOUT_MS = 75_000;
 
 class PdfSigningError extends TaggedError("PdfSigningError")<{
   message: string;
@@ -93,13 +105,12 @@ const signedAttributesDigestHex = async (data: Uint8Array) =>
   ).toString("hex");
 
 /**
- * What only phase 2 adds: trusted time and validation data. Neither is part
- * of the signed attributes (the timestamp is an unsigned attribute, the
- * validation data a later incremental update), so phase 1 leaves both out
- * and the digest it publishes is still the one phase 2 reproduces.
+ * What only phase 2 adds: trusted time. The timestamp is an unsigned
+ * attribute, so phase 1 leaves it out and the digest it publishes is still
+ * the one phase 2 reproduces. Validation data is never LibPDF's to gather
+ * (see `validation-data.ts`), so its `longTermValidation` stays off.
  */
 type TrustOptions = {
-  longTermValidation: boolean;
   timestampAuthority?: TimestampAuthority;
 };
 
@@ -157,9 +168,7 @@ export const captureSigningDigest = async (
         });
       }
       try {
-        await pdf.sign(
-          buildSignOptions(invocation, signer, { longTermValidation: false }),
-        );
+        await pdf.sign(buildSignOptions(invocation, signer, {}));
       } catch (error) {
         if (!SignedAttributesCapturedError.is(error)) {
           throw new PdfSigningError({
@@ -169,7 +178,10 @@ export const captureSigningDigest = async (
         }
       }
     },
-    { label: "pdf-signing.capture-digest", timeoutMs: PDF_SIGNING_TIMEOUT_MS },
+    {
+      label: "pdf-signing.capture-digest",
+      timeoutMs: PDF_SIGNING_PREPARE_TIMEOUT_MS,
+    },
   );
 
   const digestHex = captured.at(0);
@@ -186,6 +198,9 @@ type ApplySignatureInvocation = SigningInvocation & {
   signature: Uint8Array;
   /** Tried in order; empty signs without trusted time. */
   timestampAuthorities: readonly NamedTimestampAuthority[];
+  /** Whether `certificateChain` reaches a self-signed root. */
+  certificateChainComplete: boolean;
+  revocationProvider?: TrackedRevocationProvider;
 };
 
 export type AppliedSignature = {
@@ -224,7 +239,6 @@ export const applySignature = async (
   return await withTimeout(
     async () => {
       const pdf = await PDF.load(invocation.basePdf);
-      const timestamped = invocation.timestampAuthorities.length > 0;
       const timestampAuthority = createFallbackTimestampAuthority(
         invocation.timestampAuthorities,
       );
@@ -233,14 +247,31 @@ export const applySignature = async (
           buildSignOptions(
             invocation,
             signer,
-            timestamped
-              ? { longTermValidation: true, timestampAuthority }
-              : { longTermValidation: false },
+            invocation.timestampAuthorities.length > 0
+              ? { timestampAuthority }
+              : {},
           ),
         );
+        const token = timestampAuthority.usedToken();
+        if (token === null) {
+          return { bytes, level: "B-B", timestampAuthorityUrl: null };
+        }
+
+        // The chain is phase 1's completed one, so what is left to gather is
+        // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
+        // the store lands in one more incremental update after them.
+        const validation = await gatherValidationData({
+          provider:
+            invocation.revocationProvider ?? createTrackedRevocationProvider(),
+          signerChain: [invocation.certificate, ...invocation.certificateChain],
+          timestampCertificates: timestampTokenCertificates(token),
+        });
+        const longTermValidated =
+          invocation.certificateChainComplete &&
+          validation.uncovered.length === 0;
         return {
-          bytes,
-          level: timestamped ? "B-LT" : "B-B",
+          bytes: await embedValidationData(pdf, validation.material),
+          level: longTermValidated ? "B-LT" : "B-T",
           timestampAuthorityUrl: timestampAuthority.usedUrl(),
         } satisfies AppliedSignature;
       } catch (error) {
@@ -253,6 +284,9 @@ export const applySignature = async (
         });
       }
     },
-    { label: "pdf-signing.apply-signature", timeoutMs: PDF_SIGNING_TIMEOUT_MS },
+    {
+      label: "pdf-signing.apply-signature",
+      timeoutMs: PDF_SIGNING_APPLY_TIMEOUT_MS,
+    },
   );
 };
