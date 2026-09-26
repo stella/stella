@@ -37,7 +37,7 @@
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.
-        "src/lib/inbound-mail/runtime.ts",
+        "src/lib/email/inbound/runtime.ts",
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",

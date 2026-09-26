@@ -10,7 +10,7 @@ import {
   parseProviderAuthentication,
   verifyMailLocally,
   type MailAuthentication,
-} from "@/api/lib/inbound-mail/authentication";
+} from "@/api/lib/email/inbound/authentication";
 
 const provider = (value: string) =>
   parseProviderAuthentication({

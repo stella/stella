@@ -7,7 +7,7 @@ import { getDomain } from "tldts";
 
 import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
 
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export type MailEnvelope = {

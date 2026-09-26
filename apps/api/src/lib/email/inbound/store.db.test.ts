@@ -13,14 +13,14 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
-import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
+import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
+import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
 import type {
   InboundDeliveryStore,
   PersistInboundDeliveryOptions,
-} from "@/api/lib/inbound-mail/ingest";
-import { InboundPersistenceError } from "@/api/lib/inbound-mail/ingest";
-import { createInboundMailStore } from "@/api/lib/inbound-mail/store";
+} from "@/api/lib/email/inbound/ingest";
+import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
+import { createInboundMailStore } from "@/api/lib/email/inbound/store";
 import {
   openGatedTestDatabase,
   type GatedTestDb,

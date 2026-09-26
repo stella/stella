@@ -6,18 +6,18 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { correspondence, correspondenceAttachments } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createCorrespondence } from "@/api/lib/correspondence/create";
+import { createCorrespondence } from "@/api/lib/email/correspondence/create";
+import type { InboundFiler } from "@/api/lib/email/inbound/acceptance";
+import {
+  InboundPersistenceError,
+  type InboundDeliveryStore,
+} from "@/api/lib/email/inbound/ingest";
+import { createInboundMailStore } from "@/api/lib/email/inbound/store";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import {
   scanUpload,
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
-import type { InboundFiler } from "@/api/lib/inbound-mail/acceptance";
-import {
-  InboundPersistenceError,
-  type InboundDeliveryStore,
-} from "@/api/lib/inbound-mail/ingest";
-import { createInboundMailStore } from "@/api/lib/inbound-mail/store";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(

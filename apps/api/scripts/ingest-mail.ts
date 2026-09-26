@@ -1,8 +1,8 @@
 import { Result, TaggedError } from "better-result";
 
-import { verifyMailLocally } from "@/api/lib/inbound-mail/authentication";
-import { parseInboundDevInput } from "@/api/lib/inbound-mail/dev-input";
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
+import { verifyMailLocally } from "@/api/lib/email/inbound/authentication";
+import { parseInboundDevInput } from "@/api/lib/email/inbound/dev-input";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 
 const USAGE = `Development inbound ingest (NODE_ENV=development):
   bun scripts/ingest-mail.ts --file message.eml --mail-from member@example.test \\
@@ -39,7 +39,8 @@ const run = async () => {
     });
   }
   const raw = new Uint8Array(await file.arrayBuffer());
-  const { receiveInboundMail } = await import("@/api/lib/inbound-mail/runtime");
+  const { receiveInboundMail } =
+    await import("@/api/lib/email/inbound/runtime");
   const result = await receiveInboundMail({
     raw,
     envelope: input.value.envelope,

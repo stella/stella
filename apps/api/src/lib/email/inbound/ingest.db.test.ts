@@ -17,18 +17,18 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
-import type { MailVerifier } from "@/api/lib/inbound-mail/authentication";
+import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
+import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
   ingestInboundMail,
   InboundPersistenceError,
-} from "@/api/lib/inbound-mail/ingest";
-import { parseInboundMessage } from "@/api/lib/inbound-mail/message";
-import { createInboundMailPersistence } from "@/api/lib/inbound-mail/persistence";
+} from "@/api/lib/email/inbound/ingest";
+import { parseInboundMessage } from "@/api/lib/email/inbound/message";
+import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import {
   receiveSesInboundMail,
   SesInboundError,
-} from "@/api/lib/inbound-mail/ses";
+} from "@/api/lib/email/inbound/ses";
 import {
   openGatedTestDatabase,
   type GatedTestDb,

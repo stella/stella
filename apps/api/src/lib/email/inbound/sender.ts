@@ -8,8 +8,8 @@ import {
   correspondenceAllowedSenders,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { correspondenceUserHasAccess } from "@/api/lib/correspondence/access";
-import type { SenderMembership } from "@/api/lib/inbound-mail/acceptance";
+import { correspondenceUserHasAccess } from "@/api/lib/email/correspondence/access";
+import type { SenderMembership } from "@/api/lib/email/inbound/acceptance";
 
 export type InboundTransaction = Pick<
   Transaction,

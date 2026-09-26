@@ -20,18 +20,18 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   evaluateInboundAcceptance,
   type InboundFiler,
-} from "@/api/lib/inbound-mail/acceptance";
+} from "@/api/lib/email/inbound/acceptance";
 import {
   InboundPersistenceError,
   type InboundDeliveryOutcome,
   type InboundDeliveryStore,
   type PersistInboundDeliveryOptions,
-} from "@/api/lib/inbound-mail/ingest";
+} from "@/api/lib/email/inbound/ingest";
 import {
   resolveInboundSender,
   lookupInboundPrimaryAccount,
   type InboundTransaction,
-} from "@/api/lib/inbound-mail/sender";
+} from "@/api/lib/email/inbound/sender";
 import { brandDerivedCorrespondenceDropId } from "@/api/lib/safe-id-boundaries";
 
 export type FileInboundCandidateOptions<

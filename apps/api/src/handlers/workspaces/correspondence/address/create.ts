@@ -6,8 +6,8 @@ import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateInboundAddressToken } from "@/api/lib/inbound-mail/address";
 
 const config = {
   description:
