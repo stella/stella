@@ -26,8 +26,6 @@ import {
 import {
   clusterRow,
   courtListenerRecord,
-  courtRow,
-  docketRow,
   opinionRow,
   recordedClusters,
 } from "./test-records";
@@ -81,11 +79,9 @@ describe("complete CourtListener import mapping", () => {
     for (const record of recordedClusters()) {
       const outcome = mapCourtListenerRecord(record);
       if (Result.isError(outcome)) {
-        expect([
-          "court-not-writable",
-          "requires-assets",
-          "no-usable-text",
-        ]).toContain(outcome.error.reason);
+        expect(["requires-assets", "no-usable-text"]).toContain(
+          outcome.error.reason,
+        );
         continue;
       }
       mapped += 1;
@@ -97,15 +93,8 @@ describe("complete CourtListener import mapping", () => {
     }
     expect(mapped).toBeGreaterThan(0);
   });
-  test("non-writable courts and image dependence reject the whole cluster", () => {
+  test("image dependence rejects the whole cluster", () => {
     const cases = [
-      [
-        courtListenerRecord({
-          court: courtRow({ id: "ca9" }),
-          docket: docketRow({ court_id: "ca9" }),
-        }),
-        "court-not-writable",
-      ],
       [
         courtListenerRecord({
           opinions: [

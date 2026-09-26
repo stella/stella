@@ -9,8 +9,8 @@ import * as v from "valibot";
 
 import type { DecisionJudgeInput } from "@stll/api-contract/case-law-judges";
 import {
-  resolveWritableUsCourt,
-  type UsWritableCourtResolution,
+  resolveUsCourt,
+  type UsCourtResolution,
 } from "@stll/api-contract/us-courts";
 import {
   canonicalUsReporterCitation,
@@ -73,13 +73,11 @@ type PlanRejection = {
 // ── Court ───────────────────────────────────────────────
 
 const courtRejection = (
-  reason: Extract<UsWritableCourtResolution, { type: "rejected" }>["reason"],
+  reason: Extract<UsCourtResolution, { type: "rejected" }>["reason"],
 ): CourtListenerRejectionReason => {
   switch (reason) {
     case "unknown":
       return COURTLISTENER_REJECTION_REASON.COURT_UNKNOWN;
-    case "not-writable":
-      return COURTLISTENER_REJECTION_REASON.COURT_NOT_WRITABLE;
     case "testing":
     case "outside-jurisdiction":
       return COURTLISTENER_REJECTION_REASON.COURT_REJECTED;
@@ -533,7 +531,7 @@ const decisionPlan = (
 const planDecision = (
   admitted: AdmittedCourtListenerRecord,
 ): Result<ReturnType<typeof decisionPlan>, PlanRejection> => {
-  const resolution = resolveWritableUsCourt(admitted.record.docket.court_id);
+  const resolution = resolveUsCourt(admitted.record.docket.court_id);
   if (resolution.type === "rejected") {
     return Result.err({
       reason: courtRejection(resolution.reason),

@@ -36,17 +36,17 @@ const onCourt = (courtId: string) =>
   });
 
 describe("the court a CourtListener record is written under", () => {
-  test("a writable directory court sets the exact ID and canonical name", () => {
+  test("a directory court sets the exact ID and canonical name", () => {
     const planned = plan(courtListenerRecord());
 
     expect(planned.courtId).toBe("scotus");
     expect(planned.court).toBe("Supreme Court of the United States");
   });
 
-  test("unknown, rejected and not-writable courts are separate reasons", () => {
+  test("unknown and rejected courts are separate reasons, and every accepted court is written", () => {
     expect(rejectionOf(onCourt("no-such-court")).reason).toBe("court-unknown");
     expect(rejectionOf(onCourt("test")).reason).toBe("court-rejected");
-    expect(rejectionOf(onCourt("ca9")).reason).toBe("court-not-writable");
+    expect(plan(onCourt("ca9")).courtId).toBe("ca9");
   });
 
   test("the court is matched by exact spelling, never folded", () => {
@@ -582,11 +582,7 @@ describe("recorded snapshot clusters", () => {
     expect(planRecorded("103998").caseNumber).toBe("322 U.S. 385");
   });
 
-  test("a court outside the writable set is rejected, not written", () => {
-    const planned = planCourtListenerRecord(recorded.get("4329445"));
-
-    expect(Result.isError(planned) && planned.error.reason).toBe(
-      "court-not-writable",
-    );
+  test("a state court the directory accepts is written under its own id", () => {
+    expect(planRecorded("4329445").courtId).toBe("nyappdiv");
   });
 });

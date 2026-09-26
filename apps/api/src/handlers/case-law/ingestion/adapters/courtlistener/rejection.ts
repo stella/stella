@@ -11,7 +11,6 @@ export const COURTLISTENER_REJECTION_REASON = {
   OVER_LIMIT: "over-limit",
   COURT_UNKNOWN: "court-unknown",
   COURT_REJECTED: "court-rejected",
-  COURT_NOT_WRITABLE: "court-not-writable",
   MISSING_PRIMARY_REFERENCE: "missing-primary-reference",
   INVALID_IDENTIFIER: "invalid-identifier",
   IDENTIFIER_OVERFLOW: "identifier-overflow",
