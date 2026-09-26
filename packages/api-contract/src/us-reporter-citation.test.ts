@@ -96,8 +96,10 @@ describe("reporters that share a spelling", () => {
     expect(supreme).toHaveLength(1);
     expect(circuit).not.toEqual(supreme);
     // The bare edition names both.
-    expect(reporterOf("1 Wall. 1")?.toSorted()).toEqual(
-      [...(circuit ?? []), ...(supreme ?? [])].toSorted(),
+    const byName = (left: string | null, right: string | null): number =>
+      String(left).localeCompare(String(right));
+    expect(reporterOf("1 Wall. 1")?.toSorted(byName)).toEqual(
+      [...(circuit ?? []), ...(supreme ?? [])].toSorted(byName),
     );
   });
 
@@ -261,7 +263,7 @@ test("any spacing of a canonical citation reads to the same identity", () => {
     .map(([citation, gaps, lower]) => {
       const [volume, ...rest] = citation.split(" ");
       const page = rest.pop() ?? "";
-      const edition = [...rest.join("")]
+      const edition = Array.from(rest.join(""))
         .map(
           (character, index) =>
             `${character}${/[.]/u.test(character) ? (gaps[index] ?? "") : ""}`,

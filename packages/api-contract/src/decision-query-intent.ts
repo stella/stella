@@ -209,7 +209,9 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
     }
     default: {
       reference.kind satisfies never;
-      return panic(`Unhandled decision reference kind: ${String(reference)}`);
+      return panic(
+        `Unhandled decision reference kind: ${JSON.stringify(reference)}`,
+      );
     }
   }
 };

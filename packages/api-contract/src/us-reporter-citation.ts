@@ -93,7 +93,7 @@ const spaceMayFollow = (current: string, next: string): boolean =>
   (/\p{Ll}/u.test(current) && /\p{Lu}/u.test(next));
 
 const flexibleSpellingSource = (spelling: string): string => {
-  const characters = [...spelling];
+  const characters = Array.from(spelling);
   return characters
     .map((character, index) => {
       const next = characters[index + 1];
@@ -201,7 +201,8 @@ const FOLDED_SPELLINGS: ReadonlyMap<string, Candidates> = (() => {
     if (FOREIGN_FOLDS.has(fold)) {
       continue;
     }
-    const merged = folded.get(fold) ?? new Map();
+    const merged =
+      folded.get(fold) ?? new Map<string, UsReporterSpellingCandidate>();
     for (const candidate of candidates) {
       merged.set(`${candidate[0]}\u0000${String(candidate[1])}`, candidate);
     }

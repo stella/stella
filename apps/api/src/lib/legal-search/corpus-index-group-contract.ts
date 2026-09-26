@@ -268,7 +268,8 @@ export const resolveCorpusIndexGroupContract = ({
   manifest: CorpusIndexManifest;
   indexGroup: string;
 }): CorpusIndexGroupContract => {
-  const byGroup = contractCache.get(manifest) ?? new Map();
+  const byGroup =
+    contractCache.get(manifest) ?? new Map<string, CorpusIndexGroupContract>();
   contractCache.set(manifest, byGroup);
   const cached = byGroup.get(indexGroup);
   if (cached !== undefined) {

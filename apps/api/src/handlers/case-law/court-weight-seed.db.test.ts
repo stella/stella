@@ -231,7 +231,7 @@ test("Postgres ranks every writable United States court as TypeScript does", asy
     sql`SELECT d.court, (${tierSql})::int AS tier FROM (VALUES ${values}) AS d(court, country)`,
   );
   const inPostgres = new Map(
-    ranked.rows.map(({ court, tier }) => [court, Number(tier)]),
+    ranked.rows.map(({ court, tier }) => [court, tier]),
   );
   const differing = names.filter(
     (name) =>
@@ -282,10 +282,7 @@ test("every writable United States court ranks the same by id and by name in eve
           FROM (VALUES ${values}) AS d(court, country)`,
   );
   const byName = new Map(
-    ranked.rows.map(({ court, tier, weight }) => [
-      court,
-      { tier: Number(tier), weight: Number(weight) },
-    ]),
+    ranked.rows.map(({ court, tier, weight }) => [court, { tier, weight }]),
   );
   const disagreeing = writable.flatMap(({ id, canonicalName }) => {
     const byId = decisionCourtWeight(map, {

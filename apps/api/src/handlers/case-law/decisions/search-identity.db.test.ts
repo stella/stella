@@ -1,5 +1,4 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -216,7 +215,7 @@ test("a reporter citation resolves through the typed identifiers", async () => {
     reporters: decisionReporterGrammarForJurisdiction("USA"),
   });
   if (intent.type !== "identifier") {
-    return panic(`Read as ${intent.type}, not as an identifier`);
+    throw new Error(`Read as ${intent.type}, not as an identifier`);
   }
   expect(intent.kind).toBe("reporter");
 

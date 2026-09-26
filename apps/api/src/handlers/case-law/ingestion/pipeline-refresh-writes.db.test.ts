@@ -539,16 +539,22 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   // A result that reaches the write path without its court id is an adapter
   // defect; nothing is written for it.
   const { courtId: _courtId, ...unresolved } = usa("page-v3");
-  await expect(
-    processDecision({
-      input: { ...unresolved, caseNumber: "No. 20-1" },
-      observationOrder: 1000n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date(Date.UTC(2026, 8, 23, 13)),
-      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-      corpus: canonical,
-    }),
-  ).rejects.toThrow("Decision court identity rejected for USA: missing");
+  const rejection: unknown = await processDecision({
+    input: { ...unresolved, caseNumber: "No. 20-1" },
+    observationOrder: 1000n,
+    sourceId,
+    scopedDb,
+    observedAt: new Date(Date.UTC(2026, 8, 23, 13)),
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus: canonical,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toMatchObject({
+    message: expect.stringContaining(
+      "Decision court identity rejected for USA: missing",
+    ),
+  });
   expect(await courtIdOf("No. 20-1")).toEqual([]);
 });

@@ -695,7 +695,7 @@ describe("why a batch is not certified", () => {
         }),
     );
     if (Result.isOk(applied)) {
-      return panic("expected no receipt");
+      throw new Error("expected no receipt");
     }
     expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_WRITE);
     expect(new Set(applied.error.records.map(({ reason }) => reason))).toEqual(
@@ -731,7 +731,7 @@ describe("why a batch is not certified", () => {
         }),
     );
     if (Result.isOk(applied)) {
-      return panic("expected no receipt");
+      throw new Error("expected no receipt");
     }
     expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.TRANSIENT);
     expect(applied.error.records.map(({ reason }) => reason)).toEqual([
