@@ -1044,6 +1044,10 @@ export const processDocumentProcessingRun = async (
         mimeType: PDF_MIME_TYPE,
       });
       const result = await recognizePdfTextLocally({
+        scope: {
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+        },
         signal: lifecycleSignal,
         sourceKey,
       });

@@ -703,23 +703,6 @@ export const isMissingCorpusObjectError = (
   error instanceof MissingCorpusObjectError;
 
 /**
- * Size of one object without reading it, so a caller can refuse an
- * oversized object before materializing it. Null when storage does not
- * report a length.
- */
-export const getS3ObjectSizeWithSignal = async (
-  key: string,
-  signal: AbortSignal,
-): Promise<number | null> =>
-  await documentsCredentials.run(async () => {
-    const response = await getAbortableS3().send(
-      new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-      { abortSignal: signal },
-    );
-    return response.ContentLength ?? null;
-  });
-
-/**
  * What the store says about one object without reading it, or `null` when
  * it confirms the key holds nothing.
  */

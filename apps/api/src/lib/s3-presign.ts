@@ -508,6 +508,11 @@ const getTenantAwsS3Client = async ({
 
 type TenantS3OperationHooks = {
   resolveClient: typeof getTenantAwsS3Client;
+  headObjectSize: (
+    client: AwsS3Client,
+    command: HeadObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<number | null>;
   readObject: (
     client: AwsS3Client,
     command: GetObjectCommand,
@@ -527,6 +532,12 @@ export const createTenantS3RequestSignal = (
 
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
+  headObjectSize: async (client, command, signal) => {
+    const response = await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
+    return response.ContentLength ?? null;
+  },
   readObject: async (client, command, signal) => {
     const response = await client.send(command, {
       abortSignal: createTenantS3RequestSignal(signal),
@@ -552,6 +563,35 @@ export const setTenantS3OperationHooksForTesting = (
   hooks: TenantS3OperationHooks,
 ): void => {
   tenantS3OperationHooks = hooks;
+};
+
+/**
+ * An object's size without reading it, after enforcing its
+ * organization/workspace key scope. Null when storage does not report a
+ * length.
+ */
+export const readTenantS3ObjectSize = async ({
+  key,
+  scope,
+  signal,
+}: {
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<number | null> => {
+  assertKeyInSigningScope(key, scope);
+  // HeadObject is authorized by s3:GetObject, so the size check and the
+  // following read share one scoped session.
+  const client = await tenantS3OperationHooks.resolveClient({
+    actions: ["s3:GetObject"],
+    key,
+    scope,
+  });
+  return await tenantS3OperationHooks.headObjectSize(
+    client,
+    new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    signal,
+  );
 };
 
 /** Read an object after enforcing its organization/workspace key scope. */
