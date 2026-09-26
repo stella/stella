@@ -200,6 +200,39 @@ describe("checking a timestamp token", () => {
     );
   });
 
+  test("refuses a timestamping usage that is not marked critical", async () => {
+    const signer = await createTestTimestampCertificate({ critical: false });
+    const token = await issueTestTimestampToken({ digest, serial: 1, signer });
+
+    expect(await refused(token)).toBeInstanceOf(
+      PdfSigningTimestampInvalidError,
+    );
+  });
+
+  test("refuses a key that may also do something other than timestamping", async () => {
+    const signer = await createTestTimestampCertificate({
+      extendedKeyUsages: ["1.3.6.1.5.5.7.3.8", "1.3.6.1.5.5.7.3.1"],
+    });
+    const token = await issueTestTimestampToken({ digest, serial: 1, signer });
+
+    expect(await refused(token)).toBeInstanceOf(
+      PdfSigningTimestampInvalidError,
+    );
+  });
+
+  test("refuses a token from a certificate that had expired by its time", async () => {
+    const day = 86_400_000;
+    const signer = await createTestTimestampCertificate({
+      notAfter: new Date(Date.now() - day),
+      notBefore: new Date(Date.now() - 30 * day),
+    });
+    const token = await issueTestTimestampToken({ digest, serial: 1, signer });
+
+    expect(await refused(token)).toBeInstanceOf(
+      PdfSigningTimestampInvalidError,
+    );
+  });
+
   test("refuses a token whose signature does not verify", async () => {
     const signer = await createTestTimestampCertificate();
     const other = await createTestTimestampCertificate();

@@ -37,6 +37,8 @@ type TestCertificateOptions = {
   crlUrl?: string;
   /** Extended key usage OIDs; omitted leaves the extension out. */
   extendedKeyUsages?: string[];
+  /** Mark the extended key usage extension critical. */
+  extendedKeyUsagesCritical?: boolean;
   isCa?: boolean;
   /** Omitted: self-signed. */
   issuer?: TestCertificate;
@@ -66,6 +68,7 @@ export const createTestCertificate = async ({
   commonName,
   crlUrl,
   extendedKeyUsages,
+  extendedKeyUsagesCritical = false,
   isCa = false,
   issuer,
   notAfter = new Date(Date.now() + 86_400_000),
@@ -140,6 +143,7 @@ export const createTestCertificate = async ({
     extensions.push(
       new pkijs.Extension({
         extnID: EXTENDED_KEY_USAGE_OID,
+        critical: extendedKeyUsagesCritical,
         extnValue: new pkijs.ExtKeyUsage({ keyPurposes: extendedKeyUsages })
           .toSchema()
           .toBER(false),

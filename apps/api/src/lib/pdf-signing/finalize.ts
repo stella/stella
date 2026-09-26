@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/pdf-signing/sign-pdf";
 import type { AppliedSignature } from "@/api/lib/pdf-signing/sign-pdf";
 import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
+import { configuredTimestampTrustAnchors } from "@/api/lib/pdf-signing/timestamp-trust";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -177,6 +178,7 @@ const embed = async (
           prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
         signingTime: prepared.signingTime,
         timestampAuthorities: configuredTimestampAuthorities(),
+        timestampTrustAnchors: configuredTimestampTrustAnchors(),
       }),
     catch: (cause) => cause,
   });
