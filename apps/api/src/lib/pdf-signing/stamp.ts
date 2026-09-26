@@ -51,6 +51,8 @@ export const STAMP_SIZE_LIMITS = {
 
 /** Fractions may be off by rounding in the browser. */
 const FRACTION_TOLERANCE = 1e-6;
+/** The same rounding, in points. */
+const SIZE_TOLERANCE = 1e-3;
 
 const MAX_FONT_SIZE = 10;
 const MIN_FONT_SIZE = 3;
@@ -238,15 +240,17 @@ export const placeStamp = ({
   const displayedHeight = turned ? crop.width : crop.height;
   const width = box.width * displayedWidth;
   const height = box.height * displayedHeight;
+  // A box drawn at exactly a limit comes back a hair off it after the
+  // browser's fraction round trip.
   if (
-    width < STAMP_SIZE_LIMITS.minWidth ||
-    height < STAMP_SIZE_LIMITS.minHeight
+    width < STAMP_SIZE_LIMITS.minWidth - SIZE_TOLERANCE ||
+    height < STAMP_SIZE_LIMITS.minHeight - SIZE_TOLERANCE
   ) {
     return { status: "rejected", reason: "too_small" };
   }
   if (
-    width > STAMP_SIZE_LIMITS.maxWidth ||
-    height > STAMP_SIZE_LIMITS.maxHeight
+    width > STAMP_SIZE_LIMITS.maxWidth + SIZE_TOLERANCE ||
+    height > STAMP_SIZE_LIMITS.maxHeight + SIZE_TOLERANCE
   ) {
     return { status: "rejected", reason: "too_large" };
   }
