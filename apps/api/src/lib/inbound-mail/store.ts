@@ -1,9 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
-import type {
-  CorrespondenceDropReason,
-  CorrespondenceFiler,
-} from "@stll/api-contract/correspondence";
+import type { CorrespondenceDropReason } from "@stll/api-contract/correspondence";
 
 import {
   correspondenceDropLogs,
@@ -11,7 +8,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { evaluateInboundAcceptance } from "@/api/lib/inbound-mail/acceptance";
+import {
+  evaluateInboundAcceptance,
+  type InboundFiler,
+} from "@/api/lib/inbound-mail/acceptance";
 import type {
   InboundDeliveryOutcome,
   InboundDeliveryStore,
@@ -29,7 +29,7 @@ export type FileInboundCandidateOptions<
   tx: TTransaction;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
-  filer: CorrespondenceFiler;
+  filer: InboundFiler;
   delivery: Extract<
     PersistInboundDeliveryOptions["delivery"],
     { status: "candidate" }

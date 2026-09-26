@@ -7,15 +7,23 @@ import {
   type MailAuthentication,
 } from "@/api/lib/inbound-mail/authentication";
 
+export type InboundFiler = {
+  user: Extract<CorrespondenceFiler, { type: "user" }>;
+  shared_mailbox: Omit<
+    Extract<CorrespondenceFiler, { type: "shared_mailbox" }>,
+    "approvedByName"
+  >;
+}[CorrespondenceFiler["type"]];
+
 export type SenderMembership =
   | { status: "denied" }
   | {
       status: "allowed";
-      filer: CorrespondenceFiler;
+      filer: InboundFiler;
     };
 
 export type InboundAcceptance =
-  | { status: "accept"; filer: CorrespondenceFiler }
+  | { status: "accept"; filer: InboundFiler }
   | {
       status: "drop";
       reason:

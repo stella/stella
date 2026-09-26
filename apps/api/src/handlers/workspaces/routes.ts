@@ -19,6 +19,7 @@ import getMatterInboundAddress from "@/api/handlers/workspaces/correspondence/ad
 import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
 import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
 import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
+import listCorrespondenceDrops from "@/api/handlers/workspaces/correspondence/drops/list";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete";
 import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
@@ -238,6 +239,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .get("/search-preview", readSearchPreview.handler, {
           permissions: readSearchPreview.config.permissions,
+        })
+        .get("/correspondence/drops", listCorrespondenceDrops.handler, {
+          permissions: listCorrespondenceDrops.config.permissions,
+          query: listCorrespondenceDrops.config.query,
         })
         .get("/overview/activity", readOverviewActivity.handler, {
           permissions: readOverviewActivity.config.permissions,
