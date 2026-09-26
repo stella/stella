@@ -143,11 +143,14 @@ describe("UTF-8 punctuation read as windows-1252", () => {
 
   // "Â" is a letter French and Romanian write: before a footnote mark or a
   // nonbreaking space it is a capital with notation, not C2 read as
-  // windows-1252.
+  // windows-1252, and the lowercase word the space binds to it is no proof
+  // otherwise.
   test.each([
     ["fr", "La lettre Â¹ et la lettre Â² sont identiques."],
     ["ro", "Literele Â¹ și Â² sunt identice."],
     ["fr", "Les lettres Â  et Â  sont identiques."],
+    ["fr", "La lettre Â\u00A0est une voyelle. La lettre Â\u00A0est majuscule."],
+    ["ro", "Litera Â\u00A0este o vocală. Litera Â\u00A0este o vocală."],
   ])(
     "is not found in %s %s, where the lead is a native letter",
     (language, text) => {

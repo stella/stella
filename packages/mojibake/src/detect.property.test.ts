@@ -349,6 +349,8 @@ describe("a native capital before a mark", () => {
     actual: "utf-8",
     assumed: "windows-1252",
   } as const satisfies DecodingPair;
+  /** Spaces that bind a letter to the word after it, inside one token. */
+  const NONBREAKING_SPACES = ["\u00A0", "\u2007", "\u202F"];
   /** Marks a writer sets after a capital: footnotes, degrees, spacing, quotes. */
   const MARKS = [" ", "¹", "²", "³", "°", "«", "»"];
   const lettersOf = (tag: keyof typeof CLDR_EXEMPLARS): string[] =>
@@ -413,18 +415,53 @@ describe("a native capital before a mark", () => {
           const quoted = fc
             .constantFrom(...capitalsOf(tag))
             .map((capital) => `« ${capital} »`);
+          // "La lettre Â\u00A0est": a capital bound to the lowercase word
+          // after it. Where the capital and U+00A0 spell a UTF-8 sequence
+          // ("Â\u00A0" is C2 A0), the word must not vouch for it; it is
+          // drawn in ASCII letters too, which never stop the read-back.
+          const ascii = lower.filter((char) => /^[a-z]$/u.test(char));
+          const after =
+            ascii.length === 0
+              ? word
+              : fc.oneof(
+                  word,
+                  fc
+                    .array(fc.constantFrom(...ascii), {
+                      minLength: 1,
+                      maxLength: 9,
+                    })
+                    .map((chars) => chars.join("")),
+                );
+          const binding = fc
+            .tuple(
+              fc.constantFrom(...capitalsOf(tag)),
+              fc.constantFrom(...NONBREAKING_SPACES),
+            )
+            .map(([capital, space]) => `${capital}${space}`);
+          const bindingSequences = sequences.filter((sequence) =>
+            sequence.endsWith("\u00A0"),
+          );
+          const bound = fc
+            .tuple(
+              bindingSequences.length === 0
+                ? binding
+                : fc.oneof(binding, fc.constantFrom(...bindingSequences)),
+              after,
+            )
+            .map(([binder, lowercase]) => `${binder}${lowercase}`);
+          const token = fc.oneof(word, word, marked, quoted, bound);
           return fc.record({
             tag: fc.constant(tag),
-            tokens: fc.array(fc.oneof(word, word, marked, quoted), {
-              minLength: 2,
-              maxLength: 40,
-            }),
+            first: token,
+            rest: fc.array(
+              fc.tuple(fc.constantFrom(" ", ...NONBREAKING_SPACES), token),
+              { minLength: 1, maxLength: 40 },
+            ),
           });
         }),
-        ({ tag, tokens }) => {
-          expect(checkTextEncoding(tokens.join(" "), tag)).toEqual({
-            status: "clean",
-          });
+        ({ tag, first, rest }) => {
+          const text = [first, ...rest.flat()].join("");
+          expect(checkTextEncoding(text, tag)).toEqual({ status: "clean" });
         },
       ),
       config(300),

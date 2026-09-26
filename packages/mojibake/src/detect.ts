@@ -836,6 +836,14 @@ const bestPair = (
 /** A word with letters, none of them lowercase. */
 const CAPITALS_ONLY = /^(?=.*\p{L})\P{Ll}*$/u;
 
+/**
+ * Spaces that bind two words into one token: the split keeps them inside a
+ * word, since U+00A0 is also the second byte of UTF-8 "à" read as
+ * windows-1252.
+ */
+const isNonbreakingSpace = (char: string): boolean =>
+  char === "\u00A0" || char === "\u2007" || char === "\u202F";
+
 const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
   ["windows-1252", "iso-8859-1"] satisfies Charset[]
 ).map((assumed) => ({ actual: "utf-8", assumed }));
@@ -989,6 +997,32 @@ const marksSignOnTheirOwn = (
   return false;
 };
 
+const vouches = (part: string): boolean =>
+  !CAPITALS_ONLY.test(part) && UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(part);
+
+/**
+ * Whether lowercase letters vouch for a word's read-back: some part of it
+ * between nonbreaking spaces holds both a lowercase letter and a UTF-8
+ * sequence. A nonbreaking space ends the part it closes, since it may be
+ * that part's continuation byte ("voilÃ\u00A0" is "voilà"); the lowercase
+ * word after it is another word. So French "Â\u00A0est" (the letter Â, then
+ * a bound "est") is capitals before the space and no sequence after it.
+ */
+const vouchedByLowercase = (word: string): boolean => {
+  let part = "";
+  for (const char of word) {
+    part += char;
+    if (!isNonbreakingSpace(char)) {
+      continue;
+    }
+    if (vouches(part)) {
+      return true;
+    }
+    part = "";
+  }
+  return vouches(part);
+};
+
 type Utf8SignatureOptions = {
   alphabet: Alphabet | null;
   progress: Progress;
@@ -1015,12 +1049,13 @@ const utf8Signature = (
     if (!UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(word)) {
       continue;
     }
-    // Read back and classified per pair, then scanned for its marks once;
-    // these pairs are not the ones pair evaluations count.
+    // Read back and classified per pair, then scanned for lowercase and for
+    // its marks once each; these pairs are not the ones pair evaluations
+    // count.
     const cost = {
       words: 0,
       codeUnits: word.length,
-      passes: 2 * UTF8_SIGNATURE_PAIRS.length + 1,
+      passes: 2 * UTF8_SIGNATURE_PAIRS.length + 2,
     };
     if (!affords(progress, cost)) {
       break;
@@ -1033,8 +1068,9 @@ const utf8Signature = (
     // Capitals are where a writer's letters spell UTF-8 by accident (Slovak
     // "ÄŽ" is C4 8E, "Ď"): what capitals alone restore is no signature,
     // unless it is a mark no letter of the language leads.
+    work.codeUnits += word.length;
     signed ||=
-      !CAPITALS_ONLY.test(word) ||
+      vouchedByLowercase(word) ||
       marksSignOnTheirOwn(word, { pair: repaired.pair, alphabet, work });
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });
