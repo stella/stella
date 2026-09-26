@@ -1311,19 +1311,20 @@ type DecisionMetadata = {
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
   /**
-   * The decision's country. Identifiers are told apart by the key
+   * The decision's country, required: a caller without one would silently
+   * compare reporter citations by a key the rows are not written under. Identifiers are told apart by the key
    * `normalizeDecisionIdentifierIn` gives them there, the key the identifier
    * rows are written under, so two spellings of one reference (`10 A. 5`,
    * `10 Atl. 5`) become one row rather than a primary-key collision.
    */
-  jurisdiction?: string | undefined;
+  jurisdiction: string;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
-  jurisdiction?: string | undefined;
+  jurisdiction: string;
   metadata: Record<string, unknown>;
 };
 

@@ -704,6 +704,7 @@ describe("dockets", () => {
     const stored = decisionIdentifiersFromMetadata({
       caseNumber: decision.caseNumber,
       identifiers: decision.identifiers,
+      jurisdiction: decision.country,
     }).map((identifier) => normalizeDecisionIdentifier(identifier));
     expect(stored).toContain(
       normalizeDecisionIdentifier({

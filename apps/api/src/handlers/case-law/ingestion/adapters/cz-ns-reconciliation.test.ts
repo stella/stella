@@ -526,6 +526,7 @@ describe("cz-ns listSlicePage", () => {
         const identifiers = decisionIdentifiersFromMetadata({
           caseNumber: built.decision.caseNumber,
           identifiers: built.decision.identifiers,
+          jurisdiction: built.decision.country,
         });
         expect(identifiers.map(({ value }) => value)).toEqual(dockets);
         expect(identifiers.every(isDecisionIdentifier)).toBe(true);
