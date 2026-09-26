@@ -7,8 +7,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   AuthorizedPdfSigningSession,
   PdfSigningSessionAuthorization,
-} from "@/api/lib/pdf-signing/sessions";
-import { authorizePdfSigningSession } from "@/api/lib/pdf-signing/sessions";
+} from "@/api/lib/files/pdf-signing/sessions";
+import { authorizePdfSigningSessionAsOwner } from "@/api/lib/files/pdf-signing/sessions";
 import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 
 const SESSION_TOKEN_LENGTH = 64;
@@ -81,7 +81,7 @@ export const authorizePdfSigningFinalizeCredentials = async (
   if (!credentials.ok) {
     return Result.err(pdfSigningSessionNotFoundError());
   }
-  const authorized = await authorizePdfSigningSession(credentials.value);
+  const authorized = await authorizePdfSigningSessionAsOwner(credentials.value);
   if (authorized.status === "finalized") {
     return Result.ok({
       kind: "finalized",
@@ -112,6 +112,6 @@ export const authorizePdfSigningCredentials = async (
     return Result.err(pdfSigningSessionNotFoundError());
   }
   return openSessionOrError(
-    await authorizePdfSigningSession(credentials.value),
+    await authorizePdfSigningSessionAsOwner(credentials.value),
   );
 };

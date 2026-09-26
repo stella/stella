@@ -72,6 +72,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-types/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
@@ -79,7 +80,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
-  "apps/api/src/lib/pdf-signing/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",
@@ -175,7 +175,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/web/src/features/chat/chat-fetch.ts",
   // Handed to LibPDF as a signer and a timestamp authority, which report a
   // failure back through `pdf.sign` only by rejecting.
-  "apps/api/src/lib/pdf-signing/libpdf-callbacks.ts",
+  "apps/api/src/lib/files/pdf-signing/libpdf-callbacks.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.

@@ -6,23 +6,23 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
-import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { APIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   createPdfSigningHandoff,
   launchPdfSigningDeepLink,
-  type PdfSigningTarget,
+  type PdfSignableFile,
   watchPdfSigningSession,
-} from "@/lib/pdf-signing";
-import type { PdfSigningStamp } from "@/lib/pdf-signing-stamp.logic";
+} from "@/components/inspector/pdf-signing";
+import type { PdfSigningStamp } from "@/components/inspector/pdf-signing-stamp.logic";
 import {
   type PdfSigningCloseReason,
   pdfSigningFinalizedQueryKeys,
   pdfSigningStartErrorCode,
   type PdfSigningStartErrorCode,
-} from "@/lib/pdf-signing.logic";
+} from "@/components/inspector/pdf-signing.logic";
+import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { APIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
@@ -81,7 +81,7 @@ const CLOSE_REASON_KEYS = {
  * exchange, because one document field carries one open signing session at a
  * time.
  */
-export const useDesktopPdfSign = (target: PdfSigningTarget) => {
+export const useDesktopPdfSign = (target: PdfSignableFile) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [isSigning, setIsSigning] = useState(false);

@@ -14,10 +14,13 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
-import { createOpaqueToken, hashOpaqueToken } from "@/api/lib/opaque-tokens";
+import {
+  createOpaqueToken,
+  hashOpaqueToken,
+} from "@/api/lib/entities/opaque-tokens";
+import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { canWriteWorkspaceEntities } from "@/api/lib/workspace-entity-write-access";
 
 type AuthorizedDesktopEditSession = {
   entityId: SafeId<"entity">;

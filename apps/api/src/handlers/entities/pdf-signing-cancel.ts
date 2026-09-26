@@ -6,7 +6,7 @@ import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
+import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,

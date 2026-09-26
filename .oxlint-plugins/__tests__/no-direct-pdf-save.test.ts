@@ -104,7 +104,10 @@ describe.serial("no-direct-pdf-save", () => {
     // is not.
     expect(await lint(source)).toEqual([1, 1]);
     expect(
-      await lint(source, "apps/api/src/lib/pdf-signing/validation-data.ts"),
+      await lint(
+        source,
+        "apps/api/src/lib/files/pdf-signing/validation-data.ts",
+      ),
     ).toEqual([1]);
     expect(
       await lint(source, "apps/api/src/lib/workflow/generate-batch.ts"),
