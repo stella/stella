@@ -409,9 +409,18 @@ const MarginNoteBody = ({
         />
       );
     }
-    case "card":
-    case "annotation":
     case "example": {
+      return (
+        <ExampleNote
+          item={item}
+          measureRef={measureRef}
+          placement={placement}
+          presence={presence}
+        />
+      );
+    }
+    case "card":
+    case "annotation": {
       return (
         <AnalysisNote
           item={item}
@@ -445,15 +454,18 @@ type NoteProps<T extends MarginItem> = {
   presence: NotePresence;
 };
 
-const AnalysisNote = ({
+type AnalysisNoteStyleOptions = {
+  item: AnalysisMarginItem;
+  placement: NotePlacement;
+  presence: NotePresence;
+};
+
+/** The stripe, indent and position an analysis-shaped note is drawn with. */
+const analysisNoteStyle = ({
   item,
-  measureRef,
-  onHover,
-  onJump,
   placement,
   presence,
-}: NoteProps<AnalysisMarginItem>) => {
-  const position = notePlacementPresentation(placement);
+}: AnalysisNoteStyleOptions) => {
   const cssVar = getCategoryVar(item.category);
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
@@ -472,37 +484,77 @@ const AnalysisNote = ({
     return `color-mix(in srgb, var(${cssVar}) 60%, transparent)`;
   })();
 
-  const style = {
-    ...position.style,
+  return {
+    ...notePlacementPresentation(placement).style,
     paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
     borderInlineStartColor: stripe,
     ...(presence === "highlighted" && {
       boxShadow: `inset 2px 0 0 var(${cssVar})`,
     }),
   };
+};
+
+const NoteHeading = ({ heading }: { heading: string | undefined }) =>
+  heading ? (
+    <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
+      {capitalize(heading)}
+    </span>
+  ) : null;
+
+/**
+ * The shape a note would take, before there is an analysis. Decorative: its
+ * lines are placeholders at seeded paragraphs, so it is neither focusable nor
+ * announced, and there is nothing to jump to. The invitation's button is the
+ * keyboard path to the offer.
+ */
+const ExampleNote = ({
+  item,
+  measureRef,
+  placement,
+  presence,
+}: Omit<
+  NoteProps<Extract<AnalysisMarginItem, { kind: "example" }>>,
+  "onHover" | "onJump"
+>) => (
+  <div
+    aria-hidden
+    className={cn(
+      "text-foreground-muted border-s-[3px] py-1 ps-2.5 text-start",
+      notePlacementPresentation(placement).className,
+    )}
+    ref={(el) => measureRef?.(el, item.id)}
+    style={analysisNoteStyle({ item, placement, presence })}
+  >
+    <NoteHeading heading={item.heading} />
+    <span className="mt-1 flex flex-col gap-1.5">
+      {item.lines.map((width) => (
+        <span
+          className="bg-muted block h-2 rounded-full"
+          key={width}
+          style={{ width: `${width * 100}%` }}
+        />
+      ))}
+    </span>
+  </div>
+);
+
+const AnalysisNote = ({
+  item,
+  measureRef,
+  onHover,
+  onJump,
+  placement,
+  presence,
+}: NoteProps<Extract<AnalysisMarginItem, { kind: "card" | "annotation" }>>) => {
+  const position = notePlacementPresentation(placement);
+  const style = analysisNoteStyle({ item, placement, presence });
   const body = (
     <>
-      {item.heading && (
-        <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
-          {capitalize(item.heading)}
+      <NoteHeading heading={item.heading} />
+      {item.text && (
+        <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
+          {item.text}
         </span>
-      )}
-      {item.kind === "example" ? (
-        <span aria-hidden className="mt-1 flex flex-col gap-1.5">
-          {item.lines.map((width) => (
-            <span
-              className="bg-muted block h-2 rounded-full"
-              key={width}
-              style={{ width: `${width * 100}%` }}
-            />
-          ))}
-        </span>
-      ) : (
-        item.text && (
-          <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
-            {item.text}
-          </span>
-        )
       )}
     </>
   );

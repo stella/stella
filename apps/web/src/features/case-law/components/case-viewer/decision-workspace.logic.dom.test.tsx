@@ -5,7 +5,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 // click is answered from the elements a reader actually hits.
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, isInaccessible, render, within } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { MarginNotes } =
   await import("@/features/case-law/components/case-viewer/analysis/margin-notes");
@@ -100,5 +101,19 @@ describe("the visitor's notes column", () => {
     expect(clickOpensVisitorOffer(aside)).toBe(true);
     expect(clickOpensVisitorOffer(view.getByText(EXAMPLE_HEADING))).toBe(true);
     expect(clickOpensVisitorOffer(view.getByTestId("resize"))).toBe(false);
+  });
+
+  test("draws example notes as decoration, out of the tab order and the accessibility tree", () => {
+    const view = renderVisitorColumn();
+    const heading = view.getByText(EXAMPLE_HEADING);
+    const example = heading.closest('[aria-hidden="true"]');
+
+    expect(example).not.toBeNull();
+    expect(example?.querySelectorAll(FOCUSABLE)).toHaveLength(0);
+    expect(example?.matches(FOCUSABLE)).toBe(false);
+    expect(
+      within(view.container).queryByRole("button", { name: EXAMPLE_HEADING }),
+    ).toBeNull();
+    expect(isInaccessible(heading)).toBe(true);
   });
 });
