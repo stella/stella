@@ -39,6 +39,9 @@ export const CHAT_ORACLE = {
   ledgerCallsPresent: "chat.ledger.calls-present",
   /** An approved call runs once; a denied or unanswered one never runs. */
   ledgerEffectsAuthorized: "chat.ledger.effects-authorized",
+  /** Every action the page offers on the live view is one the conversation
+   *  model's commands may take there. */
+  modelCoversPageActions: "chat.model.covers-page-actions",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,

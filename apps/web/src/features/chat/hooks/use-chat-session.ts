@@ -37,7 +37,6 @@ import {
   getChatAssistantTurnError,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
-  hasRunningToolCallInLatestAssistantMessage,
   isApprovalToolName,
   isChatClientRequestActive,
   isExternalMcpToolName,
@@ -47,6 +46,7 @@ import {
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
+import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {
   beginCreateDocumentDraftPersistence,
   completeCreateDocumentDraft,
@@ -1312,15 +1312,16 @@ export const useChatSession = ({
     [messages],
   );
 
-  const hasRunningToolCall = useMemo(
-    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
-    [messages],
+  const isGenerating = useMemo(
+    () =>
+      isChatTurnGenerating({
+        hasError: error !== undefined,
+        messages,
+        requestActive: isChatClientRequestActive(status),
+        sessionGenerating,
+      }),
+    [error, messages, sessionGenerating, status],
   );
-  const isGenerating =
-    error === undefined &&
-    (isChatClientRequestActive(status) ||
-      sessionGenerating ||
-      hasRunningToolCall);
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);

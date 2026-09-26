@@ -97,7 +97,9 @@ type RecordedAction =
   | { type: "stop" }
   | { type: "drop-connection" }
   /** The user reloads the page. */
-  | { type: "reload" };
+  | { type: "reload" }
+  /** Retry on the latest answer. */
+  | { type: "retry" };
 
 type RecordedStep = {
   action: RecordedAction;
@@ -466,6 +468,22 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
       asks([approvalCall("call-2")], "And the older copy"),
     ]);
     await autoApprove(recorder, "call-2", [answers("Both deleted")]);
+  },
+  // Retry on an answer that failed, and on one that waits on a card.
+  retry: async (recorder) => {
+    await send(recorder, "Draft the NDA", [
+      { message: "Scripted provider failure", type: "fail-before-output" },
+    ]);
+    recorder.harness.script(recorder.threadId, [
+      asks([approvalCall("call-1")]),
+    ]);
+    await step(recorder, { type: "retry" }, async () => {
+      await recorder.client.resend();
+    });
+    recorder.harness.script(recorder.threadId, [answers("Drafted")]);
+    await step(recorder, { type: "retry" }, async () => {
+      await recorder.client.resend();
+    });
   },
   "error-before-first-chunk": async (recorder) => {
     await send(recorder, "Draft the NDA", [

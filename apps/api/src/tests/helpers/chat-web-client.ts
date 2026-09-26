@@ -27,6 +27,10 @@ const WEB_CHAT_UI_TOOLS_URL = new URL(
   "../../../../web/src/components/chat/chat-ui-tools.ts",
   import.meta.url,
 ).href;
+const WEB_CHAT_USER_ACTIONS_URL = new URL(
+  "../../../../web/src/components/chat/chat-user-actions.ts",
+  import.meta.url,
+).href;
 
 /** The web app's API origin in tests (`apps/web/src/test-setup.ts`). */
 const WEB_TEST_API_URL = "http://localhost:3001";
@@ -53,7 +57,26 @@ type WebChatRuntime = {
   stop: () => void;
 };
 
+/** An assistant message's action, as `chat-user-actions.ts` offers it. */
+type AssistantMessageActionGate = (state: {
+  isGenerating: boolean;
+  messageId: string;
+  messages: readonly UIMessage[];
+}) => boolean;
+
 type WebChatModules = {
+  /** `chat-user-actions.ts`: every action the thread page offers. */
+  chatUserActions: readonly string[];
+  canForkAssistantMessage: AssistantMessageActionGate;
+  canRetryAssistantMessage: AssistantMessageActionGate;
+  /** `chat-ui-tools.ts`: the failure a stored turn outcome reports. */
+  getChatAssistantTurnError: (message: UIMessage | null) => Error | undefined;
+  isChatTurnGenerating: (state: {
+    hasError: boolean;
+    messages: readonly UIMessage[];
+    requestActive: boolean;
+    sessionGenerating: boolean;
+  }) => boolean;
   /** `chat-ui-tools.ts`: a tool part that renders as an approval card. */
   isApprovalPart: (part: unknown) => boolean;
   /** `chat-ui-tools.ts`: a stored call of a tool the web app does not know,
@@ -95,6 +118,21 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
   process.env["VITE_API_URL"] ??= WEB_TEST_API_URL;
   const runtime: unknown = await import(WEB_CHAT_RUNTIME_URL);
   const uiTools: unknown = await import(WEB_CHAT_UI_TOOLS_URL);
+  const userActions: unknown = await import(WEB_CHAT_USER_ACTIONS_URL);
+  const actionList: unknown =
+    typeof userActions === "object" && userActions !== null
+      ? Reflect.get(userActions, "CHAT_USER_ACTIONS")
+      : undefined;
+  if (
+    typeof actionList !== "object" ||
+    actionList === null ||
+    !hasFunction(userActions, "canForkAssistantMessage") ||
+    !hasFunction(userActions, "canRetryAssistantMessage") ||
+    !hasFunction(userActions, "isChatTurnGenerating") ||
+    !hasFunction(uiTools, "getChatAssistantTurnError")
+  ) {
+    return panic("The web chat modules no longer export the chat actions");
+  }
   if (
     !hasFunction(runtime, "createChatRuntime") ||
     !hasFunction(runtime, "sendThreadChatMessage") ||
@@ -108,7 +146,12 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
   // The functions exist (checked above); their signatures are the web app's,
   // which this file states once in `WebChatModules`.
   loadedWebChat = asTestRaw<WebChatModules>({
+    canForkAssistantMessage: userActions.canForkAssistantMessage,
+    canRetryAssistantMessage: userActions.canRetryAssistantMessage,
+    chatUserActions: Object.keys(actionList),
     createChatRuntime: runtime.createChatRuntime,
+    getChatAssistantTurnError: uiTools.getChatAssistantTurnError,
+    isChatTurnGenerating: userActions.isChatTurnGenerating,
     isApprovalPart: uiTools.isApprovalPart,
     isOpaquePersistedChatToolCallPart:
       uiTools.isOpaquePersistedChatToolCallPart,
@@ -198,6 +241,8 @@ export type WebChatClient = {
   messages: () => UIMessage[];
   /** Retry on the latest answer (the web app's resend). */
   resend: () => Promise<void>;
+  /** Whether the runtime reports an error and has a request open. */
+  runtimeState: () => { hasError: boolean; requestActive: boolean };
   sendUserMessage: (id: string, text: string) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
@@ -323,6 +368,14 @@ export const createWebChatClient = async ({
     messages,
     resend: async () => {
       await act(async () => await runtime.reload());
+    },
+    runtimeState: () => {
+      const { error, isLoading, status } = runtime.getSnapshot();
+      return {
+        hasError: error !== undefined,
+        requestActive:
+          isLoading || status === "submitted" || status === "streaming",
+      };
     },
     sendUserMessage: async (id, text) => {
       await act(
