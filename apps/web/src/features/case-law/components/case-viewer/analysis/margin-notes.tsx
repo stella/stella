@@ -368,8 +368,18 @@ type MarginNoteProps = {
   presence?: NotePresence | undefined;
 };
 
-/** One note, in whichever of the two places the reader has room for it. */
-const MarginNote = ({
+/**
+ * One note, in whichever of the two places the reader has room for it. The
+ * wrapper draws no box of its own; it only marks the note's kind.
+ */
+const MarginNote = (props: MarginNoteProps) => (
+  // `MARGIN_NOTE_KIND_ATTRIBUTE`, which the notes column's click reads.
+  <div className="contents" data-margin-note={props.item.kind}>
+    <MarginNoteBody {...props} />
+  </div>
+);
+
+const MarginNoteBody = ({
   item,
   measureRef,
   onHover,

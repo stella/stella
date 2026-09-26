@@ -46,6 +46,13 @@ import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import {
+  clickOpensVisitorOffer,
+  NOTES_FILTER_SHOWS_AI,
+  READER_ASIDE_RESIZE_SLOT,
+  resolveVisitorOffer,
+} from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -127,12 +134,6 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
-/** The notes column's resize handle, which a column-wide click must skip. */
-const READER_ASIDE_RESIZE_SLOT = "reader-aside-resize";
-
-/** The notes margin's mutually exclusive source filter. */
-type NotesFilter = "all" | "ai" | "mine";
-
 /** What the margin's source filter means for the reader's own marks. */
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
@@ -166,7 +167,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
-  const showAiNotes = notesFilter === "all" || notesFilter === "ai";
+  const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
@@ -351,11 +352,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
-  // The visitor's account gate, while there is no analysis to show them.
-  const visitorOffer =
-    props.aiMode === "gated" && analysisState.status === "idle"
-      ? props.onRequestAnalysis
-      : undefined;
+  const visitorOffer = resolveVisitorOffer({
+    analysisStatus: analysisState.status,
+    notesFilter,
+    onRequest: props.aiMode === "gated" ? props.onRequestAnalysis : undefined,
+  });
 
   // A visitor sees the shape the notes would take, where they would sit,
   // until there is an analysis to show instead.
@@ -384,7 +385,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   const visibleMarginItems = [
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(showAiNotes ? exampleMarginItems : []),
+    ...exampleMarginItems,
     ...annotations.notes,
   ];
 
@@ -525,8 +526,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
-                {/* Before a visitor has an account, the whole notes column is
-                    the offer: a click anywhere in it asks for the account. The
+                {/* Before a visitor has an account, the notes column is the
+                    offer: a click on its surface or an example note asks for
+                    the account. The reader's own comments stay usable. The
                     prompt's own button is the keyboard path to the same gate. */}
                 {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pointer shortcut only; the sticky prompt's button is the keyboard path */}
                 <aside
@@ -538,16 +540,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     visitorOffer === undefined
                       ? undefined
                       : (event) => {
-                          // A resize is not a request for the offer.
-                          if (
-                            event.target instanceof Element &&
-                            event.target.closest(
-                              `[data-slot="${READER_ASIDE_RESIZE_SLOT}"]`,
-                            ) !== null
-                          ) {
-                            return;
+                          if (clickOpensVisitorOffer(event.target)) {
+                            visitorOffer();
                           }
-                          visitorOffer();
                         }
                   }
                 >

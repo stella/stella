@@ -32,7 +32,8 @@ export const exampleNoteAnchors = ({
   for (let slice = 0; slice < slices; slice++) {
     const start = Math.floor((anchorIds.length * slice) / slices);
     const end = Math.floor((anchorIds.length * (slice + 1)) / slices);
-    const pick = start + (hashString(`${seed}:${String(slice)}`) % (end - start));
+    const pick =
+      start + (hashString(`${seed}:${String(slice)}`) % (end - start));
     const anchor = anchorIds.at(pick);
     if (anchor !== undefined) {
       anchors.push(anchor);

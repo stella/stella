@@ -14,6 +14,9 @@
 
 import { panic } from "better-result";
 
+/** Carries each drawn note's kind, so a click can tell which note it hit. */
+export const MARGIN_NOTE_KIND_ATTRIBUTE = "data-margin-note";
+
 /**
  * Where a note is drawn. The wide reader has a gutter and paints its notes
  * into it at a measured offset; a reader too narrow for one (the inspector
