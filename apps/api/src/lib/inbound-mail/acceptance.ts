@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { CorrespondenceFiler } from "@stll/api-contract/correspondence";
+
 import {
   hasAlignedAuthentication,
   type MailAuthentication,
@@ -9,12 +11,11 @@ export type SenderMembership =
   | { status: "denied" }
   | {
       status: "allowed";
-      filerId: string;
-      source: "primary" | "verified-alias" | "shared-mailbox";
+      filer: CorrespondenceFiler;
     };
 
 export type InboundAcceptance =
-  | { status: "accept"; filerId: string }
+  | { status: "accept"; filer: CorrespondenceFiler }
   | {
       status: "drop";
       reason:
@@ -55,7 +56,7 @@ export const evaluateInboundAcceptance = ({
     case "unavailable":
       return { status: "drop", reason: "scan-unavailable" };
     case "pass":
-      return { status: "accept", filerId: membership.filerId };
+      return { status: "accept", filer: membership.filer };
     default: {
       scan satisfies never;
       return panic("Unhandled inbound scan verdict");
