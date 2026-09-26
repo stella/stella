@@ -965,8 +965,6 @@ export default defineConfig({
     // Flags `for (const n of [...el.childNodes])`, where the copy detaches a
     // live NodeList (or Set) from the mutations the loop body makes.
     "unicorn/no-useless-spread": "off",
-    // Nursery; keys on the method name, so it also flags Cheerio's `toArray`.
-    "unicorn/no-useless-iterator-to-array": "off",
     // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.

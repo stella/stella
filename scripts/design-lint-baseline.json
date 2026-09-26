@@ -535,6 +535,14 @@
     "apps/api/src/lib/workflow/generate-batch.ts": 1
   },
   "eslint/complexity": {
+    ".oxlint-plugins/no-ambient-nondeterminism.ts": 5,
+    ".oxlint-plugins/no-known-value-widening.ts": 1,
+    ".oxlint-plugins/no-path-prefix-containment.ts": 1,
+    ".oxlint-plugins/public-case-law-db-boundary.ts": 1,
+    ".oxlint-plugins/require-cn-for-classname-composition.ts": 4,
+    ".oxlint-plugins/require-eden-error-check.ts": 2,
+    ".oxlint-plugins/require-safe-outbound-target.ts": 3,
+    ".oxlint-plugins/require-search-scope.ts": 4,
     "apps/api/scripts/chat-orientation-eval.ts": 1,
     "apps/api/scripts/export-capability-catalog.ts": 1,
     "apps/api/scripts/generate-web-api-types.ts": 1,
@@ -632,9 +640,34 @@
     "packages/cli/src/registry-trust.ts": 1,
     "packages/scripts/src/model-catalog-capabilities-gen.ts": 1,
     "packages/scripts/src/property-timeout-convention.ts": 1,
-    "packages/ui/src/kanban/virtual-cell.tsx": 1
+    "packages/ui/src/kanban/virtual-cell.tsx": 1,
+    "scripts/check-marketing-content.ts": 1,
+    "scripts/check-migration-safety.ts": 1,
+    "scripts/ratchet.ts": 2,
+    "scripts/root-connection-shapes.ts": 1,
+    "scripts/typecheck-baseline.ts": 1
   },
   "eslint/max-lines-per-function": {
+    ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
+    ".oxlint-plugins/no-broad-translation-callable.ts": 1,
+    ".oxlint-plugins/no-object-url-leak.ts": 1,
+    ".oxlint-plugins/no-path-prefix-containment.ts": 1,
+    ".oxlint-plugins/no-secret-in-log-sink.ts": 1,
+    ".oxlint-plugins/no-truncated-timestamp-comparison.ts": 1,
+    ".oxlint-plugins/no-unbounded-response-body.ts": 1,
+    ".oxlint-plugins/no-unowned-file-version-write.ts": 1,
+    ".oxlint-plugins/no-unreviewed-typebox-unsafe.ts": 1,
+    ".oxlint-plugins/no-untyped-updates.ts": 1,
+    ".oxlint-plugins/no-unvalidated-json-domain-cast.ts": 1,
+    ".oxlint-plugins/prefer-temporal.ts": 1,
+    ".oxlint-plugins/public-case-law-db-boundary.ts": 1,
+    ".oxlint-plugins/require-cn-for-classname-composition.ts": 1,
+    ".oxlint-plugins/require-eden-error-check.ts": 1,
+    ".oxlint-plugins/require-fetch-timeout.ts": 1,
+    ".oxlint-plugins/require-safe-outbound-target.ts": 1,
+    ".oxlint-plugins/require-search-scope.ts": 3,
+    ".oxlint-plugins/require-stream-reader-disposal.ts": 1,
+    ".oxlint-plugins/scanned-file-boundary.ts": 1,
     "apps/api/evals/template-authoring.ts": 1,
     "apps/api/evals/template-fill.ts": 1,
     "apps/api/scripts/export-capability-catalog.ts": 2,
@@ -842,9 +875,17 @@
     "packages/scripts/src/dev-runner.ts": 1,
     "packages/ui/src/components/date-picker-popover.tsx": 1,
     "packages/ui/src/components/outline-rail.tsx": 1,
-    "packages/ui/src/kanban/subgroup-board.tsx": 1
+    "packages/ui/src/kanban/subgroup-board.tsx": 1,
+    "scripts/crawl-posture.ts": 1,
+    "scripts/db-await-in-loop.ts": 1,
+    "scripts/env-tool.ts": 1,
+    "scripts/merge-bar.ts": 1,
+    "scripts/ratchet.ts": 1,
+    "scripts/suppression-waivers.ts": 1
   },
   "eslint/max-params": {
+    ".oxlint-plugins/no-ambient-nondeterminism.ts": 6,
+    ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
     "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
@@ -868,6 +909,8 @@
     "packages/cli/src/auth/login.ts": 1,
     "packages/scripts/src/i18n-lint.ts": 2,
     "packages/template-conditions/src/index.ts": 1,
-    "packages/ui/src/components/date-picker-popover.tsx": 1
+    "packages/ui/src/components/date-picker-popover.tsx": 1,
+    "scripts/rc-bailouts.ts": 1,
+    "scripts/typecheck-baseline.ts": 1
   }
 }

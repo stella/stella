@@ -40,6 +40,24 @@ const BASELINE_PATH = BASELINE_PATHS.designLint;
 const CONFIG_PATH = "oxlint.design.config.ts";
 /** The paths `code-check` lints; the baseline is measured on the same tree. */
 const LINT_SCOPE = [".claude/mcp", "apps", "packages"];
+/**
+ * The files `lint-root-scripts.sh` and `lint-oxlint-fixtures.sh` lint with the
+ * same config, listed from git for the reason those scripts give. The
+ * fixtures break rules on purpose and are linted on their own.
+ */
+const TOOLING_PATHSPECS = [
+  "scripts/*.ts",
+  ".oxlint-plugins/*.ts",
+  ":(exclude).oxlint-plugins/__fixtures__/**",
+];
+
+const toolingFiles = (): string[] => {
+  const result = Bun.spawnSync(["git", "ls-files", ...TOOLING_PATHSPECS]);
+  if (result.exitCode !== 0) {
+    panic(`git ls-files exited with ${result.exitCode}`);
+  }
+  return result.stdout.toString().split("\n").filter(Boolean);
+};
 const WRITE_HINT = "bun scripts/design-lint-baseline.ts --write";
 /** Cap the stale list so a large prune stays readable in CI logs. */
 const STALE_PREVIEW = 10;
@@ -167,7 +185,7 @@ const run = (): number => {
   }
 
   if (mode === "write") {
-    const current = lint(LINT_SCOPE);
+    const current = lint([...LINT_SCOPE, ...toolingFiles()]);
     writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
     for (const rule of DESIGN_LINT_BACKLOG_RULES) {
       console.log(
