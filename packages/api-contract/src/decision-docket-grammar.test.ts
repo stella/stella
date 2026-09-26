@@ -310,7 +310,6 @@ describe("Slovak Constitutional Court dockets", () => {
   });
 
   test("every accepted spelling of one docket normalizes to one key", () => {
-    const optional = (text: string) => fc.constantFrom("", text);
     fc.assert(
       fc.property(
         fc.constantFrom("I", "II", "III", "IV", "PL"),
@@ -320,7 +319,7 @@ describe("Slovak Constitutional Court dockets", () => {
           fc.boolean(),
           fc.constantFrom(". ", ".", " ", ".  ", ". "),
           fc.constantFrom("ÚS", "US", "ús", "us", "Ús", "uS", "ÚS"),
-          optional(" "),
+          fc.constantFrom("", " ", "/", " / "),
           fc.constantFrom("", " ", "  ", " "),
         ),
         (senate, ordinal, year, [lower, separator, mark, tail, pad]) => {
