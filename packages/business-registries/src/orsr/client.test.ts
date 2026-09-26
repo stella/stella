@@ -422,6 +422,12 @@ const installPathStub = (
   };
 };
 
+const rejectionOf = async (pending: Promise<unknown>): Promise<unknown> =>
+  await pending.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
 describe("lookupFullRecordByIco", () => {
   let restore: () => void = () => {
     // replaced by each test's stub
@@ -577,7 +583,7 @@ describe("lookupFullRecordByIco", () => {
         : new Response("<html>Údržba</html>", { status: 200 }),
     );
 
-    await expect(lookupFullRecordByIco("31333532")).rejects.toMatchObject({
+    expect(await rejectionOf(lookupFullRecordByIco("31333532"))).toMatchObject({
       name: "OrsrAPIError",
       message: "ORSR 200: invalid JSON payload",
     });
@@ -603,9 +609,11 @@ describe("lookupFullRecordByIco", () => {
       }
     });
 
-    await expect(
-      lookupFullRecordByIco("31333532", { signal: controller.signal }),
-    ).rejects.toThrow("caller went away");
+    expect(
+      await rejectionOf(
+        lookupFullRecordByIco("31333532", { signal: controller.signal }),
+      ),
+    ).toMatchObject({ message: "caller went away" });
   });
 
   test("returns null without file requests when the IČO is not on file", async () => {
@@ -626,7 +634,7 @@ describe("lookupFullRecordByIco", () => {
       return jsonResponse({});
     });
 
-    await expect(lookupFullRecordByIco("12345678")).rejects.toBeInstanceOf(
+    expect(await rejectionOf(lookupFullRecordByIco("12345678"))).toBeInstanceOf(
       OrsrValidationError,
     );
     expect(called).toBe(false);

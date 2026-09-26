@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   hasOptionalNumber,
   hasOptionalString,
@@ -367,14 +369,17 @@ const fetchRelated = async (
 const settlePart = async <Value>(
   pending: Promise<Value>,
 ): Promise<OrsrRecordPart<Value>> => {
-  try {
-    return { status: "loaded", value: await pending };
-  } catch (error) {
-    if (error instanceof OrsrError) {
-      return { status: "unavailable", reason: error.message };
-    }
-    throw error;
+  const settled = await Result.tryPromise({
+    try: async () => await pending,
+    catch: (error) => error,
+  });
+  if (settled.isOk()) {
+    return { status: "loaded", value: settled.value };
   }
+  if (settled.error instanceof OrsrError) {
+    return { status: "unavailable", reason: settled.error.message };
+  }
+  throw settled.error;
 };
 
 /**
