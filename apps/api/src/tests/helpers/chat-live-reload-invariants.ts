@@ -181,6 +181,69 @@ export const findWireIdentityViolations = (
     }),
   );
 
+/** The calls `parts` hold a result for: a tool-result part, or an output on
+ *  the call. */
+const resultIdsOf = (parts: readonly unknown[]): string[] =>
+  parts.flatMap((part) => {
+    if (typeof part !== "object" || part === null) {
+      return [];
+    }
+    const type: unknown = Reflect.get(part, "type");
+    const id: unknown = Reflect.get(
+      part,
+      type === "tool-result" ? "toolCallId" : "id",
+    );
+    const carriesResult =
+      type === "tool-result" ||
+      (type === "tool-call" && Reflect.get(part, "output") !== undefined);
+    return carriesResult && typeof id === "string" ? [id] : [];
+  });
+
+type SnapshotMessage = Extract<
+  StreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>["messages"][number];
+
+/** The calls a snapshot message carries a result for: a tool message, or a
+ *  message in UI form, whose `parts` the client takes as they are. */
+const snapshotResultIds = (message: SnapshotMessage): string[] => {
+  if (message.role === "tool") {
+    return [message.toolCallId];
+  }
+  const parts: unknown = Reflect.get(message, "parts");
+  return Array.isArray(parts) ? resultIdsOf(parts) : [];
+};
+
+/**
+ * `chat.wire.results-stored`: every tool result a messages snapshot carries is
+ * one the stored thread holds once the response is done. A result only the
+ * engine was handed (the error that closes, for the model, a call an ended
+ * turn left open) must never reach a client.
+ */
+export const findUnstoredWireResults = ({
+  chunks,
+  stored,
+}: {
+  chunks: readonly StreamChunk[];
+  stored: readonly UIMessage[];
+}): OracleViolation[] => {
+  const storedResults = new Set(
+    stored.flatMap(({ parts }) => resultIdsOf(parts)),
+  );
+  return violationsOf(
+    CHAT_ORACLE.wireResultsStored,
+    chunks.flatMap((chunk, index) => {
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        return [];
+      }
+      const unstored = chunk.messages
+        .flatMap(snapshotResultIds)
+        .filter((toolCallId) => !storedResults.has(toolCallId));
+      return unstored.length === 0 ? [] : [{ chunk: index, unstored }];
+    }),
+  );
+};
+
 /** An interrupt the page received with its latest response. */
 export type DeliveredInterrupt = {
   interruptId: string;

@@ -239,15 +239,17 @@ filter for the class that matters. All four carry `caseNumber`,
 a document: a court publishing in 24 languages emits 24 variants under
 one number, and a case can carry both a judgment and an opinion.
 
-| Event                                       | Level | Meaning                                                                                  |
-| ------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `case_law.ingestion.decision_empty`         | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
-| `case_law.ingestion.ast_content_lost`       | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
-| `case_law.ingestion.ast_markup_residue`     | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
-| `case_law.ingestion.ast_missing`            | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
-| `case_law.ingestion.ast_structure_degraded` | WARN  | Text is complete, structure is imperfect.                                                |
+| Event                                         | Level | Meaning                                                                                  |
+| --------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
+| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
+| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
+| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
+| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
+| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
+| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
 
-The three ERROR events are the ones to act on. Sweep for them to find
+The ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
 means most can be re-parsed without touching the court's site.
 
@@ -299,6 +301,18 @@ WHERE d.source_id = $1
 ORDER BY d.created_at
 LIMIT 500;
 ```
+
+### 11b. Text decoded with the wrong character set
+
+`parsers/text-encoding.ts` runs `@stll/mojibake` over every stored text
+against the decision's declared language: U+FFFD, C1 controls, UTF-8 read as
+windows-1252 or Latin-1, and any reversible pair of charsets whose undoing
+turns words that do not fit the language's CLDR letters into words that do.
+The line names the pair and the words (`pod¾a@…→podľa`). It reports and
+never repairs: where the adapter decoded wrongly, fix its decoding
+(`@stll/mojibake/declared-charset` honours the BOM, the HTTP charset and the
+document's declaration, in that order) and re-fetch; where the publisher
+serves the damage, the pair it names is the transform to apply.
 
 ### 12. Check a parser against the publisher, not against yourself
 

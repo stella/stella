@@ -132,6 +132,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
+  "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",

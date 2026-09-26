@@ -12,6 +12,7 @@ import type {
 } from "@/api/tests/helpers/chat-oracles";
 import {
   cassetteFor,
+  cassetteKey,
   findMissingCassettes,
   loadProviderWireCassettes,
   PROVIDER_WIRE_PROVIDERS,
@@ -37,10 +38,15 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 
 const cassettes = loadProviderWireCassettes();
 
-const { providerWireFinish: finish, providerWireToolInput: toolInput } =
-  CHAT_ORACLE;
+const {
+  providerWireFinish: finish,
+  providerWireToolInput: toolInput,
+  providerWireUsage: usage,
+} = CHAT_ORACLE;
 
-/** Why an unmet run is on the ledger. */
+/** Why an unmet run is on the ledger: `upstream design` where the adapter
+ *  behaves as its maintainers chose (we follow upstream, and our boundary
+ *  cannot tell), `upstream gap` where upstream drops what we need. */
 type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
 
 /**
@@ -50,28 +56,17 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
  * removed, and its size is pinned to UNMET_SIZE, which only goes down.
  */
 const UNMET: Readonly<Record<string, UnmetEntry>> = {
-  "anthropic/length": { oracles: [finish], reason: "maintenance" },
-  "anthropic/refusal": { oracles: [finish], reason: "maintenance" },
-  "anthropic/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "bedrock/early-eof": { oracles: [finish], reason: "maintenance" },
-  "bedrock/parallel-tool-calls": {
-    oracles: [toolInput],
-    reason: "maintenance",
-  },
-  "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
-  "google/length": { oracles: [finish], reason: "maintenance" },
-  "google/refusal": { oracles: [finish], reason: "maintenance" },
-  "google/strict-null": { oracles: [toolInput], reason: "maintenance" },
-  "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
-  "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
-  "openai/length": { oracles: [finish], reason: "maintenance" },
-  "openrouter/early-eof": { oracles: [finish], reason: "maintenance" },
-  "openrouter/strict-null": { oracles: [toolInput], reason: "maintenance" },
+  "anthropic/length": { oracles: [usage], reason: "upstream gap" },
+  "anthropic/refusal": { oracles: [finish], reason: "upstream design" },
+  "bedrock/early-eof": { oracles: [finish], reason: "upstream design" },
+  "mistral/early-eof": { oracles: [finish], reason: "upstream design" },
+  "mistral/malformed-chunk": { oracles: [finish], reason: "upstream design" },
+  "openai/length": { oracles: [usage], reason: "upstream gap" },
+  "openrouter/early-eof": { oracles: [finish], reason: "upstream design" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 15;
+const UNMET_SIZE = 7;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
@@ -123,7 +118,7 @@ const expectContract = (
 const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, run } = await replayWireScenario({ cassette, replay });
   expectContract(
-    `${cassette.provider}/${cassette.scenario}`,
+    cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
 };
@@ -150,9 +145,9 @@ describe("provider wire corpus", () => {
 
   test("every unmet entry names a cassette in the corpus", () => {
     const keys = new Set(
-      cassettes.flatMap(({ provider, scenario }) => [
-        `${provider}/${scenario}`,
-        `${provider}/cancel`,
+      cassettes.flatMap((cassette) => [
+        cassetteKey(cassette),
+        `${cassette.provider}/cancel`,
       ]),
     );
     expect(Object.keys(UNMET).filter((key) => !keys.has(key))).toEqual([]);
@@ -202,7 +197,7 @@ describe("provider wire corpus", () => {
 describe("every adapter satisfies the wire contract", () => {
   for (const cassette of cassettes) {
     test(
-      `${cassette.provider} ${cassette.scenario}`,
+      cassetteKey(cassette).replace("/", " "),
       async () => {
         await checkCassette(cassette);
       },

@@ -668,7 +668,7 @@ const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
   });
 };
 
-export const cancelPendingToolCallPart = (
+const cancelPendingToolCallPart = (
   part: ChatToolCallPart,
 ): ChatToolCallPart => {
   switch (part.state) {

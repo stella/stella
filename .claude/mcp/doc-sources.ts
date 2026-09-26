@@ -389,6 +389,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-09-26T00:00:00.000Z",
+      dependency: "cldr-misc-full",
+      explanation:
+        "A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
+      expiresAt: "2026-10-26T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-12T00:00:00.000Z",
       dependency: "stylelint",
       explanation:

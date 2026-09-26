@@ -21,12 +21,16 @@
 // them; response and request identifiers are replaced; a response that
 // contains the key fails the recording. Review the diff before committing.
 
-import { panic } from "better-result";
+import { EventType } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
+import { panic, Result } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
+import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
   cassettePath,
   PROVIDER_WIRE_PROVIDERS,
@@ -419,6 +423,46 @@ const expectationFor = (
   }
 };
 
+/** Whether some tool call streamed arguments that hold a JSON null. */
+export const wireCarriesNull = (chunks: readonly StreamChunk[]): boolean => {
+  const argumentText = new Map<string, string>();
+  for (const chunk of chunks) {
+    if (chunk.type === EventType.TOOL_CALL_ARGS) {
+      argumentText.set(
+        chunk.toolCallId,
+        (argumentText.get(chunk.toolCallId) ?? "") + chunk.delta,
+      );
+    }
+  }
+  return [...argumentText.values()].some((text) => {
+    const parsed = Result.try((): unknown => JSON.parse(text));
+    return (
+      Result.isOk(parsed) &&
+      isJsonRecord(parsed.value) &&
+      Object.values(parsed.value).includes(null)
+    );
+  });
+};
+
+const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * What a recording must show beyond the contract for its scenario to be the
+ * one it is named for. A strict-null recording is kept only when the model
+ * put a JSON null on the wire: a model that writes the string "null", or
+ * leaves the field out, recorded something else.
+ */
+const scenarioShapeProblems = (
+  scenario: ProviderWireScenario,
+  chunks: readonly StreamChunk[],
+): OracleViolation[] =>
+  scenario === "strict-null" && !wireCarriesNull(chunks)
+    ? violationsOf(CHAT_ORACLE.providerWireToolInput, [
+        { problem: "the recording carries no JSON null on the wire" },
+      ])
+    : [];
+
 const listArgument = (name: string): string[] | undefined => {
   const index = process.argv.indexOf(name);
   const value = index === -1 ? undefined : process.argv[index + 1];
@@ -492,11 +536,14 @@ const main = async (): Promise<number> => {
             cassette,
             replay,
           });
-          violations = findWireContractViolations({
-            cassette,
-            replay: findings,
-            run,
-          });
+          violations = [
+            ...findWireContractViolations({
+              cassette,
+              replay: findings,
+              run,
+            }),
+            ...scenarioShapeProblems(scenario, run.chunks),
+          ];
         } finally {
           replay.restore();
         }

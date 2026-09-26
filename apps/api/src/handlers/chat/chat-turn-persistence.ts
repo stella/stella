@@ -258,7 +258,7 @@ const cancelAwaitingAssistantMessagesOnTx = async ({
 }: {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
-}): Promise<void> => {
+}): Promise<PersistableTerminalAssistantMessage | undefined> => {
   const awaitingMessage = (
     await tx
       .select({
@@ -284,7 +284,7 @@ const cancelAwaitingAssistantMessagesOnTx = async ({
   ).at(0);
 
   if (awaitingMessage === undefined) {
-    return;
+    return undefined;
   }
   if (awaitingMessage.role !== "assistant") {
     panic("Awaiting chat turn does not own an assistant message");
@@ -307,13 +307,25 @@ const cancelAwaitingAssistantMessagesOnTx = async ({
     threadId,
     tx,
   });
+  return cancelledMessage;
 };
+
+/**
+ * Whether a turn was accepted and, when accepting it superseded an awaiting
+ * assistant message, that message as it is now stored.
+ */
+export type ChatTurnAcceptanceResult =
+  | { type: "refused" }
+  | {
+      superseded: PersistableTerminalAssistantMessage | undefined;
+      type: "accepted";
+    };
 
 /**
  * Store acceptance in the caller's message transaction. A pending interaction
  * may be replaced, but a running turn is never superseded: its provider and
- * tool side effects still belong to a live execution. Returning false leaves
- * the entire caller transaction to roll back before the new message is saved.
+ * tool side effects still belong to a live execution. A refusal leaves the
+ * entire caller transaction to roll back before the new message is saved.
  */
 export const insertChatTurnAcceptanceOnTx = async ({
   acceptance,
@@ -321,14 +333,14 @@ export const insertChatTurnAcceptanceOnTx = async ({
 }: {
   acceptance: ChatTurnAcceptance;
   tx: Transaction;
-}): Promise<boolean> => {
+}): Promise<ChatTurnAcceptanceResult> => {
   const now = databaseNow();
   // The caller normally reserved this lock before persisting the user
   // message. Keep the check here too so direct callers retain the invariant.
   if (!(await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }))) {
-    return false;
+    return { type: "refused" };
   }
-  await cancelAwaitingAssistantMessagesOnTx({
+  const superseded = await cancelAwaitingAssistantMessagesOnTx({
     threadId: acceptance.threadId,
     tx,
   });
@@ -370,7 +382,9 @@ export const insertChatTurnAcceptanceOnTx = async ({
     })
     .onConflictDoNothing()
     .returning({ id: chatTurns.id });
-  return inserted.length === 1;
+  return inserted.length === 1
+    ? { superseded, type: "accepted" }
+    : { type: "refused" };
 };
 
 export type ChatTurnExecutionClaim = {

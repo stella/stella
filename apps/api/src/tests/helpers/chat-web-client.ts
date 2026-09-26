@@ -71,6 +71,10 @@ type WebChatModules = {
   canRetryAssistantMessage: AssistantMessageActionGate;
   /** `chat-ui-tools.ts`: the failure a stored turn outcome reports. */
   getChatAssistantTurnError: (message: UIMessage | null) => Error | undefined;
+  /** `chat-ui-tools.ts`: the answer whose cards the page still waits on. */
+  getAwaitedAssistantMessageId: (
+    messages: readonly UIMessage[],
+  ) => string | null;
   isChatTurnGenerating: (state: {
     hasError: boolean;
     messages: readonly UIMessage[];
@@ -139,6 +143,7 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     !hasFunction(runtime, "resetChatRequestStateForTests") ||
     !hasFunction(uiTools, "sanitizeRunningToolCalls") ||
     !hasFunction(uiTools, "isApprovalPart") ||
+    !hasFunction(uiTools, "getAwaitedAssistantMessageId") ||
     !hasFunction(uiTools, "isOpaquePersistedChatToolCallPart")
   ) {
     return panic("The web chat modules no longer export the chat runtime");
@@ -150,6 +155,7 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     canRetryAssistantMessage: userActions.canRetryAssistantMessage,
     chatUserActions: Object.keys(actionList),
     createChatRuntime: runtime.createChatRuntime,
+    getAwaitedAssistantMessageId: uiTools.getAwaitedAssistantMessageId,
     getChatAssistantTurnError: uiTools.getChatAssistantTurnError,
     isChatTurnGenerating: userActions.isChatTurnGenerating,
     isApprovalPart: uiTools.isApprovalPart,
@@ -182,46 +188,55 @@ export type LiveCard =
  * as `ToolApprovalCard` (line 1623). `ToolApprovalCard` offers Allow and Deny
  * while the part is `approval-requested` (`tool-approval-card.tsx:732`);
  * `AskUserCard` offers its form once the input has streamed and until the
- * call is `complete` (`ask-user-card.tsx:164`). The web predicates are called,
- * not copied.
+ * call is `complete` (`ask-user-card.tsx:164`). Either card offers its
+ * controls only on the answer the page still waits on
+ * (`getAwaitedAssistantMessageId`, the `isAwaitingUser` prop of both cards):
+ * a later user message withdraws them. The web predicates are called, not
+ * copied.
  */
 export const cardsOf = (
   web: Pick<
     WebChatModules,
-    "isApprovalPart" | "isOpaquePersistedChatToolCallPart"
+    | "getAwaitedAssistantMessageId"
+    | "isApprovalPart"
+    | "isOpaquePersistedChatToolCallPart"
   >,
   messages: readonly UIMessage[],
-): LiveCard[] =>
-  messages.flatMap(({ parts }) =>
-    parts.flatMap((part): LiveCard[] => {
-      if (
-        part.type !== "tool-call" ||
-        web.isOpaquePersistedChatToolCallPart(part)
-      ) {
-        return [];
-      }
-      if (part.name === ASK_USER_TOOL_NAME) {
-        return part.state !== "input-streaming" &&
-          part.state !== "complete" &&
-          part.input !== undefined &&
-          part.input !== null
-          ? [{ kind: "answer", toolCallId: part.id, toolName: part.name }]
-          : [];
-      }
-      return web.isApprovalPart(part) &&
-        part.state === "approval-requested" &&
-        part.approval !== undefined
-        ? [
-            {
-              approvalId: part.approval.id,
-              kind: "approval",
-              toolCallId: part.id,
-              toolName: part.name,
-            },
-          ]
-        : [];
-    }),
+): LiveCard[] => {
+  const awaited = web.getAwaitedAssistantMessageId(messages);
+  return messages.flatMap(({ id, parts }) =>
+    id !== awaited
+      ? []
+      : parts.flatMap((part): LiveCard[] => {
+          if (
+            part.type !== "tool-call" ||
+            web.isOpaquePersistedChatToolCallPart(part)
+          ) {
+            return [];
+          }
+          if (part.name === ASK_USER_TOOL_NAME) {
+            return part.state !== "input-streaming" &&
+              part.state !== "complete" &&
+              part.input !== undefined &&
+              part.input !== null
+              ? [{ kind: "answer", toolCallId: part.id, toolName: part.name }]
+              : [];
+          }
+          return web.isApprovalPart(part) &&
+            part.state === "approval-requested" &&
+            part.approval !== undefined
+            ? [
+                {
+                  approvalId: part.approval.id,
+                  kind: "approval",
+                  toolCallId: part.id,
+                  toolName: part.name,
+                },
+              ]
+            : [];
+        }),
   );
+};
 
 const MAX_SETTLE_TICKS = 20_000;
 const QUIET_TICKS = 3;

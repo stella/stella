@@ -15,6 +15,10 @@ export const CHAT_ORACLE = {
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",
+  /** A messages snapshot on the wire carries a tool result only where the
+   *  stored thread holds one: what only the engine was handed never reaches
+   *  a client. */
+  wireResultsStored: "chat.wire.results-stored",
   /** (a) The live view holds each message id once. */
   liveMessageIdsUnique: "chat.live.message-ids-unique",
   /** (b) Every interaction the stored thread offers is on screen and

@@ -196,8 +196,9 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: "resumed",
     });
 
-    expect(history.map(({ parts }) => parts.length)).toEqual([2, 1]);
-    expect(history[1]).toBe(resumed);
+    expect(history.engine.map(({ parts }) => parts.length)).toEqual([2, 1]);
+    expect(history.engine[1]).toBe(resumed);
+    expect([...history.storedForms.values()]).toEqual([earlier]);
   });
 
   test("a new user turn resumes nothing", () => {
@@ -206,7 +207,7 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: undefined,
     });
 
-    expect(history[0]?.parts.map(({ type }) => type)).toEqual([
+    expect(history.engine[0]?.parts.map(({ type }) => type)).toEqual([
       "tool-call",
       "tool-result",
     ]);
@@ -228,35 +229,32 @@ describe("the history a run hands the engine", () => {
     "input-streaming": streaming,
   } as const satisfies Record<ToolCallState, ToolCallPart>;
   const closedForEngine = {
-    "approval-requested": [
-      call("pending", {
-        approval: {
-          approved: false,
-          id: "approval_pending",
-          needsApproval: true,
-        },
-        state: "approval-responded",
-      }),
-    ],
-    "approval-responded": [denied],
-    "awaiting-input": [openCallByState["awaiting-input"]],
-    complete: [completed],
-    error: [failed, unresolvedResult("failed")],
-    "input-complete": [
-      openCallByState["input-complete"],
-      unresolvedResult("awaiting-client"),
-    ],
-    "input-streaming": [streaming],
-  } as const satisfies Record<ToolCallState, readonly ChatPart[]>;
+    "approval-requested": true,
+    "approval-responded": false,
+    "awaiting-input": false,
+    complete: false,
+    error: true,
+    "input-complete": true,
+    "input-streaming": false,
+  } as const satisfies Record<ToolCallState, boolean>;
 
   for (const part of Object.values(openCallByState)) {
-    test(`an unanswered ${part.state} call on an earlier message is closed the way the engine can read`, () => {
+    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
       const history = settleHistoryForRun({
         messages: [assistant("earlier", [part])],
         resumedMessageId: undefined,
       });
 
-      expect(history[0]?.parts).toEqual([...closedForEngine[part.state]]);
+      expect(history.engine[0]?.parts).toEqual(
+        closedForEngine[part.state]
+          ? [part, unresolvedResult(part.id)]
+          : [part],
+      );
+      // The client is shown every message the engine reads differently as
+      // stored, a denial included: the engine replays it as a result.
+      expect(history.storedForms.get("earlier")?.parts).toEqual(
+        closedForEngine[part.state] || part === denied ? [part] : undefined,
+      );
     });
   }
 
@@ -278,7 +276,8 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: "resumed",
     });
 
-    expect(history[0]?.parts).toEqual(earlier.parts);
-    expect(history[1]).toBe(resumed);
+    expect(history.engine[0]?.parts).toEqual(earlier.parts);
+    expect(history.engine[1]).toBe(resumed);
+    expect(history.storedForms.size).toBe(0);
   });
 });

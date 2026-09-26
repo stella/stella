@@ -141,6 +141,20 @@ const renderAnonPills = (
   return nodes.length === 1 && typeof nodes[0] === "string" ? nodes[0] : nodes;
 };
 
+/** `answers` with each question's default wherever it has no answer yet. */
+const withDefaultAnswers = (
+  input: AskUserInput,
+  answers: Readonly<Record<number, string>>,
+): Record<number, string> => {
+  const seeded = { ...answers };
+  for (const [index, question] of input.questions.entries()) {
+    if (question.default && !(index in seeded)) {
+      seeded[index] = question.default;
+    }
+  }
+  return seeded;
+};
+
 export const AskUserCard = ({
   part,
   isAwaitingUser,
@@ -178,19 +192,9 @@ export const AskUserCard = ({
   const input: AskUserInput | null =
     (part.state !== "input-streaming" ? part.input : null) ?? null;
 
-  const [answers, setAnswers] = useState<Record<number, string>>(() => {
-    if (!input) {
-      return {};
-    }
-    const defaults: Record<number, string> = {};
-    for (let i = 0; i < input.questions.length; i++) {
-      const question = input.questions[i];
-      if (question?.default) {
-        defaults[i] = question.default;
-      }
-    }
-    return defaults;
-  });
+  const [answers, setAnswers] = useState<Record<number, string>>(() =>
+    input ? withDefaultAnswers(input, {}) : {},
+  );
   const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
@@ -200,15 +204,7 @@ export const AskUserCard = ({
   // applies the transition before children render and avoids an extra commit.
   if (input !== null && !defaultsSeeded) {
     setDefaultsSeeded(true);
-    const seeded = { ...answers };
-    for (let i = 0; i < input.questions.length; i++) {
-      const question = input.questions[i];
-      const defaultAnswer = question?.default;
-      if (defaultAnswer && !(i in seeded)) {
-        seeded[i] = defaultAnswer;
-      }
-    }
-    setAnswers(seeded);
+    setAnswers(withDefaultAnswers(input, answers));
   }
 
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
@@ -475,54 +471,34 @@ export const AskUserCard = ({
           })}
         </div>
 
+        {/* Submit */}
         {!isDone && !isLoading && (
-          <AskUserSubmitRow
-            discardsDownstream={discardsDownstream === true}
-            isEditing={isEditing}
-            onCancelEdit={handleCancelEdit}
-          />
+          <div className="border-border/50 border-t px-3 py-2">
+            {isEditing && discardsDownstream && (
+              <p className="text-muted-foreground mb-2 text-xs">
+                {t("chat.askUser.editWarning")}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
+                type="submit"
+              >
+                {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
+              </button>
+              {isEditing && (
+                <button
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                  onClick={handleCancelEdit}
+                  type="button"
+                >
+                  {t("common.cancel")}
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </form>
-    </div>
-  );
-};
-
-/** The form's submit row: a plain submit, or re-run plus cancel while the
- *  answers are being edited. */
-const AskUserSubmitRow = ({
-  discardsDownstream,
-  isEditing,
-  onCancelEdit,
-}: {
-  discardsDownstream: boolean;
-  isEditing: boolean;
-  onCancelEdit: () => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <div className="border-border/50 border-t px-3 py-2">
-      {isEditing && discardsDownstream && (
-        <p className="text-muted-foreground mb-2 text-xs">
-          {t("chat.askUser.editWarning")}
-        </p>
-      )}
-      <div className="flex items-center gap-2">
-        <button
-          className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-          type="submit"
-        >
-          {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
-        </button>
-        {isEditing && (
-          <button
-            className="text-muted-foreground hover:text-foreground text-xs"
-            onClick={onCancelEdit}
-            type="button"
-          >
-            {t("common.cancel")}
-          </button>
-        )}
-      </div>
     </div>
   );
 };

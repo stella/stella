@@ -1,9 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
-import {
-  cancelPendingToolCallPart,
-  isChatPart,
-} from "@/api/handlers/chat/chat-message-parts";
+import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessage,
   ChatPart,
@@ -94,11 +91,15 @@ const SETTLED_TOOL_CALL_STATE = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
+const isDeniedCall = (part: SettlementPart): boolean =>
+  part.type === "tool-call" &&
+  "approval" in part &&
+  part.approval.approved === false;
+
 /** A call is settled once its result or error is stored, or its approval was
  *  denied. */
 const isSettledToolCall = (part: SettlementToolCall): boolean =>
-  SETTLED_TOOL_CALL_STATE[part.state] ||
-  ("approval" in part && part.approval.approved === false);
+  SETTLED_TOOL_CALL_STATE[part.state] || isDeniedCall(part);
 
 export type UnsettledToolCall = {
   state: ToolCallState;
@@ -181,8 +182,8 @@ export const errorToolResult = (
 });
 
 /** What the model sees for a call whose turn ended before a result was
- *  stored: a cancelled clarification the user typed past, or a client call
- *  cut off by a stop. */
+ *  stored: a cancelled clarification the user typed past, an approval never
+ *  answered, or a client call cut off by a stop. */
 export const UNRESOLVED_CALL_ERROR =
   "This call never returned a result: its turn ended before one was stored.";
 
@@ -207,27 +208,18 @@ const ENGINE_ASKS_CLIENT_AGAIN = {
 /**
  * Close every call on a message the run does not resume that the engine
  * would otherwise ask the client about again. Such a call belongs to a turn
- * that already ended, so nobody can answer it any more. An approval request
- * is denied, as the turn's cancellation stores it (`cancelPendingToolCallPart`);
- * the engine answers a denial itself. The other calls get the error as their
- * result.
+ * that already ended, so nobody can answer it any more.
  */
 const closeUnresolvedCallsForEngine = (
   parts: readonly ChatPart[],
 ): ChatPart[] =>
-  parts.flatMap((part): ChatPart[] => {
-    if (
-      part.type !== "tool-call" ||
-      !ENGINE_ASKS_CLIENT_AGAIN[part.state] ||
-      hasStoredResult(part, parts)
-    ) {
-      return [part];
-    }
-    if (part.state === "approval-requested") {
-      return [cancelPendingToolCallPart(part)];
-    }
-    return [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)];
-  });
+  parts.flatMap((part): ChatPart[] =>
+    part.type === "tool-call" &&
+    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&
+    !hasStoredResult(part, parts)
+      ? [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)]
+      : [part],
+  );
 
 /**
  * Close the approved calls a turn left without a result once it ended some
@@ -256,6 +248,20 @@ export const settleOpenToolCallsForOutcome = ({
   );
 };
 
+/** A run's history: what the engine is handed, and what the client is shown
+ *  of it. */
+export type RunHistory = {
+  engine: ChatMessage[];
+  /**
+   * Every earlier message the engine reads differently from the stored
+   * thread, by id, as stored: one settling closes with results that exist
+   * only for the engine, or one holding a denied call, which the engine
+   * replays as a result the thread never stores. The client-visible stream
+   * presents these as stored (`presentStoredHistory`).
+   */
+  storedForms: ReadonlyMap<string, ChatMessage>;
+};
+
 /**
  * The history a run hands the engine. Only the message a continuation resumes
  * may hold open calls for this run to execute or the client to answer; an
@@ -267,20 +273,28 @@ export const settleHistoryForRun = ({
 }: {
   messages: readonly ChatMessage[];
   resumedMessageId: string | undefined;
-}): ChatMessage[] =>
-  messages.map((message) =>
-    message.role !== "assistant" || message.id === resumedMessageId
-      ? message
-      : {
-          ...message,
-          parts: closeUnresolvedCallsForEngine(
-            settleOpenToolCallsForOutcome({
-              outcome: "interrupted",
-              parts: message.parts,
-            }),
-          ),
-        },
-  );
+}): RunHistory => {
+  const storedForms = new Map<string, ChatMessage>();
+  const engine = messages.map((message) => {
+    if (message.role !== "assistant" || message.id === resumedMessageId) {
+      return message;
+    }
+    const parts = closeUnresolvedCallsForEngine(
+      settleOpenToolCallsForOutcome({
+        outcome: "interrupted",
+        parts: message.parts,
+      }),
+    );
+    const settled =
+      parts.length !== message.parts.length ||
+      parts.some((part, index) => part !== message.parts[index]);
+    if (settled || message.parts.some(isDeniedCall)) {
+      storedForms.set(message.id, message);
+    }
+    return settled ? { ...message, parts } : message;
+  });
+  return { engine, storedForms };
+};
 
 export type DroppedParts = {
   droppedToolCallIds: string[];

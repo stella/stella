@@ -26,6 +26,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   findLiveViewViolations,
+  findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
 import type { DeliveredInterrupt } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -179,9 +180,13 @@ export const createApprovalHarness = ({
   const approvalTool = toolDefinition({
     name: APPROVAL_TOOL_NAME,
     description: "Server tool behind an approval",
-    // The optional field is what strict provider schemas send as null.
+    // The optional field is what strict provider schemas send as null, and
+    // what a route that fills every field sends as "" (a note is never empty).
     inputSchema: toTanStackToolSchema(
-      v.object({ name: v.string(), note: v.optional(v.string()) }),
+      v.object({
+        name: v.string(),
+        note: v.optional(v.pipe(v.string(), v.minLength(1))),
+      }),
     ),
     needsApproval: true,
   }).server(async ({ name }) => {
@@ -363,6 +368,10 @@ export const createApprovalHarness = ({
       violations: [
         ...unsettled,
         ...findWireIdentityViolations(chunks),
+        ...findUnstoredWireResults({
+          chunks,
+          stored: await reloadView(threadId),
+        }),
         ...(await findPersistedViolations(threadId)),
       ],
     } as const;
@@ -497,6 +506,10 @@ export const createApprovalHarness = ({
     clientFindings.push(
       ...(await awaitSettledTurns(raw.threadId)),
       ...findWireIdentityViolations(chunks),
+      ...findUnstoredWireResults({
+        chunks,
+        stored: await reloadView(raw.threadId),
+      }),
       ...(await findPersistedViolations(raw.threadId)),
     );
     delivered.set(raw.threadId, deliveredInterrupts(chunks));

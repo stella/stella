@@ -12,6 +12,7 @@ import {
 } from "@/api/tests/helpers/chat-fixtures";
 import {
   diffLiveAgainstReload,
+  findUnstoredWireResults,
   findWireIdentityViolations,
   TEXT_SEGMENT_SEPARATOR,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -271,5 +272,63 @@ describe("the wire identity oracle", () => {
         oracle: CHAT_ORACLE.wireSnapshotIdentity,
       },
     ]);
+  });
+});
+
+describe("the stored results oracle", () => {
+  const user: UIMessage = {
+    id: "user-1",
+    parts: [text("Draft the NDA")],
+    role: "user",
+  };
+  /** A call its turn left without a result, as the stored thread keeps it. */
+  const unanswered: Part = {
+    arguments: JSON.stringify({ name: "call-1" }),
+    id: "call-1",
+    name: "mcp__external__delete",
+    state: "error",
+    type: "tool-call",
+  };
+
+  test("flags a snapshot that answers a call the thread stores unanswered", () => {
+    const snapshot = buildEngineSnapshot([
+      user,
+      assistant("turn", [unanswered, result("call-1")]),
+    ]);
+    // The fixture must reach the fault: the engine's snapshot answers it.
+    expect(
+      snapshot.messages.some(
+        (message) => message.role === "tool" && message.toolCallId === "call-1",
+      ),
+    ).toBe(true);
+
+    expect(
+      findUnstoredWireResults({
+        chunks: [snapshot],
+        stored: [user, assistant("turn", [unanswered])],
+      }),
+    ).toEqual([
+      {
+        detail: { chunk: 0, unstored: ["call-1"] },
+        oracle: CHAT_ORACLE.wireResultsStored,
+      },
+    ]);
+  });
+
+  test("passes a snapshot whose results the thread stores", () => {
+    const answered = [
+      user,
+      assistant("turn", [
+        call("call-1", { deleted: "call-1" }),
+        result("call-1"),
+      ]),
+    ];
+
+    expect(
+      findUnstoredWireResults({
+        chunks: [buildEngineSnapshot(answered)],
+        stored: answered,
+      }),
+    ).toEqual([]);
   });
 });

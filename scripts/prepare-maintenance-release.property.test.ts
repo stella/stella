@@ -22,13 +22,14 @@ import nodePath from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
+import { parseChangesetEntry } from "./changeset-entry";
 import {
   changesetVersionEnv,
   fetchPublishedAt,
   MaintenanceReleaseError,
   maintenanceChangelog,
   nextPatchVersion,
-  parseChangesetEntry,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
@@ -278,7 +279,7 @@ describe("pending changesets folded into the release", () => {
   test("reads the packages and the summary of an entry", () => {
     expect(parseChangesetEntry(CLI_ENTRY)).toEqual({
       packages: ["@stll/cli"],
-      summary: "New `case-law lookup` command: several references per call.",
+      summary: "New `case-law lookup` command:\nseveral references per call.",
     });
     expect(parseChangesetEntry(UI_ENTRY)).toEqual({
       packages: ["@stll/ui"],
@@ -294,7 +295,7 @@ describe("pending changesets folded into the release", () => {
       summary: "",
     });
     expect(() => parseChangesetEntry('---\n"@stll/cli": minor\n')).toThrow(
-      MaintenanceReleaseError,
+      "unterminated frontmatter",
     );
   });
 
@@ -318,17 +319,105 @@ describe("pending changesets folded into the release", () => {
   });
 
   test("summarizes only the entries that release something", () => {
-    expect(maintenanceChangelog([])).toBe(
+    expect(maintenanceChangelog([], "1.2.4")).toBe(
       "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
     );
     expect(
-      maintenanceChangelog([
-        { file: "empty.md", packages: [], summary: "" },
-        { file: "cli.md", packages: ["@stll/cli"], summary: "Lookup command." },
-      ]),
+      maintenanceChangelog(
+        [
+          { file: "empty.md", packages: [], summary: "" },
+          {
+            file: "cli.md",
+            packages: ["@stll/cli"],
+            summary: "Lookup command.",
+          },
+        ],
+        "1.2.4",
+      ),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- @stll/cli: Lookup command.\n",
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Lookup command.\n",
     );
+  });
+
+  test.each([
+    "| Old | New |\n| --- | --- |\n| list | search |",
+    "Migration details in a second paragraph.\n\nA third paragraph.",
+    "```sh\nstella search\n```",
+    "- First detail\n- Second detail",
+  ])("keeps detail blocks out of the release bullet: %s", (details) => {
+    const summary = `Renamed capabilities.\nExisting calls need updating.\n\n${details}`;
+    const entry = parseChangesetEntry(
+      `---\n"@stll/cli": major\n---\n\n${summary}\n`,
+    );
+    expect(entry.summary).toBe(summary);
+    const markdown = maintenanceChangelog(
+      [{ file: "cli.md", ...entry }],
+      "1.2.4",
+    );
+    const bullet =
+      "[@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Renamed capabilities. Existing calls need updating.";
+    expect(markdown).toContain(`- ${bullet}\n`);
+    expect(markdown).not.toContain(details);
+    expect(parseChangelogMarkdown(markdown)).toEqual([
+      { type: "heading", level: 1, text: "Maintenance release" },
+      {
+        type: "paragraph",
+        text: "Stella includes reliability and maintenance improvements.",
+      },
+      { type: "heading", level: 2, text: "Packages" },
+      { type: "list", items: [bullet] },
+    ]);
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    mkdirSync(nodePath.join(root, "docs/changelog"), { recursive: true });
+    writeFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), markdown);
+    const guard = Bun.spawnSync(
+      [
+        "bash",
+        nodePath.join(import.meta.dirname, "check-release-changelog.sh"),
+        "--version",
+        "1.2.4",
+      ],
+      { cwd: root },
+    );
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
+  });
+
+  test.each([
+    "| Old | New |\n| --- | --- |\n| list | search |",
+    "Old | New\n--- | ---\nlist | search",
+    "Intro without a blank line.\n| Old | New |\n| --- | --- |",
+    "```sh\nstella search\n```",
+    "# Details\n\nMore text.",
+    "- First detail\n- Second detail",
+  ])("links block-first summaries without flattening markup: %s", (summary) => {
+    expect(
+      maintenanceChangelog(
+        [{ file: "cli.md", packages: ["@stll/cli"], summary }],
+        "1.2.4",
+      ),
+    ).toEndWith(
+      "- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): See package changelog for details.\n",
+    );
+  });
+
+  test("links every named package to the release tag", () => {
+    const markdown = maintenanceChangelog(
+      [
+        {
+          file: "shared.md",
+          packages: ["@stll/cli", "@stll/ui"],
+          summary: "Shared fix.",
+        },
+      ],
+      "2.3.4",
+    );
+    for (const name of ["cli", "ui"]) {
+      expect(markdown).toContain(
+        `[@stll/${name}](https://github.com/stella/stella/blob/v2.3.4/packages/${name}/CHANGELOG.md)`,
+      );
+    }
   });
 
   test("versions the pending packages and records them in the changelog", () => {
@@ -359,7 +448,7 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- @stll/cli: New `case-law lookup` command: several references per call.\n- @stll/ui: Keep the toolbar in view.\n",
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
     );
     // The generated bumps are release-gated paths, so the release commit
     // carries the empty entry the changeset policy asks for beside them.

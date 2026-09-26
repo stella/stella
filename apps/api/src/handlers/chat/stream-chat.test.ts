@@ -98,7 +98,13 @@ import {
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
-import type { MessageIdMapper } from "./stream-message-identity";
+import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
+
+/** A run whose history the engine holds exactly as stored. */
+const NOTHING_REWRITTEN: StoredHistory = {
+  rewrittenOnAcceptance: [],
+  storedForms: new Map(),
+};
 
 const collectChunks = async (
   stream: AsyncIterable<StreamChunk>,
@@ -3606,6 +3612,7 @@ describe("chat stream refs", () => {
           }),
         resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
         source: processed,
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
 
@@ -3656,6 +3663,7 @@ describe("chat stream refs", () => {
         resolveAssistantValueRefs: (value) =>
           JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
         source: streamChunks([buildEngineSnapshot(history)]),
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
     if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
@@ -4430,7 +4438,7 @@ describe("a superseded client-tool call in the engine's history", () => {
       settleHistoryForRun({
         messages: supersededHistory,
         resumedMessageId: undefined,
-      }),
+      }).engine,
     );
 
     expect(finish?.outcome).toEqual({ type: "completed" });

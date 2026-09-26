@@ -34,6 +34,7 @@ import { Result, panic } from "better-result";
  */
 
 import { classifyFailure } from "@stll/errors";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
 import {
@@ -451,8 +452,10 @@ const fetchDocumentXhtml = async (
     catch: () => null,
   }).unwrapOr(null);
   const content = isRecord(payload) ? payload["content"] : undefined;
+  // The document states its own charset; read the bytes as that, not as
+  // UTF-8 by assumption.
   return typeof content === "string"
-    ? Buffer.from(content, "base64").toString("utf-8")
+    ? decodeDeclared(Buffer.from(content, "base64"), { contentType: null }).text
     : undefined;
 };
 
