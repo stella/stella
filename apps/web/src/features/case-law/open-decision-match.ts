@@ -43,7 +43,7 @@ export const readDecisionIntent = (
     jurisdiction === undefined
       ? undefined
       : decisionDocketGrammarForJurisdiction(jurisdiction);
-  return parseDecisionQuery(q, { grammar, jurisdiction });
+  return parseDecisionQuery(q, { grammar });
 };
 
 /** The text a query intent hands the search endpoint, if any. */

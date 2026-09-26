@@ -4,6 +4,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -212,7 +213,7 @@ test("a docket or ECLI held in both the row and its identifiers is one hit", asy
 test("a reporter citation resolves through the typed identifiers", async () => {
   // The entry as the query box reads it, spaced differently from the row.
   const intent = parseDecisionQuery("347 U. S. 483, 495", {
-    jurisdiction: "USA",
+    reporters: decisionReporterGrammarForJurisdiction("USA"),
   });
   if (intent.type !== "identifier") {
     return panic(`Read as ${intent.type}, not as an identifier`);
@@ -235,7 +236,11 @@ test("a reporter citation resolves through the typed identifiers", async () => {
 });
 
 test("a reporter-shaped entry elsewhere stays text", () => {
-  expect(parseDecisionQuery("347 U.S. 483", { jurisdiction: "CZE" })).toEqual({
+  expect(
+    parseDecisionQuery("347 U.S. 483", {
+      reporters: decisionReporterGrammarForJurisdiction("CZE"),
+    }),
+  ).toEqual({
     type: "text",
     text: "347 U.S. 483",
   });

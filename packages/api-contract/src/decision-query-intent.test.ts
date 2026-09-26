@@ -8,6 +8,7 @@ import {
   exactDecisionMatches,
   parseDecisionQuery,
 } from "./decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "./us-reporter-citation";
 
 /** Dockets as the corpus's courts print them, one per grammar. */
 const canonicalDockets = [
@@ -141,7 +142,7 @@ describe("reading a case-law box entry", () => {
 });
 
 describe("reading a reporter citation entry", () => {
-  const inUsa = { jurisdiction: "USA" } as const;
+  const inUsa = { reporters: decisionReporterGrammarForJurisdiction("USA") };
 
   test("in the reporter jurisdiction a reporter citation is an identifier in its canonical spelling", () => {
     expect(parseDecisionQuery("347 U.S. 483", inUsa)).toEqual({
@@ -178,9 +179,12 @@ describe("reading a reporter citation entry", () => {
     for (const entry of ["347 U.S. 483", "10 S. Ct. 3", "347 U.S. 483, 495"]) {
       for (const options of [
         {},
-        { jurisdiction: "CZE" },
-        { grammar: DECISION_DOCKET_GRAMMARS.CZE, jurisdiction: "CZE" },
-        { grammar: DECISION_DOCKET_GRAMMARS.POL, jurisdiction: "POL" },
+        { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+        { grammar: DECISION_DOCKET_GRAMMARS.CZE, reporters: null },
+        {
+          grammar: DECISION_DOCKET_GRAMMARS.POL,
+          reporters: decisionReporterGrammarForJurisdiction("POL"),
+        },
       ]) {
         expect(parseDecisionQuery(entry, options)).toEqual({
           type: "text",
@@ -359,9 +363,10 @@ describe("the hits that are the named decision", () => {
       identifiers: [
         { type: "case-number", value: "1" },
         { type: "reporter-citation", value: "347 U. S. 483" },
-        { type: "reporter-citation", value: "98 L.Ed. 873" },
+        { type: "reporter-citation", value: "98 Law. Ed. 873" },
       ],
     };
+    const reporters = decisionReporterGrammarForJurisdiction("USA");
     const other = {
       caseNumber: "347",
       ecli: null,
@@ -370,13 +375,23 @@ describe("the hits that are the named decision", () => {
 
     test("a reporter citation matches its parallel spellings, not a neighbouring page", () => {
       expect(
-        exactDecisionMatches(reporterRef("347 U.S. 483"), [brown, other]),
+        exactDecisionMatches(reporterRef("347 U.S. 483"), [brown, other], {
+          reporters,
+        }),
+      ).toEqual([brown]);
+      // A variant abbreviation is the same reporter only through the grammar.
+      expect(
+        exactDecisionMatches(reporterRef("98 L. Ed. 873"), [brown, other], {
+          reporters,
+        }),
       ).toEqual([brown]);
       expect(
         exactDecisionMatches(reporterRef("98 L. Ed. 873"), [brown, other]),
-      ).toEqual([brown]);
+      ).toEqual([]);
       expect(
-        exactDecisionMatches(reporterRef("347 U.S. 485"), [brown]),
+        exactDecisionMatches(reporterRef("347 U.S. 485"), [brown], {
+          reporters,
+        }),
       ).toEqual([]);
     });
 

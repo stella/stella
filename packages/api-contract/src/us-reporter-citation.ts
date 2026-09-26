@@ -1,3 +1,4 @@
+import type { DecisionReporterGrammar } from "./decision-query-intent";
 import {
   US_REPORTER_EDITIONS,
   US_REPORTER_FOREIGN_FOLDED_SPELLINGS,
@@ -323,3 +324,16 @@ export const canonicalUsReporterCitation = (raw: string): string | null => {
     ? formatUsReporterCitation(only)
     : null;
 };
+
+const US_REPORTER_GRAMMAR: DecisionReporterGrammar = {
+  canonicalCitation: canonicalUsReporterCitation,
+};
+
+/**
+ * The reporter grammar a query entry is read with in `jurisdiction`, or null
+ * where reporter citations are not read.
+ */
+export const decisionReporterGrammarForJurisdiction = (
+  jurisdiction: string | null | undefined,
+): DecisionReporterGrammar | null =>
+  readsUsReporterCitations(jurisdiction) ? US_REPORTER_GRAMMAR : null;

@@ -8,10 +8,20 @@ import {
   parseDecisionDocket,
 } from "./decision-docket-grammar";
 import type { DecisionDocketGrammar } from "./decision-docket-grammar";
-import {
-  canonicalUsReporterCitation,
-  readsUsReporterCitations,
-} from "./us-reporter-citation";
+
+/**
+ * A jurisdiction's reporter citation grammar, supplied by the caller the way
+ * a docket grammar is. Injected rather than imported: its edition table is
+ * data only the jurisdictions that cite reporters need, so a reader of any
+ * other corpus never loads it.
+ */
+export type DecisionReporterGrammar = {
+  /**
+   * The canonical identity a whole entry names as a reporter citation, or null
+   * when it is not one or does not settle on one reporter.
+   */
+  readonly canonicalCitation: (text: string) => string | null;
+};
 
 /**
  * The kinds of reference that name a decision outright. A neutral citation is
@@ -42,16 +52,15 @@ const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 type ParseDecisionQueryOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
   /**
-   * The corpus jurisdiction the entry is read in. Reporter citations are read
-   * only in the jurisdiction whose reporters the edition table carries; any
-   * other entry, and an unscoped one, reads as it always did.
+   * The reporter grammar of the jurisdiction the entry is read in. Without
+   * one, an entry reads as it always did: no reporter citation is claimed.
    */
-  readonly jurisdiction?: string | null | undefined;
+  readonly reporters?: DecisionReporterGrammar | null | undefined;
 };
 
 export const parseDecisionQuery = (
   raw: string,
-  { grammar, jurisdiction }: ParseDecisionQueryOptions = {},
+  { grammar, reporters }: ParseDecisionQueryOptions = {},
 ): DecisionQueryIntent => {
   const text = raw.trim();
   if (text.length === 0) {
@@ -61,11 +70,9 @@ export const parseDecisionQuery = (
   if (ECLI_RE.test(folded)) {
     return { type: "identifier", kind: "ecli", value: folded };
   }
-  // Before the docket fallback: only a whole entry of volume, a reporter the
-  // edition table settles on, and a page is claimed.
-  const reporter = readsUsReporterCitations(jurisdiction)
-    ? canonicalUsReporterCitation(folded)
-    : null;
+  // Before the docket fallback: only a whole entry the reporter grammar
+  // settles on one reporter is claimed.
+  const reporter = reporters?.canonicalCitation(folded) ?? null;
   if (reporter !== null) {
     return { type: "identifier", kind: "reporter", value: reporter };
   }
@@ -96,14 +103,6 @@ const decisionIdentifierComparisonKey = (
     : canonicalDecisionDocket(docket);
 };
 
-type ExactDecisionMatchOptions = {
-  /**
-   * The scope the entry was read under, the same one `parseDecisionQuery`
-   * took. Omitted, identifiers compare the way an unscoped entry parses.
-   */
-  readonly grammar?: DecisionDocketGrammar | null | undefined;
-};
-
 /**
  * The identity of a structured citation: case, spacing and punctuation are
  * typography. The same folding the identifier column is written with.
@@ -119,23 +118,45 @@ type TypedReferenceKind = Extract<
   "neutral" | "reporter"
 >;
 
+type TypedReferenceComparison = {
+  identifierType: string;
+  key: (value: string) => string;
+};
+
 /**
  * How a typed reference is compared: only against identifiers stored under its
  * own type, each read by that type's canonicaliser. A reporter citation is
- * read into its canonical edition first, so a variant abbreviation or a pin
- * does not change it.
+ * read through the jurisdiction's reporter grammar first, so a variant
+ * abbreviation or a pin does not change it.
  */
-const TYPED_REFERENCE_COMPARISON = {
-  neutral: { identifierType: "neutral-citation", key: structuredCitationKey },
-  reporter: {
-    identifierType: "reporter-citation",
-    key: (value: string) =>
-      structuredCitationKey(canonicalUsReporterCitation(value) ?? value),
-  },
-} as const satisfies Record<
-  TypedReferenceKind,
-  { identifierType: string; key: (value: string) => string }
->;
+const typedReferenceComparison = (
+  kind: TypedReferenceKind,
+  reporters: DecisionReporterGrammar | null | undefined,
+): TypedReferenceComparison => {
+  switch (kind) {
+    case "neutral":
+      return { identifierType: "neutral-citation", key: structuredCitationKey };
+    case "reporter":
+      return {
+        identifierType: "reporter-citation",
+        key: (value) =>
+          structuredCitationKey(reporters?.canonicalCitation(value) ?? value),
+      };
+    default: {
+      kind satisfies never;
+      return panic(`Unhandled typed reference kind: ${String(kind)}`);
+    }
+  }
+};
+
+/**
+ * The grammars the entry was read under, the same ones `parseDecisionQuery`
+ * took. Omitted, identifiers compare the way an unscoped entry parses.
+ */
+type ExactDecisionMatchesOptions = {
+  readonly grammar?: DecisionDocketGrammar | null | undefined;
+  readonly reporters?: DecisionReporterGrammar | null | undefined;
+};
 
 type DecisionHitIdentity = {
   caseNumber: string;
@@ -155,7 +176,7 @@ type DecisionHitIdentity = {
 export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
   reference: DecisionReference,
   hits: readonly THit[],
-  { grammar }: ExactDecisionMatchOptions = {},
+  { grammar, reporters }: ExactDecisionMatchesOptions = {},
 ): THit[] => {
   switch (reference.kind) {
     case "docket":
@@ -173,8 +194,10 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
     }
     case "neutral":
     case "reporter": {
-      const { identifierType, key } =
-        TYPED_REFERENCE_COMPARISON[reference.kind];
+      const { identifierType, key } = typedReferenceComparison(
+        reference.kind,
+        reporters,
+      );
       const wanted = key(reference.value);
       return hits.filter(
         (hit) =>
