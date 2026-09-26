@@ -65,9 +65,8 @@ const prepareRefusal = (error: unknown) => {
   if (PdfSigningStampError.is(error)) {
     return {
       closeReason: "signing_failed",
-      code: "pdf_signing_stamp_unrenderable",
-      message:
-        "This certificate's name cannot be shown in a visible stamp. Sign invisibly instead.",
+      code: `pdf_signing_stamp_${error.reason}`,
+      message: error.message,
     } as const;
   }
   return {
