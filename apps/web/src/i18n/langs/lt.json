@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Parašas neatitiko parengto dokumento. Pabandykite pasirašyti dar kartą.",
         "cancelledFailedDescription": "Parašo nepavyko pridėti prie šio PDF.",
         "cancelledPlatformDescription": "Pasirašymas sistemos raktų pynės sertifikatu kol kas veikia macOS sistemoje.",
+        "cancelledRevokedDescription": "Pasirinktas sertifikatas arba jį išdavęs sertifikatas buvo atšauktas. Pasirinkite galiojantį sertifikatą.",
         "cancelledSignatureDescription": "stella desktop parašas neatitiko pasirinkto sertifikato. Pabandykite pasirašyti dar kartą.",
         "cancelledTitle": "Pasirašymas atšauktas",
         "cancelledUserDescription": "Pasirašymas atšauktas programoje stella desktop.",

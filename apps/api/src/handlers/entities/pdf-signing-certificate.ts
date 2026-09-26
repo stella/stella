@@ -11,12 +11,15 @@ import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
 import { inspectSigningCertificate } from "@/api/lib/pdf-signing/certificate";
 import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
+import { certificateRevokedError } from "@/api/lib/pdf-signing/finalize";
+import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 import {
   captureSigningDigest,
   PdfSigningCertifiedDocumentError,
   signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
+import { findRevokedCertificates } from "@/api/lib/pdf-signing/validation-data";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -152,6 +155,24 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       candidates: chain.filter((entry) => entry !== null),
       certificate,
     });
+
+    // Checked before the desktop asks for a PIN: a revoked certificate must
+    // never sign, and this is the earliest point its full chain is known.
+    const { revoked } = await findRevokedCertificates({
+      provider: createTrackedRevocationProvider(),
+      signerChain: [certificate, ...signerChain],
+    });
+    if (revoked.length > 0) {
+      yield* Result.await(
+        closePdfSigningSession({
+          closeReason: "certificate_revoked",
+          recordAuditEvent,
+          safeDb: session.safeDb,
+          sessionId: session.sessionId,
+        }),
+      );
+      return Result.err(certificateRevokedError());
+    }
 
     const timestamped = configuredTimestampAuthorities().length > 0;
     const placeholderSize = signaturePlaceholderSize({

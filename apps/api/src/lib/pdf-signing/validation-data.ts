@@ -62,18 +62,41 @@ const gatherRevocation = async (
     }
     const issuer = chain[index + 1];
     const ocsp =
-      issuer === undefined
-        ? null
-        : await provider.getOCSP?.(certificate, issuer);
+      issuer === undefined ? null : await provider.getOCSP(certificate, issuer);
     if (ocsp) {
       material.ocspResponses.push(ocsp);
       continue;
     }
-    const crl = await provider.getCRL?.(certificate);
+    const crl = await provider.getCRL(certificate, issuer);
     if (crl) {
       material.crls.push(crl);
     }
   }
+};
+
+/**
+ * The certificates of `signerChain` that revocation data says are revoked.
+ * Unavailable data revokes nothing: that only costs the B-LT claim.
+ */
+export const findRevokedCertificates = async ({
+  provider,
+  signerChain,
+}: {
+  provider: TrackedRevocationProvider;
+  signerChain: readonly Uint8Array[];
+}): Promise<{ material: ValidationMaterial; revoked: Uint8Array[] }> => {
+  const material: ValidationMaterial = {
+    certificates: [...signerChain],
+    crls: [],
+    ocspResponses: [],
+  };
+  await gatherRevocation(signerChain, provider, material);
+  return {
+    material,
+    revoked: signerChain.filter((certificate) =>
+      provider.isRevoked(certificate),
+    ),
+  };
 };
 
 export type GatheredValidationData = {
@@ -82,22 +105,27 @@ export type GatheredValidationData = {
   uncovered: Uint8Array[];
 };
 
+/**
+ * Add the timestamp authority's certificates and their revocation data to
+ * what {@link findRevokedCertificates} gathered for the signer.
+ */
 export const gatherValidationData = async ({
   provider,
+  signer,
   signerChain,
   timestampCertificates,
 }: {
   provider: TrackedRevocationProvider;
+  signer: ValidationMaterial;
   /** The signing certificate first, then its issuers. */
   signerChain: readonly Uint8Array[];
   timestampCertificates: readonly Uint8Array[];
 }): Promise<GatheredValidationData> => {
   const material: ValidationMaterial = {
-    certificates: [...signerChain, ...timestampCertificates],
-    crls: [],
-    ocspResponses: [],
+    certificates: [...signer.certificates, ...timestampCertificates],
+    crls: [...signer.crls],
+    ocspResponses: [...signer.ocspResponses],
   };
-  await gatherRevocation(signerChain, provider, material);
   await gatherRevocation(timestampCertificates, provider, material);
 
   return {

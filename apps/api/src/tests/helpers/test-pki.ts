@@ -139,13 +139,23 @@ export const createTestCertificate = async ({
   };
 };
 
-/** An empty CRL signed by `issuer`: "nothing it issued is revoked". */
+/** A CRL signed by `issuer` revoking exactly `revoked` (default: none). */
 export const createTestCrl = async (
   issuer: TestCertificate,
+  revoked: readonly TestCertificate[] = [],
 ): Promise<Uint8Array> => {
   const crl = new pkijs.CertificateRevocationList();
   crl.version = 1;
   crl.issuer = issuer.certificate.subject;
+  if (revoked.length > 0) {
+    crl.revokedCertificates = revoked.map(
+      ({ certificate }) =>
+        new pkijs.RevokedCertificate({
+          userCertificate: certificate.serialNumber,
+          revocationDate: new pkijs.Time({ type: 0, value: new Date() }),
+        }),
+    );
+  }
   crl.thisUpdate = new pkijs.Time({ type: 0, value: new Date() });
   crl.nextUpdate = new pkijs.Time({
     type: 0,
@@ -153,4 +163,64 @@ export const createTestCrl = async (
   });
   await crl.sign(issuer.privateKey, "SHA-256");
   return new Uint8Array(crl.toSchema(true).toBER(false));
+};
+
+const ID_PKIX_OCSP_BASIC = "1.3.6.1.5.5.7.48.1.1";
+
+/**
+ * A successful OCSP response from `issuer` about `subject`: `good`, or
+ * `revoked` as of an hour ago.
+ */
+export const createTestOcspResponse = async ({
+  issuer,
+  status,
+  subject,
+}: {
+  issuer: TestCertificate;
+  status: "good" | "revoked";
+  subject: TestCertificate;
+}): Promise<Uint8Array> => {
+  const certID = new pkijs.CertID();
+  await certID.createForCertificate(subject.certificate, {
+    hashAlgorithm: "SHA-1",
+    issuerCertificate: issuer.certificate,
+  });
+  const certStatus =
+    status === "good"
+      ? new asn1js.Primitive({ idBlock: { tagClass: 3, tagNumber: 0 } })
+      : new asn1js.Constructed({
+          idBlock: { tagClass: 3, tagNumber: 1 },
+          value: [
+            new asn1js.GeneralizedTime({
+              valueDate: new Date(Date.now() - 3_600_000),
+            }),
+          ],
+        });
+  const basic = new pkijs.BasicOCSPResponse({
+    tbsResponseData: new pkijs.ResponseData({
+      responderID: issuer.certificate.subject,
+      producedAt: new Date(),
+      responses: [
+        new pkijs.SingleResponse({
+          certID,
+          certStatus,
+          thisUpdate: new Date(),
+        }),
+      ],
+    }),
+  });
+  await basic.sign(issuer.privateKey, "SHA-256");
+  return new Uint8Array(
+    new pkijs.OCSPResponse({
+      responseStatus: new asn1js.Enumerated({ value: 0 }),
+      responseBytes: new pkijs.ResponseBytes({
+        responseType: ID_PKIX_OCSP_BASIC,
+        response: new asn1js.OctetString({
+          valueHex: basic.toSchema().toBER(false),
+        }),
+      }),
+    })
+      .toSchema()
+      .toBER(false),
+  );
 };

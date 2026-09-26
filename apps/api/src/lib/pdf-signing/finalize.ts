@@ -28,6 +28,7 @@ import { chainReachesRoot } from "@/api/lib/pdf-signing/certificate-chain";
 import type { AuthorizedPdfSigningSession } from "@/api/lib/pdf-signing/sessions";
 import {
   applySignature,
+  PdfSigningCertificateRevokedError,
   PdfSigningDigestMismatchError,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import type { AppliedSignature } from "@/api/lib/pdf-signing/sign-pdf";
@@ -56,6 +57,14 @@ export type FinalizeFailure =
       closeReason: PdfSigningSessionCloseReason;
       error: HandlerError;
     };
+
+export const certificateRevokedError = () =>
+  new HandlerError({
+    status: 422,
+    code: "pdf_signing_certificate_revoked",
+    message:
+      "The signing certificate, or one that issued it, has been revoked.",
+  });
 
 export type FinalizedSignature = {
   versionId: SafeId<"entityVersion">;
@@ -184,6 +193,11 @@ const embed = async (
             "The prepared signature no longer matches this document. Start signing again.",
         }),
       ),
+    );
+  }
+  if (PdfSigningCertificateRevokedError.is(cause)) {
+    return Result.err(
+      terminal("certificate_revoked", certificateRevokedError()),
     );
   }
   // Embedding is deterministic over the stored inputs except for its time

@@ -44,6 +44,7 @@ export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
   "digest_mismatch",
   "unsupported_platform",
   "certificate_rejected",
+  "certificate_revoked",
   "certified_document",
   "signature_invalid",
   "signing_failed",

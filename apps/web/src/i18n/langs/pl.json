@@ -5101,6 +5101,7 @@
         "cancelledDigestDescription": "Podpis nie pasował do przygotowanego dokumentu. Spróbuj podpisać ponownie.",
         "cancelledFailedDescription": "Nie udało się dodać podpisu do tego PDF.",
         "cancelledPlatformDescription": "Podpisywanie certyfikatem z pęku kluczy systemu działa na razie w macOS.",
+        "cancelledRevokedDescription": "Wybrany certyfikat lub certyfikat, który go wystawił, został unieważniony. Wybierz ważny certyfikat.",
         "cancelledSignatureDescription": "Podpis ze stella desktop nie pasował do wybranego certyfikatu. Spróbuj podpisać ponownie.",
         "cancelledTitle": "Podpisywanie anulowane",
         "cancelledUserDescription": "Podpisywanie anulowano w stella desktop.",
