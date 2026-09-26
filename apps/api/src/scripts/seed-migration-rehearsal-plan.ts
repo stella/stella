@@ -359,11 +359,11 @@ export const rehearsalSeedSteps = (
       table,
     })),
     { statement: rehearsalFutureDatedCohortStatement(), table: null },
+    // Conditional for every table: the seed runs against the promoted
+    // release's schema, which need not hold every table this checkout
+    // registers yet.
     ...REHEARSAL_SEED_ORDER.map((table) => ({
-      statement:
-        table === "case_law_statute_citation_memberships"
-          ? `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`
-          : `ANALYZE ${table}`,
+      statement: `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`,
       table: null,
     })),
   ];

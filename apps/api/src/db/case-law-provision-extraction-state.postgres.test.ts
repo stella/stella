@@ -12,7 +12,6 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -24,7 +23,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -62,21 +60,16 @@ type Fixture = {
 };
 
 const insertDecision = async (
-  db: GatedTestDb,
+  client: SQL,
   fixture: Fixture,
   language: string,
 ): Promise<SafeId<"caseLawDecision">> => {
   const id = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
-    id,
-    sourceId: fixture.sourceId,
-    country: COUNTRY,
-    language,
-    court: "Court",
-    caseNumber: id,
-    decisionDate: "2020-03-01",
-    metadata: {},
-  });
+  await client`
+    INSERT INTO case_law_decisions
+      (id, source_id, country, language, court, case_number, decision_date, metadata)
+    VALUES (${id}::uuid, ${fixture.sourceId}::uuid, ${COUNTRY}, ${language},
+      'Court', ${id}, '2020-03-01', '{}'::jsonb)`;
   return id;
 };
 
@@ -91,12 +84,11 @@ const withFixture = async (
     return;
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-    const { sql: observer, db } = openClient();
-    const source = caseLawSourceRow({
-      adapterKey: `provision-state-${Bun.randomUUIDv7()}`,
-    });
+    const { sql: observer } = openClient();
+    const source = { id: createSafeId<"caseLawSource">() };
     const fixture: Fixture = { sourceId: source.id };
-    await db.insert(caseLawSources).values(source);
+    await observer`INSERT INTO case_law_sources (id, adapter_key, name)
+      VALUES (${source.id}::uuid, ${`provision-state-${Bun.randomUUIDv7()}`}, 'Test source')`;
     try {
       await fn({ openClient, observer, fixture });
     } finally {
@@ -147,7 +139,7 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             await activated.promise;
             const pid = await backendPid(writer.sql);
-            const write = insertDecision(writer.db, fixture, language);
+            const write = insertDecision(writer.sql, fixture, language);
             await waitUntilBlocked(observer, pid);
             release.resolve(undefined);
             await transition.catch(() => undefined);
@@ -185,7 +177,7 @@ if (!databaseUrl || !runPostgresTests) {
           await tx`INSERT INTO case_law_decisions (id, source_id, country, language, court, case_number, metadata)
             VALUES (${bulkId}::uuid, ${fixture.sourceId}::uuid, ${COUNTRY}, ${language}, 'Court', ${bulkId}, '{}'::jsonb)`;
         });
-        const ordinaryId = await insertDecision(pooled.db, fixture, language);
+        const ordinaryId = await insertDecision(pooled.sql, fixture, language);
         expect((await stateOf(observer, bulkId))?.lane).toBe("backfill");
         expect((await stateOf(observer, ordinaryId))?.lane).toBe("fresh");
       });
@@ -194,7 +186,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("the input digest is the same under any session DateStyle and TimeZone", async () => {
       await withFixture(async ({ openClient, fixture }) => {
         const id = await insertDecision(
-          openClient().db,
+          openClient().sql,
           fixture,
           uniqueLanguage(),
         );
@@ -371,7 +363,7 @@ if (!databaseUrl || !runPostgresTests) {
         const language = uniqueLanguage();
         await observer`INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation)
           VALUES (${COUNTRY}, ${language}, 'active', 1)`;
-        const id = await insertDecision(openClient().db, fixture, language);
+        const id = await insertDecision(openClient().sql, fixture, language);
         await observer`UPDATE case_law_provision_extractions
           SET desired_input_digest = sha256('stale'::bytea), due_at = NULL
           WHERE decision_id = ${id}::uuid`;

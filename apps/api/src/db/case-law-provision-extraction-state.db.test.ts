@@ -19,23 +19,31 @@ import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import {
+  propertyConfig,
+  propertySeed,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-const source = caseLawSourceRow();
+// Raw SQL rather than the ORM throughout: the decision table's insert types
+// are among the most expensive in the API's type check, and nothing here
+// needs them.
+const SOURCE_ID = createSafeId<"caseLawSource">();
 
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await db.insert(caseLawSources).values(source);
-}, 120_000);
+  await db.execute(sql`
+    INSERT INTO case_law_sources (id, adapter_key, name)
+    VALUES (${SOURCE_ID}, 'provision-state', 'Test source')
+  `);
+}, propertyTestTimeout(120_000));
 afterAll(async () => await client.close());
 
 const config = (numRuns: number) =>
@@ -80,7 +88,7 @@ type DecisionInputs = {
   decisionDate: string | null;
   country: string;
   language: string;
-  redactedAt: Date | null;
+  redactedAt: string | null;
 };
 
 const BASE_INPUTS: DecisionInputs = {
@@ -104,21 +112,48 @@ const setScope = async (
   `);
 };
 
+const decisionInsert = (
+  id: DecisionId,
+  inputs: Partial<DecisionInputs> = {},
+): SQL => {
+  const { contentHash, country, decisionDate, language, redactedAt } = {
+    ...BASE_INPUTS,
+    ...inputs,
+  };
+  return sql`
+    INSERT INTO case_law_decisions (
+      id, source_id, court, case_number, metadata,
+      content_hash, decision_date, country, language, redacted_at
+    ) VALUES (
+      ${id}, ${SOURCE_ID}, 'Court', ${id}, '{}'::jsonb,
+      ${contentHash}, ${decisionDate}, ${country}, ${language}, ${redactedAt}
+    )
+  `;
+};
+
 const insertDecision = async (
   inputs: Partial<DecisionInputs> = {},
 ): Promise<DecisionId> => {
   const id = createSafeId<"caseLawDecision">();
-  const values = { ...BASE_INPUTS, ...inputs };
-  await db.insert(caseLawDecisions).values({
-    id,
-    sourceId: source.id,
-    court: "Court",
-    caseNumber: id,
-    metadata: {},
-    ...values,
-  });
+  await run(decisionInsert(id, inputs));
   return id;
 };
+
+/**
+ * Runs `statements` in one transaction and returns the last one's rows: the
+ * only transaction this suite opens, so `SET LOCAL` settings and roles last
+ * exactly as long as the statements that need them.
+ */
+const inTransaction = async (
+  statements: readonly SQL[],
+): Promise<Record<string, unknown>[]> =>
+  await db.transaction(async (tx) => {
+    let last: Record<string, unknown>[] = [];
+    for (const statement of statements) {
+      last = (await tx.execute(statement)).rows;
+    }
+    return last;
+  });
 
 type StateRow = {
   lane: string;
@@ -151,7 +186,7 @@ const readState = async (id: DecisionId): Promise<StateRow | null> => {
     lane: String(row["lane"]),
     dueAt: row["dueAt"],
     enqueueReason:
-      row["enqueueReason"] === null ? null : String(row["enqueueReason"]),
+      typeof row["enqueueReason"] === "string" ? row["enqueueReason"] : null,
     jurisdiction: String(row["jurisdiction"]),
     workStatus: String(row["workStatus"]),
     leaseToken: row["leaseToken"],
@@ -380,10 +415,10 @@ describe("enqueue trigger", () => {
     const digestColumns = [
       ...new Set(
         [...String(definition).matchAll(/decision\."([a-z_]+)"/gu)].map(
-          (match) => match[1],
+          (match) => match[1] ?? "",
         ),
       ),
-    ].toSorted();
+    ].toSorted((left, right) => Number(left > right) - Number(left < right));
     expect(triggerColumns.map((row) => row["column"])).toEqual(digestColumns);
     expect(digestColumns).toEqual([
       "content_hash",
@@ -508,21 +543,11 @@ describe("enqueue trigger", () => {
   });
 
   test("takes the lane from the transaction setting, and fresh after it", async () => {
-    const backfilled = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SET LOCAL stella.provision_extraction_lane = 'backfill'`,
-      );
-      const id = createSafeId<"caseLawDecision">();
-      await tx.insert(caseLawDecisions).values({
-        id,
-        sourceId: source.id,
-        court: "Court",
-        caseNumber: id,
-        metadata: {},
-        ...BASE_INPUTS,
-      });
-      return id;
-    });
+    const backfilled = createSafeId<"caseLawDecision">();
+    await inTransaction([
+      sql`SET LOCAL stella.provision_extraction_lane = 'backfill'`,
+      decisionInsert(backfilled),
+    ]);
     expect((await readState(backfilled))?.lane).toBe("backfill");
 
     // The same session, after the setting's transaction: it now reads as ''.
@@ -531,19 +556,10 @@ describe("enqueue trigger", () => {
 
     expect(
       await refusal(
-        db.transaction(async (tx) => {
-          await tx.execute(
-            sql`SET LOCAL stella.provision_extraction_lane = 'bulk'`,
-          );
-          await tx.insert(caseLawDecisions).values({
-            id: createSafeId<"caseLawDecision">(),
-            sourceId: source.id,
-            court: "Court",
-            caseNumber: "invalid lane",
-            metadata: {},
-            ...BASE_INPUTS,
-          });
-        }),
+        inTransaction([
+          sql`SET LOCAL stella.provision_extraction_lane = 'bulk'`,
+          decisionInsert(createSafeId<"caseLawDecision">()),
+        ]),
       ),
     ).toMatch(/provision_extraction_lane must be/u);
   });
@@ -552,15 +568,13 @@ describe("enqueue trigger", () => {
     const outstanding = await insertDecision();
     const completed = await insertDecision();
     await settle(completed);
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SET LOCAL stella.provision_extraction_lane = 'backfill'`,
-      );
-      await tx.execute(sql`
+    await inTransaction([
+      sql`SET LOCAL stella.provision_extraction_lane = 'backfill'`,
+      sql`
         UPDATE case_law_decisions SET decision_date = '2021-01-01'
         WHERE id IN (${outstanding}, ${completed})
-      `);
-    });
+      `,
+    ]);
     expect((await readState(outstanding))?.lane).toBe("fresh");
     expect((await readState(completed))?.lane).toBe("backfill");
 
@@ -880,10 +894,7 @@ describe("privileges", () => {
 
   /** Runs `query` as `role` in a transaction of its own. */
   const asRole = async (role: string, query: SQL) =>
-    await db.transaction(async (tx) => {
-      await tx.execute(sql.raw(`SET LOCAL ROLE ${role}`));
-      return (await tx.execute(query)).rows;
-    });
+    await inTransaction([sql.raw(`SET LOCAL ROLE ${role}`), query]);
 
   for (const role of APPLICATION_ROLES) {
     test(`${role} can neither insert state nor read scope rows`, async () => {
@@ -917,7 +928,7 @@ describe("privileges", () => {
     await asRole(
       "stella_ingestion",
       sql`INSERT INTO case_law_decisions (id, source_id, country, language, court, case_number, decision_date, metadata)
-        VALUES (${id}, ${source.id}, 'CZE', 'cs', 'Court', ${id}, '2020-03-01', '{}'::jsonb)`,
+        VALUES (${id}, ${SOURCE_ID}, 'CZE', 'cs', 'Court', ${id}, '2020-03-01', '{}'::jsonb)`,
     );
     expect(await readState(id)).toMatchObject({
       lane: "fresh",
@@ -928,7 +939,7 @@ describe("privileges", () => {
     await asRole(
       "stella_ingestion",
       sql`INSERT INTO case_law_decisions (id, source_id, country, language, court, case_number, metadata)
-        VALUES (${unseen}, ${source.id}, 'CZE', 'xq', 'Court', ${unseen}, '{}'::jsonb)`,
+        VALUES (${unseen}, ${SOURCE_ID}, 'CZE', 'xq', 'Court', ${unseen}, '{}'::jsonb)`,
     );
     expect(
       await rows(sql`SELECT status FROM case_law_provision_extraction_scopes
