@@ -99,6 +99,31 @@ describe("signatures that need no alphabet", () => {
   });
 });
 
+describe("UTF-8 punctuation read as windows-1252", () => {
+  test("is found in text that is otherwise ASCII", () => {
+    const text = "The courtâ€™s decision â€” an appeal â€“ is final.";
+    const finding = findingOf(text, "en", "utf8-read-as-single-byte");
+    expect(finding?.occurrences).toBe(3);
+    expect(finding?.samples.map(({ repaired }) => repaired)).toEqual([
+      "court’s",
+      "—",
+      "–",
+    ]);
+  });
+
+  test("is found for quotation marks, ellipses and signs", () => {
+    // ” is E2 80 9D, and windows-1252 leaves 9D undefined: WHATWG reads it
+    // as the C1 control U+009D.
+    const text =
+      "â€œFinalâ€\u009d he said â€˜noâ€™, costs â‚¬5â€¦ per Â§ 3, 20Â°C.";
+    expect(
+      findingOf(text, "en", "utf8-read-as-single-byte")?.samples.map(
+        ({ repaired }) => repaired,
+      ),
+    ).toEqual(["“Final”", "‘no’", "€5…", "§", "°C"]);
+  });
+});
+
 describe("double-encoded UTF-8", () => {
   test("is repaired through both layers", () => {
     const pair = { actual: "utf-8", assumed: "windows-1252" } as const;

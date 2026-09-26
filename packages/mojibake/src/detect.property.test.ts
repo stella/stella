@@ -221,6 +221,70 @@ describe("every pair of a language's own letters", () => {
   });
 });
 
+describe("typographic punctuation in otherwise ASCII text", () => {
+  // The marks an English decision carries outside ASCII: apostrophes and
+  // quotation marks, dashes, an ellipsis, signs.
+  const MARKS = [
+    "’",
+    "‘",
+    "“",
+    "”",
+    "–",
+    "—",
+    "…",
+    "€",
+    "™",
+    "§",
+    "°",
+    "«",
+    "»",
+  ];
+  const text = fc
+    .array(
+      fc.tuple(
+        fc.stringMatching(/^[A-Za-z]{1,9}$/u),
+        fc.option(fc.constantFrom(...MARKS), { freq: 3 }),
+      ),
+      { minLength: 5, maxLength: 60 },
+    )
+    .map((marked) =>
+      marked.map(([word, mark]) => (mark === null ? word : `${word}${mark}`)),
+    )
+    .filter(
+      (marked) =>
+        marked.filter((word) => /[^\p{ASCII}]/u.test(word)).length >= 2,
+    )
+    .map((marked) => marked.join(" "));
+
+  test("read correctly, it is clean", () => {
+    fc.assert(
+      fc.property(text, (written) => {
+        expect(checkTextEncoding(written, "en")).toEqual({ status: "clean" });
+      }),
+      config(300),
+    );
+  });
+
+  test("written in UTF-8 and read as windows-1252 or Latin-1, it is reported", () => {
+    fc.assert(
+      fc.property(
+        text,
+        fc.constantFrom<DecodingPair>(
+          { actual: "utf-8", assumed: "windows-1252" },
+          { actual: "utf-8", assumed: "iso-8859-1" },
+        ),
+        (written, pair) => {
+          const misread = misdecode(written, pair);
+          expect(misread).not.toBeNull();
+          expect(misread).not.toBe(written);
+          expect(checkTextEncoding(misread ?? "", "en").status).toBe("suspect");
+        },
+      ),
+      config(300),
+    );
+  });
+});
+
 describe("generated text", () => {
   test("a repair the detector proposes never writes a wrong word", () => {
     fc.assert(

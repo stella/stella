@@ -574,13 +574,57 @@ const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
 ).map((assumed) => ({ actual: "utf-8", assumed }));
 
 /**
- * Words that become valid UTF-8 with a non-ASCII letter once written back as
- * windows-1252 or Latin-1 bytes. A word a person wrote rarely spells a UTF-8
+ * Words that become valid UTF-8 with a non-ASCII letter or a punctuation
+ * mark once written back as windows-1252 or Latin-1 bytes. A word a person wrote rarely spells a UTF-8
  * multi-byte sequence in those bytes, but capitals do: Czech "POSPÍŠIL" is
  * bytes CD 8A, a combining mark, and Slovak "VÝŠKA" is DD 8A, a Syriac one.
  * So where the language is known the word read back must read natively in
  * it; where it is not, it must at least stay in one script.
  */
+/**
+ * Punctuation and signs whose UTF-8 bytes read as windows-1252 are "â€"
+ * or "Â" followed by more punctuation ("â€™" for ’, "â€”" for —, "Â§" for
+ * §). No pair of letters reads back into one (a letter byte after C2 or E2
+ * spells a control, a letter or a mathematical sign), so unlike a restored
+ * letter a restored mark needs no alphabet to be told from a capital.
+ */
+const RESTORED_PUNCTUATION = /^[\u00A0-\u00BF\u2000-\u206F\u20AC\u2122]$/u;
+
+const isRestoredPunctuation = (char: string): boolean =>
+  !isLetter(char) && RESTORED_PUNCTUATION.test(char);
+
+/**
+ * Whether a word read back as UTF-8 reads as something a person wrote:
+ * its restored marks are punctuation, and its restored letters, if any,
+ * read natively in the language (or, where it is not known, stay in one
+ * script).
+ */
+const readsAsWritten = (
+  undone: UndoneWord,
+  { word, alphabet }: { word: string; alphabet: Alphabet | null },
+): boolean => {
+  if (undone.failed || undone.text === word) {
+    return false;
+  }
+  const chars = Array.from(undone.text);
+  if (chars.some((char) => isControlOrReplacement(char.codePointAt(0) ?? 0))) {
+    return false;
+  }
+  const letters = chars.filter((char) => !isRestoredPunctuation(char)).join("");
+  if (!NON_ASCII.test(letters)) {
+    // Punctuation alone, around ASCII ("court’s", "—").
+    return letters.length < chars.length;
+  }
+  if (
+    !Array.from(letters).some((char) => NON_ASCII.test(char) && isLetter(char))
+  ) {
+    return false;
+  }
+  return alphabet === null
+    ? writtenInOneScript(letters)
+    : classifyWord(letters, alphabet) === "native";
+};
+
 const utf8Signature = (
   words: ReadonlyMap<string, WordStat>,
   alphabet: Alphabet | null,
@@ -590,20 +634,7 @@ const utf8Signature = (
   for (const [word, stat] of words) {
     const repaired = UTF8_SIGNATURE_PAIRS.map((pair) =>
       undoWord(word, pair),
-    ).find(
-      (undone) =>
-        !undone.failed &&
-        undone.text !== word &&
-        Array.from(undone.text).some(
-          (char) => NON_ASCII.test(char) && isLetter(char),
-        ) &&
-        !Array.from(undone.text).some((char) =>
-          isControlOrReplacement(char.codePointAt(0) ?? 0),
-        ) &&
-        (alphabet === null
-          ? writtenInOneScript(undone.text)
-          : classifyWord(undone.text, alphabet) === "native"),
-    );
+    ).find((undone) => readsAsWritten(undone, { word, alphabet }));
     if (repaired === undefined) {
       continue;
     }
