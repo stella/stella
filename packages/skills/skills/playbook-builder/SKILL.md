@@ -101,6 +101,10 @@ before it is read, and a subagent cannot ask them.
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the
      whole organization, so which documents feed it is the user's choice.
+     Document ids listed before the user answered no longer resolve after
+     it (`Unknown entity ref`), so read in one script that first lists the
+     chosen matters' documents again with `list_documents` and then reads
+     the picked ones by the ids that listing returns.
      Positions already saved are then revised from what the contracts say.
 - **None, or later:** do not search and do not list matters. Build from
   defaults and the interview: after the opening answers, go straight to
