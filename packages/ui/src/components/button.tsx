@@ -122,7 +122,7 @@ function Button({
       <>
         {/* Scale leaves animate-spin in control of transform. */}
         <LoaderIcon
-          className="animate-spin starting:opacity-0 starting:blur-[2px] starting:scale-50 [transition:opacity_150ms_ease-out,filter_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none"
+          className="animate-spin [transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
           data-slot="button-loader"
         />
         {children}
