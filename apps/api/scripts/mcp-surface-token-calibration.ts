@@ -131,11 +131,13 @@ const calibrateSurface = async ({
       name,
       input_schema: inputSchema,
     }));
-    const describedTools = tools.map(({ name, description, inputSchema }) => ({
-      name,
-      description,
-      input_schema: inputSchema,
-    }));
+    const describedTools = tools.map(
+      ({ name, description, inputSchema }): AnthropicToolEntry => ({
+        name,
+        ...(description === undefined ? {} : { description }),
+        input_schema: inputSchema,
+      }),
+    );
     const instructions = MCP_INSTRUCTIONS[mode];
 
     // Both carry the probe tool, so subtracting `toolBaseTokens` removes the
