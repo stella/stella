@@ -340,7 +340,7 @@
       "id": "openai-strict-null-input",
       "fix": "#1174",
       "behaviour": "The OpenAI adapter drops the nulls strict mode widens optional tool fields to.",
-      "status": "active",
+      "status": "retired",
       "file": "../../node_modules/@tanstack/openai-base/dist/esm/utils/tool-input-normalizer.js",
       "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
       "replace": "return (toolName, input) => input;",
@@ -348,13 +348,14 @@
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "openai strict-null"
       },
-      "oracle": "chat.provider-wire.tool-input"
+      "oracle": "chat.provider-wire.tool-input",
+      "reason": "The stream contract reads a null optional field as omitted on every adapter, so this adapter's own pass is no longer the only guard; the entry below mutates the one that is."
     },
     {
       "id": "mistral-strict-null-input",
       "fix": "#1189",
       "behaviour": "The Mistral adapter drops the nulls strict mode widens optional tool fields to.",
-      "status": "active",
+      "status": "retired",
       "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/utils/tool-input-normalizer.js",
       "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
       "replace": "return (toolName, input) => input;",
@@ -362,7 +363,8 @@
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "mistral strict-null"
       },
-      "oracle": "chat.provider-wire.tool-input"
+      "oracle": "chat.provider-wire.tool-input",
+      "reason": "The stream contract reads a null optional field as omitted on every adapter, so this adapter's own pass is no longer the only guard; the entry below mutates the one that is."
     },
     {
       "id": "stored-arguments-from-tool-call-end",
@@ -377,6 +379,34 @@
         "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
       },
       "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "tool-input-null-optionals-omitted",
+      "fix": "#1174, #1189, #3831",
+      "behaviour": "Every adapter's tool call input reads a null optional field as omitted.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stream-contract.ts",
+      "search": "schema === undefined ? input : withNullOptionalsOmitted(schema, input),",
+      "replace": "input,",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "google strict-null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "stream-ends-in-one-terminal-event",
+      "fix": "maintenance",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stream-contract.ts",
+      "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
+      "replace": "if (false) {\n    yield runError(options.model, {",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "anthropic early-eof"
+      },
+      "oracle": "chat.provider-wire.one-terminal"
     }
   ]
 }
