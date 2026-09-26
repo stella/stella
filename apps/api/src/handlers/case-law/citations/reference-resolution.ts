@@ -9,13 +9,17 @@
  * reference names, or why none. `reference-resolution.db.test.ts` runs both
  * over one matrix and requires the same outcome, rule and target from each.
  *
- * Two facts compare a printed hint with stored values by pattern: whether a
- * holder answers to the printed sheet (the ECLI's last segment, or a
- * case-number identifier ending on it) and whether it sits at the printed
- * court (both names folded by `courtNameKeySql`). Those are established where
- * the holder is read, beside the stored values, and a holder carries the
- * answers. Everything else, from the jurisdiction reach to the rule order, is
- * decided here.
+ * Every value the database folds or matches by pattern is taken from the
+ * database: whether a holder answers to the printed sheet (the ECLI's last
+ * segment, or a case-number identifier ending on it), whether it sits at the
+ * printed court (both names folded by `courtNameKeySql`), and its decision
+ * type as `decisionTypeKeySql` folds it. Those are established where the
+ * holder is read, beside the stored values, so a collation that folds
+ * differently folds both statements alike. Everything else, from the
+ * jurisdiction reach to the rule order, is decided here.
+ *
+ * No production module calls this; the SQL resolver is the only writer of
+ * outcomes, and `reference-resolution.test.ts` keeps it that way.
  */
 
 import {
@@ -42,7 +46,12 @@ export type ReferenceHolder = {
   /** `YYYY-MM-DD`. */
   decisionDate: string | null;
   court: string | null;
-  decisionType: string | null;
+  /**
+   * The stored decision type as the lookup folds it for comparison
+   * (`decisionTypeKeySql`: the database's `lower()` under the column's
+   * collation). Compared as given; never folded again here.
+   */
+  decisionTypeKey: string | null;
   language: string;
   /** Language manifestations of one judgment share this key. */
   languageGroupKey: string | null;
@@ -150,8 +159,7 @@ const candidatesOf = (
 const typeIn =
   (types: readonly string[]) =>
   (holder: ReferenceHolder): boolean =>
-    holder.decisionType !== null &&
-    types.includes(holder.decisionType.toLowerCase());
+    holder.decisionTypeKey !== null && types.includes(holder.decisionTypeKey);
 
 /** The holder a filter left, when it left exactly one. */
 const onlyOf = (

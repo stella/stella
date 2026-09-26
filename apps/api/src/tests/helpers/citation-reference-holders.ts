@@ -5,9 +5,9 @@
  * case-number identifier under that key. Nothing is filtered: jurisdiction,
  * time, self, language grouping and the cap are `resolveDecisionReference`'s.
  *
- * The sheet and court facts come from the resolver's own SQL fragments, so a
- * test comparing the two statements of the doctrine compares their rules, not
- * two spellings of a pattern.
+ * The sheet and court facts and the folded decision type come from the
+ * resolver's own SQL fragments, so a test comparing the two statements of the
+ * doctrine compares their rules, not two spellings of a pattern or a fold.
  */
 
 import { panic } from "better-result";
@@ -18,7 +18,10 @@ import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier
 
 import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
 import { courtNameKeySql } from "@/api/handlers/case-law/citation-court-hint";
-import { holderAnswersSheetSql } from "@/api/handlers/case-law/citation-resolution";
+import {
+  decisionTypeKeySql,
+  holderAnswersSheetSql,
+} from "@/api/handlers/case-law/citation-resolution";
 import type {
   ReferenceHolder,
   ResolvableReference,
@@ -55,7 +58,7 @@ export const readReferenceHolders = async (
            d.country,
            d.decision_date::text AS decision_date,
            d.court,
-           d.decision_type,
+           ${decisionTypeKeySql(sql.raw("d"))} AS decision_type_key,
            d.language,
            d.language_group_key,
            coalesce(${holderAnswersSheetSql(sql.raw("d"), sheet)}, false)
@@ -95,7 +98,7 @@ export const readReferenceHolders = async (
       jurisdiction: textOrNull(row["country"]),
       decisionDate: textOrNull(row["decision_date"]),
       court: textOrNull(row["court"]),
-      decisionType: textOrNull(row["decision_type"]),
+      decisionTypeKey: textOrNull(row["decision_type_key"]),
       language: String(row["language"]),
       languageGroupKey: textOrNull(row["language_group_key"]),
       answersPrintedSheet: row["answers_sheet"] === true,

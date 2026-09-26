@@ -14,8 +14,9 @@
  * function.
  */
 
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { panic } from "better-result";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -27,13 +28,18 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
+import {
+  CITATION_DECISION_TYPE_HINT,
+  CITATION_DECISION_TYPE_HINT_FAMILIES,
+  CITATION_DECISION_TYPE_HINTS,
+} from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_CANDIDATE_SCAN_CAP,
+  CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_STATUS,
 } from "@/api/handlers/case-law/citation-resolution-status";
@@ -42,12 +48,21 @@ import { resolveDecisionReference } from "@/api/handlers/case-law/citations/refe
 import type { ReferenceResolution } from "@/api/handlers/case-law/citations/reference-resolution";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { readReferenceHolders } from "@/api/tests/helpers/citation-reference-holders";
 import type { StoredReference } from "@/api/tests/helpers/citation-reference-holders";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-let client: Awaited<ReturnType<typeof createTestPglite>>;
-let db: ReturnType<typeof drizzle>;
+type Db = ReturnType<typeof drizzle>;
+
+/** One database the matrix runs against, opened by its suite. */
+type Matrix = {
+  client?: Awaited<ReturnType<typeof createTestPglite>>;
+  db?: Db;
+};
+
+const dbOf = ({ db }: Matrix): Db =>
+  db ?? panic("the suite's database is not open");
 
 const sourceId = createSafeId<"caseLawSource">();
 
@@ -453,6 +468,7 @@ type Written = {
 };
 
 const writeCase = async (
+  db: Db,
   { citing = {}, reference = {}, holders }: Case,
   index: number,
 ): Promise<Written> => {
@@ -539,7 +555,7 @@ const writeCase = async (
   };
 };
 
-const readCiting = async (citingId: SafeId<"caseLawDecision">) => {
+const readCiting = async (db: Db, citingId: SafeId<"caseLawDecision">) => {
   const [row] = await db
     .select({
       country: caseLawDecisions.country,
@@ -567,25 +583,61 @@ const outcomeOf = (resolution: ReferenceResolution | null): Outcome => {
     : { status: resolution.status, target: null, rule: null };
 };
 
-beforeAll(async () => {
-  client = await createTestPglite();
-  db = drizzle({ client });
+const openMatrix = async (
+  matrix: Matrix,
+  decisionTypeCollation: string | null,
+): Promise<void> => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  if (decisionTypeCollation !== null) {
+    await db.execute(
+      sql.raw(
+        `ALTER TABLE case_law_decisions ALTER COLUMN decision_type TYPE varchar(128) COLLATE "${decisionTypeCollation}"`,
+      ),
+    );
+  }
   await db.insert(caseLawSources).values({
     id: sourceId,
     adapterKey: "reference-resolution-parity",
     name: "reference resolution parity",
   });
-}, 120_000);
+  matrix.client = client;
+  matrix.db = db;
+};
 
-afterAll(async () => {
-  await client.close();
-});
+/** How the column's collation folds a stored type, as the suite declares it. */
+const foldTo = async (
+  db: Db,
+  stored: string,
+): Promise<{ collation: unknown; folded: unknown }> => {
+  const column = (
+    await db.execute(sql`
+      SELECT collation_name
+        FROM information_schema.columns
+       WHERE table_name = 'case_law_decisions'
+         AND column_name = 'decision_type'
+    `)
+  ).rows.at(0);
+  const collation = isRecord(column) ? column["collation_name"] : undefined;
+  const folded = (
+    await db.execute(
+      typeof collation === "string"
+        ? sql`SELECT lower(${stored}::varchar COLLATE ${sql.identifier(collation)}) AS folded`
+        : sql`SELECT lower(${stored}::varchar) AS folded`,
+    )
+  ).rows.at(0);
+  return {
+    collation: collation ?? null,
+    folded: isRecord(folded) ? folded["folded"] : undefined,
+  };
+};
 
 const expectOneOutcome = async (
+  db: Db,
   testCase: Case,
   index: number,
 ): Promise<void> => {
-  const { citingId, names, reference } = await writeCase(testCase, index);
+  const { citingId, names, reference } = await writeCase(db, testCase, index);
   const unwritten = {
     id: createSafeId<"caseLawCitation">(),
     citationKey: reference.citationKey,
@@ -619,7 +671,7 @@ const expectOneOutcome = async (
     .from(caseLawCitations)
     .where(eq(caseLawCitations.id, unwritten.id));
 
-  const citing = await readCiting(citingId);
+  const citing = await readCiting(db, citingId);
   const stated = resolveDecisionReference({
     citing: {
       decisionId: citingId,
@@ -661,11 +713,112 @@ const expectOneOutcome = async (
   }
 };
 
-for (const [index, testCase] of cases.entries()) {
-  test(`one outcome from SQL and from holders: ${testCase.name}`, async () => {
-    await expectOneOutcome(testCase, index);
+/**
+ * Every declared type spelling, stored in capitals, against its own family's
+ * hint beside a holder of another family. Whether the type rule can use it
+ * depends on how the column's collation folds the capitals, which is the
+ * database's decision: both statements must take it from there.
+ */
+const capitalisedTypeCases = (fold: (stored: string) => string): Case[] =>
+  CITATION_DECISION_TYPE_HINTS.flatMap((hint) =>
+    CITATION_DECISION_TYPE_HINT_FAMILIES[hint]
+      .filter((spelling) => spelling.toUpperCase() !== spelling)
+      .map((spelling): Case => {
+        const stored = spelling.toUpperCase();
+        return {
+          name: `${stored} against the ${hint} hint`,
+          reference: { hints: { decisionType: hint } },
+          holders: [
+            { name: "capitalised", decisionType: stored },
+            {
+              decisionType:
+                hint === CITATION_DECISION_TYPE_HINT.JUDGMENT
+                  ? usneseni
+                  : "rozsudek",
+            },
+          ],
+          expect:
+            fold(stored) === spelling
+              ? {
+                  status: CITATION_RESOLUTION_STATUS.RESOLVED,
+                  rule: CITATION_RESOLUTION_RULE.TYPE_HINT,
+                  target: "capitalised",
+                }
+              : { status: CITATION_RESOLUTION_STATUS.AMBIGUOUS },
+        };
+      }),
+  );
+
+/** A collation that folds only ASCII letters, as `"C"` does. */
+const asciiFold = (stored: string): string =>
+  stored.replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase());
+
+describe("under the column's default collation", () => {
+  const matrix: Matrix = {};
+  beforeAll(async () => {
+    await openMatrix(matrix, null);
+  }, 120_000);
+  afterAll(async () => {
+    await matrix.client?.close();
   });
-}
+
+  test("the collation folds accented capitals", async () => {
+    expect(await foldTo(dbOf(matrix), "NÁLEZ")).toEqual({
+      collation: null,
+      folded: nalez,
+    });
+  });
+
+  for (const [index, testCase] of [
+    ...cases,
+    ...capitalisedTypeCases((stored) => stored.toLowerCase()),
+  ].entries()) {
+    test(`one outcome from SQL and from holders: ${testCase.name}`, async () => {
+      await expectOneOutcome(dbOf(matrix), testCase, index);
+    });
+  }
+});
+
+describe('under the "C" collation', () => {
+  const matrix: Matrix = {};
+  beforeAll(async () => {
+    await openMatrix(matrix, "C");
+  }, 120_000);
+  afterAll(async () => {
+    await matrix.client?.close();
+  });
+
+  test("the collation leaves accented capitals as they are", async () => {
+    // The fault boundary: a JavaScript fold would read `nález` here.
+    expect(await foldTo(dbOf(matrix), "NÁLEZ")).toEqual({
+      collation: "C",
+      folded: "nÁlez",
+    });
+    expect(await foldTo(dbOf(matrix), "ÍTÉLET")).toEqual({
+      collation: "C",
+      folded: "ÍtÉlet",
+    });
+  });
+
+  for (const [index, testCase] of capitalisedTypeCases(asciiFold).entries()) {
+    test(`one outcome from SQL and from holders: ${testCase.name}`, async () => {
+      await expectOneOutcome(dbOf(matrix), testCase, index);
+    });
+  }
+
+  test("the capitalised cases reach both outcomes", () => {
+    expect(
+      new Set(
+        capitalisedTypeCases(asciiFold).map(({ expect: { status } }) => status),
+      ),
+    ).toEqual(
+      new Set([
+        CITATION_RESOLUTION_STATUS.RESOLVED,
+        CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+      ]),
+    );
+  });
+});
 
 test("the matrix declares every rule and every outcome", () => {
   // Each case above asserts its declared outcome, so what is declared here is

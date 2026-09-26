@@ -132,6 +132,16 @@ const citationRowOf = (
   };
 };
 
+/**
+ * The rows a decision's references are stored as, before they are settled:
+ * the whole of what the storage keeps of a reference and its rule verdict.
+ */
+export const citationRowsOf = ({
+  citingDecisionId,
+  references,
+}: DecisionCitations): CitationRow[] =>
+  references.map((reference) => citationRowOf(citingDecisionId, reference));
+
 /** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
 const executedRows = (result: unknown): unknown[] => {
   if (Array.isArray(result)) {
@@ -292,9 +302,7 @@ export const writeDecisionCitations = async (
     stored: boolean;
   },
 ): Promise<void> => {
-  const rows = citations.references.map((reference) =>
-    citationRowOf(citations.citingDecisionId, reference),
-  );
+  const rows = citationRowsOf(citations);
   const unmatched = new Map<string, SafeId<"caseLawCitation">[]>();
   if (stored) {
     // Read as text, so the comparison sees the values as the writer spells
