@@ -343,6 +343,50 @@ const limitDiagnostics = (
   );
 };
 
+/** Every key the contract declares: the only keys a diagnostic path names. */
+const DECLARED_KEYS: ReadonlySet<string> = new Set([
+  ...Object.keys(courtListenerRecordSchema.entries),
+  ...Object.keys(courtListenerRecordSchema.entries.provenance.entries),
+  "table",
+  "url",
+  "etag",
+  "status",
+  "people",
+  "joinedBy",
+  "opinionId",
+  "personId",
+  ...CLUSTER_COLUMNS,
+  ...DOCKET_COLUMNS,
+  ...COURT_COLUMNS,
+  ...OPINION_COLUMNS,
+  ...CITATION_COLUMNS,
+  ...PERSON_COLUMNS,
+]);
+
+/** Unexpected key names, as a count and a digest rather than the names. */
+const unexpectedKeys = (keys: readonly string[]): string =>
+  `${keys.length} unexpected key(s), sha256:${hashContent(keys.toSorted().join("\n")).slice(0, 16)}`;
+
+/**
+ * An issue's path in declared keys and indexes. A key the contract does not
+ * declare is publisher input: it is replaced by `*` and reported only as a
+ * count and digest, so no publisher-chosen name reaches a diagnostic.
+ */
+const trustedPath = (issue: v.BaseIssue<unknown>) => {
+  const unexpected: string[] = [];
+  const segments = (issue.path ?? []).map(({ key }) => {
+    if (
+      typeof key === "number" ||
+      (typeof key === "string" && DECLARED_KEYS.has(key))
+    ) {
+      return String(key);
+    }
+    unexpected.push(String(key));
+    return "*";
+  });
+  return { path: segments.join(".") || "$", unexpected };
+};
+
 const ROW_TABLES: Readonly<Record<string, readonly string[]>> = {
   cluster: CLUSTER_COLUMNS,
   docket: DOCKET_COLUMNS,
@@ -364,31 +408,40 @@ const schemaDiagnostics = (
   if (drift.length === 0) {
     return {
       reason: COURTLISTENER_REJECTION_REASON.INVALID_RECORD,
-      diagnostics: issues.map((issue) => ({
-        path: v.getDotPath(issue) ?? "$",
-        detail:
-          issue.type === "check"
-            ? issue.message
-            : `${issue.type}: expected ${issue.expected ?? "a declared value"}`,
-      })),
+      diagnostics: issues.map((issue) => {
+        const { path, unexpected } = trustedPath(issue);
+        if (unexpected.length > 0) {
+          return { path, detail: unexpectedKeys(unexpected) };
+        }
+        return {
+          path,
+          detail:
+            issue.type === "check"
+              ? issue.message
+              : `${issue.type}: expected ${issue.expected ?? "a declared value"}`,
+        };
+      }),
     };
   }
-  return {
-    reason: COURTLISTENER_REJECTION_REASON.SCHEMA_DRIFT,
-    diagnostics: drift.flatMap((issue) => {
-      const path = v.getDotPath(issue) ?? "$";
-      const columns = ROW_TABLES[path.split(".")[0] ?? ""] ?? [];
-      const { missing, notText, unexpected } = columnDrift(
-        columns,
-        issue.input,
-      );
-      return [
-        ...missing.map((column) => [column, "missing column"] as const),
-        ...unexpected.map((column) => [column, "unexpected column"] as const),
-        ...notText.map((column) => [column, "value is not text"] as const),
-      ].map(([column, detail]) => ({ path: `${path}.${column}`, detail }));
-    }),
-  };
+  const diagnostics: RejectionDiagnostic[] = [];
+  for (const issue of drift) {
+    const { path } = trustedPath(issue);
+    const columns = ROW_TABLES[path.split(".")[0] ?? ""] ?? [];
+    const { missing, notText, unexpected } = columnDrift(columns, issue.input);
+    for (const column of missing) {
+      diagnostics.push({ path: `${path}.${column}`, detail: "missing column" });
+    }
+    for (const column of notText) {
+      diagnostics.push({
+        path: `${path}.${column}`,
+        detail: "value is not text",
+      });
+    }
+    if (unexpected.length > 0) {
+      diagnostics.push({ path, detail: unexpectedKeys(unexpected) });
+    }
+  }
+  return { reason: COURTLISTENER_REJECTION_REASON.SCHEMA_DRIFT, diagnostics };
 };
 
 type PhaseFailure = {

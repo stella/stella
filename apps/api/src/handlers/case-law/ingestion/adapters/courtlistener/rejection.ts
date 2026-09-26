@@ -70,7 +70,7 @@ export const rejectCourtListenerRecord = ({
       .slice(0, MAX_DIAGNOSTICS)
       .map(({ detail, path }) => ({
         path: path.slice(0, MAX_PATH_LENGTH),
-        detail,
+        detail: detail.slice(0, MAX_PATH_LENGTH),
       })),
     omittedDiagnostics: Math.max(0, diagnostics.length - MAX_DIAGNOSTICS),
     opinionIds: opinionIds.slice(0, MAX_DIAGNOSTICS),

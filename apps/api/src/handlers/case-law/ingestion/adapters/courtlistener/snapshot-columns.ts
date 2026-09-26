@@ -315,9 +315,18 @@ export const columnDrift = (columns: readonly string[], input: unknown) => {
 
 // ── Typed readings of the scalar spellings ──────────────
 
-/** A row ID: a positive decimal with no sign, space or leading zero. */
+/** The largest ID the publisher's 64-bit keys can hold. */
+const MAX_ID = "9223372036854775807";
+
+/**
+ * A row ID: a positive decimal with no sign, space or leading zero, within
+ * the publisher's key range. The length is checked first, so an oversized
+ * value is refused without being read further.
+ */
 export const isCanonicalId = (value: string): boolean =>
-  /^[1-9][0-9]*$/u.test(value);
+  value.length <= MAX_ID.length &&
+  /^[1-9][0-9]*$/u.test(value) &&
+  compareCanonicalIds(value, MAX_ID) <= 0;
 
 /** UTF-16 code-unit order, independent of locale. */
 export const compareBytewise = (left: string, right: string): number => {
