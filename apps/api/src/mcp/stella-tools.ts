@@ -20,6 +20,7 @@ import {
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -931,7 +932,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "reporter citations. Answered from the identity columns, never by ranking text, so a hit is the " +
       "decision named, not one citing it. Every `identifiers[]` entry is " +
       "answered on its own, in input order, under `status`: `found` carries " +
-      "that decision's id, resourceName, appUrl, typed reference, court, " +
+      "that decision's id, resourceName, appUrl, reference, court, " +
       "date and ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
       "court, not to the corpus, and picking one would cite the wrong " +
       "court; `not_found` says what to call instead; `lookup_failed` means " +
@@ -2088,7 +2089,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           slug: hit.slug,
         }),
         caseNumber: hit.caseNumber,
-        caseNumberType: hit.caseNumberType,
         citationAuthority: hit.citationAuthority,
         citationCount: hit.citationCount,
         country: hit.country,
@@ -2099,7 +2099,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
         decisionType: hit.decisionType,
         ecli: hit.ecli,
-        identifiers: hit.identifiers,
         language: hit.language,
         matchingPassages: hit.matchingPassages,
         snippet: toPlainTextSnippet(hit.headline),
@@ -2179,6 +2178,19 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   status: DECISION_READ_STATUS.notFound,
 });
 
+/**
+ * The primary reference's kind and every typed identifier, only where the
+ * primary is not a docket: there `caseNumber` would otherwise read as one,
+ * and the docket, if any, is among the identifiers.
+ */
+const nonDocketReference = ({
+  caseNumberType,
+  identifiers,
+}: Pick<GatedDecisionRead, "caseNumberType" | "identifiers">) =>
+  caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+    ? {}
+    : { caseNumberType, identifiers };
+
 type DecisionItemOptions = {
   decisionId: string;
   /** See `decisionDocumentState`: the deployment's half of the answer. */
@@ -2256,7 +2268,7 @@ const decisionItemResult = ({
         slug: read.slug,
       }),
       caseNumber: read.caseNumber,
-      caseNumberType: read.caseNumberType,
+      ...nonDocketReference(read),
       citationsFrom: read.citationsFrom,
       citationsTo: read.citationsTo,
       country: read.country,
@@ -2268,7 +2280,6 @@ const decisionItemResult = ({
       decisionType: read.decisionType,
       documentUrl: read.documentUrl,
       ecli: read.ecli,
-      identifiers: read.identifiers,
       language: read.language,
       metadata: read.metadata,
       textFields: read.textFields,
@@ -2471,12 +2482,10 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
     slug: row.slug,
   }),
   caseNumber: row.caseNumber,
-  caseNumberType: row.caseNumberType,
   court: row.court,
   decisionDate: row.decisionDate,
   decisionId: row.id,
   ecli: row.ecli,
-  identifiers: row.identifiers,
   resourceName: serializeAuthorizedCorpusMcpResourceName(
     resourceRef({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -2710,7 +2719,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
                 slug: item.decision.slug,
               }),
               caseNumber: item.decision.caseNumber,
-              caseNumberType: item.decision.caseNumberType,
+              ...(item.decision.caseNumberType ===
+              DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+                ? {}
+                : { caseNumberType: item.decision.caseNumberType }),
               citationAuthority: item.decision.citationAuthority,
               court: item.decision.court,
               decisionDate: item.decision.decisionDate,

@@ -141,9 +141,7 @@ describe("what the case-number column is called", () => {
   test("names the column for any reference once one row is cited by a citation", () => {
     const kind = decisionReferenceColumnKind([docket, reporter]);
 
-    expect(decisionColumnLabelKey("caseNumber", kind)).toBe(
-      "caseLaw.columns.reference",
-    );
+    expect(decisionColumnLabelKey("caseNumber", kind)).toBe("common.reference");
   });
 
   test("leaves every other column's label alone", () => {

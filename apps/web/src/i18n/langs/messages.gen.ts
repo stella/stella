@@ -650,7 +650,6 @@ type Messages = {
       "caseNumber": "Case number";
       "citedBy": "Cited by";
       "headnote": "Headnote";
-      "reference": "Reference";
       "summary": "Headnote / match";
     };
     "corpusStatus": {
