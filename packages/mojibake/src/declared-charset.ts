@@ -1,8 +1,9 @@
 /**
  * Bytes decoded as the charset they declare, in the order a browser honours:
  * a byte-order mark, then the HTTP `Content-Type` charset, then the
- * document's own declaration (`<?xml encoding>`, `<meta charset>`,
- * `<meta http-equiv="Content-Type">`) in its first kilobyte, then UTF-8.
+ * document's own declaration (a UTF-16 `<?x` prefix, `<?xml encoding>`,
+ * `<meta charset>`, `<meta http-equiv="Content-Type">`) in its first
+ * kilobyte, then UTF-8.
  *
  * `Response.text()` and `Buffer.toString("utf-8")` ignore all of these and
  * always read UTF-8, so a page served in windows-1250 loses every non-ASCII
@@ -39,15 +40,30 @@ const BOMS = [
   { bytes: [0xff, 0xfe], charset: "utf-16le" },
 ] as const;
 
+/**
+ * `<?x` in UTF-16 without a byte-order mark: the prescan's second step reads
+ * the charset off how the first ASCII characters are laid out.
+ */
+const UTF16_XML_PREFIXES = [
+  { bytes: [0x3c, 0x00, 0x3f, 0x00, 0x78, 0x00], charset: "utf-16le" },
+  { bytes: [0x00, 0x3c, 0x00, 0x3f, 0x00, 0x78], charset: "utf-16be" },
+] as const;
+
 /** A decoder for a label the platform knows, or null. */
 const decoderFor = (label: string): LabelledTextDecoder | null =>
   Result.try(
     () => new LabelledTextDecoder(label.trim().toLowerCase()),
   ).unwrapOr(null);
 
-const bomCharset = (bytes: Uint8Array): string | null =>
-  BOMS.find(({ bytes: bom }) =>
-    bom.every((byte, index) => bytes[index] === byte),
+type BytePrefix = { bytes: readonly number[]; charset: string };
+
+/** The charset of the first of `prefixes` the bytes start with, or null. */
+const prefixCharset = (
+  bytes: Uint8Array,
+  prefixes: readonly BytePrefix[],
+): string | null =>
+  prefixes.find(({ bytes: prefix }) =>
+    prefix.every((byte, index) => bytes[index] === byte),
   )?.charset ?? null;
 
 const isSpace = (char: string | undefined): boolean =>
@@ -313,18 +329,28 @@ const prescan = (head: string): string | null => {
 const XML_DECLARATION =
   /^<\?xml[\t\n\r ][^>]*?\bencoding\s*=\s*["'](?<label>[^"']+)["']/u;
 
-const documentLabel = (bytes: Uint8Array): string | null => {
-  // Every declaration is ASCII, and every charset a declaration can name
-  // writes ASCII as ASCII, so a byte-per-character reading finds it.
+const documentDecoder = (bytes: Uint8Array): LabelledTextDecoder | null => {
+  const utf16 = prefixCharset(bytes, UTF16_XML_PREFIXES);
+  if (utf16 !== null) {
+    return new LabelledTextDecoder(utf16);
+  }
+  // Every other declaration is ASCII, and every charset it can name writes
+  // ASCII as ASCII, so a byte-per-character reading finds it.
   const head = String.fromCodePoint(...bytes.subarray(0, PRESCAN_BYTES));
-  return XML_DECLARATION.exec(head)?.groups?.["label"] ?? prescan(head);
+  const label = XML_DECLARATION.exec(head)?.groups?.["label"] ?? prescan(head);
+  const declared = label === null ? null : decoderFor(label);
+  // A declaration of UTF-16 in ASCII bytes is not UTF-16; WHATWG reads such
+  // a document as UTF-8, and so does this.
+  return declared?.encoding.startsWith("utf-16") === true
+    ? new LabelledTextDecoder("utf-8")
+    : declared;
 };
 
 export const decodeDeclared = (
   bytes: Uint8Array,
   { contentType }: DecodeDeclaredOptions,
 ): DeclaredText => {
-  const bom = bomCharset(bytes);
+  const bom = prefixCharset(bytes, BOMS);
   if (bom !== null) {
     // The platform decoders strip the BOM they were built for.
     return {
@@ -333,27 +359,23 @@ export const decodeDeclared = (
       source: "bom",
     };
   }
-  const candidates: [DeclaredCharsetSource, string | null][] = [
-    [
-      "http",
-      contentType === null
-        ? null
-        : (HTTP_CHARSET.exec(contentType)?.groups?.["label"] ?? null),
-    ],
-    ["document", documentLabel(bytes)],
-  ];
-  for (const [source, label] of candidates) {
-    const declared = label === null ? null : decoderFor(label);
-    // A document that declares UTF-16 in ASCII bytes is not UTF-16; WHATWG
-    // reads such a declaration as UTF-8, and so does this. The transport's
-    // charset is not written in the bytes, so UTF-16 there is what it says.
-    const decoder =
-      source === "document" && declared?.encoding.startsWith("utf-16") === true
-        ? new LabelledTextDecoder("utf-8")
-        : declared;
-    if (decoder !== null) {
-      return { text: decoder.decode(bytes), charset: decoder.encoding, source };
-    }
+  // The transport's charset is not written in the bytes, so UTF-16 there is
+  // what it says.
+  const httpLabel =
+    contentType === null
+      ? null
+      : (HTTP_CHARSET.exec(contentType)?.groups?.["label"] ?? null);
+  const http = httpLabel === null ? null : decoderFor(httpLabel);
+  if (http !== null) {
+    return { text: http.decode(bytes), charset: http.encoding, source: "http" };
+  }
+  const document = documentDecoder(bytes);
+  if (document !== null) {
+    return {
+      text: document.decode(bytes),
+      charset: document.encoding,
+      source: "document",
+    };
   }
   return {
     text: new TextDecoder().decode(bytes),

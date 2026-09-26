@@ -81,6 +81,20 @@ describe("bytes read as the charset they declare", () => {
     }
   });
 
+  test("an XML declaration in UTF-16 needs no byte-order mark", () => {
+    const xml = `<?xml version="1.0" encoding="utf-16"?><p>${SENTENCE}</p>`;
+    for (const [charset, bytes] of [
+      ["utf-16le", Buffer.from(xml, "utf16le")],
+      ["utf-16be", Buffer.from(xml, "utf16le").swap16()],
+    ] as const) {
+      expect(decodeDeclared(bytes, { contentType: null })).toEqual({
+        text: xml,
+        charset,
+        source: "document",
+      });
+    }
+  });
+
   test("a document that declares UTF-16 in ASCII bytes reads as UTF-8", () => {
     const html = `<meta charset="utf-16"><p>${SENTENCE}</p>`;
     expect(
