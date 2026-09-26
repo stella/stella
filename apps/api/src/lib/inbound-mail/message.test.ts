@@ -79,6 +79,76 @@ describe("inbound MIME normalization", () => {
     },
   );
 
+  for (const threadHeader of ["In-Reply-To", "References", "both"]) {
+    test.each([
+      ["pt-BR", "Rejeito a proposta de acordo."],
+      ["hu", "Elutasítom az egyezségi javaslatot."],
+      ["nl", "Ik wijs het schikkingsvoorstel af."],
+    ])(
+      `preserves a localized %s reply with ${threadHeader}`,
+      async (locale, reply) => {
+        let raw = new TextDecoder().decode(
+          await fixture(`threaded-reply-${locale}.eml`),
+        );
+        if (threadHeader !== "both") {
+          raw = raw.replace(
+            threadHeader === "In-Reply-To"
+              ? /^References:.*\r?\n/mu
+              : /^In-Reply-To:.*\r?\n/mu,
+            "",
+          );
+        }
+        // The quote is extractable when explicitly forwarded, so this fixture
+        // reaches the discrimination boundary rather than an unsupported marker.
+        const forwarded = await parseInboundMessage(
+          bytes(
+            raw.replace(/^Subject:.*$/mu, "Subject: Fwd: Settlement proposal"),
+          ),
+        );
+        expect(forwarded.forwardSource).toBe("inline");
+        expect(forwarded.message.from).toBe("counsel@outside.test");
+
+        const parsed = await parseInboundMessage(bytes(raw));
+        expect(parsed.forwardSource).toBe("none");
+        expect(parsed.message.from).toBe("member@example.test");
+        expect(parsed.message.messageId).toBe(`<reply-${locale}@example.test>`);
+        expect(parsed.message.text).toContain(reply);
+        expect(parsed.message.text).toContain("We propose settlement.");
+        expect(parsed.message.inReplyTo).toBe(
+          threadHeader === "References" ? null : "<proposal@outside.test>",
+        );
+        expect(parsed.message.references).toEqual(
+          threadHeader === "In-Reply-To" ? [] : ["<proposal@outside.test>"],
+        );
+      },
+    );
+  }
+
+  test.each(["In-Reply-To", "References"])(
+    "retains an attached original in a prefix-free reply with %s",
+    async (threadHeader) => {
+      const raw = new TextDecoder().decode(
+        await fixture("attached-forward.eml"),
+      );
+      const parsed = await parseInboundMessage(
+        bytes(
+          raw.replace(
+            "Subject: Fwd: Original subject",
+            () =>
+              `Subject: Original subject\r\n${threadHeader}: <prior@outside.test>`,
+          ),
+        ),
+      );
+      expect(parsed.forwardSource).toBe("none");
+      expect(parsed.message.from).toBe("member@example.test");
+      expect(parsed.message.messageId).toBe("<forward-wrapper@example.test>");
+      expect(parsed.message.text).toContain("Please file this message.");
+      expect(parsed.message.attachments).toMatchObject([
+        { mimeType: "message/rfc822" },
+      ]);
+    },
+  );
+
   test.each([
     ["outlook-forward-de.eml", "Vertragsentwurf"],
     ["gmail-forward-en.eml", "Filing deadline"],
