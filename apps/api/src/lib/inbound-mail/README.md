@@ -23,7 +23,8 @@ Addresses use 32 random bytes encoded as 64 lowercase hexadecimal characters.
   forwarder's assertions. An attached original's DKIM signature is checked against
   its exact decoded bytes with bounded DNS access. A verified signature identifies
   its signing domain, not an authenticated original author. Unsigned, invalid or
-  partially signed originals remain unverified.
+  partially signed originals remain unverified. Unavailable DNS or an exhausted
+  verification budget also leaves this optional proof unverified.
 - Threaded replies retain the member's complete message and quoted history.
   Ambiguous quoted headers do not trigger extraction. Invalid or timezone-free
   Date headers have an unknown sent time; explicitly zoned dates normalize to UTC.
@@ -41,7 +42,10 @@ means the transport must retry with the same source. Use a bounded queue retry
 policy and retain exhausted deliveries for operator repair; never acknowledge a
 failed filing. The development command leaves source-file retention to its caller.
 
-The record and each filer converge under unique keys. Attachment completion
+The record and each filer converge under unique keys. Matching extracts forwarded
+by colleagues share one record, retaining the initial delivery's authentication
+and recording each distinct filer. Intake is part of the key, so a direct delivery
+cannot merge with an extracted original. Attachment completion
 commits each document and ordinal link atomically through `createEntityFromBuffer`.
 A replay resumes missing ordinals, including after an uncertain commit. MIME parts
 are sorted by their content fingerprint, so reordered deliveries converge. A
@@ -50,8 +54,8 @@ The existing storage intent reconciler handles abandoned object writes; native
 extraction and derivative repair retain their existing durable recovery paths.
 
 Receipt-level virus verdicts fail closed. The existing upload scanner additionally
-checks attachment content before persistence. A transient verifier or scanner
-failure is retryable. Provider GRAY/unknown authentication results do not prove
+checks attachment content before persistence. A transient delivery verifier or
+scanner failure is retryable. Provider GRAY/unknown authentication results do not prove
 alignment and are rejected. Provider integration must supply definitive verdicts.
 
 Rejected deliveries retain only sender, receipt time and a reason, once per
