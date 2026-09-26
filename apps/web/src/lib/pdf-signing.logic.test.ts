@@ -173,6 +173,9 @@ describe("pdf signing start failures", () => {
     expect(pdfSigningStartErrorCode("pdf_signing_in_progress")).toBe(
       "pdf_signing_in_progress",
     );
+    expect(pdfSigningStartErrorCode("pdf_signing_stamp_off_page")).toBe(
+      "pdf_signing_stamp_off_page",
+    );
   });
 
   test("leaves every other failure to the generic message", () => {
