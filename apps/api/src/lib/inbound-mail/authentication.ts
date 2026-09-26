@@ -1,5 +1,6 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { authenticate, dkimVerify, type DNSResolver } from "mailauth";
+import type { MxRecord } from "node:dns";
 import { Resolver } from "node:dns/promises";
 import { isIP } from "node:net";
 import { getDomain } from "tldts";
@@ -319,16 +320,39 @@ export const createProviderMailVerifier =
 
 type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
 
-const createMailDnsResolver = (): LocalDnsResolver => {
-  const resolver = new Resolver({
+type MailDnsBackend = {
+  resolveTxt: (domain: string) => Promise<string[][]>;
+  resolve4: (domain: string) => Promise<string[]>;
+  resolve6: (domain: string) => Promise<string[]>;
+  resolveMx: (domain: string) => Promise<MxRecord[]>;
+  resolvePtr: (domain: string) => Promise<string[]>;
+  cancel: () => void;
+};
+
+export const createMailDnsResolver = (
+  resolver: MailDnsBackend = new Resolver({
     timeout: INBOUND_MAIL_LIMITS.dnsTimeoutMs,
     tries: 1,
-  });
-  return {
-    resolve: async (domain, rrtype) => await resolver.resolve(domain, rrtype),
-    cancel: () => resolver.cancel(),
-  };
-};
+  }),
+): LocalDnsResolver => ({
+  resolve: async (domain, rrtype) => {
+    switch (rrtype) {
+      case "TXT":
+        return await resolver.resolveTxt(domain);
+      case "A":
+        return await resolver.resolve4(domain);
+      case "AAAA":
+        return await resolver.resolve6(domain);
+      case "MX":
+        return await resolver.resolveMx(domain);
+      case "PTR":
+        return await resolver.resolvePtr(domain);
+      default:
+        return panic(`Unsupported mail DNS record type: ${rrtype}`);
+    }
+  },
+  cancel: () => resolver.cancel(),
+});
 
 type RunMailVerificationOptions<T> = {
   createResolver: () => LocalDnsResolver;
@@ -340,6 +364,7 @@ const runMailVerification = async <T>({
   verify,
 }: RunMailVerificationOptions<T>) => {
   const resolver = createResolver();
+  let budgetExceeded = false;
   const verified = await Result.tryPromise({
     try: () =>
       withTimeout(
@@ -351,16 +376,14 @@ const runMailVerification = async <T>({
             const result = await verify(async (domain, rrtype) => {
               queries += 1;
               if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-                throw new MailAuthenticationError({
-                  message: "Mail verification budget exhausted",
-                });
+                budgetExceeded = true;
+                resolver.cancel();
+                return [];
               }
               return await resolver.resolve(domain, rrtype);
             });
             if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-              throw new MailAuthenticationError({
-                message: "Mail verification budget exhausted",
-              });
+              budgetExceeded = true;
             }
             return result;
           } finally {
@@ -378,6 +401,13 @@ const runMailVerification = async <T>({
       }),
   });
   resolver.cancel();
+  if (budgetExceeded) {
+    return Result.err(
+      new MailAuthenticationError({
+        message: "Mail verification budget exhausted",
+      }),
+    );
+  }
   return verified;
 };
 
@@ -422,7 +452,7 @@ export const createLocalMailVerifier =
       fromDomain,
       spf: {
         result: spf ? authResult(spf.status.result) : "none",
-        domain: spf?.domain ?? null,
+        domain: spf ? spf.domain : null,
         alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
       },
       dkim: dkim.results.map((signature) => ({
@@ -442,7 +472,11 @@ export const verifyMailLocally = createLocalMailVerifier();
 // it never authenticates the forwarder's assertions as the original author's identity.
 export const createOriginalSignatureVerifier =
   (createResolver: () => LocalDnsResolver = createMailDnsResolver) =>
-  async (raw: Uint8Array) => {
+  async (
+    raw: Uint8Array,
+  ): Promise<
+    Result<CorrespondenceOriginalSignature, MailAuthenticationError>
+  > => {
     if (raw.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
       return Result.err(
         new MailAuthenticationError({

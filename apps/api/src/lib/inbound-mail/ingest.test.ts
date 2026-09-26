@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { MailVerifier } from "@/api/lib/inbound-mail/authentication";
 import {
   ingestInboundMail,
+  InboundPersistenceError,
   type InboundDeliveryOutcome,
   type InboundDeliveryStore,
   type PersistInboundDeliveryOptions,
@@ -41,10 +42,13 @@ const memoryStore = () => {
     const { delivery } = input;
     if (delivery.status === "drop") {
       drops.set(`${input.token}:${input.deliveryKey}`, delivery.reason);
-      return { status: "dropped", reason: delivery.reason };
+      return Result.ok({ status: "dropped" as const, reason: delivery.reason });
     }
     if (!members.has(delivery.sender)) {
-      return { status: "dropped", reason: "unauthorized_sender" };
+      return Result.ok({
+        status: "dropped" as const,
+        reason: "unauthorized_sender" as const,
+      });
     }
     // This fake models identity only; DB tests exercise correspondenceDedupKey.
     const key = JSON.stringify([
@@ -56,11 +60,14 @@ const memoryStore = () => {
     const existing = records.get(key);
     if (existing) {
       existing.filers.add(delivery.sender);
-      return { status: "duplicate", correspondenceId: existing.id };
+      return Result.ok({
+        status: "duplicate" as const,
+        correspondenceId: existing.id,
+      });
     }
     const id = `record-${records.size + 1}`;
     records.set(key, { id, filers: new Set([delivery.sender]) });
-    return { status: "filed", correspondenceId: id };
+    return Result.ok({ status: "filed" as const, correspondenceId: id });
   };
   return { persist, records, drops, members, deliveries };
 };
@@ -238,9 +245,11 @@ describe("raw mail through the inbound filing boundary", () => {
   });
 
   test("a retryable store failure does not claim a terminal outcome", async () => {
-    const result = await ingest(await fixture("member-cc.eml"), async () => {
-      throw new DOMException("storage unavailable", "NetworkError");
-    });
+    const result = await ingest(await fixture("member-cc.eml"), async () =>
+      Result.err(
+        new InboundPersistenceError({ message: "Storage unavailable" }),
+      ),
+    );
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.reason).toBe("persistence-unavailable");

@@ -6,6 +6,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { createOriginalSignatureVerifier } from "./authentication";
 import {
   ingestInboundMail,
+  type InboundDeliveryOutcome,
   type PersistInboundDeliveryOptions,
 } from "./ingest";
 import { INBOUND_MAIL_LIMITS } from "./limits";
@@ -84,7 +85,7 @@ test("verifies only a complete DKIM signature over the exact attached original b
   };
 
   const signed = await sign();
-  const parsed = await parseInboundMessage(attachOriginal(signed));
+  const parsed = (await parseInboundMessage(attachOriginal(signed))).unwrap();
   expect(parsed.forwardSource).toBe("attached");
   if (parsed.forwardSource !== "attached") {
     return;
@@ -126,7 +127,10 @@ test("verifies only a complete DKIM signature over the exact attached original b
     scan: "pass",
     persist: async (input) => {
       deliveries.push(input);
-      return { status: "filed", correspondenceId: "record-1" };
+      return Result.ok({
+        status: "filed",
+        correspondenceId: "record-1",
+      } as const satisfies InboundDeliveryOutcome);
     },
   });
   expect(ingested.isOk()).toBe(true);

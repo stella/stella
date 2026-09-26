@@ -1162,6 +1162,7 @@
     "lefthook",
   ],
   "patchedDependencies": {
+    "mailauth@5.0.3": "patches/mailauth@5.0.3.patch",
     "@tanstack/ai@0.54.0": "patches/@tanstack%2Fai@0.54.0.patch",
     "@tanstack/ai-mistral@0.6.2": "patches/@tanstack%2Fai-mistral@0.6.2.patch",
     "@tanstack/ai-bedrock@0.3.8": "patches/@tanstack%2Fai-bedrock@0.3.8.patch",

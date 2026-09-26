@@ -97,11 +97,18 @@ export type InboundDeliveryOutcome =
   | { status: "filed" | "duplicate"; correspondenceId: string }
   | { status: "dropped"; reason: CorrespondenceDropReason };
 
+export class InboundPersistenceError extends TaggedError(
+  "InboundPersistenceError",
+)<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 // The store owns the transaction: it resolves the token, locks the decisive
 // address/member/approval rows, and rechecks current authority before filing.
 export type InboundDeliveryStore = (
   options: PersistInboundDeliveryOptions,
-) => Promise<InboundDeliveryOutcome>;
+) => Promise<Result<InboundDeliveryOutcome, InboundPersistenceError>>;
 
 type IngestInboundMailOptions = {
   raw: Uint8Array;
@@ -231,7 +238,15 @@ const persistClassifiedDelivery = async ({
     if (persisted.isErr()) {
       return persisted;
     }
-    outcomes.push(persisted.value);
+    if (persisted.value.isErr()) {
+      return Result.err(
+        new InboundIngestError({
+          message: "Inbound filing could not complete",
+          reason: "persistence-unavailable",
+        }),
+      );
+    }
+    outcomes.push(persisted.value.value);
   }
   return Result.ok(outcomes);
 };
@@ -284,16 +299,16 @@ export const ingestInboundMail = async ({
     ] satisfies InboundDeliveryOutcome[]);
   }
 
-  const parsed = await Result.tryPromise({
-    try: () => parseInboundMessage(raw),
-    catch: (cause) =>
-      InboundMessageError.is(cause)
-        ? cause
-        : new InboundMessageError({
-            message: "Malformed inbound message",
-            reason: "invalidMime",
-          }),
-  });
+  const parsed = (
+    await Result.tryPromise({
+      try: () => parseInboundMessage(raw),
+      catch: () =>
+        new InboundMessageError({
+          message: "Malformed inbound message",
+          reason: "invalidMime",
+        }),
+    })
+  ).andThen((result) => result);
   let delivery: ClassifiedDelivery;
   if (parsed.isErr()) {
     delivery = {

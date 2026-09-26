@@ -1,0 +1,75 @@
+Correct DNS MX and DKIM signing declarations to match mailauth 5.0.3 runtime.
+Remove when upstream declarations include both shapes.
+
+diff --git a/index.d.ts b/index.d.ts
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -5,11 +5,12 @@
+ /// <reference types="node" />
+ 
+ import { Readable, Transform } from 'stream';
++import type { MxRecord } from 'node:dns';
+ 
+ /**
+  * DNS resolver function type for custom DNS resolution
+  */
+-export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[]>;
++export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[] | MxRecord[]>;
+ 
+ /**
+  * Input types accepted by mailauth functions
+@@ -597,21 +598,17 @@
+ /**
+  * DKIM signing options
+  */
++export interface DKIMSignatureData {
++    signingDomain: string;
++    selector: string;
++    privateKey: string | Buffer;
++    canonicalization?: string;
++    algorithm?: string;
++    maxBodyLength?: number;
++    identity?: string;
++}
++
+ export interface DKIMSignOptions {
+-    /**
+-     * Signing domain (d= tag)
+-     */
+-    signingDomain: string;
+-
+-    /**
+-     * Key selector (s= tag)
+-     */
+-    selector: string;
+-
+-    /**
+-     * Private key for signing (PEM format)
+-     */
+-    privateKey: string | Buffer;
+ 
+     /**
+      * Canonicalization algorithm (default: 'relaxed/relaxed')
+@@ -642,19 +639,9 @@
+     expires?: Date | string | number;
+ 
+     /**
+-     * Maximum body length to sign (l= tag)
+-     */
+-    maxBodyLength?: number;
+-
+-    /**
+-     * Identity (i= tag)
+-     */
+-    identity?: string;
+-
+-    /**
+-     * Multiple signature configurations
+-     */
+-    signatureData?: DKIMSignOptions[];
++     * Signature configurations; signing keys are read from these entries.
++     */
++    signatureData?: DKIMSignatureData[];
+ }
+ 
+ /**

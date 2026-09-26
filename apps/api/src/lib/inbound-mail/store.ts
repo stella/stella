@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { CorrespondenceDropReason } from "@stll/api-contract/correspondence";
@@ -20,10 +21,11 @@ import {
   evaluateInboundAcceptance,
   type InboundFiler,
 } from "@/api/lib/inbound-mail/acceptance";
-import type {
-  InboundDeliveryOutcome,
-  InboundDeliveryStore,
-  PersistInboundDeliveryOptions,
+import {
+  InboundPersistenceError,
+  type InboundDeliveryOutcome,
+  type InboundDeliveryStore,
+  type PersistInboundDeliveryOptions,
 } from "@/api/lib/inbound-mail/ingest";
 import {
   resolveInboundSender,
@@ -54,7 +56,10 @@ type CreateInboundStoreOptions<TTransaction extends InboundTransaction> = {
   fileCandidate: (
     options: FileInboundCandidateOptions<TTransaction>,
   ) => Promise<
-    Extract<InboundDeliveryOutcome, { status: "filed" | "duplicate" }>
+    Result<
+      Extract<InboundDeliveryOutcome, { status: "filed" | "duplicate" }>,
+      InboundPersistenceError
+    >
   >;
 };
 
@@ -65,124 +70,143 @@ export const createInboundMailStore =
     database,
     fileCandidate,
   }: CreateInboundStoreOptions<TTransaction>): InboundDeliveryStore =>
-  async ({ token, deliveryKey, receivedAt, delivery }) =>
-    await database.transaction(async (tx) => {
-      await tx.execute(
-        sql`select set_config('app.inbound_token', ${token}, true)`,
-      );
-      const hints = await tx
-        .select({
-          workspaceId: matterInboundAddresses.workspaceId,
-          organizationId: matterInboundAddresses.organizationId,
-        })
-        .from(matterInboundAddresses)
-        .where(eq(matterInboundAddresses.token, token))
-        .limit(1);
-      const hint = hints.at(0);
-      if (!hint) {
-        return { status: "dropped", reason: "unknown_recipient" };
-      }
-      const primaryUserId =
-        delivery.status === "candidate"
-          ? await lookupInboundPrimaryAccount({
-              tx,
-              organizationId: hint.organizationId,
-              sender: delivery.sender,
+  async ({ token, deliveryKey, receivedAt, delivery }) => {
+    const aborted: { error: InboundPersistenceError | null } = { error: null };
+    return await Result.tryPromise({
+      try: () =>
+        database.transaction(async (tx): Promise<InboundDeliveryOutcome> => {
+          await tx.execute(
+            sql`select set_config('app.inbound_token', ${token}, true)`,
+          );
+          const hints = await tx
+            .select({
+              workspaceId: matterInboundAddresses.workspaceId,
+              organizationId: matterInboundAddresses.organizationId,
             })
-          : null;
-      const setMatterContext = async () => {
-        await tx.execute(sql`select
+            .from(matterInboundAddresses)
+            .where(eq(matterInboundAddresses.token, token))
+            .limit(1);
+          const hint = hints.at(0);
+          if (!hint) {
+            return { status: "dropped", reason: "unknown_recipient" };
+          }
+          const primaryUserId =
+            delivery.status === "candidate"
+              ? await lookupInboundPrimaryAccount({
+                  tx,
+                  organizationId: hint.organizationId,
+                  sender: delivery.sender,
+                })
+              : null;
+          const setMatterContext = async () => {
+            await tx.execute(sql`select
           set_config('role', ${stella.name}, true),
           set_config(${SETTING_USER_ID}, '', true),
           set_config(${SETTING_ORGANIZATION_ID}, ${hint.organizationId}, true),
           set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
           set_config(${SETTING_WORKSPACE_IDS}, ${`{${hint.workspaceId}}`}, true)`);
-      };
-      await setMatterContext();
-      const matters = await tx
-        .select({
-          id: workspaces.id,
-          organizationId: workspaces.organizationId,
-          status: workspaces.status,
-        })
-        .from(workspaces)
-        .where(
-          and(
-            eq(workspaces.id, hint.workspaceId),
-            eq(workspaces.organizationId, hint.organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const matter = matters.at(0);
-      if (!matter) {
-        return { status: "dropped", reason: "unknown_recipient" };
-      }
-      const addresses = await tx
-        .select({ revokedAt: matterInboundAddresses.revokedAt })
-        .from(matterInboundAddresses)
-        .where(
-          and(
-            eq(matterInboundAddresses.workspaceId, matter.id),
-            eq(matterInboundAddresses.organizationId, matter.organizationId),
-            eq(matterInboundAddresses.token, token),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const address = addresses.at(0);
-      if (!address) {
-        return { status: "dropped", reason: "unknown_recipient" };
-      }
-      const drop = async (
-        reason: CorrespondenceDropReason,
-      ): Promise<InboundDeliveryOutcome> => {
-        await tx
-          .insert(correspondenceDropLogs)
-          .values({
-            id: brandDerivedCorrespondenceDropId(matter.id, deliveryKey),
+          };
+          await setMatterContext();
+          const matters = await tx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+              status: workspaces.status,
+            })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.id, hint.workspaceId),
+                eq(workspaces.organizationId, hint.organizationId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          const matter = matters.at(0);
+          if (!matter) {
+            return { status: "dropped", reason: "unknown_recipient" };
+          }
+          const addresses = await tx
+            .select({ revokedAt: matterInboundAddresses.revokedAt })
+            .from(matterInboundAddresses)
+            .where(
+              and(
+                eq(matterInboundAddresses.workspaceId, matter.id),
+                eq(
+                  matterInboundAddresses.organizationId,
+                  matter.organizationId,
+                ),
+                eq(matterInboundAddresses.token, token),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          const address = addresses.at(0);
+          if (!address) {
+            return { status: "dropped", reason: "unknown_recipient" };
+          }
+          const drop = async (
+            reason: CorrespondenceDropReason,
+          ): Promise<InboundDeliveryOutcome> => {
+            await tx
+              .insert(correspondenceDropLogs)
+              .values({
+                id: brandDerivedCorrespondenceDropId(matter.id, deliveryKey),
+                workspaceId: matter.id,
+                organizationId: matter.organizationId,
+                senderAddress: delivery.sender ?? "",
+                reason,
+                receivedAt: new Date(receivedAt),
+              })
+              .onConflictDoNothing({ target: correspondenceDropLogs.id });
+            return { status: "dropped", reason };
+          };
+          if (address.revokedAt || matter.status !== "active") {
+            return await drop("revoked_address");
+          }
+          if (delivery.status === "drop") {
+            return await drop(delivery.reason);
+          }
+          const membership = await resolveInboundSender({
+            tx,
+            primaryUserId,
             workspaceId: matter.id,
             organizationId: matter.organizationId,
-            senderAddress: delivery.sender ?? "",
-            reason,
-            receivedAt: new Date(receivedAt),
-          })
-          .onConflictDoNothing({ target: correspondenceDropLogs.id });
-        return { status: "dropped", reason };
-      };
-      if (address.revokedAt || matter.status !== "active") {
-        return await drop("revoked_address");
-      }
-      if (delivery.status === "drop") {
-        return await drop(delivery.reason);
-      }
-      const membership = await resolveInboundSender({
-        tx,
-        primaryUserId,
-        workspaceId: matter.id,
-        organizationId: matter.organizationId,
-        sender: delivery.sender,
-        receivedAt,
-      });
-      await setMatterContext();
-      const accepted = evaluateInboundAcceptance({
-        outerSender: delivery.sender,
-        authentication: delivery.authentication,
-        membership,
-        scan: "pass",
-      });
-      if (accepted.status === "drop") {
-        return await drop(
-          accepted.reason === "sender-not-authorized"
-            ? "unauthorized_sender"
-            : "authentication_failed",
-        );
-      }
-      return await fileCandidate({
-        tx,
-        workspaceId: matter.id,
-        organizationId: matter.organizationId,
-        filer: accepted.filer,
-        delivery,
-      });
+            sender: delivery.sender,
+            receivedAt,
+          });
+          await setMatterContext();
+          const accepted = evaluateInboundAcceptance({
+            outerSender: delivery.sender,
+            authentication: delivery.authentication,
+            membership,
+            scan: "pass",
+          });
+          if (accepted.status === "drop") {
+            return await drop(
+              accepted.reason === "sender-not-authorized"
+                ? "unauthorized_sender"
+                : "authentication_failed",
+            );
+          }
+          const filed = await fileCandidate({
+            tx,
+            workspaceId: matter.id,
+            organizationId: matter.organizationId,
+            filer: accepted.filer,
+            delivery,
+          });
+          if (filed.isErr()) {
+            aborted.error = filed.error;
+            return tx.rollback();
+          }
+          return filed.value;
+        }),
+      catch: (cause) =>
+        aborted.error ??
+        new InboundPersistenceError({
+          message: "Inbound transaction could not complete",
+          cause,
+        }),
     });
+  };

@@ -73,7 +73,9 @@ export class SesInboundError extends TaggedError("SesInboundError")<{
 }> {}
 
 type ReadSesObjectOptions = { key: string; signal: AbortSignal };
-type SesObjectReader = (options: ReadSesObjectOptions) => Promise<Uint8Array>;
+type SesObjectReader = (
+  options: ReadSesObjectOptions,
+) => Promise<Result<Uint8Array, SesInboundError>>;
 
 type CreateSesReaderOptions = { client: S3Client; bucket: string };
 export const createSesS3ObjectReader =
@@ -84,10 +86,12 @@ export const createSesS3ObjectReader =
       { abortSignal: signal },
     );
     if (!object.Body) {
-      throw new SesInboundError({
-        message: "Inbound object is unavailable",
-        reason: "object-unavailable",
-      });
+      return Result.err(
+        new SesInboundError({
+          message: "Inbound object is unavailable",
+          reason: "object-unavailable",
+        }),
+      );
     }
     // Keep Node responses native: converting then cancelling them through
     // Readable.toWeb can enqueue into an already-closed controller in Bun.
@@ -106,26 +110,48 @@ export const createSesS3ObjectReader =
       } else {
         await stream.cancel();
       }
-      throw new SesInboundError({
-        message: "Inbound message exceeds size limit",
-        reason: "message-too-large",
-      });
-    }
-    for await (const chunk of stream) {
-      if (!(chunk instanceof Uint8Array)) {
-        throw new SesInboundError({
-          message: "Inbound object has invalid byte chunks",
-          reason: "object-unavailable",
-        });
-      }
-      length += chunk.byteLength;
-      if (length > INBOUND_MAIL_LIMITS.rawBytes) {
-        throw new SesInboundError({
+      return Result.err(
+        new SesInboundError({
           message: "Inbound message exceeds size limit",
           reason: "message-too-large",
-        });
-      }
-      chunks.push(chunk);
+        }),
+      );
+    }
+    const read = await Result.tryPromise({
+      try: async () => {
+        for await (const chunk of stream) {
+          if (!(chunk instanceof Uint8Array)) {
+            return Result.err(
+              new SesInboundError({
+                message: "Inbound object has invalid byte chunks",
+                reason: "object-unavailable",
+              }),
+            );
+          }
+          length += chunk.byteLength;
+          if (length > INBOUND_MAIL_LIMITS.rawBytes) {
+            return Result.err(
+              new SesInboundError({
+                message: "Inbound message exceeds size limit",
+                reason: "message-too-large",
+              }),
+            );
+          }
+          chunks.push(chunk);
+        }
+        return Result.ok(undefined);
+      },
+      catch: () =>
+        new SesInboundError({
+          message: "Inbound object could not be read",
+          reason: "object-unavailable",
+        }),
+    });
+    if (read.isErr()) {
+      return read;
+    }
+    if (read.value.isErr()) {
+      return read.value;
     }
     const raw = new Uint8Array(length);
     let offset = 0;
@@ -133,7 +159,7 @@ export const createSesS3ObjectReader =
       raw.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    return raw;
+    return Result.ok(raw);
   };
 
 type ReadSesDeliveryOptions = {
@@ -191,7 +217,7 @@ export const readSesInboundDelivery = async ({
         .update(JSON.stringify(["ses", bucket, receipt.action.objectKey]))
         .digest("hex"),
     });
-  const object = await Result.tryPromise({
+  const read = await Result.tryPromise({
     try: () =>
       withTimeout(
         async (signal) =>
@@ -209,6 +235,10 @@ export const readSesInboundDelivery = async ({
             reason: "object-unavailable",
           }),
   });
+  if (read.isErr()) {
+    return read.error.reason === "message-too-large" ? oversized() : read;
+  }
+  const object = read.value;
   if (object.isErr()) {
     return object.error.reason === "message-too-large" ? oversized() : object;
   }
