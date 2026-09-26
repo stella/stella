@@ -760,42 +760,41 @@ const collectResources = ({
   return Result.ok(resources.toSorted((a, b) => a.path.localeCompare(b.path)));
 };
 
-// Every check is pure, so running them all and answering the first rejection
-// reports what checking them in order would.
 const checkFrontmatterLimits = (
   metadata: SkillMetadata,
 ): Result<void, HandlerError> =>
-  [
-    checkFrontmatterField({
+  Result.gen(function* () {
+    yield* checkFrontmatterField({
       field: "description",
       limit: LIMITS.agentSkillDescriptionMaxChars,
       value: metadata.description,
-    }),
-    checkFrontmatterField({
+    });
+    yield* checkFrontmatterField({
       field: "version",
       limit: LIMITS.agentSkillVersionMaxChars,
       value: metadata.version,
-    }),
-    checkFrontmatterField({
+    });
+    yield* checkFrontmatterField({
       field: "license",
       limit: LIMITS.agentSkillLicenseMaxChars,
       value: metadata.license,
-    }),
-    checkNoBidiFormattingControls({
+    });
+    yield* checkNoBidiFormattingControls({
       field: "version",
       value: metadata.version,
-    }),
-    checkNoBidiFormattingControls({
+    });
+    yield* checkNoBidiFormattingControls({
       field: "license",
       value: metadata.license,
-    }),
-    checkFrontmatterField({
+    });
+    yield* checkFrontmatterField({
       field: "compatibility",
       limit: LIMITS.agentSkillCompatibilityMaxChars,
       value: metadata.compatibility,
-    }),
-    checkFrontmatterMetadata(metadata.metadata),
-  ].find((check) => check.isErr()) ?? Result.ok();
+    });
+    yield* checkFrontmatterMetadata(metadata.metadata);
+    return Result.ok();
+  });
 
 const checkNoBidiFormattingControls = ({
   field,
