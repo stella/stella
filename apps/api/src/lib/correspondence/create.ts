@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
@@ -174,10 +174,12 @@ const authorizeFiler = async ({
             isOrganizationManagementRole(access.role)
           ))
       ) {
-        throw new HandlerError({
-          status: 403,
-          message: "Matter access required",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Matter access required",
+          }),
+        );
       }
       break;
     }
@@ -196,10 +198,12 @@ const authorizeFiler = async ({
         .for("update")
         .limit(1);
       if (approval === undefined) {
-        throw new HandlerError({
-          status: 403,
-          message: "Mailbox approval required",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Mailbox approval required",
+          }),
+        );
       }
       if (approval.scope === "matters") {
         const [scope] = await tx
@@ -216,10 +220,12 @@ const authorizeFiler = async ({
           )
           .limit(1);
         if (scope === undefined) {
-          throw new HandlerError({
-            status: 403,
-            message: "Mailbox not approved for matter",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Mailbox not approved for matter",
+            }),
+          );
         }
       }
       break;
@@ -229,6 +235,7 @@ const authorizeFiler = async ({
       return panic("Unhandled correspondence filer");
     }
   }
+  return Result.ok();
 };
 
 /** Converges concurrent deliveries on one record and one row per filer. */
@@ -247,7 +254,15 @@ export const createCorrespondence = async ({
   }
 
   const transaction = await abortableTx(safeDb, async (tx) => {
-    await authorizeFiler({ tx, filer, workspaceId, organizationId });
+    const access = await authorizeFiler({
+      tx,
+      filer,
+      workspaceId,
+      organizationId,
+    });
+    if (access.isErr()) {
+      return access;
+    }
 
     const dedupKey = correspondenceDedupKey(parsed);
     const inserted = await tx
@@ -301,10 +316,7 @@ export const createCorrespondence = async ({
         : [];
     const correspondenceId = created?.id ?? existing.at(0)?.id;
     if (correspondenceId === undefined) {
-      throw new HandlerError({
-        status: 500,
-        message: "Correspondence write failed",
-      });
+      tx.rollback();
     }
 
     const filers = await tx
@@ -340,14 +352,15 @@ export const createCorrespondence = async ({
         metadata: { subject: parsed.subject },
       });
     }
-    return {
+    return Result.ok({
       type: "ok" as const,
       id: correspondenceId,
       created: created !== undefined,
       filerAdded: filers.length > 0,
-    };
+    });
   });
-  return transaction.isErr()
-    ? { type: "error" as const, error: transaction.error }
-    : transaction.value;
+  const result = transaction.andThen((value) => value);
+  return result.isErr()
+    ? { type: "error" as const, error: result.error }
+    : result.value;
 };
