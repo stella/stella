@@ -35,17 +35,20 @@ GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion;--> stateme
 -- through this function, and the change trigger below keys on the revision,
 -- so the two cannot disagree about which columns count.
 --
--- `document_ast` is compared only when the statement assigns it: the
--- column-specific trigger calls the 'document_ast' path, and the row trigger
--- never reads the column, so an update that leaves it out never detoasts a
--- whole statute. A column-specific trigger does not see a change another
--- BEFORE trigger makes; no trigger on this table writes `document_ast`.
+-- `document_ast` and `fulltext` are compared only when the statement assigns
+-- them: each has a column-specific trigger that calls the 'column' path, and
+-- the row trigger never reads either, so an update that leaves them out never
+-- detoasts a whole statute. A column-specific trigger does not see a change
+-- another BEFORE trigger makes; no trigger on this table writes either column.
+-- Every path sets OLD + 1 rather than incrementing NEW, so a statement that
+-- changes several inputs advances the revision once.
 --
 -- Trigger order is name order. The row trigger (`..._payload_revision`) sorts
--- before the AST trigger (`..._payload_revision_ast`), so it checks the
--- client's value before the AST path advances it. Both sort before
+-- before the column triggers (`..._payload_revision_ast`,
+-- `..._payload_revision_fulltext`), so it checks the client's value before a
+-- column path advances it. All sort before
 -- `legislation_documents_projection_epoch_monotonic`, which reads and writes
--- neither column.
+-- none of these columns.
 CREATE FUNCTION "advance_legislation_payload_revision"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -60,7 +63,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF TG_ARGV[0] = 'document_ast' THEN
+  IF TG_ARGV[0] = 'column' THEN
     NEW."payload_revision" := OLD."payload_revision" + 1;
     RETURN NEW;
   END IF;
@@ -185,7 +188,13 @@ CREATE TRIGGER "legislation_documents_payload_revision_ast"
 BEFORE UPDATE OF "document_ast" ON "legislation_documents"
 FOR EACH ROW
 WHEN (OLD."document_ast" IS DISTINCT FROM NEW."document_ast")
-EXECUTE FUNCTION "advance_legislation_payload_revision"('document_ast');--> statement-breakpoint
+EXECUTE FUNCTION "advance_legislation_payload_revision"('column');--> statement-breakpoint
+
+CREATE TRIGGER "legislation_documents_payload_revision_fulltext"
+BEFORE UPDATE OF "fulltext" ON "legislation_documents"
+FOR EACH ROW
+WHEN (OLD."fulltext" IS DISTINCT FROM NEW."fulltext")
+EXECUTE FUNCTION "advance_legislation_payload_revision"('column');--> statement-breakpoint
 
 CREATE TRIGGER "legislation_documents_work_change"
 AFTER INSERT OR DELETE ON "legislation_documents"

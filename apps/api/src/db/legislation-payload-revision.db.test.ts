@@ -83,6 +83,7 @@ const BASE_ROW = {
   versionValidFrom: "2024-01-01",
   versionValidTo: "2024-12-31",
   documentAst: astWith("§ 1 Předmět úpravy"),
+  fulltext: "§ 1 Předmět úpravy",
   astS3Key: "legislation/cze/2012/89/ast-a.zst",
   textS3Key: null,
   contentHash: "a".repeat(64),
@@ -95,6 +96,7 @@ const BASE_ROW = {
  */
 const PAYLOAD_INPUT_CHANGES = {
   document_ast: { documentAst: astWith("§ 1 Předmět a rozsah úpravy") },
+  fulltext: { fulltext: "§ 1 Předmět a rozsah úpravy" },
   ast_s3_key: { astS3Key: "legislation/cze/2012/89/ast-b.zst" },
   content_hash: { contentHash: "b".repeat(64) },
   text_s3_key: { textS3Key: "legislation/cze/2012/89/text-b.zst" },
@@ -112,14 +114,20 @@ type PayloadInput = keyof typeof PAYLOAD_INPUT_CHANGES;
 const PAYLOAD_INPUTS = Object.keys(PAYLOAD_INPUT_CHANGES).filter(
   (column): column is PayloadInput => column in PAYLOAD_INPUT_CHANGES,
 );
+/** Inputs compared only when a statement assigns them, by their own triggers. */
+const ASSIGNED_ONLY_INPUTS = [
+  "document_ast",
+  "fulltext",
+] as const satisfies readonly PayloadInput[];
 const SCALAR_INPUTS = PAYLOAD_INPUTS.filter(
-  (column) => column !== "document_ast",
+  (column) =>
+    !ASSIGNED_ONLY_INPUTS.some((assignedOnly) => assignedOnly === column),
 );
 
 /** Columns outside the payload that writers routinely update. */
 const UNRELATED_CHANGES = {
   title: { title: "Zákon č. 89/2012 Sb., občanský zákoník" },
-  fulltext: { fulltext: "§ 1 Předmět úpravy" },
+  source_hash: { sourceHash: "c".repeat(64) },
   status: { status: "repealed" },
   projection_epoch: { projectionEpoch: 3n },
   citation_count: { citationCount: 12 },
@@ -237,20 +245,22 @@ describe("trigger definitions", () => {
         .map((match) => match.groups?.["column"] ?? "")
         .filter((column) => column !== "payload_revision"),
     );
-    const astTriggerColumns = await db.execute<{ attname: string }>(sql`
+    const columnTriggers = await db.execute<{ attname: string }>(sql`
       SELECT attribute.attname
       FROM pg_trigger trigger_row
+      JOIN pg_proc function_row ON function_row.oid = trigger_row.tgfoid
       JOIN pg_attribute attribute
         ON attribute.attrelid = trigger_row.tgrelid
        AND attribute.attnum = ANY (trigger_row.tgattr)
-      WHERE trigger_row.tgname = 'legislation_documents_payload_revision_ast'
+      WHERE function_row.proname = 'advance_legislation_payload_revision'
     `);
-    const triggerInputs = new Set([
-      ...comparedByRowPath,
-      ...astTriggerColumns.rows.map(({ attname }) => attname),
-    ]);
+    const assignedOnly = columnTriggers.rows.map(({ attname }) => attname);
+    const triggerInputs = new Set([...comparedByRowPath, ...assignedOnly]);
 
-    expect(comparedByRowPath.has("document_ast")).toBe(false);
+    expect(assignedOnly.toSorted()).toEqual([...ASSIGNED_ONLY_INPUTS]);
+    for (const column of ASSIGNED_ONLY_INPUTS) {
+      expect(comparedByRowPath.has(column)).toBe(false);
+    }
     expect([...triggerInputs].toSorted()).toEqual(PAYLOAD_INPUTS.toSorted());
 
     const changeTrigger = await db.execute<{ definition: string }>(sql`
@@ -262,7 +272,7 @@ describe("trigger definitions", () => {
     );
   });
 
-  test("the row path fires before the AST path, and both before the epoch guard", async () => {
+  test("the row path fires before the column paths, and all before the epoch guard", async () => {
     const triggers = await db.execute<{ tgname: string }>(sql`
       SELECT tgname FROM pg_trigger
       WHERE tgrelid = 'legislation_documents'::regclass
@@ -274,6 +284,7 @@ describe("trigger definitions", () => {
     expect(triggers.rows.map(({ tgname }) => tgname)).toEqual([
       "legislation_documents_payload_revision",
       "legislation_documents_payload_revision_ast",
+      "legislation_documents_payload_revision_fulltext",
       "legislation_documents_projection_epoch_monotonic",
     ]);
   });
@@ -314,11 +325,12 @@ describe("payload revision", () => {
   );
 
   test.each(SCALAR_INPUTS)(
-    "changing document_ast with %s in one statement advances the revision once",
+    "changing document_ast and fulltext with %s in one statement advances the revision once",
     async (column) => {
       await insertBaseRow();
       const change = {
         ...PAYLOAD_INPUT_CHANGES.document_ast,
+        ...PAYLOAD_INPUT_CHANGES.fulltext,
         ...PAYLOAD_INPUT_CHANGES[column],
       };
 
@@ -367,6 +379,26 @@ describe("payload revision", () => {
 
     expect(await revisionOf(DOCUMENT_ID)).toBe(3n);
   });
+
+  test.each(ASSIGNED_ONLY_INPUTS)(
+    "assigning %s its current value changes nothing",
+    async (column) => {
+      await insertBaseRow();
+      const { id: _id, title: _title, ...inputs } = BASE_ROW;
+      const current =
+        column === "document_ast"
+          ? { documentAst: inputs.documentAst }
+          : { fulltext: inputs.fulltext };
+
+      await db
+        .update(legislationDocuments)
+        .set(current)
+        .where(eq(legislationDocuments.id, DOCUMENT_ID));
+
+      expect(await revisionOf(DOCUMENT_ID)).toBe(1n);
+      expect(await workChanges()).toEqual([]);
+    },
+  );
 
   test("assigning every input its current value changes nothing", async () => {
     await insertBaseRow();
