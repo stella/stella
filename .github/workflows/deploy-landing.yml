@@ -1,36 +1,74 @@
 name: Deploy Landing
 
-# Triggers the landing site deploy on every main merge that
-# touches the landing app or shared deps. The public repo cannot
-# call private reusable workflows directly, so this dispatches the
-# private deploy workflow and watches the resulting run.
+# Deploys the landing site after every main merge that changes what the
+# landing build reads. The public repo cannot call private reusable workflows
+# directly, so this dispatches the private deploy workflow and watches the
+# resulting run.
 
 on:
   push:
     branches: [main]
-    paths:
-      - "apps/landing/**"
-      - "packages/**"
-      - "docs/changelog/**"
-      - "bun.lock"
-      - ".github/workflows/deploy-landing.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Each deploy ships the whole site at live main, so a newer push makes an
-# older run redundant.
-concurrency:
-  group: deploy-landing-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  scope:
     # Belt-and-suspenders: the trigger above already restricts to
     # main, but a manual dispatch via API can pass a feature ref.
     # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      affected: ${{ steps.scope.outputs.affected }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The pushed range can span several commits; blobless keeps the
+          # history cheap and fetches only the files the check reads.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # scripts/landing-deploy-scope.ts owns what the landing reads: its
+      # workspace graph, the packages that graph resolves to, and the outside
+      # files turbo.json declares for its build. A manual dispatch always
+      # deploys, and a check that cannot decide deploys too.
+      - name: Decide whether the push changes the site
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            affected=true
+          elif ! affected="$(
+            bun scripts/landing-deploy-scope.ts --base "$BEFORE" --head "$GITHUB_SHA"
+          )"; then
+            echo "::warning::Could not scope the landing deploy; deploying."
+            affected=true
+          fi
+          echo "affected=${affected}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: scope
+    if: needs.scope.outputs.affected == 'true'
+    # Each deploy ships the whole site at live main, so a newer deploy makes
+    # an older one redundant. The group sits on this job so a push that does
+    # not change the site never cancels a deploy that is still watching.
+    concurrency:
+      group: deploy-landing-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # Allows for the single retry below (a 3-minute wait plus a second deploy).
     timeout-minutes: 30
@@ -128,8 +166,8 @@ jobs:
               --exit-status
           }
 
-          # The private workflow keeps one running and one pending deploy; a
-          # newer dispatch replaces the pending one, which ends as cancelled.
+          # The private workflow runs one deploy at a time; a newer dispatch
+          # cancels the older run, which then ends as cancelled.
           # A newer deploy that is still running or already succeeded covers
           # this commit, so neither a failure nor a retry is warranted.
           superseded() {
