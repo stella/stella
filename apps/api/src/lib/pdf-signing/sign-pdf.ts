@@ -45,6 +45,7 @@ import {
   PdfSigningTimestampUnavailableError,
 } from "@/api/lib/pdf-signing/timestamp-authority";
 import type { NamedTimestampAuthority } from "@/api/lib/pdf-signing/timestamp-authority";
+import { reachesTrustAnchor } from "@/api/lib/pdf-signing/timestamp-trust";
 import {
   embedValidationData,
   findRevokedCertificates,
@@ -290,6 +291,11 @@ type ApplySignatureInvocation = SigningInvocation & {
   timestampAuthorities: readonly NamedTimestampAuthority[];
   /** Whether `certificateChain` reaches a self-signed root. */
   certificateChainComplete: boolean;
+  /**
+   * Certificates a timestamp's chain must reach for its time to count; see
+   * `timestamp-trust.ts`. Empty: timestamps are embedded, never trusted.
+   */
+  timestampTrustAnchors: readonly Uint8Array[];
   revocationProvider?: TrackedRevocationProvider;
 };
 
@@ -324,6 +330,24 @@ const libpdfWarnings = (warnings: readonly SignWarning[]) =>
   warnings
     .filter(({ code }) => code !== "MDP_VIOLATION")
     .map(({ code, message }) => ({ code, message }));
+
+/**
+ * The level a timestamped signature reached. Time from an authority no
+ * trust anchor vouches for is not trusted time, so such a signature is
+ * B-B however much validation data it carries.
+ */
+const achievedLevel = ({
+  longTermValidated,
+  timestampTrusted,
+}: {
+  longTermValidated: boolean;
+  timestampTrusted: boolean;
+}): PdfSigningLevel => {
+  if (!timestampTrusted) {
+    return "B-B";
+  }
+  return longTermValidated ? "B-LT" : "B-T";
+};
 
 const describeError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -435,9 +459,16 @@ export const applySignature = async (
         // The timestamp's own chain, completed like the signer's: what the
         // token carries, then its issuers' AIA URLs through the guard.
         const timestampIssuers = await completeCertificateChain({
-          candidates: timestamp.certificates,
+          candidates: [
+            ...timestamp.certificates,
+            ...invocation.timestampTrustAnchors,
+          ],
           certificate: timestamp.signerCertificate,
         });
+        const timestampTrusted = reachesTrustAnchor(
+          [timestamp.signerCertificate, ...timestampIssuers.chain],
+          invocation.timestampTrustAnchors,
+        );
         const validation = await gatherValidationData({
           provider,
           signer: signerRevocation.material,
@@ -452,6 +483,13 @@ export const applySignature = async (
             code: "CHAIN_INCOMPLETE",
             message:
               "The signer's certificate chain does not reach a root certificate.",
+          });
+        }
+        if (!timestampTrusted) {
+          warnings.push({
+            code: "TIMESTAMP_UNTRUSTED",
+            message:
+              "The timestamp authority's chain reaches no configured trust anchor; its time is embedded but not relied on.",
           });
         }
         if (!timestampIssuers.complete) {
@@ -469,12 +507,13 @@ export const applySignature = async (
         }
         return {
           bytes: await embedValidationData(signed.pdf, validation.material),
-          level:
-            invocation.certificateChainComplete &&
-            timestampIssuers.complete &&
-            validation.uncovered.length === 0
-              ? "B-LT"
-              : "B-T",
+          level: achievedLevel({
+            longTermValidated:
+              invocation.certificateChainComplete &&
+              timestampIssuers.complete &&
+              validation.uncovered.length === 0,
+            timestampTrusted,
+          }),
           timestampAuthorityUrl: timestampAuthority.usedUrl(),
           warnings: boundWarnings(warnings),
         } satisfies AppliedSignature;

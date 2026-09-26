@@ -87,6 +87,7 @@ const buildInvocation = async () => {
       reserveTimestamp: true,
       signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
       signingTime: SIGNING_TIME,
+      timestampTrustAnchors: [] as Uint8Array[],
     },
     privateKey,
   };
@@ -238,6 +239,7 @@ describe("two-phase PDF signing", () => {
         },
         { authority: working, url: "https://tsa-up.example/" },
       ],
+      timestampTrustAnchors: [working.signer.der],
     });
 
     // The timestamp is phase 2's alone: adding it did not change the digest
@@ -257,11 +259,14 @@ describe("two-phase PDF signing", () => {
       chainComplete,
       crlServed = true,
       leafRevoked = false,
+      timestampAnchors,
       timestampSigner,
     }: {
       chainComplete: boolean;
       crlServed?: boolean;
       leafRevoked?: boolean;
+      /** Default: pin the timestamp authority's own certificate. */
+      timestampAnchors?: (signer: TestCertificate) => Uint8Array[];
       timestampSigner?: TestCertificate;
     }) => {
       const root = await createTestCertificate({
@@ -309,6 +314,10 @@ describe("two-phase PDF signing", () => {
         digestHex,
       );
 
+      const tsa = await createTestTimestampAuthority(
+        timestampSigner === undefined ? {} : { signer: timestampSigner },
+      );
+
       // LibPDF's own fetching goes through the global `fetch`; nothing may
       // reach it, whatever the certificate's URLs name.
       const globalFetch = globalThis.fetch;
@@ -328,15 +337,11 @@ describe("two-phase PDF signing", () => {
           revocationProvider,
           signature,
           timestampAuthorities: [
-            {
-              authority: await createTestTimestampAuthority(
-                timestampSigner === undefined
-                  ? {}
-                  : { signer: timestampSigner },
-              ),
-              url: "https://tsa.example/",
-            },
+            { authority: tsa, url: "https://tsa.example/" },
           ],
+          timestampTrustAnchors: (
+            timestampAnchors ?? ((signer) => [signer.der])
+          )(tsa.signer),
         });
         return {
           applied,
@@ -406,6 +411,40 @@ describe("two-phase PDF signing", () => {
       expect(applied.warnings.map(({ code }) => code)).toContain(
         "TIMESTAMP_CHAIN_INCOMPLETE",
       );
+    });
+
+    test("never counts time from an authority no anchor vouches for", async () => {
+      const { applied } = await signUnderIssuingCa({
+        chainComplete: true,
+        timestampAnchors: () => [],
+      });
+
+      expect(applied.level).toBe("B-B");
+      expect(applied.timestampAuthorityUrl).toBe("https://tsa.example/");
+      expect(applied.warnings.map(({ code }) => code)).toContain(
+        "TIMESTAMP_UNTRUSTED",
+      );
+    });
+
+    test("trusts time whose chain reaches a configured CA", async () => {
+      const tsaCa = await createTestCertificate({
+        commonName: "Timestamp CA",
+        isCa: true,
+      });
+      const { applied } = await signUnderIssuingCa({
+        chainComplete: true,
+        timestampAnchors: () => [tsaCa.der],
+        timestampSigner: await createTestTimestampCertificate({
+          issuer: tsaCa,
+        }),
+      });
+
+      // Trusted time: the chain reached the anchor. Not B-LT only because
+      // the authority's certificate has no revocation data to embed.
+      expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "REVOCATION_UNAVAILABLE",
+      ]);
     });
 
     test("refuses to embed a signature whose certificate is revoked", async () => {

@@ -44,21 +44,31 @@ export type ValidatedTimestamp = {
 const invalid = (message: string) =>
   new PdfSigningTimestampInvalidError({ message });
 
-const allowsTimeStamping = (certificate: pkijs.Certificate) => {
+/**
+ * RFC 3161 2.3: a timestamping certificate carries exactly one extended key
+ * usage, id-kp-timeStamping, in an extension marked critical. A key that
+ * may also do other things is not a timestamping key.
+ */
+const isTimeStampingKey = (certificate: pkijs.Certificate) => {
   const extension = certificate.extensions?.find(
     ({ extnID }) => extnID === EXTENDED_KEY_USAGE_OID,
   );
-  if (extension === undefined) {
+  if (extension === undefined || !extension.critical) {
     return false;
   }
   try {
-    return pkijs.ExtKeyUsage.fromBER(
+    const { keyPurposes } = pkijs.ExtKeyUsage.fromBER(
       new Uint8Array(extension.extnValue.valueBlock.valueHexView),
-    ).keyPurposes.includes(TIME_STAMPING_USAGE);
+    );
+    return keyPurposes.length === 1 && keyPurposes[0] === TIME_STAMPING_USAGE;
   } catch {
     return false;
   }
 };
+
+const isValidAt = (certificate: pkijs.Certificate, at: Date) =>
+  certificate.notBefore.value.getTime() <= at.getTime() &&
+  at.getTime() <= certificate.notAfter.value.getTime();
 
 /** An OCTET STRING's bytes, whether DER-primitive or BER-constructed. */
 const octetStringBytes = (value: asn1js.OctetString): Uint8Array => {
@@ -243,8 +253,13 @@ export const validateTimestampToken = async ({
   if (signer === null) {
     throw invalid("The timestamp's signature does not verify.");
   }
-  if (!allowsTimeStamping(signer)) {
+  if (!isTimeStampingKey(signer)) {
     throw invalid("The timestamp was not signed by a timestamping key.");
+  }
+  if (!isValidAt(signer, tstInfo.genTime)) {
+    throw invalid(
+      "The timestamp's certificate was not valid at the time it claims.",
+    );
   }
 
   return {

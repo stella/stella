@@ -135,6 +135,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "POSTHOG_KEY",
   "PDF_SIGNING_TSA_URL",
   "PDF_SIGNING_TSA_URLS",
+  "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -343,6 +344,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Allow PostHog capture from localhost when using a real project key.",
   PDF_SIGNING_TSA_URL:
     "Single RFC 3161 timestamp authority for PDF signing, appended to PDF_SIGNING_TSA_URLS.",
+  PDF_SIGNING_TSA_TRUST_PEM:
+    "Trust anchors for PDF signing timestamps: PEM text or a path to a PEM file (CA certificates, or an authority's own certificate to pin it). Unset embeds timestamps without counting them as trusted time.",
   PDF_SIGNING_TSA_URLS:
     "RFC 3161 timestamp authorities for PDF signing in preference order, comma separated; the next one is tried when one fails. Unset signs at PAdES B-B.",
   PUBLIC_URL:

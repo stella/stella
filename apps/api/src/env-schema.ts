@@ -217,6 +217,12 @@ export const envApiServerSchema = {
   ),
   /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
   PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * Trust anchors for timestamp authorities: PEM text, or a path to a PEM
+   * file. CA certificates, or an authority's own certificate to pin it.
+   * Unset: timestamps are embedded but not counted as trusted time.
+   */
+  PDF_SIGNING_TSA_TRUST_PEM: v.optional(v.string()),
 
   /**
    * Self-host escape hatch for deployments without SMTP/OAuth. When enabled,
