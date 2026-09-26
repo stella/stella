@@ -401,30 +401,15 @@ const structuredData = {
       }
 
       /*
-       * Theme transition:
-       * The gradient and background crossfade over 800ms via
-       * @property registration in global.css. Other tokens
-       * snap instantly (intentional; the toggle is at the top
-       * of the page so only the hero gradient matters).
+       * Theme switching: the toggle crossfades the whole page as a
+       * view transition (see ThemeToggle.astro); a system theme
+       * change applies instantly.
        */
     </style>
   </head>
   <body class="antialiased">
     {header && <SiteHeader current={current} overlay={headerOverlay} />}
     <slot />
-
-    {/*
-      Disable transitions on first load so the theme
-      applies instantly, then enable after paint.
-    */}
-    <script is:inline>
-      document.documentElement.classList.add("no-transitions");
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          document.documentElement.classList.remove("no-transitions");
-        });
-      });
-    </script>
 
     {/*
       Scroll-reveal helper. Elements with [data-reveal] fade up once

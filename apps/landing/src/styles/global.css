@@ -39,19 +39,6 @@
   --color-warning-foreground: var(--warning-foreground);
 }
 
-/* Register gradient endpoint so the browser can interpolate it */
-@property --auth-gradient-end {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #a8cfe8;
-}
-
-@property --background {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #ffffff;
-}
-
 :root {
   --radius: 0.625rem;
   --background: #ffffff;
@@ -84,9 +71,6 @@
   --terminal-foreground: #f2f1ee;
   --terminal-muted: #858b97;
   --terminal-accent: #79acd0;
-  transition:
-    --auth-gradient-end 800ms ease,
-    --background 800ms ease;
 }
 
 .dark {
@@ -114,10 +98,6 @@
   --success: #3fa674;
   --warning: #f59e0b;
   --warning-foreground: #fcd34d;
-}
-
-html.no-transitions {
-  transition: none !important;
 }
 
 body {

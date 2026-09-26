@@ -15,13 +15,8 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 7,
-    "files": {
-      "apps/desktop/src/mainview/index.css": 2,
-      "apps/landing/src/components/react/ProductShowcase.tsx": 3,
-      "apps/landing/src/styles/docs.css": 1,
-      "apps/landing/src/styles/global.css": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "super-linear-regexes": {
     "count": 0,
