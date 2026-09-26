@@ -148,18 +148,33 @@ const refusalResponse = (rejection: unknown): Response => {
   });
 };
 
+/**
+ * Where the harness's model calls are answered: the scripted provider by
+ * default, or a real adapter fed recorded provider responses.
+ */
+export type HarnessModel = Pick<
+  ReturnType<typeof installScriptedProvider>,
+  "modelOptionsOf" | "restore" | "script" | "stalled" | "takeFindings"
+>;
+
 export const createApprovalHarness = ({
   ids,
+  model,
+  organizationAIConfig = orgAIConfig,
   safeDb,
   scopedDb,
   testDb,
 }: {
   ids: TestIds;
+  /** Defaults to the scripted provider. */
+  model?: HarnessModel | undefined;
+  /** The organization's model selection; defaults to the harness's own. */
+  organizationAIConfig?: OrgAIConfig | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
-  const provider = installScriptedProvider();
+  const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
     name: APPROVAL_TOOL_NAME,
@@ -217,7 +232,7 @@ export const createApprovalHarness = ({
         await Promise.resolve([ids.wsA1, ids.wsA2]),
       getWorkspaceAccess: async () => await Promise.resolve(null),
       memberRole: { role: "owner" },
-      orgAIConfig,
+      orgAIConfig: organizationAIConfig,
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
