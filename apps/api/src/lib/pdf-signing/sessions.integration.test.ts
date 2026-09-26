@@ -44,11 +44,14 @@ const createdSessionIds: SafeId<"pdfSigningSession">[] = [];
 const MINUTE_MS = 60_000;
 
 type SeedOptions = {
+  /** A creator other than the tenant's own member. */
+  createdBy?: string;
   handoffExpiresAt?: Date;
   tenant?: "a" | "b";
 };
 
 const seedHandoff = async ({
+  createdBy,
   handoffExpiresAt = new Date(Date.now() + 2 * MINUTE_MS),
   tenant = "a",
 }: SeedOptions = {}) => {
@@ -79,6 +82,7 @@ const seedHandoff = async ({
 
   await testDb.insert(pdfSigningSessions).values({
     ...tenantIds,
+    ...(createdBy !== undefined && { createdBy }),
     handoffExpiresAt,
     handoffTokenHash: hashPdfSigningToken(handoffToken),
     id: sessionId,
@@ -131,6 +135,22 @@ describe("pdf signing handoff redemption", () => {
     expect(rows.at(0)?.sessionTokenHash).toBe(
       hashPdfSigningToken(first?.sessionToken ?? ""),
     );
+  });
+
+  test("refuses a handoff whose creator lost access before it was redeemed", async () => {
+    // Tenant B's member holds no role in tenant A's workspace: the same
+    // shape as a member removed after minting the link.
+    const { handoffToken, sessionId } = await seedHandoff({
+      createdBy: ids.userB1,
+    });
+
+    expect(await redeemPdfSigningHandoff(handoffToken, db)).toBeNull();
+
+    const rows = await testDb
+      .select({ sessionTokenHash: pdfSigningSessions.sessionTokenHash })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)?.sessionTokenHash).toBeNull();
   });
 
   test("refuses a handoff whose deep link has expired", async () => {
