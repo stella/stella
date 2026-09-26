@@ -187,13 +187,16 @@ function CorrespondenceDetailPage() {
                     <SelectItem value="unassigned">
                       {tCommon("unassigned")}
                     </SelectItem>
-                    {members
-                      .filter((member) => member.user)
-                      .map((member) => (
+                    {members.map((member) => {
+                      if (member.user === null) {
+                        return null;
+                      }
+                      return (
                         <SelectItem key={member.userId} value={member.userId}>
                           {member.user.name}
                         </SelectItem>
-                      ))}
+                      );
+                    })}
                   </SelectPopup>
                 </Select>
               ) : (
