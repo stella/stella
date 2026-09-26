@@ -60,12 +60,65 @@ jobs:
           fi
           echo "affected=${affected}" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  # The site is built here, from the pushed commit, with no secrets in reach.
+  # The private deploy downloads this job's artifact and checks where it came
+  # from before publishing it.
+  build:
     needs: scope
     if: needs.scope.outputs.affected == 'true'
-    # Each deploy ships the whole site at live main, so a newer deploy makes
-    # an older one redundant. The group sits on this job so a push that does
-    # not change the site never cancels a deploy that is still watching.
+    name: Build landing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      artifact-name: ${{ steps.name.outputs.artifact-name }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The landing build dates sitemap entries from git history and
+          # emits none on a shallow checkout. Blobless keeps the full
+          # history cheap: only the checked-out tree's blobs are fetched.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; the build installs nothing private.
+          NPM_TOKEN: ""
+
+      - name: Build landing
+        run: bun --filter @stll/landing build
+
+      - name: Name the artifact
+        id: name
+        run: echo "artifact-name=landing-site-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the built site
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.name.outputs.artifact-name }}
+          path: apps/landing/dist/
+          # The site serves files under /.well-known/.
+          include-hidden-files: true
+          if-no-files-found: error
+          # A re-run replaces the artifact instead of failing on the name.
+          overwrite: true
+          retention-days: 1
+
+  deploy:
+    needs: build
+    # Each deploy ships the whole site, so a newer deploy makes an older one
+    # redundant. The group sits on this job so a push that does not change
+    # the site never cancels a deploy that is still watching.
     concurrency:
       group: deploy-landing-${{ github.ref }}
       cancel-in-progress: true
@@ -94,23 +147,19 @@ jobs:
           PRIVATE_WORKFLOWS_REPO: ${{ github.repository_owner }}/private-workflows
           SOURCE_REF: ${{ github.ref }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_NAME: ${{ needs.build.outputs.artifact-name }}
+          ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact-digest }}
           AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
         run: |
 
           # The dispatched private deploy occasionally fails on a transient
-          # install/registry blip even though the lockfile is unchanged. Wrap a
-          # single dispatch+watch in a function so it can be retried once before
-          # the deploy is failed.
+          # blip. Wrap a single dispatch+watch in a function so it can be
+          # retried once before the deploy is failed. The private workflow
+          # refuses a build older than the live site, so a retry or a re-run
+          # can never put an older site in front of a newer one.
           attempt_deploy() {
-            # Deploy live main rather than the triggering commit. A retry, or
-            # a re-run of an older workflow, then can never put an older site
-            # in front of a newer one; main already contains the trigger.
-            SOURCE_SHA="$(
-              GH_TOKEN="$SOURCE_TOKEN" gh api \
-                "repos/${SOURCE_REPOSITORY}/git/ref/heads/main" \
-                --jq .object.sha
-            )" || return 1
             dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             # Must match the `run-name:` template in
             # stella/private-workflows/.github/workflows/deploy-landing.yml.
@@ -121,6 +170,9 @@ jobs:
                 --field source_repository="$SOURCE_REPOSITORY" \
                 --field source_ref="$SOURCE_REF" \
                 --field source_sha="$SOURCE_SHA" \
+                --field source_run_id="$SOURCE_RUN_ID" \
+                --field artifact_name="$ARTIFACT_NAME" \
+                --field artifact_digest="$ARTIFACT_DIGEST" \
                 --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
             )"; then
               printf '%s\n' "$dispatch_output" >&2
