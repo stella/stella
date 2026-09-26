@@ -22672,12 +22672,12 @@ export type WebRoutes = {
                   country: string;
                   identifiers: T4b4720fb6b;
                   createdAt: string;
-                  ecli: T432e07d100;
                   decisionDate: T432e07d100;
+                  ecli: T432e07d100;
                   caseNumber: string;
-                  caseNumberType: T20fe2f2cfe;
                   decisionId: string;
                   decisionType: T432e07d100;
+                  caseNumberType: T20fe2f2cfe;
                   citationAuthority: number;
                   anchorId: T432e07d100;
                   courtAbbreviation: T432e07d100;
@@ -32329,10 +32329,7 @@ type T1e9bf90711 = {
 } | {
   type: "neutral-citation";
   value: string;
-} | {
-  type: "reporter-citation";
-  value: string;
-};
+} | T7d5fa1ce74;
 
 type T1eec80096a = {
   readonly "~standard": {
@@ -33981,6 +33978,18 @@ type T7522841395 = {
   cite: string;
   href?: undefined | string;
   children: Array<T7522841395>;
+  target?: undefined | {
+    status: "identified";
+    identifiers: T4b4720fb6b;
+  } | {
+    status: "unresolved";
+    reason: ("missing-antecedent" | "ambiguous-antecedent" | "ambiguous-reporter" | "authority-barrier" | "scope-unknown" | "conflicting-parallels");
+  };
+  pin?: undefined | {
+    raw: string;
+    parts: readonly [Tfd90ca4005, ...Tfd90ca4005[]];
+    reporter?: undefined | T7d5fa1ce74;
+  };
 } | {
   type: "line-break";
 } | {
@@ -34367,6 +34376,11 @@ type T7d2603043e = null | {
 type T7d5b6398be = "reference" | "tiers";
 
 type T7d5dbe7dfc = "workspace" | "download";
+
+type T7d5fa1ce74 = {
+  type: "reporter-citation";
+  value: string;
+};
 
 type T7d9d93bde2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatMessage";
@@ -37944,6 +37958,12 @@ type Tfd818c98a8 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type Tfd90ca4005 = {
+  kind: ("paragraph" | "page" | "footnote");
+  start: string;
+  end?: undefined | string;
+};
 
 type Tfde6260a4e = {
   entityId: string;
