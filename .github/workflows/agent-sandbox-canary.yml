@@ -58,6 +58,9 @@ jobs:
       - name: Run canary protocol tests
         run: bun test packages/agent-engine/scripts/mcp-canary-server.test.ts
 
+      - name: Pull sandbox base images
+        run: bash scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
+
       - name: Build pinned sandbox image
         run: >-
           docker build

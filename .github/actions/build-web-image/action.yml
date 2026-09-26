@@ -92,6 +92,7 @@ runs:
       id: args
       shell: bash
       env:
+        RELEASE_REF: ${{ inputs.release-ref }}
         SOURCE_PATH: ${{ inputs.source-path }}
         TARGET_ENV: ${{ inputs.target-environment }}
         TOOLING_PATH: ${{ inputs.tooling-path }}
@@ -104,7 +105,7 @@ runs:
             VITE_POSTHOG_KEY
         )"
         posthog_arg="$(jq -er '.variables.VITE_POSTHOG_KEY' "${SOURCE_PATH}/apps/web/build-env-contract.json")"
-        version="${{ inputs.release-ref }}"
+        version="$RELEASE_REF"
         if [[ "$version" == v* ]]; then
           version="${version#v}"
         fi
@@ -138,6 +139,13 @@ runs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
+
+    - name: Pull web base images
+      shell: bash
+      env:
+        DOCKERFILE: ${{ inputs.source-path }}/apps/web/Dockerfile
+        TOOLING_PATH: ${{ inputs.tooling-path }}
+      run: bash "${TOOLING_PATH}/scripts/pull-base-images.sh" --buildx linux/arm64 "$DOCKERFILE"
 
     - name: Build and push web image
       id: build

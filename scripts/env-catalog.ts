@@ -863,5 +863,6 @@ export const AMBIENT_ENV_KEYS = new Set([
   "NODE_ENV",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
+  "TMPDIR",
   "TZ",
 ]);
