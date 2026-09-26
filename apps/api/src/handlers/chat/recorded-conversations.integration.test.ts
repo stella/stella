@@ -606,14 +606,6 @@ const recordScenario = async (
   };
 };
 
-/** Conversations where a new message replaces a turn that still waits on a
- *  card. */
-const SUPERSEDE_SCENARIOS = new Set([
-  "supersede-approval",
-  "supersede-approval-then-grant",
-  "supersede-ask-user",
-]);
-
 const checkRecording = async (scenario: string) => {
   const run =
     SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
@@ -640,48 +632,7 @@ const checkRecording = async (scenario: string) => {
 };
 
 describe("recorded conversations", () => {
-  test.each(
-    Object.keys(SCENARIOS).filter(
-      (scenario) => !SUPERSEDE_SCENARIOS.has(scenario),
-    ),
-  )("the committed recording of %s matches the server", checkRecording, 60_000);
-
-  // The card the new message replaces is recorded as it stands today.
-  test.each([...SUPERSEDE_SCENARIOS])(
-    "the committed recording of %s matches the server up to the new message",
-    async (scenario) => {
-      const run =
-        SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
-      const { recording } = await recordScenario(scenario, run);
-      const [firstStep] = recording.steps;
-      const fresh: unknown = JSON.parse(
-        stabilize({
-          ...recording,
-          steps: firstStep === undefined ? [] : [firstStep],
-        }),
-      );
-      const committed: unknown = JSON.parse(
-        readFileSync(
-          path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`),
-          "utf-8",
-        ),
-      );
-      // Instants are numbered across the whole recording, so the later
-      // steps shift them; the first step is compared without them.
-      const firstStepOf = (value: unknown) =>
-        JSON.stringify(asTestRaw<RecordedConversation>(value).steps.at(0))
-          .replaceAll(ISO_INSTANT_PATTERN, "<instant>")
-          .replaceAll(EPOCH_MS_PATTERN, "<instant>");
-      // The fixture must reach the fault: the next step is the new message.
-      expect(
-        asTestRaw<RecordedConversation>(committed).steps.at(1)?.action.type,
-      ).toBe("send");
-      expect(firstStepOf(fresh)).toBe(firstStepOf(committed));
-    },
-    60_000,
-  );
-
-  test.failing.each([...SUPERSEDE_SCENARIOS])(
+  test.each(Object.keys(SCENARIOS))(
     "the committed recording of %s matches the server",
     checkRecording,
     60_000,

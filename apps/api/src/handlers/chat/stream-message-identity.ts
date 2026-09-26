@@ -4,6 +4,7 @@ import type { StreamChunk, ToolCall } from "@tanstack/ai";
 import { Temporal } from "@stll/time";
 
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
+import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type {
   ChatMessage,
   PersistableChatMessage,
@@ -126,6 +127,109 @@ export const keepDeniedApprovalsOnScreen = async function* ({
           }),
         }
       : chunk;
+  }
+};
+
+/** What the client-visible stream shows of the history a run was handed,
+ *  each message as the thread's page serves it (`loadClientMessages`). */
+export type StoredHistory = {
+  /**
+   * The messages accepting the turn rewrote (the turn a new message
+   * superseded). The stream opens with a snapshot of just these, so the page
+   * holds them as stored however the run then ends. The page keeps every
+   * message a snapshot leaves out where it held it (the web app's
+   * `keepPostedMessagesInSnapshots`), so its older pages and cursor stand.
+   */
+  rewrittenOnAcceptance: readonly ClientMessage[];
+  /** See `RunHistory.storedForms`. */
+  storedForms: ReadonlyMap<string, ClientMessage>;
+};
+
+/** A served message as a snapshot carries it: in UI form, which the client
+ *  takes as is. AG-UI requires `content`; the client reads `parts`. */
+const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => ({
+  ...message,
+  content: "",
+});
+
+/**
+ * `messages` with every message `storedForms` holds as stored. The tool
+ * messages answering its calls and the reasoning ahead of it are the engine's
+ * copy of what its stored parts already carry, so they are left out.
+ */
+const withStoredForms = ({
+  messages,
+  storedCallIds,
+  storedForms,
+}: {
+  messages: readonly SnapshotMessage[];
+  storedCallIds: ReadonlySet<string>;
+  storedForms: ReadonlyMap<string, ClientMessage>;
+}): SnapshotMessage[] => {
+  const presented: SnapshotMessage[] = [];
+  for (const message of messages) {
+    if (message.role === "tool" && storedCallIds.has(message.toolCallId)) {
+      continue;
+    }
+    const stored = storedForms.get(message.id);
+    if (stored === undefined) {
+      presented.push(message);
+      continue;
+    }
+    while (presented.at(-1)?.role === "reasoning") {
+      presented.pop();
+    }
+    presented.push(servedSnapshotMessage(stored));
+  }
+  return presented;
+};
+
+/**
+ * Presents the history a run was handed as the thread stores it, never as the
+ * engine was handed it: every snapshot carries each message the engine held
+ * differently in its stored form, and a turn whose acceptance rewrote a
+ * message the page holds opens with that message as stored.
+ *
+ * @yields Each chunk of `source`, its snapshots showing the stored history.
+ */
+export const presentStoredHistory = async function* ({
+  history: { rewrittenOnAcceptance, storedForms },
+  source,
+}: {
+  history: StoredHistory;
+  source: AsyncIterable<StreamChunk>;
+}): AsyncIterable<StreamChunk> {
+  const storedCallIds = new Set(
+    [...storedForms.values()].flatMap(({ parts }) =>
+      parts.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),
+    ),
+  );
+  let opening: StreamChunk | undefined =
+    rewrittenOnAcceptance.length === 0
+      ? undefined
+      : {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: rewrittenOnAcceptance.map(servedSnapshotMessage),
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        };
+  for await (const chunk of source) {
+    if (opening !== undefined && chunk.type !== EventType.RUN_STARTED) {
+      yield opening;
+      opening = undefined;
+    }
+    yield chunk.type === EventType.MESSAGES_SNAPSHOT
+      ? {
+          ...chunk,
+          messages: withStoredForms({
+            messages: chunk.messages,
+            storedCallIds,
+            storedForms,
+          }),
+        }
+      : chunk;
+  }
+  if (opening !== undefined) {
+    yield opening;
   }
 };
 

@@ -26,6 +26,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   findLiveViewViolations,
+  findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
 import type { DeliveredInterrupt } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -367,6 +368,10 @@ export const createApprovalHarness = ({
       violations: [
         ...unsettled,
         ...findWireIdentityViolations(chunks),
+        ...findUnstoredWireResults({
+          chunks,
+          stored: await reloadView(threadId),
+        }),
         ...(await findPersistedViolations(threadId)),
       ],
     } as const;
@@ -501,6 +506,10 @@ export const createApprovalHarness = ({
     clientFindings.push(
       ...(await awaitSettledTurns(raw.threadId)),
       ...findWireIdentityViolations(chunks),
+      ...findUnstoredWireResults({
+        chunks,
+        stored: await reloadView(raw.threadId),
+      }),
       ...(await findPersistedViolations(raw.threadId)),
     );
     delivered.set(raw.threadId, deliveredInterrupts(chunks));

@@ -9,6 +9,7 @@ import { Result, panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
@@ -301,7 +302,9 @@ export const withProviderStreamContract = (
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
     withOneTerminalEvent(
       withDeclaredToolInput(
-        readOutputCeilingStopAsLength(adapter.chatStream(options)),
+        readOutputCeilingStopAsLength(
+          withUniqueToolCallIds(adapter.chatStream(options), options.messages),
+        ),
         options,
       ),
       options,

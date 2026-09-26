@@ -671,11 +671,10 @@ const createExtendedBedrockAdapter = (
 export const createTanStackTextAdapterFactory = (
   options: TanStackModelFactoryOptions,
 ): TanStackTextAdapterFactory => {
-  const mockFactory = activeMockTextAdapterFactory();
-  if (mockFactory) {
-    return mockFactory;
-  }
-  const factory = createProviderTextAdapterFactory(options);
+  // A mock adapter is held to the same contract, so tests and local runs
+  // read what production reads.
+  const factory =
+    activeMockTextAdapterFactory() ?? createProviderTextAdapterFactory(options);
   return (modelId) => withProviderStreamContract(factory(modelId));
 };
 

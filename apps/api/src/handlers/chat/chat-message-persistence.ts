@@ -88,6 +88,14 @@ type ChatTurnSettlement = {
   outcome: ChatTurnOutcome;
 };
 
+/** What a persisted message's turn writes changed beyond the message. */
+type ChatTurnWrites = {
+  /** The awaiting assistant message an accepted turn superseded, as stored. */
+  superseded: PersistableTerminalAssistantMessage | undefined;
+};
+
+const NO_TURN_WRITES: ChatTurnWrites = { superseded: undefined };
+
 const applyChatTurnWritesOnTx = async ({
   acceptance,
   settlement,
@@ -96,11 +104,12 @@ const applyChatTurnWritesOnTx = async ({
   acceptance: ChatTurnAcceptance | undefined;
   settlement: ChatTurnSettlement | undefined;
   tx: Transaction;
-}): Promise<void> => {
-  if (
-    acceptance !== undefined &&
-    !(await insertChatTurnAcceptanceOnTx({ acceptance, tx }))
-  ) {
+}): Promise<ChatTurnWrites> => {
+  const accepted =
+    acceptance === undefined
+      ? undefined
+      : await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+  if (accepted?.type === "refused") {
     panic("Chat turn acceptance lost its reserved thread slot");
   }
   if (
@@ -109,6 +118,7 @@ const applyChatTurnWritesOnTx = async ({
   ) {
     panic("Chat turn settlement lost execution ownership");
   }
+  return { superseded: accepted?.superseded };
 };
 
 const reserveChatTurnAcceptanceOnTx = async ({
@@ -183,10 +193,10 @@ const insertMessages = async ({
   userId,
   workspaceId,
 }: InsertMessagesProps): Promise<
-  Result<void, HandlerError<409> | SafeDbError>
+  Result<ChatTurnWrites, HandlerError<409> | SafeDbError>
 > => {
   if (messages.length === 0) {
-    return Result.ok();
+    return Result.ok(NO_TURN_WRITES);
   }
 
   const insertResult = await safeDb(async (tx) => {
@@ -239,17 +249,16 @@ const insertMessages = async ({
         metadata: { threadId, role: persistedMessage.role },
       })),
     );
-    await applyChatTurnWritesOnTx({
+    return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
       settlement: turnSettlement,
       tx,
     });
-    return true;
   });
 
   return insertResult.andThen((inserted) =>
-    inserted
-      ? Result.ok()
+    inserted !== false
+      ? Result.ok(inserted)
       : Result.err(
           new HandlerError({
             status: 409,
@@ -772,17 +781,16 @@ const runPersistMessage = async ({
         workspaceId,
         metadata: { threadId, role: persistencePlan.message.role },
       });
-      await applyChatTurnWritesOnTx({
+      return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
         settlement: turnSettlement,
         tx,
       });
-      return true;
     });
 
     return updateResult.andThen((updated) =>
-      updated
-        ? Result.ok()
+      updated !== false
+        ? Result.ok(updated)
         : Result.err(
             new HandlerError({
               status: 409,
@@ -806,7 +814,7 @@ const runPersistMessage = async ({
       turnSettlement === undefined &&
       !marksUsedAnonymization
     ) {
-      return Result.ok();
+      return Result.ok(NO_TURN_WRITES);
     }
     const turnResult = await safeDb(async (tx) => {
       if (
@@ -833,16 +841,15 @@ const runPersistMessage = async ({
           .set({ usedAnonymization: true })
           .where(eq(chatThreads.id, threadId));
       }
-      await applyChatTurnWritesOnTx({
+      return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
         settlement: turnSettlement,
         tx,
       });
-      return true;
     });
     return turnResult.andThen((written) =>
-      written
-        ? Result.ok()
+      written !== false
+        ? Result.ok(written)
         : Result.err(
             new HandlerError({
               status: 409,
@@ -924,17 +931,16 @@ const runPersistMessage = async ({
       workspaceId,
       metadata: { threadId, role: insertedMessage.role },
     });
-    await applyChatTurnWritesOnTx({
+    return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
       settlement: turnSettlement,
       tx,
     });
-    return true;
   });
 
   return replaceResult.andThen((replaced) =>
-    replaced
-      ? Result.ok()
+    replaced !== false
+      ? Result.ok(replaced)
       : Result.err(
           new HandlerError({
             status: 409,
@@ -958,6 +964,12 @@ type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
   turnAcceptance: ChatTurnAcceptance;
 };
 
+/** The claimed execution of an accepted message, with what accepting it
+ *  superseded (see `ChatTurnWrites`). */
+type AcceptedMessageClaim = ChatTurnWrites & {
+  execution: ChatTurnExecution;
+};
+
 /**
  * Persist a new user message, create its durable turn, and claim execution
  * before releasing the thread lock. No other sender can observe and supersede
@@ -968,7 +980,7 @@ export const persistAcceptedMessageWithClaim = async ({
   turnAcceptance,
   ...persistenceProps
 }: PersistAcceptedMessageWithClaimProps): Promise<
-  Result<ChatTurnExecution, HandlerError<409> | SafeDbError>
+  Result<AcceptedMessageClaim, HandlerError<409> | SafeDbError>
 > => {
   const result = await safeDb(async (tx) => {
     const persistenceResult = await runPersistMessage({
@@ -993,7 +1005,10 @@ export const persistAcceptedMessageWithClaim = async ({
     if (execution === null) {
       panic("Newly accepted chat turn lost execution ownership");
     }
-    return Result.ok(execution);
+    return Result.ok({
+      execution,
+      superseded: persistenceResult.value.superseded,
+    });
   });
   if (Result.isError(result)) {
     return Result.err(result.error);

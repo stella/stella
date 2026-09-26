@@ -30,6 +30,13 @@ type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
 
 type AskUserCardProps = {
   part: AskUserPart;
+  /**
+   * Whether the conversation still waits on this card. False once a later
+   * user message superseded the turn: the server stores the call as an error
+   * without its questions when it accepts that message, so an unanswered card
+   * shows only its heading, live as after a reload, and offers no form.
+   */
+  isAwaitingUser: boolean;
   onSubmit: (toolCallId: string, output: AskUserOutput) => void;
   /**
    * Optional re-run callback. When provided, an answered card
@@ -134,8 +141,23 @@ const renderAnonPills = (
   return nodes.length === 1 && typeof nodes[0] === "string" ? nodes[0] : nodes;
 };
 
+/** `answers` with each question's default wherever it has no answer yet. */
+const withDefaultAnswers = (
+  input: AskUserInput,
+  answers: Readonly<Record<number, string>>,
+): Record<number, string> => {
+  const seeded = { ...answers };
+  for (const [index, question] of input.questions.entries()) {
+    if (question.default && !(index in seeded)) {
+      seeded[index] = question.default;
+    }
+  }
+  return seeded;
+};
+
 export const AskUserCard = ({
   part,
+  isAwaitingUser,
   onSubmit,
   onEditAndRerun,
   onEditingChange,
@@ -170,19 +192,9 @@ export const AskUserCard = ({
   const input: AskUserInput | null =
     (part.state !== "input-streaming" ? part.input : null) ?? null;
 
-  const [answers, setAnswers] = useState<Record<number, string>>(() => {
-    if (!input) {
-      return {};
-    }
-    const defaults: Record<number, string> = {};
-    for (let i = 0; i < input.questions.length; i++) {
-      const question = input.questions[i];
-      if (question?.default) {
-        defaults[i] = question.default;
-      }
-    }
-    return defaults;
-  });
+  const [answers, setAnswers] = useState<Record<number, string>>(() =>
+    input ? withDefaultAnswers(input, {}) : {},
+  );
   const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
@@ -192,15 +204,7 @@ export const AskUserCard = ({
   // applies the transition before children render and avoids an extra commit.
   if (input !== null && !defaultsSeeded) {
     setDefaultsSeeded(true);
-    const seeded = { ...answers };
-    for (let i = 0; i < input.questions.length; i++) {
-      const question = input.questions[i];
-      const defaultAnswer = question?.default;
-      if (defaultAnswer && !(i in seeded)) {
-        seeded[i] = defaultAnswer;
-      }
-    }
-    setAnswers(seeded);
+    setAnswers(withDefaultAnswers(input, answers));
   }
 
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
@@ -214,6 +218,7 @@ export const AskUserCard = ({
   const canRerun = onEditAndRerun !== undefined;
   const isAnswered = answeredOutput !== null || submitted;
   const isDone = isAnswered && !isEditing;
+  const isWithdrawn = !isAnswered && !isAwaitingUser;
 
   // Mirror local edit-mode to the parent: a reopened answered card is a live
   // clarification again, so the parent can suppress competing affordances.
@@ -327,7 +332,7 @@ export const AskUserCard = ({
     [handleRerun, handleSubmit, isEditing],
   );
 
-  if (!input) {
+  if (!input || isWithdrawn) {
     return (
       <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
         <div className="flex items-center gap-2 px-3 py-2">

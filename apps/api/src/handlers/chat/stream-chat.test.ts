@@ -33,6 +33,7 @@ import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -97,7 +98,13 @@ import {
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
-import type { MessageIdMapper } from "./stream-message-identity";
+import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
+
+/** A run whose history the engine holds exactly as stored. */
+const NOTHING_REWRITTEN: StoredHistory = {
+  rewrittenOnAcceptance: [],
+  storedForms: new Map(),
+};
 
 const collectChunks = async (
   stream: AsyncIterable<StreamChunk>,
@@ -3605,6 +3612,7 @@ describe("chat stream refs", () => {
           }),
         resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
         source: processed,
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
 
@@ -3655,6 +3663,7 @@ describe("chat stream refs", () => {
         resolveAssistantValueRefs: (value) =>
           JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
         source: streamChunks([buildEngineSnapshot(history)]),
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
     if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
@@ -4358,6 +4367,83 @@ describe("anonymized outgoing chat stream", () => {
           },
         },
       },
+    ]);
+  });
+});
+
+// A user who types past an ask-user card supersedes the turn: the card's call
+// is stored as an error with no result. Handed to the engine as is, that call
+// still reads as pending, so the run pauses for the client again and answers
+// nothing. The settled history closes it and the model runs. The first test
+// is the canary for that engine behaviour: once an upgrade makes it fail, the
+// engine no longer needs `closeUnresolvedCallsForEngine`, and both go.
+describe("a superseded client-tool call in the engine's history", () => {
+  const askUserTool = toolDefinition({
+    name: "ask-user",
+    description: "Client-rendered clarification",
+    inputSchema: toTanStackToolSchema(v.object({ question: v.string() })),
+  });
+  const supersededHistory: ChatMessage[] = [
+    {
+      id: "user-1",
+      parts: [{ type: "text", content: "Create a document in the matter" }],
+      role: "user",
+    },
+    {
+      id: "assistant-1",
+      parts: [
+        {
+          arguments: '{"question":"Which matter?"}',
+          id: "call-ask",
+          name: "ask-user",
+          state: "error",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    },
+    {
+      id: "user-2",
+      parts: [
+        {
+          type: "text",
+          content: "Before you create anything, tell me what it will say.",
+        },
+      ],
+      role: "user",
+    },
+  ];
+  const runOver = async (messages: ChatMessage[]) =>
+    await persistNativeInterruptTurn(
+      chat({
+        adapter: createTextReplyAdapter("It will say one sentence."),
+        agentLoopStrategy: maxIterations(3),
+        messages,
+        threadId: "thread-1",
+        tools: [askUserTool],
+      }),
+    );
+
+  test("canary: the engine ends the raw history with an empty completion", async () => {
+    const { finish } = await runOver(supersededHistory);
+
+    expect(finish?.outcome).toEqual({
+      error: "empty_completion",
+      type: "failed",
+    });
+  });
+
+  test("the settled history lets the model answer", async () => {
+    const { finish } = await runOver(
+      settleHistoryForRun({
+        messages: supersededHistory,
+        resumedMessageId: undefined,
+      }).engine,
+    );
+
+    expect(finish?.outcome).toEqual({ type: "completed" });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      { type: "text", content: "It will say one sentence." },
     ]);
   });
 });

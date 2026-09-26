@@ -95,6 +95,8 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
+import { loadClientMessages } from "@/api/handlers/chat/message-page";
+import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
 import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
@@ -113,6 +115,7 @@ import {
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   createToolReadScopeRecorder,
@@ -163,6 +166,7 @@ import type {
   ChatMessage,
   ChatPart,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
@@ -779,6 +783,7 @@ const acceptIncomingTurn = async ({
     } as const;
 
     let turnExecution: ChatTurnExecution | null;
+    let superseded: PersistableTerminalAssistantMessage | undefined;
     if (parsedMessage.message.role === "assistant") {
       if (latestMessagePlan.persistencePlan.type !== "update") {
         return Result.err(
@@ -846,7 +851,7 @@ const acceptIncomingTurn = async ({
       if (Result.isError(persistenceResult)) {
         return Result.err(persistenceResult.error);
       }
-      turnExecution = persistenceResult.value;
+      ({ execution: turnExecution, superseded } = persistenceResult.value);
     }
     if (
       parsedMessage.message.role !== "assistant" &&
@@ -867,18 +872,80 @@ const acceptIncomingTurn = async ({
         ? parsedMessage.message
         : undefined;
     lifecycle.claimTurn(turnExecution, owningAssistantMessage);
+    const supersededMessage = superseded;
     return Result.ok({
       dataScopeAfterIncomingMessage,
       deleteMessageIdsBeforeLatest,
-      latestMessagePlan,
+      // The run continues the thread as accepting the turn stored it.
+      latestMessagePlan:
+        supersededMessage === undefined
+          ? latestMessagePlan
+          : {
+              ...latestMessagePlan,
+              messages: latestMessagePlan.messages.map((message) =>
+                message.id === supersededMessage.id
+                  ? supersededMessage
+                  : message,
+              ),
+            },
       owningAssistantMessage,
       parsedMessage,
       replayTargetMessageId,
+      // The messages accepting the turn rewrote, which the page holds.
+      rewrittenOnAcceptance:
+        supersededMessage === undefined ? [] : [supersededMessage.id],
       sandboxRun,
       toolWorkspaceIds,
       turnExecution,
     });
   });
+
+type LoadStoredHistoryOptions = {
+  /** The messages accepting the turn rewrote. */
+  rewrittenOnAcceptance: readonly SafeId<"chatMessage">[];
+  safeDb: SafeDb;
+  /** The ids of `RunHistory.storedForms`. */
+  storedFormIds: readonly string[];
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+};
+
+/** What the client is shown of a run's history as stored, read the way the
+ *  thread's page serves it. */
+const loadStoredHistory = async ({
+  rewrittenOnAcceptance,
+  safeDb,
+  storedFormIds,
+  threadId,
+  userId,
+}: LoadStoredHistoryOptions): Promise<Result<StoredHistory, SafeDbError>> => {
+  const messageIds = [
+    ...new Set([
+      ...rewrittenOnAcceptance,
+      ...storedFormIds.map(brandPersistedChatMessageId),
+    ]),
+  ];
+  if (messageIds.length === 0) {
+    return Result.ok({ rewrittenOnAcceptance: [], storedForms: new Map() });
+  }
+  const loaded = await loadClientMessages({
+    messageIds,
+    safeDb,
+    threadId,
+    userId,
+  });
+  if (Result.isError(loaded)) {
+    return Result.err(loaded.error);
+  }
+  const byId = new Map(loaded.value.map((message) => [message.id, message]));
+  const served = (id: string): ClientMessage =>
+    byId.get(brandPersistedChatMessageId(id)) ??
+    panic("A stored message the run was handed is gone");
+  return Result.ok({
+    rewrittenOnAcceptance: rewrittenOnAcceptance.map(served),
+    storedForms: new Map(storedFormIds.map((id) => [id, served(id)])),
+  });
+};
 
 type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
@@ -1762,6 +1829,7 @@ export const createSendMessage = (
           owningAssistantMessage,
           parsedMessage,
           replayTargetMessageId,
+          rewrittenOnAcceptance,
           sandboxRun,
           toolWorkspaceIds,
           turnExecution,
@@ -1781,11 +1849,12 @@ export const createSendMessage = (
           );
         }
 
+        const runHistory = settleHistoryForRun({
+          messages: latestMessagePlan.messages,
+          resumedMessageId: owningAssistantMessage?.id,
+        });
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: settleHistoryForRun({
-            messages: latestMessagePlan.messages,
-            resumedMessageId: owningAssistantMessage?.id,
-          }),
+          messages: runHistory.engine,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,
@@ -2065,6 +2134,17 @@ export const createSendMessage = (
           await lifecycle.failCurrentTurn("internal", true);
           return Result.err(requestedSkillsPrompt.error);
         }
+        const storedHistory = await loadStoredHistory({
+          rewrittenOnAcceptance,
+          safeDb,
+          storedFormIds: [...runHistory.storedForms.keys()],
+          threadId: body.threadId,
+          userId: user.id,
+        });
+        if (Result.isError(storedHistory)) {
+          await lifecycle.failCurrentTurn("internal", true);
+          return Result.err(storedHistory.error);
+        }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
           externalMcpTools,
@@ -2123,6 +2203,7 @@ export const createSendMessage = (
                   ...(resume === undefined ? {} : { resume }),
                   messages: chatContext.hydratedMessages,
                   latestMessageId: parsedMessage.message.id,
+                  storedHistory: storedHistory.value,
                   ...(owningAssistantMessage === undefined
                     ? {}
                     : { owningAssistantMessageId: owningAssistantMessage.id }),

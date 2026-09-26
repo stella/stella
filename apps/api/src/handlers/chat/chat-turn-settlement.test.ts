@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  errorToolResult,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
   settleHistoryForRun,
   settleOpenToolCallsForOutcome,
   UNFINISHED_APPROVED_CALL_ERROR,
+  UNRESOLVED_CALL_ERROR,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type {
   ChatMessage,
@@ -13,7 +15,8 @@ import type {
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
 
-type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
+type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+type ToolCallState = ToolCallPart["state"];
 
 // An external MCP tool: its parts carry the approval an approval-gated call
 // records.
@@ -24,7 +27,7 @@ const call = (
     output?: unknown;
     state: ToolCallState;
   },
-): ChatPart => ({
+): ToolCallPart => ({
   arguments: '{"name":"NDA"}',
   id,
   input: { name: "NDA" },
@@ -125,13 +128,7 @@ describe("settling the calls a turn left open", () => {
       output: { error: UNFINISHED_APPROVED_CALL_ERROR },
       state: "error",
     }),
-    {
-      content: JSON.stringify({ error: UNFINISHED_APPROVED_CALL_ERROR }),
-      error: UNFINISHED_APPROVED_CALL_ERROR,
-      state: "error",
-      toolCallId: "approved",
-      type: "tool-result",
-    },
+    errorToolResult("approved", UNFINISHED_APPROVED_CALL_ERROR),
   ] satisfies ChatPart[];
 
   test.each(["cancelled", "completed", "failed", "interrupted"] as const)(
@@ -199,8 +196,9 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: "resumed",
     });
 
-    expect(history.map(({ parts }) => parts.length)).toEqual([2, 1]);
-    expect(history[1]).toBe(resumed);
+    expect(history.engine.map(({ parts }) => parts.length)).toEqual([2, 1]);
+    expect(history.engine[1]).toBe(resumed);
+    expect([...history.storedForms.values()]).toEqual([earlier]);
   });
 
   test("a new user turn resumes nothing", () => {
@@ -209,9 +207,77 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: undefined,
     });
 
-    expect(history[0]?.parts.map(({ type }) => type)).toEqual([
+    expect(history.engine[0]?.parts.map(({ type }) => type)).toEqual([
       "tool-call",
       "tool-result",
     ]);
+  });
+
+  // A superseded turn stores its client call as an error without a result,
+  // and a stopped turn may leave an input-complete call or an approval request
+  // open. The engine would ask the client for any of them again instead of
+  // running the model. Every state is listed so a new one must choose.
+  const unresolvedResult = (toolCallId: string): ChatPart =>
+    errorToolResult(toolCallId, UNRESOLVED_CALL_ERROR);
+  const openCallByState = {
+    "approval-requested": pendingApproval,
+    "approval-responded": denied,
+    "awaiting-input": call("awaiting", { state: "awaiting-input" }),
+    complete: completed,
+    error: failed,
+    "input-complete": call("awaiting-client", { state: "input-complete" }),
+    "input-streaming": streaming,
+  } as const satisfies Record<ToolCallState, ToolCallPart>;
+  const closedForEngine = {
+    "approval-requested": true,
+    "approval-responded": false,
+    "awaiting-input": false,
+    complete: false,
+    error: true,
+    "input-complete": true,
+    "input-streaming": false,
+  } as const satisfies Record<ToolCallState, boolean>;
+
+  for (const part of Object.values(openCallByState)) {
+    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+      const history = settleHistoryForRun({
+        messages: [assistant("earlier", [part])],
+        resumedMessageId: undefined,
+      });
+
+      expect(history.engine[0]?.parts).toEqual(
+        closedForEngine[part.state]
+          ? [part, unresolvedResult(part.id)]
+          : [part],
+      );
+      // The client is shown every message the engine reads differently as
+      // stored, a denial included: the engine replays it as a result.
+      expect(history.storedForms.get("earlier")?.parts).toEqual(
+        closedForEngine[part.state] || part === denied ? [part] : undefined,
+      );
+    });
+  }
+
+  test("leaves the resumed message's open client call and stored results alone", () => {
+    const storedError = {
+      content: JSON.stringify({ error: "boom" }),
+      error: "boom",
+      state: "error",
+      toolCallId: "failed",
+      type: "tool-result",
+    } satisfies ChatPart;
+    const earlier = assistant("earlier", [failed, storedError, completed]);
+    const resumed = assistant("resumed", [
+      call("awaiting-client", { state: "input-complete" }),
+    ]);
+
+    const history = settleHistoryForRun({
+      messages: [earlier, resumed],
+      resumedMessageId: "resumed",
+    });
+
+    expect(history.engine[0]?.parts).toEqual(earlier.parts);
+    expect(history.engine[1]).toBe(resumed);
+    expect(history.storedForms.size).toBe(0);
   });
 });

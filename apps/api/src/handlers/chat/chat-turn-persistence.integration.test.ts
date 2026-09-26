@@ -156,7 +156,11 @@ const seedAwaitingTurn = async () => {
           workspaceId: ids.wsA1,
         },
       ]);
-      expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(true);
+      expect(
+        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+      ).toMatchObject({
+        type: "accepted",
+      });
     }),
   );
   const initialExecution = unwrap(
@@ -420,9 +424,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -504,9 +510,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -595,9 +603,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
 
@@ -694,7 +704,7 @@ describe("durable chat turn persistence", () => {
             acceptance: regeneration,
             tx,
           }),
-        ).toBe(true);
+        ).toMatchObject({ type: "accepted" });
       }),
     );
     const regeneratedExecution = unwrap(
@@ -774,9 +784,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const initialExecution = unwrap(
@@ -879,9 +891,11 @@ describe("durable chat turn persistence", () => {
             workspaceId: ids.wsA1,
           },
         ]);
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1018,9 +1032,11 @@ describe("durable chat turn persistence", () => {
             workspaceId: ids.wsA1,
           },
         ]);
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const initialExecution = unwrap(
@@ -1092,9 +1108,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1162,9 +1180,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1215,7 +1235,7 @@ describe("durable chat turn persistence", () => {
         });
         expect(
           await insertChatTurnAcceptanceOnTx({ acceptance: replacement, tx }),
-        ).toBe(true);
+        ).toMatchObject({ type: "accepted" });
       }),
     );
 
@@ -1298,7 +1318,7 @@ describe("durable chat turn persistence", () => {
             acceptance: replacementAcceptance,
             tx,
           }),
-        ).toBe(true);
+        ).toMatchObject({ type: "accepted" });
         return true;
       }),
     ]);
@@ -1347,7 +1367,7 @@ describe("durable chat turn persistence", () => {
         });
         expect(
           await insertChatTurnAcceptanceOnTx({ acceptance: replacement, tx }),
-        ).toBe(true);
+        ).toMatchObject({ type: "accepted" });
       }),
     );
 
@@ -1436,9 +1456,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const initialExecution = unwrap(
@@ -1561,9 +1583,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1618,9 +1642,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1712,9 +1738,11 @@ describe("durable chat turn persistence", () => {
           userId: ids.userA1,
           workspaceId: ids.wsA1,
         });
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(
@@ -1858,9 +1886,11 @@ describe("settling a continuation reports a stored message that breaks the rules
             workspaceId: ids.wsA1,
           },
         ]);
-        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
-          true,
-        );
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+        ).toMatchObject({
+          type: "accepted",
+        });
       }),
     );
     const execution = unwrap(

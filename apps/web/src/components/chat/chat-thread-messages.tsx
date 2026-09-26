@@ -64,6 +64,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
@@ -136,6 +137,10 @@ export const ChatThreadMessages = ({
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
   const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
+  const awaitedAssistantMessageId = useMemo(
+    () => getAwaitedAssistantMessageId(messages),
+    [messages],
+  );
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -264,6 +269,7 @@ export const ChatThreadMessages = ({
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
               assistantTextDensity={assistantTextDensity}
+              isAwaitingUser={awaitedAssistantMessageId === message.id}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -1296,6 +1302,9 @@ type AssistantMessagePartsProps = Pick<
 > & {
   activeOrganizationId: string;
   assistantTextDensity: "compact" | "default";
+  /** Whether the conversation still waits on this message's cards; see
+   *  `getAwaitedAssistantMessageId`. */
+  isAwaitingUser: boolean;
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: ChatUIMessage;
@@ -1468,6 +1477,7 @@ const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
+  isAwaitingUser,
   isGenerating,
   isLatestAssistantMessage,
   message,
@@ -1552,6 +1562,7 @@ const AssistantMessageParts = ({
       return (
         <AskUserCard
           discardsDownstream={!isLatestAssistantMessage}
+          isAwaitingUser={isAwaitingUser}
           key={part.id}
           {...(onAskUserEditAndRerun && {
             onEditAndRerun: (toolCallId, output) => {
@@ -1618,6 +1629,7 @@ const AssistantMessageParts = ({
       ) {
         return (
           <ToolApprovalCard
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}
@@ -1632,6 +1644,7 @@ const AssistantMessageParts = ({
         return (
           <ToolApprovalCard
             activeFileName={activeFileName}
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}
