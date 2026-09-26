@@ -75,8 +75,10 @@ const MIN_UTF8_SIGNATURE_OCCURRENCES = 2;
  * or one long word, cannot hold a synchronous caller for seconds. The most
  * frequent words are examined first; a check that stops at a bound says so
  * (`incomplete`) instead of calling the text clean. Splitting the text into
- * words is not bounded: it is a hand-written scan that reads each code unit
- * at most three times (`scanText`), whatever the text's shape.
+ * words and choosing the most frequent are not bounded, but linear: a
+ * hand-written scan that reads each code unit at most three times
+ * (`scanText`), whatever the text's shape, and two passes over the distinct
+ * words for each choice (`mostFrequent`).
  */
 export const MAX_EXAMINED_WORDS = 20_000;
 /**
@@ -163,7 +165,8 @@ export type EncodingCheckCounters = {
   codeUnits: number;
   /**
    * Code units the split into words, its signature scan and its edge trims
-   * read: linear in the text (at most three times its length) and outside
+   * read, and a unit per distinct word each time the most frequent are
+   * chosen: linear in the text (at most four times its length) and outside
    * the budgets.
    */
   scannedCodeUnits: number;
@@ -562,21 +565,57 @@ const scanText = (text: string, work: EncodingCheckCounters): ScannedText => {
 };
 
 /**
- * The `limit` most frequent words, in the order the text first uses them:
+ * The `limit` most frequent words, the earliest first among equally frequent
+ * ones, in the order the text first uses them (the order `words` is in):
  * the words a bounded check weighs, and the order its samples are read in.
+ * Chosen in two passes over the words, not by sorting them: one counts the
+ * words at each count, which gives the lowest count that makes the cut, and
+ * one keeps the words above it and the earliest at it. Each pass reads a
+ * word once and counts it as one scanned code unit (it holds at least one).
  */
+type MostFrequentOptions = {
+  limit: number;
+  work: EncodingCheckCounters;
+};
+
 const mostFrequent = <T extends { stat: WordStat }>(
   words: readonly T[],
-  limit: number,
-): readonly T[] =>
-  words.length <= limit
-    ? words
-    : words
-        .toSorted(
-          ({ stat: a }, { stat: b }) => b.count - a.count || a.start - b.start,
-        )
-        .slice(0, limit)
-        .toSorted(({ stat: a }, { stat: b }) => a.start - b.start);
+  { limit, work }: MostFrequentOptions,
+): readonly T[] => {
+  if (words.length <= limit) {
+    return words;
+  }
+  const wordsPerCount = new Map<number, number>();
+  for (const { stat } of words) {
+    wordsPerCount.set(stat.count, (wordsPerCount.get(stat.count) ?? 0) + 1);
+  }
+  // Counts add up to at most the text's length, so n occurrences have fewer
+  // than √(2n) distinct counts: sorting them is not sorting the words.
+  let cutoff = 0;
+  let keptAtCutoff = 0;
+  let kept = 0;
+  for (const [count, number] of Array.from(wordsPerCount).toSorted(
+    ([a], [b]) => b - a,
+  )) {
+    if (kept + number >= limit) {
+      cutoff = count;
+      keptAtCutoff = limit - kept;
+      break;
+    }
+    kept += number;
+  }
+  const selected: T[] = [];
+  for (const word of words) {
+    if (word.stat.count > cutoff) {
+      selected.push(word);
+    } else if (word.stat.count === cutoff && keptAtCutoff > 0) {
+      selected.push(word);
+      keptAtCutoff -= 1;
+    }
+  }
+  work.scannedCodeUnits += 2 * words.length;
+  return selected;
+};
 
 /**
  * A word by its letters alone: what makes two misfit words two words of
@@ -1185,7 +1224,10 @@ export const checkTextEncoding = (
   if (weighable.length > MAX_EXAMINED_WORDS) {
     progress.limit ??= "distinct-words";
   }
-  const examined = mostFrequent(weighable, MAX_EXAMINED_WORDS);
+  const examined = mostFrequent(weighable, {
+    limit: MAX_EXAMINED_WORDS,
+    work: progress.work,
+  });
   progress.work.wordsExamined = examined.length;
   const alphabet = alphabetFor(language);
   const utf8 = utf8Signature(examined, { alphabet, progress });
@@ -1212,7 +1254,10 @@ export const checkTextEncoding = (
       allMisfits.length === 0
         ? null
         : bestPair({
-            misfits: mostFrequent(allMisfits, MAX_PAIR_MISFITS),
+            misfits: mostFrequent(allMisfits, {
+              limit: MAX_PAIR_MISFITS,
+              work: progress.work,
+            }),
             natives: classified.filter(
               ({ wordClass }) => wordClass === "native",
             ),

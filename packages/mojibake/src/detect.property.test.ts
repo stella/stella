@@ -651,10 +651,11 @@ describe("bounded work", () => {
               scannedCodeUnits: 0,
             };
             checkTextEncoding(text, "cs", { counters });
-            // Splitting and trimming read each code unit a bounded number of
-            // times; everything past them is within the budgets.
+            // Splitting, trimming and choosing the most frequent words read
+            // each code unit a bounded number of times; everything past them
+            // is within the budgets.
             expect(counters.scannedCodeUnits).toBeLessThanOrEqual(
-              3 * text.length,
+              4 * text.length,
             );
             expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
             expect(counters.pairEvaluations).toBeLessThanOrEqual(
@@ -682,7 +683,13 @@ describe("bounded work", () => {
             codeUnits: 0,
             scannedCodeUnits: 0,
           };
-          checkTextEncoding(mixedText(wordCount), "cs", { counters });
+          const text = mixedText(wordCount);
+          checkTextEncoding(text, "cs", { counters });
+          // Past the distinct-word bound the most frequent are chosen, in
+          // passes over the words rather than by sorting them.
+          expect(counters.scannedCodeUnits).toBeLessThanOrEqual(
+            4 * text.length,
+          );
           expect(counters.wordsExamined).toBeLessThanOrEqual(
             MAX_EXAMINED_WORDS,
           );
@@ -734,6 +741,48 @@ describe("bounded work", () => {
       );
     },
     propertyTestTimeout(20_000),
+  );
+
+  test(
+    "past the distinct-word bound, the most frequent words are the ones weighed",
+    () => {
+      fc.assert(
+        fc.property(
+          fc.integer({
+            min: MAX_EXAMINED_WORDS + 1,
+            max: MAX_EXAMINED_WORDS + 10_000,
+          }),
+          fc.nat(),
+          (wordCount, seed) => {
+            // Native words once each, and "Â§" (C2 A7, "§", which Czech
+            // never writes as "Â") twice, wherever it lands: the first
+            // words the text uses would miss it, the most frequent do not.
+            const at = seed % (wordCount + 1);
+            const tokens = Array.from(
+              { length: wordCount },
+              (_, index) => `př${spelled(index)}`,
+            );
+            tokens.splice(at, 0, "Â§", "Â§");
+            const counters: EncodingCheckCounters = {
+              wordsExamined: 0,
+              pairEvaluations: 0,
+              codeUnits: 0,
+              scannedCodeUnits: 0,
+            };
+            const text = tokens.join(" ");
+            const check = checkTextEncoding(text, "cs", { counters });
+            expect(counters.wordsExamined).toBe(MAX_EXAMINED_WORDS);
+            expect(
+              check.status === "suspect"
+                ? check.findings.map(({ kind }) => kind)
+                : check,
+            ).toEqual(["utf8-read-as-single-byte"]);
+          },
+        ),
+        config(30),
+      );
+    },
+    propertyTestTimeout(15_000),
   );
 
   test(
