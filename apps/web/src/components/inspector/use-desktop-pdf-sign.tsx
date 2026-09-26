@@ -16,6 +16,7 @@ import {
   type PdfSigningTarget,
   watchPdfSigningSession,
 } from "@/lib/pdf-signing";
+import type { PdfSigningStamp } from "@/lib/pdf-signing-stamp.logic";
 import {
   type PdfSigningCloseReason,
   pdfSigningFinalizedQueryKeys,
@@ -31,6 +32,16 @@ const START_ERROR_KEYS = {
   pdf_signing_in_progress: "workspaces.files.pdfSigning.inProgressDescription",
   pdf_signing_not_a_file: "workspaces.files.pdfSigning.noFileDescription",
   pdf_signing_not_a_pdf: "workspaces.files.pdfSigning.notAPdfDescription",
+  pdf_signing_stamp_off_page:
+    "workspaces.files.pdfSigning.stampRejectedDescription",
+  pdf_signing_stamp_page_not_found:
+    "workspaces.files.pdfSigning.stampRejectedDescription",
+  pdf_signing_stamp_time_zone:
+    "workspaces.files.pdfSigning.stampRejectedDescription",
+  pdf_signing_stamp_too_large:
+    "workspaces.files.pdfSigning.stampRejectedDescription",
+  pdf_signing_stamp_too_small:
+    "workspaces.files.pdfSigning.stampRejectedDescription",
   pdf_signing_too_large: "workspaces.files.pdfSigning.tooLargeDescription",
 } as const satisfies Record<PdfSigningStartErrorCode, TranslationKey>;
 
@@ -54,10 +65,11 @@ const CLOSE_REASON_KEYS = {
 } as const satisfies Record<PdfSigningCloseReason, TranslationKey>;
 
 /**
- * Sign one PDF in the desktop app: mint a handoff, hand the deep link to the
- * OS, then watch the signing session from a single toast until it settles.
- * The action stays busy for the whole exchange, because one document field
- * carries one open signing session at a time.
+ * Sign one PDF in the desktop app, optionally with a visible stamp: mint a
+ * handoff, hand the deep link to the OS, then watch the signing session from
+ * a single toast until it settles. The action stays busy for the whole
+ * exchange, because one document field carries one open signing session at a
+ * time.
  */
 export const useDesktopPdfSign = (target: PdfSigningTarget) => {
   const t = useTranslations();
@@ -74,14 +86,14 @@ export const useDesktopPdfSign = (target: PdfSigningTarget) => {
     return t(START_ERROR_KEYS[code]);
   };
 
-  const sign = async () => {
+  const sign = async (stamp?: PdfSigningStamp) => {
     if (isSigning) {
       return;
     }
     setIsSigning(true);
 
     const started = await Result.tryPromise(
-      async () => await createPdfSigningHandoff(target),
+      async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
     if (Result.isError(started)) {
       setIsSigning(false);

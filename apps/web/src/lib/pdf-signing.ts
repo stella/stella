@@ -2,6 +2,7 @@ import { Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { PdfSigningStamp } from "@/lib/pdf-signing-stamp.logic";
 import {
   decidePdfSigningPoll,
   parsePdfSigningDeadline,
@@ -21,16 +22,19 @@ type PdfSigningSessionRef = {
   workspaceId: string;
 };
 
+/** Omitting `stamp` signs without a visible mark on any page. */
 export const createPdfSigningHandoff = async ({
   entityId,
   propertyId,
+  stamp,
   workspaceId,
-}: PdfSigningTarget) => {
+}: PdfSigningTarget & { stamp?: PdfSigningStamp | undefined }) => {
   const response = await api
     .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["pdf-signing-handoffs"].post({
       entityId: toSafeId<"entity">(entityId),
       propertyId: toSafeId<"property">(propertyId),
+      ...(stamp === undefined ? {} : { stamp }),
     });
 
   return unwrapEden(response);

@@ -148,6 +148,11 @@ export const pdfSigningStartErrorCode = (code: string | undefined) => {
     case "pdf_signing_in_progress":
     case "pdf_signing_not_a_file":
     case "pdf_signing_not_a_pdf":
+    case "pdf_signing_stamp_off_page":
+    case "pdf_signing_stamp_page_not_found":
+    case "pdf_signing_stamp_time_zone":
+    case "pdf_signing_stamp_too_large":
+    case "pdf_signing_stamp_too_small":
     case "pdf_signing_too_large": {
       return code;
     }

@@ -149,6 +149,7 @@ export const FileTabHeaderActions = ({
       {pdfSignTarget !== null ? (
         <PdfSignButton
           entityId={tab.entityId}
+          fieldId={tab.id}
           propertyId={pdfSignTarget.propertyId}
           workspaceId={tab.workspaceId}
         />
