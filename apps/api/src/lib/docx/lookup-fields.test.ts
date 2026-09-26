@@ -538,7 +538,7 @@ describe("renderLookupOutput", () => {
         legalForm: company.legalForm,
         address: null,
         registryUrl: company.registryUrl,
-        details: { registry: "orsr", company },
+        details: { registry: "orsr", detail: "standard", company },
       } satisfies BusinessRegistryHit;
       expect(
         renderLookupOutput("v Obchodnom registri [court genitive]", hit),
@@ -1691,7 +1691,7 @@ describe("built-in party clauses", () => {
     legalForm: company.legalForm,
     address: textAddressOf(textAddress),
     registryUrl: company.registryUrl,
-    details: { registry: "orsr", company },
+    details: { registry: "orsr", detail: "standard", company },
   });
 
   test("ORSR renders the Slovak register citation in full", () => {

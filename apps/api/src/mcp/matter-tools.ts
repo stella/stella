@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
   resourceRef,
   RESOURCE_TYPE,
@@ -32,7 +33,10 @@ import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_SLUGS,
+  LOOKUP_DETAIL_DESCRIPTION,
+} from "@/api/lib/business-registries/dispatch";
 import {
   type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -893,6 +897,12 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
         "Canonical identifier (e.g. company number, VAT number) or company name",
       ),
     ),
+    detail: v.optional(
+      v.pipe(
+        v.picklist(BUSINESS_REGISTRY_LOOKUP_DETAILS),
+        v.description(LOOKUP_DETAIL_DESCRIPTION),
+      ),
+    ),
   }),
 );
 
@@ -913,6 +923,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     organizationId: context.organizationId,
     registry: parsed.output.registry,
     q: parsed.output.query,
+    detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
   });
   if (Result.isError(result)) {
@@ -2149,14 +2160,12 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Look up a company in a public business register (ARES, Brreg, " +
-      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
-      "RPO, or VIES). Pass a canonical identifier (company/registration " +
-      "number, VAT number) for an exact match, or a company name to search where the " +
-      "register supports it. Returns registered names, addresses, and " +
-      "registry-specific details. Result IDs belong to the external registry, " +
-      "not stella's contact directory; create a contact with save_contact " +
-      "before using read_contact.",
+      "Look up a company in a public business register. Pass a canonical " +
+      "identifier (company/registration number, VAT number) for an exact " +
+      "match, or a company name to search where the register supports it. " +
+      "Result IDs belong to the external registry, not stella's contact " +
+      "directory; create a contact with save_contact before using " +
+      "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },

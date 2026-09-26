@@ -51,7 +51,8 @@ export const bindRegistryCredential = (
   return {
     ...handler,
     isDeployAvailable: () => handler.isDeployAvailable(credential),
-    lookup: async (input) => await handler.lookup(input, credential),
+    lookup: async (input, options) =>
+      await handler.lookup(input, { ...options, credential }),
     search:
       search === null
         ? null

@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import {
+  BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  type BusinessRegistryLookupDetail,
+} from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -8,12 +13,21 @@ import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/cr
 import {
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
+  LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+// A tuple of literals keeps each option in the route types, where a mapped
+// array widens to `never`; `satisfies` fails when the contract list changes.
+const [standardDetail, fullDetail] =
+  BUSINESS_REGISTRY_LOOKUP_DETAILS satisfies readonly [
+    BusinessRegistryLookupDetail,
+    BusinessRegistryLookupDetail,
+  ];
 
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
@@ -25,6 +39,11 @@ const querySchema = t.Object({
     description:
       "Canonical identifier (e.g. company number, VAT number) or company name",
   }),
+  detail: t.Optional(
+    t.Union([t.Literal(standardDetail), t.Literal(fullDetail)], {
+      description: LOOKUP_DETAIL_DESCRIPTION,
+    }),
+  ),
 });
 
 export type LookupBusinessRegistryProps = {
@@ -32,6 +51,7 @@ export type LookupBusinessRegistryProps = {
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
   q: string;
+  detail?: BusinessRegistryLookupDetail | undefined;
   executeLookup?: typeof executeRegistryLookup | undefined;
 };
 
@@ -41,6 +61,7 @@ export const lookupBusinessRegistryShared = async ({
   organizationId,
   registry,
   q,
+  detail,
   executeLookup = executeRegistryLookup,
 }: LookupBusinessRegistryProps): Promise<
   Result<RegistryLookupResponse, HandlerError>
@@ -73,7 +94,7 @@ export const lookupBusinessRegistryShared = async ({
     );
   }
 
-  const result = await executeLookup({ handler, query: q });
+  const result = await executeLookup({ handler, query: q, detail });
   if (result instanceof HandlerError) {
     return Result.err(result);
   }
@@ -83,12 +104,9 @@ export const lookupBusinessRegistryShared = async ({
 const businessRegistriesLookup = createSafeRootHandler(
   {
     description:
-      "Look up a company in a public business register (ARES, Brreg, " +
-      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
-      "RPO, or VIES). Pass a canonical identifier (company/registration " +
-      "number, VAT number) for an exact match, or a company name to search where the " +
-      "register supports it. Returns registered names, addresses, and " +
-      "registry-specific details.",
+      "Look up a company in a public business register. Pass a canonical " +
+      "identifier (company/registration number, VAT number) for an exact " +
+      "match, or a company name to search where the register supports it.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "lookup_business_registry" },
     access: "read",
@@ -100,6 +118,7 @@ const businessRegistriesLookup = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       registry: query.registry,
       q: query.q,
+      detail: query.detail,
     });
     if (Result.isError(result)) {
       return yield* Result.err(result.error);

@@ -2714,7 +2714,7 @@
       "scope": "read"
     },
     "name": "lookup_business_registry",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, RPO, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "inputSchema": {
       "type": "object",
       "required": ["registry", "query"],
@@ -2743,6 +2743,11 @@
           "minLength": 1,
           "maxLength": 256,
           "description": "Canonical identifier (e.g. company number, VAT number) or company name"
+        },
+        "detail": {
+          "enum": ["standard", "full"],
+          "type": "string",
+          "description": "full adds history, filings, and linked persons where the register keeps them (ORSR, RPO). Default: standard."
         }
       }
     },

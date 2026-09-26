@@ -1,12 +1,16 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
-import type { BusinessRegistrySlug } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  type BusinessRegistrySlug,
+} from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   executeRegistryLookup,
   type RegistryHandler,
+  LOOKUP_DETAIL_DESCRIPTION,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 
@@ -115,6 +119,12 @@ export const createBusinessRegistryTools = ({
         v.description(registryDescription(enabledHandlers)),
       ),
     ),
+    detail: v.optional(
+      v.pipe(
+        v.picklist(BUSINESS_REGISTRY_LOOKUP_DETAILS),
+        v.description(LOOKUP_DETAIL_DESCRIPTION),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
@@ -131,7 +141,7 @@ export const createBusinessRegistryTools = ({
       name: BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
       description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
       inputSchema: toTanStackToolSchema(inputSchema),
-    }).server(async ({ jurisdiction, limit, query, registry }) => {
+    }).server(async ({ detail, jurisdiction, limit, query, registry }) => {
       const handler = resolveHandler({
         enabledHandlers,
         jurisdiction,
@@ -148,6 +158,7 @@ export const createBusinessRegistryTools = ({
       const result = await executeRegistryLookup({
         handler,
         query,
+        detail,
         ...(limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for

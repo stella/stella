@@ -125,7 +125,15 @@ export type OrsrRawStatutoryBodyType = OrsrRawValueTemporal;
 
 export type OrsrRawAuthorization = OrsrRawValueTemporal;
 
+// A legal-status event (merger, dissolution, liquidation) recorded on the
+// full extract.
+type OrsrRawLegalStatusEvent = OrsrRawTemporal & {
+  type?: string | null;
+  text?: string | null;
+};
+
 export type OrsrRawCorporateBody = {
+  legalStatusEvents?: OrsrRawLegalStatusEvent[];
   corporateBodyFullName?: OrsrRawValueTemporal[];
   legalForm?: OrsrRawLegalForm[];
   establishment?: string;
@@ -179,6 +187,35 @@ export type OrsrRawSearchHit = {
 export type OrsrRawSearchResponse = {
   filteredCount?: number;
   data?: OrsrRawSearchHit[];
+};
+
+/** One filed document (`/legal-person/documents`, the collection of deeds). */
+export type OrsrRawDocument = {
+  serialNumber?: number;
+  name?: string;
+  type?: number;
+  deliveryDate?: string;
+  pageCount?: number;
+  isElectronic?: boolean;
+};
+
+/**
+ * One row of `/legal-person/related`. The register's own portal reads these
+ * fields from each row; every entity probed while building the adapter
+ * returned an empty list.
+ */
+export type OrsrRawRelatedHit = {
+  corporateBodyFullName?: string;
+  registrationNumber?: string;
+  physicalAddressLine1?: string;
+  physicalAddressLine2?: string;
+  relatedPersonName?: string | null;
+  fileReference?: OrsrRawFileReference;
+};
+
+export type OrsrRawRelatedResponse = {
+  filteredCount?: number;
+  data?: OrsrRawRelatedHit[];
 };
 
 export type OrsrRawErrorResponse = {
@@ -267,4 +304,75 @@ export type OrsrSearchResult = {
   ico: string;
   name: string;
   address: string | null;
+};
+
+/** The trade-register file an entity is filed under, e.g. `Sro 3586/B`. */
+export type OrsrFileReference = Pick<
+  OrsrCourtFile,
+  "court" | "section" | "insertNumber"
+>;
+
+type OrsrHistoryDates = {
+  validFrom: string | null;
+  validTo: string | null;
+};
+
+/**
+ * A superseded entry of the full extract: a record the register closed with
+ * an end date (a former name, seat, officer, shareholder, capital, ...).
+ */
+export type OrsrHistoryEntry =
+  | (OrsrHistoryDates & {
+      kind:
+        | "name"
+        | "legal-form"
+        | "address"
+        | "share-capital"
+        | "acting-clause"
+        | "legal-status";
+      value: string;
+    })
+  | (OrsrHistoryDates & {
+      kind: "statutory-body-member" | "stakeholder";
+      name: string;
+      role: string | null;
+    });
+
+type OrsrDocumentMedium = "electronic" | "paper";
+
+/** A document filed in the collection of deeds (zbierka listín). */
+export type OrsrDocument = {
+  serialNumber: number;
+  name: string;
+  /** Register's document type code, as the portal lists it (`typ`). */
+  typeCode: number | null;
+  deliveredOn: string | null;
+  pageCount: number | null;
+  medium: OrsrDocumentMedium;
+};
+
+/** A legal person the register links to this entity. */
+export type OrsrRelatedLegalPerson = {
+  name: string;
+  ico: string | null;
+  address: string | null;
+  /** The person through whom the entities are connected. */
+  connectedThrough: string | null;
+  fileReference: OrsrFileReference | null;
+};
+
+/**
+ * A supplementary part of the full record, fetched on its own request. A
+ * failed part does not fail the lookup; it states why it is missing.
+ */
+export type OrsrRecordPart<Value> =
+  | { status: "loaded"; value: Value }
+  | { status: "unavailable"; reason: string };
+
+/** The current extract plus the register's history, filings, and links. */
+export type OrsrFullRecord = {
+  company: OrsrCompany;
+  history: OrsrRecordPart<OrsrHistoryEntry[]>;
+  documents: OrsrRecordPart<OrsrDocument[]>;
+  related: OrsrRecordPart<OrsrRelatedLegalPerson[]>;
 };
