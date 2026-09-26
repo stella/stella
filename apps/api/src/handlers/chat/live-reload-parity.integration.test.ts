@@ -1328,10 +1328,7 @@ const innermost = (
 type OpenGap = {
   /** The steps the page-action property leaves out while this is open. */
   condition: string;
-  excludes: (
-    command: fc.AsyncCommand<Model, Real>,
-    model: Readonly<Model>,
-  ) => boolean;
+  excludes: (command: fc.AsyncCommand<Model, Real>) => boolean;
   /** Fails while this is open. */
   reproduce: () => Promise<void>;
 };
@@ -1346,11 +1343,6 @@ const isSupersede = (command: fc.AsyncCommand<Model, Real>) =>
  * OPEN_GAPS_SIZE, which only goes down.
  */
 const OPEN_GAPS = {
-  S1: {
-    condition: "SupersedeCards",
-    excludes: isSupersede,
-    reproduce: sendPastAnApproval,
-  },
   S2: {
     condition: "SupersedeCards",
     excludes: isSupersede,
@@ -1376,16 +1368,6 @@ const OPEN_GAPS = {
       await stopWhileStreaming("before-tool-end");
     },
   },
-  F3: {
-    condition:
-      "ForkFrom a turn that waits on an ask-user card or a client call",
-    excludes: (command, model) =>
-      command instanceof ForkFrom &&
-      (model.waiting.get(command.targetTurn(model)) ?? []).some(
-        (kind) => kind === "ask-user" || kind === "client",
-      ),
-    reproduce: forkWhileAQuestionWaits,
-  },
   F5: {
     condition: "StopRunningCall",
     excludes: (command) => command instanceof StopRunningCall,
@@ -1394,7 +1376,7 @@ const OPEN_GAPS = {
 } as const satisfies Record<string, OpenGap>;
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const OPEN_GAPS_SIZE = 6;
+const OPEN_GAPS_SIZE = 4;
 
 /** A step the page-action property takes unless an open finding excludes
  *  it. */
@@ -1406,7 +1388,7 @@ class OutsideOpenGaps implements fc.AsyncCommand<Model, Real> {
   check = (model: Readonly<Model>) =>
     this.command.check(model) &&
     !Object.values(OPEN_GAPS).some(({ excludes }) =>
-      excludes(innermost(this.command), model),
+      excludes(innermost(this.command)),
     );
   run = async (model: Model, real: Real) => {
     await this.command.run(model, real);
@@ -1954,7 +1936,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "sends a message typed while an approval waits",
     sendPastAnApproval,
     propertyTestTimeout(30_000),
@@ -1986,7 +1968,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "continues a fork taken while a question waits",
     forkWhileAQuestionWaits,
     propertyTestTimeout(30_000),
