@@ -323,7 +323,7 @@ export const installProviderWireReplay = () => {
         "not a provider host; the replay never reaches the network",
       );
     }
-    if (signal?.aborted === true) {
+    if (signal.aborted) {
       throw abortError();
     }
     if (

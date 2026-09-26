@@ -389,12 +389,11 @@ const main = async (): Promise<number> => {
   ).filter((name): name is ProviderWireProvider =>
     (PROVIDER_WIRE_PROVIDERS as readonly string[]).includes(name),
   );
-  const scenarios = (
-    listArgument("--scenario") ?? Object.keys(PROVIDER_WIRE_SCENARIOS)
-  ).filter(
-    (name): name is ProviderWireScenario =>
-      name in PROVIDER_WIRE_SCENARIOS &&
-      PROVIDER_WIRE_SCENARIOS[name as ProviderWireScenario].recordable,
+  const recordable: readonly string[] = Object.entries(PROVIDER_WIRE_SCENARIOS)
+    .filter(([, scenario]) => scenario.recordable)
+    .map(([name]) => name);
+  const scenarios = (listArgument("--scenario") ?? recordable).filter(
+    (name): name is ProviderWireScenario => recordable.includes(name),
   );
   let failures = 0;
   for (const provider of providers) {

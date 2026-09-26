@@ -268,8 +268,11 @@ export const runCancelledWireScenario = async (options: {
     prepareWireRequest(options);
   const abortController = new AbortController();
   const chunks: StreamChunk[] = [];
-  let thrown: unknown;
-  let cancelledAt: number | null = null;
+  // Written from inside the run, so held in an object the run shares.
+  const state: { cancelledAt: number | null; thrown: unknown } = {
+    cancelledAt: null,
+    thrown: undefined,
+  };
   const run = (async () => {
     try {
       for await (const chunk of streamChatChunks({
@@ -284,15 +287,15 @@ export const runCancelledWireScenario = async (options: {
       })) {
         chunks.push(chunk);
         if (
-          cancelledAt === null &&
+          state.cancelledAt === null &&
           chunk.type === EventType.TEXT_MESSAGE_CONTENT
         ) {
-          cancelledAt = performance.now();
+          state.cancelledAt = performance.now();
           abortController.abort();
         }
       }
     } catch (error) {
-      thrown = error;
+      state.thrown = error;
     }
     return "settled" as const;
   })();
@@ -311,13 +314,13 @@ export const runCancelledWireScenario = async (options: {
   });
   const ending = await Promise.race([run, abandoned]);
   let cancelSettledMs: number | null = null;
-  if (cancelledAt !== null) {
+  if (state.cancelledAt !== null) {
     cancelSettledMs =
       ending === "abandoned"
         ? Number.POSITIVE_INFINITY
-        : performance.now() - cancelledAt;
+        : performance.now() - state.cancelledAt;
   }
-  return { cancelSettledMs, chunks: [...chunks], thrown };
+  return { cancelSettledMs, chunks: [...chunks], thrown: state.thrown };
 };
 
 /** How long a cancelled run is waited for before it is abandoned. */
@@ -421,8 +424,8 @@ const byInput = (
   left: { input: unknown },
   right: { input: unknown },
 ): number => {
-  const leftKey = String(JSON.stringify(left.input));
-  const rightKey = String(JSON.stringify(right.input));
+  const leftKey = JSON.stringify(left.input);
+  const rightKey = JSON.stringify(right.input);
   if (leftKey === rightKey) {
     return 0;
   }
@@ -467,7 +470,7 @@ export const findWireContractViolations = ({
     ...(last !== undefined && TERMINAL_TYPES.has(last.type)
       ? []
       : [{ lastEvent: last?.type ?? null }]),
-    ...(thrown === undefined ? [] : [{ thrown: String(thrown) }]),
+    ...(thrown === undefined ? [] : [{ thrown: Bun.inspect(thrown) }]),
     ...(run.overdue === true
       ? [{ problem: "no terminal event before the deadline" }]
       : []),
@@ -583,7 +586,7 @@ export const findWireContractViolations = ({
       text: textOf(chunks),
     });
   } else {
-    if ((failed.message ?? "").trim() === "") {
+    if (failed.message.trim() === "") {
       errors.push({ problem: "the run error carries no message" });
     }
     const kind = classifyRunErrorChunk(failed);
