@@ -37,14 +37,20 @@ const DIGITAL_SIGNATURE: u8 = 0x80;
 const NON_REPUDIATION: u8 = 0x40;
 
 /// Extended key usages that mark a certificate as made for something other
-/// than signing documents: servers, code, VPN and IPsec endpoints, time
-/// stamping, OCSP responders. A certificate whose every usage is one of
-/// these is left out of the picker; one that also allows anything else
-/// (e-mail protection, document signing, client authentication, any usage)
-/// stays.
+/// than signing documents: servers, logging in (client authentication, smart
+/// card logon), code, VPN and IPsec endpoints, time stamping, OCSP
+/// responders. A certificate whose every usage is one of these is left out
+/// of the picker; one that also allows anything else (e-mail protection,
+/// document signing, any usage) stays, as does one with no extended key
+/// usage at all.
 const NON_DOCUMENT_USAGES: &[&[u8]] = &[
   // id-kp-serverAuth (1.3.6.1.5.5.7.3.1)
   &[0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01],
+  // id-kp-clientAuth (1.3.6.1.5.5.7.3.2): an identity card's login key sits
+  // beside its signing key, and signing with it is not a signature.
+  &[0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02],
+  // Microsoft smart card logon (1.3.6.1.4.1.311.20.2.2)
+  &[0x2B, 0x06, 0x01, 0x04, 0x01, 0x82, 0x37, 0x14, 0x02, 0x02],
   // id-kp-codeSigning (1.3.6.1.5.5.7.3.3)
   &[0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x03],
   // id-kp-ipsecEndSystem (1.3.6.1.5.5.7.3.5)
@@ -312,6 +318,11 @@ mod tests {
     include_bytes!("../fixtures/encipherment-certificate.der");
   const VPN: &[u8] = include_bytes!("../fixtures/vpn-certificate.der");
   const CLIENT_AUTH: &[u8] = include_bytes!("../fixtures/client-auth-certificate.der");
+  const CLIENT_AUTH_AND_EMAIL: &[u8] =
+    include_bytes!("../fixtures/client-auth-email-certificate.der");
+  const ANY_USAGE: &[u8] = include_bytes!("../fixtures/any-usage-certificate.der");
+  const DOCUMENT_SIGNING: &[u8] =
+    include_bytes!("../fixtures/document-signing-certificate.der");
   /// Self-signed, no extensions, valid for one day from 2026-09-21 18:19:52.
   const NO_EXTENSIONS: &[u8] = include_bytes!("../fixtures/rsa-certificate.der");
 
@@ -347,7 +358,7 @@ mod tests {
 
   #[test]
   fn leaves_out_certificates_made_for_something_else() {
-    for certificate in [CODE_SIGNING, ENCIPHERMENT, VPN] {
+    for certificate in [CODE_SIGNING, ENCIPHERMENT, VPN, CLIENT_AUTH] {
       let facts = certificate_facts(certificate).unwrap();
       assert!(!can_sign_documents(&facts, NOW), "{facts:?}");
     }
@@ -355,11 +366,12 @@ mod tests {
 
   #[test]
   fn keeps_certificates_whose_usages_do_not_rule_out_documents() {
-    // Client authentication often rides along on personal certificates.
-    assert!(can_sign_documents(
-      &certificate_facts(CLIENT_AUTH).unwrap(),
-      NOW
-    ));
+    // Client authentication riding along with e-mail protection, the usual
+    // shape of a personal certificate; any usage; document signing itself.
+    for certificate in [CLIENT_AUTH_AND_EMAIL, ANY_USAGE, DOCUMENT_SIGNING] {
+      let facts = certificate_facts(certificate).unwrap();
+      assert!(can_sign_documents(&facts, NOW), "{facts:?}");
+    }
     // No KeyUsage and no extKeyUsage: unconstrained.
     let unconstrained = certificate_facts(NO_EXTENSIONS).unwrap();
     assert!(can_sign_documents(&unconstrained, unconstrained.not_before));
