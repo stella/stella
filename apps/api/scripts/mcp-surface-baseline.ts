@@ -6,8 +6,11 @@
 // annotations, the connect-time instructions), the UTF-8 size of the served
 // `tools/list` array, and the largest description, input schema and output
 // schema. Every
-// audience in `MCP_MODES` is read from the canonical registry and serialized
-// with its own mode, exactly as `tools/list` serves it.
+// audience in `MCP_MODES` is read from the canonical static registry and
+// serialized with its own mode, as `tools/list` serves it. The measurement is
+// the unfiltered first-party list, an upper bound for any session's
+// first-party tools; the skill and connector tools the gateway adds per
+// organization are not part of it.
 //
 // A change that moves a row past its tolerance rewrites the baseline, so
 // review sees the number diff and the pull request argues for it. The gate is
