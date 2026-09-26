@@ -335,10 +335,11 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // validators already enforced (`minLength`, the cursor's `maxLength`,
 // `access`/`limit` defaults) plus Valibot's empty `required`.
 // check_counterparty adds its subject union and the four-outcome output:
-// measured 176_547 default and 79_598 anonymized.
+// measured 176_547 default and 79_598 anonymized. The VAT reliability check
+// adds the tax-ID subject and its payer record: 177_871 and 80_922.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 176_700,
-  anonymized: 79_750,
+  default: 178_000,
+  anonymized: 81_050,
   law: 28_250,
 };
 
@@ -420,10 +421,11 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // created mark's stored passages, and two receipts: measured 55_085 default and
 // 33_799 anonymized, where the list is the only one of them.
 // check_counterparty's outcome union with its typed findings: measured 57_133
-// default and 35_847 anonymized.
+// default and 35_847 anonymized; 57_890 and 36_604 with the VAT payer record
+// and the not-registered outcome.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 57_200,
-  anonymized: 35_900,
+  default: 57_950,
+  anonymized: 36_650,
   law: 10_050,
 };
 

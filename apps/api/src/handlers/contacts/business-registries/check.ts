@@ -19,7 +19,8 @@ const querySchema = t.Object({
   subjectType: t.UnionEnum(ENTITY_CHECK_SUBJECT_TYPES, {
     description:
       "'company-id' screens a registered business by its national ID; " +
-      "'person' screens a natural person by name and birth date",
+      "'tax-id' a taxpayer by its tax ID; 'person' a natural person by " +
+      "name and birth date",
   }),
   companyId: t.Optional(
     t.String({
@@ -27,6 +28,9 @@ const querySchema = t.Object({
       maxLength: 32,
       description: "National business ID",
     }),
+  ),
+  taxId: t.Optional(
+    t.String({ minLength: 1, maxLength: 32, description: "Tax ID" }),
   ),
   firstName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
   lastName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
@@ -58,6 +62,14 @@ const subjectFromQuery = (
             value: query.companyId,
           } satisfies EntityCheckSubject);
     }
+    case "tax-id": {
+      return query.taxId === undefined
+        ? missingSubjectFields("taxId")
+        : Result.ok({
+            type: "tax-id",
+            value: query.taxId,
+          } satisfies EntityCheckSubject);
+    }
     case "person": {
       const { firstName, lastName, birthDate } = query;
       return firstName === undefined ||
@@ -82,8 +94,9 @@ const businessRegistriesCheck = createSafeRootHandler(
   {
     description:
       "Screen a company or person against an official source, such as the " +
-      "Czech insolvency register. Returns one outcome: clear (the source " +
-      "answered and holds nothing), found (with the records it holds), " +
+      "Czech insolvency or VAT register. Returns one outcome: clear (the " +
+      "source answered and holds nothing adverse), found (with the adverse " +
+      "records), not-registered (the source holds no record of the subject), " +
       "unavailable (the source could not answer; never read this as clear), " +
       "or not-covered (the source cannot answer for this subject type).",
     permissions: { workspace: ["read"] },

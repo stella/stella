@@ -57,7 +57,7 @@ const requestFailure = (
       });
 };
 
-export type SoapRequestOptions = {
+type SoapRequestOptions = {
   url: string;
   soapAction: string;
   /** Namespace declarations for the envelope, keyed by prefix. */

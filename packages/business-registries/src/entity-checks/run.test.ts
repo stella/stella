@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import type { EntityCheckSubject } from "./result.js";
 import { runEntityCheck } from "./run.js";
-import type { RunEntityCheckOptions } from "./run.js";
 
 // Fixtures are live ISIR_CUZK_WS responses captured on 2026-09-26:
 //   isir-company-found*.xml   IČO 26863154, a company in reorganisation
@@ -11,13 +10,17 @@ import type { RunEntityCheckOptions } from "./run.js";
 //   isir-invalid-combination  a first name without a surname (WS1)
 //   isir-soap-fault.xml       an out-of-range relevance cap (HTTP 500)
 //   isir-outage-page.html     the register's "system unavailable" page
+// and live ADIS rozhraniCRPDPH responses captured the same day:
+//   adis-vat-payer-clear.xml   DIČ CZ45274649, a reliable VAT payer
+//   adis-unreliable-payer.xml  DIČ CZ00121100, a published unreliable payer
+//   adis-not-found.xml         a DIČ the VAT register does not hold
 
 const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 const fixture = async (name: string): Promise<string> =>
   await Bun.file(new URL(name, FIXTURE_DIR)).text();
 
 type Reply = { body: string; status?: number; contentType?: string };
-type RecordedRequest = { url: string; body: string };
+type RecordedRequest = { url: string; body: string; soapAction: string | null };
 
 let restoreFetch: () => void = () => {
   // replaced by stubFetch
@@ -37,6 +40,7 @@ const stubFetch = (replies: readonly (Reply | Error)[]): RecordedRequest[] => {
       requests.push({
         url,
         body: typeof init?.body === "string" ? init.body : "",
+        soapAction: new Headers(init?.headers).get("SOAPAction"),
       });
       const reply = replies.at(requests.length - 1);
       if (reply === undefined) {
@@ -76,7 +80,7 @@ const errorCodeBody = (code: string): string =>
   soapBody(`<stav><kodChyby>${code}</kodChyby><textChyby>x</textChyby></stav>`);
 
 /** Run a check that must produce an outcome rather than an error. */
-const check = async (options: RunEntityCheckOptions) =>
+const check = async (options: Parameters<typeof runEntityCheck>[0]) =>
   (await runEntityCheck(options)).unwrap();
 
 describe("Czech insolvency check", () => {
@@ -344,6 +348,19 @@ describe("Czech insolvency check never reports clear without an explicit empty a
 });
 
 describe("Czech insolvency check input", () => {
+  test("answers not-covered for a tax ID without querying", async () => {
+    const requests = stubFetch([]);
+    const result = await check({
+      kind: "cz-insolvency",
+      subject: { type: "tax-id", value: "CZ45274649" },
+    });
+    expect(result).toMatchObject({
+      status: "not-covered",
+      supportedSubjectTypes: ["company-id", "person"],
+    });
+    expect(requests).toHaveLength(0);
+  });
+
   test("rejects a malformed subject before any request", async () => {
     const requests = stubFetch([]);
     const invalid: readonly EntityCheckSubject[] = [
@@ -392,5 +409,248 @@ describe("Czech insolvency check input", () => {
     expect(result.isErr() && result.error._tag).toBe(
       "EntityCheckCancelledError",
     );
+  });
+});
+
+const adisBody = (inner: string): string =>
+  `<?xml version="1.0" encoding="utf-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body><StatusNespolehlivySubjektRozsirenyResponse xmlns="http://adis.mfcr.cz/rozhraniCRPDPH/">${inner}</StatusNespolehlivySubjektRozsirenyResponse></soapenv:Body></soapenv:Envelope>`;
+
+const ADIS_OK =
+  '<status odpovedGenerovana="2026-09-26" statusCode="0" statusText="OK"/>';
+
+describe("Czech VAT reliability check", () => {
+  test("reads a reliable payer as clear, with its published accounts", async () => {
+    const requests = stubFetch([
+      { body: await fixture("adis-vat-payer-clear.xml") },
+    ]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: { type: "tax-id", value: "CZ 452 74 649" },
+    });
+
+    expect(result.status).toBe("clear");
+    if (result.status !== "clear" || result.kind !== "cz-vat-reliability") {
+      return;
+    }
+    expect(result.subject).toEqual({
+      type: "tax-id",
+      value: "CZ45274649",
+      derivedFrom: null,
+    });
+    expect(result.record).toMatchObject({
+      subjectType: "vat-payer",
+      name: "ČEZ, A. S.",
+      address:
+        "Duhová 1444/2, MICHLE (PRAHA 4), 14000 PRAHA 4, Česká republika",
+      taxOfficeCode: "13",
+    });
+    expect(result.record.publishedAccounts).toHaveLength(17);
+    expect(result.record.publishedAccounts).toContainEqual({
+      account: "27-5868650297/0100",
+      publishedOn: "2013-04-01",
+      withdrawnOn: null,
+    });
+    expect(result.record.publishedAccounts).toContainEqual({
+      account: "CZ6426000000002001268200",
+      publishedOn: "2013-04-01",
+      withdrawnOn: null,
+    });
+    expect(requests[0]?.body).toContain("<roz:dic>45274649</roz:dic>");
+    expect(requests[0]?.soapAction).toBe(
+      '"http://adis.mfcr.cz/rozhraniCRPDPH/getStatusNespolehlivySubjektRozsirenyV2"',
+    );
+  });
+
+  test("reports a published unreliable payer as found, marking a DIČ derived from the IČO", async () => {
+    stubFetch([{ body: await fixture("adis-unreliable-payer.xml") }]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: { type: "company-id", value: "00121100" },
+    });
+    expect(result).toMatchObject({
+      status: "found",
+      subject: {
+        type: "tax-id",
+        value: "CZ00121100",
+        derivedFrom: { type: "company-id", value: "00121100" },
+      },
+      findings: [{ type: "unreliable-vat-payer", publishedOn: "2017-03-16" }],
+      record: { subjectType: "vat-payer", name: "LIDRU, A.S." },
+    });
+  });
+
+  test("reports a DIČ the register does not hold as not-registered, not clear", async () => {
+    // The captured answer was for another DIČ; the register echoes the DIČ
+    // it was asked about, so the fixture is re-addressed to this one.
+    const body = (await fixture("adis-not-found.xml")).replace(
+      'dic="9999999999"',
+      'dic="12345679"',
+    );
+    stubFetch([{ body }]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: { type: "company-id", value: "12345679" },
+    });
+    expect(result).toMatchObject({
+      status: "not-registered",
+      subject: { value: "CZ12345679", derivedFrom: { value: "12345679" } },
+    });
+  });
+
+  test("reports an unreliable person as found", async () => {
+    stubFetch([
+      {
+        body: adisBody(
+          `${ADIS_OK}<statusSubjektu typSubjektu="NESPOLEHLIVA_OSOBA" dic="45274649" nespolehlivyPlatce="NENALEZEN" datumZverejneniNespolehlivosti="2024-01-02"><nazevSubjektu>X</nazevSubjektu></statusSubjektu>`,
+        ),
+      },
+    ]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: { type: "tax-id", value: "CZ45274649" },
+    });
+    expect(result).toMatchObject({
+      status: "found",
+      findings: [{ type: "unreliable-person", publishedOn: "2024-01-02" }],
+    });
+  });
+
+  test("answers not-covered for a person without querying", async () => {
+    const requests = stubFetch([]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: {
+        type: "person",
+        firstName: "Jan",
+        lastName: "Novák",
+        birthDate: "1980-01-01",
+      },
+    });
+    expect(result.status).toBe("not-covered");
+    expect(requests).toHaveLength(0);
+  });
+});
+
+describe("Czech VAT reliability check never reports clear without an explicit answer", () => {
+  const PAYER = { type: "tax-id", value: "CZ45274649" } as const;
+  const entry = (attributes: string) =>
+    adisBody(`${ADIS_OK}<statusSubjektu dic="45274649" ${attributes}/>`);
+  const failures: readonly {
+    name: string;
+    reply: () => Promise<Reply | Error>;
+    reason: string;
+  }[] = [
+    ...["2", "3", "9"].map((code) => ({
+      name: `status code ${code}`,
+      reply: async () => ({
+        body: adisBody(
+          `<status odpovedGenerovana="2026-09-26" statusCode="${code}" statusText="x"/>`,
+        ),
+      }),
+      reason: "source-error",
+    })),
+    {
+      name: "the outage page",
+      reply: async () => ({
+        body: await fixture("isir-outage-page.html"),
+        contentType: "text/html",
+      }),
+      reason: "outage-page",
+    },
+    {
+      name: "a SOAP fault",
+      reply: async () => ({
+        body: '<?xml version="1.0"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body><soapenv:Fault><faultcode>soapenv:Server</faultcode><faultstring>x</faultstring></soapenv:Fault></soapenv:Body></soapenv:Envelope>',
+        status: 500,
+      }),
+      reason: "soap-fault",
+    },
+    {
+      name: "an answer for another DIČ",
+      reply: async () => ({
+        body: (await fixture("adis-vat-payer-clear.xml")).replace(
+          'dic="45274649"',
+          'dic="45274650"',
+        ),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "no subject status",
+      reply: async () => ({ body: adisBody(ADIS_OK) }),
+      reason: "malformed-response",
+    },
+    {
+      name: "no status element",
+      reply: async () => ({
+        body: adisBody(
+          '<statusSubjektu dic="45274649" typSubjektu="PLATCE_DPH" nespolehlivyPlatce="NE"/>',
+        ),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "an unknown subject type",
+      reply: async () => ({
+        body: entry('typSubjektu="JINY" nespolehlivyPlatce="NE"'),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "an unknown reliability flag",
+      reply: async () => ({
+        body: entry('typSubjektu="PLATCE_DPH" nespolehlivyPlatce="MOZNA"'),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "a registered payer flagged not found",
+      reply: async () => ({
+        body: entry('typSubjektu="PLATCE_DPH" nespolehlivyPlatce="NENALEZEN"'),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "an unknown subject flagged unreliable",
+      reply: async () => ({
+        body: entry('typSubjektu="NENALEZEN" nespolehlivyPlatce="ANO"'),
+      }),
+      reason: "malformed-response",
+    },
+    {
+      name: "a timeout",
+      reply: async () =>
+        new DOMException("The operation timed out.", "TimeoutError"),
+      reason: "timeout",
+    },
+  ];
+
+  for (const failure of failures) {
+    test(`${failure.name} is unavailable`, async () => {
+      stubFetch([await failure.reply()]);
+      const result = await check({
+        kind: "cz-vat-reliability",
+        subject: PAYER,
+      });
+      expect(result.status).toBe("unavailable");
+      expect(result.status === "unavailable" && result.reason).toBe(
+        failure.reason,
+      );
+    });
+  }
+
+  test("no truncation of a clear answer reads as clear", async () => {
+    const complete = await fixture("adis-vat-payer-clear.xml");
+    for (let length = 0; length < complete.length; length += 1) {
+      stubFetch([{ body: complete.slice(0, length) }]);
+      const result = await check({
+        kind: "cz-vat-reliability",
+        subject: PAYER,
+      });
+      restoreFetch();
+      if (result.status === "clear") {
+        throw new Error(`truncated to ${length} characters read as clear`);
+      }
+    }
   });
 });

@@ -26,6 +26,7 @@ import {
 } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_SOURCE,
+  CZ_VAT_RELIABILITY_SOURCE,
   EntityCheckInputError,
 } from "@stll/business-registries/entity-checks";
 import type {
@@ -1376,6 +1377,42 @@ describe("OpenAI-compatible MCP tools", () => {
         subject: company,
         checkedAt: "2026-09-26T14:00:00Z",
         sourceDataAsOf: null,
+        record: null,
+      },
+      {
+        status: "found",
+        kind: "cz-vat-reliability",
+        source: CZ_VAT_RELIABILITY_SOURCE,
+        subject: {
+          type: "tax-id",
+          value: "CZ00121100",
+          derivedFrom: { type: "company-id", value: "00121100" },
+        },
+        checkedAt: "2026-09-26T14:00:00Z",
+        sourceDataAsOf: null,
+        totalMatches: 1,
+        findings: [{ type: "unreliable-vat-payer", publishedOn: "2017-03-16" }],
+        record: {
+          subjectType: "vat-payer",
+          name: "LIDRU, A.S.",
+          address: "153, LIBOTENICE, 41201 LIBOTENICE, Česká republika",
+          taxOfficeCode: "456",
+          publishedAccounts: [
+            {
+              account: "258795779/0600",
+              publishedOn: "2023-07-26",
+              withdrawnOn: null,
+            },
+          ],
+        },
+      },
+      {
+        status: "not-registered",
+        kind: "cz-vat-reliability",
+        source: CZ_VAT_RELIABILITY_SOURCE,
+        subject: { type: "tax-id", value: "CZ12345679", derivedFrom: null },
+        checkedAt: "2026-09-26T14:00:00Z",
+        sourceDataAsOf: null,
       },
       {
         status: "found",
@@ -1404,6 +1441,7 @@ describe("OpenAI-compatible MCP tools", () => {
             url: "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
           },
         ],
+        record: null,
       },
       {
         status: "unavailable",

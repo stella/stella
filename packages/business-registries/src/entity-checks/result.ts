@@ -6,20 +6,27 @@ import { Temporal } from "temporal-polyfill/full";
 // ("is this company in insolvency proceedings?"), not company lookups.
 // Every check resolves to exactly one outcome:
 //
-//   clear         the source positively answered and holds nothing adverse
-//   found         the source returned adverse records (typed findings)
-//   unavailable   the source could not answer (transport error, timeout,
-//                 outage page, SOAP fault, error code, unparseable body)
-//   not-covered   the source cannot answer for this kind of subject
+//   clear           the source positively answered and holds nothing adverse
+//   found           the source returned adverse records (typed findings)
+//   not-registered  the source answered but holds no record of the subject
+//                   (for example not a VAT payer); neither clear nor adverse
+//   unavailable     the source could not answer (transport error, timeout,
+//                   outage page, SOAP fault, error code, unparseable body)
+//   not-covered     the source cannot answer for this kind of subject
 //
 // `unavailable` is never collapsed into `clear`: the only path to `clear` is
-// a parser that recognised the source's explicit empty answer.
+// a parser that recognised the source's explicit answer.
 
 /** What the check is asked about. Each check declares which types it answers. */
 export type EntityCheckSubject =
   | {
       type: "company-id";
       /** National business identifier of the check's jurisdiction (IČO). */
+      value: string;
+    }
+  | {
+      type: "tax-id";
+      /** Tax identifier of the check's jurisdiction (DIČ). */
       value: string;
     }
   | {
@@ -32,11 +39,24 @@ export type EntityCheckSubject =
 
 export const ENTITY_CHECK_SUBJECT_TYPES = [
   "company-id",
+  "tax-id",
   "person",
 ] as const satisfies readonly EntityCheckSubject["type"][];
 
 export type EntityCheckSubjectType =
   (typeof ENTITY_CHECK_SUBJECT_TYPES)[number];
+
+/**
+ * The subject as sent to the source. A tax ID the check derived from a
+ * company ID names that company ID, so a reader can tell it was not given.
+ */
+export type CheckedEntityCheckSubject =
+  | Exclude<EntityCheckSubject, { type: "tax-id" }>
+  | {
+      type: "tax-id";
+      value: string;
+      derivedFrom: { type: "company-id"; value: string } | null;
+    };
 
 /** The official source a check queries, for attribution next to the answer. */
 export type EntityCheckSource = {
@@ -55,29 +75,31 @@ export const ENTITY_CHECK_UNAVAILABLE_REASONS = [
   "source-error",
 ] as const;
 
-export type EntityCheckUnavailableReason =
+type EntityCheckUnavailableReason =
   (typeof ENTITY_CHECK_UNAVAILABLE_REASONS)[number];
 
 export const ENTITY_CHECK_NOT_COVERED_REASONS = [
   "subject-type-not-supported",
 ] as const;
 
-export type EntityCheckNotCoveredReason =
+type EntityCheckNotCoveredReason =
   (typeof ENTITY_CHECK_NOT_COVERED_REASONS)[number];
 
 type EntityCheckOutcomeBase<TKind extends string> = {
   kind: TKind;
   source: EntityCheckSource;
-  subject: EntityCheckSubject;
+  subject: CheckedEntityCheckSubject;
 };
 
-export type EntityCheckOutcome<TKind extends string, TFinding> =
+export type EntityCheckOutcome<TKind extends string, TFinding, TRecord> =
   | (EntityCheckOutcomeBase<TKind> & {
       status: "clear";
       /** ISO instant the source was queried. */
       checkedAt: string;
       /** When the source last refreshed its data, if it says so. */
       sourceDataAsOf: string | null;
+      /** What the source holds about the subject beyond the yes/no answer. */
+      record: TRecord;
     })
   | (EntityCheckOutcomeBase<TKind> & {
       status: "found";
@@ -86,6 +108,12 @@ export type EntityCheckOutcome<TKind extends string, TFinding> =
       findings: [TFinding, ...TFinding[]];
       /** Matches the source reported, which can exceed the findings returned. */
       totalMatches: number;
+      record: TRecord;
+    })
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "not-registered";
+      checkedAt: string;
+      sourceDataAsOf: string | null;
     })
   | (EntityCheckOutcomeBase<TKind> & {
       status: "unavailable";
@@ -100,17 +128,17 @@ export type EntityCheckOutcome<TKind extends string, TFinding> =
       supportedSubjectTypes: EntityCheckSubjectType[];
     });
 
-export type EntityCheckStatus = EntityCheckOutcome<string, unknown>["status"];
-
 /** What a source client reports once it has an explicit answer. */
-export type SourceAnswer<TFinding> =
-  | { type: "clear"; sourceDataAsOf: string | null }
+export type SourceAnswer<TFinding, TRecord> =
+  | { type: "clear"; sourceDataAsOf: string | null; record: TRecord }
   | {
       type: "found";
       sourceDataAsOf: string | null;
       totalMatches: number;
       findings: [TFinding, ...TFinding[]];
-    };
+      record: TRecord;
+    }
+  | { type: "not-registered"; sourceDataAsOf: string | null };
 
 /**
  * A failure that makes the source's answer unusable. Source clients return it

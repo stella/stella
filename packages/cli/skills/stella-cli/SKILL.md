@@ -204,7 +204,7 @@ are omitted here.
 - `stella clause save`
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
 - `stella contact check-counterparty`
-  - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency)
+  - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability)
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
