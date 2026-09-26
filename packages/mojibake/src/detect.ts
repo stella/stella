@@ -1082,7 +1082,7 @@ const vouchedByLowercase = (
       !alphabet.native.has(previous.codePointAt(0) ?? 0)
     ) {
       const restored = undoMisdecoding(previous + char, pair);
-      if (restored !== null && restored.length === 1 && isLetter(restored)) {
+      if (restored?.length === 1 && isLetter(restored)) {
         continue;
       }
     }
