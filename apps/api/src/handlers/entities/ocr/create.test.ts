@@ -12,6 +12,7 @@ import {
   classifyManualOcrCollision,
   persistManualOcrRun,
 } from "@/api/lib/document-processing-request";
+import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-request";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -745,5 +746,49 @@ describe("requestManualOcrHandler", () => {
       expect(compiled.sql).toContain('"workspaces"."status" =');
       expect(compiled.params).toContain("active");
     }
+  });
+});
+
+/**
+ * The connection a manual OCR request runs on is always named by its caller.
+ * Each directive below is the assertion: if the helper regains a default
+ * connection or the handler a default persister, the directive is unused and
+ * the typecheck fails.
+ */
+describe("the manual OCR request names its connection", () => {
+  const source = {
+    entityId,
+    entityVersionId,
+    fieldId,
+    sourceFileId: "00000000-0000-4000-8000-000000000001",
+    sourceSha256Hex: "a".repeat(64),
+  };
+
+  test("the helper takes no default connection", () => {
+    // @ts-expect-error `db` is required; the owner connection is never implied
+    const options: PersistManualOcrRunOptions = {
+      organizationId,
+      recordAuditEvent,
+      source,
+      userId,
+      workspaceId,
+    };
+
+    expect(Object.keys(options)).not.toContain("db");
+  });
+
+  test("the handler persists only through the persister it is given", () => {
+    // @ts-expect-error the route passes the request door; nothing is implied
+    const props: Parameters<typeof requestManualOcrHandler>[0] = {
+      entityId,
+      fieldId,
+      organizationId,
+      recordAuditEvent,
+      safeDb: createSafeDb(null),
+      userId,
+      workspaceId,
+    };
+
+    expect(Object.keys(props)).not.toContain("persistRun");
   });
 });
