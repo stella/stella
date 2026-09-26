@@ -465,16 +465,41 @@ export const createChatRuntime = ({
       }
     });
 
-  const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    const stream = client.sendMessage(message, options?.body);
+  // TanStack refuses a normal send while its interrupt manager still owns the
+  // turn ("cannot send normal input while pending interrupts exist"). The
+  // server has the reverse contract: a new message supersedes the awaited
+  // interaction, and accepting the turn cancels it
+  // (`insertChatTurnAcceptanceOnTx`). Drop the local interrupt state first so
+  // a user who ignores an approval or a card can keep typing. `stop()` is the
+  // only public reset of that state; with no request in flight its other
+  // effects are no-ops. A request in flight is a resume being submitted, so
+  // leave it alone: TanStack refuses the send, `ChatMessageStartError` keeps
+  // its "busy, retry" meaning, and the send queue retries after the turn.
+  const supersedePendingInterrupts = (): void => {
+    if (client.getResumeState() === null) {
+      return;
+    }
+    if (snapshot.isLoading || isChatClientRequestActive(snapshot.status)) {
+      return;
+    }
+    client.stop();
+  };
 
+  const startClientSend = (
+    message: ChatUserMessageInput,
+    options: ChatSendMessageOptions | undefined,
+  ): ChatRouteHandoffStart => {
+    supersedePendingInterrupts();
+    const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
       detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
-      const error = new ChatMessageStartError(message.id);
-      captureRuntimeError(error);
-      throw error;
+      throw captureRuntimeError(new ChatMessageStartError(message.id));
     }
+    return { messageId: message.id, status: "started", stream };
+  };
 
+  const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
+    const { stream } = startClientSend(message, options);
     try {
       await stream;
     } catch (error) {
@@ -625,18 +650,9 @@ export const createChatRuntime = ({
       setSnapshot({ messages });
     },
     startRouteHandoffMessage: (message, options) => {
-      const stream = client.sendMessage(message, options?.body);
-
-      if (!hasUserMessage(snapshot.messages, message.id)) {
-        detached(
-          stream.catch(ignoreAbandonedStreamError),
-          "chat-queries.stream",
-        );
-        throw captureRuntimeError(new ChatMessageStartError(message.id));
-      }
-
-      detached(stream.catch(captureRuntimeError), "chat-queries.stream");
-      return { messageId: message.id, status: "started", stream };
+      const started = startClientSend(message, options);
+      detached(started.stream.catch(captureRuntimeError), "chat-queries.stream");
+      return started;
     },
     stop: () => {
       const turnWasActive =

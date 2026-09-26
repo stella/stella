@@ -2179,6 +2179,232 @@ describe("chat runtime", () => {
     expect(childRunId).not.toBe(parentRunId);
   });
 
+  // TanStack refuses `sendMessage` while its interrupt manager still owns the
+  // turn ("Use resumeInterrupts() instead"). The server's contract is the
+  // reverse: a new turn supersedes the awaited one and cancels it. The
+  // runtime must reconcile the two locally, or a user who ignores an approval
+  // or a card cannot type anything until they answer it.
+  const createPendingInterruptChunks = ({
+    interrupt,
+    runId,
+    threadId,
+    toolCall,
+  }: {
+    interrupt: Record<string, unknown>;
+    runId: string;
+    threadId: string;
+    toolCall: { id: string; input: Record<string, unknown>; name: string };
+  }) => [
+    { type: "RUN_STARTED", threadId, runId },
+    {
+      type: "TOOL_CALL_START",
+      parentMessageId: assistantMessageId,
+      toolCallId: toolCall.id,
+      toolCallName: toolCall.name,
+      toolName: toolCall.name,
+    },
+    {
+      type: "TOOL_CALL_ARGS",
+      delta: JSON.stringify(toolCall.input),
+      toolCallId: toolCall.id,
+    },
+    {
+      type: "TOOL_CALL_END",
+      input: toolCall.input,
+      toolCallId: toolCall.id,
+      toolCallName: toolCall.name,
+      toolName: toolCall.name,
+    },
+    {
+      type: "RUN_FINISHED",
+      threadId,
+      runId,
+      finishReason: "tool_calls",
+      outcome: { type: "interrupt", interrupts: [interrupt] },
+    },
+  ];
+
+  const createApprovalInterrupt = (runId: string) => ({
+    id: "approval_tool-save",
+    reason: "tool_call",
+    toolCallId: "tool-save",
+    metadata: {
+      kind: "approval",
+      toolName: "save_playbook",
+      input: { name: "Employment terms" },
+      "tanstack:interruptBinding": {
+        v: 1,
+        kind: "tool-approval",
+        interruptId: "approval_tool-save",
+        interruptedRunId: runId,
+        generation: 0,
+        toolName: "save_playbook",
+        toolCallId: "tool-save",
+        originalArgs: { name: "Employment terms" },
+        inputSchemaHash: "server-owned",
+        approvalSchemaHash: "server-owned",
+        responseSchemaHash: "server-owned",
+      },
+    },
+  });
+
+  const createClientToolInterrupt = (runId: string) => ({
+    id: "client_tool_tool-ask",
+    reason: "tanstack:client_tool_execution",
+    message: "Client tool ask-user is ready to run",
+    toolCallId: "tool-ask",
+    responseSchema: {},
+    metadata: {
+      kind: "client_tool",
+      toolName: "ask-user",
+      input: { question: "Which position titles should the playbook cover?" },
+      "tanstack:interruptBinding": {
+        v: 1,
+        kind: "client-tool-execution",
+        interruptId: "client_tool_tool-ask",
+        interruptedRunId: runId,
+        generation: 0,
+        toolName: "ask-user",
+        toolCallId: "tool-ask",
+        outputSchemaHash: "server-owned",
+        responseSchemaHash: "server-owned",
+      },
+    },
+  });
+
+  const sendWhileInterruptPending = async ({
+    interruptFor,
+    threadId,
+    toolCall,
+  }: {
+    interruptFor: (runId: string) => Record<string, unknown>;
+    threadId: ReturnType<typeof toChatThreadId>;
+    toolCall: { id: string; input: Record<string, unknown>; name: string };
+  }) => {
+    const requests: unknown[] = [];
+    const followUpAssistantId = "11111111-1111-4111-8111-111111111112";
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createPendingInterruptChunks({
+            interrupt: interruptFor(runId),
+            runId,
+            threadId,
+            toolCall,
+          }),
+        );
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: followUpAssistantId,
+          role: "assistant",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: followUpAssistantId,
+          delta: "Two titles: Engineer and Counsel.",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: followUpAssistantId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+
+    const firstMessageId = "22222222-2222-4222-8222-222222222301";
+    const followUpMessageId = "22222222-2222-4222-8222-222222222302";
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(firstMessageId, "Save the playbook"),
+    );
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        followUpMessageId,
+        "Before saving, briefly list the position titles you plan to include.",
+      ),
+    );
+
+    return { firstMessageId, followUpMessageId, requests, runtime };
+  };
+
+  const expectSupersededSend = ({
+    firstMessageId,
+    followUpMessageId,
+    requests,
+    runtime,
+  }: Awaited<ReturnType<typeof sendWhileInterruptPending>>) => {
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      data: { message: { id: followUpMessageId } },
+    });
+    expect(requests.at(1)).not.toHaveProperty("resume");
+    expect(requests.at(1)).not.toHaveProperty("parentRunId");
+    const snapshot = runtime.getSnapshot();
+    expect(
+      snapshot.messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.id),
+    ).toEqual([firstMessageId, followUpMessageId]);
+    expect(snapshot).toMatchObject({
+      error: undefined,
+      status: "ready",
+      turnAbandoned: false,
+    });
+  };
+
+  test("supersedes a pending tool approval when the user sends a new message", async () => {
+    const sent = await sendWhileInterruptPending({
+      interruptFor: createApprovalInterrupt,
+      threadId: toChatThreadId("thread-superseded-approval"),
+      toolCall: {
+        id: "tool-save",
+        input: { name: "Employment terms" },
+        name: "save_playbook",
+      },
+    });
+    expectSupersededSend(sent);
+
+    // The superseded card stays in the transcript until the authoritative
+    // refresh replaces it. Answering it late must not start a request: the
+    // server already cancelled that interaction when it accepted the new turn.
+    await sent.runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-save",
+    });
+    expect(sent.requests).toHaveLength(2);
+  });
+
+  test("supersedes a pending ask-user card when the user sends a new message", async () => {
+    const sent = await sendWhileInterruptPending({
+      interruptFor: createClientToolInterrupt,
+      threadId: toChatThreadId("thread-superseded-card"),
+      toolCall: {
+        id: "tool-ask",
+        input: { question: "Which position titles should the playbook cover?" },
+        name: "ask-user",
+      },
+    });
+    expectSupersededSend(sent);
+  });
+
   // A refused chat request must not reach the user as the connection
   // adapter's opaque `HTTP error! status: 400`. chatFetchClient reads the body
   // while the response is whole and rejects with an APIError; TanStack wraps
