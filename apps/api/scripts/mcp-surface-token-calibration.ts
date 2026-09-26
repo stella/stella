@@ -26,6 +26,7 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 
 const COUNT_TOKENS_URL = "https://api.anthropic.com/v1/messages/count_tokens";
 const ANTHROPIC_VERSION = "2023-06-01";
+const COUNT_TOKENS_TIMEOUT_MS = 30_000;
 // The smallest valid conversation; every count below is a delta over it.
 const PROBE_MESSAGES = [{ role: "user", content: "." }] as const;
 // Carries the tool-use preamble at the cost of a few tokens of its own.
@@ -74,6 +75,7 @@ const countTokens = async ({
           "x-api-key": apiKey,
         },
         body: JSON.stringify({ model, messages: PROBE_MESSAGES, ...request }),
+        signal: AbortSignal.timeout(COUNT_TOKENS_TIMEOUT_MS),
       });
       const body: unknown = await reply.json();
       return { ok: reply.ok, status: reply.status, body };
@@ -136,11 +138,21 @@ const calibrateSurface = async ({
     }));
     const instructions = MCP_INSTRUCTIONS[mode];
 
+    // Both carry the probe tool, so subtracting `toolBaseTokens` removes the
+    // preamble and the probe and leaves only the audience's own tools.
     const bare = yield* Result.await(
-      countTokens({ apiKey, model, request: { tools: bareTools } }),
+      countTokens({
+        apiKey,
+        model,
+        request: { tools: [MINIMAL_TOOL, ...bareTools] },
+      }),
     );
     const described = yield* Result.await(
-      countTokens({ apiKey, model, request: { tools: describedTools } }),
+      countTokens({
+        apiKey,
+        model,
+        request: { tools: [MINIMAL_TOOL, ...describedTools] },
+      }),
     );
     const withInstructions = yield* Result.await(
       countTokens({ apiKey, model, request: { system: instructions } }),
