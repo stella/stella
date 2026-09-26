@@ -490,8 +490,14 @@ export const findWireContractViolations = ({
       });
     }
   }
-  if (new Set(calls.map(({ id }) => id)).size !== calls.length) {
-    toolInput.push({ problem: "tool call ids repeat" });
+  // Counted on the events: the summaries above are keyed by id already.
+  for (const type of [EventType.TOOL_CALL_START, EventType.TOOL_CALL_END]) {
+    const ids = chunks.flatMap((chunk) =>
+      chunk.type === type && "toolCallId" in chunk ? [chunk.toolCallId] : [],
+    );
+    if (new Set(ids).size !== ids.length) {
+      toolInput.push({ event: type, problem: "a tool call id repeats" });
+    }
   }
 
   if (expected.outcome === "finished") {

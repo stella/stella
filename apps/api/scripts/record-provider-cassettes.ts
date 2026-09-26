@@ -199,12 +199,32 @@ export const keptHeaders = (headers: Headers): Record<string, string> =>
     }),
   );
 
+/** The body, refused as soon as it passes the size limit. */
 const readBounded = async (response: Response): Promise<Uint8Array> => {
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.length > MAX_RESPONSE_BYTES) {
-    return panic("A provider response exceeds the recording size limit");
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for await (const chunk of response.body ?? []) {
+    length += chunk.byteLength;
+    if (length > MAX_RESPONSE_BYTES) {
+      await response.body?.cancel();
+      return panic("A provider response exceeds the recording size limit");
+    }
+    chunks.push(chunk);
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   }
   return bytes;
+};
+
+/** Refuses anything to be stored that carries the recording key. */
+export const refuseSecret = (text: string, secret: string): void => {
+  if (secret !== "" && text.includes(secret)) {
+    panic("A provider response contains the recording key");
+  }
 };
 
 /** A fetch that forwards to the provider and keeps what it answered. */
@@ -233,6 +253,10 @@ const installRecorder = ({
     }
     const response = await upstream(input, { ...init, redirect: "error" });
     const bytes = await readBounded(response);
+    // Every stored byte and header, whatever its framing.
+    refuseSecret(new TextDecoder().decode(bytes), secret);
+    const headers = keptHeaders(response.headers);
+    refuseSecret(JSON.stringify(headers), secret);
     const contentType = response.headers.get("content-type") ?? "";
     const body: ProviderWireExchange["response"]["body"] = contentType.includes(
       "vnd.amazon.eventstream",
@@ -255,17 +279,16 @@ const installRecorder = ({
         };
     exchanges.push({
       request: { method: "POST", path: cassetteRequestPath(url) },
-      response: {
-        body,
-        headers: keptHeaders(response.headers),
-        status: response.status,
-      },
+      response: { body, headers, status: response.status },
     });
     // The SDK reads exactly the bytes that were recorded, already decoded.
-    const headers = new Headers(response.headers);
-    headers.delete("content-encoding");
-    headers.delete("content-length");
-    return new Response(bytes, { headers, status: response.status });
+    const sdkHeaders = new Headers(response.headers);
+    sdkHeaders.delete("content-encoding");
+    sdkHeaders.delete("content-length");
+    return new Response(bytes, {
+      headers: sdkHeaders,
+      status: response.status,
+    });
   };
   globalThis.fetch = Object.assign(recorder, {
     preconnect: () => undefined,
@@ -384,31 +407,36 @@ const main = async (): Promise<number> => {
       const label = `${provider}/${scenario}`;
       try {
         const cassette = await recordOne({ provider, scenario, secret });
-        const file = cassettePath(provider, scenario);
-        mkdirSync(path.dirname(file), { recursive: true });
-        writeFileSync(file, `${JSON.stringify(cassette, null, 2)}\n`);
         const replay = installProviderWireReplay();
+        let violations: ReturnType<typeof findWireContractViolations>;
         try {
           const { findings, run } = await replayWireScenario({
             cassette,
             replay,
           });
-          const violations = findWireContractViolations({
+          violations = findWireContractViolations({
             cassette,
             replay: findings,
             run,
           });
-          if (violations.length > 0) {
-            failures += 1;
-          }
-          console.log(
-            violations.length === 0
-              ? `${label}: recorded, contract holds`
-              : `${label}: recorded, contract violations ${JSON.stringify(violations)}`,
-          );
         } finally {
           replay.restore();
         }
+        // A recording the contract rejects stays beside the corpus, outside
+        // it, for review; the entry it would replace is left as it is.
+        const corpusFile = cassettePath(provider, scenario);
+        const file =
+          violations.length === 0 ? corpusFile : `${corpusFile}.rejected`;
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(file, `${JSON.stringify(cassette, null, 2)}\n`);
+        if (violations.length > 0) {
+          failures += 1;
+        }
+        console.log(
+          violations.length === 0
+            ? `${label}: recorded, contract holds`
+            : `${label}: written to ${path.basename(file)}, contract violations ${JSON.stringify(violations)}`,
+        );
       } catch {
         // Provider errors can echo request content; keep the output generic.
         failures += 1;
