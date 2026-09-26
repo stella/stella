@@ -160,7 +160,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "office_file_evidence",
   "organization",
   "organization_settings",
-  "pdf_signing_sessions",
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",
