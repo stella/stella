@@ -29,6 +29,9 @@ const sb = (number: number, year: number): WorkIdentifier => ({
 /** The day 89/2012 Sb. replaced 40/1964 Sb. */
 const RECODIFICATION = "2014-01-01";
 
+/** The day 91/2012 Sb. replaced 97/1963 Sb. */
+const PRIVATE_INTERNATIONAL_LAW_RECODIFICATION = "2014-01-01";
+
 /** The day 134/2016 Sb. replaced 137/2006 Sb. */
 const PUBLIC_PROCUREMENT_RECODIFICATION = "2016-10-01";
 
@@ -275,17 +278,20 @@ export const CZ_PROFILE = {
       newer: sb(137, 2006),
       on: "2006-07-01",
     }),
-    // The predecessors (344/1992, 97/1963) are not known by these names.
+    // The predecessor, 344/1992 Sb., is not known by this name.
     {
       spellings: ["KatZ"],
       identifier: sb(256, 2013),
       citedFrom: RECODIFICATION,
     },
-    {
+    // Courts cited 97/1963 Sb. as ZMPS before its successor took effect
+    // (NS 28 Nd 276/2012, 13 March 2013).
+    ...succession({
       spellings: ["ZMPS"],
-      identifier: sb(91, 2012),
-      citedFrom: RECODIFICATION,
-    },
+      older: sb(97, 1963),
+      newer: sb(91, 2012),
+      on: PRIVATE_INTERNATIONAL_LAW_RECODIFICATION,
+    }),
     { spellings: ["ZOR"], identifier: sb(94, 1963) },
     // Replaced 58/1969 Sb., a differently named act, on 15 May 1998.
     { spellings: ["OdpŠk"], identifier: sb(82, 1998), citedFrom: "1998-05-15" },
