@@ -68,5 +68,10 @@
     "table": "legislation_documents",
     "column": "citationAuthorityComputedAt",
     "reason": "unreferenced as of 2026-09-23; drop with its case-law twin in the next schema release"
+  },
+  {
+    "table": "legislation_documents",
+    "column": "payloadRevision",
+    "reason": "maintained by a database trigger on every payload or version-selection change and read by ingestion outside this workspace; app code never writes or reads it."
   }
 ]

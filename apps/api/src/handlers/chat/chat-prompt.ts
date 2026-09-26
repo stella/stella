@@ -105,6 +105,7 @@ import {
 } from "@/api/lib/legal-search/corpus-reads";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
+import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
 import {
   publishedLegislationDocument,
   redistributableLegislationVersion,
@@ -2198,8 +2199,9 @@ const readActiveStatuteFulltext = async (
   if (!allowsDerivedAi(version.descriptor)) {
     return { status: "withheld" } as const;
   }
-  const { fulltext, textS3Key } = version;
-  if (corpusStorageMode === "off" || textS3Key === null) {
+  const { fulltext } = version;
+  const source = canonicalLegislationTextSource(version, corpusStorageMode);
+  if (source.type === "database") {
     return { status: "available", fulltext: fulltext ?? "" } as const;
   }
   return {
@@ -2207,9 +2209,9 @@ const readActiveStatuteFulltext = async (
     fulltext:
       (await readCorpusPayloadOrFallback({
         documentId,
-        key: textS3Key,
+        key: source.key,
         step: ACTIVE_STATUTE_TEXT_READ_STEP,
-        read: async () => await readCorpusText(textS3Key),
+        read: async () => await readCorpusText(source.key),
         fallback: () => fulltext,
       })) ?? "",
   } as const;
