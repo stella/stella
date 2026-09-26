@@ -170,7 +170,7 @@ describe("agent skill policy migrations", () => {
       "agent_skill_resource_delete",
     ];
     const fromSchema = await readPolicies(policyNames);
-    await applyMigration("20260925174000_agent_skill_write_policies");
+    await applyMigration("20260925230000_agent_skill_write_policies");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(policyNames.length);
@@ -181,7 +181,7 @@ describe("agent skill policy migrations", () => {
     await testDb.execute(
       sql`DROP FUNCTION IF EXISTS "lock_agent_skill_for_anchor"(uuid)`,
     );
-    await applyMigration("20260925174100_agent_skill_anchor_lock");
+    await applyMigration("20260925230100_agent_skill_anchor_lock");
 
     const rows = await testDb.execute<{
       securityDefiner: boolean;
@@ -282,7 +282,7 @@ describe("agent skill domain values", () => {
         sql.raw(`ALTER TABLE "${table}" DROP CONSTRAINT "${constraint}"`),
       );
     }
-    await applyMigration("20260925174200_agent_skill_domain_checks");
+    await applyMigration("20260925230200_agent_skill_domain_checks");
     const migrated = await readDomainChecks();
 
     expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);

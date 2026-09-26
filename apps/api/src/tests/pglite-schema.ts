@@ -32,7 +32,7 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
 );
 const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260925174100_agent_skill_anchor_lock",
+  "20260925230100_agent_skill_anchor_lock",
   "migration.sql",
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
