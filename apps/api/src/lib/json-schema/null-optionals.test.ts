@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   withModelPlaceholdersOmitted,
   withNullOptionalsOmitted,
-} from "@/api/lib/json-schema-null-optionals";
+} from "@/api/lib/json-schema/null-optionals";
 
 const schema = {
   type: "object",

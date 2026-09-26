@@ -8,7 +8,8 @@ import { Result, panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema-null-optionals";
+import { arrayOrEmpty } from "@/api/lib/array";
+import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -173,7 +174,7 @@ async function* withDeclaredToolInput(
   options: ChatStreamOptions,
 ): AsyncIterable<StreamChunk> {
   const schemas = new Map<string, unknown>();
-  for (const tool of options.tools ?? []) {
+  for (const tool of arrayOrEmpty(options.tools)) {
     const toolName: unknown = tool.name;
     if (typeof toolName === "string") {
       schemas.set(toolName, tool.inputSchema);

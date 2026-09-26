@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import { normalizeAgentInput } from "@stll/agent-input";
 
-import { withNullOptionalsOmitted } from "@/api/lib/json-schema-null-optionals";
+import { withNullOptionalsOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
