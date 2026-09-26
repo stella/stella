@@ -10,7 +10,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import { pdfSigningSessions } from "@/api/db/schema";
+import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
@@ -525,6 +525,49 @@ describe("opening a pdf signing exchange", () => {
     });
     return { id, opened };
   };
+
+  test("opens only on the version that was checked, while it is current", async () => {
+    await testDb
+      .delete(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.workspaceId, ids.wsA1));
+    // A version of the same document that is not its current one: what a
+    // concurrent upload leaves the earlier checks pointing at.
+    const stale = createSafeId<"entityVersion">();
+    await testDb.insert(entityVersions).values({
+      entityId: ids.entityA1,
+      id: stale,
+      versionNumber: 99,
+      workspaceId: ids.wsA1,
+    });
+    try {
+      const id = createSafeId<"pdfSigningSession">();
+      const expiresAt = new Date(Date.now() + 2 * MINUTE_MS);
+      const opened = await openPdfSigningSession({
+        now: new Date(),
+        tx: asTestRaw<Transaction>(testDb),
+        values: {
+          baseVersionId: stale,
+          createdBy: ids.userA1,
+          entityId: ids.entityA1,
+          handoffExpiresAt: expiresAt,
+          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          id,
+          propertyId: ids.filePropertyA1,
+          tokenExpiresAt: expiresAt,
+          workspaceId: ids.wsA1,
+        },
+      });
+
+      expect(opened).toEqual({ status: "version-changed" });
+      const rows = await testDb
+        .select({ id: pdfSigningSessions.id })
+        .from(pdfSigningSessions)
+        .where(eq(pdfSigningSessions.id, id));
+      expect(rows).toEqual([]);
+    } finally {
+      await testDb.delete(entityVersions).where(eq(entityVersions.id, stale));
+    }
+  });
 
   test("a lapsed exchange no longer blocks the next one", async () => {
     await testDb
