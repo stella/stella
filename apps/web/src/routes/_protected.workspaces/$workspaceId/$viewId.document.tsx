@@ -50,13 +50,13 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxEditorActionBar } from "@/components/docx/docx-editor-action-bar";
 import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import {
   DOCUMENT_PANE,
   DOCUMENT_PANE_SEARCH_VALUES,
