@@ -26,6 +26,7 @@ import {
 import type {
   IngestionResult,
   SourceAdapter,
+  StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -169,6 +170,7 @@ const storedDecision = async (
         caseNumber: caseLawDecisions.caseNumber,
         caseNumberType: caseLawDecisions.caseNumberType,
         citationKey: caseLawDecisions.citationKey,
+        country: caseLawDecisions.country,
         ecli: caseLawDecisions.ecli,
         languageGroupKey: caseLawDecisions.languageGroupKey,
         metadata: caseLawDecisions.metadata,
@@ -207,9 +209,11 @@ const storedDecision = async (
         caseNumber: row.caseNumber,
         caseNumberType: row.caseNumberType,
         ecli: row.ecli,
+        jurisdiction: row.country,
         metadata,
       }),
     ].toSorted(byTypeThenValue),
+    sourceId,
   };
 };
 
@@ -217,6 +221,86 @@ const REPORTER_IDENTIFIERS = [
   { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: DOCKET },
   { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: REPORTER },
 ];
+
+/**
+ * A replay of one stored decision through a parser that returns `parse`.
+ *
+ * The row gets a stored payload to read, which the crawl did not store, and
+ * an observation order below the replay's own: this file's crawl numbers
+ * observations itself rather than through the source's allocator, which the
+ * replay draws from.
+ */
+const replayerFor = async (
+  row: { id: SafeId<"caseLawDecision">; sourceId: SafeId<"caseLawSource"> },
+  parse: (stored: StoredRawReparseInput) => IngestionResult,
+) => {
+  await db
+    .update(caseLawDecisions)
+    .set({
+      sourceObservationOrder: 0n,
+      sourceRawS3Key: `case-law/raw/legacy/${row.id}`,
+      sourceRawContentType: "application/json",
+    })
+    .where(eq(caseLawDecisions.id, row.id));
+  const adapter: SourceAdapter = {
+    key: ADAPTER_KEYS.EU_ECJ,
+    sourceFields: {
+      status: "declared",
+      fields: {},
+      listSourceFields: () => [],
+    },
+    sourceSurfaces: { surfaces: {} },
+    name: "primary reference replay stub",
+    country: "USA",
+    language: "en",
+    minRequestIntervalMs: 0,
+    fetchPage: async () => {
+      throw new Error("a replay must never fetch from the publisher");
+    },
+    getTotalCount: async () => {
+      throw new Error("a replay must never fetch from the publisher");
+    },
+    reconciliation: {
+      firstSlice: "1970-01-01",
+      sliceOf: () => "1970-01-01",
+      nextSlice: () => null,
+      previousSlice: () => null,
+      tipWindowDays: 1,
+      listSlicePage: async () => {
+        throw new Error("a replay must never list the publisher");
+      },
+      buildDecision: async () => {
+        throw new Error("a replay must never build from publisher data");
+      },
+    },
+    reparseStoredRaw: (stored) => ({ type: "parsed", result: parse(stored) }),
+  };
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: row.sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+  const replay = async () => {
+    const run = await replayCaseLawSource({
+      adapter,
+      scopedDb,
+      sourceId: row.sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () =>
+        await Promise.resolve(new TextEncoder().encode("{}")),
+      sourceLease,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+    if (run.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    return run;
+  };
+  return { replay, release: async () => await sourceLease.release() };
+};
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -293,170 +377,158 @@ test("a docket upgraded to a reporter primary keeps the row and drops its docket
   expect(upgraded.identifiers).toEqual(REPORTER_IDENTIFIERS);
 });
 
-test("a replay of the stored payload and the identifier backfill converge on the typed primary", async () => {
+test("a replay upgrading a docket primary to its reporter citation, the backfill and a second replay converge", async () => {
   const fake = startFakeS3();
   try {
     const sourceId = await newSource();
-    await ingest(sourceId, usReporterDecision("cluster-3"));
+    // Written by a parser that took the docket as the primary.
+    await ingest(sourceId, usDocketDecision("cluster-3"));
     const crawled = await storedDecision(sourceId, "cluster-3");
-    // The stored payload the replay reads, which the crawl above did not
-    // store, and an observation order below the replay's own: this file's
-    // crawl numbers observations itself rather than through the source's
-    // allocator, which the replay draws from.
-    await db
-      .update(caseLawDecisions)
-      .set({
-        sourceObservationOrder: 0n,
-        sourceRawS3Key: "case-law/raw/legacy/cluster-3",
-        sourceRawContentType: "application/json",
-      })
-      .where(eq(caseLawDecisions.id, crawled.id));
-    const payload = { citation: REPORTER, docket: DOCKET, id: "cluster-3" };
-
-    // The parser derives the primary and its type from the payload alone.
-    const reparse: NonNullable<SourceAdapter["reparseStoredRaw"]> = (
-      stored,
-    ) => {
-      const parsed: unknown = JSON.parse(new TextDecoder().decode(stored.raw));
-      if (
-        !isRecord(parsed) ||
-        typeof parsed["citation"] !== "string" ||
-        typeof parsed["docket"] !== "string"
-      ) {
-        throw new TypeError("unexpected stored payload");
-      }
-      return {
-        type: "parsed",
-        result: {
-          ...usDocketDecision("cluster-3"),
-          caseNumber: parsed["citation"],
-          caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: parsed["docket"],
-            },
-          ],
-          sourceDocumentId: stored.sourceDocumentId ?? undefined,
-          rawHash: "current-parser",
-        },
-      };
-    };
-    const adapter: SourceAdapter = {
-      key: ADAPTER_KEYS.EU_ECJ,
-      sourceFields: {
-        status: "declared",
-        fields: {},
-        listSourceFields: () => [],
-      },
-      sourceSurfaces: { surfaces: {} },
-      name: "primary reference replay stub",
-      country: "USA",
-      language: "en",
-      minRequestIntervalMs: 0,
-      fetchPage: async () => {
-        throw new Error("a replay must never fetch from the publisher");
-      },
-      getTotalCount: async () => {
-        throw new Error("a replay must never fetch from the publisher");
-      },
-      reconciliation: {
-        firstSlice: "1970-01-01",
-        sliceOf: () => "1970-01-01",
-        nextSlice: () => null,
-        previousSlice: () => null,
-        tipWindowDays: 1,
-        listSlicePage: async () => {
-          throw new Error("a replay must never list the publisher");
-        },
-        buildDecision: async () => {
-          throw new Error("a replay must never build from publisher data");
-        },
-      },
-      reparseStoredRaw: reparse,
-    };
-
-    const sourceLease = await acquireCaseLawSourceIngestionLease({
-      scopedDb,
-      sourceId,
-    });
-    if (sourceLease === null) {
-      throw new TypeError("Expected the source ingestion lease to be free");
-    }
-    const replay = async () =>
-      await replayCaseLawSource({
-        adapter,
-        scopedDb,
-        sourceId,
-        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
-        readStoredRaw: async () =>
-          await Promise.resolve(
-            new TextEncoder().encode(JSON.stringify(payload)),
-          ),
-        sourceLease,
-        bound: { type: "at-most", limit: 10 },
-        pageSize: 10,
-      });
+    expect(crawled.caseNumber).toBe(DOCKET);
+    expect(crawled.citationKey).toBe(citationKeyOf(DOCKET));
+    const { replay, release } = await replayerFor(crawled, (stored) => ({
+      ...usReporterDecision(stored.sourceDocumentId ?? ""),
+      rawHash: "current-parser",
+    }));
 
     const first = await replay();
     if (first.type !== "ran") {
       throw new TypeError("Expected the capable adapter to run");
     }
+    // The reference changed and the document did not: the same decision,
+    // written again, not an identity mismatch.
     expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
     const replayed = await storedDecision(sourceId, "cluster-3");
     expect(replayed.id).toBe(crawled.id);
     expect(replayed.slug).toBe(crawled.slug);
     expect(replayed.languageGroupKey).toBe(crawled.languageGroupKey);
     expect(replayed.caseNumber).toBe(REPORTER);
+    expect(replayed.caseNumberType).toBe(
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    );
     expect(replayed.citationKey).toBeNull();
     expect(replayed.identifiers).toEqual(REPORTER_IDENTIFIERS);
     expect(replayed.recovered).toEqual(REPORTER_IDENTIFIERS);
+
+    // The global backfill reprojects every decision from its stored
+    // columns and metadata, the rows of the tests above included, and finds
+    // nothing to rewrite.
+    const identifierRows = async () =>
+      await db
+        .select({
+          decisionId: caseLawDecisionIdentifiers.decisionId,
+          type: caseLawDecisionIdentifiers.type,
+          value: caseLawDecisionIdentifiers.value,
+        })
+        .from(caseLawDecisionIdentifiers)
+        .orderBy(
+          asc(caseLawDecisionIdentifiers.decisionId),
+          asc(caseLawDecisionIdentifiers.type),
+          asc(caseLawDecisionIdentifiers.value),
+        );
+    const before = await identifierRows();
+    const backfill = await runDecisionIdentifierBackfill(rootDb());
+    expect(backfill.verification.gaps.decisionIdentifierMismatches).toBe(0);
+    expect(await identifierRows()).toEqual(before);
 
     const second = await replay();
     if (second.type !== "ran") {
       throw new TypeError("Expected the capable adapter to run");
     }
     expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
-    await sourceLease.release();
+    expect(await storedDecision(sourceId, "cluster-3")).toEqual(replayed);
+    await release();
+  } finally {
+    fake.stop();
+  }
+});
 
-    // The global backfill reprojects every decision from its stored
-    // columns and metadata, the rows of the tests above included, and finds nothing to
-    // rewrite.
-    const before = await db
-      .select({
-        decisionId: caseLawDecisionIdentifiers.decisionId,
-        type: caseLawDecisionIdentifiers.type,
-        value: caseLawDecisionIdentifiers.value,
-      })
-      .from(caseLawDecisionIdentifiers)
-      .orderBy(
-        asc(caseLawDecisionIdentifiers.decisionId),
-        asc(caseLawDecisionIdentifiers.type),
-        asc(caseLawDecisionIdentifiers.value),
-      );
-    const backfill = await runDecisionIdentifierBackfill(rootDb());
-    expect(backfill.verification.gaps.decisionIdentifierMismatches).toBe(0);
-    const after = await db
-      .select({
-        decisionId: caseLawDecisionIdentifiers.decisionId,
-        type: caseLawDecisionIdentifiers.type,
-        value: caseLawDecisionIdentifiers.value,
-      })
-      .from(caseLawDecisionIdentifiers)
-      .orderBy(
-        asc(caseLawDecisionIdentifiers.decisionId),
-        asc(caseLawDecisionIdentifiers.type),
-        asc(caseLawDecisionIdentifiers.value),
-      );
-    expect(after).toEqual(before);
-    expect(
-      after
-        .filter(({ decisionId }) => decisionId === crawled.id)
-        .map(({ type }) => type),
-    ).toEqual([
-      DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+test("a correction of the reference type alone is written under an unchanged source hash", async () => {
+  const sourceId = await newSource();
+  // A reporter citation first stored as though it were a docket.
+  const mistyped = {
+    ...usDocketDecision("cluster-4"),
+    caseNumber: REPORTER,
+    rawHash: "same-payload",
+  };
+  await ingest(sourceId, mistyped);
+  const before = await storedDecision(sourceId, "cluster-4");
+  expect(before.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
+  expect(before.citationKey).toBe(citationKeyOf(REPORTER));
+
+  await ingest(sourceId, {
+    ...mistyped,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+  });
+  const corrected = await storedDecision(sourceId, "cluster-4");
+
+  expect(corrected.id).toBe(before.id);
+  expect(corrected.slug).toBe(before.slug);
+  expect(corrected.caseNumberType).toBe(
+    DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+  );
+  expect(corrected.citationKey).toBeNull();
+  expect(corrected.identifiers).toEqual([
+    { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: REPORTER },
+  ]);
+});
+
+test("two spellings of one reporter citation become one identifier row", async () => {
+  const sourceId = await newSource();
+  // `A.` and `Atl.` name one reporter, so the two keys are one.
+  await ingest(sourceId, {
+    ...usDocketDecision("cluster-5"),
+    caseNumber: "10 A. 5",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: "10 Atl. 5" },
+    ],
+  });
+  const stored = await storedDecision(sourceId, "cluster-5");
+
+  // The primary's spelling is the row; the other stays in the stored
+  // publisher identifiers.
+  expect(stored.identifiers).toEqual([
+    { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: "10 A. 5" },
+  ]);
+  expect(stored.recovered).toEqual(stored.identifiers);
+  expect(stored.metadata["_stellaDecisionIdentifiers"]).toEqual([
+    { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: "10 Atl. 5" },
+  ]);
+
+  const backfill = await runDecisionIdentifierBackfill(rootDb());
+  expect(backfill.verification.gaps.decisionIdentifierMismatches).toBe(0);
+  expect((await storedDecision(sourceId, "cluster-5")).identifiers).toEqual(
+    stored.identifiers,
+  );
+});
+
+test("a replay correcting only the reference type is applied", async () => {
+  const fake = startFakeS3();
+  try {
+    const sourceId = await newSource();
+    const mistyped = {
+      ...usDocketDecision("cluster-6"),
+      caseNumber: REPORTER,
+      rawHash: "same-payload",
+    };
+    await ingest(sourceId, mistyped);
+    const before = await storedDecision(sourceId, "cluster-6");
+    const { replay, release } = await replayerFor(before, () => ({
+      ...mistyped,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    }));
+
+    const run = await replay();
+    await release();
+
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    const corrected = await storedDecision(sourceId, "cluster-6");
+    expect(corrected.id).toBe(before.id);
+    expect(corrected.caseNumberType).toBe(
       DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    ]);
+    );
+    expect(corrected.citationKey).toBeNull();
   } finally {
     fake.stop();
   }

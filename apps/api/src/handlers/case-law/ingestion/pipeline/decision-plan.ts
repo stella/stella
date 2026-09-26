@@ -419,6 +419,7 @@ export const planDecisionWrite = async ({
     caseNumberType,
     ecli: result.ecli ?? null,
     identifiers: result.identifiers,
+    jurisdiction: result.country,
   });
   const identifierRows = decisionIdentifiers.map((identifier) => ({
     type: identifier.type,

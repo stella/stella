@@ -143,6 +143,11 @@ export const observeDecision = ({
 
 const IDENTITY_COLUMNS = {
   id: true,
+  // The primary reference is derived from the payload, not the payload
+  // itself: an unchanged source hash cannot say the reference or its kind
+  // did not change.
+  caseNumber: true,
+  caseNumberType: true,
   // The three fields the candidate join filters on, read so a refresh can
   // tell whether it changes which citations may honestly point here.
   citationKey: true,
