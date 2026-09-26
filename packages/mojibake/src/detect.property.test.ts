@@ -469,56 +469,104 @@ describe("a native capital before a mark", () => {
   });
 
   /**
-   * Every language with a lowercase letter whose UTF-8 bytes read as
-   * windows-1252 end in U+00A0 ("à" is C3 A0, "Ã\u00A0"): there the
-   * nonbreaking space is inside the word, not a space binding two.
+   * Every letter whose UTF-8 bytes read as windows-1252 are a lead and
+   * U+00A0 ("à" is C3 A0, "Ã\u00A0"), split by whether the language writes
+   * that lead. Where it does not, the nonbreaking space is inside a word;
+   * where it does, the lead may be the capital bound to the word after it.
    */
-  const CONTINUED_BY_NBSP = Object.keys(CLDR_EXEMPLARS)
+  const BY_NONBREAKING_LEAD = Object.keys(CLDR_EXEMPLARS)
     .filter((tag): tag is keyof typeof CLDR_EXEMPLARS =>
       Object.hasOwn(CLDR_EXEMPLARS, tag),
     )
     .flatMap((tag) => {
-      const letters = lettersOf(tag).filter(
-        (char) =>
-          /\p{Ll}/u.test(char) &&
-          misdecode(char, UTF8_READ_AS_WINDOWS_1252)?.endsWith(" "),
-      );
+      const native = alphabetFor(tag)?.native;
       // An ASCII letter survives the read in lowercase; without one the word
       // read back is capitals and marks, which alone sign nothing.
       const ascii = lettersOf(tag).filter((char) => /^[a-z]$/u.test(char));
-      return letters.length === 0 || ascii.length === 0
-        ? []
-        : [{ tag, letters, ascii }];
+      if (native === undefined || ascii.length === 0) {
+        return [];
+      }
+      const leads = lettersOf(tag).flatMap((letter) => {
+        const read = misdecode(letter, UTF8_READ_AS_WINDOWS_1252);
+        return /\p{Ll}/u.test(letter) &&
+          read !== null &&
+          Array.from(read).length === 2 &&
+          read.endsWith("\u00A0")
+          ? [{ letter, lead: read.slice(0, -1) }]
+          : [];
+      });
+      const isNative = (lead: string) => native.has(lead.codePointAt(0) ?? 0);
+      return [
+        {
+          tag,
+          ascii,
+          foreign: leads.filter(({ lead }) => !isNative(lead)),
+          native: leads.filter(({ lead }) => isNative(lead)),
+        },
+      ];
     });
+  const FOREIGN_LEAD = BY_NONBREAKING_LEAD.filter(
+    ({ foreign }) => foreign.length > 0,
+  );
+  const NATIVE_LEAD = BY_NONBREAKING_LEAD.filter(
+    ({ native }) => native.length > 0,
+  );
+  const asciiWord = (ascii: readonly string[], minLength: number) =>
+    fc
+      .array(fc.constantFrom(...ascii), { minLength, maxLength: 6 })
+      .map((chars) => chars.join(""));
 
-  test("the languages whose letters read as a nonbreaking space are derived", () => {
-    expect(CONTINUED_BY_NBSP.map(({ tag }) => tag)).toEqual(
-      expect.arrayContaining(["pt", "fr", "it"]),
+  test("the languages on each side of the lead are derived", () => {
+    expect(FOREIGN_LEAD.map(({ tag }) => tag)).toEqual(
+      expect.arrayContaining(["fr", "it", "ca"]),
     );
+    expect(NATIVE_LEAD.map(({ tag }) => tag)).toContain("pt");
   });
 
-  test("a word whose letter reads as a nonbreaking space is found", () => {
+  test("where the language does not write the lead, the word is found", () => {
     fc.assert(
       fc.property(
-        fc
-          .constantFrom(...CONTINUED_BY_NBSP)
-          .chain(({ tag, letters, ascii }) => {
-            const around = fc
-              .array(fc.constantFrom(...ascii), { maxLength: 6 })
-              .map((chars) => chars.join(""));
-            return fc.record({
-              tag: fc.constant(tag),
-              word: fc
-                .tuple(around, fc.constantFrom(...letters), around)
-                .filter(([before, , after]) => `${before}${after}`.length > 0)
-                .map(([before, letter, after]) => `${before}${letter}${after}`),
-            });
+        fc.constantFrom(...FOREIGN_LEAD).chain(({ tag, ascii, foreign }) =>
+          fc.record({
+            tag: fc.constant(tag),
+            word: fc
+              .tuple(
+                asciiWord(ascii, 0),
+                fc.constantFrom(...foreign),
+                asciiWord(ascii, 0),
+              )
+              .filter(([before, , after]) => `${before}${after}`.length > 0)
+              .map(
+                ([before, { letter }, after]) => `${before}${letter}${after}`,
+              ),
           }),
+        ),
         ({ tag, word }) => {
           const read = misdecode(word, UTF8_READ_AS_WINDOWS_1252) ?? "";
           expect(checkTextEncoding(`${read} ${read}`, tag).status).toBe(
             "suspect",
           );
+        },
+      ),
+      config(300),
+    );
+  });
+
+  test("where the language writes the lead, a capital bound to a word is clean", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...NATIVE_LEAD).chain(({ tag, ascii, native }) =>
+          fc.record({
+            tag: fc.constant(tag),
+            bound: fc
+              .tuple(fc.constantFrom(...native), asciiWord(ascii, 1))
+              .map(([{ lead }, word]) => `${lead}\u00A0${word}`),
+          }),
+        ),
+        ({ tag, bound }) => {
+          expect(checkTextEncoding(`${bound} ${bound}`, tag)).toEqual({
+            status: "clean",
+          });
         },
       ),
       config(300),

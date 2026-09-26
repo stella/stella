@@ -1047,16 +1047,27 @@ const marksSignOnTheirOwn = (
 const vouches = (part: string): boolean =>
   !CAPITALS_ONLY.test(part) && UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(part);
 
+type VouchedByLowercaseOptions = {
+  pair: DecodingPair;
+  alphabet: Alphabet | null;
+};
+
 /**
  * Whether lowercase letters vouch for a word's read-back: some part of it
  * between nonbreaking spaces holds both a lowercase letter and a UTF-8
- * sequence. A nonbreaking space that completes a restored letter is inside
- * its word ("Ã\u00A0quela" is "àquela"); any other one ends the part it
- * closes, and the lowercase word after it is another word. So French
- * "Â\u00A0est" (the letter Â, then a bound "est") is capitals before the
- * space and no sequence after it, since "Â\u00A0" restores a space.
+ * sequence. A nonbreaking space that completes a restored letter after a
+ * lead the language does not write is inside its word (French or Italian
+ * "Ã\u00A0" is "à"); any other one ends the part it closes, and the
+ * lowercase word after it is another word. The bytes cannot tell the two
+ * apart where the lead is a letter the language writes: Portuguese
+ * "Ã\u00A0quela" is "àquela" read as windows-1252, and "Ã\u00A0representa"
+ * is the capital Ã bound to the word after it. So is French "Â\u00A0est",
+ * whose "Â\u00A0" restores a space.
  */
-const vouchedByLowercase = (word: string, pair: DecodingPair): boolean => {
+const vouchedByLowercase = (
+  word: string,
+  { pair, alphabet }: VouchedByLowercaseOptions,
+): boolean => {
   let part = "";
   let lead = "";
   for (const char of word) {
@@ -1066,9 +1077,14 @@ const vouchedByLowercase = (word: string, pair: DecodingPair): boolean => {
     if (!isNonbreakingSpace(char)) {
       continue;
     }
-    const restored = undoMisdecoding(previous + char, pair);
-    if (restored !== null && restored.length === 1 && isLetter(restored)) {
-      continue;
+    if (
+      alphabet !== null &&
+      !alphabet.native.has(previous.codePointAt(0) ?? 0)
+    ) {
+      const restored = undoMisdecoding(previous + char, pair);
+      if (restored !== null && restored.length === 1 && isLetter(restored)) {
+        continue;
+      }
     }
     if (vouches(part)) {
       return true;
@@ -1125,7 +1141,7 @@ const utf8Signature = (
     // unless it is a mark no letter of the language leads.
     work.codeUnits += word.length;
     signed ||=
-      vouchedByLowercase(word, repaired.pair) ||
+      vouchedByLowercase(word, { pair: repaired.pair, alphabet }) ||
       marksSignOnTheirOwn(word, { pair: repaired.pair, alphabet, work });
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });

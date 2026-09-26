@@ -151,6 +151,10 @@ describe("UTF-8 punctuation read as windows-1252", () => {
     ["fr", "Les lettres Â  et Â  sont identiques."],
     ["fr", "La lettre Â\u00A0est une voyelle. La lettre Â\u00A0est majuscule."],
     ["ro", "Litera Â\u00A0este o vocală. Litera Â\u00A0este o vocală."],
+    [
+      "pt",
+      "A letra Ã\u00A0representa nasalidade. A letra Ã\u00A0representa nasalidade.",
+    ],
   ])(
     "is not found in %s %s, where the lead is a native letter",
     (language, text) => {
@@ -159,15 +163,11 @@ describe("UTF-8 punctuation read as windows-1252", () => {
   );
 
   // "à" is C3 A0 in UTF-8: windows-1252 reads it as "Ã" and a nonbreaking
-  // space that belongs to the word, not one binding two words.
+  // space that belongs to the word. Catalan does not write "Ã", so the
+  // lowercase letters after the space vouch for it.
   test.each([
-    ["pt", "Ã\u00A0s Ã\u00A0s", "às"],
-    [
-      "pt",
-      "Refiro-me Ã\u00A0quela regra. Refiro-me Ã\u00A0quela regra.",
-      "àquela",
-    ],
-    ["pt", "Ã\u00A0quilo Ã\u00A0quilo", "àquilo"],
+    ["ca", "Ã\u00A0rea Ã\u00A0rea", "àrea"],
+    ["ca", "Ã\u00A0mbit Ã\u00A0mbit", "àmbit"],
   ])(
     "is found in %s %s, where the nonbreaking space is a letter's second byte",
     (language, text, first) => {
@@ -177,6 +177,22 @@ describe("UTF-8 punctuation read as windows-1252", () => {
       ).toBe(first);
     },
   );
+
+  // Portuguese writes "Ã", so "Ã\u00A0quela" alone is as likely the capital
+  // bound to a word; the other words the same mis-read garbles sign it, and
+  // the repair restores it with them.
+  test("Portuguese à read as windows-1252 is found through its other words", () => {
+    const text =
+      "Refiro-me Ã\u00A0quela informaÃ§Ã£o. Refiro-me Ã\u00A0quela informaÃ§Ã£o.";
+    expect(checkTextEncoding(text, "pt").status).toBe("suspect");
+    expect(
+      repairMisdecoding(text, {
+        language: "pt",
+        pair: { actual: "utf-8", assumed: "windows-1252" },
+        layers: 1,
+      }),
+    ).toBe("Refiro-me àquela informação. Refiro-me àquela informação.");
+  });
 
   test("letters restored in capitals alone are no signature", () => {
     // Slovak "ÄŽ" is C4 8E: the UTF-8 bytes of "Ď".
