@@ -11,9 +11,19 @@ import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { CourtWeightRow } from "@/api/lib/case-law/case-law-config-read";
-import { usCourtRank } from "@/api/lib/case-law/court-ranks";
+import {
+  type CourtRank,
+  UNRANKED_COURT_RANK,
+  usCourtRank,
+  usCourtRankByCanonicalName,
+  usCourtRankSql,
+} from "@/api/lib/case-law/court-ranks";
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
-import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
+import {
+  COURT_DIRECTORY_JURISDICTIONS,
+  type CourtDirectoryJurisdiction,
+  isCourtDirectoryJurisdiction,
+} from "@/api/lib/case-law/decision-court-id-sql";
 import { logger } from "@/api/lib/observability/logger";
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -237,9 +247,29 @@ export const createCourtWeightCache = (
 
 // -- Lookup --------------------------------------------------------------
 
-const DEFAULT_WEIGHT = 1;
+const DEFAULT_WEIGHT = UNRANKED_COURT_RANK.weight;
 /** The rank a court nobody ranked carries: the bottom of the pinned scale. */
-const DEFAULT_TIER = LOWEST_COURT_TIER;
+const DEFAULT_TIER = UNRANKED_COURT_RANK.tier;
+
+type CourtRankValue = { tier: number; weight: number };
+
+type DirectoryCourtRank = {
+  byId: (courtId: string) => CourtRankValue | null;
+  byCanonicalName: (court: string) => CourtRank | null;
+  sql: (courtIdColumn: string, field: "tier" | "weight") => string;
+};
+
+/**
+ * How a directory jurisdiction ranks its courts: from its court directory, by
+ * the stored id, never through the name registry.
+ */
+const DIRECTORY_COURT_RANK = {
+  USA: {
+    byId: usCourtRank,
+    byCanonicalName: usCourtRankByCanonicalName,
+    sql: usCourtRankSql,
+  },
+} as const satisfies Record<CourtDirectoryJurisdiction, DirectoryCourtRank>;
 
 /**
  * Rank a court name: its own jurisdiction's patterns first, then every
@@ -280,47 +310,149 @@ type DecisionCourt = {
 };
 
 /**
- * Rank a decision's court. A decision that stores a directory court id is
- * ranked by that court's directory tier, since the id and not the name is its
+ * A directory jurisdiction's rank for a stored court id. The table CHECK
+ * gives every such row an id and the write boundary admits accepted ids
+ * only, so a missing or unaccepted one is a row that should not exist: it
+ * fails rather than taking a name or default rank.
+ */
+const directoryCourtRankById = (
+  country: CourtDirectoryJurisdiction,
+  courtId: string | null,
+): CourtRankValue => {
+  const rank =
+    courtId === null ? null : DIRECTORY_COURT_RANK[country].byId(courtId);
+  return rank === null
+    ? panic(`Unranked directory court id: ${courtId ?? "none"}`)
+    : { weight: rank.weight, tier: rank.tier };
+};
+
+/**
+ * Rank a decision's court. A directory jurisdiction's decision is ranked by
+ * its stored court id's directory tier, since the id and not the name is its
  * identity; every other decision is ranked by name through the registry,
- * exactly as `courtWeightFromMap` ranks it. A stored id the directory does not
- * accept was never admitted by the write boundary, so it fails rather than
- * falling back to the default rank.
+ * exactly as `courtWeightFromMap` ranks it.
  */
 export const decisionCourtWeight = (
   map: CourtWeightMap,
   { court, country, courtId }: DecisionCourt,
-): { weight: number; tier: number } => {
-  if (courtId === null) {
-    return courtWeightFromMap(map, court, country);
-  }
-  const rank =
-    usCourtRank(courtId) ?? panic(`Unranked directory court id: ${courtId}`);
-  return { weight: rank.weight, tier: rank.tier };
-};
+): { weight: number; tier: number } =>
+  isCourtDirectoryJurisdiction(country)
+    ? directoryCourtRankById(country, courtId)
+    : courtWeightFromMap(map, court, country);
 
 /**
- * The tier a court name is presented under: the registry's own precedence
- * rules, then the bucket every unranked court falls into.
+ * The weight a citing decision's court lends a citation. A directory
+ * jurisdiction's court weighs by id; any other court by name across every
+ * jurisdiction's patterns, since citation graphs cross borders, exactly as
+ * `courtWeightSql` renders it.
+ */
+export const citingCourtWeight = (
+  map: CourtWeightMap,
+  { court, country, courtId }: DecisionCourt,
+): number =>
+  isCourtDirectoryJurisdiction(country)
+    ? directoryCourtRankById(country, courtId).weight
+    : courtWeightFromMap(map, court).weight;
+
+/** The tier a decision's court is presented under. */
+export const decisionCourtTierLabel = (
+  map: CourtWeightMap,
+  decision: DecisionCourt,
+): CourtTierLabel => courtTierLabel(decisionCourtWeight(map, decision).tier);
+
+/**
+ * The rank of the directory court stored under exactly this canonical name,
+ * or null for a name the jurisdiction's directory does not carry.
+ */
+export const directoryCourtRankByName = (
+  country: CourtDirectoryJurisdiction,
+  court: string,
+): CourtRank | null => DIRECTORY_COURT_RANK[country].byCanonicalName(court);
+
+/**
+ * The tier a court name is presented under, for a reader that holds only the
+ * name (a facet bucket). A directory jurisdiction's name is its court's
+ * canonical name, which the write boundary stores exactly, so it resolves
+ * through the directory and a name the directory does not carry fails. Any
+ * other name takes the registry's precedence rules, then the bucket every
+ * unranked court falls into.
  */
 export const courtTierLabelFromMap = (
   map: CourtWeightMap,
   court: string,
-  country?: string,
-): CourtTierLabel =>
-  courtTierLabel(courtWeightFromMap(map, court, country).tier);
+  country: string,
+): CourtTierLabel => {
+  if (!isCourtDirectoryJurisdiction(country)) {
+    return courtTierLabel(courtWeightFromMap(map, court, country).tier);
+  }
+  const rank =
+    directoryCourtRankByName(country, court) ??
+    panic(`Court name is not in the ${country} court directory: ${court}`);
+  return courtTierLabel(rank.tier);
+};
 
 /** A single-quoted SQL literal; the registry is operator-seeded, not input. */
 const sqlLiteral = (value: string): string =>
   `'${value.replaceAll("'", "''")}'`;
 
-type CourtTierSqlOptions = {
-  /** SQL reference to the court-name column. A code constant, never input. */
+/** SQL references to a decision's court columns. Code constants, never input. */
+export type CourtRankColumns = {
+  countryColumn: string;
   courtColumn: string;
-  /** SQL reference to the country column. A code constant, never input. */
+  courtIdColumn: string;
+};
+
+type DirectoryCourtRankSqlOptions = {
+  columns: CourtRankColumns;
+  field: "tier" | "weight";
+  /** The rank every other jurisdiction's row takes, rendered by name. */
+  byName: string;
+};
+
+/**
+ * A rank expression that sends each directory jurisdiction's rows to its
+ * directory rank by id and every other row to `byName`, unchanged. A
+ * directory row never reaches the name patterns, so a court name cannot rank
+ * it, and no other row reaches the directory.
+ */
+export const directoryCourtRankSql = ({
+  columns: { countryColumn, courtIdColumn },
+  field,
+  byName,
+}: DirectoryCourtRankSqlOptions): string =>
+  sqlCaseExpression({
+    branches: COURT_DIRECTORY_JURISDICTIONS.map(
+      (country) =>
+        `WHEN ${countryColumn} = ${sqlLiteral(country)} THEN ${DIRECTORY_COURT_RANK[country].sql(courtIdColumn, field)}`,
+    ),
+    fallback: byName,
+  });
+
+type CourtNameTierSqlOptions = {
+  courtColumn: string;
   countryColumn: string;
   map: CourtWeightMap;
 };
+
+type CourtTierSqlOptions = CourtRankColumns & { map: CourtWeightMap };
+
+/**
+ * `decisionCourtWeight`'s tier as SQL: a directory jurisdiction's row by its
+ * court id, every other row by `courtNameTierSql`.
+ */
+export const courtTierSqlFromMap = ({
+  map,
+  ...columns
+}: CourtTierSqlOptions): string =>
+  directoryCourtRankSql({
+    columns,
+    field: "tier",
+    byName: courtNameTierSql({
+      countryColumn: columns.countryColumn,
+      courtColumn: columns.courtColumn,
+      map,
+    }),
+  });
 
 /**
  * `courtWeightFromMap`'s tier lookup rendered as SQL, branch for branch: the
@@ -340,11 +472,11 @@ type CourtTierSqlOptions = {
  * court-tier prior exists in both runtimes, and `authority-sql.test.ts` runs
  * the two over the same fixtures and holds them equal.
  */
-export const courtTierSqlFromMap = ({
+export const courtNameTierSql = ({
   courtColumn,
   countryColumn,
   map,
-}: CourtTierSqlOptions): string => {
+}: CourtNameTierSqlOptions): string => {
   const ordered = flattenCourtWeightEntries(map);
   const scoped = ordered.map(
     (entry) =>

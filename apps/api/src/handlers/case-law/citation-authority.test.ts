@@ -47,10 +47,22 @@ const NOW = new Date("2026-06-05T00:00:00.000Z");
  * NULL polarity any way it liked and still match.
  */
 const CITED_CITATIONS = [
-  { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
-  { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
   {
     citingCourt: "Nejvyšší soud",
+    citingCountry: "CZE",
+    citingCourtId: null,
+    citingDate: "2025-01-01",
+  },
+  {
+    citingCourt: "Krajský soud",
+    citingCountry: "CZE",
+    citingCourtId: null,
+    citingDate: "2018-01-01",
+  },
+  {
+    citingCourt: "Nejvyšší soud",
+    citingCountry: "CZE",
+    citingCourtId: null,
     citingDate: "2024-01-01",
     polarity: POLARITY.NEGATIVE,
   },
@@ -270,10 +282,14 @@ test("materialized authority equals citationScore() at the same instant", async 
   // Ignoring polarity would score the same fixture higher, so a SQL twin that
   // forgot the polarity CASE could not pass the equality below.
   const ignoringPolarity = citationScore(
-    CITED_CITATIONS.map(({ citingCourt, citingDate }) => ({
-      citingCourt,
-      citingDate,
-    })),
+    CITED_CITATIONS.map(
+      ({ citingCourt, citingCountry, citingCourtId, citingDate }) => ({
+        citingCourt,
+        citingCountry,
+        citingCourtId,
+        citingDate,
+      }),
+    ),
     NOW,
     SEED_MAP,
   );
@@ -327,12 +343,26 @@ test("a more authoritative citing court yields higher authority", async () => {
   // Same single citation, supreme (weight 8) vs regional (weight 4),
   // controlling for date so only court weight differs.
   const supreme = citationScore(
-    [{ citingCourt: "Nejvyšší soud", citingDate: "2024-01-01" }],
+    [
+      {
+        citingCourt: "Nejvyšší soud",
+        citingCountry: "CZE",
+        citingCourtId: null,
+        citingDate: "2024-01-01",
+      },
+    ],
     NOW,
     SEED_MAP,
   );
   const regional = citationScore(
-    [{ citingCourt: "Krajský soud", citingDate: "2024-01-01" }],
+    [
+      {
+        citingCourt: "Krajský soud",
+        citingCountry: "CZE",
+        citingCourtId: null,
+        citingDate: "2024-01-01",
+      },
+    ],
     NOW,
     SEED_MAP,
   );
@@ -531,7 +561,14 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
 
   expect(await authorityOf(customCitedId)).toBeCloseTo(
     citationScore(
-      [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
+      [
+        {
+          citingCourt: "Custom Seeded Court",
+          citingCountry: "CZE",
+          citingCourtId: null,
+          citingDate: "2025-01-01",
+        },
+      ],
       NOW,
       new Map([["CZE", CUSTOM_ENTRIES]]),
     ),
@@ -542,12 +579,98 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   // enough that the assertion above cannot pass by coincidence.
   expect(await authorityOf(customCitedId)).not.toBeCloseTo(
     citationScore(
-      [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
+      [
+        {
+          citingCourt: "Custom Seeded Court",
+          citingCountry: "CZE",
+          citingCourtId: null,
+          citingDate: "2025-01-01",
+        },
+      ],
       NOW,
       SEED_MAP,
     ),
     2,
   );
+});
+
+test("a United States citing court weighs its directory tier, by id", async () => {
+  // One cited decision per tier, each cited once by a court of that tier.
+  const citing = [
+    { courtId: "scotus", court: "Supreme Court of the United States" },
+    { courtId: "ca1", court: "Court of Appeals for the First Circuit" },
+    { courtId: "mad", court: "District Court, D. Massachusetts" },
+    { courtId: "masslandct", court: "Massachusetts Land Court" },
+  ].map(({ court, courtId }) => ({
+    court,
+    courtId,
+    citedId: createSafeId<"caseLawDecision">(),
+    citingId: createSafeId<"caseLawDecision">(),
+  }));
+  await db.insert(caseLawDecisions).values(
+    citing.flatMap(({ citedId: cited, citingId, court, courtId }) => [
+      {
+        id: cited,
+        sourceId,
+        caseNumber: `usa-cited-${courtId}`,
+        court: "Supreme Court of the United States",
+        courtId: "scotus",
+        country: "USA",
+        language: "en",
+        decisionDate: "2020-01-01",
+      },
+      {
+        id: citingId,
+        sourceId,
+        caseNumber: `usa-citing-${courtId}`,
+        court,
+        courtId,
+        country: "USA",
+        language: "en",
+        decisionDate: "2025-01-01",
+      },
+    ]),
+  );
+  await db.insert(caseLawCitations).values(
+    citing.map(({ citedId: cited, citingId, courtId }) => ({
+      citingDecisionId: citingId,
+      citedDecisionId: cited,
+      citationText: `usa-cited-${courtId}`,
+    })),
+  );
+
+  await sweep(1000);
+
+  const scored = await Promise.all(
+    citing.map(async ({ citedId: cited, court, courtId }) => {
+      const citation = {
+        citingCourt: court,
+        citingCountry: "USA",
+        citingCourtId: courtId,
+        citingDate: "2025-01-01",
+      };
+      return {
+        courtId,
+        stored: await authorityOf(cited),
+        byId: citationScore([citation], NOW, SEED_MAP),
+        // What the same citation scores under the name registry alone.
+        byName: citationScore(
+          [{ ...citation, citingCountry: "XNM", citingCourtId: null }],
+          NOW,
+          SEED_MAP,
+        ),
+      };
+    }),
+  );
+  for (const { courtId, stored, byId } of scored) {
+    expect([courtId, Math.abs(stored - byId) < 1e-9]).toEqual([courtId, true]);
+  }
+  // Weights 8, 5, 2 and 3: every tier scores apart, and below the apex the
+  // name registry would have weighed each at the default.
+  expect(new Set(scored.map(({ byId }) => byId)).size).toBe(citing.length);
+  expect(
+    scored.filter(({ byId, byName }) => byId !== byName).map((s) => s.courtId),
+  ).toEqual(["ca1", "mad", "masslandct"]);
 });
 
 test("an unseeded registry recomputes at the default weight", async () => {

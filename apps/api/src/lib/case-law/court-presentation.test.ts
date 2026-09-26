@@ -15,6 +15,7 @@ import {
 const SUPREME_COURT = {
   country: "CZE",
   court: "Nejvyšší soud",
+  courtId: null,
   ecli: "ECLI:CZ:NS:2019:25.CDO.1734.2018.1",
 };
 

@@ -167,6 +167,7 @@ test("a cache reload ranks an overlapping court the same, whatever order the row
     rendered: courtTierSqlFromMap({
       countryColumn: "d.country",
       courtColumn: "d.court",
+      courtIdColumn: "d.court_id",
       map,
     }),
   });

@@ -28,8 +28,13 @@ import {
   POLARITY_AUTHORITY_WEIGHT,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
-import { courtWeightFromMap } from "@/api/lib/case-law/court-weights";
+import {
+  citingCourtWeight,
+  courtWeightFromMap,
+  directoryCourtRankSql,
+} from "@/api/lib/case-law/court-weights";
 import type {
+  CourtRankColumns,
   CourtWeightEntry,
   CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
@@ -93,6 +98,9 @@ export const polarityWeight = (polarity: Polarity | null): number =>
 /** One incoming citation, as the score reads it. */
 export type CitationInput = {
   citingCourt: string;
+  citingCountry: string;
+  /** The citing decision's directory court id, where its country stores one. */
+  citingCourtId: string | null;
   citingDate: Date | string | null;
   /** Null while the citation has not been classified. */
   polarity?: Polarity | null;
@@ -103,7 +111,7 @@ export type CitationInput = {
  * Each citation contributes:
  *
  *   polarityWeight(polarity)
- *     * courtWeight(citingCourt)
+ *     * citingCourtWeight(citing)
  *     * recencyFactor(citingDate)
  *
  * A negative treatment therefore adds nothing: the court that overruled or
@@ -119,7 +127,11 @@ export const weightedCitationSum = (
   for (const c of citations) {
     sum +=
       polarityWeight(c.polarity ?? null) *
-      courtWeight(c.citingCourt, weightMap) *
+      citingCourtWeight(weightMap, {
+        court: c.citingCourt,
+        country: c.citingCountry,
+        courtId: c.citingCourtId,
+      }) *
       recencyFactor(c.citingDate, now);
   }
   return sum;
@@ -156,13 +168,31 @@ export const polarityWeightSql = (polarityColumn: string): string =>
     fallback: POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN],
   });
 
+type CourtWeightSqlOptions = CourtRankColumns & {
+  entries: readonly CourtWeightEntry[];
+};
+
 /**
- * The SQL CASE expression for court weights, rendered from the seeded
+ * `citingCourtWeight` as SQL: a directory jurisdiction's court by its id,
+ * every other court by `courtNameWeightSql`.
+ */
+export const courtWeightSql = ({
+  entries,
+  ...columns
+}: CourtWeightSqlOptions): string =>
+  directoryCourtRankSql({
+    columns,
+    field: "weight",
+    byName: courtNameWeightSql(columns.courtColumn, entries),
+  });
+
+/**
+ * The SQL CASE expression for court weights by name, rendered from the seeded
  * entries (highest tier first, so the first matching branch is the rank).
  * No entries renders the default weight alone: an unseeded registry weighs
  * every court the same rather than failing the statement.
  */
-export const courtWeightSql = (
+export const courtNameWeightSql = (
   courtColumn: string,
   entries: readonly CourtWeightEntry[],
 ): string =>

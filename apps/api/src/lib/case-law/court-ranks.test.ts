@@ -1,37 +1,42 @@
 import { expect, test } from "bun:test";
 
-import {
-  resolveUsCourt,
-  US_COURTS,
-  US_WRITABLE_COURT_IDS,
-} from "@stll/api-contract/us-courts";
+import { resolveUsCourt, US_COURTS } from "@stll/api-contract/us-courts";
 
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { usCourtRank } from "@/api/lib/case-law/court-ranks";
 import {
+  UNRANKED_COURT_RANK,
+  usCourtRank,
+  usCourtRankSql,
+} from "@/api/lib/case-law/court-ranks";
+import {
+  citingCourtWeight,
+  courtTierLabelFromMap,
   courtWeightFromMap,
   decisionCourtWeight,
 } from "@/api/lib/case-law/court-weights";
 
 const map = courtWeightMapFromSeed();
 
-test("a directory court ranks by id exactly as its seeded row ranks it by name", () => {
-  // Every court the seed names, SCOTUS included: the directory rank and the
-  // registry row are two readings of one tier, and a decision stored with an
-  // id must rank where the same decision ranked by name.
-  const writable = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id));
-  expect(writable.map(({ id }) => id)).toContain("scotus");
-  for (const court of writable) {
-    const byName = courtWeightFromMap(map, court.canonicalName, "USA");
-    expect([
-      court.id,
-      decisionCourtWeight(map, {
-        court: court.canonicalName,
-        country: "USA",
-        courtId: court.id,
-      }),
-    ]).toEqual([court.id, byName]);
+const SCOTUS = "Supreme Court of the United States";
+
+test("a directory decision ranks by its court id, whatever its name says", () => {
+  const circuit = resolveUsCourt("ca1");
+  if (circuit.type !== "accepted") {
+    throw new Error("ca1 is not an accepted court");
   }
+  expect(circuit.court.tier).toBe("appellate");
+  // The registry keeps a name row for the Supreme Court; an id that names
+  // the First Circuit still ranks as the First Circuit.
+  expect(courtWeightFromMap(map, SCOTUS, "USA")).toEqual({
+    tier: 3,
+    weight: 8,
+  });
+  expect(
+    decisionCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
+  ).toEqual({ tier: 2, weight: 5 });
+  expect(
+    citingCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
+  ).toBe(5);
   expect(usCourtRank("scotus")).toEqual({
     tier: 3,
     tierLabel: "supreme",
@@ -39,29 +44,41 @@ test("a directory court ranks by id exactly as its seeded row ranks it by name",
   });
 });
 
-test("a directory court the seed does not name still ranks at its directory tier", () => {
-  const circuit = resolveUsCourt("ca1");
-  if (circuit.type !== "accepted" || US_WRITABLE_COURT_IDS.has("ca1")) {
-    throw new Error("ca1 is not an accepted, unseeded court");
+test("a directory decision without an accepted court id fails rather than ranking by name", () => {
+  for (const courtId of [null, "test", "Scotus", "unknown-court"]) {
+    expect(() =>
+      decisionCourtWeight(map, { court: SCOTUS, country: "USA", courtId }),
+    ).toThrow(`Unranked directory court id: ${courtId ?? "none"}`);
+    expect(() =>
+      citingCourtWeight(map, { court: SCOTUS, country: "USA", courtId }),
+    ).toThrow(`Unranked directory court id: ${courtId ?? "none"}`);
   }
-  expect(circuit.court.tier).toBe("appellate");
-  // By name it falls to the default rank; by id it holds its tier.
-  expect(courtWeightFromMap(map, circuit.court.canonicalName, "USA")).toEqual({
-    tier: 1,
-    weight: 1,
-  });
-  expect(
-    decisionCourtWeight(map, {
-      court: circuit.court.canonicalName,
-      country: "USA",
-      courtId: "ca1",
-    }),
-  ).toEqual({ tier: 2, weight: 5 });
   expect(() =>
-    decisionCourtWeight(map, {
-      court: "Test court",
-      country: "USA",
-      courtId: "test",
-    }),
-  ).toThrow("Unranked directory court id: test");
+    courtTierLabelFromMap(map, "Supreme Court of Nowhere", "USA"),
+  ).toThrow("Court name is not in the USA court directory");
+});
+
+test("the directory rank SQL lists each ranked id once, grouped by value", () => {
+  const listed = (rendered: string): string[] =>
+    [...rendered.matchAll(/"([^"]+)"/gu)].map(([, id]) => id ?? "");
+  const weight = usCourtRankSql("d.court_id", "weight");
+  const tier = usCourtRankSql("d.court_id", "tier");
+
+  // Every accepted court holds a weight above the unranked one, so every id
+  // is listed; the tier lists only the courts above the lowest tier, since
+  // the ELSE already answers the rest.
+  expect(listed(weight).toSorted()).toEqual(
+    US_COURTS.map(({ id }) => id).toSorted(),
+  );
+  expect(listed(tier).toSorted()).toEqual(
+    US_COURTS.filter(
+      ({ id }) => (usCourtRank(id)?.tier ?? 0) > UNRANKED_COURT_RANK.tier,
+    )
+      .map(({ id }) => id)
+      .toSorted(),
+  );
+  expect(weight.match(/\bWHEN\b/gu)).toHaveLength(4);
+  expect(tier.match(/\bWHEN\b/gu)).toHaveLength(2);
+  expect(weight).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.weight)} END`);
+  expect(tier).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.tier)} END`);
 });

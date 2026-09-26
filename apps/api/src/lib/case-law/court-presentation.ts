@@ -7,8 +7,8 @@ import {
   type CourtAbbreviationInput,
 } from "@/api/lib/case-law/court-abbreviations";
 import {
-  courtTierLabelFromMap,
   type CourtWeightMap,
+  decisionCourtTierLabel,
 } from "@/api/lib/case-law/court-weights";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -41,9 +41,14 @@ export type CourtRegistry = CourtWeightMap | null;
  */
 const UNRANKED_TIER: CourtTierLabel = "other";
 
+type PresentedDecision = CourtAbbreviationInput & {
+  /** The directory court id, where the decision's jurisdiction stores one. */
+  courtId: string | null;
+};
+
 export const courtPresentation = (
   courtWeights: CourtRegistry,
-  decision: CourtAbbreviationInput,
+  decision: PresentedDecision,
 ): CourtPresentation =>
   // No registry, no chip. The alternative is a badge drawn at the bottom of a
   // scale nobody could read, which would show the Supreme Court as a district
@@ -53,11 +58,7 @@ export const courtPresentation = (
     ? { courtAbbreviation: null, courtTier: UNRANKED_TIER }
     : {
         courtAbbreviation: courtAbbreviation(decision) ?? null,
-        courtTier: courtTierLabelFromMap(
-          courtWeights,
-          decision.court,
-          decision.country,
-        ),
+        courtTier: decisionCourtTierLabel(courtWeights, decision),
       };
 
 /**

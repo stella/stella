@@ -19,6 +19,7 @@ describe("selectShelfCourts", () => {
         { court: "Nejvyšší správní soud", count: 2000 },
         { court: "Ústavní soud", count: 400 },
       ],
+      country: "CZE",
       entries: entriesFor("CZE"),
       limit: 4,
     });
@@ -36,6 +37,7 @@ describe("selectShelfCourts", () => {
         { court: "Naczelny Sąd Administracyjny", count: 2 },
         { court: "Trybunał Konstytucyjny", count: 0 },
       ],
+      country: "POL",
       entries: entriesFor("POL"),
       limit: 2,
     });
@@ -49,15 +51,37 @@ describe("selectShelfCourts", () => {
     expect(
       selectShelfCourts({
         counts: [{ court: "Nejvyšší soud", count: 5 }],
+        country: "CZE",
         entries: [],
         limit: 4,
       }),
     ).toEqual([]);
   });
 
+  test("a United States court is shelved by its directory tier, not the registry", () => {
+    const shelf = selectShelfCourts({
+      counts: [
+        { court: "Supreme Court of the United States", count: 1 },
+        { court: "California Supreme Court", count: 5 },
+        { court: "Court of Appeals for the First Circuit", count: 9 },
+        { court: "Supreme court of the united states", count: 3 },
+      ],
+      country: "USA",
+      entries: entriesFor("USA"),
+      limit: 4,
+    });
+    // The registry names only the Supreme Court, and case-insensitively; the
+    // directory names each court by its exact canonical name.
+    expect(shelf).toEqual([
+      { court: "California Supreme Court", tierLabel: "supreme" },
+      { court: "Supreme Court of the United States", tierLabel: "supreme" },
+    ]);
+  });
+
   test("court names match case-insensitively, as the seed compiles them", () => {
     const shelf = selectShelfCourts({
       counts: [{ court: "COURT OF JUSTICE", count: 1 }],
+      country: "EU",
       entries: entriesFor("EU"),
       limit: 4,
     });

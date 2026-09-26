@@ -270,6 +270,7 @@ export const listDecisionsHandler = async (
       const presentation = courtPresentation(courtWeights, {
         country: decision.country,
         court: decision.court,
+        courtId: decision.courtId,
         ecli: decision.ecli,
       });
       return {

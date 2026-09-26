@@ -132,6 +132,7 @@ export const providerSearchPlan = ({
       courtTierSqlFromMap({
         countryColumn: "d.country",
         courtColumn: "d.court",
+        courtIdColumn: "d.court_id",
         map: courtWeights,
       }),
     ),

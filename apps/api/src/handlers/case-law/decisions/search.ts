@@ -331,6 +331,7 @@ export const caseLawSearchPlan = ({
       courtTierSqlFromMap({
         countryColumn: "d.country",
         courtColumn: "d.court",
+        courtIdColumn: "d.court_id",
         map: courtWeights,
       }),
     ),
@@ -365,10 +366,12 @@ export const caseLawSearchPlan = ({
   // The citing court can belong to any jurisdiction — citation graphs cross
   // borders — so this side of the statement reads the flattened registry
   // rather than the decision's own country.
-  const courtWeightExpr = courtWeightSql(
-    "citing_d.court",
-    flattenCourtWeightEntries(courtWeights),
-  );
+  const courtWeightExpr = courtWeightSql({
+    countryColumn: "citing_d.country",
+    courtColumn: "citing_d.court",
+    courtIdColumn: "citing_d.court_id",
+    entries: flattenCourtWeightEntries(courtWeights),
+  });
 
   const citationAuthorityLateral = sql.raw(`
     LATERAL (
@@ -453,6 +456,7 @@ export const caseLawSearchPlan = ({
         WHERE identifier.decision_id = d.id
       ) AS identifiers,
       d.court,
+      d.court_id,
       d.country,
       d.language,
       d.language_group_key,
@@ -741,6 +745,7 @@ const searchPostgresDecisions = async (
     const presentation = courtPresentation(courtWeights, {
       country: String(row["country"]),
       court: String(row["court"]),
+      courtId: toNullableString(row["court_id"]),
       ecli: toNullableString(row["ecli"]),
     });
 
@@ -1501,6 +1506,7 @@ const decisionHitsPage = ({
     const presentation = courtPresentation(courtWeights, {
       country: row.country,
       court: row.court,
+      courtId: row.courtId,
       ecli: row.ecli,
     });
     const { caseNumberType } = row;
