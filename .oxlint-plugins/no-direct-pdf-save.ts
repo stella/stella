@@ -50,6 +50,8 @@ const RESTRICTED_HELPERS: ReadonlyMap<string, readonly string[]> = new Map([
   ],
 ]);
 const OWNER_PATH = "apps/api/src/lib/files/pdf-signatures.ts";
+const FIXTURE_FILE_SUFFIX =
+  ".oxlint-plugins/__fixtures__/no-direct-pdf-save.fixture.ts";
 const LIBPDF = "@libpdf/core";
 const DOCUMENT_FACTORIES = new Set(["create", "load", "merge"]);
 const OTHER_PDF_WRITERS = new Set([
@@ -176,6 +178,9 @@ export default eslintCompatPlugin({
             pdfClassNames.clear();
             documentNames.clear();
             const filename = filenameForContext(context);
+            if (filename.endsWith(FIXTURE_FILE_SUFFIX)) {
+              return true;
+            }
             return (
               filename.includes("apps/api/src/") &&
               !filename.endsWith(OWNER_PATH) &&
