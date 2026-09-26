@@ -65,6 +65,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -687,6 +688,90 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         metadata: { flowName: "Gate-terminated flow" },
       },
     ]);
+  });
+
+  test("a completion notice that cannot be filed still answers the completed review", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Gate-terminated flow, notice refused",
+      steps: [AI_STEP, REVIEW_GATE_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const { runId } = started.value;
+
+    enqueuedSteps.length = 0;
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 0 },
+      new AbortController().signal,
+    );
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 1 });
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 1 },
+      new AbortController().signal,
+    );
+
+    const refusingNotice = mock(async () => {
+      await Promise.resolve();
+      throw new Error("notice refused");
+    });
+    const recordAuditEvent = mock(async () => undefined);
+    const analytics = installRecordingAnalytics();
+    try {
+      const approved = await resolveFlowReviewGateWithDependencies(
+        {
+          safeDb,
+          workspaceId,
+          organizationId,
+          runId,
+          userId,
+          decision: "approved",
+          note: null,
+          recordAuditEvent,
+        },
+        {
+          broadcastUpdate,
+          enqueueStep: enqueueFlowStepMock,
+          notifyRunCompleted: refusingNotice,
+        },
+      );
+      if (Result.isError(approved)) {
+        throw approved.error;
+      }
+      expect(approved.value.status).toBe("completed");
+      expect(refusingNotice).toHaveBeenCalledTimes(1);
+      expect(recordAuditEvent).toHaveBeenCalled();
+      expect(
+        analytics.exceptions().map((event) => event.properties["error.class"]),
+      ).toEqual(["FlowRunCompletionNoticeError"]);
+    } finally {
+      analytics.restore();
+    }
+
+    const finished = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { status: true },
+    });
+    expect(finished?.status).toBe("completed");
   });
 
   // An automated run whose author was deleted mid-flight has no actor to

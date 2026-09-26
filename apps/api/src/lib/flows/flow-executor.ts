@@ -64,7 +64,9 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -106,6 +108,25 @@ export class FlowStepError extends TaggedError("FlowStepError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+/**
+ * The completion notice for a run a reviewer finished could not be filed.
+ * The review has already committed, so this is observed, not answered.
+ */
+class FlowRunCompletionNoticeError extends TaggedError(
+  "FlowRunCompletionNoticeError",
+)<{
+  message: string;
+  cause: unknown;
+  organizationId: SafeId<"organization">;
+  runId: SafeId<"flowRun">;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+const FLOW_RUN_COMPLETION_NOTICE_SINK = failureSink({
+  event: "flow_run.completion_notice_failed",
+  expected: [],
+});
 
 // ── Per-job step execution (queue side) ─────────────────
 
@@ -1319,20 +1340,36 @@ export const resolveFlowReviewGate = async (
     // exist only for runs whose last step was not a review gate. Addressed to
     // the run's actor, who is usually not the reviewer, so it cannot be
     // written under the reviewer's own scope; the run-derived key makes it a
-    // no-op if `completeStepAndAdvance` also reaches it.
+    // no-op if `completeStepAndAdvance` also reaches it. The review and its
+    // audit event have committed by now, so a notice that cannot be filed is
+    // observed and the reviewer still gets the completed run: failing here
+    // would answer an error for a decision that stands, and a retry would find
+    // the run no longer awaiting review.
     if (resolution.kind === "finish") {
-      yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await notifyRunCompleted({
-              run,
-              flowName: run.definitionSnapshot.name,
-              organizationId,
-              runId,
-              workspaceId,
-            }),
-        ),
-      );
+      const noticeFiled = await Result.tryPromise({
+        try: async () =>
+          await notifyRunCompleted({
+            run,
+            flowName: run.definitionSnapshot.name,
+            organizationId,
+            runId,
+            workspaceId,
+          }),
+        catch: (cause) =>
+          new FlowRunCompletionNoticeError({
+            message: "Could not file the completion notice for a reviewed run",
+            cause,
+            organizationId,
+            runId,
+            workspaceId,
+          }),
+      });
+      if (Result.isError(noticeFiled)) {
+        observeFailure(noticeFiled.error, {
+          sink: FLOW_RUN_COMPLETION_NOTICE_SINK,
+          ctx: { organizationId, runId, workspaceId },
+        });
+      }
     }
 
     if (resolution.kind === "advance") {
