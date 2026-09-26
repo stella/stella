@@ -79,6 +79,7 @@ const handlerContext = <T>(value: unknown) => asTestRaw<T>(value);
 
 describe("matter correspondence", () => {
   test("the migration forces RLS on every new table", () => {
+    expect(createdTables.length).toBeGreaterThan(0);
     expect(forcedTables.toSorted()).toEqual(createdTables.toSorted());
   });
 
