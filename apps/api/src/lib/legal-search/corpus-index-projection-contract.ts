@@ -52,6 +52,7 @@ export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
 export const CORPUS_INDEX_APPEND_CANCEL_REASON = {
   leaseExpired: "projection reservation lease expired before append",
   desiredStateChanged: "projection desired state changed before append",
+  groupNotAttested: "projection index group was not attested at append start",
 } as const;
 
 /** Phases that can create or expose one exact append revision. */

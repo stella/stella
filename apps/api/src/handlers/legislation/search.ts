@@ -465,6 +465,7 @@ const corpusIndexSearch = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+          target: null,
         });
 
   const hits = pageRanked.flatMap((hit): LegislationHit[] => {
@@ -530,6 +531,7 @@ export const searchLegislationHandler = async (
       !isUuid(parsedCursor.id) ||
       isStaleCorpusSearchCursor(parsedCursor, {
         dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+        target: null,
         sort: DEFAULT_SEARCH_SORT,
       }))
   ) {

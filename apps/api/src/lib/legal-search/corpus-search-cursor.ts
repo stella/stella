@@ -21,6 +21,14 @@
  *
  *     base64("<score>:<windowStart>:<dictionary>:<sort>:<id>")
  *
+ * and, for a read that reaches a group under a contract of its own, the
+ * identity of what it reached before the id:
+ *
+ *     base64("<score>:<windowStart>:<dictionary>:<sort>:<target>:<id>")
+ *
+ * A cursor without a target was built against groups under their manifests'
+ * contracts only, so it cannot continue a read whose target has one.
+ *
  * `windowStart` is a decimal rank, `dictionary` is a payload's sha256 hex or
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
  * corpus addresses documents by uuid, so the grammar is fixed-width in its
@@ -68,7 +76,22 @@ import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
  */
 export type CorpusSearchCursor = SearchCursor & {
   dictionary: ExpansionDictionaryIdentity;
+  /**
+   * The identity of what the read reached (`corpusIndexReadTarget`), or null
+   * for a read that reached only groups under their manifests' contracts,
+   * whose cursors keep the form they always had.
+   */
+  target: string | null;
 };
+
+/** Hex characters of a read target's identity (`corpusIndexReadTarget`). */
+export const CORPUS_READ_TARGET_IDENTITY_LENGTH = 32;
+
+/** A read target identity on the wire: fixed-width lowercase hex. */
+const READ_TARGET_PATTERN = new RegExp(
+  `^[0-9a-f]{${String(CORPUS_READ_TARGET_IDENTITY_LENGTH)}}$`,
+  "u",
+);
 
 /**
  * A window rank on the wire: decimal digits, bounded so the parse is total.
@@ -111,6 +134,8 @@ export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
     1 +
     SORT_MAX_CHARS +
     1 +
+    CORPUS_READ_TARGET_IDENTITY_LENGTH +
+    1 +
     DECISION_ID_MAX_CHARS,
 );
 
@@ -119,11 +144,12 @@ export const encodeCorpusSearchCursor = ({
   id,
   score,
   sort,
+  target,
   windowStart,
 }: CorpusSearchCursor): string =>
   encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${id}`,
   );
 
 export const decodeCorpusSearchCursor = (
@@ -142,11 +168,13 @@ export const decodeCorpusSearchCursor = (
     dictionary: ExpansionDictionaryIdentity,
     windowStart: number,
     sort: SearchSort,
+    target: string | null = null,
   ): CorpusSearchCursor => ({
     dictionary,
     id,
     score: decoded.score,
     sort,
+    target,
     windowStart,
   });
 
@@ -184,6 +212,21 @@ export const decodeCorpusSearchCursor = (
       }
       return cursorOf(dictionary, windowStart, sort);
     }
+    case 5: {
+      const windowStart = parseWindowStart(segments.at(0) ?? "");
+      const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
+      const sort = parseSearchSort(segments.at(2) ?? "");
+      const target = segments.at(3) ?? "";
+      if (
+        windowStart === null ||
+        dictionary === null ||
+        sort === null ||
+        !READ_TARGET_PATTERN.test(target)
+      ) {
+        return null;
+      }
+      return cursorOf(dictionary, windowStart, sort, target);
+    }
     // An id carrying a colon is not a cursor this service issued: the grammar
     // above spends every segment it defines, so a longer payload is malformed
     // rather than an id with a separator in it.
@@ -197,6 +240,8 @@ export const decodeCorpusSearchCursor = (
 type CorpusSearchRanking = {
   dictionary: ExpansionDictionaryIdentity;
   sort: SearchSort;
+  /** The read's target identity; a cursor must carry exactly this one. */
+  target: string | null;
 };
 
 /**
@@ -206,8 +251,9 @@ type CorpusSearchRanking = {
  */
 export const isStaleCorpusSearchCursor = (
   cursor: CorpusSearchCursor | null,
-  { dictionary, sort }: CorpusSearchRanking,
+  { dictionary, sort, target }: CorpusSearchRanking,
 ): boolean =>
   cursor !== null &&
   (!sameExpansionDictionary(cursor.dictionary, dictionary) ||
-    cursor.sort !== sort);
+    cursor.sort !== sort ||
+    cursor.target !== target);

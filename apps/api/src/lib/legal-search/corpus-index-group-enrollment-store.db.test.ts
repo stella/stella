@@ -25,8 +25,13 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { reserveCorpusProjectionIntentsTx } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  reserveCorpusProjectionIntentsTx,
+  startCorpusProjectionAppendBatchTx,
+  startCorpusProjectionAppendTx,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -167,15 +172,166 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   );
   expect(refusal).toBeInstanceOf(HandlerError);
   expect(refusal).toMatchObject({ status: 503 });
-  expect((await target("CZE")).contract?.type).toBe("base");
-  expect((await target(undefined)).contract).toBeNull();
+  // A scoped base read keeps its route and its legacy cursor form.
+  expect(await target("CZE")).toMatchObject({
+    contract: { type: "base" },
+    route: { indexId: "case_law_v7_cs_sk", jurisdictionClause: "CZE" },
+    cursorTarget: null,
+  });
+
+  // A global read before attestation names every base group and never the
+  // unattested index, which may exist and hold documents already.
+  const unattestedGlobal = await target(undefined);
+  expect(unattestedGlobal.contract).toBeNull();
+  expect(unattestedGlobal.route.indexId).toBe(
+    "case_law_v7_aut*,case_law_v7_cs_sk*,case_law_v7_eu*,case_law_v7_hun*,case_law_v7_pol*",
+  );
+  expect(unattestedGlobal.cursorTarget).toBeNull();
 
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
   await expect(target("USA")).rejects.toBeInstanceOf(HandlerError);
+  expect((await target(undefined)).route).toEqual(unattestedGlobal.route);
   await inTx(
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
   );
-  expect((await target("USA")).contract).toBe(USA_CONTRACT);
+  const scoped = await target("USA");
+  expect(scoped.contract).toBe(USA_CONTRACT);
+  expect(scoped.route.indexId).toBe("case_law_v7_usa");
+  expect(scoped.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
+
+  // Once attested the global read names the index exactly, and its cursors
+  // bind the set it reached, so a base-only cursor cannot continue it.
+  const attestedGlobal = await target(undefined);
+  expect(attestedGlobal.route.indexId).toBe(
+    `${unattestedGlobal.route.indexId},case_law_v7_usa`,
+  );
+  expect(attestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
+  expect(attestedGlobal.cursorTarget).not.toBe(scoped.cursorTarget);
+
+  // Withdrawn again, the global read drops it at once.
+  await db
+    .update(corpusIndexGroupEnrollments)
+    .set({ provisioningStatus: "pending", attestedAt: null })
+    .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
+  expect(await target(undefined)).toMatchObject({
+    route: unattestedGlobal.route,
+    cursorTarget: null,
+  });
+});
+
+test("an attestation withdrawn after reservation stops the append at start, and the work waits for the next one", async () => {
+  await db.insert(caseLawSources).values({
+    id: SOURCE_ID,
+    adapterKey: "group-enrollment",
+    name: "Group enrollment",
+  });
+  await db.insert(caseLawDecisions).values({
+    id: USA_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "No. 19-1392",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    contentHash: "a".repeat(64),
+  });
+  await inTx(
+    async (tx) =>
+      await advanceCorpusProjectionDesiredStateTx(tx, {
+        family: "case_law",
+        entityId: USA_DECISION_ID,
+      }),
+  );
+  await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  const withdraw = async () =>
+    await db
+      .update(corpusIndexGroupEnrollments)
+      .set({ provisioningStatus: "pending", attestedAt: null })
+      .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
+  const reserve = async () =>
+    await inTx(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(tx, {
+          family: "case_law",
+          generation: MANIFEST.generation,
+          scope: { type: "route", indexId: "case_law_v7_usa" },
+          limit: 1,
+          leaseMs: 60_000,
+        }),
+    );
+  const lastErrorOf = async (intentId: string) =>
+    await db
+      .select({
+        status: corpusIndexProjectionIntents.status,
+        lastError: corpusIndexProjectionIntents.lastError,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, intentId));
+
+  // The batch start, which the append cycle uses.
+  const batchLeases = await reserve();
+  expect(batchLeases).toHaveLength(1);
+  await withdraw();
+  expect(
+    await inTx(
+      async (tx) =>
+        await startCorpusProjectionAppendBatchTx(tx, { leases: batchLeases }),
+    ),
+  ).toEqual(
+    batchLeases.map(({ intentId }) => ({
+      intentId,
+      status: "stale_cancelled",
+    })),
+  );
+  const [batchLease] = batchLeases;
+  expect(await lastErrorOf(batchLease?.intentId ?? "")).toEqual([
+    {
+      status: "cancelled",
+      lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.groupNotAttested,
+    },
+  ]);
+  // The desired state still needs work; nothing reserves it while unattested.
+  expect(await reserve()).toEqual([]);
+
+  // The single start: attested again, reserved, withdrawn, refused.
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  const [single] = await reserve();
+  if (single === undefined) {
+    throw new Error("the attested group's work was not reserved again");
+  }
+  await withdraw();
+  expect(
+    await inTx(
+      async (tx) =>
+        await startCorpusProjectionAppendTx(tx, {
+          intentId: single.intentId,
+          leaseToken: single.leaseToken,
+        }),
+    ),
+  ).toBe("stale_cancelled");
+  expect(await lastErrorOf(single.intentId)).toEqual([
+    {
+      status: "cancelled",
+      lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.groupNotAttested,
+    },
+  ]);
+
+  // Attested, the same work starts.
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  const started = await reserve();
+  expect(
+    await inTx(
+      async (tx) =>
+        await startCorpusProjectionAppendBatchTx(tx, { leases: started }),
+    ),
+  ).toEqual(started.map(({ intentId }) => ({ intentId, status: "started" })));
 });
 
 test("no append reaches a group before its attestation, and its work waits rather than fails", async () => {

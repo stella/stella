@@ -120,7 +120,6 @@ import {
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -1704,7 +1703,7 @@ export const searchCorpusIndexDecisions = async (
     });
   };
 
-  const { serving, manifest, contract } = await dbTimer.time(
+  const { serving, route, contract, cursorTarget } = await dbTimer.time(
     CASE_LAW_SEARCH_DB_READ.servingGeneration,
     async () =>
       await caseLawDb(
@@ -1826,11 +1825,9 @@ export const searchCorpusIndexDecisions = async (
   }
 
   // Scoped query → that country's index, plus a jurisdiction clause when that
-  // index holds other countries; unscoped → the generation glob.
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    manifest,
-    body.country,
-  );
+  // index holds other countries; unscoped → every index of the generation a
+  // read may reach (`corpusIndexReadTarget`).
+  const { indexId, jurisdictionClause } = route;
 
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
@@ -1863,6 +1860,7 @@ export const searchCorpusIndexDecisions = async (
     isStaleCorpusSearchCursor(parsedCursor, {
       dictionary: resolved.dictionary,
       sort,
+      target: cursorTarget,
     })
   ) {
     return status(400, { message: "Invalid cursor" });
@@ -1952,6 +1950,7 @@ export const searchCorpusIndexDecisions = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: resolved.dictionary,
+          target: cursorTarget,
         });
 
   // A row the candidate read saw and this one no longer answers for was

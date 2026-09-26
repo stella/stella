@@ -15,6 +15,7 @@ import {
   COURT_PARTITION_FIELD,
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
+  corpusIndexReadTarget,
   courtPartitionsForCourtFilter,
   enrolledCorpusIndexGroupContracts,
   requireCourtPartitionIdentity,
@@ -294,4 +295,99 @@ test("a read that reaches any index without the partition field never names it",
       }
     }
   }
+});
+
+/** What a Quickwit index-id pattern matches: `*` is any run, else literal. */
+const matchesIndexPattern = (pattern: string, indexId: string): boolean =>
+  new RegExp(
+    `^${pattern
+      .split("*")
+      .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+      .join(".*")}$`,
+    "u",
+  ).test(indexId);
+
+test("a global read reaches an enrolled group's index only once it is attested", () => {
+  // Each base group is named by a pattern over its own id, which is exact
+  // only while no group name is a prefix of another.
+  for (const group of CASE_LAW_INDEX_GROUP_NAMES) {
+    for (const other of CASE_LAW_INDEX_GROUP_NAMES) {
+      expect([
+        group,
+        other,
+        other !== group && other.startsWith(group),
+      ]).toEqual([group, other, false]);
+    }
+  }
+  for (const manifest of CASE_LAW_MANIFESTS) {
+    const usaIndex = `${manifest.generation}_usa`;
+    const reached = (attestedGroups: ReadonlySet<string>) => {
+      const resolution = corpusIndexReadTarget({
+        manifest,
+        jurisdiction: undefined,
+        attestedGroups,
+      });
+      if (resolution.type !== "ready") {
+        throw new Error("a global read is never refused");
+      }
+      return resolution.target;
+    };
+    const unattested = reached(new Set());
+    const names = unattested.route.indexId.split(",");
+    expect(names.some((name) => matchesIndexPattern(name, usaIndex))).toBe(
+      false,
+    );
+    // Every base group's index is still reached, provisioned or not.
+    for (const indexGroup of CASE_LAW_INDEX_GROUP_NAMES.filter(
+      (group) => group !== "usa",
+    )) {
+      expect(
+        names.some((name) =>
+          matchesIndexPattern(name, `${manifest.generation}_${indexGroup}`),
+        ),
+      ).toBe(true);
+    }
+    expect(unattested.cursorTarget).toBeNull();
+
+    const attested = reached(new Set(["usa"]));
+    expect(attested.route.indexId.split(",")).toEqual([...names, usaIndex]);
+    expect(attested.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
+  }
+  // A scoped read of the group before attestation is refused, not narrowed.
+  expect(
+    corpusIndexReadTarget({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
+      jurisdiction: "USA",
+      attestedGroups: new Set(),
+    }).type,
+  ).toBe("unready");
+  // Legislation enrolls no group and keeps its wildcard.
+  expect(
+    corpusIndexReadTarget({
+      manifest: CORPUS_INDEX_MANIFESTS.legislation_v2,
+      jurisdiction: undefined,
+      attestedGroups: new Set(),
+    }),
+  ).toEqual({
+    type: "ready",
+    target: {
+      route: { indexId: "legislation_v2_*", jurisdictionClause: undefined },
+      contract: null,
+      cursorTarget: null,
+    },
+  });
+});
+
+test("each generation's USA contract gives its cursors an identity of their own", () => {
+  const identities = CASE_LAW_MANIFESTS.map((manifest) => {
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "USA",
+      attestedGroups: new Set(["usa"]),
+    });
+    return resolution.type === "ready" ? resolution.target.cursorTarget : null;
+  });
+  expect(identities.every((identity) => identity !== null)).toBe(true);
+  // A replacement generation's cursor never continues the previous one's.
+  expect(new Set(identities).size).toBe(identities.length);
 });

@@ -10,7 +10,7 @@
  * written, even under a generation that is already serving; groups under the
  * manifest's own contract never touch the registry.
  */
-import { panic, Result, TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -27,9 +27,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   corpusIndexGroupContractForJurisdiction,
+  corpusIndexReadTarget,
   enrolledCorpusIndexGroupContracts,
   resolveCorpusIndexGroupContract,
   type CorpusIndexGroupContract,
+  type CorpusIndexReadTarget,
   type EnrolledGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
@@ -246,37 +248,28 @@ export class CorpusIndexGroupNotReadyError extends TaggedError(
   reason: Extract<CorpusIndexGroupReadiness, { type: "unready" }>["reason"];
 }> {}
 
-/** The group, if it may be read or written now. */
-export const requireReadyCorpusIndexGroupTx = async (
-  tx: ReadTransaction,
-  contract: CorpusIndexGroupContract,
-): Promise<Result<CorpusIndexGroupContract, CorpusIndexGroupNotReadyError>> => {
-  const readiness = await readCorpusIndexGroupReadinessTx(tx, contract);
-  return readiness.type === "unready"
-    ? Result.err(
-        new CorpusIndexGroupNotReadyError({
-          message: `Corpus index group is not attested (${readiness.reason}): ${contract.indexId}`,
-          indexId: contract.indexId,
-          reason: readiness.reason,
-        }),
-      )
-    : Result.ok(contract);
+type AttestedGroupsOptions = {
+  /**
+   * `share` holds each attested row until the transaction ends, so an
+   * attestation withdrawn concurrently waits for the work checked against it.
+   */
+  lock?: "share";
 };
 
 /**
- * The physical indexes of `manifest` that no append may reach yet: every
- * enrolled group without an attestation of its current contract. Empty, with
- * no read, for a manifest whose groups are all under its own contract.
+ * The enrolled groups of `manifest` whose current contract is attested. Empty,
+ * with no read, for a manifest whose groups are all under its own contract.
  */
-export const unattestedCorpusIndexIdsTx = async (
+export const attestedCorpusIndexGroupsTx = async (
   tx: ReadTransaction,
   manifest: CorpusIndexManifest,
-): Promise<string[]> => {
+  { lock }: AttestedGroupsOptions = {},
+): Promise<ReadonlySet<string>> => {
   const contracts = enrolledCorpusIndexGroupContracts(manifest);
   if (contracts.length === 0) {
-    return [];
+    return new Set();
   }
-  const attested = await tx
+  const query = tx
     .select({
       indexGroup: corpusIndexGroupEnrollments.indexGroup,
       effectiveDigest: corpusIndexGroupEnrollments.effectiveDigest,
@@ -293,32 +286,52 @@ export const unattestedCorpusIndexIdsTx = async (
         eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
       ),
     )
+    .orderBy(corpusIndexGroupEnrollments.indexGroup)
     .limit(contracts.length);
-  const ready = new Set(
-    attested.map(
-      ({ indexGroup, effectiveDigest }) => `${indexGroup}:${effectiveDigest}`,
-    ),
+  const attested = lock === "share" ? await query.for("share") : await query;
+  const digestOf = new Map(
+    attested.map(({ indexGroup, effectiveDigest }) => [
+      indexGroup,
+      effectiveDigest,
+    ]),
   );
-  return contracts
-    .filter(
-      ({ indexGroup, effectiveDigest }) =>
-        !ready.has(`${indexGroup}:${effectiveDigest}`),
-    )
-    .map(({ indexId }) => indexId);
-};
-
-export type ServingCorpusIndexTarget = {
-  serving: ServingCorpusIndexGeneration;
-  manifest: CorpusIndexManifest;
-  /** The group a scoped read targets, or null for a generation-wide read. */
-  contract: CorpusIndexGroupContract | null;
+  return new Set(
+    contracts
+      .filter(
+        ({ indexGroup, effectiveDigest }) =>
+          digestOf.get(indexGroup) === effectiveDigest,
+      )
+      .map(({ indexGroup }) => indexGroup),
+  );
 };
 
 /**
- * The serving generation and, for a read scoped to one jurisdiction, the
- * contract of the group it reads. A group that is not attested refuses the
- * read as unavailable rather than answering from an index nobody proved: an
- * empty or differently mapped index would read as a corpus with no matches.
+ * The physical indexes of `manifest` that no append may reach yet: every
+ * enrolled group without an attestation of its current contract.
+ */
+export const unattestedCorpusIndexIdsTx = async (
+  tx: ReadTransaction,
+  manifest: CorpusIndexManifest,
+  options: AttestedGroupsOptions = {},
+): Promise<string[]> => {
+  const attested = await attestedCorpusIndexGroupsTx(tx, manifest, options);
+  return enrolledCorpusIndexGroupContracts(manifest)
+    .filter(({ indexGroup }) => !attested.has(indexGroup))
+    .map(({ indexId }) => indexId);
+};
+
+export type ServingCorpusIndexTarget = CorpusIndexReadTarget & {
+  serving: ServingCorpusIndexGeneration;
+  manifest: CorpusIndexManifest;
+};
+
+/**
+ * The serving generation and what a read of it reaches
+ * (`corpusIndexReadTarget`). A scoped read of a group that is not attested
+ * refuses as unavailable rather than answering from an index nobody proved:
+ * an empty or differently mapped index would read as a corpus with no
+ * matches. A scoped read of a group under its manifest's contract reads no
+ * enrollment.
  */
 export const readServingCorpusIndexTargetTx = async (
   tx: ReadTransaction,
@@ -329,19 +342,32 @@ export const readServingCorpusIndexTargetTx = async (
 ): Promise<ServingCorpusIndexTarget> => {
   const serving = await readServingCorpusIndexGenerationTx(tx, family);
   const manifest = requireCorpusIndexManifest(family, serving.generation);
-  if (jurisdiction === undefined) {
-    return { serving, manifest, contract: null };
-  }
-  const ready = await requireReadyCorpusIndexGroupTx(
-    tx,
-    corpusIndexGroupContractForJurisdiction(manifest, jurisdiction),
-  );
-  if (Result.isError(ready)) {
+  const readsEnrollment =
+    jurisdiction === undefined ||
+    corpusIndexGroupContractForJurisdiction(manifest, jurisdiction).type !==
+      "base";
+  const resolution = corpusIndexReadTarget({
+    manifest,
+    jurisdiction,
+    attestedGroups: readsEnrollment
+      ? await attestedCorpusIndexGroupsTx(tx, manifest)
+      : new Set(),
+  });
+  if (resolution.type === "unready") {
+    const readiness = await readCorpusIndexGroupReadinessTx(
+      tx,
+      resolution.contract,
+    );
+    const reason = readiness.type === "unready" ? readiness.reason : "pending";
     throw new HandlerError({
       status: 503,
       message: "Search is temporarily unavailable",
-      cause: ready.error,
+      cause: new CorpusIndexGroupNotReadyError({
+        message: `Corpus index group is not attested (${reason}): ${resolution.contract.indexId}`,
+        indexId: resolution.contract.indexId,
+        reason,
+      }),
     });
   }
-  return { serving, manifest, contract: ready.value };
+  return { serving, manifest, ...resolution.target };
 };

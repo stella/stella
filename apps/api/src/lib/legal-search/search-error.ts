@@ -7,6 +7,7 @@ import { TaggedError } from "better-result";
  */
 export type InvalidLegalSearchCursorReason =
   | "dictionary_mismatch"
+  | "target_mismatch"
   | "undecodable";
 
 /**
