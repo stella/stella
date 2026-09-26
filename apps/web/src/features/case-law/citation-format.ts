@@ -1,5 +1,9 @@
 import type { createFormatter } from "use-intl/core";
 
+import { US_COURTS } from "@stll/api-contract/us-courts";
+import type { UsCourtId } from "@stll/api-contract/us-courts";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
@@ -22,6 +26,8 @@ type IntlFormatter = ReturnType<typeof createFormatter>;
 
 export type CitationInput = {
   caseNumber: string;
+  /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
+  caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
   decisionDate: string | null;
@@ -222,7 +228,71 @@ const euCitation = (input: CitationInput): string => {
   return `${named}${input.caseNumber}${ecli}`;
 };
 
+/**
+ * Bluebook month abbreviations. A fixed table, not a locale formatter: the
+ * convention belongs to the court, not to the reader's locale settings.
+ */
+const BLUEBOOK_MONTHS = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "June",
+  "July",
+  "Aug.",
+  "Sept.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+] as const;
+
+/**
+ * The Bluebook court abbreviation of each enrolled court. Total over the
+ * directory, so enrolling a court cannot compile without deciding its form.
+ */
+const US_COURT_BLUEBOOK_ABBREVIATIONS = {
+  scotus: "U.S.",
+} as const satisfies Record<UsCourtId, string>;
+
+/**
+ * A USA decision is stored under its enrolled court's canonical name, so the
+ * name finds the abbreviation; any other name is cited as it stands.
+ */
+const usCourtAbbreviation = (court: string): string => {
+  const enrolled = US_COURTS.find((candidate) => candidate.name === court);
+  return enrolled === undefined
+    ? court
+    : US_COURT_BLUEBOOK_ABBREVIATIONS[enrolled.id];
+};
+
+const DOCKET_PREFIX_RE = /^Nos?\.\s/u;
+
+/**
+ * A decision known only by its docket, cited as a slip opinion:
+ * "Name, No. 17-1618 (U.S. June 15, 2020)". The pincite is left out: the
+ * reader's page markers are not known to be slip-opinion pages, and a
+ * reporter page cited as "slip op. at N" would point at the wrong text.
+ */
+const usDocketCitation = (input: CitationInput): string => {
+  const docket = DOCKET_PREFIX_RE.test(input.caseNumber)
+    ? input.caseNumber
+    : `No. ${input.caseNumber}`;
+  const named = input.name === null ? docket : `${input.name}, ${docket}`;
+  const court = usCourtAbbreviation(input.court);
+  const date = parseDecisionDate(input.decisionDate);
+  const month = date === null ? undefined : BLUEBOOK_MONTHS[date.month - 1];
+  const dated =
+    date === null || month === undefined
+      ? ""
+      : ` ${month} ${String(date.day)}, ${String(date.year)}`;
+  return `${named} (${court}${dated})`;
+};
+
 const usCitation = (input: CitationInput): string => {
+  if (input.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
+    return usDocketCitation(input);
+  }
   const cite =
     input.pincite === null
       ? input.caseNumber

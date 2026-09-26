@@ -1,3 +1,4 @@
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -7,7 +8,13 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 
 type DecisionCitationFacts = Pick<
   PublicCaseLawDecision,
-  "caseNumber" | "country" | "court" | "decisionDate" | "decisionType" | "ecli"
+  | "caseNumber"
+  | "caseNumberType"
+  | "country"
+  | "court"
+  | "decisionDate"
+  | "decisionType"
+  | "ecli"
 >;
 
 type DecisionReaderAnnotationTarget = Extract<
@@ -25,6 +32,9 @@ type DecisionInspectorAnnotationTargetOptions = {
 /**
  * The loaded decision carries the citable facts; the payload's record fields
  * stand in only before the read, so a citation never invents a date or type.
+ * The payload does not say what kind of reference its case number is; until
+ * the read it counts as the docket, the default kind, and nothing can be
+ * quoted before then anyway, since the text arrives with the read.
  */
 export const decisionInspectorAnnotationTarget = ({
   ast,
@@ -37,6 +47,8 @@ export const decisionInspectorAnnotationTarget = ({
   return {
     type: "decision",
     caseNumber,
+    caseNumberType:
+      decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: decision?.country ?? payload.country,
     court: decision?.court ?? payload.court,
     decisionDate: decision?.decisionDate ?? null,

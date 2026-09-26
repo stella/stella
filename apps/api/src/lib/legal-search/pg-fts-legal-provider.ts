@@ -20,6 +20,7 @@ import {
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
@@ -155,6 +156,7 @@ export const providerSearchPlan = ({
     SELECT
       sd.decision_id,
       d.case_number,
+      d.case_number_type,
       d.ecli,
       (
         SELECT coalesce(
@@ -289,6 +291,7 @@ const searchResult = async (
     ecli: toNullableString(row["ecli"]),
     identifiers: decisionIdentifierProjection(row["identifiers"], {
       caseNumber: String(row["case_number"]),
+      caseNumberType: primaryReferenceTypeFromStored(row["case_number_type"]),
       ecli: toNullableString(row["ecli"]),
     }),
     court: String(row["court"]),

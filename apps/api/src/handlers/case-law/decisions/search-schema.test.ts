@@ -44,6 +44,7 @@ const validResponse = {
     {
       decisionId: "decision-id",
       caseNumber: "case-reference",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       slug: null,
       ecli: null,
       identifiers: [

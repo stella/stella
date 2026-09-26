@@ -18,6 +18,7 @@ import {
   type DecisionHeadnotePreview,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -64,6 +65,8 @@ const NO_QUERY_TOKENS: readonly string[] = [];
 export type Decision = {
   id: string;
   caseNumber: string;
+  /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
+  caseNumberType: DecisionPrimaryReferenceType;
   slug: string | null;
   ecli: string | null;
   court: string;

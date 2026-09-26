@@ -27,6 +27,7 @@ import type { ComponentProps } from "react";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
@@ -165,6 +166,7 @@ const BENCH_TEXT_FIELDS = {
 
 const BENCH_DECISION = {
   caseNumber: "Pl. ÚS 20/21",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   court: "Ústavní soud",
   courtAbbreviation: null,
   courtTier: "other",

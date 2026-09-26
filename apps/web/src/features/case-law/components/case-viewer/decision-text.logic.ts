@@ -7,6 +7,8 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
   PUBLISHER_SUMMARY_ROLES,
   isApparatusRole,
@@ -186,6 +188,31 @@ export const decisionCaseName = ({
   return title?.endsWith(citeSuffix) === true
     ? title.slice(0, -citeSuffix.length)
     : null;
+};
+
+/**
+ * The reference the reader's reference line shows. For a docket primary, the
+ * document's own case-number header wins, since it keeps the court's printed
+ * spelling. Any other primary (a reporter or neutral citation) is shown as
+ * stored: the document's header is then the docket, which stays visible in
+ * the text itself and must not displace the citation.
+ */
+export const decisionDisplayReference = ({
+  ast,
+  caseNumber,
+  caseNumberType,
+}: {
+  ast: DocumentAst | null;
+  caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
+}): string => {
+  if (caseNumberType !== DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
+    return caseNumber;
+  }
+  const caseNumberBlock = ast?.blocks.find(
+    (block) => block.type === "paragraph" && block.role === "case-number",
+  );
+  return caseNumberBlock?.plainText ?? caseNumber;
 };
 
 /**

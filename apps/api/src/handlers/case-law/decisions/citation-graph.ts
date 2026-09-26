@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
@@ -66,6 +67,8 @@ type ListDecisionCitationsQuery = Static<
 type RelatedDecision = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
+  /** What kind of reference `caseNumber` is. */
+  caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
   decisionDate: string | null;
@@ -313,6 +316,7 @@ export const listDecisionCitationsHandler = async ({
       decision: {
         id: relatedDecision.id,
         caseNumber: relatedDecision.caseNumber,
+        caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
         decisionDate: relatedDecision.decisionDate,
@@ -591,6 +595,7 @@ export const listLeadingCitationsHandler = async ({
       decision: {
         id: relatedDecision.id,
         caseNumber: relatedDecision.caseNumber,
+        caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
         decisionDate: relatedDecision.decisionDate,

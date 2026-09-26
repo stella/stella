@@ -12,6 +12,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { useTable } from "@tanstack/react-table";
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
@@ -28,6 +30,7 @@ const decisionRows = (count: number): DecisionRowData[] =>
     decision: {
       id: `decision-${index}`,
       caseNumber: `case ${index}`,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: null,
       court: "Nejvyšší soud",
       country: "cze",

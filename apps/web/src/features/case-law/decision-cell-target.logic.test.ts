@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
@@ -9,6 +10,7 @@ import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic"
 const monolingual: Decision = {
   id: "decision-cs",
   caseNumber: "III. ÚS 649/05",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   slug: "iii-us-649-05",
   ecli: null,
   court: "Ústavní soud",

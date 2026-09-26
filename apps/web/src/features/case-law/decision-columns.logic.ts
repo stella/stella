@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
 import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
@@ -102,6 +104,38 @@ export const DECISION_COLUMN_LABEL_KEYS = {
   citedBy: "caseLaw.columns.citedBy",
   language: "common.language",
 } as const satisfies Record<DecisionColumnId, TranslationKey>;
+
+/**
+ * What the case-number column holds across the rows on screen: dockets only,
+ * or at least one decision whose primary reference is a reporter or neutral
+ * citation. A citation is not a case number, so a column holding one is
+ * named for what both kinds are.
+ */
+export type DecisionReferenceColumnKind = "case-number" | "reference";
+
+export const decisionReferenceColumnKind = (
+  decisions: readonly Pick<Decision, "caseNumberType">[],
+): DecisionReferenceColumnKind =>
+  decisions.every(
+    ({ caseNumberType }) =>
+      caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  )
+    ? "case-number"
+    : "reference";
+
+const DECISION_REFERENCE_COLUMN_LABEL_KEYS = {
+  "case-number": DECISION_COLUMN_LABEL_KEYS.caseNumber,
+  reference: "caseLaw.columns.reference",
+} as const satisfies Record<DecisionReferenceColumnKind, TranslationKey>;
+
+/** A decision column's label, given what the case-number column holds. */
+export const decisionColumnLabelKey = (
+  column: DecisionColumnId,
+  referenceKind: DecisionReferenceColumnKind,
+): TranslationKey =>
+  column === "caseNumber"
+    ? DECISION_REFERENCE_COLUMN_LABEL_KEYS[referenceKind]
+    : DECISION_COLUMN_LABEL_KEYS[column];
 
 /**
  * What a reader sees before choosing: identity, the hook, and the three

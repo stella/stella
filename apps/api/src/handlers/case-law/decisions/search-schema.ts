@@ -6,6 +6,7 @@ import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
+  DECISION_PRIMARY_REFERENCE_TYPES,
   type DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
 
@@ -155,6 +156,8 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
         {
           decisionId: t.String(),
           caseNumber: t.String(),
+          /** What kind of reference `caseNumber` is. */
+          caseNumberType: t.UnionEnum([...DECISION_PRIMARY_REFERENCE_TYPES]),
           slug: nullableStringSchema,
           ecli: nullableStringSchema,
           identifiers: decisionIdentifiersSchema,

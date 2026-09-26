@@ -179,6 +179,7 @@ describe("sanitizeResult — decision identifiers", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: sanitized.caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: sanitized.ecli ?? null,
         metadata: sanitized.metadata,
       }),

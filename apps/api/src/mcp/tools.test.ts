@@ -24,6 +24,7 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
   entities,
@@ -325,6 +326,10 @@ const featureDisabledHint = (feature: string): string =>
 const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  identifiers: [
+    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
+  ],
   citationsFrom: [
     {
       citationText: "29 Odo 1/2001",
@@ -1555,6 +1560,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1564,6 +1570,16 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           // The handler builds the headline for the web UI; the MCP snippet
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
@@ -1656,6 +1672,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1666,6 +1683,16 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           language: "cs",
           matchedQueries: [0],
           matchingPassages: 4,
@@ -1689,6 +1716,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1698,6 +1726,16 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
           matchingPassages: 1,
@@ -1738,6 +1776,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1748,6 +1787,16 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           language: "cs",
           matchedQueries: [0],
           matchingPassages: 1,
@@ -1784,12 +1833,15 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const createLookupRow = (decisionId: string, court: string) => ({
     caseNumber: CZ_DOCKET,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: "CZE",
     court,
     decisionDate: "2020-05-01",
     ecli: null,
     id: toSafeId<"caseLawDecision">(decisionId),
-    identifiers: [],
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: CZ_DOCKET },
+    ],
     language: "cs",
     languageAlternates: [],
     slug: `slug-${decisionId}`,
@@ -1819,11 +1871,15 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
         caseNumber: CZ_DOCKET,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         court: "Nejvyšší soud",
         decisionDate: "2020-05-01",
         decisionId: DECISION_ID,
         ecli: null,
         identifier: `${CZ_DOCKET}-28`,
+        identifiers: [
+          { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: CZ_DOCKET },
+        ],
         resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
         status: "found",
       },
@@ -1909,6 +1965,12 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
         caseNumber: "29 Cdo 7/2019",
+        identifiers: [
+          {
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: "29 Cdo 7/2019",
+          },
+        ],
       },
     ]);
 
@@ -2023,6 +2085,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const createCaseLawHit = (decisionId: string, headline: string) => ({
     caseNumber: `case ${decisionId}`,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     citationAuthority: 1,
     citationCount: 0,
     country: "CZE",
@@ -2033,6 +2096,12 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionType: "judgment",
     ecli: null,
     headline,
+    identifiers: [
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: `case ${decisionId}`,
+      },
+    ],
     language: "cs",
     languageAlternates: [],
     matchingPassages: 1,
@@ -2386,6 +2455,7 @@ describe("OpenAI-compatible MCP tools", () => {
         hits: [
           {
             caseNumber: "29 Cdo 123/2024",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             citationAuthority: 0,
             citationCount: 7,
             country: "CZE",
@@ -2396,6 +2466,12 @@ describe("OpenAI-compatible MCP tools", () => {
             decisionType: "judgment",
             ecli: null,
             headline: null,
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "29 Cdo 123/2024",
+              },
+            ],
             language: "cs",
             matchingPassages: 1,
             slug: "stable-official-slug",
@@ -2444,6 +2520,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decision: {
               id: CITING_DECISION_ID,
               caseNumber: "31 Cdo 900/2025",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               citationAuthority: 2.5,
               country: "CZE",
               court: "Nejvyšší soud",
@@ -2507,6 +2584,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             citationAuthority: 2.5,
             court: "Nejvyšší soud",
             decisionDate: "2025-04-02",
@@ -3426,6 +3504,13 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
             caseNumber: "29 Cdo 123/2024",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "29 Cdo 123/2024",
+              },
+            ],
             citationsFrom: [
               {
                 citationText: "29 Odo 1/2001",
@@ -3593,6 +3678,13 @@ describe("OpenAI-compatible MCP tools", () => {
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
             caseNumber: "29 Cdo 123/2024",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "29 Cdo 123/2024",
+              },
+            ],
             citationsFrom: [
               {
                 citationText: "29 Odo 1/2001",

@@ -108,6 +108,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     id: "required",
     source_id: "required",
     case_number: "required",
+    case_number_type: "required",
     slug: "required",
     ecli: "required",
     citation_key: "required",

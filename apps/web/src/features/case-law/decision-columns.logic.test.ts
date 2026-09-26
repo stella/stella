@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import {
   DECISION_COLUMN_IDS,
+  DECISION_COLUMN_LABEL_KEYS,
   DECISION_COLUMN_WIDTHS,
   DECISION_IDENTITY_LINE_FIELDS,
+  decisionColumnLabelKey,
   decisionColumnWidthClassNames,
   decisionIdentityLineFields,
+  decisionReferenceColumnKind,
   DEFAULT_HIDDEN_DECISION_COLUMN_IDS,
 } from "@/features/case-law/decision-columns.logic";
 
@@ -110,5 +115,45 @@ describe("the columns a reader sees before choosing", () => {
 
   test("leaves the default identity line carrying nothing, because its columns show", () => {
     expect(decisionIdentityLineFields(visibleByDefault)).toEqual([]);
+  });
+});
+
+describe("what the case-number column is called", () => {
+  const docket = { caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER };
+  const reporter = {
+    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+  };
+
+  test("keeps the case-number label while every row is a docket", () => {
+    const kind = decisionReferenceColumnKind([docket, docket]);
+
+    expect(decisionColumnLabelKey("caseNumber", kind)).toBe(
+      "caseLaw.columns.caseNumber",
+    );
+  });
+
+  test("keeps the case-number label for a page with no rows yet", () => {
+    expect(
+      decisionColumnLabelKey("caseNumber", decisionReferenceColumnKind([])),
+    ).toBe("caseLaw.columns.caseNumber");
+  });
+
+  test("names the column for any reference once one row is cited by a citation", () => {
+    const kind = decisionReferenceColumnKind([docket, reporter]);
+
+    expect(decisionColumnLabelKey("caseNumber", kind)).toBe(
+      "caseLaw.columns.reference",
+    );
+  });
+
+  test("leaves every other column's label alone", () => {
+    for (const column of DECISION_COLUMN_IDS) {
+      if (column === "caseNumber") {
+        continue;
+      }
+      expect(decisionColumnLabelKey(column, "reference")).toBe(
+        DECISION_COLUMN_LABEL_KEYS[column],
+      );
+    }
   });
 });

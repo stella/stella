@@ -307,6 +307,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
     expect(item.decision).toEqual({
       id: openRelatedId,
       caseNumber: "open-related",
+      caseNumberType: "case-number",
       citationAuthority: 0,
       country: "CZE",
       court: "Related court",

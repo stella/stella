@@ -931,8 +931,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "reporter citations. Answered from the identity columns, never by ranking text, so a hit is the " +
       "decision named, not one citing it. Every `identifiers[]` entry is " +
       "answered on its own, in input order, under `status`: `found` carries " +
-      "that decision's id, resourceName, appUrl, docket, court, date and " +
-      "ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
+      "that decision's id, resourceName, appUrl, typed reference, court, " +
+      "date and ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
       "court, not to the corpus, and picking one would cite the wrong " +
       "court; `not_found` says what to call instead; `lookup_failed` means " +
       "the read did not complete, so retry that entry. Use this when the " +
@@ -2088,6 +2088,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           slug: hit.slug,
         }),
         caseNumber: hit.caseNumber,
+        caseNumberType: hit.caseNumberType,
         citationAuthority: hit.citationAuthority,
         citationCount: hit.citationCount,
         country: hit.country,
@@ -2098,6 +2099,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
         decisionType: hit.decisionType,
         ecli: hit.ecli,
+        identifiers: hit.identifiers,
         language: hit.language,
         matchingPassages: hit.matchingPassages,
         snippet: toPlainTextSnippet(hit.headline),
@@ -2254,6 +2256,7 @@ const decisionItemResult = ({
         slug: read.slug,
       }),
       caseNumber: read.caseNumber,
+      caseNumberType: read.caseNumberType,
       citationsFrom: read.citationsFrom,
       citationsTo: read.citationsTo,
       country: read.country,
@@ -2265,6 +2268,7 @@ const decisionItemResult = ({
       decisionType: read.decisionType,
       documentUrl: read.documentUrl,
       ecli: read.ecli,
+      identifiers: read.identifiers,
       language: read.language,
       metadata: read.metadata,
       textFields: read.textFields,
@@ -2467,10 +2471,12 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
     slug: row.slug,
   }),
   caseNumber: row.caseNumber,
+  caseNumberType: row.caseNumberType,
   court: row.court,
   decisionDate: row.decisionDate,
   decisionId: row.id,
   ecli: row.ecli,
+  identifiers: row.identifiers,
   resourceName: serializeAuthorizedCorpusMcpResourceName(
     resourceRef({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -2704,6 +2710,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
                 slug: item.decision.slug,
               }),
               caseNumber: item.decision.caseNumber,
+              caseNumberType: item.decision.caseNumberType,
               citationAuthority: item.decision.citationAuthority,
               court: item.decision.court,
               decisionDate: item.decision.decisionDate,

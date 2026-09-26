@@ -21718,6 +21718,7 @@ export type WebRoutes = {
               items: Array<{
                 id: Tf4b485f2ea;
                 caseNumber: string;
+                caseNumberType: T20fe2f2cfe;
                 slug: T432e07d100;
                 ecli: T432e07d100;
                 court: string;
@@ -22671,9 +22672,10 @@ export type WebRoutes = {
                   country: string;
                   identifiers: T4b4720fb6b;
                   createdAt: string;
-                  decisionDate: T432e07d100;
                   ecli: T432e07d100;
+                  decisionDate: T432e07d100;
                   caseNumber: string;
+                  caseNumberType: T20fe2f2cfe;
                   decisionId: string;
                   decisionType: T432e07d100;
                   citationAuthority: number;
@@ -32392,6 +32394,8 @@ type T20e2e4a545 = {
   }>;
 };
 
+type T20fe2f2cfe = "case-number" | "neutral-citation" | "reporter-citation";
+
 type T219ebda4a4 = "message" | "document" | "folder" | "task" | "link";
 
 type T21bb8cfb40 = "other" | "work" | "personal";
@@ -33107,6 +33111,7 @@ type T4c634e037d = string & valibot_Brand<"SafeId"> & {
 type T4c9fd159c8 = {
   id: Tf4b485f2ea;
   caseNumber: string;
+  caseNumberType: T20fe2f2cfe;
   country: string;
   court: string;
   decisionDate: T432e07d100;
@@ -34178,6 +34183,7 @@ type T7bba2468e2 = T2430547df2 | {
     anchorPrefix: string;
   };
   caseNumber: string;
+  caseNumberType: T20fe2f2cfe;
   slug: T432e07d100;
   ecli: T432e07d100;
   identifiers: T4b4720fb6b;
@@ -34207,7 +34213,7 @@ type T7bba2468e2 = T2430547df2 | {
       number?: undefined | number;
       type: "paragraph";
       id: string;
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: undefined | "unknown" | "case-number" | "summary" | "quote" | "counsel" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       anchorId: string;
       note?: undefined | T5b30b2c0a8;
       inlines: Array<T7522841395>;
@@ -34924,7 +34930,7 @@ type T96412b8318 = {
       id: string;
       anchorId: string;
       type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: undefined | "unknown" | "case-number" | "summary" | "quote" | "counsel" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       note?: undefined | T5b30b2c0a8;
       listDepth?: undefined | 1 | 2 | 3 | 4;
       number?: undefined | number;

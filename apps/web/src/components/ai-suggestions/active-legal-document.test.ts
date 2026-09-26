@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 
 import {
@@ -10,6 +12,7 @@ import {
 const decisionTarget: ReaderAnnotationTarget = {
   type: "decision",
   caseNumber: "22 Cdo 1234/2024",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   country: "CZ",
   court: "ns",
   decisionDate: "2024-03-01",

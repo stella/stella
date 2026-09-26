@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {
   Block,
   DocumentAst,
@@ -12,6 +13,7 @@ import {
   apparatusBlockIds,
   courtHeadnoteOrigin,
   decisionCaseName,
+  decisionDisplayReference,
   editorialSupplementBlocks,
   footnoteParts,
   visibleDecisionBlocks,
@@ -67,6 +69,47 @@ describe("citable case name", () => {
 
   test("an unparsed document has no case name", () => {
     expect(decisionCaseName({ ast: null, caseNumber: "C-311/18" })).toBeNull();
+  });
+});
+
+const caseNumberHeader = (plainText: string): Block => ({
+  anchorId: "case-number",
+  id: "case-number",
+  inlines: [{ text: plainText, type: "text" }],
+  plainText,
+  role: "case-number",
+  type: "paragraph",
+});
+
+describe("the reference line's reference", () => {
+  test("a docket primary takes the document's own case-number header", () => {
+    expect(
+      decisionDisplayReference({
+        ast: astOf([caseNumberHeader("sp. zn. 1 As 1/2026")]),
+        caseNumber: "1 As 1/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe("sp. zn. 1 As 1/2026");
+  });
+
+  test("a citation primary is not displaced by the docket header", () => {
+    expect(
+      decisionDisplayReference({
+        ast: astOf([caseNumberHeader("No. 1")]),
+        caseNumber: "347 U.S. 483",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      }),
+    ).toBe("347 U.S. 483");
+  });
+
+  test("falls back to the stored primary when the document has no header", () => {
+    expect(
+      decisionDisplayReference({
+        ast: null,
+        caseNumber: "1 As 1/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe("1 As 1/2026");
   });
 });
 

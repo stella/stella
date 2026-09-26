@@ -31,6 +31,7 @@ import { unionAll } from "drizzle-orm/pg-core";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
+  type DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -83,6 +84,8 @@ const IDENTIFIER_TYPE_OF_LOCATOR_KIND = {
  */
 export type DecisionIdentityRow = {
   caseNumber: string;
+  /** What kind of reference `caseNumber` is. */
+  caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
   decisionDate: string | null;
@@ -221,6 +224,7 @@ export const lookupDecisionsByIdentity = async ({
     const decisions = await tx
       .select({
         caseNumber: caseLawDecisions.caseNumber,
+        caseNumberType: caseLawDecisions.caseNumberType,
         country: caseLawDecisions.country,
         court: caseLawDecisions.court,
         decisionDate: caseLawDecisions.decisionDate,

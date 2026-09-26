@@ -17,7 +17,10 @@ import type { TableFindHighlight } from "@/components/workspaces/table/find-high
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
-import type { DecisionExtraColumn } from "@/features/case-law/decision-columns.logic";
+import type {
+  DecisionExtraColumn,
+  DecisionReferenceColumnKind,
+} from "@/features/case-law/decision-columns.logic";
 import { useDecisionRowHost } from "@/features/case-law/decision-row-host";
 import {
   DecisionRenderScope,
@@ -72,6 +75,8 @@ type DecisionTableProps = {
    */
   query?: string | undefined;
   questions: QuestionColumnSurface;
+  /** What the case-number column holds across the rows on the page. */
+  referenceKind: DecisionReferenceColumnKind;
   selectedIds: readonly string[];
 };
 
@@ -89,9 +94,14 @@ export const DecisionTable = ({
   onSelectedIdsChange,
   query,
   questions,
+  referenceKind,
   selectedIds,
 }: DecisionTableProps) => {
-  const columns = useDecisionTableColumns({ extraColumns, questions });
+  const columns = useDecisionTableColumns({
+    extraColumns,
+    questions,
+    referenceKind,
+  });
   const rows = useMemo(
     () =>
       decisions.map((decision): DecisionRowData => ({

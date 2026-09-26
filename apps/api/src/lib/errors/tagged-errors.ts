@@ -279,6 +279,8 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   JUDGE_NAME: "judge-name",
   COURT_CODE: "court-code",
   PUBLISHER_CITATIONS: "publisher-citations",
+  PRIMARY_REFERENCE_TYPE: "primary-reference-type",
+  SUPPLEMENT: "supplement",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -290,7 +292,9 @@ export type UnpersistableDecisionField =
  * one decision may hold, a document identity that does not survive
  * sanitization, a list-valued field sent in a shape that is not a list, a
  * judge name, court code or citation list sent in a shape the publisher does
- * not state.
+ * not state, a primary reference type outside the closed list, a missing
+ * document identity or a supplement where the jurisdiction's identity policy
+ * requires or forbids one.
  *
  * Tagged, because this is the ingestion boundary's own refusal and callers
  * act on it. The reconciliation engine parks a failed item under

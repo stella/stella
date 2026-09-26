@@ -15,6 +15,7 @@ import type { ColumnToggleGroup } from "@/components/workspaces/table/column-tog
 import type {
   DecisionColumnId,
   DecisionExtraColumn,
+  DecisionReferenceColumnKind,
 } from "@/features/case-law/decision-columns.logic";
 import {
   DECISION_COLUMN_ICONS,
@@ -29,14 +30,20 @@ const isDecisionColumnId = (id: string): id is DecisionColumnId =>
 type UseDecisionColumnGroupsOptions = {
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   questions: QuestionColumnSurface;
+  referenceKind: DecisionReferenceColumnKind;
 };
 
 export const useDecisionColumnGroups = ({
   extraColumns,
   questions,
+  referenceKind,
 }: UseDecisionColumnGroupsOptions): ColumnToggleGroup[] => {
   const t = useTranslations();
-  const schema = useDecisionTableSchema({ extraColumns, questions });
+  const schema = useDecisionTableSchema({
+    extraColumns,
+    questions,
+    referenceKind,
+  });
 
   // Read off the schema, so a column the table gained shows here without an
   // edit and a column it lost cannot be offered.

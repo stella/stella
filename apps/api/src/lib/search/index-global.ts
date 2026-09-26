@@ -22,6 +22,7 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { escapeLike } from "@/api/lib/escape-like";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -389,6 +390,7 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     caseNumber: String(row["case_number"]),
     identifiers: decisionIdentifierProjection(row["identifiers"], {
       caseNumber: String(row["case_number"]),
+      caseNumberType: primaryReferenceTypeFromStored(row["case_number_type"]),
       ecli: toNullableString(row["ecli"]),
     }),
     court: String(row["court"]),
@@ -898,6 +900,7 @@ const readGlobalSearch = async (
         clsd.decision_id AS id,
         d.case_number,
         d.ecli,
+        d.case_number_type,
         d.court,
         d.country,
         d.decision_date,

@@ -29,8 +29,12 @@ import {
   reopenCitationsForKeys,
 } from "@/api/handlers/case-law/citation-resolution";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
-import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  citationKeyOf,
+  decisionCitationKeyOf,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { isRecord } from "@/api/lib/type-guards";
 
 const RECANONICALIZE_FLAG = "--recanonicalize";
@@ -85,7 +89,8 @@ const backfillTable = async (
   while (true) {
     // db-await-in-loop: keyset page per iteration; the page is the batch
     const result: unknown = await rootDb.execute(
-      sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored
+      sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored,
+                 ${sql.raw(table === "case_law_decisions" ? "case_number_type" : "NULL")} AS type
             FROM ${sql.raw(table)}
            WHERE ${missingOnly ? sql`citation_key IS NULL` : sql`TRUE`}
              ${after === null ? sql`` : sql`AND id > ${after}`}
@@ -99,7 +104,17 @@ const backfillTable = async (
         ? [
             {
               id: row["id"],
-              key: citationKeyOf(row["text"]),
+              // A decision whose primary reference is not a docket keeps no
+              // key: filling one here would undo what the pipeline wrote.
+              key:
+                table === "case_law_decisions"
+                  ? decisionCitationKeyOf({
+                      caseNumber: row["text"],
+                      caseNumberType: primaryReferenceTypeFromStored(
+                        row["type"],
+                      ),
+                    })
+                  : citationKeyOf(row["text"]),
               stored: typeof row["stored"] === "string" ? row["stored"] : null,
             },
           ]

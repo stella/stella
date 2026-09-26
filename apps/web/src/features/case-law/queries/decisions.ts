@@ -268,6 +268,7 @@ export const decisionsInfiniteOptions = (
           decisions: data.hits.map((h) => ({
             id: toSafeId<"caseLawDecision">(h.decisionId),
             caseNumber: h.caseNumber,
+            caseNumberType: h.caseNumberType,
             slug: h.slug,
             ecli: h.ecli,
             identifiers: h.identifiers,

@@ -6,7 +6,10 @@ import type {
   DecisionTextFieldKey,
   ReadDecisionTextFields,
 } from "@stll/api-contract/case-law-text-field";
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifiers,
+  DecisionPrimaryReferenceType,
+} from "@stll/legal-ast/decision-identifier";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -56,7 +59,17 @@ type DocumentDelivery =
 
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
+  /**
+   * The decision's primary citable reference: the docket, unless
+   * `caseNumberType` says otherwise.
+   */
   caseNumber: string;
+  /**
+   * What kind of reference `caseNumber` is. Absent means a docket. A source
+   * that cites a decision primarily by a reporter or neutral citation says
+   * so here and lists the docket, where it has one, in `identifiers`.
+   */
+  caseNumberType?: DecisionPrimaryReferenceType | undefined;
   /**
    * Every identifier the publisher states for this decision. The pipeline
    * always adds `caseNumber` and `ecli`, so adapters may omit this until they

@@ -48,6 +48,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -1020,4 +1024,31 @@ describe("the reasons' stored payload", () => {
     ).toEqual([]);
     expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
   });
+});
+
+test("a jurisdiction keyed by publisher document takes no docket-keyed supplement", async () => {
+  const fixture = await newSource();
+  const reasons = supplementOf(REASONS);
+  // The same supplement a docket-keyed jurisdiction places, relabelled.
+  expect(reasons.document.country).not.toBe("USA");
+
+  const placed: unknown = await ingestSupplement(fixture, {
+    ...reasons,
+    document: { ...reasons.document, country: "USA" },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(placed).toBeInstanceOf(UnpersistableDecisionFieldError);
+  expect(placed).toMatchObject({
+    field: UNPERSISTABLE_DECISION_FIELDS.SUPPLEMENT,
+  });
+  expect(await decisionRows(fixture.sourceId)).toEqual([]);
+  expect(
+    await db
+      .select({ id: caseLawDecisionSupplements.sourceDocumentId })
+      .from(caseLawDecisionSupplements)
+      .where(eq(caseLawDecisionSupplements.sourceId, fixture.sourceId)),
+  ).toEqual([]);
 });

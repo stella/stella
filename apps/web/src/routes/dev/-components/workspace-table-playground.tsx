@@ -19,11 +19,13 @@
 import { useState } from "react";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
+import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 /** A bench has no organization, so it draws no question columns. */
@@ -69,6 +71,7 @@ const benchDecisions = (): Decision[] =>
     return {
       id: `bench-${index}`,
       caseNumber: `${senate} Cdo ${sequence}/2024`,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: `ECLI:BENCH:2024:${senate}.CDO.${sequence}.1`,
       court: index % 3 === 0 ? "Supreme Court" : "Regional Court",
       courtAbbreviation: index % 3 === 0 ? "SC" : "RC",
@@ -129,6 +132,7 @@ export const WorkspaceTablePlayground = () => {
         onLayoutChange={setLayout}
         onSelectedIdsChange={setSelectedIds}
         questions={NO_QUESTION_COLUMNS}
+        referenceKind={decisionReferenceColumnKind(decisions)}
         selectedIds={selectedIds}
       />
       {/* The results page keeps its pager below the table; the bench keeps a

@@ -17,7 +17,11 @@ test("projects every persisted identifier", () => {
           value: "12 Example Reports 34",
         },
       ],
-      { caseNumber: "fallback", ecli: null },
+      {
+        caseNumber: "fallback",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        ecli: null,
+      },
     ),
   ).toEqual([
     {
@@ -35,6 +39,7 @@ test("falls back to legacy columns until the bounded backfill reaches a row", ()
   expect(
     decisionIdentifierProjection([], {
       caseNumber: "A-123",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: "ECLI:XX:COURT:2024:1",
     }),
   ).toEqual([
@@ -42,6 +47,21 @@ test("falls back to legacy columns until the bounded backfill reaches a row", ()
     {
       type: DECISION_IDENTIFIER_TYPES.ECLI,
       value: "ECLI:XX:COURT:2024:1",
+    },
+  ]);
+});
+
+test("falls back to the persisted primary type, never a guessed docket", () => {
+  expect(
+    decisionIdentifierProjection(null, {
+      caseNumber: "347 U.S. 483",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      ecli: null,
+    }),
+  ).toEqual([
+    {
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: "347 U.S. 483",
     },
   ]);
 });

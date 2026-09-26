@@ -33,6 +33,7 @@ import type {
   DecisionIdentifier,
   DecisionIdentifiers,
   DecisionIdentifierType,
+  DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
@@ -47,6 +48,11 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { decisionIdentifiersFromPersistedMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import {
+  DEFAULT_PRIMARY_REFERENCE_TYPE,
+  primaryDecisionIdentifier,
+  primaryReferenceIsDocket,
+} from "@/api/lib/legal-search/decision-primary-reference";
 
 /**
  * Extracted citation reference found in decision text.
@@ -1300,12 +1306,15 @@ const canonicalizeDedupKey = (text: string): string => {
 
 type DecisionMetadata = {
   caseNumber: string;
+  /** Absent means a docket. */
+  caseNumberType?: DecisionPrimaryReferenceType | undefined;
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -1314,13 +1323,14 @@ const PUBLISHER_CASE_NUMBER_ALIASES_METADATA_KEY = "additionalCaseNumbers";
 
 export const decisionIdentifiersFromMetadata = ({
   caseNumber,
+  caseNumberType = DEFAULT_PRIMARY_REFERENCE_TYPE,
   ecli,
   identifiers,
 }: DecisionMetadata): DecisionIdentifiers => {
-  const caseNumberIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value: caseNumber,
-  } as const;
+  const caseNumberIdentifier = primaryDecisionIdentifier({
+    caseNumber,
+    caseNumberType,
+  });
 
   const candidates: DecisionIdentifier[] = [
     caseNumberIdentifier,
@@ -1399,6 +1409,7 @@ const expandCompositeReporterIdentifier = (
 
 export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
+  caseNumberType,
   ecli,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
@@ -1411,6 +1422,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
     const [firstIdentifier, ...otherIdentifiers] = expandedIdentifiers;
     return decisionIdentifiersFromMetadata({
       caseNumber,
+      caseNumberType,
       ecli,
       identifiers:
         firstIdentifier === undefined
@@ -1441,12 +1453,18 @@ export const decisionIdentifiersFromStoredMetadata = ({
   ];
   const capacity =
     DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1) - reporterIdentifiers.length;
-  const seen = new Set([
-    normalizeDecisionIdentifier({
-      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-      value: caseNumber,
-    }),
-  ]);
+  // A docket alias that spells the primary docket again is dropped here; a
+  // non-docket primary has no docket spelling to collide with.
+  const seen = new Set(
+    primaryReferenceIsDocket(caseNumberType)
+      ? [
+          normalizeDecisionIdentifier({
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: caseNumber,
+          }),
+        ]
+      : [],
+  );
   const aliases: DecisionIdentifier[] = [];
   for (const value of storedAliases) {
     const candidate = {
@@ -1471,6 +1489,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
   const [firstIdentifier, ...otherIdentifiers] = legacyIdentifiers;
   return decisionIdentifiersFromMetadata({
     caseNumber,
+    caseNumberType,
     ecli,
     identifiers:
       firstIdentifier === undefined
@@ -1500,6 +1519,20 @@ export const bareCitationKey = (text: string): string =>
  */
 export const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
+
+/**
+ * A decision's own `citation_key`: its docket's key, and none where the
+ * primary reference is not a docket. Citations reach such a decision through
+ * its typed identifiers instead.
+ */
+export const decisionCitationKeyOf = ({
+  caseNumber,
+  caseNumberType,
+}: {
+  caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
+}): string | null =>
+  primaryReferenceIsDocket(caseNumberType) ? citationKeyOf(caseNumber) : null;
 
 export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,

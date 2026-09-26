@@ -59,6 +59,7 @@ export const readPublicDecisionSummaries = async ({
   return rows.map((row) => ({
     id: row.id,
     caseNumber: row.caseNumber,
+    caseNumberType: row.caseNumberType,
     slug: row.slug,
     ecli: row.ecli,
     court: row.court,

@@ -103,6 +103,7 @@ import {
   DecisionSortControl,
 } from "@/features/case-law/components/decision-toolbar-controls";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
+import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
 import { decisionFilterFacets } from "@/features/case-law/decision-filter-facets";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
@@ -878,16 +879,22 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       );
     },
   });
+  // What the case-number column is called, from the whole page rather than
+  // the rows a find leaves, so the header does not change while the reader
+  // types.
+  const referenceKind = decisionReferenceColumnKind(ordered);
   // Find-in-table over the page on screen, beside the control that narrows the
   // search itself. Kept per jurisdiction, the way the arrangement is.
   const columnGroups = useDecisionColumnGroups({
     questions: questions.surface,
+    referenceKind,
   });
   const find = useDecisionFind({
     decisions: ordered,
     layout,
     paneRef,
     questions: questions.surface,
+    referenceKind,
     surfaceKey: countryParam,
   });
 
@@ -1153,6 +1160,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
               onSelectedIdsChange={setSelectedIds}
               query={rowsQuery}
               questions={questions.surface}
+              referenceKind={referenceKind}
               selectedIds={selectedIds}
             />
             <PublicLawPager
