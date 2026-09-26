@@ -1,6 +1,8 @@
+import type { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByIco, searchByName } from "./client.js";
+import type { RpoClientError } from "./client.js";
 import { RpoAPIError, RpoRequestError, RpoValidationError } from "./errors.js";
 import type { RpoRawSearchResponse } from "./types.js";
 
@@ -39,6 +41,13 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 const isEntityRequest = (url: URL): boolean =>
   url.pathname.startsWith("/rpo/v1/entity/");
 
+const errorOf = async (
+  pending: Promise<Result<unknown, RpoClientError>>,
+): Promise<RpoClientError | null> => {
+  const result = await pending;
+  return result.isErr() ? result.error : null;
+};
+
 let restore: () => void = () => {
   // replaced by each test's stub
 };
@@ -56,7 +65,7 @@ describe("lookupByIco", () => {
       return jsonResponse(isEntityRequest(url) ? entity : search);
     });
 
-    const result = await lookupByIco("31 333 532");
+    const result = (await lookupByIco("31 333 532")).unwrap();
 
     expect(requests.map((url) => url.pathname)).toEqual([
       "/rpo/v1/search",
@@ -85,7 +94,9 @@ describe("lookupByIco", () => {
       return jsonResponse(search);
     });
 
-    const result = await lookupByIco("31333532", { view: "historical" });
+    const result = (
+      await lookupByIco("31333532", { view: "historical" })
+    ).unwrap();
 
     expect(entityUrl?.searchParams.get("showHistoricalData")).toBe("true");
     expect(
@@ -103,7 +114,7 @@ describe("lookupByIco", () => {
       jsonResponse(isEntityRequest(url) ? entity : search),
     );
 
-    const result = await lookupByIco("35681039");
+    const result = (await lookupByIco("35681039")).unwrap();
 
     expect(result).toMatchObject({
       name: "Slovnaft Retail, s.r.o.",
@@ -136,7 +147,7 @@ describe("lookupByIco", () => {
       return jsonResponse({ results: [ended, live] });
     });
 
-    await lookupByIco("31333532");
+    (await lookupByIco("31333532")).unwrap();
 
     expect(entityPath).toBe(`/rpo/v1/entity/${live.id}`);
   });
@@ -151,7 +162,7 @@ describe("lookupByIco", () => {
       return jsonResponse(university);
     });
 
-    expect(await lookupByIco("31333532")).toBeNull();
+    expect((await lookupByIco("31333532")).unwrap()).toBeNull();
     expect(requests.some(isEntityRequest)).toBe(false);
   });
 
@@ -162,7 +173,7 @@ describe("lookupByIco", () => {
       isEntityRequest(url) ? jsonResponse(notFound, 404) : jsonResponse(search),
     );
 
-    expect(await lookupByIco("31333532")).toBeNull();
+    expect((await lookupByIco("31333532")).unwrap()).toBeNull();
   });
 
   test("accepts IČOs that predate the check digit", async () => {
@@ -173,7 +184,7 @@ describe("lookupByIco", () => {
     });
 
     // 11111111 fails MOD-11 yet is a registered 1992 state enterprise.
-    expect(await lookupByIco("11111111")).toBeNull();
+    expect((await lookupByIco("11111111")).unwrap()).toBeNull();
     expect(searched).toBe("11111111");
   });
 
@@ -185,7 +196,7 @@ describe("lookupByIco", () => {
     });
 
     for (const input of ["3133353", "313335322", "ESET"]) {
-      await expect(lookupByIco(input)).rejects.toBeInstanceOf(
+      expect(await errorOf(lookupByIco(input))).toBeInstanceOf(
         RpoValidationError,
       );
     }
@@ -203,7 +214,7 @@ describe("upstream failures", () => {
         }),
     );
 
-    await expect(lookupByIco("31333532")).rejects.toThrow(
+    expect((await errorOf(lookupByIco("31333532")))?.message).toBe(
       "RPO 200: invalid JSON payload",
     );
   });
@@ -212,10 +223,7 @@ describe("upstream failures", () => {
     const body = await readFixture<unknown>("search-no-parameters.json");
     restore = installFetchStub(async () => jsonResponse(body, 400));
 
-    const rejection = await searchByName("ESET").then(
-      () => null,
-      (error: unknown) => error,
-    );
+    const rejection = await errorOf(searchByName("ESET"));
 
     expect(rejection).toBeInstanceOf(RpoAPIError);
     expect(rejection).toMatchObject({
@@ -229,7 +237,7 @@ describe("upstream failures", () => {
       async () => new Response("<html>Bad Gateway</html>", { status: 502 }),
     );
 
-    await expect(searchByName("ESET")).rejects.toMatchObject({
+    expect(await errorOf(searchByName("ESET"))).toMatchObject({
       name: "RpoAPIError",
       httpStatus: 502,
       upstreamMessage: null,
@@ -241,7 +249,7 @@ describe("upstream failures", () => {
       throw new TypeError("fetch failed");
     });
 
-    await expect(lookupByIco("31333532")).rejects.toBeInstanceOf(
+    expect(await errorOf(lookupByIco("31333532"))).toBeInstanceOf(
       RpoRequestError,
     );
   });
@@ -249,7 +257,7 @@ describe("upstream failures", () => {
   test("an unexpected JSON shape is an API error", async () => {
     restore = installFetchStub(async () => jsonResponse({ data: [] }));
 
-    await expect(searchByName("ESET")).rejects.toThrow(
+    expect((await errorOf(searchByName("ESET")))?.message).toContain(
       "unexpected JSON payload shape",
     );
   });
@@ -259,7 +267,7 @@ describe("upstream failures", () => {
       jsonResponse({ results: [{ id: 1, identifiers: [null] }] }),
     );
 
-    await expect(lookupByIco("31333532")).rejects.toBeInstanceOf(RpoAPIError);
+    expect(await errorOf(lookupByIco("31333532"))).toBeInstanceOf(RpoAPIError);
   });
 
   test("a malformed leaf field is an API error", async () => {
@@ -275,7 +283,7 @@ describe("upstream failures", () => {
       }),
     );
 
-    await expect(searchByName("ESET")).rejects.toThrow(
+    expect((await errorOf(searchByName("ESET")))?.message).toContain(
       "unexpected JSON payload shape",
     );
   });
@@ -292,7 +300,7 @@ describe("searchByName", () => {
       return jsonResponse(fixture);
     });
 
-    const results = await searchByName(" slovnaft ", { limit: 100 });
+    const results = (await searchByName(" slovnaft ", { limit: 100 })).unwrap();
 
     expect(fullName).toBe("slovnaft");
     // Every upstream row survives the ranking.
@@ -321,14 +329,14 @@ describe("searchByName", () => {
     );
     restore = installFetchStub(async () => jsonResponse(fixture));
 
-    const all = await searchByName("slovnaft", { limit: 100 });
-    const top = await searchByName("slovnaft", { limit: 3 });
+    const all = (await searchByName("slovnaft", { limit: 100 })).unwrap();
+    const top = (await searchByName("slovnaft", { limit: 3 })).unwrap();
 
     expect(top).toEqual(all.slice(0, 3));
   });
 
   test("rejects an empty name", async () => {
-    await expect(searchByName("   ")).rejects.toBeInstanceOf(
+    expect(await errorOf(searchByName("   "))).toBeInstanceOf(
       RpoValidationError,
     );
   });

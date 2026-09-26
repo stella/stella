@@ -1,5 +1,5 @@
 export { lookupByIco, searchByName } from "./client.js";
-export type { LookupOptions, SearchOptions } from "./client.js";
+export type { LookupOptions, RpoClientError, SearchOptions } from "./client.js";
 export {
   RpoAPIError,
   RpoError,

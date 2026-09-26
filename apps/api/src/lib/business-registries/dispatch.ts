@@ -1247,13 +1247,21 @@ const RPO_HANDLER: RegistryHandler = {
   nativeToolSlug: "rpo",
   // Shape only: RPO holds bodies whose IČO predates the MOD-11 check digit.
   isCanonicalId: isRpoIcoShape,
+  // The client returns Results; the handler contract reports failures by
+  // throwing into `mapError`.
   lookup: async (input) => {
     const entity = await lookupRpoByIco(input);
-    return entity ? rpoEntityToHit(entity) : null;
+    if (entity.isErr()) {
+      throw entity.error;
+    }
+    return entity.value ? rpoEntityToHit(entity.value) : null;
   },
   search: async (input, options) => {
     const results = await searchRpoByName(input, options);
-    return results.map(rpoSearchResultToHit);
+    if (results.isErr()) {
+      throw results.error;
+    }
+    return results.value.map(rpoSearchResultToHit);
   },
   isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapRpoError,
