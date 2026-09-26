@@ -242,6 +242,10 @@ export const generatedToolAnnotations: Readonly<
     command: ["contact", "lookup-registry"],
     scope: "read",
   },
+  check_counterparty: {
+    command: ["contact", "check-counterparty"],
+    scope: "read",
+  },
   list_tasks: {
     command: ["task", "list"],
     scope: "read",
