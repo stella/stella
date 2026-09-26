@@ -8,7 +8,7 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { withNullOptionalsOmitted } from "@/api/lib/json-schema-null-optionals";
+import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema-null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -122,9 +122,10 @@ export const readOutputCeilingStopAsLength = async function* (
 type ChatStreamOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
 
 // Each tool call's input as its tool declares it. A strict provider spells an
-// optional field it is not setting as `null`, and a model on any provider may
-// write one; the optional-null rule reads it as omitted, so the input checked,
-// stored and shown is the declared shape on every provider.
+// optional field it is not setting as `null`, some routes fill an optional
+// string with "", and a model on any provider may write either; where the
+// field's own schema refuses the placeholder, it reads as omitted, so the
+// input checked, stored and shown is the declared shape on every provider.
 async function* withDeclaredToolInput(
   chunks: AsyncIterable<StreamChunk>,
   options: ChatStreamOptions,
@@ -169,7 +170,9 @@ async function* withDeclaredToolInput(
     yield {
       ...chunk,
       input:
-        schema === undefined ? input : withNullOptionalsOmitted(schema, input),
+        schema === undefined
+          ? input
+          : withModelPlaceholdersOmitted(schema, input),
     };
   }
 }

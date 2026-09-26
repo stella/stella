@@ -179,9 +179,13 @@ export const createApprovalHarness = ({
   const approvalTool = toolDefinition({
     name: APPROVAL_TOOL_NAME,
     description: "Server tool behind an approval",
-    // The optional field is what strict provider schemas send as null.
+    // The optional field is what strict provider schemas send as null, and
+    // what a route that fills every field sends as "" (a note is never empty).
     inputSchema: toTanStackToolSchema(
-      v.object({ name: v.string(), note: v.optional(v.string()) }),
+      v.object({
+        name: v.string(),
+        note: v.optional(v.pipe(v.string(), v.minLength(1))),
+      }),
     ),
     needsApproval: true,
   }).server(async ({ name }) => {

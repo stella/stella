@@ -48,10 +48,11 @@ import type {
 // its replay differ only in who answers.
 
 /** The declared input of the wire tool: `note` is optional, so a strict
- *  provider widens it to `null` on the wire. */
+ *  provider widens it to `null` on the wire, and a route that fills every
+ *  field sends ""; a note is never empty, so "" is not one. */
 export const WIRE_TOOL_INPUT = v.object({
   name: v.string(),
-  note: v.optional(v.string()),
+  note: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 export const wireTool = () =>
@@ -538,7 +539,12 @@ export const findWireContractViolations = ({
       }
     }
     const streamedText = textOf(chunks);
-    const expectsText = (expected.toolCalls ?? []).length === 0;
+    // A reply cut off at the output ceiling may have spent the whole budget
+    // before writing any text (a reasoning model); every other answer that
+    // calls no tool has text.
+    const expectsText =
+      (expected.toolCalls ?? []).length === 0 &&
+      expected.finishReason !== "length";
     if (expected.text !== undefined && streamedText !== expected.text) {
       text.push({ expected: expected.text, got: streamedText });
     }

@@ -383,11 +383,11 @@
     {
       "id": "tool-input-null-optionals-omitted",
       "fix": "#1174, #1189, #3831",
-      "behaviour": "Every adapter's tool call input reads a null optional field as omitted.",
+      "behaviour": "Every adapter's tool call input reads a placeholder in an optional field (null, or \"\" where the field refuses it) as omitted.",
       "status": "active",
       "file": "src/lib/chat/provider-stream-contract.ts",
-      "search": "schema === undefined ? input : withNullOptionalsOmitted(schema, input),",
-      "replace": "input,",
+      "search": "          : withModelPlaceholdersOmitted(schema, input),",
+      "replace": "          : input,",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "google strict-null"
