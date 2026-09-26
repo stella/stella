@@ -24,6 +24,7 @@ type DecisionBySlug = Awaited<
 
 const UNPUBLISHED_DECISION = {
   caseNumber: "SYN 1/2026",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationsFrom: [],
   citationsNextCursor: null,
   citationsTo: [],
