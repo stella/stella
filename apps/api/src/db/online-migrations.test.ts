@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
+
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
+  ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
 
@@ -30,6 +33,26 @@ const DELETE_RECEIPT_CONSTRAINT =
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
 
 describe("online migrations", () => {
+  /**
+   * The online phase runs inside the migrator's exclusive corpus schema lane,
+   * so a walk or a full-table scan there pauses every corpus writer for its
+   * whole length. The provision state backfill is a scheduler job instead.
+   */
+  test("keeps the provision state backfill out of the online phase", () => {
+    const repairNames = new Set(
+      ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
+    );
+    expect(PROVISION_STATE_BACKFILL_STEPS.length).toBeGreaterThan(0);
+    expect(
+      PROVISION_STATE_BACKFILL_STEPS.filter(({ name }) =>
+        repairNames.has(name),
+      ),
+    ).toEqual([]);
+    expect(
+      [...repairNames].filter((name) => name.includes("provision")),
+    ).toEqual([]);
+  });
+
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
 

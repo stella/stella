@@ -43,6 +43,10 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
+    "./provision-citation-profiles": {
+      "types": "./src/provision-citation-profiles.ts",
+      "import": "./src/provision-citation-profiles.ts"
+    },
     "./runners/registry": {
       "types": "./src/runners/registry.ts",
       "import": "./src/runners/registry.ts"

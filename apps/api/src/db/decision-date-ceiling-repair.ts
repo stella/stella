@@ -32,6 +32,7 @@ import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-b
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { onlineMigrationParams } from "./online-migration-connection";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -73,7 +74,7 @@ const dialect = new PgDialect();
 const bindTo = (connection: OnlineMigrationConnection) => ({
   execute: async (query: SQL): Promise<unknown> => {
     const { sql: text, params } = dialect.sqlToQuery(query);
-    return await connection.query(text, params);
+    return await connection.query(text, onlineMigrationParams(params));
   },
 });
 

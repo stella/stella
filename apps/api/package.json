@@ -114,6 +114,7 @@
     "@stll/folio-core": "catalog:",
     "@stll/infosoud": "workspace:*",
     "@stll/legal-ast": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/mojibake": "workspace:*",
     "@stll/money": "workspace:*",

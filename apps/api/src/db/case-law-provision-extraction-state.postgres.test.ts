@@ -21,6 +21,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -75,7 +76,7 @@ const insertDecision = async (
 
 const withFixture = async (
   fn: (tools: {
-    openClient: () => { sql: SQL; db: GatedTestDb };
+    openClient: (options?: { max?: number }) => { sql: SQL; db: GatedTestDb };
     observer: SQL;
     fixture: Fixture;
   }) => Promise<void>,
@@ -404,5 +405,126 @@ if (!databaseUrl || !runPostgresTests) {
         }
       });
     }, 15_000);
+
+    test("a transition page waits for decisions before locking its scope", async () => {
+      await withFixture(async ({ openClient, observer, fixture }) => {
+        const language = uniqueLanguage();
+        const id = await insertDecision(openClient().sql, fixture, language);
+        const [activated] = await observer`
+          UPDATE case_law_provision_extraction_scopes
+          SET status = 'active', generation = generation + 1
+          WHERE country = ${COUNTRY} AND language = ${language}
+          RETURNING generation`;
+        const activeGeneration = String(activated?.generation);
+        await observer`INSERT INTO case_law_provision_scope_transitions
+          (country, language, generation, action)
+          VALUES (${COUNTRY}, ${language}, ${activeGeneration}::bigint, 'activate')`;
+
+        const holder = openClient().sql;
+        const runner = openClient().sql;
+        const held = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const holding = holder.begin(async (tx) => {
+          await tx`SELECT 1 FROM case_law_decisions
+            WHERE id = ${id}::uuid FOR NO KEY UPDATE`;
+          held.resolve(undefined);
+          await release.promise;
+        });
+        try {
+          await held.promise;
+          const pid = await backendPid(runner);
+          const running = (async () =>
+            await runner`SELECT run_case_law_provision_scope_transition_page(
+              ${COUNTRY}, ${language}, ${activeGeneration}::bigint) AS more`)();
+          await waitUntilBlocked(observer, pid);
+
+          const retiredGeneration = await observer.begin(async (tx) => {
+            const [retired] = await tx`
+              UPDATE case_law_provision_extraction_scopes
+              SET status = 'retired', generation = generation + 1
+              WHERE country = ${COUNTRY} AND language = ${language}
+              RETURNING generation`;
+            await tx`INSERT INTO case_law_provision_scope_transitions
+              (country, language, generation, action)
+              VALUES (${COUNTRY}, ${language}, ${String(retired?.generation)}::bigint, 'retire')`;
+            return Number(retired?.generation);
+          });
+          expect(retiredGeneration).toBe(Number(activeGeneration) + 1);
+          release.resolve(undefined);
+          await holding;
+          expect((await running).at(0)?.more).toBe(false);
+          const [obsolete] = await observer`
+            SELECT completed_at IS NOT NULL AS complete
+            FROM case_law_provision_scope_transitions
+            WHERE country = ${COUNTRY} AND language = ${language}
+              AND generation = ${activeGeneration}::bigint`;
+          expect(obsolete?.complete).toBe(true);
+          expect(await stateOf(observer, id)).toBeUndefined();
+        } finally {
+          release.resolve(undefined);
+          await holding.catch(() => undefined);
+        }
+      });
+    }, 15_000);
+
+    /**
+     * The backfill on the driver the scheduler uses: a reserved Bun SQL
+     * session, whose `unsafe` binds a JavaScript array as text. Every list
+     * the steps bind is a joined string, so the walks, the transition pages
+     * and the CHECK scans all run here to completion.
+     */
+    test("the backfill completes on a reserved Bun SQL session", async () => {
+      await withFixture(async ({ openClient, fixture }) => {
+        // Two connections: one reserved for the backfill, one for the checks.
+        const { sql: client } = openClient({ max: 2 });
+        await insertDecision(client, fixture, uniqueLanguage());
+        const reserved = await client.reserve();
+        try {
+          const session = {
+            execute: async (
+              query: string,
+              params: readonly (
+                | string
+                | number
+                | bigint
+                | boolean
+                | null
+              )[] = [],
+            ) => {
+              await reserved.unsafe(query, [...params]);
+            },
+            query: async (
+              query: string,
+              params: readonly (
+                | string
+                | number
+                | bigint
+                | boolean
+                | null
+              )[] = [],
+            ): Promise<readonly unknown[]> =>
+              await reserved.unsafe(query, [...params]),
+          };
+          const outcomes: string[] = [];
+          for (let run = 0; run < 20; run += 1) {
+            const outcome = await runProvisionStateBackfill({
+              connection: session,
+              deadline: Number.POSITIVE_INFINITY,
+            });
+            outcomes.push(outcome.type);
+            if (outcome.type === "complete") {
+              break;
+            }
+          }
+          expect(outcomes.at(-1)).toBe("complete");
+          const [pending] = await client`
+            SELECT count(*)::int AS count FROM pg_constraint
+            WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`;
+          expect(pending?.count).toBe(0);
+        } finally {
+          reserved.release();
+        }
+      });
+    }, 120_000);
   });
 }
