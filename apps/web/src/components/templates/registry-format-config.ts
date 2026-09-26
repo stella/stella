@@ -96,6 +96,7 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
       "registering authority",
       "registered on",
     ],
+    rpo: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
     vies: [...REGISTRY_BASE_RETURN_FIELDS, "VAT number"],
   };
 
@@ -114,6 +115,7 @@ export const REGISTRY_DEFAULT_FORMAT = {
   "recherche-entreprises":
     BUSINESS_REGISTRY_FORMAT_CAPABILITIES["recherche-entreprises"]
       .defaultFormat,
+  rpo: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.rpo.defaultFormat,
   vies: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.vies.defaultFormat,
 } satisfies Record<LookupRegistry, string>;
 
