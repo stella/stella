@@ -33,7 +33,7 @@ const valuesSql = (values: readonly string[]) =>
     sql`, `,
   );
 
-export const correspondence = p.pgTable(
+export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
     id: pUuid<"correspondence">().primaryKey(),
@@ -115,7 +115,7 @@ export const correspondence = p.pgTable(
   ],
 );
 
-export const correspondenceFilers = p.pgTable(
+export const correspondenceFilers = p.pgTable.withRLS(
   "correspondence_filers",
   {
     id: pUuid<"correspondenceFiler">().primaryKey(),
@@ -171,7 +171,7 @@ export const correspondenceFilers = p.pgTable(
   ],
 );
 
-export const correspondenceAttachments = p.pgTable(
+export const correspondenceAttachments = p.pgTable.withRLS(
   "correspondence_attachments",
   {
     id: pUuid<"correspondenceAttachment">().primaryKey(),
@@ -225,7 +225,7 @@ export const correspondenceAttachments = p.pgTable(
   ],
 );
 
-export const matterInboundAddresses = p.pgTable(
+export const matterInboundAddresses = p.pgTable.withRLS(
   "matter_inbound_addresses",
   {
     id: pUuid<"matterInboundAddress">().primaryKey(),
@@ -256,11 +256,16 @@ export const matterInboundAddresses = p.pgTable(
     p
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
+    p.pgPolicy("matter_inbound_addresses_owner_lookup", {
+      for: "select",
+      to: "current_user",
+      using: sql`true`,
+    }),
     ...wsOrganizationPolicies("matter_inbound_addresses"),
   ],
 );
 
-export const correspondenceAllowedSenders = p.pgTable(
+export const correspondenceAllowedSenders = p.pgTable.withRLS(
   "correspondence_allowed_senders",
   {
     id: pUuid<"correspondenceAllowedSender">().primaryKey(),
@@ -306,11 +311,16 @@ export const correspondenceAllowedSenders = p.pgTable(
       "correspondence_allowed_senders_approval_check",
       sql`${table.kind} <> 'shared_mailbox' or ${table.approvedBy} is not null`,
     ),
+    p.pgPolicy("correspondence_allowed_senders_owner_lookup", {
+      for: "select",
+      to: "current_user",
+      using: sql`true`,
+    }),
     ...orgPolicies(),
   ],
 );
 
-export const correspondenceAllowedSenderMatters = p.pgTable(
+export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
   "correspondence_allowed_sender_matters",
   {
     id: pUuid<"correspondenceAllowedSenderMatter">().primaryKey(),
@@ -341,11 +351,16 @@ export const correspondenceAllowedSenderMatters = p.pgTable(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
+    p.pgPolicy("correspondence_allowed_sender_matters_owner_lookup", {
+      for: "select",
+      to: "current_user",
+      using: sql`true`,
+    }),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
   ],
 );
 
-export const correspondenceDropLogs = p.pgTable(
+export const correspondenceDropLogs = p.pgTable.withRLS(
   "correspondence_drop_logs",
   {
     id: pUuid<"correspondenceDropLog">().primaryKey(),

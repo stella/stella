@@ -5,7 +5,6 @@ import { t } from "elysia";
 import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
-  workspaces,
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -51,10 +50,15 @@ const addAllowedSenderMatter = createSafeRootHandler(
           )
           .for("update");
         const sender = senderRows.at(0);
-        if (!sender) return { kind: "missing_sender" as const };
-        if (sender.revokedAt !== null) return { kind: "revoked" as const };
-        if (sender.scope !== "matters")
+        if (!sender) {
+          return { kind: "missing_sender" as const };
+        }
+        if (sender.revokedAt !== null) {
+          return { kind: "revoked" as const };
+        }
+        if (sender.scope !== "matters") {
           return { kind: "organization_scope" as const };
+        }
 
         const workspace = await tx.query.workspaces.findFirst({
           where: {
@@ -63,18 +67,27 @@ const addAllowedSenderMatter = createSafeRootHandler(
           },
           columns: { id: true },
         });
-        if (!workspace) return { kind: "missing_workspace" as const };
+        if (!workspace) {
+          return { kind: "missing_workspace" as const };
+        }
 
-        const existingScope =
-          await tx.query.correspondenceAllowedSenderMatters.findFirst({
-            where: {
-              organizationId: { eq: session.activeOrganizationId },
-              allowedSenderId: { eq: sender.id },
-              workspaceId: { eq: body.matterId },
-            },
-            columns: { id: true },
-          });
-        if (existingScope) return { kind: "added" as const };
+        const [existingScope] = await tx
+          .select({ id: correspondenceAllowedSenderMatters.id })
+          .from(correspondenceAllowedSenderMatters)
+          .where(
+            and(
+              eq(
+                correspondenceAllowedSenderMatters.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(correspondenceAllowedSenderMatters.allowedSenderId, sender.id),
+              eq(correspondenceAllowedSenderMatters.workspaceId, body.matterId),
+            ),
+          )
+          .limit(1);
+        if (existingScope) {
+          return { kind: "added" as const };
+        }
 
         const scopeRows = await tx
           .select({ id: correspondenceAllowedSenderMatters.id })
@@ -89,8 +102,9 @@ const addAllowedSenderMatter = createSafeRootHandler(
             ),
           )
           .limit(MAX_MATTER_SCOPE_SIZE);
-        if (scopeRows.length >= MAX_MATTER_SCOPE_SIZE)
+        if (scopeRows.length >= MAX_MATTER_SCOPE_SIZE) {
           return { kind: "scope_limit" as const };
+        }
 
         const inserted = await tx
           .insert(correspondenceAllowedSenderMatters)
@@ -117,18 +131,20 @@ const addAllowedSenderMatter = createSafeRootHandler(
       }),
     );
 
-    if (result.kind === "missing_sender")
+    if (result.kind === "missing_sender") {
       return Result.err(
         new HandlerError({ status: 404, message: "Allowed sender not found" }),
       );
-    if (result.kind === "revoked")
+    }
+    if (result.kind === "revoked") {
       return Result.err(
         new HandlerError({
           status: 409,
           message: "A revoked sender cannot gain matter access",
         }),
       );
-    if (result.kind === "organization_scope")
+    }
+    if (result.kind === "organization_scope") {
       return Result.err(
         new HandlerError({
           status: 409,
@@ -136,17 +152,20 @@ const addAllowedSenderMatter = createSafeRootHandler(
             "Organization-scoped senders do not have matter-specific scope",
         }),
       );
-    if (result.kind === "missing_workspace")
+    }
+    if (result.kind === "missing_workspace") {
       return Result.err(
         new HandlerError({ status: 404, message: "Matter not found" }),
       );
-    if (result.kind === "scope_limit")
+    }
+    if (result.kind === "scope_limit") {
       return Result.err(
         new HandlerError({
           status: 409,
           message: "Matter scope limit reached",
         }),
       );
+    }
     return Result.ok({ added: true });
   },
 );
