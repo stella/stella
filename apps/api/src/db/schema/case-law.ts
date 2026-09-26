@@ -70,6 +70,7 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  corpusSampleReaderDecisionPolicies,
   corpusSampleReaderPolicies,
   globalCaseLawPolicies,
   isNotNull,
@@ -799,7 +800,7 @@ export const caseLawDecisions = p.pgTable(
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderPolicies(),
-    ...corpusSampleReaderPolicies(),
+    ...corpusSampleReaderDecisionPolicies(),
   ],
 );
 

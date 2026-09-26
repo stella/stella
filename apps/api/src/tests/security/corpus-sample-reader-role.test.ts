@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { stellaCorpusSampleReader } from "@/api/db/rls";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import { CORPUS_SAMPLE_READER_SELECT_COLUMNS } from "@/api/tests/pglite-test-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -287,9 +289,61 @@ describe("corpus sample reader role", () => {
       expectedRelations.map((tablename) => ({
         tablename,
         cmd: "SELECT",
-        qual: "true",
+        qual:
+          tablename === "case_law_decisions" ? "(redacted_at IS NULL)" : "true",
       })),
     );
+  });
+
+  test("SET ROLE sees unredacted decisions and never redacted ones", async () => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const visibleId = createSafeId<"caseLawDecision">();
+    const redactedId = createSafeId<"caseLawDecision">();
+    let seen: string[] = [];
+
+    await testDb
+      .transaction(async (tx) => {
+        await tx.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `corpus-sample-reader-${sourceId}`,
+          name: "Corpus sample reader role",
+        });
+        await tx.insert(caseLawDecisions).values([
+          {
+            id: visibleId,
+            sourceId,
+            caseNumber: `CASE-${visibleId}`,
+            court: "Test Court",
+            country: "CZE",
+            language: "cs",
+          },
+          {
+            id: redactedId,
+            sourceId,
+            caseNumber: `CASE-${redactedId}`,
+            court: "Test Court",
+            country: "CZE",
+            language: "cs",
+            redactedAt: new Date("2026-09-01T00:00:00.000Z"),
+            textS3Key: `text/${redactedId}`,
+          },
+        ]);
+
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+        const result = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM case_law_decisions
+          WHERE id IN (${visibleId}, ${redactedId})
+        `);
+        seen = result.rows.map(({ id }) => id);
+        tx.rollback();
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof TransactionRollbackError)) {
+          throw error;
+        }
+      });
+
+    expect(seen).toEqual([visibleId]);
   });
 
   test("row security is enabled on every granted relation", async () => {
@@ -322,7 +376,7 @@ const READER_GRANT_PATTERN =
   /^(?<verb>GRANT|REVOKE) SELECT \((?<columns>[^)]+)\) ON TABLE "?(?<table>[a-z_]+)"? (?:TO|FROM) "?stella_corpus_sample_reader"?$/iu;
 const READER_ROLE_NAME_PATTERN = /\bstella_corpus_sample_reader\b/iu;
 const READER_DDL_PATTERN =
-  /^(?:CREATE ROLE "?stella_corpus_sample_reader"? NOLOGIN|GRANT USAGE ON SCHEMA public TO "?stella_corpus_sample_reader"?|CREATE POLICY "\w+" ON "?[a-z_]+"? AS PERMISSIVE FOR SELECT TO "?stella_corpus_sample_reader"? USING \(true\)|DROP POLICY (?:IF EXISTS )?"\w+" ON "?[a-z_]+"?)$/iu;
+  /^(?:CREATE ROLE "?stella_corpus_sample_reader"? NOLOGIN|GRANT USAGE ON SCHEMA public TO "?stella_corpus_sample_reader"?|CREATE POLICY "\w+" ON "?[a-z_]+"? AS PERMISSIVE FOR SELECT TO "?stella_corpus_sample_reader"? USING \((?:true|redacted_at IS NULL)\)|DROP POLICY (?:IF EXISTS )?"\w+" ON "?[a-z_]+"?)$/iu;
 
 /** Fold every migration's column grants for the role into one effective map. */
 const foldReaderGrants = (

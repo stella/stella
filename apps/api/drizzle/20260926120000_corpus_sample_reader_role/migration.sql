@@ -66,8 +66,11 @@ CREATE POLICY "corpus_sample_reader_read" ON "case_law_citations"
   AS PERMISSIVE FOR SELECT TO "stella_corpus_sample_reader" USING (true);--> statement-breakpoint
 CREATE POLICY "corpus_sample_reader_read" ON "case_law_corpus_tombstones"
   AS PERMISSIVE FOR SELECT TO "stella_corpus_sample_reader" USING (true);--> statement-breakpoint
+-- Redacted decisions stay invisible even while a failed object deletion leaves
+-- their storage keys set for retry.
 CREATE POLICY "corpus_sample_reader_read" ON "case_law_decisions"
-  AS PERMISSIVE FOR SELECT TO "stella_corpus_sample_reader" USING (true);--> statement-breakpoint
+  AS PERMISSIVE FOR SELECT TO "stella_corpus_sample_reader"
+  USING (redacted_at IS NULL);--> statement-breakpoint
 CREATE POLICY "corpus_sample_reader_read" ON "legislation_documents"
   AS PERMISSIVE FOR SELECT TO "stella_corpus_sample_reader" USING (true);--> statement-breakpoint
 CREATE POLICY "corpus_sample_reader_read" ON "legislation_sources"

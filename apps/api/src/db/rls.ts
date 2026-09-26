@@ -835,6 +835,18 @@ export const corpusSampleReaderPolicies = () => [
   }),
 ];
 
+/**
+ * Decisions a redaction marked stay invisible to the sample reader, even while
+ * a failed object deletion leaves their storage keys set for retry.
+ */
+export const corpusSampleReaderDecisionPolicies = () => [
+  p.pgPolicy("corpus_sample_reader_read", {
+    for: "select",
+    to: stellaCorpusSampleReader,
+    using: sql`redacted_at IS NULL`,
+  }),
+];
+
 /** Case-law relations retain the v0.7.22 policy during the rollout window. */
 export const publicCaseLawReaderPolicies = () => [
   p.pgPolicy("case_law_reader_access", {
