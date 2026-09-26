@@ -46,6 +46,7 @@ export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
   "certificate_rejected",
   "certificate_revoked",
   "certified_document",
+  "expired",
   "signature_invalid",
   "signing_failed",
 ] as const;

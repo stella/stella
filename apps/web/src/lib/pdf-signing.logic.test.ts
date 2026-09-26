@@ -169,6 +169,9 @@ describe("pdf signing start failures", () => {
     expect(pdfSigningStartErrorCode("pdf_signing_certified_document")).toBe(
       "pdf_signing_certified_document",
     );
+    expect(pdfSigningStartErrorCode("pdf_signing_in_progress")).toBe(
+      "pdf_signing_in_progress",
+    );
   });
 
   test("leaves every other failure to the generic message", () => {

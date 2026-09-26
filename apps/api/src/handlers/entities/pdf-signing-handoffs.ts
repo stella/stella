@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { pdfSigningSessions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -22,6 +21,7 @@ import {
   computePdfSigningHandoffExpiresAt,
   createPdfSigningToken,
   hashPdfSigningToken,
+  openPdfSigningSession,
 } from "@/api/lib/pdf-signing/sessions";
 
 /**
@@ -234,22 +234,45 @@ const createPdfSigningHandoff = createSafeHandler(
           };
         }
 
-        await tx.insert(pdfSigningSessions).values({
-          baseVersionId: current.baseVersionId,
-          createdBy: user.id,
-          entityId,
-          handoffExpiresAt: expiresAt,
-          handoffTokenHash: hashPdfSigningToken(handoffToken),
-          id: sessionId,
-          location: sanitizeSigningAnnotation(location),
-          propertyId,
-          reason: sanitizeSigningAnnotation(reason),
-          // Until the handoff is redeemed the exchange lives exactly as long
-          // as the deep link does; redemption replaces this with the session
-          // token's own TTL.
-          tokenExpiresAt: expiresAt,
-          workspaceId,
+        const opened = await openPdfSigningSession({
+          now: new Date(),
+          tx,
+          values: {
+            baseVersionId: current.baseVersionId,
+            createdBy: user.id,
+            entityId,
+            handoffExpiresAt: expiresAt,
+            handoffTokenHash: hashPdfSigningToken(handoffToken),
+            id: sessionId,
+            location: sanitizeSigningAnnotation(location),
+            propertyId,
+            reason: sanitizeSigningAnnotation(reason),
+            // Until the handoff is redeemed the exchange lives exactly as
+            // long as the deep link does; redemption replaces this with the
+            // session token's own TTL.
+            tokenExpiresAt: expiresAt,
+            workspaceId,
+          },
         });
+        if (opened.status === "in-progress") {
+          return {
+            error: new HandlerError({
+              status: 409,
+              code: "pdf_signing_in_progress",
+              message:
+                "This file is already being signed. Finish or cancel that first.",
+            }),
+          };
+        }
+        for (const expiredSessionId of opened.expiredSessionIds) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+            resourceId: expiredSessionId,
+            changes: { status: { old: "open", new: "cancelled" } },
+            metadata: { closeReason: "expired" },
+          });
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

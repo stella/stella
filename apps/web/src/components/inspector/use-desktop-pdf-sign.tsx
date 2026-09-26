@@ -28,6 +28,7 @@ const START_ERROR_KEYS = {
   pdf_signing_certified_document:
     "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   pdf_signing_encrypted: "workspaces.files.pdfSigning.encryptedDescription",
+  pdf_signing_in_progress: "workspaces.files.pdfSigning.inProgressDescription",
   pdf_signing_not_a_file: "workspaces.files.pdfSigning.noFileDescription",
   pdf_signing_not_a_pdf: "workspaces.files.pdfSigning.notAPdfDescription",
   pdf_signing_too_large: "workspaces.files.pdfSigning.tooLargeDescription",
@@ -43,6 +44,7 @@ const CLOSE_REASON_KEYS = {
   certified_document:
     "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   digest_mismatch: "workspaces.files.pdfSigning.cancelledDigestDescription",
+  expired: "workspaces.files.pdfSigning.expiredDescription",
   signature_invalid:
     "workspaces.files.pdfSigning.cancelledSignatureDescription",
   signing_failed: "workspaces.files.pdfSigning.cancelledFailedDescription",

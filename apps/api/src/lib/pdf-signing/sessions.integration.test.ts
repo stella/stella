@@ -22,6 +22,7 @@ import {
   authorizePdfSigningSession,
   createPdfSigningToken,
   hashPdfSigningToken,
+  openPdfSigningSession,
   redeemPdfSigningHandoff,
 } from "@/api/lib/pdf-signing/sessions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -385,5 +386,59 @@ describe("pdf signing finalization attempts", () => {
         )
       ).status,
     ).toBe("missing");
+  });
+});
+
+describe("opening a pdf signing exchange", () => {
+  const openFor = async (now: Date) => {
+    const id = createSafeId<"pdfSigningSession">();
+    createdSessionIds.push(id);
+    const expiresAt = new Date(now.getTime() + 2 * MINUTE_MS);
+    const opened = await openPdfSigningSession({
+      now,
+      tx: asTestRaw<Transaction>(testDb),
+      values: {
+        baseVersionId: ids.entityVersionA1,
+        createdBy: ids.userA1,
+        entityId: ids.entityA1,
+        handoffExpiresAt: expiresAt,
+        handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+        id,
+        propertyId: ids.filePropertyA1,
+        tokenExpiresAt: expiresAt,
+        workspaceId: ids.wsA1,
+      },
+    });
+    return { id, opened };
+  };
+
+  test("a lapsed exchange no longer blocks the next one", async () => {
+    await testDb
+      .delete(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.workspaceId, ids.wsA1));
+    const start = new Date();
+
+    const first = await openFor(start);
+    expect(first.opened).toEqual({ status: "created", expiredSessionIds: [] });
+
+    // While the first is live, a second click is refused, not forked.
+    expect((await openFor(start)).opened).toEqual({ status: "in-progress" });
+
+    // Past its TTL nothing swept it, yet the next attempt succeeds and the
+    // dead one is closed with the reason the browser shows.
+    const later = new Date(start.getTime() + 11 * MINUTE_MS);
+    const second = await openFor(later);
+    expect(second.opened).toEqual({
+      status: "created",
+      expiredSessionIds: [first.id],
+    });
+    const rows = await testDb
+      .select({
+        closeReason: pdfSigningSessions.closeReason,
+        status: pdfSigningSessions.status,
+      })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, first.id));
+    expect(rows.at(0)).toEqual({ closeReason: "expired", status: "cancelled" });
   });
 });

@@ -22,6 +22,7 @@ export type PdfSigningCloseReason =
   | "certificate_revoked"
   | "certified_document"
   | "digest_mismatch"
+  | "expired"
   | "signature_invalid"
   | "signing_failed"
   | "unsupported_platform"
@@ -125,6 +126,7 @@ export const pdfSigningStartErrorCode = (code: string | undefined) => {
     case "entity_read_only":
     case "pdf_signing_certified_document":
     case "pdf_signing_encrypted":
+    case "pdf_signing_in_progress":
     case "pdf_signing_not_a_file":
     case "pdf_signing_not_a_pdf":
     case "pdf_signing_too_large": {
