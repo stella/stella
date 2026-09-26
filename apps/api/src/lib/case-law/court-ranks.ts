@@ -5,6 +5,8 @@
  * TypeScript by `usCourtRank` and in SQL by `usCourtRankSql`, both read from
  * the one directory.
  */
+import { type SQL, sql } from "drizzle-orm";
+
 import {
   resolveUsCourt,
   US_COURT_BY_CANONICAL_NAME,
@@ -13,7 +15,7 @@ import {
 } from "@stll/api-contract/us-courts";
 
 import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
-import { sqlCaseExpression } from "@/api/lib/sql-case-expression";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export type CourtRank = { tier: number; tierLabel: string; weight: number };
 
@@ -76,48 +78,51 @@ export const usCourtRankByCanonicalName = (court: string): CourtRank | null => {
 
 type RankField = "tier" | "weight";
 
-/** A `text[]` literal of directory ids, each element quoted and escaped. */
-const courtIdArrayLiteral = (ids: readonly string[]): string => {
-  const elements = ids.map(
-    (id) => `"${id.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`,
-  );
-  return `'{${elements.join(",").replaceAll("'", "''")}}'::text[]`;
-};
+/** A `text[]` input literal of directory ids, each element quoted. */
+const courtIdArrayLiteral = (ids: readonly string[]): string =>
+  `{${ids.map((id) => `"${id.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`).join(",")}}`;
 
-const renderUsCourtRankSql = (
-  courtIdColumn: string,
-  field: RankField,
-): string => {
-  const unranked = UNRANKED_COURT_RANK[field];
+/** A rank value and the `text[]` literal of the accepted ids holding it. */
+type RankGroup = { value: number; ids: string };
+
+/**
+ * The accepted ids grouped by the rank value they hold, highest first. A
+ * group at the unranked value is left out: the ELSE answers it already.
+ */
+const rankGroups = (field: RankField): readonly RankGroup[] => {
   const idsByValue = new Map<number, string[]>();
   for (const { id, tier } of US_COURTS) {
     const value = US_TIER_RANK[tier][field];
-    // A group at the unranked value is what the ELSE answers already.
-    if (value === unranked) {
+    if (value === UNRANKED_COURT_RANK[field]) {
       continue;
     }
     const ids = idsByValue.get(value) ?? [];
     ids.push(id);
     idsByValue.set(value, ids);
   }
-  return sqlCaseExpression({
-    branches: [...idsByValue]
-      .toSorted(([left], [right]) => right - left)
-      .map(
-        ([value, ids]) =>
-          `WHEN ${courtIdColumn} = ANY(${courtIdArrayLiteral(ids)}) THEN ${String(value)}`,
-      ),
-    fallback: unranked,
-  });
+  return [...idsByValue]
+    .toSorted(([left], [right]) => right - left)
+    .map(([value, ids]) => ({ value, ids: courtIdArrayLiteral(ids) }));
 };
 
-const usCourtRankSqlCache = new Map<string, string>();
+let rankGroupsByField: Record<RankField, readonly RankGroup[]> | null = null;
+
+/** Built once per process: the directory is fixed at build time. */
+const usRankGroups = (field: RankField): readonly RankGroup[] => {
+  rankGroupsByField ??= {
+    tier: rankGroups("tier"),
+    weight: rankGroups("weight"),
+  };
+  return rankGroupsByField[field];
+};
 
 /**
- * `usCourtRank`'s tier or weight as SQL over a court id column: one
- * `= ANY(text[])` branch per rank value, listing the accepted ids holding it.
- * The directory holds thousands of ids and four tiers, so the rendering is
- * grouped by value rather than a branch per court, and cached per column.
+ * `usCourtRank`'s tier or weight as SQL over a court id column: one branch
+ * per rank value, testing membership in the accepted ids holding it. The ids
+ * travel as bound `text[]` parameters, so the statement text stays the same
+ * size whatever the directory holds, and each `IN (SELECT unnest(...))` is an
+ * uncorrelated subquery Postgres hashes once per statement, so a row's
+ * lookup does not scan the list.
  *
  * A NULL or unaccepted id takes the ELSE, the unranked rank: never a name
  * pattern and never another jurisdiction's rank. The table CHECK keeps a
@@ -125,16 +130,11 @@ const usCourtRankSqlCache = new Map<string, string>();
  * only, so a stored row reaches the ELSE only through corruption, and
  * `decisionCourtWeight` panics on the same row in TypeScript.
  */
-export const usCourtRankSql = (
-  courtIdColumn: string,
-  field: RankField,
-): string => {
-  const key = `${field}:${courtIdColumn}`;
-  const cached = usCourtRankSqlCache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rendered = renderUsCourtRankSql(courtIdColumn, field);
-  usCourtRankSqlCache.set(key, rendered);
-  return rendered;
-};
+export const usCourtRankSql = (courtIdColumn: string, field: RankField): SQL =>
+  sqlCaseFragment({
+    branches: usRankGroups(field).map(
+      ({ value, ids }) =>
+        sql`WHEN ${sql.raw(courtIdColumn)} IN (SELECT unnest(${ids}::text[])) THEN ${sql.raw(String(value))}`,
+    ),
+    fallback: sql.raw(String(UNRANKED_COURT_RANK[field])),
+  });

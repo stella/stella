@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   courtNameWeightSql,
@@ -29,20 +31,26 @@ test("the name rank SQL renders byte for byte as before", () => {
   expect(nameTier).toMatchSnapshot("tier");
   expect(nameWeight).toMatchSnapshot("weight");
 
+  const text = (fragment: SQL): string =>
+    new PgDialect().sqlToQuery(fragment).sql;
   expect(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      map,
-    }),
+    text(
+      courtTierSqlFromMap({
+        countryColumn: "d.country",
+        courtColumn: "d.court",
+        courtIdColumn: "d.court_id",
+        map,
+      }),
+    ),
   ).toEndWith(`ELSE ${nameTier} END`);
   expect(
-    courtWeightSql({
-      countryColumn: "citing_d.country",
-      courtColumn: "citing_d.court",
-      courtIdColumn: "citing_d.court_id",
-      entries: flattenCourtWeightEntries(map),
-    }),
+    text(
+      courtWeightSql({
+        countryColumn: "citing_d.country",
+        courtColumn: "citing_d.court",
+        courtIdColumn: "citing_d.court_id",
+        entries: flattenCourtWeightEntries(map),
+      }),
+    ),
   ).toEndWith(`ELSE ${nameWeight} END`);
 });

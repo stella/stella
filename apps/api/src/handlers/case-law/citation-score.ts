@@ -21,6 +21,8 @@
  * scored 1.61; on the weighted sum alone the same two score 3.61 and 2.20.
  */
 
+import type { SQL } from "drizzle-orm";
+
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -179,7 +181,7 @@ type CourtWeightSqlOptions = CourtRankColumns & {
 export const courtWeightSql = ({
   entries,
   ...columns
-}: CourtWeightSqlOptions): string =>
+}: CourtWeightSqlOptions): SQL =>
   directoryCourtRankSql({
     columns,
     field: "weight",

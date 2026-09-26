@@ -327,14 +327,12 @@ export const caseLawSearchPlan = ({
 
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
-    courtTier: sql.raw(
-      courtTierSqlFromMap({
-        countryColumn: "d.country",
-        courtColumn: "d.court",
-        courtIdColumn: "d.court_id",
-        map: courtWeights,
-      }),
-    ),
+    courtTier: courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      courtIdColumn: "d.court_id",
+      map: courtWeights,
+    }),
     lexicalRank: ftsSearch.rank,
   });
   const sortKeyExpr = decisionSortKeySql(sort, scoreExpr);
@@ -373,11 +371,11 @@ export const caseLawSearchPlan = ({
     entries: flattenCourtWeightEntries(courtWeights),
   });
 
-  const citationAuthorityLateral = sql.raw(`
+  const citationAuthorityLateral = sql`
     LATERAL (
       SELECT ln(1 + coalesce(
         sum(
-          (${polarityWeightSql("c.polarity")})
+          (${sql.raw(polarityWeightSql("c.polarity"))})
           * (${courtWeightExpr})
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
@@ -389,11 +387,11 @@ export const caseLawSearchPlan = ({
         ON citing_d.id = c.citing_decision_id
       JOIN case_law_sources citing_src
         ON citing_src.id = citing_d.source_id
-       AND ${redistributableCaseLawSourceSqlFor("citing_src")}
+       AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       WHERE c.cited_decision_id = d.id
-        AND ${publishedCaseLawDecisionSqlFor("citing_d")}
+        AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
     ) cb
-  `);
+  `;
 
   // Every matched language version, scored once. The page and the total both
   // read this set, so the representative rule below sees exactly what the

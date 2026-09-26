@@ -141,14 +141,12 @@ export const citationContributionWeight: CitationContributionWeight = ({
   now,
 }) =>
   sql`(${sql.raw(polarityWeightSql(`${aliases.citation}.polarity`))})
-      * (${sql.raw(
-        courtWeightSql({
-          countryColumn: `${aliases.citing}.country`,
-          courtColumn: `${aliases.citing}.court`,
-          courtIdColumn: `${aliases.citing}.court_id`,
-          entries: courtWeightEntries,
-        }),
-      )})
+      * (${courtWeightSql({
+        countryColumn: `${aliases.citing}.country`,
+        courtColumn: `${aliases.citing}.court`,
+        courtIdColumn: `${aliases.citing}.court_id`,
+        entries: courtWeightEntries,
+      })})
       * (1.0 / (1 + COALESCE(
           extract(
             epoch FROM (

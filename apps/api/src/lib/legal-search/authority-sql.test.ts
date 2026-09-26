@@ -208,14 +208,12 @@ const BLEND_FIXTURES = [
 
 test("the Postgres blend equals the TypeScript blend for the same decision", async () => {
   const map = courtWeightMapFromSeed();
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      map,
-    }),
-  );
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map,
+  });
 
   const usaTiers: number[] = [];
   for (const fixture of BLEND_FIXTURES) {
@@ -280,14 +278,12 @@ test("Postgres resolves an overlapping court to the tier the lookup does", async
       ],
     ],
   ]);
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      map: overlapping,
-    }),
-  );
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map: overlapping,
+  });
 
   // A country the registry does not rank, so both runtimes take the
   // cross-jurisdiction fallback rather than the scoped branch.
@@ -311,22 +307,18 @@ test("an unseeded registry renders ranking SQL Postgres accepts", async () => {
   // *and executed*, because the fault is a syntax error the renderer alone
   // cannot show.
   const empty: CourtWeightMap = new Map();
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      map: empty,
-    }),
-  );
-  const citingWeight = sql.raw(
-    courtWeightSql({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      entries: [],
-    }),
-  );
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map: empty,
+  });
+  const citingWeight = courtWeightSql({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    entries: [],
+  });
 
   const [row] = await db
     .select({

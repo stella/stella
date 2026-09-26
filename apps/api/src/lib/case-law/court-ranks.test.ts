@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { resolveUsCourt, US_COURTS } from "@stll/api-contract/us-courts";
 
@@ -58,27 +59,38 @@ test("a directory decision without an accepted court id fails rather than rankin
   ).toThrow("Court name is not in the USA court directory");
 });
 
-test("the directory rank SQL lists each ranked id once, grouped by value", () => {
-  const listed = (rendered: string): string[] =>
-    [...rendered.matchAll(/"([^"]+)"/gu)].map(([, id]) => id ?? "");
-  const weight = usCourtRankSql("d.court_id", "weight");
-  const tier = usCourtRankSql("d.court_id", "tier");
+test("the directory rank SQL binds each ranked id once, grouped by value", () => {
+  const dialect = new PgDialect();
+  const weight = dialect.sqlToQuery(usCourtRankSql("d.court_id", "weight"));
+  const tier = dialect.sqlToQuery(usCourtRankSql("d.court_id", "tier"));
+  const bound = (params: readonly unknown[]): string[] =>
+    params.flatMap((param) =>
+      [...String(param).matchAll(/"([^"]+)"/gu)].map(([, id]) => id ?? ""),
+    );
 
   // Every accepted court holds a weight above the unranked one, so every id
-  // is listed; the tier lists only the courts above the lowest tier, since
+  // is bound; the tier binds only the courts above the lowest tier, since
   // the ELSE already answers the rest.
-  expect(listed(weight).toSorted()).toEqual(
+  expect(bound(weight.params).toSorted()).toEqual(
     US_COURTS.map(({ id }) => id).toSorted(),
   );
-  expect(listed(tier).toSorted()).toEqual(
+  expect(bound(tier.params).toSorted()).toEqual(
     US_COURTS.filter(
       ({ id }) => (usCourtRank(id)?.tier ?? 0) > UNRANKED_COURT_RANK.tier,
     )
       .map(({ id }) => id)
       .toSorted(),
   );
-  expect(weight.match(/\bWHEN\b/gu)).toHaveLength(4);
-  expect(tier.match(/\bWHEN\b/gu)).toHaveLength(2);
-  expect(weight).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.weight)} END`);
-  expect(tier).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.tier)} END`);
+  // One parameter per rank value, and no id in the statement text: the text
+  // is the same few hundred characters whatever the directory holds.
+  expect(weight.params).toHaveLength(4);
+  expect(tier.params).toHaveLength(2);
+  for (const { sql: text } of [weight, tier]) {
+    expect(text).not.toContain("scotus");
+    expect(text.length).toBeLessThan(400);
+  }
+  expect(weight.sql).toEndWith(
+    `ELSE ${String(UNRANKED_COURT_RANK.weight)} END`,
+  );
+  expect(tier.sql).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.tier)} END`);
 });

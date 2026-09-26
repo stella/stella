@@ -229,22 +229,18 @@ const directoryRankOf = (court: UsCourt) => US_TIER_RANK[court.tier];
 
 /** Every rank SQL path over `d`, the columns the Postgres paths read. */
 const rankSql = (map: CourtWeightMap) => ({
-  tier: sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      map,
-    }),
-  ),
-  weight: sql.raw(
-    courtWeightSql({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      courtIdColumn: "d.court_id",
-      entries: flattenCourtWeightEntries(map),
-    }),
-  ),
+  tier: courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map,
+  }),
+  weight: courtWeightSql({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    entries: flattenCourtWeightEntries(map),
+  }),
 });
 
 // The admission invariant. A USA decision is identified by its court id, and

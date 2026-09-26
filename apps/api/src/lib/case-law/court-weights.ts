@@ -5,6 +5,7 @@
  * `local-case-law-config.ts`).
  */
 import { panic } from "better-result";
+import { type SQL, sql } from "drizzle-orm";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import { Temporal } from "@stll/time";
@@ -25,7 +26,11 @@ import {
   isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { logger } from "@/api/lib/observability/logger";
-import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
+import {
+  SQL_NULL,
+  sqlCaseExpression,
+  sqlCaseFragment,
+} from "@/api/lib/sql-case-expression";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 // -- Types ---------------------------------------------------------------
@@ -256,7 +261,7 @@ type CourtRankValue = { tier: number; weight: number };
 type DirectoryCourtRank = {
   byId: (courtId: string) => CourtRankValue | null;
   byCanonicalName: (court: string) => CourtRank | null;
-  sql: (courtIdColumn: string, field: "tier" | "weight") => string;
+  sql: (courtIdColumn: string, field: "tier" | "weight") => SQL;
 };
 
 /**
@@ -413,19 +418,20 @@ type DirectoryCourtRankSqlOptions = {
  * A rank expression that sends each directory jurisdiction's rows to its
  * directory rank by id and every other row to `byName`, unchanged. A
  * directory row never reaches the name patterns, so a court name cannot rank
- * it, and no other row reaches the directory.
+ * it, and no other row reaches the directory. A Drizzle fragment rather than
+ * text: the directory's ids are bound parameters.
  */
 export const directoryCourtRankSql = ({
   columns: { countryColumn, courtIdColumn },
   field,
   byName,
-}: DirectoryCourtRankSqlOptions): string =>
-  sqlCaseExpression({
+}: DirectoryCourtRankSqlOptions): SQL =>
+  sqlCaseFragment({
     branches: COURT_DIRECTORY_JURISDICTIONS.map(
       (country) =>
-        `WHEN ${countryColumn} = ${sqlLiteral(country)} THEN ${DIRECTORY_COURT_RANK[country].sql(courtIdColumn, field)}`,
+        sql`WHEN ${sql.raw(`${countryColumn} = ${sqlLiteral(country)}`)} THEN ${DIRECTORY_COURT_RANK[country].sql(courtIdColumn, field)}`,
     ),
-    fallback: byName,
+    fallback: sql.raw(byName),
   });
 
 type CourtNameTierSqlOptions = {
@@ -443,7 +449,7 @@ type CourtTierSqlOptions = CourtRankColumns & { map: CourtWeightMap };
 export const courtTierSqlFromMap = ({
   map,
   ...columns
-}: CourtTierSqlOptions): string =>
+}: CourtTierSqlOptions): SQL =>
   directoryCourtRankSql({
     columns,
     field: "tier",
