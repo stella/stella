@@ -55,8 +55,8 @@ const FIXTURES = {
 type Fixture = (typeof FIXTURES)[keyof typeof FIXTURES];
 const source = ({ file }: Fixture) =>
   readFileSync(
-    new URL(`./__fixtures__/html/${file}.html`, import.meta.url),
-    "utf8",
+    new URL(`__fixtures__/html/${file}.html`, import.meta.url),
+    "utf-8",
   );
 const compose = (fixture: Fixture, html = source(fixture)) => {
   const result = composeCourtListenerText([
@@ -70,8 +70,9 @@ const compose = (fixture: Fixture, html = source(fixture)) => {
       }),
     },
   ]);
-  if (result.status !== "parsed")
+  if (result.status !== "parsed") {
     throw new TypeError(`Expected parsed ${fixture.file}: ${result.status}`);
+  }
   return result;
 };
 type Composed = ReturnType<typeof compose>;
@@ -81,8 +82,9 @@ const blockWith = (text: Composed, phrase: string) => {
   );
   expect(matches.length, `unique publisher span: ${phrase}`).toBe(1);
   const block = matches.at(0);
-  if (block === undefined)
+  if (block === undefined) {
     throw new TypeError(`Missing publisher span: ${phrase}`);
+  }
   return block;
 };
 const scopeOf = (text: Composed, phrase: string) => {
@@ -114,12 +116,14 @@ const extract = (text: Composed) => {
       blocks: [...text.blocks],
     },
   });
-  if (Result.isError(result)) throw result.error;
+  if (Result.isError(result)) {
+    throw result.error;
+  }
   return result.value;
 };
 const replaceOnce = (html: string, original: string, replacement: string) => {
   expect(html.split(original).length).toBe(2);
-  return html.replace(original, replacement);
+  return html.replace(original, () => replacement);
 };
 
 for (const fixture of [FIXTURES.citations, FIXTURES.lawbox, FIXTURES.generic]) {
@@ -129,12 +133,12 @@ for (const fixture of [FIXTURES.citations, FIXTURES.lawbox, FIXTURES.generic]) {
     expect(
       text.citationScopes.every(({ boundaries }) => boundaries === "unproven"),
     ).toBe(true);
-    const citation =
-      fixture === FIXTURES.citations
-        ? "624 F.2d 1090"
-        : fixture === FIXTURES.lawbox
-          ? "996 A.2d 488"
-          : "634 F.2d 404";
+    let citation = "634 F.2d 404";
+    if (fixture === FIXTURES.citations) {
+      citation = "624 F.2d 1090";
+    } else if (fixture === FIXTURES.lawbox) {
+      citation = "996 A.2d 488";
+    }
     const block = blockWith(text, citation);
     const found = extract(text).occurrences.filter(
       ({ blockId, target }) =>

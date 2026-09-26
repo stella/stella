@@ -12,22 +12,27 @@ test("every alternate rendition proves exact nonempty Unicode and control-charac
   const decision = await fixture.buildDecision();
   const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
   expect(parts).not.toBeNull();
-  if (parts === null)
+  if (parts === null) {
     throw new Error("Conformance fixture lost its raw envelope");
+  }
   const observed = new Set<string>();
   for (const column of [...COURTLISTENER_TEXT_FORMATS, "xml_scan"]) {
-    if (column === "xml_harvard") continue;
+    if (column === "xml_harvard") {
+      continue;
+    }
     const field = `opinions[].${column}`;
     const values = fixture.rawFieldValues[field];
     expect(Array.isArray(values)).toBe(true);
-    if (!Array.isArray(values))
-      throw new Error(`Missing original value for ${field}`);
+    if (!Array.isArray(values)) {
+      throw new TypeError(`Missing original value for ${field}`);
+    }
     for (const value of values) {
       expect(typeof value).toBe("string");
-      if (typeof value !== "string")
-        throw new Error(`Non-text fixture value for ${field}`);
+      if (typeof value !== "string") {
+        throw new TypeError(`Non-text fixture value for ${field}`);
+      }
       expect(value).toContain(column);
-      expect(value).toMatch(/[^\x00-\x7f]/u);
+      expect(value).toMatch(/[\u0080-\uffff]/u);
       expect(value).toContain("\u0000");
       expect(value).toContain("\u200b");
       expect(observed.has(value)).toBe(false);
@@ -38,8 +43,9 @@ test("every alternate rendition proves exact nonempty Unicode and control-charac
     if (
       disposition?.disposition !== "stored" ||
       disposition.target.type !== "raw"
-    )
+    ) {
       throw new Error(`Missing raw-path disposition for ${field}`);
+    }
     expect(readSourceRawField(parts, disposition.target)).toEqual(values);
   }
   expect(observed.size).toBe(COURTLISTENER_TEXT_FORMATS.length);

@@ -173,8 +173,9 @@ const scopeRow = (
           first === undefined ||
           !("note" in first) ||
           first.note === undefined
-        )
+        ) {
           continue;
+        }
         outsideNotes += 1;
         scopes.push({
           opinionId: `${base}/note-${outsideNotes}`,
@@ -240,21 +241,24 @@ const report = (
   classConflicts: scoped?.classConflicts ?? 0,
   unknownOpinionTypes: (() => {
     const counts = new Map<string, number>();
-    if (selection.status === "parsed")
+    if (selection.status === "parsed") {
       for (const unit of selection.text.units) {
         const unknown = unrecognizedOpinionType(unit.domType);
-        if (unknown !== null)
+        if (unknown !== null) {
           counts.set(unknown, (counts.get(unknown) ?? 0) + 1);
+        }
       }
+    }
     return Object.fromEntries(counts);
   })(),
   resumedPrincipalRuns: (() => {
     let interrupted = false;
     let resumed = 0;
-    if (selection.status === "parsed")
+    if (selection.status === "parsed") {
       for (const unit of selection.text.units) {
-        if (unit.position === "nested") interrupted = true;
-        else if (
+        if (unit.position === "nested") {
+          interrupted = true;
+        } else if (
           unit.kind === "opinion" &&
           unit.position === "row" &&
           interrupted
@@ -263,6 +267,7 @@ const report = (
           interrupted = false;
         }
       }
+    }
     return resumed;
   })(),
   duplicateCaptionParagraphs,
@@ -386,8 +391,9 @@ export const composeCourtListenerText = (
           block.type !== "paragraph" ||
           block.note !== undefined ||
           !captionText.has(block.plainText)
-        )
+        ) {
           return true;
+        }
         duplicateCaptionParagraphs += 1;
         return false;
       });
@@ -395,22 +401,24 @@ export const composeCourtListenerText = (
     });
     const scoped = scopeRow(opinion, units);
     // A damaged note span leaves principal-body membership as unproven too.
-    if (selection.text.counts.noteSpanDefects > 0) scoped.principal.length = 0;
+    if (selection.text.counts.noteSpanDefects > 0) {
+      scoped.principal.length = 0;
+    }
     for (const unit of units) {
       blocks.push(...unit.blocks);
       const role =
         unit.kind === "outside"
           ? "header"
           : unitClass(opinion.type, unit.domType, unit.position).body;
-      appendSections(
-        sections,
-        unit.blocks,
-        role === "argumentation" || role === "dissent"
-          ? role
-          : unit.kind === "outside"
-            ? "header"
-            : "unknown",
-      );
+      let sectionRole: "argumentation" | "dissent" | "header" | "unknown";
+      if (role === "argumentation" || role === "dissent") {
+        sectionRole = role;
+      } else if (unit.kind === "outside") {
+        sectionRole = "header";
+      } else {
+        sectionRole = "unknown";
+      }
+      appendSections(sections, unit.blocks, sectionRole);
     }
     citationScopes.push(...scoped.scopes);
     principal.push(...scoped.principal);

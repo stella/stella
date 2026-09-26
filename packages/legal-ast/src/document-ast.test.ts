@@ -659,7 +659,9 @@ describe("table cell spans and header cells", () => {
   test("keeps a footnote table's membership across the wire round trip", () => {
     const ast = cellAst({ plainText: "Rok" });
     const block = ast.blocks[0];
-    if (block === undefined) throw new Error("expected a table block");
+    if (block === undefined) {
+      throw new Error("expected a table block");
+    }
     const noted = {
       ...ast,
       blocks: [

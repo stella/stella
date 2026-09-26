@@ -9,6 +9,7 @@
  * its notes are marked where that column's notes are.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import {
   type Element,
@@ -206,8 +207,6 @@ const pageAnchor = (element: Element): PageAnchor | undefined => {
   };
 };
 
-const IN_PAGE = /^#/u;
-
 /** Whether `element` is a note, in any of the columns' markups. */
 const isNote = (element: Element): boolean => {
   const name = nameOf(element);
@@ -239,7 +238,9 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
   const insideNote = (element: Element): boolean => {
     let parent = element.parent;
     while (parent !== null && isTag(parent)) {
-      if (isNote(parent)) return true;
+      if (isNote(parent)) {
+        return true;
+      }
       parent = parent.parent;
     }
     return false;
@@ -250,19 +251,29 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
       element.attribs["anchoridref"] ??
       (href.startsWith("#") ? href.slice(1) : "");
     const label = textOf(element).replace(/\s+/gu, " ").trim();
-    if (target === "" || label === "" || insideNote(element)) return;
+    if (target === "" || label === "" || insideNote(element)) {
+      return;
+    }
     const returnIds = new Set<string>();
     const ownId = attribute(element, "id");
-    if (ownId !== undefined) returnIds.add(ownId);
+    if (ownId !== undefined) {
+      returnIds.add(ownId);
+    }
     const parent = element.parent;
     if (parent !== null && isTag(parent) && nameOf(parent) === "sup") {
       const parentId = attribute(parent, "id");
-      if (parentId !== undefined) returnIds.add(parentId);
+      if (parentId !== undefined) {
+        returnIds.add(parentId);
+      }
     }
     const existing = callouts.get(target);
-    if (existing === undefined) callouts.set(target, { label, returnIds });
-    else if (existing.label === label)
-      for (const id of returnIds) existing.returnIds.add(id);
+    if (existing === undefined) {
+      callouts.set(target, { label, returnIds });
+    } else if (existing.label === label) {
+      for (const id of returnIds) {
+        existing.returnIds.add(id);
+      }
+    }
   });
   let removed = 0;
   for (const note of notes) {
@@ -278,7 +289,9 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
       .find((entry) => entry !== undefined);
     const label = attribute(note, "label") ?? callout?.label ?? "";
     labels.set(note, label);
-    if (callout === undefined) continue;
+    if (callout === undefined) {
+      continue;
+    }
     for (const anchor of $(note).find("a[href]").toArray()) {
       const href = anchor.attribs["href"] ?? "";
       const printed = textOf(anchor).trim();
@@ -287,8 +300,9 @@ const prepareNotes = ($: cheerio.CheerioAPI, notes: readonly Element[]) => {
         !href.startsWith("#") ||
         !callout.returnIds.has(href.slice(1)) ||
         (printed !== label && printed !== "↩")
-      )
+      ) {
         continue;
+      }
       removed += printed.length;
       $(anchor).remove();
     }
@@ -309,19 +323,31 @@ const noteSpanDefects = (text: string, notes: readonly Element[]): number => {
   for (const token of text.matchAll(/<\/?footnote_body\b[^>]*>/giu)) {
     if (token[0].startsWith("</")) {
       const start = opened.pop();
-      if (start === undefined) defects += 1;
-      else spans.set(start, token.index);
-    } else opened.push(token.index);
+      if (start === undefined) {
+        defects += 1;
+      } else {
+        spans.set(start, token.index);
+      }
+    } else {
+      opened.push(token.index);
+    }
   }
-  for (const start of opened) spans.set(start, -1);
+  for (const start of opened) {
+    spans.set(start, -1);
+  }
   for (const note of notes) {
-    if (nameOf(note) !== "footnote_body") continue;
+    if (nameOf(note) !== "footnote_body") {
+      continue;
+    }
     const location = note.sourceCodeLocation;
     const start = location?.startOffset;
     const end = start === undefined ? undefined : spans.get(start);
-    if (end === undefined || location?.endTag?.startOffset !== end)
+    if (end === undefined || location?.endTag?.startOffset !== end) {
       defects += 1;
-    if (start !== undefined) spans.delete(start);
+    }
+    if (start !== undefined) {
+      spans.delete(start);
+    }
   }
   return defects + spans.size;
 };
@@ -332,17 +358,27 @@ const captionElements = (root: ParentNode): WeakSet<Element> => {
   const classes = new Set(["case_cite", "parties", "docket", "court", "date"]);
   const mark = (element: Element) => {
     captions.add(element);
-    for (const child of element.children) if (isTag(child)) mark(child);
+    for (const child of element.children) {
+      if (isTag(child)) {
+        mark(child);
+      }
+    }
   };
   const visit = (container: ParentNode): boolean => {
     for (const child of container.children) {
       if (isText(child)) {
-        if (child.data.trim() !== "") return true;
+        if (child.data.trim() !== "") {
+          return true;
+        }
         continue;
       }
-      if (!isTag(child)) continue;
+      if (!isTag(child)) {
+        continue;
+      }
       const name = nameOf(child);
-      if (["script", "style", "template", "title"].includes(name)) continue;
+      if (["script", "style", "template", "title"].includes(name)) {
+        continue;
+      }
       const caption =
         name === "center" ||
         name === "h1" ||
@@ -356,9 +392,12 @@ const captionElements = (root: ParentNode): WeakSet<Element> => {
         name === "pre" ||
         name === "table" ||
         HEADINGS.has(name)
-      )
+      ) {
         return true;
-      if (visit(child)) return true;
+      }
+      if (visit(child)) {
+        return true;
+      }
     }
     return false;
   };
@@ -421,7 +460,7 @@ const noteBoundaries = (
         : "layout";
     default: {
       format satisfies never;
-      return "layout";
+      return panic("Unhandled CourtListener HTML format");
     }
   }
 };
@@ -430,7 +469,7 @@ const noteBoundaries = (
 const publisherLinks = ($: cheerio.CheerioAPI): number =>
   $("a[href]")
     .toArray()
-    .filter((element) => !IN_PAGE.test(element.attribs["href"] ?? "")).length;
+    .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
 
 const parseHtml =
   (

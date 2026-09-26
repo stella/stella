@@ -14,8 +14,9 @@ const compose = (html: string, id = "9109419") => {
       type: "020lead",
     },
   ]);
-  if (result.status !== "parsed")
+  if (result.status !== "parsed") {
     throw new TypeError(`expected parsed: ${result.status}`);
+  }
   return result;
 };
 const citations = (text: ReturnType<typeof compose>) => {
@@ -43,7 +44,9 @@ const citations = (text: ReturnType<typeof compose>) => {
       blocks: [...text.blocks],
     },
   });
-  if (Result.isError(result)) throw new TypeError(result.error.message);
+  if (Result.isError(result)) {
+    throw new TypeError(result.error.message);
+  }
   return result.value;
 };
 
@@ -89,10 +92,10 @@ for (const { cluster, opinion, spans } of [
   test(`real Columbia ${cluster} note continuation has no proven body scope`, () => {
     const html = readFileSync(
       new URL(
-        `./__fixtures__/html/html-with-citations-${cluster}.html`,
+        `__fixtures__/html/html-with-citations-${cluster}.html`,
         import.meta.url,
       ),
-      "utf8",
+      "utf-8",
     );
     const text = compose(html, opinion);
     for (const { block, prefix } of spans) {
@@ -178,10 +181,10 @@ test("a detached note's table stays in one contiguous citation scope", () => {
 test("real 4809723 table and preceding paragraph share note five's scope", () => {
   const html = readFileSync(
     new URL(
-      "./__fixtures__/html/html-with-citations-4809723.html",
+      "__fixtures__/html/html-with-citations-4809723.html",
       import.meta.url,
     ),
-    "utf8",
+    "utf-8",
   );
   const text = compose(html, "4591777");
   expect(
@@ -198,7 +201,9 @@ test("real 4809723 table and preceding paragraph share note five's scope", () =>
     type: "table",
     note: { label: "5", noteId: "o4591777-fn6" },
   });
-  if (table === undefined) throw new TypeError("missing real footnote table");
+  if (table === undefined) {
+    throw new TypeError("missing real footnote table");
+  }
   const before = text.blocks.at(text.blocks.indexOf(table) - 1);
   const scope = text.citationScopes.find((item) =>
     item.blockIds.includes(table.id),

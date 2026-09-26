@@ -41,8 +41,8 @@ for (const fixture of cases) {
   for (const format of ["html_with_citations", "html_anon_2020"] as const) {
     test(`${format} preserves the real ${fixture.file} heading boundaries on both text walks`, () => {
       const html = readFileSync(
-        new URL(`./__fixtures__/html/${fixture.file}.html`, import.meta.url),
-        "utf8",
+        new URL(`__fixtures__/html/${fixture.file}.html`, import.meta.url),
+        "utf-8",
       );
       const parsed = selectOpinionText({
         row: opinionRow({
@@ -54,8 +54,9 @@ for (const fixture of cases) {
         budget: createTextBudget(),
       });
       expect(parsed.status).toBe("parsed");
-      if (parsed.status !== "parsed")
+      if (parsed.status !== "parsed") {
         throw new TypeError(`Unexpected ${parsed.status}`);
+      }
       const blocks = parsed.text.units.flatMap((unit) => unit.blocks);
       expect(
         blocks.map(({ type, plainText }) => ({ type, plainText })),

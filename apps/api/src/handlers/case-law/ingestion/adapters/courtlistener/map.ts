@@ -6,6 +6,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
 import {
   absentTextField,
+  checkedDecisionMetadata,
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
@@ -56,9 +57,13 @@ export const mapCourtListenerRecord = (
   input: unknown,
 ): Result<IngestionResult, CourtListenerRecordRejectedError> => {
   const planned = planCourtListenerRecord(input);
-  if (Result.isError(planned)) return Result.err(planned.error);
+  if (Result.isError(planned)) {
+    return Result.err(planned.error);
+  }
   const admitted = admitCourtListenerRecord(input);
-  if (Result.isError(admitted)) return Result.err(admitted.error);
+  if (Result.isError(admitted)) {
+    return Result.err(admitted.error);
+  }
   const { record, opinions, sourceRecordKey, clusterId } = admitted.value;
   const composed = composeCourtListenerText(opinions, record.cluster);
   if (composed.status !== "parsed") {
@@ -107,12 +112,12 @@ export const mapCourtListenerRecord = (
       summary: textField(composed.textFields.summary),
       legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     },
-    metadata: {
+    metadata: checkedDecisionMetadata({
       ...plan.metadata,
       classification,
       textSelection: composed.opinions,
       diagnostics: plan.diagnostics,
-    },
+    }),
     fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
     documentAst: {
       version: 1,

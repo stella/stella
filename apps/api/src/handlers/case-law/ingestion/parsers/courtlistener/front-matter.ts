@@ -29,13 +29,17 @@ const semanticTexts = (blocks: readonly Block[], role: string): Set<string> => {
   const texts = new Set<string>();
   let run: string[] = [];
   const flush = () => {
-    if (run.length > 0) texts.add(run.join("\n\n"));
+    if (run.length > 0) {
+      texts.add(run.join("\n\n"));
+    }
     run = [];
   };
   for (const block of blocks) {
-    if (block.type === "paragraph" && block.role === role)
+    if (block.type === "paragraph" && block.role === role) {
       run.push(block.plainText);
-    else flush();
+    } else {
+      flush();
+    }
   }
   flush();
   return texts;
@@ -54,7 +58,9 @@ export const composeFrontMatter = ({
   const textFields = { headnotes: "", syllabus: "", summary: "" };
   for (const field of ["headmatter", ...APPARATUS] as const) {
     const value = source[field] ?? "";
-    if (value.trim() === "") continue;
+    if (value.trim() === "") {
+      continue;
+    }
     // The snapshot mixes plain and HTML apparatus within each column.
     const text =
       field === "headmatter"
@@ -67,14 +73,17 @@ export const composeFrontMatter = ({
       budget,
     });
     if (parsed.status !== "parsed") {
+      let reason: "over-limit" | "requires-assets" | "no-usable-text";
+      if (parsed.status === "over-limit") {
+        reason = "over-limit";
+      } else if (parsed.status === "requires-assets") {
+        reason = "requires-assets";
+      } else {
+        reason = "no-usable-text";
+      }
       return {
         status: "held",
-        reason:
-          parsed.status === "over-limit"
-            ? "over-limit"
-            : parsed.status === "requires-assets"
-              ? "requires-assets"
-              : "no-usable-text",
+        reason,
       };
     }
     const added = parsed.text.units.flatMap((unit) => [...unit.blocks]);
@@ -83,11 +92,15 @@ export const composeFrontMatter = ({
       parsed.text.validationHtml,
       added,
     );
-    if (!validation.ok) return { status: "held", reason: "no-usable-text" };
+    if (!validation.ok) {
+      return { status: "held", reason: "no-usable-text" };
+    }
     if (field !== "headmatter") {
       const visible = added.map((block) => block.plainText).join("\n\n");
       textFields[field] = visible;
-      if (semanticTexts([...blocks, ...existing], field).has(visible)) continue;
+      if (semanticTexts([...blocks, ...existing], field).has(visible)) {
+        continue;
+      }
     }
     blocks.push(...added);
     budget.blocks += added.length;

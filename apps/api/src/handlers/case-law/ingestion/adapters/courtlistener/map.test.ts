@@ -110,7 +110,9 @@ describe("complete CourtListener import mapping", () => {
     for (const [input, reason] of cases) {
       const result = mapCourtListenerRecord(input);
       expect(Result.isError(result)).toBe(true);
-      if (Result.isError(result)) expect(result.error.reason).toBe(reason);
+      if (Result.isError(result)) {
+        expect(result.error.reason).toBe(reason);
+      }
     }
   });
   test("replay refuses a changed record identity, court, language, or unsupported raw", () => {
@@ -147,8 +149,9 @@ describe("complete CourtListener import mapping", () => {
     if (
       disposition?.disposition !== "stored" ||
       disposition.target.type !== "raw"
-    )
+    ) {
       throw new Error("Expected raw field target");
+    }
     expect(readSourceRawField(parts, disposition.target)).toEqual([
       record.opinions[0]?.plain_text,
     ]);
@@ -185,7 +188,7 @@ test("the importer participates in conformance and replay but has no crawl capab
   expect(registration?.source.reparseStoredRaw).toBe(reparseStoredRaw);
   expect(getAdapter(COURTLISTENER_IMPORT_KEY)).toBeUndefined();
   expect(
-    listAdapters().some(({ key }) => String(key) === COURTLISTENER_IMPORT_KEY),
+    listAdapters().some(({ key }) => key === COURTLISTENER_IMPORT_KEY),
   ).toBe(false);
   expect(registration?.source).not.toHaveProperty("fetchPage");
   expect(registration?.source).not.toHaveProperty("reconciliation");

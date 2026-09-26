@@ -15,8 +15,9 @@ const compose = (html: string, headmatter = "") => {
     ],
     { headmatter },
   );
-  if (result.status !== "parsed")
+  if (result.status !== "parsed") {
     throw new TypeError(`expected parsed: ${result.status}`);
+  }
   return result;
 };
 const classify = (text: ReturnType<typeof compose>) =>

@@ -173,6 +173,62 @@ const orderTitleOf = (blocks: readonly Block[]): string | null => {
     : null;
 };
 
+const tableBlock = ({
+  rows,
+  number,
+  note,
+  prefix,
+}: {
+  rows: TableCell[][];
+  number: number;
+  note: { label: string; noteId: string; blocks: number } | null;
+  prefix: string;
+}): Block => {
+  let anchorId = `${prefix}-t${number}`;
+  if (note !== null) {
+    anchorId =
+      note.blocks === 0
+        ? note.noteId
+        : `${note.noteId}-${String(note.blocks + 1)}`;
+  }
+  return {
+    id: `${prefix}-b${number}`,
+    anchorId,
+    type: "table",
+    ...(note === null
+      ? {}
+      : {
+          note: {
+            type: "footnote" as const,
+            label: note.label,
+            noteId: note.noteId,
+          },
+        }),
+    rows,
+    plainText: rows
+      .map((row) => row.map((cell) => cell.plainText).join("\t"))
+      .join("\n"),
+  };
+};
+
+const buildTextUnits = (
+  units: { frame: Frame; blocks: Block[] }[],
+  boundaries: TextUnit["boundaries"],
+): TextUnit[] => {
+  const root = units.find(({ frame }) => frame.kind === "opinion");
+  return units.map(({ blocks, frame }) => ({
+    kind: frame.kind,
+    domType: frame.domType,
+    position: frame.position,
+    boundaries,
+    blocks,
+    orderTitleBlockId:
+      root?.frame.id === frame.id && frame.position === "row"
+        ? orderTitleOf(blocks)
+        : null,
+  }));
+};
+
 /**
  * Numbers one opinion row's blocks under `prefix` and groups them into units:
  * a unit closes wherever the innermost opinion element changes, so a nested
@@ -300,17 +356,22 @@ export const createUnitBuilder = ({
   return {
     enterOpinion: (domType: string | null) => {
       nextFrame += 1;
-      if (frames.length === 0) rootOpinions += 1;
+      if (frames.length === 0) {
+        rootOpinions += 1;
+      }
       frames.push({
         id: nextFrame,
         kind: "opinion",
         domType,
-        position:
-          frames.length > 0
-            ? "nested"
-            : rootOpinions === 1 || rootOpinionPolicy === "multiple"
-              ? "row"
-              : "sibling",
+        position: (() => {
+          if (frames.length > 0) {
+            return "nested";
+          }
+          if (rootOpinions === 1 || rootOpinionPolicy === "multiple") {
+            return "row";
+          }
+          return "sibling";
+        })(),
       });
     },
     exitOpinion: () => {
@@ -353,33 +414,11 @@ export const createUnitBuilder = ({
       if (number === null) {
         return;
       }
-      const noteAnchorId =
-        note === null
-          ? `${prefix}-t${number}`
-          : note.blocks === 0
-            ? note.noteId
-            : `${note.noteId}-${String(note.blocks + 1)}`;
+      const block = tableBlock({ rows, number, note, prefix });
       if (note !== null) {
         note.blocks += 1;
       }
-      push({
-        id: `${prefix}-b${number}`,
-        anchorId: noteAnchorId,
-        type: "table",
-        ...(note === null
-          ? {}
-          : {
-              note: {
-                type: "footnote" as const,
-                label: note.label,
-                noteId: note.noteId,
-              },
-            }),
-        rows,
-        plainText: rows
-          .map((row) => row.map((cell) => cell.plainText).join("\t"))
-          .join("\n"),
-      });
+      push(block);
     },
     /** Blocks emitted until `endNote` are one footnote. */
     beginNote: (label: string) => {
@@ -406,19 +445,8 @@ export const createUnitBuilder = ({
         pending = [];
       }
       // Only the row's own first opinion can open with its root title.
-      const root = units.find(({ frame }) => frame.kind === "opinion");
       return {
-        units: units.map(({ blocks, frame }) => ({
-          kind: frame.kind,
-          domType: frame.domType,
-          position: frame.position,
-          boundaries,
-          blocks,
-          orderTitleBlockId:
-            root?.frame.id === frame.id && frame.position === "row"
-              ? orderTitleOf(blocks)
-              : null,
-        })),
+        units: buildTextUnits(units, boundaries),
         ...counts,
         overLimit,
       };
@@ -879,16 +907,25 @@ export const walkBody = ({
 
   const preformatted = (nodes: readonly Inline[]): Inline[] =>
     nodes.flatMap((node): Inline[] => {
-      if (hasInlineChildren(node))
+      if (hasInlineChildren(node)) {
         return [{ ...node, children: preformatted(node.children) }];
-      if (node.type !== "text") return [node];
+      }
+      if (node.type !== "text") {
+        return [node];
+      }
       return node.text
         .replace(/\r\n?/gu, "\n")
         .split("\n")
-        .flatMap((text, index): Inline[] => [
-          ...(index === 0 ? [] : [{ type: "line-break" } as const]),
-          ...(text === "" ? [] : [{ ...node, text }]),
-        ]);
+        .flatMap((text, index): Inline[] => {
+          const result: Inline[] = [];
+          if (index > 0) {
+            result.push({ type: "line-break" });
+          }
+          if (text !== "") {
+            result.push({ ...node, text });
+          }
+          return result;
+        });
     });
   const readInlines = (element: Element): Inline[] => {
     const inlines = walkInlines($, $(element), inlineOptions);

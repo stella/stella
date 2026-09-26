@@ -18,8 +18,9 @@ describe("source discovery fails closed on contradictory identities", () => {
     (key) => {
       const source = getSourceRegistration(key)?.source;
       expect(source).toBeDefined();
-      if (source === undefined)
+      if (source === undefined) {
         throw new Error("Missing registered source fixture");
+      }
       const original = source.key;
       Object.defineProperty(source, "key", {
         configurable: true,

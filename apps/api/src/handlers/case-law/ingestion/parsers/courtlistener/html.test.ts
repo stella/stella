@@ -15,13 +15,13 @@ import { parsedWords, sourceWords, wordDifference } from "./test-oracle";
 
 const fixture = (name: string): string =>
   readFileSync(
-    new URL(`./__fixtures__/html/${name}.html`, import.meta.url),
-    "utf8",
+    new URL(`__fixtures__/html/${name}.html`, import.meta.url),
+    "utf-8",
   );
 
 const sourceSpan = (source: string, snippet: string) => {
   const start = source.indexOf(snippet);
-  if (start < 0 || source.indexOf(snippet, start + 1) >= 0) {
+  if (start === -1 || source.includes(snippet, start + 1)) {
     throw new TypeError(`expected one source occurrence: ${snippet}`);
   }
   return { start, end: start + snippet.length };
@@ -110,7 +110,9 @@ for (const column of htmlColumns) {
   test(`reads CourtListener ${column.format} HTML`, () => {
     const text = fixture(column.name);
     const parsed = parse(COURTLISTENER_HTML_PARSERS[column.format], text);
-    const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+    const blocks = parsed.text.units.flatMap(
+      ({ blocks: unitBlocks }) => unitBlocks,
+    );
 
     expect(blocks[0]?.plainText).toBe(column.first);
     expect(
@@ -134,7 +136,9 @@ test("keeps CourtListener markup classes, page labels, and note boundaries", () 
     COURTLISTENER_HTML_PARSERS.html_anon_2020,
     fixture("html-anon-2020-4812730"),
   );
-  const anonBlocks = anon.text.units.flatMap(({ blocks }) => [...blocks]);
+  const anonBlocks = anon.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   expect(anon.text.units.map(({ kind }) => kind)).toEqual([
     "outside",
     "opinion",
@@ -160,7 +164,9 @@ test("keeps CourtListener markup classes, page labels, and note boundaries", () 
     COURTLISTENER_HTML_PARSERS.html_lawbox,
     fixture("html-lawbox-2099017"),
   );
-  const lawboxBlocks = lawbox.text.units.flatMap(({ blocks }) => [...blocks]);
+  const lawboxBlocks = lawbox.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   expect(pageLabels(lawboxBlocks)).toEqual(["489"]);
   expect(lawbox.text.counts.paginationCharacters).toBe(4);
 
@@ -168,9 +174,9 @@ test("keeps CourtListener markup classes, page labels, and note boundaries", () 
     COURTLISTENER_HTML_PARSERS.html_columbia,
     fixture("html-columbia-3262966"),
   );
-  const columbiaBlocks = columbia.text.units.flatMap(({ blocks }) => [
-    ...blocks,
-  ]);
+  const columbiaBlocks = columbia.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   expect(columbia.text.counts.notes).toBe(1);
   expect(columbia.text.counts.backlinkCharacters).toBe(1);
   expect(columbiaBlocks.at(-1)).toMatchObject({
@@ -181,7 +187,9 @@ test("keeps CourtListener markup classes, page labels, and note boundaries", () 
 
 test("reads cluster headmatter as front matter", () => {
   const parsed = parse(parseHeadmatter, fixture("html-headmatter-2099017"));
-  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+  const blocks = parsed.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   expect(parsed.text.units.map(({ kind }) => kind)).toEqual(["outside"]);
   expect(blocks.map(({ plainText }) => plainText)).toEqual([
     "996 A.2d 488",
@@ -201,8 +209,10 @@ test("keeps an HTML table caption and its headed cells in order", () => {
   const text =
     "<html><body><p>Table follows.</p><table><caption>Damages are VACATED.</caption><tr><th>Year</th><th>Result</th></tr><tr><td>2024</td><td>Affirmed.</td></tr></table></body></html>";
   const parsed = parse(COURTLISTENER_HTML_PARSERS.html, text);
-  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
-  const [table] = blocks.filter((block) => block.type === "table");
+  const blocks = parsed.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
+  const table = blocks.find((block) => block.type === "table");
 
   expect(blocks.map(({ type }) => type)).toEqual([
     "paragraph",
@@ -236,7 +246,9 @@ test("keeps a table inside a real CourtListener footnote in the same note", () =
     COURTLISTENER_HTML_PARSERS.html_with_citations,
     fixture("html-with-citations-4809723"),
   );
-  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+  const blocks = parsed.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   const table = blocks.find(
     (block) =>
       block.type === "table" &&
@@ -244,7 +256,9 @@ test("keeps a table inside a real CourtListener footnote in the same note", () =
   );
 
   expect(table?.type).toBe("table");
-  if (table?.type !== "table") throw new Error("expected the note's table");
+  if (table?.type !== "table") {
+    throw new Error("expected the note's table");
+  }
   expect(table.note).toEqual({
     type: "footnote",
     label: "5",
@@ -262,7 +276,9 @@ test("keeps a table between two paragraphs in one synthetic note", () => {
   const text =
     '<div class="footnotes"><ul><li><div id="fn_1" label="1"><p>See 410 U.S. 113.</p><table><tr><td>Reporter</td><td>410 U.S. 113</td></tr></table><p>Id. at 5.</p></div></li></ul></div>';
   const parsed = parse(COURTLISTENER_HTML_PARSERS.html, text);
-  const blocks = parsed.text.units.flatMap(({ blocks }) => [...blocks]);
+  const blocks = parsed.text.units.flatMap(
+    ({ blocks: unitBlocks }) => unitBlocks,
+  );
   const noteBlocks = blocks.filter(
     (block) =>
       (block.type === "paragraph" || block.type === "table") &&
