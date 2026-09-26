@@ -37,6 +37,15 @@ const PUBLIC_PROCUREMENT_RECODIFICATION = "2016-10-01";
 const CRIMINAL_CODE_RECODIFICATION = "2010-01-01";
 
 /**
+ * 283/2021 Sb. took effect on 1 January 2024 for reserved structures only;
+ * ordinary structures stayed under 183/2006 Sb. until 1 July 2024. In between,
+ * a bare `stavební zákon` may mean either, so it opens neither: a citation
+ * that names its act (`z roku 2006`, `č. 283/2021 Sb.`) still resolves.
+ */
+const BUILDING_ACT_PHASED_IN = "2024-01-01";
+const BUILDING_ACT_FULLY_APPLICABLE = "2024-07-01";
+
+/**
  * The European Convention on Human Rights in every case a sentence puts it
  * in, with and without its closing `a základních svobod`. Bare `Úmluva` is
  * left out: a decision cites more than one convention by that word.
@@ -338,7 +347,7 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(183, 2006),
       citedFrom: "2007-01-01",
-      citedUntil: "2024-01-01",
+      citedUntil: BUILDING_ACT_PHASED_IN,
     },
     {
       spellings: [
@@ -349,7 +358,7 @@ export const CZ_PROFILE = {
         "stavebním zákonem",
       ],
       identifier: sb(283, 2021),
-      citedFrom: "2024-01-01",
+      citedFrom: BUILDING_ACT_FULLY_APPLICABLE,
     },
     {
       spellings: [
