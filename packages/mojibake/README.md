@@ -25,4 +25,6 @@ belongs to the caller.
 
 ## License
 
-Apache-2.0
+The code is Apache-2.0. `src/exemplars.generated.ts` is derived from Unicode
+CLDR data and is licensed under Unicode-3.0; its notice is in `NOTICE` and at
+the head of the generated file.
