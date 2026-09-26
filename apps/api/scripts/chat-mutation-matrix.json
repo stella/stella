@@ -183,8 +183,8 @@
       "behaviour": "With the tool allowed for the conversation, the approval card answers itself when it appears.",
       "status": "active",
       "file": "../web/src/components/chat/tool-approval-card.tsx",
-      "search": "          shouldRespond: !responded && (isBlocked || shouldAutoApprove),",
-      "replace": "          shouldRespond: !responded && isBlocked,",
+      "search": "            isAwaitingUser && !responded && (isBlocked || shouldAutoApprove),",
+      "replace": "            isAwaitingUser && !responded && isBlocked,",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "conversation-grant shows what the server stored, live and in a second tab"
@@ -197,8 +197,8 @@
       "behaviour": "Stop settles a tool call still running, so nothing on the page stays busy.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "        const sanitized = sanitizeRunningToolCalls(snapshot.messages, \"cancel\");",
-      "replace": "        const sanitized = snapshot.messages;",
+      "search": "    const sanitized = sanitizeRunningToolCalls(messages, \"cancel\");\n    client.setMessagesManually(sanitized);\n    setSnapshot({ messages: sanitized });",
+      "replace": "    setSnapshot({ messages });",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "stop-mid-stream shows what the server stored, live and in a second tab"
@@ -340,7 +340,7 @@
       "id": "openai-strict-null-input",
       "fix": "#1174",
       "behaviour": "The OpenAI adapter drops the nulls strict mode widens optional tool fields to.",
-      "status": "active",
+      "status": "retired",
       "file": "../../node_modules/@tanstack/openai-base/dist/esm/utils/tool-input-normalizer.js",
       "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
       "replace": "return (toolName, input) => input;",
@@ -348,13 +348,14 @@
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "openai strict-null"
       },
-      "oracle": "chat.provider-wire.tool-input"
+      "oracle": "chat.provider-wire.tool-input",
+      "reason": "The stream contract reads a null optional field as omitted on every adapter, so this adapter's own pass is no longer the only guard; the entry below mutates the one that is."
     },
     {
       "id": "mistral-strict-null-input",
       "fix": "#1189",
       "behaviour": "The Mistral adapter drops the nulls strict mode widens optional tool fields to.",
-      "status": "active",
+      "status": "retired",
       "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/utils/tool-input-normalizer.js",
       "search": "return (toolName, input) => undoNullWidening(input, maps.get(toolName));",
       "replace": "return (toolName, input) => input;",
@@ -362,7 +363,8 @@
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "mistral strict-null"
       },
-      "oracle": "chat.provider-wire.tool-input"
+      "oracle": "chat.provider-wire.tool-input",
+      "reason": "The stream contract reads a null optional field as omitted on every adapter, so this adapter's own pass is no longer the only guard; the entry below mutates the one that is."
     },
     {
       "id": "stored-arguments-from-tool-call-end",
@@ -377,6 +379,118 @@
         "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
       },
       "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "tool-input-null-optionals-omitted",
+      "fix": "#1174, #1189, #3831",
+      "behaviour": "Every adapter's tool call input reads a placeholder in an optional field (null, or \"\" where the field refuses it) as omitted.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stream-contract.ts",
+      "search": "          : withModelPlaceholdersOmitted(schema, input),",
+      "replace": "          : input,",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "google strict-null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "stream-ends-in-one-terminal-event",
+      "fix": "maintenance",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stream-contract.ts",
+      "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
+      "replace": "if (false) {\n    yield runError(options.model, {",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "anthropic early-eof"
+      },
+      "oracle": "chat.provider-wire.one-terminal"
+    },
+    {
+      "id": "new-message-resets-interrupts",
+      "fix": "#3885",
+      "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
+      "status": "active",
+      "file": "../web/src/features/chat/chat-runtime.ts",
+      "search": "    client.stop();\n  };\n\n  const startClientSend",
+      "replace": "  };\n\n  const startClientSend",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "id": "engine-closes-unanswerable-calls",
+      "fix": "#3885",
+      "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&",
+      "replace": "    false &&",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "continues a fork taken while a question waits"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "id": "run-continues-stored-thread",
+      "fix": "#3885",
+      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "message.id === supersededMessage.id",
+      "replace": "message.id === \"\"",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "superseding-turn-opens-with-stored-message",
+      "fix": "#3885",
+      "behaviour": "A turn that supersedes an awaiting message opens its stream with that message as the page serves it, so the page holds the superseded calls as stored however the run ends.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "        supersededMessage === undefined ? [] : [supersededMessage.id],",
+      "replace": "        [],",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an ask-user card that still waits"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "snapshot-shows-stored-history",
+      "fix": "#3885",
+      "behaviour": "A snapshot carries each message the engine was handed differently in its stored form, so a result only the engine saw never reaches the client.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "  presentStoredHistory({\n    history: storedHistory,",
+      "replace": "  presentStoredHistory({\n    history: { ...storedHistory, storedForms: new Map() },",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "resumes the new turn's own calls after a message replaced waiting ones"
+      },
+      "oracle": "chat.wire.results-stored"
+    },
+    {
+      "id": "tool-call-ids-unique-in-thread",
+      "fix": "#3885",
+      "behaviour": "A tool call id a provider reuses within the thread reaches the engine as a fresh one, so the new call never attaches to the earlier.",
+      "status": "active",
+      "file": "src/lib/chat/unique-tool-call-ids.ts",
+      "search": "        if (!taken.has(chunk.toolCallId)) {",
+      "replace": "        if (true) {",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "asks again for an approval whose call id an interrupted turn used"
+      },
+      "oracle": "chat.live.tool-parts-once"
     }
   ]
 }

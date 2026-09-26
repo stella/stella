@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { UNFINISHED_APPROVED_CALL_ERROR } from "@/api/handlers/chat/chat-turn-settlement";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -287,5 +288,88 @@ describe("forking a thread whose approved call lost its result", () => {
       ),
     ).toEqual({ status: "streamed" });
     expect(executions).toEqual([]);
+  });
+});
+
+describe("forking a thread at a pending ask-user card", () => {
+  test("a message sent on the fork runs the model", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    openHarnesses.push(harness);
+    const { lastAssistant, script, send, sendContext } = harness;
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+
+    script(threadId, [
+      {
+        arguments: JSON.stringify({
+          analysis: "The draft depends on the side the user represents.",
+          questions: [{ question: "Which side?", reason: "It decides it." }],
+        }),
+        toolName: ASK_USER_TOOL_NAME,
+        type: "tool-call",
+      },
+    ]);
+    expect(
+      await send(
+        sendContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Draft the NDA", type: "text" }],
+            role: "user",
+          },
+          runId: `run-${Bun.randomUUIDv7()}`,
+          threadId,
+        }),
+      ),
+    ).toEqual({ status: "streamed" });
+    const pending = await lastAssistant(threadId);
+
+    const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(forkThreadId);
+    const forked = await createForkThread({
+      indexChatThread: async () => undefined,
+    }).handler(
+      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+        body: { newThreadId: forkThreadId, upToMessageId: pending.id },
+        getWorkspaceAccess: async () => null,
+        memberRole: { role: "owner" },
+        params: { threadId },
+        query: {},
+        recordAuditEvent: async () => undefined,
+        request: new Request("http://localhost/v1/chat/threads/fork"),
+        safeDb,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+    expect(forked).toMatchObject({ threadId: forkThreadId });
+    // The fixture must reach the fault: the fork keeps the card's call closed
+    // as an error with no result, which the engine would ask about again.
+    expect(
+      (await lastAssistant(forkThreadId)).parts.map(({ type }) => type),
+    ).toEqual(["tool-call"]);
+    expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
+      { name: ASK_USER_TOOL_NAME, state: "error", type: "tool-call" },
+    ]);
+
+    script(forkThreadId, [
+      { finishReason: "stop", text: "Here is the draft.", type: "text" },
+    ]);
+    expect(
+      await send(
+        sendContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Seller side, go ahead", type: "text" }],
+            role: "user",
+          },
+          runId: `run-${Bun.randomUUIDv7()}`,
+          threadId: forkThreadId,
+        }),
+      ),
+    ).toEqual({ status: "streamed" });
+    expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
+      { content: "Here is the draft.", type: "text" },
+    ]);
   });
 });

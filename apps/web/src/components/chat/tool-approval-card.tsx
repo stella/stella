@@ -402,6 +402,16 @@ type ToolApprovalCardProps = {
   /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
+  /**
+   * Whether the conversation still waits on this card. False once a later
+   * user message superseded the turn (the server cancels the approval when it
+   * accepts that message) or when the card belongs to an earlier turn; the
+   * request then shows without controls and is never answered automatically.
+   * Independent of `isTurnActive`: a card is awaited while its request
+   * streams in and while its answer is being submitted, and neither once the
+   * turn ended.
+   */
+  isAwaitingUser: boolean;
   /** Whether the turn this card belongs to is still running. */
   isTurnActive: boolean;
   part: ApprovalToolPart;
@@ -417,6 +427,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 
 export const ToolApprovalCard = ({
   activeFileName,
+  isAwaitingUser,
   isTurnActive,
   part,
 }: ToolApprovalCardProps) => {
@@ -504,11 +515,13 @@ export const ToolApprovalCard = ({
             }
           },
           // A card the user already answered is not answered again.
-          shouldRespond: !responded && (isBlocked || shouldAutoApprove),
+          shouldRespond:
+            isAwaitingUser && !responded && (isBlocked || shouldAutoApprove),
         };
   // Answered cards stop asking, even while the answer waits for the rest of
   // a batch.
-  const asksForDecision = isApprovalRequested && !responded && !isProcessing;
+  const asksForDecision =
+    isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
   const isAwaitingDecision =
     asksForDecision && !isBlocked && !isPublicOfficialApproval;
   const beginManualResponse = (id: string): boolean => {

@@ -117,6 +117,27 @@ export const ROOT_CONNECTION_DOORS = [
     },
   },
   {
+    id: "manual-ocr-request-run",
+    capability: "Recording a user's manual OCR request",
+    owner: ["apps/api/src/lib/entity-versions/manual-ocr-request-run.ts"],
+    summary:
+      "A manual OCR request may promote, retry or reuse a run another requester " +
+      "or an upload owns, and cancels competing manual selections, in one " +
+      "serialized transaction with the entity locked. Those updates are outside " +
+      "the requester's scope, so the operation runs on the owner connection; " +
+      "the helper it wraps takes its connection as a required argument.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/entity-versions/manual-ocr-request-run"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/entities/ocr/create.ts",
+          reason: "Records the manual OCR request the route accepted.",
+        },
+      ],
+    },
+  },
+  {
     id: "search-projection-flush",
     capability: "Flushing a mutation's search marks after it commits",
     owner: ["apps/api/src/lib/search/projection-repair-flush.ts"],
@@ -732,6 +753,19 @@ export const OWNERSHIP = [
       "Folding decides which strings compare equal, so search, highlighting, " +
       "and slugs have to agree on it. Build slug helpers on the folds exported " +
       "here rather than on a local regex.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "charset-misdecoding",
+    capability:
+      "Detecting and undoing text decoded with the wrong character set",
+    owner: ["packages/mojibake/"],
+    summary:
+      "Ingestion guards and corpus checks judge a text against its declared " +
+      "language's CLDR exemplar letters, which covers every language CLDR " +
+      "does and needs no reader of the language. A check that lists letters " +
+      "or byte pairs for one language is a second, narrower detector; extend " +
+      "this one.",
     enforcement: { kind: "none" },
   },
   {

@@ -14,6 +14,7 @@ import path from "node:path";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  checkChangesetPackages,
   decideChangesetGate,
   isChangesetEntry,
   loadChangesetPolicy,
@@ -260,6 +261,156 @@ describe("changeset gate decision", () => {
   });
 });
 
+describe("changeset package relevance", () => {
+  const entry = (names: readonly string[]) => ({
+    file: ".changeset/change.md",
+    contents: `---\n${names.map((name) => `"${name}": patch`).join("\n")}\n---\n\nA public change.\n`,
+  });
+
+  test("requires path evidence for every named package across the release policy", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...policy.packageFiles),
+        fc.constantFrom(...policy.packageFiles),
+        (changedManifest, namedManifest) => {
+          const changedDirectory = path.posix.dirname(changedManifest);
+          const namedDirectory = path.posix.dirname(namedManifest);
+          const name = `@stll/${path.posix.basename(namedDirectory)}`;
+          const options = {
+            changedFiles: [`${changedDirectory}/src/change.ts`],
+            entries: [entry([name])],
+            policy,
+          };
+          if (changedDirectory !== namedDirectory) {
+            expect(() => checkChangesetPackages(options)).toThrow(
+              `.changeset/change.md: ${name}`,
+            );
+            return;
+          }
+          checkChangesetPackages(options);
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
+
+  test("rejects an unrelated member of a multi-package changeset", () => {
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: ["packages/cli/src/main.ts"],
+        entries: [entry(["@stll/cli", "@stll/business-registries"])],
+        policy,
+      }),
+    ).toThrow(".changeset/change.md: @stll/business-registries");
+  });
+
+  test("requires relevant paths even when the PR has no gated changes", () => {
+    for (const changedFiles of [
+      [],
+      ["docs/releases.md"],
+      ["packages/cli/CHANGELOG.md"],
+    ]) {
+      expect(() =>
+        checkChangesetPackages({
+          changedFiles,
+          entries: [entry(["@stll/cli"])],
+          policy,
+        }),
+      ).toThrow("no changed release-gated files");
+    }
+  });
+
+  test("does not infer public impact from source paths or require names in an empty entry", () => {
+    checkChangesetPackages({
+      changedFiles: ["packages/cli/src/comment-only.ts"],
+      entries: [
+        entry(["@stll/cli"]),
+        { file: ".changeset/empty.md", contents: EMPTY_CHANGESET },
+      ],
+      policy,
+    });
+    checkChangesetPackages({ changedFiles: [], entries: [entry([])], policy });
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [],
+        entries: [entry(["@stll/unknown"])],
+        policy,
+      }),
+    ).toThrow("outside the release policy: @stll/unknown");
+  });
+
+  test("checks edits as well as additions at HEAD, while allowing consumed version entries", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-package-relevance-"));
+    try {
+      mkdirSync(path.join(root, "scripts"));
+      mkdirSync(path.join(root, ".changeset"));
+      mkdirSync(path.join(root, "packages/cli/src"), { recursive: true });
+      for (const file of [
+        "changeset-guard.ts",
+        "changeset-entry.ts",
+        "changeset-policy.json",
+      ]) {
+        writeFileSync(
+          path.join(root, "scripts", file),
+          readFile(`scripts/${file}`),
+        );
+      }
+      const entryPath = path.join(root, ".changeset/change.md");
+      writeFileSync(entryPath, entry(["@stll/cli"]).contents);
+      writeFileSync(
+        path.join(root, "packages/cli/src/main.ts"),
+        "export const version = 1;\n",
+      );
+      git(root, ["init", "-b", "main"]);
+      git(root, ["config", "user.email", "test@example.com"]);
+      git(root, ["config", "user.name", "Test"]);
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "base"]);
+      const base = git(root, ["rev-parse", "HEAD"]).trim();
+      const check = () =>
+        Bun.spawnSync(
+          [
+            "bun",
+            "scripts/changeset-guard.ts",
+            "--base",
+            base,
+            "--packages-only",
+          ],
+          { cwd: root },
+        );
+      writeFileSync(entryPath, entry(["@stll/cli", "@stll/ui"]).contents);
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "edit entry"]);
+      // A worktree-only correction must not hide the committed mistake.
+      writeFileSync(entryPath, EMPTY_CHANGESET);
+      const edited = check();
+      expect(edited.exitCode).toBe(1);
+      expect(edited.stderr.toString()).toContain(
+        ".changeset/change.md: @stll/ui",
+      );
+      rmSync(entryPath);
+      writeFileSync(
+        path.join(root, "packages/cli/package.json"),
+        '{"version":"1.0.1"}',
+      );
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "consume entry"]);
+      expect(check().exitCode).toBe(0);
+      writeFileSync(
+        path.join(root, ".changeset/new.md"),
+        entry(["@stll/ui"]).contents,
+      );
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "add unrelated entry"]);
+      const added = check();
+      expect(added.exitCode).toBe(1);
+      expect(added.stderr.toString()).toContain(".changeset/new.md: @stll/ui");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 describe("the diff the gate decides on", () => {
   test("counts a renamed empty changeset as a new entry", () => {
     // A maintenance release commit deletes the previous release's empty entry
@@ -452,6 +603,12 @@ describe("workflow and pre-push read the same policy", () => {
     // A second copy of the list in the workflow is exactly the drift this
     // guard exists to prevent: CI would gate paths pre-push does not.
     expect(changesetJob()).not.toMatch(/^\s+(?:apps|packages)\//mu);
+  });
+
+  test("CI runs the same package relevance check without replacing the shared presence gate", () => {
+    expect(changesetJob()).toContain(
+      'bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only',
+    );
   });
 
   test("pre-push runs the guard", () => {

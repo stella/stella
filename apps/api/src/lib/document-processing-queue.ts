@@ -715,6 +715,60 @@ export const indexDocumentProjectionAtJobBoundary = async ({
   }
 };
 
+/**
+ * Applies the organization's processing policy to a claimed OCR run. A
+ * policy-gated run is cancelled, unless a manual request promoted it onto
+ * this claim in the meantime.
+ */
+const admitOcrRunUnderPolicy = async ({
+  claimToken,
+  database,
+  run,
+}: {
+  claimToken: string;
+  database: typeof rootDb;
+  run: typeof documentProcessingRuns.$inferSelect;
+}): Promise<"proceed" | "stop"> => {
+  const settings = await database.query.organizationSettings.findFirst({
+    where: { organizationId: { eq: run.organizationId } },
+    columns: { documentProcessingMode: true },
+  });
+  const currentRuns = await database
+    .select({ requestSource: documentProcessingRuns.requestSource })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, run.id))
+    .limit(1);
+  if (
+    !requiresOcrPolicy(currentRuns.at(0)?.requestSource ?? run.requestSource) ||
+    settings?.documentProcessingMode === "searchable-text"
+  ) {
+    return "proceed";
+  }
+
+  const cancelled = await markRunCancelled(
+    database,
+    run.id,
+    claimToken,
+    "policy_disabled",
+  );
+  if (cancelled) {
+    return "stop";
+  }
+
+  const promotedRuns = await database
+    .select({
+      claimedBy: documentProcessingRuns.claimedBy,
+      requestSource: documentProcessingRuns.requestSource,
+      status: documentProcessingRuns.status,
+    })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, run.id))
+    .limit(1);
+  return ownsPromotedManualOcrClaim({ claimToken, run: promotedRuns.at(0) })
+    ? "proceed"
+    : "stop";
+};
+
 export const processDocumentProcessingRun = async (
   database: typeof rootDb,
   runId: SafeId<"documentProcessingRun">,
@@ -900,50 +954,11 @@ export const processDocumentProcessingRun = async (
   const processingResult = await Result.tryPromise({
     try: async () => {
       lifecycleSignal.throwIfAborted();
-      if (run.kind === "ocr") {
-        const settings = await database.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: run.organizationId } },
-          columns: { documentProcessingMode: true },
-        });
-        const currentRuns = await database
-          .select({ requestSource: documentProcessingRuns.requestSource })
-          .from(documentProcessingRuns)
-          .where(eq(documentProcessingRuns.id, run.id))
-          .limit(1);
-        if (
-          requiresOcrPolicy(
-            currentRuns.at(0)?.requestSource ?? run.requestSource,
-          ) &&
-          settings?.documentProcessingMode !== "searchable-text"
-        ) {
-          const cancelled = await markRunCancelled(
-            database,
-            run.id,
-            claimToken,
-            "policy_disabled",
-          );
-          if (cancelled) {
-            return;
-          }
-
-          const promotedRuns = await database
-            .select({
-              claimedBy: documentProcessingRuns.claimedBy,
-              requestSource: documentProcessingRuns.requestSource,
-              status: documentProcessingRuns.status,
-            })
-            .from(documentProcessingRuns)
-            .where(eq(documentProcessingRuns.id, run.id))
-            .limit(1);
-          if (
-            !ownsPromotedManualOcrClaim({
-              claimToken,
-              run: promotedRuns.at(0),
-            })
-          ) {
-            return;
-          }
-        }
+      if (
+        run.kind === "ocr" &&
+        (await admitOcrRunUnderPolicy({ claimToken, database, run })) === "stop"
+      ) {
+        return;
       }
 
       const source = await readCurrentDocumentSource({
@@ -1044,6 +1059,10 @@ export const processDocumentProcessingRun = async (
         mimeType: PDF_MIME_TYPE,
       });
       const result = await recognizePdfTextLocally({
+        scope: {
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+        },
         signal: lifecycleSignal,
         sourceKey,
       });

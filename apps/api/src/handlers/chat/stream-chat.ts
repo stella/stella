@@ -68,11 +68,13 @@ import {
   findDeniedApprovals,
   keepDeniedApprovalsOnScreen,
   normalizeFinalAssistantMessageId,
+  presentStoredHistory,
   remapOutgoingMessageIds,
 } from "@/api/handlers/chat/stream-message-identity";
 import type {
   DeniedApproval,
   MessageIdMapper,
+  StoredHistory,
 } from "@/api/handlers/chat/stream-message-identity";
 import {
   createTanStackTerminalHooks,
@@ -220,6 +222,8 @@ type StreamChatProps = {
   messages: ChatMessage[];
   owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  /** What the client is shown of the history `messages` came from. */
+  storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
@@ -352,6 +356,7 @@ export const streamChat = async ({
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   safeDb,
+  storedHistory,
   systemSafe,
   systemUntrusted,
   tenantWorkspaceIds,
@@ -562,6 +567,7 @@ export const streamChat = async ({
     resolveAssistantToolOutputRefs,
     resolveAssistantValueRefs,
     source: processedStream,
+    storedHistory,
   });
 
   return withSseHeartbeat(
@@ -2045,12 +2051,13 @@ type TransformClientVisibleStreamProps = Pick<
 > & {
   /** Calls the history denied (see `findDeniedApprovals`). */
   deniedApprovals?: ReadonlyMap<string, DeniedApproval> | undefined;
+  storedHistory: StoredHistory;
 };
 
 /**
  * Resolve refs only after the server-side processor has consumed its copy,
  * then present the calls the history denied as denied, built from the
- * resolved snapshot.
+ * resolved snapshot, and the rest of the history as stored.
  */
 export const transformClientVisibleStream = ({
   deniedApprovals = new Map(),
@@ -2059,18 +2066,22 @@ export const transformClientVisibleStream = ({
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   source,
+  storedHistory,
 }: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  keepDeniedApprovalsOnScreen({
-    deniedApprovals,
-    source: transformOutgoingStream({
-      boundary: { type: "raw" },
-      initialRestorationPlaceholders: new Set(),
-      resolveAssistantTextRefs,
-      resolveAssistantToolInputRefs,
-      resolveAssistantToolOutputRefs,
-      resolveAssistantValueRefs,
-      restorationPairs: [],
-      source,
+  presentStoredHistory({
+    history: storedHistory,
+    source: keepDeniedApprovalsOnScreen({
+      deniedApprovals,
+      source: transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        resolveAssistantTextRefs,
+        resolveAssistantToolInputRefs,
+        resolveAssistantToolOutputRefs,
+        resolveAssistantValueRefs,
+        restorationPairs: [],
+        source,
+      }),
     }),
   });
 

@@ -12,6 +12,7 @@ import {
   classifyManualOcrCollision,
   persistManualOcrRun,
 } from "@/api/lib/document-processing-request";
+import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-request";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -745,5 +746,55 @@ describe("requestManualOcrHandler", () => {
       expect(compiled.sql).toContain('"workspaces"."status" =');
       expect(compiled.params).toContain("active");
     }
+  });
+});
+
+/**
+ * These directives pin requiredness: the helper's `db` and the handler's
+ * `persistRun` are required inputs, so omitting either fails the typecheck.
+ * They do not rule out a default, since a destructuring default behind a
+ * still-required type would pass them. That is held elsewhere: restoring
+ * `db = rootDb` is a parameter default that the
+ * `implicit-root-connection-shapes` ratchet counts, and
+ * `document-processing-request.ts` no longer has a baseline entry there.
+ * Swapping the route's door for another
+ * root-bound persister needs a new `rootDb` import, which the
+ * `direct-root-connection-imports` ratchet and the door's import confinement
+ * reject.
+ */
+describe("the manual OCR request's connection is a required input", () => {
+  const source = {
+    entityId,
+    entityVersionId,
+    fieldId,
+    sourceFileId: "00000000-0000-4000-8000-000000000001",
+    sourceSha256Hex: "a".repeat(64),
+  };
+  const persistOptions = (options: PersistManualOcrRunOptions) => options;
+  const handlerProps = (props: Parameters<typeof requestManualOcrHandler>[0]) =>
+    props;
+
+  test("the helper requires its connection", () => {
+    // @ts-expect-error `db` is a required option
+    persistOptions({
+      organizationId,
+      recordAuditEvent,
+      source,
+      userId,
+      workspaceId,
+    });
+  });
+
+  test("the handler requires its persister", () => {
+    // @ts-expect-error `persistRun` is a required prop
+    handlerProps({
+      entityId,
+      fieldId,
+      organizationId,
+      recordAuditEvent,
+      safeDb: createSafeDb(null),
+      userId,
+      workspaceId,
+    });
   });
 });

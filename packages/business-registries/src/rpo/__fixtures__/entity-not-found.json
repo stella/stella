@@ -1,0 +1,6 @@
+{
+  "message": "No record found",
+  "_links": {
+    "self": { "href": "/rpo/v1/entity/999999999", "templated": false }
+  }
+}

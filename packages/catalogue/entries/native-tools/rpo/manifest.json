@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "rpo",
+  "displayName": "Register právnických osôb",
+  "description": "Slovak lookup by IČO or name in the Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) operated by the Statistical Office of the Slovak Republic. Covers every legal person and entrepreneur, including sole traders, associations, foundations, and public bodies outside the commercial register.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://rpo.statistics.sk",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["SK"],
+  "backendSlug": "rpo",
+  "url": "https://rpo.statistics.sk",
+  "documentationUrl": "https://susrrpo.docs.apiary.io"
+}

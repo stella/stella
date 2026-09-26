@@ -20,7 +20,19 @@ export const getDefaultDesktopRegistry = ({
   registries,
   practiceJurisdictions,
 }: DefaultRegistryOptions) => {
-  const domesticRegistries = registries.filter(({ id }) =>
+  // A supplementary register (RPO beside ORSR) never competes with its
+  // jurisdiction's enabled primary register for the default.
+  const hasEnabledPrimary = (country: string): boolean =>
+    registries.some(
+      ({ id }) =>
+        BUSINESS_REGISTRY_DISPATCH[id].country === country &&
+        BUSINESS_REGISTRY_DISPATCH[id].jurisdictionRole.type === "primary",
+    );
+  const candidates = registries.filter(({ id }) => {
+    const { country, jurisdictionRole } = BUSINESS_REGISTRY_DISPATCH[id];
+    return jurisdictionRole.type === "primary" || !hasEnabledPrimary(country);
+  });
+  const domesticRegistries = candidates.filter(({ id }) =>
     practiceJurisdictions.some(
       ({ countryCode }) =>
         countryCode === BUSINESS_REGISTRY_DISPATCH[id].country,

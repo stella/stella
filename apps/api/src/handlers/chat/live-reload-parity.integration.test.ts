@@ -165,6 +165,9 @@ type Ledger = {
   /** How each turn stood when the conversation last settled. */
   outcomes: Map<number, Ledger["latest"]>;
   pending: string[];
+  /** The answers a new message superseded, which the page must hold as the
+   *  thread serves them. */
+  superseded: Set<string>;
   turn: number;
   /** What each turn still waited on when the conversation last settled. */
   waiting: Map<number, CallKind[]>;
@@ -178,6 +181,7 @@ const newLedger = (): Ledger => ({
   latest: "none",
   outcomes: new Map(),
   pending: [],
+  superseded: new Set(),
   turn: 0,
   waiting: new Map(),
 });
@@ -369,6 +373,31 @@ const toolCallIdsOf = (messages: readonly UIMessage[]): string[] =>
 
 const sorted = (values: readonly string[]) => JSON.stringify(values.toSorted());
 
+const placeholderOf = (part: unknown): string[] => {
+  const metadata: unknown =
+    typeof part === "object" && part !== null
+      ? Reflect.get(part, "metadata")
+      : undefined;
+  const placeholder: unknown =
+    typeof metadata === "object" && metadata !== null
+      ? Reflect.get(metadata, "placeholder")
+      : undefined;
+  return typeof placeholder === "string" ? [placeholder] : [];
+};
+
+/** What the thread's page serves of a message beyond what the live/reload
+ *  views compare: its stored time and its attachments' placeholders. */
+const servedFieldsOf = (message: UIMessage | undefined) =>
+  message === undefined
+    ? null
+    : {
+        createdAt:
+          message.createdAt === undefined
+            ? null
+            : new Date(message.createdAt).toISOString(),
+        placeholders: message.parts.flatMap(placeholderOf),
+      };
+
 /** The ledger's oracles for the conversation as it now stands. */
 const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
   const { harness, ledger, threadId } = real;
@@ -390,7 +419,19 @@ const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
   const callsMatch =
     JSON.stringify(live) === JSON.stringify(expectedCalls) &&
     JSON.stringify(reloaded) === JSON.stringify(expectedCalls);
+  const unservedSuperseded = [...ledger.superseded].flatMap((id) => {
+    const onPage = servedFieldsOf(
+      real.client.messages().find((message) => message.id === id),
+    );
+    const served = servedFieldsOf(reload.find((message) => message.id === id));
+    return JSON.stringify(onPage) === JSON.stringify(served)
+      ? []
+      : [{ id, live: onPage, reload: served }];
+  });
   return [
+    // A superseded answer the page was sent again holds what the page
+    // serves, not only what the views compare.
+    ...violationsOf(CHAT_ORACLE.liveEqualsReload, unservedSuperseded),
     ...violationsOf(
       CHAT_ORACLE.ledgerPending,
       pendingMatches ? [] : [{ expected: ledger.pending, onScreen, stored }],
@@ -449,6 +490,7 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedTurnSettles,
   CHAT_ORACLE.providerScriptsConsumed,
+  CHAT_ORACLE.wireResultsStored,
   CHAT_ORACLE.wireSnapshotIdentity,
 ]);
 
@@ -614,6 +656,14 @@ class SupersedeCards implements fc.AsyncCommand<Model, Real> {
   check = SupersedeCards.allows;
   run = async (model: Model, real: Real) => {
     const failuresBefore = real.ledger.failures;
+    const waiting = new Set(real.ledger.pending);
+    for (const { id, parts } of real.client.messages()) {
+      if (
+        parts.some((part) => part.type === "tool-call" && waiting.has(part.id))
+      ) {
+        real.ledger.superseded.add(id);
+      }
+    }
     real.ledger.pending = [];
     real.ledger.turn += 1;
     real.harness.script(
@@ -1211,7 +1261,7 @@ const runConversations = async (
   );
 };
 
-// --- Cases the page does not handle yet -------------------------------------
+// --- Example cases----------------------------------------------------------
 
 /** Runs `steps` on a fresh conversation. */
 const inConversation = async (
@@ -1328,16 +1378,10 @@ const innermost = (
 type OpenGap = {
   /** The steps the page-action property leaves out while this is open. */
   condition: string;
-  excludes: (
-    command: fc.AsyncCommand<Model, Real>,
-    model: Readonly<Model>,
-  ) => boolean;
+  excludes: (command: fc.AsyncCommand<Model, Real>) => boolean;
   /** Fails while this is open. */
   reproduce: () => Promise<void>;
 };
-
-const isSupersede = (command: fc.AsyncCommand<Model, Real>) =>
-  command instanceof SupersedeCards;
 
 /**
  * Open findings, by id: each one's excluded steps and its failing case. The
@@ -1346,28 +1390,6 @@ const isSupersede = (command: fc.AsyncCommand<Model, Real>) =>
  * OPEN_GAPS_SIZE, which only goes down.
  */
 const OPEN_GAPS = {
-  S1: {
-    condition: "SupersedeCards",
-    excludes: isSupersede,
-    reproduce: sendPastAnApproval,
-  },
-  S2: {
-    condition: "SupersedeCards",
-    excludes: isSupersede,
-    reproduce: async () => {
-      await replaceWaiting(["ask-user"]);
-    },
-  },
-  S3: {
-    condition: "SupersedeCards whose runs end at a card",
-    excludes: (command) =>
-      command instanceof SupersedeCards &&
-      command.runs.some(
-        (run) =>
-          !isFailure(run) && run.some(({ calls }) => calls.some(isInteraction)),
-      ),
-    reproduce: resumeAfterReplacing,
-  },
   F2: {
     condition: "StopMidStream",
     excludes: (command) => command instanceof StopMidStream,
@@ -1375,16 +1397,6 @@ const OPEN_GAPS = {
       await stopWhileStreaming("after-tool-end");
       await stopWhileStreaming("before-tool-end");
     },
-  },
-  F3: {
-    condition:
-      "ForkFrom a turn that waits on an ask-user card or a client call",
-    excludes: (command, model) =>
-      command instanceof ForkFrom &&
-      (model.waiting.get(command.targetTurn(model)) ?? []).some(
-        (kind) => kind === "ask-user" || kind === "client",
-      ),
-    reproduce: forkWhileAQuestionWaits,
   },
   F5: {
     condition: "StopRunningCall",
@@ -1394,7 +1406,7 @@ const OPEN_GAPS = {
 } as const satisfies Record<string, OpenGap>;
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const OPEN_GAPS_SIZE = 6;
+const OPEN_GAPS_SIZE = 2;
 
 /** A step the page-action property takes unless an open finding excludes
  *  it. */
@@ -1406,7 +1418,7 @@ class OutsideOpenGaps implements fc.AsyncCommand<Model, Real> {
   check = (model: Readonly<Model>) =>
     this.command.check(model) &&
     !Object.values(OPEN_GAPS).some(({ excludes }) =>
-      excludes(innermost(this.command), model),
+      excludes(innermost(this.command)),
     );
   run = async (model: Model, real: Real) => {
     await this.command.run(model, real);
@@ -1874,15 +1886,21 @@ describe("a conversation's live view", () => {
         harness.script(threadId, [deleteCall("second")]);
         await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete another");
 
+        const cards = real.client.cards();
         expect({
-          card: real.client
-            .cards()
-            .some(
-              ({ kind, toolCallId }) =>
-                kind === "approval" && toolCallId === reusedId,
-            ),
+          cards: cards.map(({ kind }) => kind),
+          renamed: cards.every(({ toolCallId }) => toolCallId !== reusedId),
           secondRan: harness.executions.includes("second"),
-        }).toEqual({ card: true, secondRan: false });
+          violations: await harness.checkWebClient({
+            client: real.client,
+            threadId,
+          }),
+        }).toEqual({
+          cards: ["approval"],
+          renamed: true,
+          secondRan: false,
+          violations: [],
+        });
       } finally {
         closeConversation({ real });
       }
@@ -1954,13 +1972,13 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "sends a message typed while an approval waits",
     sendPastAnApproval,
     propertyTestTimeout(30_000),
   );
 
-  test.failing.each([
+  test.each([
     ["an approval", ["approval"]],
     ["an ask-user card", ["ask-user"]],
     ["a mixed batch", ["approval", "ask-user", "approval"]],
@@ -1972,7 +1990,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "resumes the new turn's own calls after a message replaced waiting ones",
     resumeAfterReplacing,
     propertyTestTimeout(30_000),
@@ -1986,7 +2004,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "continues a fork taken while a question waits",
     forkWhileAQuestionWaits,
     propertyTestTimeout(30_000),
@@ -2046,7 +2064,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(240_000),
   );
 
-  test.failing(
+  test(
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
       await runConversations(

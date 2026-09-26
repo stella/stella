@@ -118,6 +118,60 @@ export const CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS = {
 } as const;
 
 /**
+ * Exact columns the internal corpus sample reader may read. The migration owns
+ * these grants in production; the privilege test folds that SQL back against
+ * this map so the two cannot drift.
+ */
+export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
+  case_law_citations: [
+    "id",
+    "citing_decision_id",
+    "cited_decision_id",
+    "citation_text",
+    "section_index",
+    "polarity",
+    "kind",
+  ],
+  case_law_corpus_tombstones: ["location"],
+  case_law_decisions: [
+    "id",
+    "case_number",
+    "ecli",
+    "court",
+    "country",
+    "decision_date",
+    "decision_type",
+    "fulltext",
+    "document_ast",
+    "source_url",
+    "document_url",
+    "metadata",
+    "redacted_at",
+    "text_s3_key",
+    "ast_s3_key",
+  ],
+  legislation_documents: [
+    "id",
+    "source_id",
+    "eli",
+    "title",
+    "country",
+    "language",
+    "document_type",
+    "status",
+    "effective_date",
+    "version_valid_from",
+    "version_valid_to",
+    "fulltext",
+    "source_url",
+    "document_url",
+    "metadata",
+    "text_s3_key",
+  ],
+  legislation_sources: ["id", "adapter_key"],
+} as const;
+
+/**
  * Every column of `case_law_sources` the ingestion role may write. The table
  * is otherwise migration-managed, so the role holds UPDATE column by column
  * and each column here matches a grant in a committed migration
@@ -476,6 +530,16 @@ export const ROLE_GRANT_STATEMENTS = [
         TO stella_case_law_analysis_reader
     `,
   ),
+  `
+    GRANT USAGE ON SCHEMA public TO stella_corpus_sample_reader
+  `,
+  ...Object.entries(CORPUS_SAMPLE_READER_SELECT_COLUMNS).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_corpus_sample_reader
+    `,
+  ),
 ] as const;
 
 /**
@@ -500,6 +564,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(
     sql.raw("CREATE ROLE stella_case_law_analysis_reader NOLOGIN"),
   );
+  await db.execute(sql.raw("CREATE ROLE stella_corpus_sample_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this

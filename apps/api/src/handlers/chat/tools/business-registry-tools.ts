@@ -1,6 +1,8 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import type { BusinessRegistrySlug } from "@stll/api-contract";
+
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   executeRegistryLookup,
@@ -55,7 +57,9 @@ type CreateBusinessRegistryToolsArgs = {
 export const createBusinessRegistryTools = ({
   enabledHandlers,
 }: CreateBusinessRegistryToolsArgs) => {
-  const enabledJurisdictions = enabledHandlers.map(({ country }) => country);
+  const enabledJurisdictions = [
+    ...new Set(enabledHandlers.map(({ country }) => country)),
+  ];
   if (enabledJurisdictions.length === 0) {
     return {};
   }
@@ -83,6 +87,15 @@ export const createBusinessRegistryTools = ({
       ? ` Name search is not supported for these enabled registries: ${canonicalOnlyGuidance}. Ask the user for the canonical identifier instead of passing a company name.`
       : "";
 
+  const [firstHandler, ...otherHandlers] = enabledHandlers;
+  if (firstHandler === undefined) {
+    return {};
+  }
+  const registryOptions: [BusinessRegistrySlug, ...BusinessRegistrySlug[]] = [
+    firstHandler.slug,
+    ...otherHandlers.map(({ slug }) => slug),
+  ];
+
   const inputSchema = v.strictObject({
     jurisdiction: v.pipe(
       v.picklist(picklistOptions),
@@ -95,6 +108,12 @@ export const createBusinessRegistryTools = ({
     query: v.pipe(
       v.string(),
       v.description(QUERY_DESCRIPTION_BASE + canonicalOnlySuffix),
+    ),
+    registry: v.optional(
+      v.pipe(
+        v.picklist(registryOptions),
+        v.description(registryDescription(enabledHandlers)),
+      ),
     ),
     limit: v.optional(
       v.pipe(
@@ -112,16 +131,18 @@ export const createBusinessRegistryTools = ({
       name: BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
       description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
       inputSchema: toTanStackToolSchema(inputSchema),
-    }).server(async ({ jurisdiction, limit, query }) => {
-      const handler = enabledHandlers.find(
-        (candidate) => candidate.country === jurisdiction,
-      );
+    }).server(async ({ jurisdiction, limit, query, registry }) => {
+      const handler = resolveHandler({
+        enabledHandlers,
+        jurisdiction,
+        registry,
+      });
       if (!handler) {
-        // `enabledJurisdictions` should always be a subset of the
-        // countries we ship adapters for, but defend against
-        // configuration drift rather than crash mid-tool-call.
         return {
-          error: `No business registry adapter is shipped for jurisdiction ${jurisdiction}`,
+          error:
+            registry === undefined
+              ? `No business registry adapter is shipped for jurisdiction ${jurisdiction}`
+              : `Registry '${registry}' does not cover jurisdiction ${jurisdiction}`,
         };
       }
       const result = await executeRegistryLookup({
@@ -140,6 +161,56 @@ export const createBusinessRegistryTools = ({
       return result;
     }),
   };
+};
+
+type ResolveHandlerOptions = {
+  enabledHandlers: readonly RegistryHandler[];
+  jurisdiction: RegistryJurisdictionCode;
+  registry: BusinessRegistrySlug | undefined;
+};
+
+/**
+ * A named register must cover the jurisdiction; otherwise the jurisdiction's
+ * primary register answers, or its only enabled one when the primary is off.
+ */
+const resolveHandler = ({
+  enabledHandlers,
+  jurisdiction,
+  registry,
+}: ResolveHandlerOptions): RegistryHandler | undefined => {
+  const candidates = enabledHandlers.filter(
+    ({ country }) => country === jurisdiction,
+  );
+  if (registry !== undefined) {
+    return candidates.find(({ slug }) => slug === registry);
+  }
+  const [sole, ...others] = candidates;
+  return (
+    candidates.find(
+      ({ jurisdictionRole }) => jurisdictionRole.type === "primary",
+    ) ?? (others.length === 0 ? sole : undefined)
+  );
+};
+
+/**
+ * Describe the optional `registry` input: omitted, the jurisdiction's default
+ * register answers; each enabled supplementary register says what it adds.
+ */
+const registryDescription = (
+  enabledHandlers: readonly RegistryHandler[],
+): string => {
+  const supplementary = enabledHandlers.flatMap(
+    ({ country, jurisdictionRole, slug }) =>
+      jurisdictionRole.type === "supplementary"
+        ? [`${slug} (${country}) covers ${jurisdictionRole.coverage}`]
+        : [],
+  );
+  const base =
+    "Register to query within the jurisdiction. Omit to use the " +
+    "jurisdiction's default register.";
+  return supplementary.length > 0
+    ? `${base} ${supplementary.join("; ")}.`
+    : base;
 };
 
 const canonicalOnlyQueryGuidanceFor = (

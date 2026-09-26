@@ -175,6 +175,8 @@ export const providerWireCassetteSchema = v.strictObject({
   format: v.literal(1),
   provider: v.picklist(PROVIDER_WIRE_PROVIDERS),
   scenario: v.picklist(SCENARIO_NAMES),
+  /** A further shape of the same scenario, beside its main cassette. */
+  variant: v.optional(v.pipe(v.string(), v.regex(/^[a-z0-9-]+$/u))),
   source: v.picklist(["recorded", "synthetic"]),
   /** Where a synthetic cassette's bytes come from. */
   basis: v.optional(v.string()),
@@ -192,7 +194,21 @@ export type ProviderWireCassette = v.InferOutput<
 export const cassettePath = (
   provider: ProviderWireProvider,
   scenario: ProviderWireScenario,
-): string => path.join(PROVIDER_WIRE_DIR, provider, `${scenario}.json`);
+  variant?: string,
+): string =>
+  path.join(
+    PROVIDER_WIRE_DIR,
+    provider,
+    `${scenario}${variant === undefined ? "" : `.${variant}`}.json`,
+  );
+
+/** A cassette's name: provider, scenario and any variant. */
+export const cassetteKey = ({
+  provider,
+  scenario,
+  variant,
+}: Pick<ProviderWireCassette, "provider" | "scenario" | "variant">): string =>
+  `${provider}/${scenario}${variant === undefined ? "" : `.${variant}`}`;
 
 /** Problems with one cassette file, beyond its schema. */
 const cassetteProblems = (
@@ -200,7 +216,11 @@ const cassetteProblems = (
   cassette: ProviderWireCassette,
 ): string[] => {
   const problems: string[] = [];
-  const expected = cassettePath(cassette.provider, cassette.scenario);
+  const expected = cassettePath(
+    cassette.provider,
+    cassette.scenario,
+    cassette.variant,
+  );
   if (path.resolve(file) !== expected) {
     problems.push(`${file}: lives at ${expected} by its provider and scenario`);
   }
@@ -252,8 +272,11 @@ export const loadProviderWireCassettes = (): ProviderWireCassette[] => {
 export const findMissingCassettes = (
   cassettes: readonly ProviderWireCassette[],
 ): string[] => {
+  // A variant sits beside its main cassette; it does not stand in for one.
   const present = new Set(
-    cassettes.map(({ provider, scenario }) => `${provider}/${scenario}`),
+    cassettes
+      .filter(({ variant }) => variant === undefined)
+      .map(({ provider, scenario }) => `${provider}/${scenario}`),
   );
   return PROVIDER_WIRE_PROVIDERS.flatMap((provider) =>
     SCENARIO_NAMES.filter(
@@ -272,5 +295,7 @@ export const cassetteFor = (
 ): ProviderWireCassette =>
   cassettes.find(
     (cassette) =>
-      cassette.provider === provider && cassette.scenario === scenario,
+      cassette.provider === provider &&
+      cassette.scenario === scenario &&
+      cassette.variant === undefined,
   ) ?? panic(`No ${provider}/${scenario} provider wire cassette`);

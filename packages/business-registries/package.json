@@ -79,6 +79,7 @@
     "./recherche-entreprises": "./src/recherche-entreprises/index.ts",
     "./recherche-entreprises/default-format": "./src/recherche-entreprises/default-format.ts",
     "./recherche-entreprises/identifier-format": "./src/recherche-entreprises/identifier-format.ts",
+    "./rpo": "./src/rpo/index.ts",
     "./vies": "./src/vies/index.ts",
     "./vies/validation": "./src/vies/validation.ts",
     "./shared": "./src/shared/index.ts",

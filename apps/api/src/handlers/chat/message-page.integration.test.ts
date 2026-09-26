@@ -3,14 +3,17 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
+  loadClientMessages,
 } from "@/api/handlers/chat/message-page";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { toUserFileUrl } from "@/api/lib/user-files/types";
+import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -31,6 +34,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+const seededFileIds: SafeId<"userFile">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -46,6 +50,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // A file keeps its thread from being deleted.
+  if (seededFileIds.length > 0) {
+    await testDb.delete(userFiles).where(inArray(userFiles.id, seededFileIds));
+  }
   if (seededThreadIds.length > 0) {
     // Cascade removes the seeded messages; the fixture DB is shared.
     await testDb
@@ -206,5 +214,65 @@ describe("loadChatMessagePage keyset pagination", () => {
     expect(idsAscending).toEqual(expectedAscendingIds(messages));
     expect(pageSizes).toEqual([50, 20]);
     expect(new Set(idsAscending).size).toBe(70);
+  });
+});
+
+describe("loadClientMessages", () => {
+  test("serves each message exactly as the thread's page does", async () => {
+    const base = Date.parse("2026-05-01T00:00:00.000Z");
+    const { threadId, messages } = await seedThread([
+      new Date(base),
+      new Date(base + 1),
+    ]);
+    const fileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+    await testDb.insert(userFiles).values({
+      fileName: "scan.png",
+      id: fileId,
+      mimeType: "image/png",
+      placeholder: "data:image/png;base64,AAAA",
+      s3Key: testFileKey(`chat/${ids.userA1}/${fileId}`),
+      sha256Hex: "b".repeat(64),
+      sizeBytes: 4,
+      threadId,
+      userId: ids.userA1,
+    });
+    seededFileIds.push(fileId);
+    const withAttachment = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    await testDb.insert(chatMessages).values({
+      content: {
+        data: [
+          {
+            source: {
+              mimeType: "image/png",
+              type: "url",
+              value: toUserFileUrl(fileId),
+            },
+            type: "image",
+          },
+        ],
+        version: 1,
+      },
+      createdAt: new Date(base + 2),
+      id: withAttachment,
+      role: "user",
+      threadId,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    });
+    const page = await loadPage(threadId);
+    // The fixture must reach the fault: the page fills the attachment's
+    // placeholder from the file it references.
+    expect(JSON.stringify(page.messages.at(-1))).toContain(
+      "data:image/png;base64,AAAA",
+    );
+
+    const served = await loadClientMessages({
+      messageIds: [withAttachment, ...messages.map(({ id }) => id)],
+      safeDb,
+      threadId,
+      userId: ids.userA1,
+    });
+
+    expect(served).toEqual(Result.ok(page.messages));
   });
 });

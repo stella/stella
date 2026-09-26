@@ -55,7 +55,10 @@ import {
 import { templateForTokens } from "@stll/business-registries/format-clauses";
 import { validateTaxId } from "@stll/business-registries/gcis";
 import { validateKrsNumber } from "@stll/business-registries/krs";
-import { validateIco as validateOrsrIco } from "@stll/business-registries/orsr";
+import {
+  type OrsrCompany,
+  validateIco as validateOrsrIco,
+} from "@stll/business-registries/orsr";
 import {
   formatOrsrCourtFile,
   formatOrsrInsert,
@@ -80,6 +83,7 @@ import {
   SIREN_SPACED_TOKEN,
   SIRET_SPACED_TOKEN,
 } from "@stll/business-registries/recherche-entreprises/identifier-format";
+import { isIcoShape as isRpoIcoShape } from "@stll/business-registries/rpo";
 import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
@@ -133,6 +137,7 @@ const LOOKUP_VALUE_VALIDATORS: Record<
   orsr: validateOrsrIco,
   prh: validateBusinessId,
   "recherche-entreprises": hasRechercheEntreprisesShape,
+  rpo: isRpoIcoShape,
   vies: validateVatFormat,
 };
 
@@ -282,6 +287,20 @@ const renderGcisLookupHit = (hit: BusinessRegistryHit): string => {
     .join("，");
 };
 
+// Mirrors the RPO built-in format; a legal form or seat the record lacks
+// drops its clause instead of leaving an empty label.
+const renderRpoLookupHit = (hit: BusinessRegistryHit): string => {
+  const address = addressText(hit);
+  return [
+    `**${hit.name}**`,
+    hit.legalForm,
+    address === null ? null : `sídlo: ${address}`,
+    `IČO: ${hit.id}`,
+  ]
+    .filter((part) => part !== null && part !== "")
+    .join(", ");
+};
+
 const renderViesLookupHit = (hit: BusinessRegistryHit): string =>
   renderLabelledParts(hit.name, [`VAT number ${hit.id}`, addressText(hit)]);
 
@@ -326,6 +345,8 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
       return renderEdgarLookupHit(hit);
     case "gcis":
       return renderGcisLookupHit(hit);
+    case "rpo":
+      return renderRpoLookupHit(hit);
     case "vies":
       return renderViesLookupHit(hit);
     default: {
@@ -346,6 +367,30 @@ const formatAresDate = (value: string): string => {
   return date === null
     ? value
     : date.toLocaleDateString("cs-CZ", { dateStyle: "medium" });
+};
+
+const orsrDetailTokens = (
+  company: OrsrCompany,
+): Record<string, string | null> => {
+  const { courtFile } = company;
+  return {
+    "share capital": company.shareCapital,
+    "share capital paid": company.shareCapitalPaid,
+    // Slovak citation order: the court letter belongs to the insert number
+    // ("Sro 3586/B"), not in front of the reference.
+    "court file": courtFile ? formatOrsrCourtFile(courtFile) : null,
+    [ORSR_SECTION_TOKEN]: courtFile?.section ?? null,
+    [ORSR_INSERT_TOKEN]: courtFile ? formatOrsrInsert(courtFile) : null,
+    // The extract endpoint supplies the full court name; a file reference
+    // parsed from a leaner payload carries only the insert letter. Both
+    // resolve against the same table, so try the name first and fall back.
+    [ORSR_COURT_GENITIVE_TOKEN]: courtFile
+      ? (getOrsrCourtNameGenitive(courtFile.courtName ?? courtFile.court) ??
+        getOrsrCourtNameGenitive(courtFile.court))
+      : null,
+    "registered on": company.establishedAt,
+    "acting clause": company.actingClause,
+  };
 };
 
 /** The [token] names the config UI offers, mapped onto hit fields. The
@@ -429,28 +474,7 @@ const lookupTemplateTokens = (
       break;
     }
     case "orsr": {
-      const { company } = details;
-      tokens["share capital"] = company.shareCapital;
-      tokens["share capital paid"] = company.shareCapitalPaid;
-      // Slovak citation order: the court letter belongs to the insert number
-      // ("Sro 3586/B"), not in front of the reference.
-      tokens["court file"] = company.courtFile
-        ? formatOrsrCourtFile(company.courtFile)
-        : null;
-      tokens[ORSR_SECTION_TOKEN] = company.courtFile?.section ?? null;
-      tokens[ORSR_INSERT_TOKEN] = company.courtFile
-        ? formatOrsrInsert(company.courtFile)
-        : null;
-      // The extract endpoint supplies the full court name; a file reference
-      // parsed from a leaner payload carries only the insert letter. Both
-      // resolve against the same table, so try the name first and fall back.
-      tokens[ORSR_COURT_GENITIVE_TOKEN] = company.courtFile
-        ? (getOrsrCourtNameGenitive(
-            company.courtFile.courtName ?? company.courtFile.court,
-          ) ?? getOrsrCourtNameGenitive(company.courtFile.court))
-        : null;
-      tokens["registered on"] = company.establishedAt;
-      tokens["acting clause"] = company.actingClause;
+      Object.assign(tokens, orsrDetailTokens(details.company));
       break;
     }
     case "krs": {
@@ -523,6 +547,10 @@ const lookupTemplateTokens = (
       tokens["registry number"] = company.taxId;
       tokens["registering authority"] = company.registerOrganization;
       tokens["registered on"] = company.setupDate;
+      break;
+    }
+    case "rpo": {
+      tokens["registered on"] = details.entity.establishedAt;
       break;
     }
     case "vies": {

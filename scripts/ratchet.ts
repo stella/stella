@@ -422,6 +422,7 @@ const PAINT_TRANSITION_PROPERTIES = [
   "fill",
   "filter",
   "outline",
+  "outline-color",
   "stroke",
   "text-decoration-color",
 ] as const;
@@ -556,6 +557,110 @@ const countLegacyPaintScriptTransitions = (
   return total;
 };
 
+// An .astro file mixes TypeScript (frontmatter and <script> blocks), CSS
+// (<style> blocks and style attributes) and template attributes that carry
+// Tailwind class lists (`class`, `class:list`, `contentClass`, ...).
+const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/u;
+// A <script> or <style> element; an end tag may carry whitespace or
+// attributes, as browsers accept.
+const ASTRO_RAW_TEXT_ELEMENT =
+  /<(script|style)\b[^>]*>([\s\S]*?)<\/\1\b[^>]*>/giu;
+const ASTRO_STYLE_ELEMENT = "style";
+const ASTRO_CLASS_LIST_DIRECTIVE = "class:list";
+const ASTRO_STYLE_ATTRIBUTE = "style";
+
+// The value after `name=`: a quoted string, or a brace-balanced expression
+// (returned with its braces).
+const readAstroAttributeValue = (template: string, start: number): string => {
+  const opener = template.charAt(start);
+  if (opener === '"' || opener === "'") {
+    const end = template.indexOf(opener, start + 1);
+    return template.slice(start + 1, end === -1 ? template.length : end);
+  }
+  let depth = 0;
+  for (let index = start; index < template.length; index += 1) {
+    const char = template.charAt(index);
+    if (char === "{") {
+      depth += 1;
+    }
+    if (char === "}") {
+      depth -= 1;
+    }
+    if (depth === 0) {
+      return template.slice(start, index + 1);
+    }
+  }
+  return template.slice(start);
+};
+
+const countLegacyPaintAstroAttributes = (
+  template: string,
+  file: string,
+): number => {
+  const attribute = /(?<![\w:.-])([A-Za-z][\w-]*(?::list)?)\s*=\s*(?=["'{])/gu;
+  let total = 0;
+  for (
+    let match = attribute.exec(template);
+    match !== null;
+    match = attribute.exec(template)
+  ) {
+    const name = match.at(1) ?? "";
+    const value = readAstroAttributeValue(
+      template,
+      match.index + match[0].length,
+    );
+    if (name === ASTRO_STYLE_ATTRIBUTE) {
+      total += countLegacyPaintCssTransitions(value);
+      continue;
+    }
+    if (name !== ASTRO_CLASS_LIST_DIRECTIVE && !CLASS_LIST_NAME.test(name)) {
+      continue;
+    }
+    // An expression goes through the TypeScript counter as a class binding's
+    // value, so only its class-valued branches count.
+    total += value.startsWith("{")
+      ? countLegacyPaintScriptTransitions(
+          `const astroClass = (${value.slice(1, -1)});`,
+          `${file}.ts`,
+        )
+      : countLegacyPaintTransitionTokens(value, "class-list");
+  }
+  return total;
+};
+
+const countLegacyPaintAstroTransitions = (
+  content: string,
+  file: string,
+): number => {
+  const frontmatter = ASTRO_FRONTMATTER.exec(content);
+  const body =
+    frontmatter === null ? content : content.slice(frontmatter[0].length);
+  let total =
+    frontmatter === null
+      ? 0
+      : countLegacyPaintScriptTransitions(
+          frontmatter.at(1) ?? "",
+          `${file}.ts`,
+        );
+  // Each element's text goes to its own counter; the template is what lies
+  // between them, so its attributes are scanned without the element bodies.
+  const templateParts: string[] = [];
+  let templateStart = 0;
+  for (const match of body.matchAll(ASTRO_RAW_TEXT_ELEMENT)) {
+    const text = match.at(2) ?? "";
+    total +=
+      match.at(1)?.toLowerCase() === ASTRO_STYLE_ELEMENT
+        ? countLegacyPaintCssTransitions(text)
+        : countLegacyPaintScriptTransitions(text, `${file}.ts`);
+    templateParts.push(body.slice(templateStart, match.index));
+    templateStart = match.index + match[0].length;
+  }
+  templateParts.push(body.slice(templateStart));
+  return (
+    total + countLegacyPaintAstroAttributes(templateParts.join("\n"), file)
+  );
+};
+
 type PaintTransitionAllowance = { utility: string; reason: string };
 
 // Paint transitions kept on purpose, one reasoned entry per file. Each
@@ -580,9 +685,15 @@ const LEGACY_PAINT_TRANSITION_ALLOWANCES: ReadonlyMap<
 // counter freezes the older paint-property Tailwind utilities per file so
 // their remaining call sites can only shrink.
 const countLegacyPaintTransitions: FileCounter = (content, file) => {
-  const total = file.endsWith(".css")
-    ? countLegacyPaintCssTransitions(content)
-    : countLegacyPaintScriptTransitions(content, file);
+  const total = (() => {
+    if (file.endsWith(".css")) {
+      return countLegacyPaintCssTransitions(content);
+    }
+    if (file.endsWith(".astro")) {
+      return countLegacyPaintAstroTransitions(content, file);
+    }
+    return countLegacyPaintScriptTransitions(content, file);
+  })();
   const allowance = LEGACY_PAINT_TRANSITION_ALLOWANCES.get(file);
   if (allowance === undefined) {
     return total;
@@ -2643,9 +2754,10 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "legacy-paint-transitions",
     description:
-      "legacy Tailwind utilities and CSS declarations that transition paint properties instead of transform/opacity; existing per-file debt may only shrink",
+      "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
     include: [
       "apps/*/src/**/*.css",
+      "apps/*/src/**/*.astro",
       "apps/desktop/src/**/*.{ts,tsx}",
       "apps/landing/src/**/*.{ts,tsx}",
       "apps/web/src/**/*.{ts,tsx}",
@@ -3586,11 +3698,39 @@ const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
 }
 .custom { transition: --theme-color 200ms; }
 .shorthands { transition: background 120ms, border 120ms; }
+.focus { transition: outline-color 200ms; }
 .compositable { transition: opacity 100ms, transform 100ms; }
 .timing-variable { transition: opacity 100ms var(--motion-duration); }
 .disabled { transition: none; }
 `;
-const EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS = 4;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS = 5;
+
+const LEGACY_PAINT_TRANSITION_ASTRO_FIXTURE_LINES = [
+  "---",
+  'const ROW_CLASS = "rounded transition-colors";',
+  'const step = { kind: "transition" };',
+  "---",
+  '<a class="px-2 transition-colors" data-kind="transition">Row</a>',
+  '<div class:list={["rounded", { "transition-shadow": active }]} />',
+  '<div class:list={[state === "transition" && "opacity-0"]} />',
+  '<Popover contentClass="px-2 transition" />',
+  '<span class="transition-opacity" style="transition: color 150ms"></span>',
+  "<p>Theme transition: the background fades.</p>",
+  "<style>",
+  "  .row { transition: background-color 150ms; }",
+  "  .fade { transition: opacity 150ms, transform 150ms; }",
+  "</style>",
+  "<script>",
+  '  button.className = "transition-colors";',
+  "</script>",
+];
+const SELF_TEST_LEGACY_PAINT_TRANSITIONS_ASTRO = `${LEGACY_PAINT_TRANSITION_ASTRO_FIXTURE_LINES.join("\n")}\n`;
+// Expected: ROW_CLASS, the class attribute, the class:list object key, the
+// bare utility in contentClass, the style attribute, the .row block and the
+// script's className. The discriminator, the data attribute, the comparison
+// operand in class:list, the opacity utility, the prose and the .fade block
+// are not counted.
+const EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO = 7;
 
 const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   // Counted: the shape that stalled the ingestion worker — the leading
@@ -4903,6 +5043,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/landing/src/legacy-paint-transitions.astro",
+      SELF_TEST_LEGACY_PAINT_TRANSITIONS_ASTRO,
+    );
+    writeFixture(
+      root,
       "apps/web/dist/generated.css",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS,
     );
@@ -5338,7 +5483,8 @@ const runSelfTest = (): number => {
       [
         "legacy-paint-transitions",
         EXPECTED_LEGACY_PAINT_TRANSITIONS +
-          EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS,
+          EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS +
+          EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],

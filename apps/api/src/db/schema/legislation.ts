@@ -5,6 +5,7 @@ import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
 import {
   caseLawIngestionOnlyPolicies,
+  corpusSampleReaderPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -106,6 +107,7 @@ export const legislationSources = p.pgTable(
     p.uniqueIndex("legislation_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+    ...corpusSampleReaderPolicies(),
   ],
 );
 
@@ -292,6 +294,7 @@ export const legislationDocuments = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+    ...corpusSampleReaderPolicies(),
   ],
 );
 

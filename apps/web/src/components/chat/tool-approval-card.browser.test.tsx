@@ -35,7 +35,7 @@ const renderCard = (part: unknown) => {
             handleDeny: noop,
           }}
         >
-          <ToolApprovalCard isTurnActive={false} part={part} />
+          <ToolApprovalCard isAwaitingUser isTurnActive={false} part={part} />
         </ChatApprovalContext>
       </IntlProvider>
     </QueryClientProvider>,

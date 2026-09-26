@@ -98,7 +98,7 @@ describe("the live view's cards", () => {
     expect(cardsOf(web, assistant(unknownTool))).toEqual([]);
   });
 
-  test("offer the ask-user form once its input has streamed and until it is answered", async () => {
+  test("offer the ask-user form while the answer waits on it", async () => {
     const web = await loadWebChat();
     const offered = STATES.filter(
       (state) =>
@@ -121,11 +121,53 @@ describe("the live view's cards", () => {
       state: "input-complete",
     });
 
-    expect(offered).toEqual(
-      STATES.filter(
-        (state) => state !== "complete" && state !== "input-streaming",
-      ),
-    );
+    // A lone part in any other state leaves the answer waiting on nothing,
+    // so the web card shows no form (`isAwaitingUser`).
+    expect(offered).toEqual(["approval-requested", "input-complete"]);
     expect(cardsOf(web, assistant(withoutInput))).toEqual([]);
+  });
+
+  test("offer no card on an answer a later message superseded", async () => {
+    const web = await loadWebChat();
+    const waiting = [
+      ...assistant(
+        toolCall({
+          approval: true,
+          input: { name: "NDA" },
+          name: APPROVAL_TOOL_NAME,
+          state: "approval-requested",
+        }),
+      ),
+      {
+        id: "message-2",
+        parts: [
+          {
+            arguments: JSON.stringify({ questions: [] }),
+            id: "call-2",
+            input: { questions: [] },
+            name: ASK_USER_TOOL_NAME,
+            state: "input-complete",
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
+    ] satisfies UIMessage[];
+    const superseded = [
+      ...waiting,
+      {
+        id: "message-3",
+        parts: [{ content: "Use the buyer's form", type: "text" }],
+        role: "user",
+      },
+    ] satisfies UIMessage[];
+
+    // The fixture must reach the fault: before the new message, the latest
+    // answer's card is on screen and the earlier one's is not.
+    expect(cardsOf(web, waiting).map(({ toolCallId }) => toolCallId)).toEqual([
+      "call-2",
+    ]);
+    expect(web.getAwaitedAssistantMessageId(superseded)).toBeNull();
+    expect(cardsOf(web, superseded)).toEqual([]);
   });
 });

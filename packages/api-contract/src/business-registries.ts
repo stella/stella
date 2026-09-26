@@ -9,6 +9,7 @@ export const BUSINESS_REGISTRY_SLUGS = [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "rpo",
   "vies",
 ] as const;
 
@@ -25,6 +26,7 @@ export const BUSINESS_REGISTRY_CONFIGURATION = {
   orsr: "none",
   prh: "none",
   "recherche-entreprises": "none",
+  rpo: "none",
   vies: "none",
 } as const satisfies Record<
   BusinessRegistrySlug,

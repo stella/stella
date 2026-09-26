@@ -20,6 +20,7 @@ export * as krs from "./krs/index.js";
 export * as orsr from "./orsr/index.js";
 export * as prh from "./prh/index.js";
 export * as rechercheEntreprises from "./recherche-entreprises/index.js";
+export * as rpo from "./rpo/index.js";
 export * as shared from "./shared/index.js";
 export * as sudreg from "./sudreg/index.js";
 export * as vies from "./vies/index.js";

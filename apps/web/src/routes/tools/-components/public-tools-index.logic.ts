@@ -37,6 +37,7 @@ const TASK_SLUGS = {
     "orsr",
     "prh",
     "recherche-entreprises",
+    "rpo",
     "vies",
   ],
 } as const satisfies Record<PublicToolTask, readonly string[]>;

@@ -52,9 +52,33 @@ const createAskUserPart = (
 };
 
 describe("ask-user clarification card", () => {
+  // A user who types instead of answering supersedes the turn. The server
+  // stores the call as an error without its questions when it accepts that
+  // message; until that lands, the live card shows the same heading-only
+  // block and no form, so nothing invites an answer nobody accepts.
+  test("shows only its heading once a later message withdrew it", () => {
+    const html = renderWithIntl(
+      <AskUserCard
+        isAwaitingUser={false}
+        onSubmit={() => {}}
+        part={createAskUserPart([
+          {
+            question: "Which jurisdiction should I use?",
+            reason: "The answer changes the legal analysis.",
+          },
+        ])}
+      />,
+    );
+
+    expect(html).toContain("Asking for clarification");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("Which jurisdiction should I use?");
+  });
+
   test("renders free-text prompts as a submit form", () => {
     const html = renderWithIntl(
       <AskUserCard
+        isAwaitingUser
         onSubmit={() => {}}
         part={createAskUserPart([
           {
@@ -74,6 +98,7 @@ describe("ask-user clarification card", () => {
   test("keeps option chips out of form submission semantics", () => {
     const html = renderWithIntl(
       <AskUserCard
+        isAwaitingUser
         onSubmit={() => {}}
         part={createAskUserPart([
           {

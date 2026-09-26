@@ -225,7 +225,11 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
           workspaceId: null,
         },
       ]);
-      expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(true);
+      expect(
+        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+      ).toMatchObject({
+        type: "accepted",
+      });
     }),
   );
   const execution = unwrap(

@@ -207,7 +207,7 @@ are omitted here.
 - `stella contact list`
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
-  - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, vies)
+  - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
   - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
