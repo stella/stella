@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   correspondenceKeys,
+  correspondenceAddressState,
   uniqueCorrespondenceAddresses,
 } from "./correspondence";
 
@@ -41,4 +42,37 @@ test("recipient labels keep the first entry for each email address", () => {
     { address: "Office@example.test", name: "Office" },
     { address: "client@example.test", name: null },
   ]);
+});
+
+describe("matter email address setup", () => {
+  test("an unconfigured domain remains distinct from an address waiting to be created", () => {
+    const unconfigured = {
+      address: null,
+      setupHint: "Inbound mail domain is not configured",
+    } satisfies Parameters<typeof correspondenceAddressState>[0];
+    const readyToCreate = {
+      address: null,
+      setupHint: null,
+    } satisfies Parameters<typeof correspondenceAddressState>[0];
+
+    expect(unconfigured.address).toBe(readyToCreate.address);
+    expect(correspondenceAddressState(unconfigured)).toEqual({
+      status: "unconfigured",
+    });
+    expect(correspondenceAddressState(readyToCreate)).toEqual({
+      status: "configured",
+      address: null,
+    });
+  });
+
+  test("a configured active address remains available for copying and rotation", () => {
+    const active = {
+      address: "matter-token@mail.example",
+      setupHint: null,
+    } satisfies Parameters<typeof correspondenceAddressState>[0];
+    expect(correspondenceAddressState(active)).toEqual({
+      status: "configured",
+      address: active.address,
+    });
+  });
 });
