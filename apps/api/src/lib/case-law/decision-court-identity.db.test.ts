@@ -17,7 +17,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260926110000_case_law_decision_court_id/migration.sql",
+  "../../../drizzle/20260926120400_case_law_decision_court_id/migration.sql",
 );
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;

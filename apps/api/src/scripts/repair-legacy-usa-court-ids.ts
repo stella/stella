@@ -1,7 +1,7 @@
 /**
  * Give USA decisions stored before court ids existed the id of the court they
  * name, where that court is a trusted identity, before migration
- * 20260926110000_case_law_decision_court_id is applied.
+ * 20260926120400_case_law_decision_court_id is applied.
  *
  * The migration enables a CHECK that every USA row carries a court id, and
  * refuses to run while one does not: the CHECK is enforced on every later
