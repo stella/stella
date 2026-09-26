@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
+    "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "suggestTitle": "Cím javaslata",

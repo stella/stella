@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -156,6 +157,130 @@ const findUnsettledToolCalls = async ({
   });
 };
 
+/** A settled turn whose answer stores a different outcome. */
+type TurnOutcomeMismatch = {
+  messageId: SafeId<"chatMessage">;
+  stored: ChatTurnOutcome | null;
+  turn: {
+    id: SafeId<"chatTurn">;
+    reason: string | null;
+    status: ChatTurnStatus;
+  };
+};
+
+/** The outcome a settled turn row records, as its message would store it;
+ *  null while the turn still writes its message. */
+const rowOutcome = (turn: {
+  cancellationReason: string | null;
+  interruptionReason: string | null;
+  status: ChatTurnStatus;
+}): { reason: string | null; type: ChatTurnOutcome["type"] } | null => {
+  switch (turn.status) {
+    case "accepted":
+    case "running":
+      return null;
+    case "awaiting-user":
+    case "completed":
+    case "failed":
+      return { reason: null, type: turn.status };
+    case "cancelled":
+      return { reason: turn.cancellationReason, type: turn.status };
+    case "interrupted":
+      return { reason: turn.interruptionReason, type: turn.status };
+    default:
+      turn.status satisfies never;
+      return panic(`Unhandled status: ${String(turn.status)}`);
+  }
+};
+
+const storedReason = (outcome: ChatTurnOutcome): string | null =>
+  outcome.type === "cancelled" || outcome.type === "interrupted"
+    ? outcome.reason
+    : null;
+
+/**
+ * Persisted-thread invariant: the turn row and the message it settled say the
+ * same thing. Every writer that ends a turn writes both, so a mismatch is the
+ * two records drifting. A turn's answer is the message its row names or,
+ * once it ended without one (cancelled or interrupted rows name none), the
+ * assistant message that follows its user message. Only the latest turn of a
+ * user message is held to it: an earlier one's answer was replaced. A turn
+ * that stored no answer has nothing to disagree with. Returns the
+ * violations; a sound thread returns [].
+ */
+export const findTurnOutcomeMismatches = async ({
+  db,
+  threadId,
+}: {
+  db: TestDatabase;
+  threadId: SafeId<"chatThread">;
+}): Promise<TurnOutcomeMismatch[]> => {
+  const [rows, turns] = await Promise.all([
+    db
+      .select({
+        content: chatMessages.content,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
+    db
+      .select({
+        assistantMessageId: chatTurns.assistantMessageId,
+        cancellationReason: chatTurns.cancellationReason,
+        id: chatTurns.id,
+        interruptionReason: chatTurns.interruptionReason,
+        status: chatTurns.status,
+        userMessageId: chatTurns.userMessageId,
+      })
+      .from(chatTurns)
+      .where(eq(chatTurns.threadId, threadId))
+      .orderBy(asc(chatTurns.createdAt), asc(chatTurns.id)),
+  ]);
+  const latestTurnByUserMessage = new Map(
+    turns.map((turn) => [turn.userMessageId, turn]),
+  );
+  const answerByUserMessage = new Map<string, (typeof rows)[number]>();
+  let lastUserMessageId: string | null = null;
+  for (const row of rows) {
+    if (row.role === "user") {
+      lastUserMessageId = row.id;
+    } else if (
+      row.role === "assistant" &&
+      lastUserMessageId !== null &&
+      !answerByUserMessage.has(lastUserMessageId)
+    ) {
+      answerByUserMessage.set(lastUserMessageId, row);
+    }
+  }
+  return [...latestTurnByUserMessage.values()].flatMap((turn) => {
+    const expected = rowOutcome(turn);
+    const answer =
+      turn.assistantMessageId === null
+        ? answerByUserMessage.get(turn.userMessageId)
+        : rows.find(({ id }) => id === turn.assistantMessageId);
+    if (expected === null || answer === undefined) {
+      return [];
+    }
+    const stored = chatMessageFromPersisted(answer).metadata?.turnOutcome;
+    if (
+      stored !== undefined &&
+      stored.type === expected.type &&
+      storedReason(stored) === expected.reason
+    ) {
+      return [];
+    }
+    return [
+      {
+        messageId: answer.id,
+        stored: stored ?? null,
+        turn: { id: turn.id, reason: expected.reason, status: turn.status },
+      },
+    ];
+  });
+};
+
 /** An interaction the stored thread offers: a tool call the client answers,
  *  on a message an `awaiting-user` turn owns. */
 export type OfferedInteraction = {
@@ -228,9 +353,18 @@ export const findThreadInvariantViolations = async ({
   db: TestDatabase;
   threadId: SafeId<"chatThread">;
 }) => {
-  const [unownedPendingInteractions, unsettledToolCalls] = await Promise.all([
+  const [
+    unownedPendingInteractions,
+    unsettledToolCalls,
+    turnOutcomeMismatches,
+  ] = await Promise.all([
     findUnownedPendingInteractions({ db, threadId }),
     findUnsettledToolCalls({ db, threadId }),
+    findTurnOutcomeMismatches({ db, threadId }),
   ]);
-  return { unownedPendingInteractions, unsettledToolCalls };
+  return {
+    turnOutcomeMismatches,
+    unownedPendingInteractions,
+    unsettledToolCalls,
+  };
 };

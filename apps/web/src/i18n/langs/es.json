@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",
+    "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "suggestTitle": "Sugerir un título",

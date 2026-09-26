@@ -1,6 +1,7 @@
 import {
   EventType,
   maxIterations,
+  RUN_CANCEL_REASON,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
 import type {
@@ -27,6 +28,7 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -53,6 +55,10 @@ import {
   CHAT_RUN_MODE,
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
+import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
+import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import { registerChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
+import { KEEPS_PARTIAL_TOOL_INPUT } from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -215,6 +221,8 @@ type StreamChatProps = {
   devModelId?: string | undefined;
   /** Explicit effort for a validated manual model selection. */
   reasoningEffort?: ReasoningEffort | undefined;
+  /** The claimed execution this run produces for; a stop aborts it. */
+  execution: ChatTurnExecution;
   latestMessageId: string;
   runId: string;
   parentRunId?: string | undefined;
@@ -336,6 +344,7 @@ export const prepareResumeForThirdParty = async ({
 export const streamChat = async ({
   abortSignal,
   devModelId,
+  execution,
   latestMessageId,
   runId,
   parentRunId,
@@ -502,6 +511,11 @@ export const streamChat = async ({
       ? null
       : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
+  const producer = registerChatTurnProducer({
+    abortController,
+    execution,
+    safeDb,
+  });
   const restorationPairs: ChatAnonRestoration[] = [];
 
   const stream = runChatAttempts({
@@ -555,7 +569,13 @@ export const streamChat = async ({
     deadlineSignal: abortSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
-    onFinish,
+    onFinish: async (event) => {
+      try {
+        await onFinish(event);
+      } finally {
+        producer.settled();
+      }
+    },
     owningAssistantMessageId,
     restorationPairs,
     source: persistenceVisibleStream,
@@ -571,7 +591,10 @@ export const streamChat = async ({
   });
 
   return withSseHeartbeat(
-    toServerSentEventsResponse(output, { abortController }),
+    toServerSentEventsResponse(output, {
+      abortController,
+      headers: { [CHAT_TURN_ID_HEADER]: execution.id },
+    }),
   );
 };
 
@@ -1415,21 +1438,33 @@ type ProcessServerChatStreamProps = {
   source: AsyncIterable<PublicStreamChunk>;
 };
 
-type ChatInterruptionReason = Extract<
+type ChatCutShortOutcome = Extract<
   ChatTurnOutcome,
-  { type: "interrupted" }
->["reason"];
+  { type: "cancelled" | "interrupted" }
+>;
 
 /**
- * Which of the two aborts cut this run. Both reach the run's signal, so the
- * deadline is what has to be asked: it fires on its own timer and nothing
- * else touches it, while a response-stream cancel aborts only the controller
- * derived from it.
+ * Which abort cut this run. A stop aborts the run's controller with
+ * upstream's explicit-cancel reason. The deadline fires on its own timer and
+ * reaches the controller through the signal it derives from, so the deadline
+ * itself has to be asked. Any other abort is the response stream's cancel,
+ * which is how a dropped connection arrives.
  */
-const chatInterruptionReason = (
-  deadlineSignal: AbortSignal,
-): ChatInterruptionReason =>
-  deadlineSignal.aborted ? "timeout" : "client-disconnected";
+const chatCutShortOutcome = ({
+  abortSignal,
+  deadlineSignal,
+}: {
+  abortSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+}): ChatCutShortOutcome => {
+  if (abortSignal.reason === RUN_CANCEL_REASON) {
+    return USER_STOP_OUTCOME;
+  }
+  return {
+    type: "interrupted",
+    reason: deadlineSignal.aborted ? "timeout" : "client-disconnected",
+  };
+};
 
 type RunErrorChunk = Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>;
 
@@ -1601,7 +1636,10 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "settled") {
       return;
     }
-    if (outcome.type === "interrupted" && flushPendingSource !== undefined) {
+    if (
+      KEEPS_PARTIAL_TOOL_INPUT[outcome.type] &&
+      flushPendingSource !== undefined
+    ) {
       for (const chunk of flushPendingSource()) {
         trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
         processor.processChunk(chunk);
@@ -1624,13 +1662,12 @@ export const processServerChatStream = async function* ({
         "Persistence processor dropped an assistant turn that carried a complete tool call",
       );
     }
-    const responseMessage =
-      outcome.type === "interrupted"
-        ? restoreInterruptedToolCallInputs(
-            getResponseMessage(),
-            rawArgumentsByIncompleteToolCallId,
-          )
-        : getResponseMessage();
+    const responseMessage = KEEPS_PARTIAL_TOOL_INPUT[outcome.type]
+      ? restoreInterruptedToolCallInputs(
+          getResponseMessage(),
+          rawArgumentsByIncompleteToolCallId,
+        )
+      : getResponseMessage();
     const terminalResponseMessage = createTerminalResponseMessage({
       mapMessageId,
       outcome,
@@ -1803,17 +1840,14 @@ export const processServerChatStream = async function* ({
       // source that simply ended. Grading that silence as a completion
       // persists a turn with no answer and no reason; the signal is what says
       // the turn was cut, and which signal says why.
-      outcome = {
-        type: "interrupted",
-        reason: chatInterruptionReason(deadlineSignal),
-      };
+      outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
     } else {
       outcome = { type: "completed" };
     }
     await terminalize({
-      // An interrupted outcome flushes the pending source into the processor,
+      // A cut-short outcome flushes the pending source into the processor,
       // which has to be finalized again for that content to reach the message.
-      flushProcessor: outcome.type === "interrupted",
+      flushProcessor: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {
@@ -1828,10 +1862,7 @@ export const processServerChatStream = async function* ({
       captureError(error, { kind });
       await terminalize({
         flushProcessor: true,
-        outcome: {
-          type: "interrupted",
-          reason: chatInterruptionReason(deadlineSignal),
-        },
+        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
       });
     } else {
       reportStreamFailure(error, kind);
@@ -1853,7 +1884,7 @@ export const processServerChatStream = async function* ({
     // to the provider request, so the model call is cancelled with the socket;
     // tanstack breaks its `for await`, and that `.return()`s this generator
     // mid-stream, so neither the natural-completion finish nor the `catch` ran.
-    // Persist whatever content accumulated before the abort as an interrupted
+    // Persist whatever content accumulated before the abort as a cut-short
     // turn, so a partial answer is not silently lost on remount. Skipped when
     // the stream already finished or failed, and a no-op when nothing
     // accumulated (finalizeStream drops whitespace-only messages). Awaiting here
@@ -1862,7 +1893,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,
-        outcome: { type: "interrupted", reason: "client-disconnected" },
+        outcome: chatCutShortOutcome({ abortSignal, deadlineSignal }),
       });
     }
   }

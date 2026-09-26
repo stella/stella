@@ -1398,15 +1398,10 @@ const OPEN_GAPS = {
       await stopWhileStreaming("before-tool-end");
     },
   },
-  F5: {
-    condition: "StopRunningCall",
-    excludes: (command) => command instanceof StopRunningCall,
-    reproduce: stopARunningClientCall,
-  },
 } as const satisfies Record<string, OpenGap>;
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const OPEN_GAPS_SIZE = 2;
+const OPEN_GAPS_SIZE = 1;
 
 /** A step the page-action property takes unless an open finding excludes
  *  it. */
@@ -1996,10 +1991,18 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing.each(["after-tool-end", "before-tool-end"] as const)(
-    "stops an answer while it streams (%s)",
-    async (quietAt) => {
-      await stopWhileStreaming(quietAt);
+  test(
+    "stops an answer while it streams (after-tool-end)",
+    async () => {
+      await stopWhileStreaming("after-tool-end");
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.failing(
+    "stops an answer while it streams (before-tool-end)",
+    async () => {
+      await stopWhileStreaming("before-tool-end");
     },
     propertyTestTimeout(30_000),
   );
@@ -2010,7 +2013,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "stops a client call the page still runs",
     stopARunningClientCall,
     propertyTestTimeout(30_000),

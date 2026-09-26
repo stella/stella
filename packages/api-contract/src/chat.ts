@@ -25,6 +25,12 @@ export const CHAT_TURN_INTENT = {
   regenerate: "regenerate",
 } as const;
 
+/**
+ * Response header naming the server turn a chat request runs, so the page can
+ * stop that turn (`POST /chat/threads/:threadId/turns/:turnId/cancel`).
+ */
+export const CHAT_TURN_ID_HEADER = "x-stella-chat-turn-id";
+
 export const CHAT_RUN_MODE = { agent: "agent" } as const;
 export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
 

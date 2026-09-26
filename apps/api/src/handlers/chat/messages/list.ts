@@ -310,6 +310,7 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          activeTurnId: null,
           forkProvenance: { type: "none" } as const,
           messages: [],
           olderCursor: null,
@@ -385,6 +386,7 @@ const getMessages = createSafeRootHandler(
     });
 
     return Result.ok({
+      activeTurnId: page.activeTurnId,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,
         parent,

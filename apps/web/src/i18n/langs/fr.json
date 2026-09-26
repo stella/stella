@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
+    "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "suggestTitle": "Suggérer un titre",

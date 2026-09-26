@@ -88,22 +88,30 @@ export const deliveredInterrupts = (
   }));
 };
 
-/**
- * The message list a freshly loaded page holds: the thread's first page as
- * the messages endpoint serves it (`loadChatMessagePage`, with placeholders
- * and paging), carried over JSON, read back with dates the way the web app's
- * `deserializeChatMessages` does, and sanitized by the web app's own
- * `sanitizeRunningToolCalls(..., "hydrate")`.
- */
-export const loadReloadView = async ({
-  safeDb,
-  threadId,
-  userId,
-}: {
+/** What a freshly loaded page seeds its runtime with. */
+type ReloadPage = {
+  activeTurnId: SafeId<"chatTurn"> | null;
+  messages: UIMessage[];
+};
+
+type LoadReloadProps = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
-}): Promise<UIMessage[]> => {
+};
+
+/**
+ * What a freshly loaded page holds: the thread's first page as the messages
+ * endpoint serves it (`loadChatMessagePage`, with placeholders and paging),
+ * carried over JSON, read back with dates the way the web app's
+ * `deserializeChatMessages` does, and sanitized by the web app's own
+ * `sanitizeRunningToolCalls`, with the turn the page may stop.
+ */
+export const loadReloadPage = async ({
+  safeDb,
+  threadId,
+  userId,
+}: LoadReloadProps): Promise<ReloadPage> => {
   const page = await loadChatMessagePage({ safeDb, threadId, userId });
   if (Result.isError(page)) {
     return panic("The thread's message page failed to load", page.error);
@@ -125,5 +133,13 @@ export const loadReloadView = async ({
     ),
   );
   const web = await loadWebChat();
-  return web.sanitizeRunningToolCalls(deserialized, "hydrate");
+  return {
+    activeTurnId: page.value.activeTurnId,
+    messages: web.sanitizeRunningToolCalls(deserialized),
+  };
 };
+
+/** The message list a freshly loaded page holds (see `loadReloadPage`). */
+export const loadReloadView = async (
+  props: LoadReloadProps,
+): Promise<UIMessage[]> => (await loadReloadPage(props)).messages;

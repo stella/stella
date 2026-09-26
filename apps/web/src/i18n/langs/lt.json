@@ -1141,6 +1141,7 @@
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",
+    "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "suggestTitle": "Pasiūlyti pavadinimą",
