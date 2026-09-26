@@ -22,11 +22,13 @@
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 mod certificate;
+mod failure;
 mod identity;
 #[cfg(target_os = "macos")]
 mod macos;
 mod spki;
 
+pub use failure::SigningErrorCode;
 pub use identity::{SigningError, SigningIdentity, SigningKeyType};
 
 /// Every keychain identity (certificate plus private key) that can sign a

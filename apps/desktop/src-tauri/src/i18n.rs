@@ -75,6 +75,16 @@ fn parse_locale(json_str: &str) -> HashMap<String, String> {
   map
 }
 
+/// The shipped locales whose own file lacks `key` (English fallback aside).
+#[cfg(test)]
+pub(crate) fn locales_missing(key: &str) -> Vec<&'static str> {
+  LOCALES
+    .iter()
+    .filter(|(_, source)| !parse_locale(source).contains_key(key))
+    .map(|(locale, _)| *locale)
+    .collect()
+}
+
 fn locale_source(locale: &str) -> Option<(&'static str, &'static str)> {
   LOCALES
     .iter()

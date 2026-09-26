@@ -117,6 +117,14 @@
       .status[data-tone="success"] {
         color: #30d158;
       }
+      .status-detail {
+        color: #a1a1a6;
+        display: block;
+        font-size: 11px;
+        margin-top: 4px;
+        -webkit-user-select: text;
+        user-select: text;
+      }
       .actions {
         display: flex;
         gap: 10px;
@@ -271,10 +279,37 @@
       }
 
       const status = element("status");
-      const showStatus = (text, tone) => {
+      // `detail`, when given, is a code for support: shown small, beneath the
+      // sentence, never in place of it.
+      const showStatus = (text, tone, detail) => {
         status.textContent = text || "";
+        if (detail) {
+          const line = document.createElement("span");
+          line.className = "status-detail";
+          line.dir = "auto";
+          line.textContent = (strings.pdfSignErrorCode || "").replace(
+            "{code}",
+            detail,
+          );
+          status.append(line);
+        }
         status.dataset["tone"] = tone;
         status.hidden = false;
+      };
+
+      // Every failure arrives as a code and the catalogue key Rust chose for
+      // it; the wording is always the dialog's own, in the app's language. A
+      // code without wording of its own shows the generic sentence with the
+      // code beneath it.
+      const GENERIC_ERROR_KEY = "pdfSignErrors.generic";
+      const failureText = (result) => {
+        const key = result.messageKey || GENERIC_ERROR_KEY;
+        const text = strings[key] || strings[GENERIC_ERROR_KEY];
+        return {
+          detail:
+            key === GENERIC_ERROR_KEY || !strings[key] ? result.code : null,
+          text,
+        };
       };
 
       // Issuer and expiry tell apart certificates with the same holder, the
@@ -317,6 +352,11 @@
         element("signBtn").hidden = false;
       } else if (state === "noIdentities") {
         showStatus(strings.pdfSignNoIdentities, "error");
+      } else if (state === "keychainUnavailable") {
+        showStatus(
+          strings[params.get("stateMessage")] || strings[GENERIC_ERROR_KEY],
+          "error",
+        );
       } else {
         showStatus(strings.pdfSignUnsupported, "error");
       }
@@ -332,8 +372,8 @@
       // not open, and Rust is the side that knows when the session is
       // settled. A failure leaves the window up so the message can be read,
       // with the remaining button now closing it.
-      const offerToClose = (message) => {
-        showStatus(message, "error");
+      const offerToClose = (message, detail) => {
+        showStatus(message, "error", detail);
         setText("cancelBtn", strings.close);
         element("cancelBtn").disabled = false;
       };
@@ -341,13 +381,22 @@
       // After a failure the API kept the signature for, the primary button
       // finalizes again with it: the keychain is not asked a second time.
       let retrying = false;
-      const offerToRetry = (message) => {
+      let retryExpiry = null;
+      // The retry lasts only as long as the session: once Rust stops waiting
+      // for it, the dialog says the session ended and offers only to close.
+      const offerToRetry = (message, detail, retryWithinMs) => {
         retrying = true;
-        showStatus(message, "error");
+        showStatus(message, "error", detail);
         setText("signBtn", strings.pdfSignRetry);
         setText("cancelBtn", strings.cancel);
         element("signBtn").disabled = false;
         element("cancelBtn").disabled = false;
+        clearTimeout(retryExpiry);
+        retryExpiry = setTimeout(() => {
+          retrying = false;
+          element("signBtn").hidden = true;
+          offerToClose(strings["pdfSignErrors.sessionEnded"]);
+        }, retryWithinMs);
       };
 
       const renderOutcome = (result) => {
@@ -362,16 +411,18 @@
           return;
         }
         if (result && result.status === "failed") {
-          if (result.retryable) {
-            offerToRetry(result.message);
+          const { detail, text } = failureText(result);
+          if (typeof result.retryWithinMs === "number") {
+            offerToRetry(text, detail, result.retryWithinMs);
             return;
           }
           element("signBtn").hidden = true;
-          offerToClose(result.message);
+          offerToClose(text, detail);
         }
       };
 
       element("signBtn").addEventListener("click", () => {
+        clearTimeout(retryExpiry);
         element("signBtn").disabled = true;
         element("cancelBtn").disabled = true;
         element("picker").hidden = true;
@@ -380,7 +431,7 @@
           retrying
             ? { action: "retry" }
             : { action: "sign", identityId: element("identities").value },
-        ).then(renderOutcome, (error) => offerToClose(String(error)));
+        ).then(renderOutcome, () => offerToClose(strings[GENERIC_ERROR_KEY]));
       });
 
       element("cancelBtn").addEventListener("click", () => {
