@@ -12,7 +12,8 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const querySchema = t.Object({
+// A POST body keeps a person's name and birth date out of URLs and access logs.
+const bodySchema = t.Object({
   check: t.UnionEnum(ENTITY_CHECK_KINDS, {
     description: "Which official source to screen the subject against",
   }),
@@ -35,31 +36,31 @@ const querySchema = t.Object({
   ),
 });
 
-type CheckQuery = Static<typeof querySchema>;
+type CheckBody = Static<typeof bodySchema>;
 
 const missingSubjectFields = (fields: string) =>
   Result.err(
     new HandlerError({
       status: 400,
       code: "validation_error",
-      message: `The '${fields}' query parameters are required for this subject type`,
+      message: `The '${fields}' fields are required for this subject type`,
     }),
   );
 
-const subjectFromQuery = (
-  query: CheckQuery,
+const subjectFromBody = (
+  body: CheckBody,
 ): Result<EntityCheckSubject, HandlerError> => {
-  switch (query.subjectType) {
+  switch (body.subjectType) {
     case "company-id": {
-      return query.companyId === undefined
+      return body.companyId === undefined
         ? missingSubjectFields("companyId")
         : Result.ok({
             type: "company-id",
-            value: query.companyId,
+            value: body.companyId,
           } satisfies EntityCheckSubject);
     }
     case "person": {
-      const { firstName, lastName, birthDate } = query;
+      const { firstName, lastName, birthDate } = body;
       return firstName === undefined ||
         lastName === undefined ||
         birthDate === undefined
@@ -72,7 +73,7 @@ const subjectFromQuery = (
           } satisfies EntityCheckSubject);
     }
     default: {
-      query.subjectType satisfies never;
+      body.subjectType satisfies never;
       return panic("Unhandled subjectType");
     }
   }
@@ -89,13 +90,13 @@ const businessRegistriesCheck = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "check_counterparty" },
     access: "read",
-    query: querySchema,
+    body: bodySchema,
   },
-  async function* ({ query, request }) {
-    const subject = yield* subjectFromQuery(query);
+  async function* ({ body, request }) {
+    const subject = yield* subjectFromBody(body);
     const result = yield* Result.await(
       runEntityCheckShared({
-        check: query.check,
+        check: body.check,
         subject,
         signal: request.signal,
       }),

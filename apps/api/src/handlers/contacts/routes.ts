@@ -37,9 +37,9 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     permissions: businessRegistriesLookup.config.permissions,
     query: businessRegistriesLookup.config.query,
   })
-  .get("/business-registries/checks", businessRegistriesCheck.handler, {
+  .post("/business-registries/checks", businessRegistriesCheck.handler, {
+    body: businessRegistriesCheck.config.body,
     permissions: businessRegistriesCheck.config.permissions,
-    query: businessRegistriesCheck.config.query,
   })
   .get("/export", exportContacts.handler, {
     permissions: exportContacts.config.permissions,
