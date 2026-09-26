@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "Endereço de e-mail do caso",
-    "attachments": "Anexos",
     "authResults": {
       "fail": "Falhou",
-      "none": "Nenhuma",
       "pass": "Aprovada",
-      "unknown": "Desconhecida"
+      "unknown": "Não determinado"
     },
     "authentication": "Autenticação do e-mail",
     "backToList": "Voltar para correspondência",
-    "ccLabel": "Cc",
     "createAddress": "Criar endereço",
+    "dmarcLabel": "Verificação DMARC",
     "empty": "Ainda não há correspondência.",
     "filers": "Remetentes",
-    "fromLabel": "De",
     "markHandled": "Marcar como resolvido",
     "markNew": "Marcar como novo",
-    "message": "Mensagem",
     "noAddress": "Nenhum endereço de e-mail está ativo.",
-    "noSubject": "(Sem assunto)",
     "receivedAt": "Recebido",
     "revokeAddress": "Revogar endereço",
     "rotateAddress": "Trocar endereço",
-    "sentAt": "Enviado",
+    "sentAt": "Enviado em",
     "sharedMailboxFiler": "Caixa compartilhada {address}, aprovada por {approver}",
     "states": {
-      "handled": "Resolvido",
-      "new": "Novo"
+      "handled": "Resolvido"
     },
     "title": "Correspondência",
-    "toLabel": "Para",
     "unknownApprover": "Aprovador desconhecido"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Toda a atividade",
           "automation": "Automação",
-          "correspondence": "Correspondência",
           "court": "Tribunal",
           "documents": "Documentos",
           "matter": "Caso",

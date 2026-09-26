@@ -1928,36 +1928,29 @@ type Messages = {
   };
   "correspondence": {
     "addressTitle": "Matter email address";
-    "attachments": "Attachments";
     "authResults": {
       "fail": "Fail";
-      "none": "None";
       "pass": "Pass";
-      "unknown": "Unknown";
+      "unknown": "Not determined";
     };
     "authentication": "Email authentication";
     "backToList": "Back to correspondence";
-    "ccLabel": "Cc";
     "createAddress": "Create address";
+    "dmarcLabel": "DMARC check";
     "empty": "No correspondence yet.";
     "filers": "Filers";
-    "fromLabel": "From";
     "markHandled": "Mark handled";
     "markNew": "Mark new";
-    "message": "Message";
     "noAddress": "No email address is active.";
-    "noSubject": "(No subject)";
     "receivedAt": "Received";
     "revokeAddress": "Revoke address";
     "rotateAddress": "Rotate address";
-    "sentAt": "Sent";
+    "sentAt": "Sent on";
     "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
     "states": {
       "handled": "Handled";
-      "new": "New";
     };
     "title": "Correspondence";
-    "toLabel": "To";
     "unknownApprover": "Unknown approver";
   };
   "docxReview": {
@@ -5359,7 +5352,6 @@ type Messages = {
         "filters": {
           "all": "All activity";
           "automation": "Automation";
-          "correspondence": "Correspondence";
           "court": "Court records";
           "documents": "Documents and files";
           "matter": "Matter details";

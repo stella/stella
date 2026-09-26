@@ -16,11 +16,12 @@ const config = {
 const getMatterInboundAddress = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId }) {
-    if (env.INBOUND_MAIL_DOMAIN === undefined)
+    if (env.INBOUND_MAIL_DOMAIN === undefined) {
       return Result.ok({
         address: null,
         setupHint: "Inbound mail domain is not configured",
       });
+    }
     const [row] = yield* Result.await(
       safeDb(
         async (tx) =>

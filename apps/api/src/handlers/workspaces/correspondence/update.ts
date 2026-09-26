@@ -47,8 +47,9 @@ const updateCorrespondence = createSafeHandler(
               ),
             )
             .limit(1);
-          if (assignee === undefined)
+          if (assignee === undefined) {
             return { type: "invalid_assignee" as const };
+          }
         }
         const [existing] = await tx
           .select({
@@ -64,7 +65,9 @@ const updateCorrespondence = createSafeHandler(
           )
           .for("update")
           .limit(1);
-        if (existing === undefined) return { type: "not_found" as const };
+        if (existing === undefined) {
+          return { type: "not_found" as const };
+        }
         const [record] = await tx
           .update(correspondence)
           .set({
@@ -79,7 +82,9 @@ const updateCorrespondence = createSafeHandler(
             ),
           )
           .returning();
-        if (record === undefined) return { type: "not_found" as const };
+        if (record === undefined) {
+          return { type: "not_found" as const };
+        }
         if (
           existing.handlingState !== record.handlingState ||
           existing.assigneeId !== record.assigneeId

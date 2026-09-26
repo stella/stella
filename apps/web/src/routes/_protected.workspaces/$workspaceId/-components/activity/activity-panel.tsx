@@ -142,7 +142,7 @@ const categoryLabelKeys = {
   all: "workspaces.overview.activity.filters.all",
   automation: "workspaces.overview.activity.filters.automation",
   court: "workspaces.overview.activity.filters.court",
-  correspondence: "workspaces.overview.activity.filters.correspondence",
+  correspondence: "correspondence.title",
   documents: "workspaces.overview.activity.filters.documents",
   matter: "workspaces.overview.activity.filters.matter",
   tasks: "workspaces.overview.activity.filters.tasks",
@@ -1371,22 +1371,21 @@ const ActivityDetailsSheet = ({
     resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   // Every decision in a folded review sitting is about the same document, so
   // the group opens it the way a single row does.
-  const openTarget =
-    group.items.length === 1 || group.type === "review_decisions"
-      ? item.target.kind === "correspondence"
-        ? () =>
-            detached(
-              navigate({
-                to: "/workspaces/$workspaceId/correspondence/$correspondenceId",
-                params: {
-                  workspaceId,
-                  correspondenceId: item.target.id,
-                },
-              }),
-              "activity.open-correspondence",
-            )
-        : getOpenTarget(item, workspaceId)
-      : undefined;
+  let openTarget: (() => void) | undefined;
+  if (group.items.length === 1 || group.type === "review_decisions") {
+    if (item.target.kind === "correspondence") {
+      openTarget = () =>
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/correspondence/$correspondenceId",
+            params: { workspaceId, correspondenceId: item.target.id },
+          }),
+          "activity.open-correspondence",
+        );
+    } else {
+      openTarget = getOpenTarget(item, workspaceId);
+    }
+  }
   const rows = [
     {
       label: t("workspaces.overview.activity.details.dateTime"),

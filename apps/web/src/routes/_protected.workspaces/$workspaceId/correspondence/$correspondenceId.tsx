@@ -22,6 +22,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
+  uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
@@ -42,9 +43,9 @@ function CorrespondenceDetailPage() {
   const t = useTranslations();
   const format = useFormatter();
   const { workspaceId, correspondenceId } = Route.useParams({
-    select: ({ workspaceId, correspondenceId }) => ({
-      workspaceId,
-      correspondenceId,
+    select: (params) => ({
+      workspaceId: params.workspaceId,
+      correspondenceId: params.correspondenceId,
     }),
   });
   const { data } = useSuspenseQuery(
@@ -68,9 +69,7 @@ function CorrespondenceDetailPage() {
           </span>
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-          <bdi dir="auto">
-            {record.subject || t("correspondence.noSubject")}
-          </bdi>
+          <bdi dir="auto">{record.subject || t("emailViewer.noSubject")}</bdi>
         </h1>
         {canUpdate && (
           <Button
@@ -97,14 +96,14 @@ function CorrespondenceDetailPage() {
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            <DetailField label={t("correspondence.fromLabel")}>
+            <DetailField label={t("emailViewer.from")}>
               <Address name={record.from.name} address={record.from.address} />
             </DetailField>
-            <DetailField label={t("correspondence.toLabel")}>
+            <DetailField label={t("emailViewer.to")}>
               <AddressList addresses={record.to} />
             </DetailField>
             {record.cc.length > 0 && (
-              <DetailField label={t("correspondence.ccLabel")}>
+              <DetailField label={t("emailViewer.cc")}>
                 <AddressList addresses={record.cc} />
               </DetailField>
             )}
@@ -182,11 +181,11 @@ function CorrespondenceDetailPage() {
 
           <section className="rounded-lg border p-4">
             <h2 className="mb-3 text-sm font-medium">
-              {t("correspondence.message")}
+              {t("emailViewer.bodyTitle")}
             </h2>
             {record.bodyHtml === null ? (
               <pre
-                className="text-foreground whitespace-pre-wrap break-words font-sans text-sm leading-6"
+                className="text-foreground font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
                 dir="auto"
               >
                 {record.bodyText}
@@ -196,8 +195,9 @@ function CorrespondenceDetailPage() {
                 className="h-[28rem] w-full rounded border"
                 referrerPolicy="no-referrer"
                 sandbox=""
+                // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.
                 srcDoc={record.bodyHtml}
-                title={t("correspondence.message")}
+                title={t("emailViewer.bodyTitle")}
               />
             )}
           </section>
@@ -205,7 +205,7 @@ function CorrespondenceDetailPage() {
           {attachments.length > 0 && (
             <section className="rounded-lg border p-4">
               <h2 className="mb-3 text-sm font-medium">
-                {t("correspondence.attachments")}
+                {t("emailViewer.attachments")}
               </h2>
               <ul className="divide-y">
                 {attachments.map((attachment) => (
@@ -214,7 +214,7 @@ function CorrespondenceDetailPage() {
                     key={attachment.entityId}
                   >
                     <Button
-                      className="min-w-0 truncate"
+                      className="min-w-0"
                       onClick={() =>
                         detached(
                           openEntityInInspector(
@@ -229,7 +229,9 @@ function CorrespondenceDetailPage() {
                       type="button"
                       variant="link"
                     >
-                      <bdi dir="auto">{attachment.filename}</bdi>
+                      <bdi className="block truncate" dir="auto">
+                        {attachment.filename}
+                      </bdi>
                     </Button>
                     <span className="text-muted-foreground text-xs">
                       {format.number(attachment.byteSize, {
@@ -293,7 +295,7 @@ const DetailField = ({
 }) => (
   <div className="min-w-0 space-y-1">
     <div className="text-muted-foreground text-xs">{label}</div>
-    <div className="break-words text-sm">{children}</div>
+    <div className="text-sm wrap-break-word">{children}</div>
   </div>
 );
 
@@ -323,8 +325,8 @@ const AddressList = ({
   addresses: { name: string | null; address: string }[];
 }) => (
   <span className="flex flex-col gap-1">
-    {addresses.map((address, index) => (
-      <Address key={`${address.address}-${index}`} {...address} />
+    {uniqueCorrespondenceAddresses(addresses).map((address) => (
+      <Address key={address.address.toLowerCase()} {...address} />
     ))}
   </span>
 );

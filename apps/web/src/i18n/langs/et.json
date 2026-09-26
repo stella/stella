@@ -1924,37 +1924,30 @@
     }
   },
   "correspondence": {
-    "addressTitle": "Asja e-posti aadress",
-    "attachments": "Manused",
+    "addressTitle": "Toimiku e-posti aadress",
     "authResults": {
       "fail": "Ebaõnnestunud",
-      "none": "Puudub",
       "pass": "Läbitud",
-      "unknown": "Teadmata"
+      "unknown": "Määramata"
     },
     "authentication": "E-posti autentimine",
     "backToList": "Tagasi kirjavahetuse juurde",
-    "ccLabel": "Koopia",
     "createAddress": "Loo aadress",
+    "dmarcLabel": "DMARC-kontroll",
     "empty": "Kirjavahetust veel pole.",
     "filers": "Esitajad",
-    "fromLabel": "Saatja",
     "markHandled": "Märgi käsitletuks",
     "markNew": "Märgi uueks",
-    "message": "Sõnum",
     "noAddress": "Aktiivset e-posti aadressi pole.",
-    "noSubject": "(Teemata)",
     "receivedAt": "Saabunud",
     "revokeAddress": "Tühista aadress",
     "rotateAddress": "Vaheta aadress",
     "sentAt": "Saadetud",
     "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
     "states": {
-      "handled": "Käsitletud",
-      "new": "Uus"
+      "handled": "Käsitletud"
     },
     "title": "Kirjavahetus",
-    "toLabel": "Saaja",
     "unknownApprover": "Tundmatu kinnitaja"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Kogu tegevus",
           "automation": "Automatiseerimine",
-          "correspondence": "Kirjavahetus",
           "court": "Kohus",
           "documents": "Dokumendid",
           "matter": "Toimik",

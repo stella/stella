@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "Dirección de correo del asunto",
-    "attachments": "Adjuntos",
     "authResults": {
       "fail": "Fallida",
-      "none": "Ninguna",
       "pass": "Correcta",
-      "unknown": "Desconocida"
+      "unknown": "Sin determinar"
     },
     "authentication": "Autenticación del correo",
     "backToList": "Volver a correspondencia",
-    "ccLabel": "Cc",
     "createAddress": "Crear dirección",
+    "dmarcLabel": "Comprobación DMARC",
     "empty": "Todavía no hay correspondencia.",
     "filers": "Remitentes",
-    "fromLabel": "De",
     "markHandled": "Marcar como tramitado",
     "markNew": "Marcar como nuevo",
-    "message": "Mensaje",
     "noAddress": "No hay ninguna dirección de correo activa.",
-    "noSubject": "(Sin asunto)",
     "receivedAt": "Recibido",
     "revokeAddress": "Revocar dirección",
     "rotateAddress": "Cambiar dirección",
-    "sentAt": "Enviado",
+    "sentAt": "Enviado el",
     "sharedMailboxFiler": "Buzón compartido {address}, aprobado por {approver}",
     "states": {
-      "handled": "Tramitado",
-      "new": "Nuevo"
+      "handled": "Tramitado"
     },
     "title": "Correspondencia",
-    "toLabel": "Para",
     "unknownApprover": "Aprobador desconocido"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Toda la actividad",
           "automation": "Automatización",
-          "correspondence": "Correspondencia",
           "court": "Tribunal",
           "documents": "Documentos",
           "matter": "Asunto",

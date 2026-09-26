@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "Lietas e-pasta adrese",
-    "attachments": "Pielikumi",
     "authResults": {
       "fail": "Neizdevās",
-      "none": "Nav",
       "pass": "Izdevās",
-      "unknown": "Nezināms"
+      "unknown": "Nav noteikts"
     },
     "authentication": "E-pasta autentifikācija",
     "backToList": "Atpakaļ uz saraksti",
-    "ccLabel": "Kopija",
     "createAddress": "Izveidot adresi",
+    "dmarcLabel": "DMARC pārbaude",
     "empty": "Sarakstes vēl nav.",
     "filers": "Iesniedzēji",
-    "fromLabel": "No",
     "markHandled": "Atzīmēt kā izskatītu",
     "markNew": "Atzīmēt kā jaunu",
-    "message": "Ziņojums",
     "noAddress": "Nav aktīvas e-pasta adreses.",
-    "noSubject": "(Bez temata)",
     "receivedAt": "Saņemts",
     "revokeAddress": "Atsaukt adresi",
     "rotateAddress": "Mainīt adresi",
     "sentAt": "Nosūtīts",
     "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
     "states": {
-      "handled": "Izskatīts",
-      "new": "Jauns"
+      "handled": "Izskatīts"
     },
     "title": "Sarakste",
-    "toLabel": "Kam",
     "unknownApprover": "Nezināms apstiprinātājs"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Visas darbības",
           "automation": "Automatizācija",
-          "correspondence": "Sarakste",
           "court": "Tiesa",
           "documents": "Dokumenti",
           "matter": "Lieta",

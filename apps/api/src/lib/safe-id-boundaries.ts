@@ -215,6 +215,15 @@ export const brandPersistedAuditLogId = (
   auditLogId: string,
 ): SafeId<"auditLog"> => toSafeId<"auditLog">(auditLogId);
 
+export const brandValidatedCorrespondenceCursorId = (
+  correspondenceId: string,
+): SafeId<"correspondence"> => toSafeId<"correspondence">(correspondenceId);
+
+export const brandValidatedAllowedSenderCursorId = (
+  allowedSenderId: string,
+): SafeId<"correspondenceAllowedSender"> =>
+  toSafeId<"correspondenceAllowedSender">(allowedSenderId);
+
 export const brandPersistedAgentSkillId = (
   agentSkillId: string,
 ): SafeId<"agentSkill"> => toSafeId<"agentSkill">(agentSkillId);

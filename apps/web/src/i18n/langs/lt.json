@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "Bylos el. pašto adresas",
-    "attachments": "Priedai",
     "authResults": {
       "fail": "Nepavyko",
-      "none": "Nėra",
       "pass": "Pavyko",
-      "unknown": "Nežinoma"
+      "unknown": "Nenustatyta"
     },
     "authentication": "El. laiško autentifikavimas",
     "backToList": "Grįžti į korespondenciją",
-    "ccLabel": "Kopija",
     "createAddress": "Sukurti adresą",
+    "dmarcLabel": "DMARC patikra",
     "empty": "Korespondencijos dar nėra.",
     "filers": "Pateikėjai",
-    "fromLabel": "Nuo",
     "markHandled": "Pažymėti kaip sutvarkytą",
     "markNew": "Pažymėti kaip naują",
-    "message": "Pranešimas",
     "noAddress": "Aktyvaus el. pašto adreso nėra.",
-    "noSubject": "(Be temos)",
     "receivedAt": "Gauta",
     "revokeAddress": "Atšaukti adresą",
     "rotateAddress": "Pakeisti adresą",
     "sentAt": "Išsiųsta",
     "sharedMailboxFiler": "Bendra pašto dėžutė {address}, patvirtino {approver}",
     "states": {
-      "handled": "Sutvarkyta",
-      "new": "Nauja"
+      "handled": "Sutvarkyta"
     },
     "title": "Korespondencija",
-    "toLabel": "Kam",
     "unknownApprover": "Nežinomas tvirtintojas"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Visa veikla",
           "automation": "Automatizavimas",
-          "correspondence": "Korespondencija",
           "court": "Teismas",
           "documents": "Dokumentai",
           "matter": "Byla",

@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "عنوان البريد الإلكتروني للملف",
-    "attachments": "المرفقات",
     "authResults": {
       "fail": "فاشل",
-      "none": "لا يوجد",
       "pass": "ناجح",
-      "unknown": "غير معروف"
+      "unknown": "غير محدد"
     },
     "authentication": "مصادقة البريد الإلكتروني",
     "backToList": "العودة إلى المراسلات",
-    "ccLabel": "نسخة",
     "createAddress": "إنشاء عنوان",
+    "dmarcLabel": "فحص DMARC",
     "empty": "لا توجد مراسلات بعد.",
     "filers": "مقدمو المراسلات",
-    "fromLabel": "من",
     "markHandled": "تحديد كمُعالج",
     "markNew": "تحديد كجديد",
-    "message": "الرسالة",
     "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",
-    "noSubject": "(بلا موضوع)",
     "receivedAt": "تاريخ الاستلام",
     "revokeAddress": "إلغاء العنوان",
     "rotateAddress": "تغيير العنوان",
-    "sentAt": "تاريخ الإرسال",
+    "sentAt": "أُرسل في",
     "sharedMailboxFiler": "صندوق بريد مشترك {address}، وافق عليه {approver}",
     "states": {
-      "handled": "مُعالج",
-      "new": "جديد"
+      "handled": "مُعالج"
     },
     "title": "المراسلات",
-    "toLabel": "إلى",
     "unknownApprover": "موافق غير معروف"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "كل النشاط",
           "automation": "الأتمتة",
-          "correspondence": "المراسلات",
           "court": "المحكمة",
           "documents": "المستندات",
           "matter": "ملف قانوني",

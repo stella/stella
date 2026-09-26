@@ -1924,37 +1924,30 @@
     }
   },
   "correspondence": {
-    "addressTitle": "E-mailová adresa veci",
-    "attachments": "Prílohy",
+    "addressTitle": "E-mailová adresa spisu",
     "authResults": {
       "fail": "Neúspešné",
-      "none": "Žiadne",
       "pass": "Úspešné",
-      "unknown": "Neznáme"
+      "unknown": "Neurčené"
     },
     "authentication": "Overenie e-mailu",
     "backToList": "Späť na korešpondenciu",
-    "ccLabel": "Kópia",
     "createAddress": "Vytvoriť adresu",
+    "dmarcLabel": "Kontrola DMARC",
     "empty": "Zatiaľ žiadna korešpondencia.",
     "filers": "Odosielatelia",
-    "fromLabel": "Od",
     "markHandled": "Označiť ako vybavené",
     "markNew": "Označiť ako nové",
-    "message": "Správa",
     "noAddress": "Nie je aktívna žiadna e-mailová adresa.",
-    "noSubject": "(Bez predmetu)",
     "receivedAt": "Prijaté",
     "revokeAddress": "Zrušiť adresu",
     "rotateAddress": "Zmeniť adresu",
-    "sentAt": "Odoslané",
+    "sentAt": "Odoslané dňa",
     "sharedMailboxFiler": "Zdieľaná schránka {address}, schválil(a) {approver}",
     "states": {
-      "handled": "Vybavené",
-      "new": "Nové"
+      "handled": "Vybavené"
     },
     "title": "Korešpondencia",
-    "toLabel": "Komu",
     "unknownApprover": "Neznámy schvaľovateľ"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Všetka aktivita",
           "automation": "Automatizácia",
-          "correspondence": "Korešpondencia",
           "court": "Súd",
           "documents": "Dokumenty",
           "matter": "Spis",

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -8,7 +8,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -17,9 +16,11 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { brandValidatedAllowedSenderCursorId } from "@/api/lib/safe-id-boundaries";
 
 const PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_MAX = 200;
+const MAX_MATTERS_PER_SENDER = 200;
 const querySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGE_SIZE_MAX })),
   cursor: t.Optional(tPaginationCursor()),
@@ -50,7 +51,7 @@ const listAllowedSenders = createSafeRootHandler(
       );
     }
     const cursor = isUuidPaginationCursorPart(rawCursor)
-      ? toSafeId<"correspondenceAllowedSender">(rawCursor)
+      ? brandValidatedAllowedSenderCursorId(rawCursor)
       : null;
 
     const result = yield* Result.await(
@@ -62,8 +63,9 @@ const listAllowedSenders = createSafeRootHandler(
           ),
           eq(correspondenceAllowedSenders.kind, "shared_mailbox"),
         ];
-        if (cursor !== null)
+        if (cursor !== null) {
           conditions.push(gt(correspondenceAllowedSenders.id, cursor));
+        }
         const rows = await tx
           .select({
             id: correspondenceAllowedSenders.id,
@@ -101,7 +103,8 @@ const listAllowedSenders = createSafeRootHandler(
                     ),
                   ),
                 )
-                .orderBy(asc(correspondenceAllowedSenderMatters.workspaceId));
+                .orderBy(asc(correspondenceAllowedSenderMatters.workspaceId))
+                .limit(PAGE_SIZE_MAX * MAX_MATTERS_PER_SENDER + 1);
 
         return { rows, matterRows };
       }),
@@ -112,6 +115,9 @@ const listAllowedSenders = createSafeRootHandler(
       limit,
       cursorForItem: ({ id }) => encodePaginationCursor([id]),
     });
+    if (result.matterRows.length > PAGE_SIZE_MAX * MAX_MATTERS_PER_SENDER) {
+      return panic("Allowed sender matter scope exceeds the bounded page");
+    }
     const workspaceIdsBySender = new Map<string, string[]>();
     for (const row of result.matterRows) {
       const workspaceIds = workspaceIdsBySender.get(row.allowedSenderId) ?? [];
@@ -121,7 +127,12 @@ const listAllowedSenders = createSafeRootHandler(
     return Result.ok({
       ...page,
       items: page.items.map((row) => ({
-        ...row,
+        id: row.id,
+        address: row.address,
+        scope: row.scope,
+        approvedBy: row.approvedBy,
+        approvedAt: row.approvedAt,
+        revokedAt: row.revokedAt,
         matterIds: workspaceIdsBySender.get(row.id) ?? [],
         active: row.revokedAt === null,
       })),

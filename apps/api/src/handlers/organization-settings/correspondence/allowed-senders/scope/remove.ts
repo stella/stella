@@ -44,7 +44,9 @@ const removeAllowedSenderMatter = createSafeRootHandler(
           )
           .for("update");
         const sender = senderRows.at(0);
-        if (!sender) return { kind: "missing_sender" as const };
+        if (!sender) {
+          return { kind: "missing_sender" as const };
+        }
 
         const removed = await tx
           .delete(correspondenceAllowedSenderMatters)
@@ -75,10 +77,11 @@ const removeAllowedSenderMatter = createSafeRootHandler(
       }),
     );
 
-    if (result.kind === "missing_sender")
+    if (result.kind === "missing_sender") {
       return Result.err(
         new HandlerError({ status: 404, message: "Allowed sender not found" }),
       );
+    }
     return Result.ok({ removed: true });
   },
 );

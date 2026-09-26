@@ -1925,36 +1925,29 @@
   },
   "correspondence": {
     "addressTitle": "E-Mail-Adresse der Akte",
-    "attachments": "Anhänge",
     "authResults": {
       "fail": "Fehlgeschlagen",
-      "none": "Keine",
       "pass": "Bestanden",
-      "unknown": "Unbekannt"
+      "unknown": "Nicht ermittelt"
     },
     "authentication": "E-Mail-Authentifizierung",
     "backToList": "Zurück zur Korrespondenz",
-    "ccLabel": "Kopie",
     "createAddress": "Adresse erstellen",
+    "dmarcLabel": "DMARC-Prüfung",
     "empty": "Noch keine Korrespondenz.",
     "filers": "Einreicher",
-    "fromLabel": "Von",
     "markHandled": "Als erledigt markieren",
     "markNew": "Als neu markieren",
-    "message": "Nachricht",
     "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
-    "noSubject": "(Kein Betreff)",
     "receivedAt": "Empfangen",
     "revokeAddress": "Adresse widerrufen",
     "rotateAddress": "Adresse erneuern",
-    "sentAt": "Gesendet",
+    "sentAt": "Gesendet am",
     "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
     "states": {
-      "handled": "Erledigt",
-      "new": "Neu"
+      "handled": "Erledigt"
     },
     "title": "Korrespondenz",
-    "toLabel": "An",
     "unknownApprover": "Unbekannte genehmigende Person"
   },
   "docxReview": {
@@ -5356,7 +5349,6 @@
         "filters": {
           "all": "Alle Aktivitäten",
           "automation": "Automatisierung",
-          "correspondence": "Korrespondenz",
           "court": "Gericht",
           "documents": "Dokumente",
           "matter": "Akte",
