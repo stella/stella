@@ -12,19 +12,12 @@
 import stampFontLicensePath from "./fonts/DejaVuSans-LICENSE.txt" with { type: "file" };
 import stampFontPath from "./fonts/DejaVuSans.ttf" with { type: "file" };
 
-let loading: Promise<Uint8Array> | undefined;
+let loaded: Uint8Array | undefined;
 
+/** Only a successful read is kept, so a failed one is retried next use. */
 export const loadStampFont = async (): Promise<Uint8Array> => {
-  loading ??= Bun.file(stampFontPath)
-    .bytes()
-    .then((bytes) => new Uint8Array(bytes));
-  try {
-    return await loading;
-  } catch (error) {
-    // A failed read is retried on the next use rather than cached.
-    loading = undefined;
-    throw error;
-  }
+  loaded ??= new Uint8Array(await Bun.file(stampFontPath).bytes());
+  return loaded;
 };
 
 /** The font's licence, shipped with it wherever the font is embedded. */

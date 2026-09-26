@@ -10,12 +10,11 @@
 const LIST_SEPARATOR = /[\s,]+/u;
 
 const isTimestampAuthorityUrl = (value: string) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
+  if (!URL.canParse(value)) {
     return false;
   }
+  const { protocol } = new URL(value);
+  return protocol === "https:" || protocol === "http:";
 };
 
 const splitList = (value: string | undefined) =>
