@@ -47,7 +47,7 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-const DIALOG_HEIGHT: f64 = 430.0;
+const DIALOG_HEIGHT: f64 = 470.0;
 
 const DIGEST_ALGORITHM: &str = "SHA-256";
 const DIGEST_BYTES: usize = 32;
@@ -138,6 +138,8 @@ struct DialogContent<'a> {
   /// The API asking for the signature, shown so the user sees who asks.
   api_base_url: &'a str,
   document_name: &'a str,
+  /// Where the signature will be visible, so consent covers what shows.
+  stamp_page_number: Option<i64>,
   identities: &'a [SigningIdentity],
   state: DialogState,
   version_number: i64,
@@ -196,6 +198,9 @@ struct RedeemResponse {
   document_name: String,
   version_number: i64,
   workspace_name: String,
+  /// 1-based page of the visible stamp; absent or null signs invisibly.
+  #[serde(default)]
+  stamp_page_number: Option<i64>,
 }
 
 #[derive(serde::Serialize)]
@@ -393,6 +398,7 @@ pub async fn redeem_and_sign(
     api_base_url: &session.api_base_url,
     document_name: &redeemed.document_name,
     identities: &identities,
+    stamp_page_number: redeemed.stamp_page_number,
     state,
     version_number: redeemed.version_number,
     workspace_name: &redeemed.workspace_name,
@@ -785,9 +791,13 @@ fn open_dialog(
   // strings of its own, so its wording rides along and it renders in the
   // language the rest of the app runs in.
   let hash = format!(
-    "state={}&apiOrigin={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
+    "state={}&apiOrigin={}&stampPage={}&documentName={}&versionNumber={}&workspaceName={}&identities={}&strings={}&lang={}&dir={}",
     encode_json(&content.state)?,
     percent_encode(content.api_base_url),
+    content
+      .stamp_page_number
+      .map(|page| page.to_string())
+      .unwrap_or_default(),
     percent_encode(content.document_name),
     content.version_number,
     percent_encode(content.workspace_name),
@@ -904,6 +914,19 @@ mod tests {
       false,
       true
     ));
+  }
+
+  #[test]
+  fn reads_the_stamp_page_from_the_redeemed_session() {
+    let base = r#"{"sessionId":"s","sessionToken":"t","apiBaseUrl":"https://api.stll.app","documentName":"d","versionNumber":1,"workspaceName":"w""#;
+    let visible: RedeemResponse =
+      serde_json::from_str(&format!(r#"{base},"stampPageNumber":3}}"#)).unwrap();
+    assert_eq!(visible.stamp_page_number, Some(3));
+    let invisible: RedeemResponse =
+      serde_json::from_str(&format!(r#"{base},"stampPageNumber":null}}"#)).unwrap();
+    assert_eq!(invisible.stamp_page_number, None);
+    let older: RedeemResponse = serde_json::from_str(&format!("{base}}}")).unwrap();
+    assert_eq!(older.stamp_page_number, None);
   }
 
   #[test]
