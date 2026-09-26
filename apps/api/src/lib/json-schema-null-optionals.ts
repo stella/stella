@@ -121,22 +121,20 @@ const objectChildSchemas = (
   return children;
 };
 
-/**
- * Apply the common optional-null rule before any agent-value coercion. The
- * decision comes from the same schema validation will use: nullable values keep
- * null, required values still fail, and optional non-null values read null as
- * omission at every declared object level.
- */
-export const withNullOptionalsOmitted = (
+/** Whether `value` is a placeholder `schema` rejects, standing for "not set". */
+type AbsentPlaceholderTest = (value: unknown, schema: unknown) => boolean;
+
+const omitAbsentPlaceholders = (
   schema: unknown,
   value: unknown,
+  isAbsent: AbsentPlaceholderTest,
 ): unknown => {
   if (!isRecord(schema)) {
     return value;
   }
   const items = schema["items"];
   if (items !== undefined && isUnknownArray(value)) {
-    return value.map((entry) => withNullOptionalsOmitted(items, entry));
+    return value.map((entry) => omitAbsentPlaceholders(items, entry, isAbsent));
   }
   if (!isRecord(value)) {
     return value;
@@ -150,17 +148,86 @@ export const withNullOptionalsOmitted = (
       continue;
     }
     if (
-      entry === null &&
       !requiredNames.has(key) &&
-      childSchemas.some((childSchema) => !admitsNull(childSchema))
+      childSchemas.some((childSchema) => isAbsent(entry, childSchema))
     ) {
       continue;
     }
     let current = entry;
     for (const childSchema of childSchemas) {
-      current = withNullOptionalsOmitted(childSchema, current);
+      current = omitAbsentPlaceholders(childSchema, current, isAbsent);
     }
     present[key] = current;
   }
   return present;
 };
+
+const isRejectedNull: AbsentPlaceholderTest = (value, schema) =>
+  value === null && !admitsNull(schema);
+
+/**
+ * Whether a schema refuses the empty string: a declared type other than
+ * string, a string with a minimum length or a pattern "" does not match, or
+ * an enum or constant without "". A union refuses it only when every branch
+ * does. A schema that declares no type accepts it.
+ */
+const rejectsEmptyString = (schema: unknown): boolean => {
+  if (!isRecord(schema)) {
+    return false;
+  }
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (isUnknownArray(branches) && branches.length > 0) {
+      return branches.every(rejectsEmptyString);
+    }
+  }
+  const enumValues = schema["enum"];
+  if (isUnknownArray(enumValues)) {
+    return !enumValues.includes("");
+  }
+  if ("const" in schema) {
+    return schema["const"] !== "";
+  }
+  const type = schema["type"];
+  if (type === undefined) {
+    return false;
+  }
+  const isString =
+    type === "string" || (isUnknownArray(type) && type.includes("string"));
+  // A declared type that is not a string refuses any string.
+  if (!isString) {
+    return true;
+  }
+  const minLength = schema["minLength"];
+  if (typeof minLength === "number" && minLength > 0) {
+    return true;
+  }
+  const pattern = schema["pattern"];
+  return typeof pattern === "string" && !new RegExp(pattern, "u").test("");
+};
+
+const isRejectedPlaceholder: AbsentPlaceholderTest = (value, schema) =>
+  isRejectedNull(value, schema) || (value === "" && rejectsEmptyString(schema));
+
+/**
+ * Apply the common optional-null rule before any agent-value coercion. The
+ * decision comes from the same schema validation will use: nullable values keep
+ * null, required values still fail, and optional non-null values read null as
+ * omission at every declared object level.
+ */
+export const withNullOptionalsOmitted = (
+  schema: unknown,
+  value: unknown,
+): unknown => omitAbsentPlaceholders(schema, value, isRejectedNull);
+
+/**
+ * The same rule for a model's tool input, which also fills an optional string
+ * it is not setting with "": that reads as omitted too, but only where the
+ * property's own schema refuses "". Where "" is a value the property
+ * accepts, it stays exactly as sent. This is the placeholder rule the MCP
+ * input schemas apply (`nullAsAbsent`), read off JSON Schema.
+ */
+export const withModelPlaceholdersOmitted = (
+  schema: unknown,
+  value: unknown,
+): unknown => omitAbsentPlaceholders(schema, value, isRejectedPlaceholder);
