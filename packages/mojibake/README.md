@@ -8,7 +8,9 @@ against CLDR exemplar characters.
 - `detect`: `checkTextEncoding(text, language)` reports U+FFFD, C1 controls,
   UTF-8 read as windows-1252 or Latin-1, and any reversible mis-decoding
   between the charsets in `charsets`, with the pair, a confidence, sample
-  spans and a repaired preview. `repairMisdecoding` undoes a reported pair.
+  spans and a repaired preview. Its work is bounded; a check that stops at a
+  bound with nothing found says `incomplete`, not `clean`.
+  `repairMisdecoding` undoes a reported pair.
 - `declared-charset`: `decodeDeclared(bytes, { contentType })` reads bytes as
   their byte-order mark, HTTP charset or in-document declaration says, where
   `Response.text()` always assumes UTF-8.

@@ -16,7 +16,11 @@
 
 import { panic } from "better-result";
 
-import { checkTextEncoding, type EncodingFinding } from "@stll/mojibake/detect";
+import {
+  checkTextEncoding,
+  type EncodingCheckLimit,
+  type EncodingFinding,
+} from "@stll/mojibake/detect";
 
 import { MARKUP_RESIDUE_EXCERPT_CHARS } from "@/api/lib/legal-search/parsers/markup-residue";
 
@@ -25,6 +29,13 @@ import { MARKUP_RESIDUE_EXCERPT_CHARS } from "@/api/lib/legal-search/parsers/mar
  * character set. Reported at ERROR and swept per source.
  */
 export const TEXT_MISDECODED = "case_law.ingestion.text_misdecoded";
+
+/**
+ * Log event emitted when a decision's text found nothing but was too long,
+ * in distinct words, to be weighed whole: not a verdict that it is clean.
+ */
+export const TEXT_ENCODING_INCOMPLETE =
+  "case_law.ingestion.text_encoding_incomplete";
 
 /** Spans a log line carries: enough to see the pattern and find it again. */
 const LOGGED_SAMPLES = 3;
@@ -94,19 +105,37 @@ const sampleSpans = (finding: EncodingFinding): string[] => {
   }
 };
 
+export type TextEncodingReport =
+  | { type: "misdecoded"; fields: TextMisdecodedFields }
+  | { type: "incomplete"; fields: { encodingLimit: EncodingCheckLimit } };
+
 /**
- * The fields a `TEXT_MISDECODED` line carries for this text, or undefined
- * when the text reads correctly in its declared language.
+ * What this text's encoding check reports: the fields of a `TEXT_MISDECODED`
+ * line, of a `TEXT_ENCODING_INCOMPLETE` line, or undefined when the text
+ * reads correctly in its declared language.
  */
-export const textMisdecodedFields = (
+export const textEncodingReport = (
   text: string,
   language: string,
-): TextMisdecodedFields | undefined => {
+): TextEncodingReport | undefined => {
   const check = checkTextEncoding(text, language);
-  if (check.status === "clean") {
-    return undefined;
+  switch (check.status) {
+    case "clean":
+      return undefined;
+    case "incomplete":
+      return { type: "incomplete", fields: { encodingLimit: check.limit } };
+    case "suspect":
+      return { type: "misdecoded", fields: misdecodedFields(check.findings) };
+    default: {
+      check satisfies never;
+      return panic(`Unhandled encoding check: ${String(check)}`);
+    }
   }
-  const { findings } = check;
+};
+
+const misdecodedFields = (
+  findings: readonly EncodingFinding[],
+): TextMisdecodedFields => {
   const misdecoded = findings.find((finding) => finding.kind === "misdecoded");
   const pairFields =
     misdecoded?.kind === "misdecoded"

@@ -2,8 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ENCODING_SAMPLES_MAX_CHARS,
-  textMisdecodedFields,
+  textEncodingReport,
 } from "@/api/lib/legal-search/parsers/text-encoding";
+
+const textMisdecodedFields = (text: string, language: string) => {
+  const report = textEncodingReport(text, language);
+  return report?.type === "misdecoded" ? report.fields : undefined;
+};
 
 // Slovak Constitutional Court, I. ÚS 66/98, as the publisher serves it:
 // windows-1250 text read as windows-1252 before it reached the corpus.
@@ -27,7 +32,7 @@ describe("a stored text read through the wrong charset", () => {
   });
 
   test("the same text as written is not", () => {
-    expect(textMisdecodedFields(WRITTEN, "sk")).toBeUndefined();
+    expect(textEncodingReport(WRITTEN, "sk")).toBeUndefined();
   });
 
   test("a sample is capped however long the word it stands in", () => {
@@ -62,6 +67,19 @@ describe("a stored text read through the wrong charset", () => {
     expect(samples).toContain(`pod¾axxx`);
     expect(samples).toContain(`→podľaxxx`);
     expect(samples.length).toBeLessThanOrEqual(ENCODING_SAMPLES_MAX_CHARS);
+  });
+
+  test("a text too long to weigh whole is reported as such, not as clean", () => {
+    // Every word distinct: more than the check weighs in one call.
+    const text = Array.from(
+      { length: 30_000 },
+      (_, index) =>
+        `př${index.toString(26).replaceAll(/\d/gu, (digit) => "qrstuvwxyz".charAt(Number(digit)))}`,
+    ).join(" ");
+    expect(textEncodingReport(text, "cs")).toEqual({
+      type: "incomplete",
+      fields: { encodingLimit: "distinct-words" },
+    });
   });
 
   test("lost bytes are reported without a pair", () => {

@@ -23,6 +23,7 @@
 import { type Alphabet, alphabetFor } from "./alphabet.js";
 import {
   type Charset,
+  decodeBytes,
   DECODING_PAIRS,
   type DecodingPair,
   isEncodable,
@@ -54,6 +55,17 @@ const FIXED_PER_DAMAGED = 4;
 /** Two layers is double-encoded UTF-8; a third is not seen in practice. */
 const MAX_LAYERS = 2;
 const MIN_UTF8_SIGNATURE_OCCURRENCES = 2;
+/**
+ * Bounds on the work one check does, so that a long text of distinct words
+ * cannot hold a synchronous caller for seconds. The most frequent words are
+ * examined first; a check that stops at a bound says so (`incomplete`)
+ * instead of calling the text clean.
+ */
+const MAX_EXAMINED_WORDS = 20_000;
+/** Misfit words every pair is tried on. */
+const MAX_PAIR_MISFITS = 200;
+/** Words read back through a pair, across all pairs. */
+const PAIR_EVALUATION_BUDGET = 40_000;
 const MAX_SAMPLES = 5;
 const PREVIEW_CHARS = 400;
 
@@ -116,12 +128,24 @@ export type EncodingFinding =
 
 export type EncodingFindingKind = EncodingFinding["kind"];
 
+/** The bound a check stopped at before it had weighed every word. */
+export type EncodingCheckLimit =
+  | "distinct-words"
+  | "misfit-words"
+  | "pair-evaluations";
+
 export type EncodingCheck =
   | { status: "clean" }
   | {
       status: "suspect";
       findings: readonly [EncodingFinding, ...EncodingFinding[]];
-    };
+    }
+  /**
+   * Nothing found, but the check reached `limit` before it had weighed
+   * every word, so that is no verdict that the text is clean. Evidence found
+   * within the bound is `suspect` as usual.
+   */
+  | { status: "incomplete"; limit: EncodingCheckLimit };
 
 type WordStat = { count: number; start: number };
 
@@ -170,16 +194,39 @@ const SCRIPTS = [
  * script in its middle, and a decoder reading the wrong table often makes it
  * (Slovak "KÚŽP" in windows-1252 is the UTF-8 bytes of Arabic "ڎ").
  */
+/** Script index per letter code point; the regexes run once per letter. */
+const scriptCache = new Map<number, number>();
+
+const scriptOf = (char: string): number => {
+  const cp = char.codePointAt(0) ?? 0;
+  const cached = scriptCache.get(cp);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const script = SCRIPTS.findIndex((pattern) => pattern.test(char));
+  scriptCache.set(cp, script);
+  return script;
+};
+
 const writtenInOneScript = (word: string): boolean => {
-  const scripts = new Set<number>();
+  let first: number | undefined;
   for (const char of word) {
-    if (!isLetter(char) || /\p{M}/u.test(char)) {
+    if ((char.codePointAt(0) ?? 0) < C1_FIRST) {
+      // ASCII letters are Latin.
+      if (!isLetter(char)) {
+        continue;
+      }
+    } else if (!isLetter(char) || /\p{M}/u.test(char)) {
       continue;
     }
-    const script = SCRIPTS.findIndex((pattern) => pattern.test(char));
-    scripts.add(script);
+    const script = scriptOf(char);
+    if (first === undefined) {
+      first = script;
+    } else if (script !== first) {
+      return false;
+    }
   }
-  return scripts.size <= 1;
+  return true;
 };
 
 const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
@@ -352,6 +399,23 @@ const collectWords = (text: string): Map<string, WordStat> => {
 };
 
 /**
+ * The `limit` most frequent words, in the order the text first uses them:
+ * the words a bounded check weighs, and the order its samples are read in.
+ */
+const mostFrequent = <T extends { stat: WordStat }>(
+  words: readonly T[],
+  limit: number,
+): readonly T[] =>
+  words.length <= limit
+    ? words
+    : words
+        .toSorted(
+          ({ stat: a }, { stat: b }) => b.count - a.count || a.start - b.start,
+        )
+        .slice(0, limit)
+        .toSorted(({ stat: a }, { stat: b }) => a.start - b.start);
+
+/**
  * A word by its letters alone: what makes two misfit words two words of
  * evidence rather than one word punctuated twice („Søren“ and Søren).
  */
@@ -379,13 +443,31 @@ type PairEvidence = {
   repairs: ReadonlyMap<string, string>;
 };
 
-type ClassifiedWord = { word: string; stat: WordStat; wordClass: WordClass };
+type CountedWord = { word: string; stat: WordStat };
+type ClassifiedWord = CountedWord & { wordClass: WordClass };
 
+/** Word read-backs a check may still spend; spent in place. */
+type Budget = { remaining: number };
+
+type PairEvidenceOptions = {
+  misfits: readonly ClassifiedWord[];
+  natives: readonly ClassifiedWord[];
+  alphabet: Alphabet;
+  budget: Budget;
+};
+
+/**
+ * What the words say about one pair, null when the pair explains too few
+ * of them, or "exhausted" when the budget ran out before it was weighed.
+ */
 const pairEvidence = (
-  words: readonly ClassifiedWord[],
   pair: DecodingPair,
-  alphabet: Alphabet,
-): PairEvidence | null => {
+  { misfits, natives, alphabet, budget }: PairEvidenceOptions,
+): PairEvidence | null | "exhausted" => {
+  budget.remaining -= misfits.length;
+  if (budget.remaining < 0) {
+    return "exhausted";
+  }
   let fixedOccurrences = 0;
   /** Fixed occurrences of words that are more than attached notation. */
   let lexicalOccurrences = 0;
@@ -395,10 +477,7 @@ const pairEvidence = (
   let doubleLayered = 0;
   const samples: RepairedSpan[] = [];
   const repairs = new Map<string, string>();
-  for (const { word, stat, wordClass } of words) {
-    if (!isMisfit(wordClass)) {
-      continue;
-    }
+  for (const { word, stat, wordClass } of misfits) {
     const repair = repairWord(word, { pair, alphabet, maxLayers: MAX_LAYERS });
     if (repair.status === "unrepaired") {
       unresolvedOccurrences += stat.count;
@@ -430,12 +509,13 @@ const pairEvidence = (
   // went through leaves them as they are, or turns them into other native
   // words (Polish "siź" is "się" through windows-1250 read as windows-1257),
   // and never breaks them.
+  budget.remaining -= natives.length;
+  if (budget.remaining < 0) {
+    return "exhausted";
+  }
   let damagedOccurrences = 0;
   let convertedOccurrences = 0;
-  for (const { word, stat, wordClass } of words) {
-    if (wordClass !== "native") {
-      continue;
-    }
+  for (const { word, stat } of natives) {
     const undone = undoWord(word, pair);
     if (undone.text === word && !undone.failed) {
       continue;
@@ -495,12 +575,14 @@ const repairsDiffer = (
  * alternatives, and the first in `DECODING_PAIRS` order is proposed.
  */
 const bestPair = (
-  words: readonly ClassifiedWord[],
-  alphabet: Alphabet,
-): BestPair | null => {
+  options: PairEvidenceOptions,
+): BestPair | null | "exhausted" => {
   const accepted: PairEvidence[] = [];
   for (const pair of DECODING_PAIRS) {
-    const evidence = pairEvidence(words, pair, alphabet);
+    const evidence = pairEvidence(pair, options);
+    if (evidence === "exhausted") {
+      return evidence;
+    }
     if (
       evidence !== null &&
       evidence.fixedOccurrences >=
@@ -576,6 +658,28 @@ const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
   ["windows-1252", "iso-8859-1"] satisfies Charset[]
 ).map((assumed) => ({ actual: "utf-8", assumed }));
 
+/** What `assumed` reads each of `bytes` as, as a regex character class body. */
+const readAs = (bytes: readonly number[]): string =>
+  UTF8_SIGNATURE_PAIRS.flatMap(({ assumed }) =>
+    bytes.map((byte) => decodeBytes(Uint8Array.of(byte), assumed)),
+  )
+    .filter((char): char is string => char !== null)
+    .map((char) => `\\u{${(char.codePointAt(0) ?? 0).toString(16)}}`)
+    .join("");
+
+const byteRange = (first: number, last: number): number[] =>
+  Array.from({ length: last - first + 1 }, (_, index) => first + index);
+
+/**
+ * A UTF-8 lead byte followed by a continuation byte, as either charset
+ * reads them: a word without one cannot read back as UTF-8, and is not
+ * written back to find out.
+ */
+const UTF8_SEQUENCE_READ_AS_SINGLE_BYTE = new RegExp(
+  `[${readAs(byteRange(0xc2, 0xf4))}][${readAs(byteRange(0x80, 0xbf))}]`,
+  "u",
+);
+
 /**
  * Words that become valid UTF-8 with a non-ASCII letter or a punctuation
  * mark once written back as windows-1252 or Latin-1 bytes. A word a person wrote rarely spells a UTF-8
@@ -629,13 +733,16 @@ const readsAsWritten = (
 };
 
 const utf8Signature = (
-  words: ReadonlyMap<string, WordStat>,
+  words: readonly CountedWord[],
   alphabet: Alphabet | null,
 ): Extract<EncodingFinding, { kind: "utf8-read-as-single-byte" }> | null => {
   let occurrences = 0;
   let beyondCapitals = false;
   const samples: RepairedSpan[] = [];
-  for (const [word, stat] of words) {
+  for (const { word, stat } of words) {
+    if (!UTF8_SEQUENCE_READ_AS_SINGLE_BYTE.test(word)) {
+      continue;
+    }
     const repaired = UTF8_SIGNATURE_PAIRS.map((pair) =>
       undoWord(word, pair),
     ).find((undone) => readsAsWritten(undone, { word, alphabet }));
@@ -721,22 +828,44 @@ export const checkTextEncoding = (
   }
 
   const words = collectWords(text);
+  let limit: EncodingCheckLimit | undefined =
+    words.size > MAX_EXAMINED_WORDS ? "distinct-words" : undefined;
+  const examined = mostFrequent(
+    Array.from(words, ([word, stat]) => ({ word, stat })),
+    MAX_EXAMINED_WORDS,
+  );
   const alphabet = alphabetFor(language);
-  const utf8 = utf8Signature(words, alphabet);
+  const utf8 = utf8Signature(examined, alphabet);
   if (utf8 !== null) {
     findings.push(utf8);
   }
 
   if (alphabet !== null) {
-    const classified = Array.from(words).map(([word, stat]) => ({
+    const classified = examined.map(({ word, stat }) => ({
       word,
       stat,
       wordClass: classifyWord(word, alphabet),
     }));
-    const best = classified.some(({ wordClass }) => isMisfit(wordClass))
-      ? bestPair(classified, alphabet)
-      : null;
-    if (best !== null) {
+    const allMisfits = classified.filter(({ wordClass }) =>
+      isMisfit(wordClass),
+    );
+    if (allMisfits.length > MAX_PAIR_MISFITS) {
+      limit ??= "misfit-words";
+    }
+    const best =
+      allMisfits.length === 0
+        ? null
+        : bestPair({
+            misfits: mostFrequent(allMisfits, MAX_PAIR_MISFITS),
+            natives: classified.filter(
+              ({ wordClass }) => wordClass === "native",
+            ),
+            alphabet,
+            budget: { remaining: PAIR_EVALUATION_BUDGET },
+          });
+    if (best === "exhausted") {
+      limit ??= "pair-evaluations";
+    } else if (best !== null) {
       const { evidence, alternatives } = best;
       const { pair, layers, fixedOccurrences, damagedOccurrences, samples } =
         evidence;
@@ -764,7 +893,10 @@ export const checkTextEncoding = (
   }
 
   const [first, ...rest] = findings;
-  return first === undefined
+  if (first !== undefined) {
+    return { status: "suspect", findings: [first, ...rest] };
+  }
+  return limit === undefined
     ? { status: "clean" }
-    : { status: "suspect", findings: [first, ...rest] };
+    : { status: "incomplete", limit };
 };

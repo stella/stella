@@ -24,7 +24,7 @@ const findingOf = <K extends EncodingFinding["kind"]>(
   kind: K,
 ): Extract<EncodingFinding, { kind: K }> | undefined => {
   const check = checkTextEncoding(text, language);
-  if (check.status === "clean") {
+  if (check.status !== "suspect") {
     return undefined;
   }
   return check.findings.find(
@@ -121,6 +121,65 @@ describe("UTF-8 punctuation read as windows-1252", () => {
         ({ repaired }) => repaired,
       ),
     ).toEqual(["“Final”", "‘no’", "€5…", "§", "°C"]);
+  });
+});
+
+describe("work on a long text of distinct words", () => {
+  /** Latin letters spelling `index`, so every word is a distinct word. */
+  const spelled = (index: number): string => {
+    let rest = index;
+    let word = "";
+    do {
+      word += String.fromCodePoint(0x61 + (rest % 26));
+      rest = Math.floor(rest / 26);
+    } while (rest > 0);
+    return word;
+  };
+  const textOf = (bytes: number, word: (index: number) => string): string => {
+    const words: string[] = [];
+    let length = 0;
+    for (let index = 0; length < bytes; index += 1) {
+      const next = word(index);
+      words.push(next);
+      length += next.length + 1;
+    }
+    return words.join(" ");
+  };
+  /**
+   * What a synchronous check may hold the ingestion worker's event loop for,
+   * with headroom for a loaded machine.
+   */
+  const LATENCY_BUDGET_MS = 500;
+  const HALF_MEGABYTE = 500_000;
+  // Never "clean": a check that stopped at a bound says so, unless what it
+  // did weigh is already evidence. Thousands of distinct words in letters
+  // Czech does not write, each one read back into Czech, are.
+  const SHAPES = [
+    ["foreign letters", (index: number) => `Sø${spelled(index)}`, "suspect"],
+    ["native letters", (index: number) => `př${spelled(index)}`, "incomplete"],
+    [
+      "both",
+      (index: number) =>
+        index % 2 === 0 ? `Sø${spelled(index)}` : `př${spelled(index)}`,
+      "incomplete",
+    ],
+  ] as const;
+
+  test.each(SHAPES)(
+    "half a megabyte, %s: within the budget, and never called clean",
+    (_, word, status) => {
+      const text = textOf(HALF_MEGABYTE, word);
+      const started = performance.now();
+      const check = checkTextEncoding(text, "cs");
+      const elapsed = performance.now() - started;
+      expect(check.status).toBe(status);
+      expect(elapsed).toBeLessThan(LATENCY_BUDGET_MS);
+    },
+  );
+
+  test("a decision-sized text is checked whole", () => {
+    const text = textOf(20_000, (index) => `př${spelled(index % 300)}`);
+    expect(checkTextEncoding(text, "cs")).toEqual({ status: "clean" });
   });
 });
 

@@ -202,6 +202,7 @@ const exemplarText = (language: UdhrLanguage) => {
 };
 
 describe("every pair of a language's own letters", () => {
+  const PAIRS_PER_TEXT = 150;
   // Exhaustive rather than sampled: two letters a language writes side by
   // side can be the bytes of a UTF-8 sequence read as windows-1252 (Czech
   // "ÍŠ" is CD 8A), and a sampler rarely draws the pair that is.
@@ -225,8 +226,13 @@ describe("every pair of a language's own letters", () => {
             `${isUpper(first) ? "A" : "a"}${first}${second}${isUpper(second) ? "A" : "a"}`,
         ),
     );
-    const text = [UDHR_ARTICLE_1[language], ...pairs, ...pairs].join(" ");
-    expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
+    // In texts short enough to be weighed whole: a longer one would stop at
+    // the detector's bounds and prove nothing.
+    for (let start = 0; start < pairs.length; start += PAIRS_PER_TEXT) {
+      const chunk = pairs.slice(start, start + PAIRS_PER_TEXT);
+      const text = [UDHR_ARTICLE_1[language], ...chunk, ...chunk].join(" ");
+      expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
+    }
   });
 });
 

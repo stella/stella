@@ -239,14 +239,15 @@ filter for the class that matters. All four carry `caseNumber`,
 a document: a court publishing in 24 languages emits 24 variants under
 one number, and a case can carry both a judgment and an opinion.
 
-| Event                                       | Level | Meaning                                                                                  |
-| ------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `case_law.ingestion.decision_empty`         | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
-| `case_law.ingestion.ast_content_lost`       | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
-| `case_law.ingestion.ast_markup_residue`     | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
-| `case_law.ingestion.text_misdecoded`        | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
-| `case_law.ingestion.ast_missing`            | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
-| `case_law.ingestion.ast_structure_degraded` | WARN  | Text is complete, structure is imperfect.                                                |
+| Event                                         | Level | Meaning                                                                                  |
+| --------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
+| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
+| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
+| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
+| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
+| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
+| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
 
 The ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3

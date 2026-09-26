@@ -40,8 +40,9 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
+  TEXT_ENCODING_INCOMPLETE,
   TEXT_MISDECODED,
-  textMisdecodedFields,
+  textEncodingReport,
 } from "@/api/lib/legal-search/parsers/text-encoding";
 import {
   AST_MARKUP_RESIDUE,
@@ -130,18 +131,28 @@ const reportStoredDocumentQuality = ({
   // Text read through the wrong character set, by the adapter or upstream.
   // Checked on every stored text, parsed or not: the parser sees the text
   // after decoding and cannot tell either.
-  const misdecoded =
+  const encoding =
     preserveStoredDocument || pendingMirrorPayload !== null || !result.fulltext
       ? undefined
-      : textMisdecodedFields(result.fulltext, result.language);
-  if (misdecoded) {
-    logger.error(TEXT_MISDECODED, {
-      sourceId,
-      caseNumber: result.caseNumber,
-      language: result.language,
-      url: result.sourceUrl ?? result.documentUrl ?? "",
-      ...misdecoded,
-    });
+      : textEncodingReport(result.fulltext, result.language);
+  const subject = {
+    sourceId,
+    caseNumber: result.caseNumber,
+    language: result.language,
+    url: result.sourceUrl ?? result.documentUrl ?? "",
+  };
+  switch (encoding?.type) {
+    case undefined:
+      break;
+    case "misdecoded":
+      logger.error(TEXT_MISDECODED, { ...subject, ...encoding.fields });
+      break;
+    case "incomplete":
+      logger.warn(TEXT_ENCODING_INCOMPLETE, { ...subject, ...encoding.fields });
+      break;
+    default:
+      encoding satisfies never;
+      panic("Unhandled text encoding report");
   }
 };
 
