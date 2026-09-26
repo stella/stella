@@ -13,6 +13,7 @@
 import { PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import type { PDF, PdfObject, PdfRef } from "@libpdf/core";
 
+import { appendSigningRevision } from "@/api/lib/files/pdf-signatures";
 import { parseCertificate } from "@/api/lib/pdf-signing/certificate-chain";
 import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
 
@@ -155,5 +156,5 @@ export const embedValidationData = async (
   }
 
   catalog.set("DSS", pdf.context.registry.register(dss));
-  return await pdf.save({ incremental: true });
+  return await appendSigningRevision(pdf);
 };

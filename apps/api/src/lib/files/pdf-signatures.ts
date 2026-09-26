@@ -106,6 +106,16 @@ export const savePdfRewrite = async ({
 };
 
 /**
+ * Appends a signing revision: the incremental update a signature, and the
+ * validation data that goes with it, is written as. Nothing already in the
+ * file is rewritten, so every earlier signature keeps covering its bytes;
+ * this is the one save that is meant for a signed PDF, and the signing
+ * pipeline is its only caller.
+ */
+export const appendSigningRevision = async (pdf: PDF): Promise<Uint8Array> =>
+  await pdf.save({ incremental: true });
+
+/**
  * Serialises a transient copy that only ever goes to a model as input (a
  * Bates-stamped document, a single extracted page). Its bytes are never stored
  * or handed to a person, so the signature rules above do not apply.
