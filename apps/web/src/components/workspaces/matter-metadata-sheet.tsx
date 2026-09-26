@@ -478,7 +478,7 @@ export const MatterMetadataPanel = ({
           {canDeleteWorkspace && (
             <button
               className={cn(
-                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium transition-colors",
+                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium",
                 TOOLBAR_ROW_HEIGHT,
               )}
               disabled={deleteWorkspace.isPending}

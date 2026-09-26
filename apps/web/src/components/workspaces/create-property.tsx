@@ -227,7 +227,7 @@ export const CreateProperty = ({
                   render={
                     <button
                       aria-label={t("workspaces.properties.newColumn")}
-                      className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                      className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                       data-add-property-trigger
                       data-row-expansion-ignore
                       onClick={(event) => {

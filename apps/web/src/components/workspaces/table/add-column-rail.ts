@@ -36,4 +36,4 @@ export const addColumnHeaderCellStyle: AddColumnRailStyle = {
 
 /** The rail's "+", centred on the header row the shell measured. */
 export const ADD_COLUMN_RAIL_PLUS_CLASS_NAME =
-  "text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-[calc(var(--workspace-table-header-height)/2)] size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2";
+  "text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-[calc(var(--workspace-table-header-height)/2)] size-4 -translate-x-1/2 -translate-y-1/2 rtl:translate-x-1/2";

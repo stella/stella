@@ -563,7 +563,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   <div className="divide-y">
                     {tasks.map((task) => (
                       <button
-                        className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
+                        className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start"
                         key={task.entityId}
                         onClick={() =>
                           useInspectorTabsStore.getState().openTask({
@@ -1021,7 +1021,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
   if (onClick) {
     return (
       <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start transition-colors"
+        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
         onClick={onClick}
         type="button"
       >

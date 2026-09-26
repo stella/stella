@@ -71,7 +71,7 @@ export const CatalogueRow = ({
       <div
         aria-pressed={focused}
         className={cn(
-          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start transition-colors",
+          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start",
           focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
           !focused &&
             accentWhenUnfocused &&

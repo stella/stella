@@ -153,7 +153,7 @@ export const InlineOptionEditor = ({
         </ul>
       )}
 
-      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5 transition-colors">
+      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
         <Button
           aria-label={t("workspaces.properties.addOption")}
           className="text-foreground-label size-6 shrink-0"

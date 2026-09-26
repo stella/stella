@@ -17,7 +17,7 @@ import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-comp
 const selectColId = getInternalColId("select");
 // Add-row is chrome, not data: it recedes (muted, single hairline border) and
 // surfaces on hover so it doesn't compete with the rows above it.
-const bottomRowClassName = `sticky bottom-0 z-20 cursor-pointer text-muted-foreground transition-colors duration-150 hover:text-foreground ${TOOLBAR_ROW_HEIGHT}`;
+const bottomRowClassName = `sticky bottom-0 z-20 cursor-pointer text-muted-foreground hover:text-foreground ${TOOLBAR_ROW_HEIGHT}`;
 
 type BottomRowProps = {
   workspaceId: string;

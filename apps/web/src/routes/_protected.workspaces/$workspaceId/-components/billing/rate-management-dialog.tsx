@@ -238,7 +238,7 @@ const RateTablesView = ({
         <div className="flex flex-col gap-1.5">
           {tables.map((table) => (
             <div
-              className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors"
+              className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2"
               key={table.id}
             >
               <button

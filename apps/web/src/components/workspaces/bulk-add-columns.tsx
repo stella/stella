@@ -221,7 +221,7 @@ export const BulkAddColumns = ({
         <DialogClose
           aria-label={t("common.close")}
           className={cn(
-            "absolute end-2 top-2 z-10 transition-[transform,box-shadow,background-color] duration-200",
+            "absolute end-2 top-2 z-10 transition-transform duration-200",
             flashClose &&
               "bg-muted ring-foreground-strong-muted scale-125 ring-2",
           )}
@@ -281,7 +281,7 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
             render={
               <button
                 aria-label={t("workspaces.properties.newColumn")}
-                className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                 data-add-property-trigger
                 data-row-expansion-ignore
                 onClick={(event) => event.currentTarget.blur()}

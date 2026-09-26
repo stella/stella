@@ -164,7 +164,6 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
       className={cn(
         "relative",
         isAddPropertyColumn && "border-s-2 border-e-2",
-        isAddPropertyColumn && "transition-colors",
         isAddPropertyColumn && "hover:bg-transparent",
         isPinnedBoundaryColumn(header.column) && "border-e-0",
         collapseEndBorder && "border-e-0",
@@ -232,7 +231,7 @@ const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
       <button
         aria-checked={ariaChecked}
         className={cn(
-          "ring-ring focus-visible:ring-offset-background inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs/5 transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+          "ring-ring focus-visible:ring-offset-background inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs/5 outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
           (state.checked || state.indeterminate) &&
             "bg-primary border-primary text-primary-foreground shadow-none",
           !(state.checked || state.indeterminate) &&

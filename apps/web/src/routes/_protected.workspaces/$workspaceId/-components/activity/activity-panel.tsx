@@ -992,7 +992,7 @@ const HorizontalActivityMilestone = ({
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
         <button
-          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
+          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start"
           onClick={() => onSelectGroup(group)}
           type="button"
         >
@@ -1089,7 +1089,7 @@ const HorizontalRunActivityItem = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
     type="button"
   >
@@ -1207,7 +1207,7 @@ const TimelineEntry = ({
           aria-hidden="true"
           className="bg-border absolute inset-y-0 start-1/2 w-px"
         />
-        <span className="bg-background text-muted-foreground ring-background group-hover:text-foreground relative z-10 mt-2.5 flex size-7 items-center justify-center rounded-full ring-4 transition-colors">
+        <span className="bg-background text-muted-foreground ring-background group-hover:text-foreground relative z-10 mt-2.5 flex size-7 items-center justify-center rounded-full ring-4">
           {marker}
         </span>
       </span>
@@ -1224,7 +1224,7 @@ const RunActivityItem = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
     type="button"
   >
@@ -1250,7 +1250,7 @@ const ActivityItemRow = ({
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
       <button
-        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start transition-colors"
+        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start"
         onClick={() => onSelectGroup(group)}
         type="button"
       >
@@ -1318,7 +1318,7 @@ const ActivityList = ({
                 </td>
                 <td className="col-span-2 min-w-0 p-0 align-middle text-sm leading-5 md:table-cell">
                   <button
-                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start transition-colors"
+                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start"
                     onClick={() => onSelectGroup(group)}
                     type="button"
                   >
@@ -1431,7 +1431,7 @@ const ActivityDetailsSheet = ({
                   }
                   return (
                     <button
-                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start transition-colors"
+                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start"
                       key={batchItem.id}
                       onClick={() => {
                         onOpenChange(false);

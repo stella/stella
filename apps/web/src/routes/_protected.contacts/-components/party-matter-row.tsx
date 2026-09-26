@@ -13,7 +13,7 @@ export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
 
   return (
     <MatterRefLink
-      className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
+      className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm"
       workspaceId={matter.id}
     >
       <MatterIcon className="size-4 shrink-0" matter={matter} />

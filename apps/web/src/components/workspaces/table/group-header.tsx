@@ -51,7 +51,7 @@ export const TableGroupHeader = ({
       <button
         aria-expanded={empty ? undefined : !collapsed}
         className={cn(
-          "flex min-w-0 flex-1 items-center py-1.5 text-start transition-colors duration-150",
+          "flex min-w-0 flex-1 items-center py-1.5 text-start",
           !empty && "hover:bg-foreground/[0.04]",
         )}
         disabled={empty}

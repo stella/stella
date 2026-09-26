@@ -366,7 +366,7 @@ const ImportSkillDialogBody = ({
                   selected.size >= MAX_SELECTED_SKILLS && !checked;
                 return (
                   <label
-                    className="hover:bg-muted/50 flex min-h-11 items-start gap-3 p-3 transition-colors"
+                    className="hover:bg-muted/50 flex min-h-11 items-start gap-3 p-3"
                     htmlFor={checkboxId}
                     key={skill.sourceUrl}
                   >

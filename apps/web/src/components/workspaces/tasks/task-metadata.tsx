@@ -261,7 +261,7 @@ export const OwnerPicker = ({
       <PopoverTrigger
         render={
           <button
-            className="hover:bg-muted flex min-h-11 w-full items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors"
+            className="hover:bg-muted flex min-h-11 w-full items-center gap-1.5 rounded-md px-1.5 text-sm"
             disabled={disabled}
             type="button"
           />
@@ -291,7 +291,7 @@ export const OwnerPicker = ({
               }
               return (
                 <button
-                  className="hover:bg-muted flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors disabled:opacity-50"
+                  className="hover:bg-muted flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm disabled:opacity-50"
                   disabled={owner !== null && reason.trim().length === 0}
                   key={candidate.id}
                   onClick={() => {
@@ -386,7 +386,7 @@ export const AssigneePicker = ({
           <PopoverTrigger
             render={
               <button
-                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm"
                 type="button"
               />
             }
@@ -403,7 +403,7 @@ export const AssigneePicker = ({
                 }
                 return (
                   <button
-                    className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors"
+                    className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
                     key={user.id}
                     onClick={() =>
                       addAssignee.mutate({ taskId, userId: user.id })

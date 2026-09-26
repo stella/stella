@@ -290,7 +290,7 @@ export const ProcuracaoDropZone = ({
       <button
         aria-busy={isExtracting}
         className={cn(
-          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center focus-visible:ring-2 focus-visible:outline-none",
           isDropTarget && "border-primary bg-primary/5",
           isExtracting && "cursor-progress",
         )}
