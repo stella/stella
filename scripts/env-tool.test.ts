@@ -28,8 +28,15 @@ import {
   renderWebEnvExample,
   resolveDoctorMode,
   resolveDoctorProcessEnvironment,
+  trackedEnvFilesWithLocalDevOptIn,
   validateDoctorEnvironment,
 } from "./env-tool";
+
+describe("tracked env files", () => {
+  test("never carry the local development opt-in", () => {
+    expect(trackedEnvFilesWithLocalDevOptIn()).toEqual([]);
+  });
+});
 
 describe("generated environment examples", () => {
   test("contain every documented schema entry exactly once", () => {

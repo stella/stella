@@ -292,6 +292,46 @@ const checkEnvironmentArtifacts = () => {
   return false;
 };
 
+const TRACKED_ENV_FILE_PATTERN = /(?:^|\/)\.env(?:\.[^/]*)?$/u;
+
+/**
+ * Tracked env files that carry the local development opt-in. Bun loads `.env`
+ * from the working directory, so a copied file must never open a runtime;
+ * only launchers set the opt-in.
+ */
+export const trackedEnvFilesWithLocalDevOptIn = (
+  root: string = REPO_ROOT,
+): string[] => {
+  const listed = Bun.spawnSync({
+    cmd: ["git", "ls-files", "-z"],
+    cwd: root,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (listed.exitCode !== 0) {
+    return panic(`git ls-files failed: ${listed.stderr.toString()}`);
+  }
+  return listed.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => TRACKED_ENV_FILE_PATTERN.test(file))
+    .filter((file) =>
+      readFileSync(path.join(root, file), "utf-8").includes(
+        LOCAL_DEV_OPT_IN.name,
+      ),
+    );
+};
+
+const checkTrackedEnvFiles = () => {
+  const optedIn = trackedEnvFilesWithLocalDevOptIn();
+  for (const file of optedIn) {
+    console.error(
+      `${file} sets ${LOCAL_DEV_OPT_IN.name}; only launchers may opt in.`,
+    );
+  }
+  return optedIn.length === 0;
+};
+
 // Vite inlines client variables at build time, so the web container build must
 // carry every schema key into the build command: an ARG the image can receive,
 // and an entry in the build command's environment prefix. A key missing from
@@ -1182,8 +1222,9 @@ const main = async () => {
   if (command === "check") {
     const buildArgsValid = checkWebBuildArgs();
     const artifactsValid = buildArgsValid && checkEnvironmentArtifacts();
+    const envFilesValid = checkTrackedEnvFiles();
     const auditValid = await auditEnvironment();
-    if (!(artifactsValid && auditValid)) {
+    if (!(artifactsValid && envFilesValid && auditValid)) {
       process.exitCode = 1;
     }
     return;
