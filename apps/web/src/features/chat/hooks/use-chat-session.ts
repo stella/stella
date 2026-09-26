@@ -1321,8 +1321,9 @@ export const useChatSession = ({
         messages,
         requestActive: isChatClientRequestActive(status),
         sessionGenerating,
+        stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status],
+    [error, messages, sessionGenerating, status, stopState.status],
   );
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });

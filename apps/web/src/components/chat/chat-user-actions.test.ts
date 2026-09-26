@@ -4,6 +4,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  isChatTurnGenerating,
 } from "@/components/chat/chat-user-actions";
 import type { UnnamedChatSessionHandler } from "@/components/chat/chat-user-actions";
 
@@ -48,5 +49,23 @@ describe("assistant message actions", () => {
         ),
       ),
     ).toEqual([true, true, true, false]);
+  });
+});
+
+describe("a running turn", () => {
+  test("keeps running while the server settles its stop", () => {
+    const idle = {
+      hasError: false,
+      messages: [message("u1", "user"), message("a1", "assistant")],
+      requestActive: false,
+      sessionGenerating: false,
+    };
+    // Until the stop settles the server refuses a new message, so the
+    // composer queues it instead of sending it.
+    expect(
+      (["idle", "pending", "failed"] as const).map((stopStatus) =>
+        isChatTurnGenerating({ ...idle, stopStatus }),
+      ),
+    ).toEqual([false, true, false]);
   });
 });

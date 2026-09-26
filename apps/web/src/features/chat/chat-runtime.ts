@@ -83,7 +83,7 @@ export type ChatRouteHandoffStart = {
  * The composer's Stop, as the server hears it: nothing asked, a stop the
  * server has not answered yet, or one it refused (Stop stays available).
  */
-type ChatStopState =
+export type ChatStopState =
   | { status: "idle" }
   | { status: "pending"; turnId: SafeId<"chatTurn"> }
   | { error: Error; status: "failed"; turnId: SafeId<"chatTurn"> };
@@ -694,6 +694,19 @@ export const createChatRuntime = ({
     if (!isCurrent()) {
       return;
     }
+    // A failed poll is not a settled turn. The server already holds the stop,
+    // so Stop stays available to ask again.
+    if (Result.isError(answer)) {
+      stoppedTurnId = null;
+      setSnapshot({
+        stop: { error: answer.error, status: "failed", turnId: stoppedTurn },
+        turnAbandoned: false,
+      });
+      return;
+    }
+    // Settled, or still running once the polls run out (its owner is gone
+    // and its lease has yet to lapse): reload what the server stores. The
+    // stopped turn's continuations stay held back either way.
     setSnapshot({ stop: { status: "idle" } });
     reloadThread();
   };
