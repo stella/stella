@@ -467,6 +467,63 @@ describe("a native capital before a mark", () => {
       config(300),
     );
   });
+
+  /**
+   * Every language with a lowercase letter whose UTF-8 bytes read as
+   * windows-1252 end in U+00A0 ("à" is C3 A0, "Ã\u00A0"): there the
+   * nonbreaking space is inside the word, not a space binding two.
+   */
+  const CONTINUED_BY_NBSP = Object.keys(CLDR_EXEMPLARS)
+    .filter((tag): tag is keyof typeof CLDR_EXEMPLARS =>
+      Object.hasOwn(CLDR_EXEMPLARS, tag),
+    )
+    .flatMap((tag) => {
+      const letters = lettersOf(tag).filter(
+        (char) =>
+          /\p{Ll}/u.test(char) &&
+          misdecode(char, UTF8_READ_AS_WINDOWS_1252)?.endsWith(" "),
+      );
+      // An ASCII letter survives the read in lowercase; without one the word
+      // read back is capitals and marks, which alone sign nothing.
+      const ascii = lettersOf(tag).filter((char) => /^[a-z]$/u.test(char));
+      return letters.length === 0 || ascii.length === 0
+        ? []
+        : [{ tag, letters, ascii }];
+    });
+
+  test("the languages whose letters read as a nonbreaking space are derived", () => {
+    expect(CONTINUED_BY_NBSP.map(({ tag }) => tag)).toEqual(
+      expect.arrayContaining(["pt", "fr", "it"]),
+    );
+  });
+
+  test("a word whose letter reads as a nonbreaking space is found", () => {
+    fc.assert(
+      fc.property(
+        fc
+          .constantFrom(...CONTINUED_BY_NBSP)
+          .chain(({ tag, letters, ascii }) => {
+            const around = fc
+              .array(fc.constantFrom(...ascii), { maxLength: 6 })
+              .map((chars) => chars.join(""));
+            return fc.record({
+              tag: fc.constant(tag),
+              word: fc
+                .tuple(around, fc.constantFrom(...letters), around)
+                .filter(([before, , after]) => `${before}${after}`.length > 0)
+                .map(([before, letter, after]) => `${before}${letter}${after}`),
+            });
+          }),
+        ({ tag, word }) => {
+          const read = misdecode(word, UTF8_READ_AS_WINDOWS_1252) ?? "";
+          expect(checkTextEncoding(`${read} ${read}`, tag).status).toBe(
+            "suspect",
+          );
+        },
+      ),
+      config(300),
+    );
+  });
 });
 
 describe("generated text", () => {

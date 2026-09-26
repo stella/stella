@@ -1050,16 +1050,24 @@ const vouches = (part: string): boolean =>
 /**
  * Whether lowercase letters vouch for a word's read-back: some part of it
  * between nonbreaking spaces holds both a lowercase letter and a UTF-8
- * sequence. A nonbreaking space ends the part it closes, since it may be
- * that part's continuation byte ("voilÃ\u00A0" is "voilà"); the lowercase
- * word after it is another word. So French "Â\u00A0est" (the letter Â, then
- * a bound "est") is capitals before the space and no sequence after it.
+ * sequence. A nonbreaking space that completes a restored letter is inside
+ * its word ("Ã\u00A0quela" is "àquela"); any other one ends the part it
+ * closes, and the lowercase word after it is another word. So French
+ * "Â\u00A0est" (the letter Â, then a bound "est") is capitals before the
+ * space and no sequence after it, since "Â\u00A0" restores a space.
  */
-const vouchedByLowercase = (word: string): boolean => {
+const vouchedByLowercase = (word: string, pair: DecodingPair): boolean => {
   let part = "";
+  let lead = "";
   for (const char of word) {
     part += char;
+    const previous = lead;
+    lead = char;
     if (!isNonbreakingSpace(char)) {
+      continue;
+    }
+    const restored = undoMisdecoding(previous + char, pair);
+    if (restored !== null && restored.length === 1 && isLetter(restored)) {
       continue;
     }
     if (vouches(part)) {
@@ -1117,7 +1125,7 @@ const utf8Signature = (
     // unless it is a mark no letter of the language leads.
     work.codeUnits += word.length;
     signed ||=
-      vouchedByLowercase(word) ||
+      vouchedByLowercase(word, repaired.pair) ||
       marksSignOnTheirOwn(word, { pair: repaired.pair, alphabet, work });
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });

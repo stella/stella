@@ -158,6 +158,26 @@ describe("UTF-8 punctuation read as windows-1252", () => {
     },
   );
 
+  // "à" is C3 A0 in UTF-8: windows-1252 reads it as "Ã" and a nonbreaking
+  // space that belongs to the word, not one binding two words.
+  test.each([
+    ["pt", "Ã\u00A0s Ã\u00A0s", "às"],
+    [
+      "pt",
+      "Refiro-me Ã\u00A0quela regra. Refiro-me Ã\u00A0quela regra.",
+      "àquela",
+    ],
+    ["pt", "Ã\u00A0quilo Ã\u00A0quilo", "àquilo"],
+  ])(
+    "is found in %s %s, where the nonbreaking space is a letter's second byte",
+    (language, text, first) => {
+      expect(
+        findingOf(text, language, "utf8-read-as-single-byte")?.samples.at(0)
+          ?.repaired,
+      ).toBe(first);
+    },
+  );
+
   test("letters restored in capitals alone are no signature", () => {
     // Slovak "ÄŽ" is C4 8E: the UTF-8 bytes of "Ď".
     expect(checkTextEncoding("ÄŽ ÄŽ ÄŽ", "sk")).toEqual({ status: "clean" });
