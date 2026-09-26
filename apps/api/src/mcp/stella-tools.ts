@@ -1102,21 +1102,14 @@ const buildOnboardingNextStep = () =>
   `complete onboarding at ${getAppBaseUrl()}.`;
 
 /**
- * An empty result for an organization without practice jurisdictions carries
- * the onboarding step as its `nextStep`, a field of the tool's own output
- * contract, so the model sees it whichever result representation the host
- * shows.
+ * The onboarding step an empty result carries as its `nextStep` while the
+ * organization has no practice jurisdictions. It is a field of the tool's own
+ * output contract, so the model sees it whichever result representation the
+ * host shows. Callers ask only for an empty result.
  */
-const onboardingNextStep = async ({
-  context,
-  isEmpty,
-}: {
-  context: McpRequestContext;
-  isEmpty: boolean;
-}): Promise<{ nextStep?: string }> => {
-  if (!isEmpty) {
-    return {};
-  }
+const onboardingNextStep = async (
+  context: McpRequestContext,
+): Promise<{ nextStep?: string }> => {
   const jurisdictions = await loadPracticeJurisdictions(context);
   return jurisdictions.length > 0
     ? {}
@@ -1250,7 +1243,7 @@ const handleListMattersTool: TypedMcpToolHandler<
     return toolDataResult({
       matters,
       nextCursor: page.nextCursor,
-      ...(await onboardingNextStep({ context, isEmpty: true })),
+      ...(await onboardingNextStep(context)),
     } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>);
   }
 
@@ -2099,7 +2092,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       single === undefined
         ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
         : single.total,
-    ...(await onboardingNextStep({ context, isEmpty: merged.length === 0 })),
+    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
 };
 

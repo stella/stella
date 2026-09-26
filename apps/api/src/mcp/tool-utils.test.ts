@@ -329,8 +329,10 @@ describe("serializeToolResult", () => {
       contract,
     );
 
-    expect(result.content).toEqual([{ type: "text", text: "[1,2]" }]);
     expect(result.structuredContent).toEqual({ result: [1, 2] });
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify({ result: [1, 2] }) },
+    ]);
   });
 
   test("fails closed when projected content violates the advertised schema", () => {

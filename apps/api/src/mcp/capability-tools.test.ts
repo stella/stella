@@ -8,6 +8,7 @@ import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -50,13 +51,30 @@ const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
 
 type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
+/**
+ * The tool's payload as a client reads it: invoke_capability's `{ result }`
+ * envelope is unwrapped, as the CLI and the MCP apps do.
+ */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
 const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
   const item = result.content.at(0);
   if (!item || item.type !== "text") {
     throw new Error("Expected a text MCP response");
   }
-  return asTestRaw<T>(JSON.parse(item.text));
+  const parsed: unknown = JSON.parse(item.text);
+  const envelope = result.structuredContent;
+  const isCapabilityEnvelope =
+    envelope !== undefined &&
+    Object.keys(envelope).length === 1 &&
+    Object.hasOwn(envelope, "result");
+  return asTestRaw<T>(
+    isCapabilityEnvelope &&
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "result" in parsed
+      ? parsed.result
+      : parsed,
+  );
 };
 
 type ErrorEnvelope = {
@@ -723,11 +741,9 @@ describe("invoke_capability gates", () => {
       context: createContext(),
       toolName: "invoke_capability",
     });
-    expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
-    ).toEqual({
-      valid: true,
-      capability: "clauses.categories.create",
+    // Text and structuredContent are one `{ result }` envelope.
+    expect(modelViewOf(result)).toEqual({
+      result: { valid: true, capability: "clauses.categories.create" },
     });
     // No handler executed, so the org-settings loader was never consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();

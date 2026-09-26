@@ -436,17 +436,18 @@ export const serializeToolResult = (
       panic("Internal tool success data must be JSON-serializable");
     }
     // A host shows the model either the text or `structuredContent`, so the
-    // one text block is the JSON of the same validated object. An explicit
-    // projection only wraps the payload (`{ result }`); its text stays the
-    // unwrapped payload callers parse.
+    // one text block is the JSON of the same validated object.
     const structuredContent = successStructuredContent(result, outputContract);
-    const text =
-      structuredContent !== undefined &&
-      outputContract?.projection === "identity"
-        ? JSON.stringify(structuredContent)
-        : serializedData;
     return {
-      content: [{ type: "text", text }],
+      content: [
+        {
+          type: "text",
+          text:
+            structuredContent === undefined
+              ? serializedData
+              : JSON.stringify(structuredContent),
+        },
+      ],
       ...(structuredContent === undefined ? {} : { structuredContent }),
     };
   }
