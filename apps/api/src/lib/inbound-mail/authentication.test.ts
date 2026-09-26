@@ -1,0 +1,131 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  domainsAlign,
+  hasAlignedAuthentication,
+  parseProviderAuthentication,
+  verifyMailLocally,
+  type MailAuthentication,
+} from "@/api/lib/inbound-mail/authentication";
+
+const provider = (value: string) =>
+  parseProviderAuthentication({
+    authenticationResults: `mx.example.test; ${value}`,
+    authservId: "mx.example.test",
+    fromAddress: "member@example.com",
+  });
+
+describe("mail authentication trust boundary", () => {
+  test.each([
+    "pass",
+    "fail",
+    "none",
+    "neutral",
+    "softfail",
+    "temperror",
+    "permerror",
+  ])("requires both DMARC and aligned authentication: %s", (verdict) => {
+    const result = provider(
+      `spf=${verdict} smtp.mailfrom=member@example.com; dmarc=pass header.from=example.com`,
+    );
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(hasAlignedAuthentication(result.value, "member@example.com")).toBe(
+        verdict === "pass",
+      );
+    }
+  });
+
+  test.each([
+    "spf=pass smtp.mailfrom=member@attacker.com; dmarc=pass header.from=example.com",
+    "spf=pass smtp.mailfrom=member@example.com; dmarc=none header.from=example.com",
+    "dkim=pass header.d=attacker.com; dmarc=pass header.from=example.com",
+    "dkim=pass header.d=example.com; dmarc=pass header.from=attacker.com",
+    "arc=pass; dmarc=pass header.from=example.com",
+  ])("cannot turn unrelated authentication into sender proof: %s", (value) => {
+    const result = provider(value);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(hasAlignedAuthentication(result.value, "member@example.com")).toBe(
+        false,
+      );
+    }
+  });
+
+  test("accepts aligned DKIM when SPF fails and handles comments and folding removed by the adapter", () => {
+    const result = provider(
+      'spf=fail (comment; (nested)); dkim=fail header.d=other.test; dkim=pass header.d="example.com"; dmarc=pass header.from=example.com',
+    );
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(hasAlignedAuthentication(result.value, "member@example.com")).toBe(
+        true,
+      );
+      expect(hasAlignedAuthentication(result.value, "member@other.test")).toBe(
+        false,
+      );
+    }
+  });
+
+  test.each([
+    "spf=pass smtp.mailfrom=example.com; spf=fail smtp.mailfrom=other.test",
+    "dkim=pass header.d=example.com header.d=other.test",
+    "dkim=pass (unterminated",
+    'dkim=pass header.d="example.com',
+    "dkim=pass header.d=example.com\r\nAuthentication-Results: mx.example.test; dmarc=pass",
+  ])("rejects ambiguous or malformed provider evidence: %s", (value) => {
+    expect(provider(value).isErr()).toBe(true);
+  });
+
+  test("rejects an unexpected authentication server", () => {
+    expect(
+      parseProviderAuthentication({
+        authenticationResults: "evil.test; spf=pass",
+        authservId: "mx.example.test",
+        fromAddress: "member@example.com",
+      }).isErr(),
+    ).toBe(true);
+  });
+
+  test("relaxed alignment respects public and private suffix boundaries", () => {
+    for (const [fromDomain, authenticatedDomain, expected] of [
+      ["team.example.co.uk", "mail.example.co.uk", true],
+      ["example.co.uk", "attacker.co.uk", false],
+      ["alice.github.io", "bob.github.io", false],
+      ["example.com", "example.com.evil.test", false],
+      ["example.com", "evil-example.com", false],
+    ] as const) {
+      expect(
+        domainsAlign({ fromDomain, authenticatedDomain, mode: "relaxed" }),
+      ).toBe(expected);
+      expect(
+        domainsAlign({ fromDomain, authenticatedDomain, mode: "strict" }),
+      ).toBe(false);
+    }
+  });
+
+  test("strict policy rejects sibling subdomains", () => {
+    const auth = {
+      source: "local",
+      fromDomain: "example.com",
+      spf: { result: "pass", domain: "mail.example.com", alignment: "strict" },
+      dkim: [],
+      dmarc: "pass",
+    } satisfies MailAuthentication;
+    expect(hasAlignedAuthentication(auth, "member@example.com")).toBe(false);
+  });
+
+  test("local verification fails before DNS for an absent SMTP peer", async () => {
+    const result = await verifyMailLocally({
+      raw: new Uint8Array(),
+      fromAddress: "member@example.com",
+      envelope: {
+        mailFrom: "member@example.com",
+        recipients: [],
+        remoteIp: "",
+        helo: "mail.example.com",
+      },
+    });
+    expect(result.isErr()).toBe(true);
+  });
+});
