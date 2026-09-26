@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   entities,
@@ -12,6 +12,7 @@ import {
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -156,6 +157,51 @@ describe("createScopedDb", () => {
     // properties has 3 in wsA1 (text, file, and dependency fixtures)
     expect(result.props).toBe(3);
     expect(result.fields).toBe(2);
+  });
+});
+
+describe("service-owned explicit scopes", () => {
+  test("uses an empty actor setting and reads only the pinned matter", async () => {
+    const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, null);
+    const result = await scoped(async (tx) => ({
+      actor: await tx
+        .select({
+          value: sql<string>`pg_catalog.current_setting('app.user_id', true)`,
+        })
+        .from(workspaces)
+        .limit(1),
+      entities: await tx
+        .select({ workspaceId: entities.workspaceId })
+        .from(entities),
+    }));
+    expect(result.actor.at(0)?.value).toBe("");
+    expect(result.entities.map(({ workspaceId }) => workspaceId)).toEqual([
+      ids.wsA1,
+    ]);
+  });
+
+  test("discards explicit workspace IDs outside the stated organization", async () => {
+    const mixed = createScopedDb(testDb, [ids.wsA1, ids.wsB1], ids.orgA, null);
+    const mixedRows = await mixed((tx) =>
+      tx.select({ workspaceId: entities.workspaceId }).from(entities),
+    );
+    expect(mixedRows.map(({ workspaceId }) => workspaceId)).toEqual([ids.wsA1]);
+
+    const foreignOnly = createScopedDb(testDb, [ids.wsB1], ids.orgA, null);
+    expect(await foreignOnly((tx) => tx.$count(entities))).toBe(0);
+  });
+
+  test("safe service scopes retain the same matter and organization boundary", async () => {
+    const safe = createSafeDb(testDb, [ids.wsA2, ids.wsB1], ids.orgA, null);
+    const result = await safe((tx) =>
+      tx.select({ workspaceId: entities.workspaceId }).from(entities),
+    );
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.map(({ workspaceId }) => workspaceId)).toEqual([
+        ids.wsA2,
+      ]);
+    }
   });
 });
 

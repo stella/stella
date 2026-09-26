@@ -17,6 +17,7 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
@@ -86,7 +87,7 @@ type RunScopedTransactionOptions<
   database: RlsDatabase<TTransaction>;
   fn: (tx: TTransaction) => Promise<T>;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
 };
 
@@ -107,13 +108,27 @@ const runScopedTransaction = async <
   const wsIds = `{${workspaceIds.join(",")}}`;
 
   return await database.transaction(async (tx: TTransaction) => {
+    if (userId === null) {
+      // A service actor has no membership-derived authority. Resolve its
+      // explicit workspace IDs against the tenant before changing the role.
+      await tx.execute(sql`SELECT set_config(
+        '${sql.raw(SETTING_WORKSPACE_IDS)}',
+        coalesce((
+          SELECT pg_catalog.array_agg(${workspaces.id})::text
+          FROM ${workspaces}
+          WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
+            AND ${workspaces.organizationId} = ${organizationId}
+        ), '{}'),
+        true
+      )`);
+    }
     await tx.execute(
       sql`SELECT
         set_config('role', '${sql.raw(stella.name)}', true),
-        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${wsIds}, true),
+        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
         set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
         set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
-        set_config('${sql.raw(SETTING_USER_ID)}', ${userId}, true)`,
+        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true)`,
     );
 
     return await fn(tx);
@@ -130,7 +145,7 @@ export const createScopedDb =
     database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
+    userId: SafeId<"user"> | null,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
@@ -255,7 +270,7 @@ export const createSafeDb =
     database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
+    userId: SafeId<"user"> | null,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,

@@ -1,10 +1,23 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   bufferObjectCleanupIntents,
+  correspondence,
+  correspondenceAttachments,
   documentCounters,
   entities,
   entityVersions,
@@ -12,8 +25,10 @@ import {
   pendingUploads,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -23,6 +38,14 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
 
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -582,6 +605,256 @@ describe("createEntityFromBuffer", () => {
     );
     expect(processExtractionMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("service-owned buffer publication in the database", () => {
+  let db: TestDatabase;
+  let ids: TestIds;
+  let serviceScopedDb: ScopedDb;
+  const correspondenceId = createSafeId<"correspondence">();
+  const createdEntityIds: SafeId<"entity">[] = [];
+  const attachmentIds: SafeId<"correspondenceAttachment">[] = [];
+  const intentIds: SafeId<"pendingUpload">[] = [];
+
+  const objectKey = (): string => {
+    const key = requestKeys("PUT").at(0);
+    if (!key) {
+      throw new Error("Expected the file to be uploaded");
+    }
+    return key;
+  };
+
+  const intentForObject = async () =>
+    (
+      await db
+        .select({
+          id: bufferObjectCleanupIntents.id,
+          status: bufferObjectCleanupIntents.status,
+          writerUserId: bufferObjectCleanupIntents.writerUserId,
+          objectKey: bufferObjectCleanupIntents.objectKey,
+        })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.objectKey, objectKey()))
+    ).at(0);
+
+  const createServiceDocument = async (
+    afterCreate?: Parameters<typeof createEntityFromBuffer>[0]["afterCreate"],
+  ) =>
+    await createEntityFromBufferForTest({
+      scopedDb: serviceScopedDb,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: null,
+      recordAuditEvent: async () => undefined,
+      buffer: new TextEncoder().encode("service document bytes"),
+      fileName: "Inbound exhibit.txt",
+      mimeType: "text/plain",
+      afterCreate,
+    });
+
+  beforeAll(async () => {
+    const fixture = await getRlsFixture();
+    db = fixture.testDb;
+    ids = fixture.ids;
+    serviceScopedDb = asTestRaw<ScopedDb>(
+      createScopedDb(db, [ids.wsA1], ids.orgA, null),
+    );
+    await db.insert(correspondence).values({
+      id: correspondenceId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      direction: "in",
+      channel: "email",
+      contentHash: "a".repeat(64),
+      dedupKey: "b".repeat(64),
+      from: { address: "sender@example.test", name: null },
+      to: [{ address: "matter@example.test", name: null }],
+      cc: [],
+      subject: "Inbound exhibit",
+      receivedAt: new Date("2026-09-26T12:00:00.000Z"),
+      references: [],
+      bodyText: "Attached.",
+      spf: "pass",
+      dkim: "none",
+      dmarc: "pass",
+    });
+  });
+
+  beforeEach(() => {
+    fake = startFakeS3();
+    enqueueImageThumbnailOrMarkFailedMock.mockClear();
+    enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
+  afterAll(async () => {
+    try {
+      if (attachmentIds.length > 0) {
+        await db
+          .delete(correspondenceAttachments)
+          .where(inArray(correspondenceAttachments.id, attachmentIds));
+      }
+      if (createdEntityIds.length > 0) {
+        await db.delete(entities).where(inArray(entities.id, createdEntityIds));
+      }
+      if (intentIds.length > 0) {
+        await db
+          .delete(bufferObjectCleanupIntents)
+          .where(inArray(bufferObjectCleanupIntents.id, intentIds));
+      }
+      await db
+        .delete(correspondence)
+        .where(eq(correspondence.id, correspondenceId));
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
+  test("commits a service document with null attribution and retires its exact-key intent", async () => {
+    const pendingBefore = await db.$count(
+      pendingUploads,
+      eq(pendingUploads.workspaceId, ids.wsA1),
+    );
+    let intentDuringTransaction:
+      | {
+          status: string;
+          writerUserId: SafeId<"user"> | null;
+          objectKey: string;
+        }
+      | undefined;
+    const created = await createServiceDocument(async (tx) => {
+      intentDuringTransaction = (
+        await tx
+          .select({
+            status: bufferObjectCleanupIntents.status,
+            writerUserId: bufferObjectCleanupIntents.writerUserId,
+            objectKey: bufferObjectCleanupIntents.objectKey,
+          })
+          .from(bufferObjectCleanupIntents)
+          .where(eq(bufferObjectCleanupIntents.objectKey, objectKey()))
+      ).at(0);
+    });
+    if (Result.isError(created)) {
+      throw created.error;
+    }
+    createdEntityIds.push(created.value.entityId);
+
+    expect(intentDuringTransaction).toEqual({
+      status: "writing",
+      writerUserId: "",
+      objectKey: objectKey(),
+    });
+    expect(await intentForObject()).toBeUndefined();
+    expect(
+      await db.$count(pendingUploads, eq(pendingUploads.workspaceId, ids.wsA1)),
+    ).toBe(pendingBefore);
+    expect(
+      await db.query.entities.findFirst({
+        where: { id: { eq: created.value.entityId } },
+        columns: { createdBy: true, currentVersionId: true },
+      }),
+    ).toEqual({
+      createdBy: null,
+      currentVersionId: created.value.entityVersionId,
+    });
+    expect(
+      await db.query.fields.findFirst({
+        where: { id: { eq: created.value.fieldId } },
+        columns: { entityVersionId: true },
+      }),
+    ).toEqual({ entityVersionId: created.value.entityVersionId });
+    expect(enqueuePdfDerivativeOrMarkFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: null,
+        entityId: created.value.entityId,
+      }),
+    );
+    expect(enqueueImageThumbnailOrMarkFailedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: null,
+        entityId: created.value.entityId,
+      }),
+    );
+    expect(objectKeysInStore()).toHaveLength(1);
+    expect(requestKeys("DELETE")).toEqual([]);
+  });
+
+  test("rolls back the entity and attachment link when the callback fails, then removes the bytes", async () => {
+    const attachmentId = createSafeId<"correspondenceAttachment">();
+    attachmentIds.push(attachmentId);
+    let attemptedEntityId: SafeId<"entity"> | undefined;
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createServiceDocument(async (tx, created) => {
+          attemptedEntityId = created.entityId;
+          await tx.insert(correspondenceAttachments).values({
+            id: attachmentId,
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+            correspondenceId,
+            entityId: created.entityId,
+            ordinal: 0,
+            filename: created.fileName,
+            mediaType: "text/plain",
+            byteSize: 22,
+            scanVerdict: "clean",
+          });
+          throw new Error("link write failed");
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted) && attempted.error instanceof Error) {
+      expect(attempted.error.message).toBe("link write failed");
+    }
+    expect(attemptedEntityId).toBeDefined();
+    if (!attemptedEntityId) {
+      throw new Error("Callback did not reach entity insert");
+    }
+    expect(
+      await db.query.entities.findFirst({
+        where: { id: { eq: attemptedEntityId } },
+      }),
+    ).toBeUndefined();
+    expect(
+      await db
+        .select({ id: correspondenceAttachments.id })
+        .from(correspondenceAttachments)
+        .where(eq(correspondenceAttachments.id, attachmentId)),
+    ).toEqual([]);
+    expect(await intentForObject()).toBeUndefined();
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect(objectKeysInStore()).toEqual([]);
+    expect(enqueuePdfDerivativeOrMarkFailedMock).not.toHaveBeenCalled();
+  });
+
+  test("retains an orphaned exact-key intent when callback cleanup is denied", async () => {
+    fake.failNext({ method: "DELETE", code: "AccessDenied", status: 403 });
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createServiceDocument(async () => {
+          throw new Error("link write failed");
+        }),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(attempted)).toBe(true);
+    const intent = await intentForObject();
+    expect(intent).toMatchObject({
+      status: "orphaned",
+      writerUserId: "",
+      objectKey: objectKey(),
+    });
+    if (intent) {
+      intentIds.push(intent.id);
+    }
+    expect(objectKeysInStore()).toEqual(
+      requestKeys("PUT").map((key) => `${envBase.S3_BUCKET}/${key}`),
+    );
   });
 });
 
