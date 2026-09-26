@@ -25,7 +25,7 @@
  * never re-read from the clock.
  */
 
-import { PDF, PlaceholderError } from "@libpdf/core";
+import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
 import type {
   DigestAlgorithm,
   Signer,
@@ -183,6 +183,40 @@ type SigningInvocation = SigningIdentity & {
   stamp: SignatureStamp | null;
 };
 
+/** The length of a file identifier LibPDF would mint itself. */
+const FILE_IDENTIFIER_BYTES = 16;
+
+/**
+ * Give a document without a trailer /ID one derived from its bytes. Saving
+ * needs an /ID, and LibPDF mints a random one when there is none; that
+ * would make each phase's prepared bytes, and so the digest, differ.
+ */
+const pinFileIdentifier = (pdf: PDF, source: Uint8Array) => {
+  const { trailer } = pdf.context.info;
+  const existing = trailer.getArray("ID");
+  if (
+    existing !== undefined &&
+    existing.length >= 2 &&
+    existing.at(0) instanceof PdfString &&
+    existing.at(1) instanceof PdfString
+  ) {
+    return;
+  }
+  const identifier = new Uint8Array(
+    new Bun.CryptoHasher("sha256")
+      .update(source)
+      .digest()
+      .subarray(0, FILE_IDENTIFIER_BYTES),
+  );
+  trailer.set(
+    "ID",
+    new PdfArray([
+      PdfString.fromBytes(identifier),
+      PdfString.fromBytes(identifier),
+    ]),
+  );
+};
+
 /**
  * Put the stamp's field on the page, when there is one, and name the field
  * to sign into. Runs on a freshly loaded document in both phases; the stamp
@@ -312,6 +346,7 @@ export const captureSigningDigest = async (
         });
       }
       try {
+        pinFileIdentifier(pdf, invocation.basePdf);
         const fieldName = await prepareSignatureField(pdf, invocation);
         await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName));
       } catch (error) {
@@ -447,6 +482,7 @@ export const applySignature = async (
 
   const signOnce = async (trust: TrustOptions) => {
     const pdf = await PDF.load(invocation.basePdf);
+    pinFileIdentifier(pdf, invocation.basePdf);
     const fieldName = await prepareSignatureField(pdf, invocation);
     const { bytes, warnings } = await pdf.sign(
       buildSignOptions(invocation, signer, trust, fieldName),
