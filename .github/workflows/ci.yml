@@ -879,6 +879,13 @@ jobs:
         # that joined no shard would leave CI silently.
         run: bun test scripts/test-shards.test.ts
 
+      - name: Landing deploy scope
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # deploy-landing.yml deploys only when scripts/landing-deploy-scope.ts
+        # finds a change the landing build reads; a wrong answer there leaves
+        # the site stale.
+        run: bun test scripts/landing-deploy-scope.test.ts
+
       - name: Module ownership
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # scripts/ownership.ts holds one row per owned capability. The
