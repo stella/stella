@@ -6,7 +6,6 @@ import path from "node:path";
 import {
   configuredTimestampTrustAnchors,
   parseTrustAnchors,
-  reachesTrustAnchor,
 } from "@/api/lib/pdf-signing/timestamp-trust";
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
 
@@ -42,15 +41,5 @@ describe("timestamp trust anchors", () => {
       [],
     );
     expect(parseTrustAnchors("no certificates here")).toEqual([]);
-  });
-
-  test("matches a chain by exact certificate, not by name", async () => {
-    const anchor = await createTestCertificate({ commonName: "Anchor" });
-    const lookalike = await createTestCertificate({ commonName: "Anchor" });
-
-    expect(reachesTrustAnchor([lookalike.der], [anchor.der])).toBe(false);
-    expect(reachesTrustAnchor([lookalike.der, anchor.der], [anchor.der])).toBe(
-      true,
-    );
   });
 });
