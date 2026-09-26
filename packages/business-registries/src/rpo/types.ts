@@ -25,7 +25,7 @@ export type RpoRawTimedValue = RpoRawTimed & {
   value?: string;
 };
 
-export type RpoRawTimedCodeValue = RpoRawTimed & {
+type RpoRawTimedCodeValue = RpoRawTimed & {
   value?: RpoRawCodeValue;
 };
 
@@ -76,11 +76,11 @@ export type RpoRawRelatedEntity = RpoRawTimed & {
   fullName?: string;
 };
 
-export type RpoRawActivity = RpoRawTimed & {
+type RpoRawActivity = RpoRawTimed & {
   economicActivityDescription?: string;
 };
 
-export type RpoRawStatisticalCodes = {
+type RpoRawStatisticalCodes = {
   mainActivity?: RpoRawCodeValue;
 };
 
