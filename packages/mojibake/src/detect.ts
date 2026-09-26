@@ -569,6 +569,9 @@ const signatureSpans = (
   return { occurrences, samples };
 };
 
+/** A word with letters, none of them lowercase. */
+const CAPITALS_ONLY = /^(?=.*\p{L})\P{Ll}*$/u;
+
 const UTF8_SIGNATURE_PAIRS: readonly DecodingPair[] = (
   ["windows-1252", "iso-8859-1"] satisfies Charset[]
 ).map((assumed) => ({ actual: "utf-8", assumed }));
@@ -630,6 +633,7 @@ const utf8Signature = (
   alphabet: Alphabet | null,
 ): Extract<EncodingFinding, { kind: "utf8-read-as-single-byte" }> | null => {
   let occurrences = 0;
+  let beyondCapitals = false;
   const samples: RepairedSpan[] = [];
   for (const [word, stat] of words) {
     const repaired = UTF8_SIGNATURE_PAIRS.map((pair) =>
@@ -639,11 +643,14 @@ const utf8Signature = (
       continue;
     }
     occurrences += stat.count;
+    beyondCapitals ||= !CAPITALS_ONLY.test(word);
     if (samples.length < MAX_SAMPLES) {
       samples.push({ ...span(word, stat), repaired: repaired.text });
     }
   }
-  return occurrences >= MIN_UTF8_SIGNATURE_OCCURRENCES
+  // Capitals are where a writer's letters spell UTF-8 by accident (Slovak
+  // "ÄŽ" is C4 8E, "Ď"): words in capitals alone are no signature.
+  return beyondCapitals && occurrences >= MIN_UTF8_SIGNATURE_OCCURRENCES
     ? { kind: "utf8-read-as-single-byte", occurrences, samples }
     : null;
 };

@@ -213,8 +213,17 @@ describe("every pair of a language's own letters", () => {
       ...letters,
       ...letters.map((char) => char.toUpperCase()),
     ].filter((char) => Array.from(char).length === 1);
+    const isUpper = (char: string): boolean => /\p{Lu}/u.test(char);
+    // Each pair inside a word cased as a writer cases one: all lower, all
+    // capitals, or a capital first. A capital after a lowercase letter is
+    // what the detector reads as a misread byte, so no writer's word has one.
     const pairs = cased.flatMap((first) =>
-      cased.map((second) => `a${first}${second}a`),
+      cased
+        .filter((second) => isUpper(first) || !isUpper(second))
+        .map(
+          (second) =>
+            `${isUpper(first) ? "A" : "a"}${first}${second}${isUpper(second) ? "A" : "a"}`,
+        ),
     );
     const text = [UDHR_ARTICLE_1[language], ...pairs, ...pairs].join(" ");
     expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
