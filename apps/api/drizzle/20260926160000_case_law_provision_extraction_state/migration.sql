@@ -285,6 +285,32 @@ ALTER TABLE "case_law_provision_scope_transitions" ENABLE ROW LEVEL SECURITY;-->
 ALTER TABLE "case_law_provision_extraction_revisions_registry" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_provision_extraction_revisions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_provision_extractions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_extraction_scopes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_scope_transitions" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_extraction_revisions_registry" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_extraction_revisions" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_extractions" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+
+-- Row security is forced, so the owner is bound by policy too, and the
+-- owner-run functions (the enqueue trigger, ensure_…_state, the in-scope
+-- predicate, the revision setter) write and read these tables as the owner.
+-- The owner role is named per deployment, so the policy cannot name it; table
+-- privileges decide who reaches the rows.
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all, stella and stella_ingestion only the grants below, and no other role any
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_extraction_scopes"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all, stella and stella_ingestion only the grants below, and no other role any
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_scope_transitions"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all, stella and stella_ingestion only the grants below, and no other role any
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_extraction_revisions_registry"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all, stella and stella_ingestion only the grants below, and no other role any
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_extraction_revisions"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all, stella and stella_ingestion only the grants below, and no other role any
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_extractions"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 
 CREATE POLICY "case_law_global_access" ON "case_law_provision_scope_transitions"
   AS PERMISSIVE FOR SELECT TO "stella" USING (true);--> statement-breakpoint

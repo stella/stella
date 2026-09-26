@@ -30,6 +30,20 @@ const sqlValues = (values: readonly string[]) =>
     sql.raw(","),
   );
 
+/**
+ * Row security is forced on every table here (migration
+ * `20260926160000_case_law_provision_extraction_state`), so the owner-run
+ * functions need a policy too. The owner role is named per deployment, so the
+ * policy admits every role and table privileges decide access.
+ */
+const ownerAccessPolicy = () =>
+  p.pgPolicy("case_law_provision_extraction_owner_access", {
+    for: "all",
+    to: "public",
+    using: sql`true`,
+    withCheck: sql`true`,
+  });
+
 const PROVISION_EXTRACTION_SCOPE_STATUSES = ["active", "retired"] as const;
 
 const PROVISION_SCOPE_TRANSITION_ACTIONS = ["activate", "retire"] as const;
@@ -99,6 +113,7 @@ export const caseLawProvisionExtractionScopes = p.pgTable.withRLS(
       "case_law_provision_extraction_scopes_generation_positive",
       sql`${t.generation} > 0`,
     ),
+    ownerAccessPolicy(),
   ],
 );
 
@@ -137,6 +152,7 @@ export const caseLawProvisionScopeTransitions = p.pgTable(
       sql`${t.action} IN (${sqlValues(PROVISION_SCOPE_TRANSITION_ACTIONS)})`,
     ),
     ...globalCaseLawPolicies(),
+    ownerAccessPolicy(),
   ],
 );
 
@@ -171,6 +187,7 @@ export const caseLawProvisionExtractionRevisionsRegistry = p.pgTable(
       sql`${t.engineInputDigest} ~ '^[0-9a-f]{64}$' AND ${t.profileDigest} ~ '^[0-9a-f]{64}$'`,
     ),
     ...globalCaseLawPolicies(),
+    ownerAccessPolicy(),
   ],
 );
 
@@ -203,6 +220,7 @@ export const caseLawProvisionExtractionRevisions = p.pgTable(
       sql`${t.minCurrentRevision} > 0 AND ${t.minCurrentRevision} <= ${t.desiredRevision}`,
     ),
     ...globalCaseLawPolicies(),
+    ownerAccessPolicy(),
   ],
 );
 
@@ -371,5 +389,6 @@ export const caseLawProvisionExtractions = p.pgTable(
       sql`${t.rowsDigest} IS NULL OR ${t.rowsDigest} ~ '^[0-9a-f]{64}$'`,
     ),
     ...globalCaseLawPolicies(),
+    ownerAccessPolicy(),
   ],
 );
