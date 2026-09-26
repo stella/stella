@@ -127,7 +127,7 @@ export type OrsrRawAuthorization = OrsrRawValueTemporal;
 
 // A legal-status event (merger, dissolution, liquidation) recorded on the
 // full extract.
-export type OrsrRawLegalStatusEvent = OrsrRawTemporal & {
+type OrsrRawLegalStatusEvent = OrsrRawTemporal & {
   type?: string | null;
   text?: string | null;
 };
@@ -338,7 +338,7 @@ export type OrsrHistoryEntry =
       role: string | null;
     });
 
-export type OrsrDocumentMedium = "electronic" | "paper";
+type OrsrDocumentMedium = "electronic" | "paper";
 
 /** A document filed in the collection of deeds (zbierka listín). */
 export type OrsrDocument = {
