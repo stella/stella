@@ -2,6 +2,7 @@ import { EventType } from "@tanstack/ai";
 import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
 // A thread holds each tool call id once. Some providers number calls per
@@ -51,7 +52,7 @@ export const CALL_ID_CARRIER = {
 const callIdsOf = (messages: readonly ModelMessage[]): Set<string> =>
   new Set(
     messages.flatMap((message) => [
-      ...(message.toolCalls ?? []).map(({ id }) => id),
+      ...arrayOrEmpty(message.toolCalls).map(({ id }) => id),
       ...(message.toolCallId === undefined ? [] : [message.toolCallId]),
     ]),
   );

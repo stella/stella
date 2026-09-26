@@ -108,7 +108,8 @@ describe("tool call ids from a provider", () => {
           }
           expect(at).toBe(out.length);
           // An id the thread did not hold yet reaches the engine as sent.
-          const seen = new Set(historyIds);
+          // Renamed ids widen the set beyond the generated alphabet.
+          const seen = new Set<string>(historyIds);
           for (const [index, [id]] of calls.entries()) {
             if (!seen.has(id)) {
               expect(started[index]).toBe(id);
