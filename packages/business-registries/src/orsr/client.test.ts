@@ -517,6 +517,32 @@ describe("lookupFullRecordByIco", () => {
     });
   });
 
+  test("a malformed document row marks the documents unavailable", async () => {
+    const fixtures = await eset();
+    restore = installPathStub(async (url) => {
+      switch (url.pathname) {
+        case "/api/legal-person/extract":
+          return jsonResponse(fixtures.extract);
+        case "/api/legal-person/extract-full":
+          return jsonResponse(fixtures.full);
+        case "/api/legal-person/documents":
+          return jsonResponse([{ serialNumber: 1, name: 5 }]);
+        case "/api/legal-person/related":
+          return jsonResponse(fixtures.related);
+        default:
+          return jsonResponse(fixtures.search);
+      }
+    });
+
+    const record = await lookupFullRecordByIco("31333532");
+
+    expect(record?.company.ico).toBe("31333532");
+    expect(record?.documents).toEqual({
+      status: "unavailable",
+      reason: "ORSR 200: unexpected JSON payload shape",
+    });
+  });
+
   test("an outage page instead of the extract fails the lookup", async () => {
     const fixtures = await eset();
     restore = installPathStub(async (url) =>

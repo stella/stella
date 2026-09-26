@@ -1,4 +1,8 @@
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalNumber,
+  hasOptionalString,
+  isRecord,
+} from "../shared/guards.js";
 import {
   DEFAULT_REGISTRY_TIMEOUT_MS,
   performRegistryRequest,
@@ -81,8 +85,13 @@ const isOrsrDocumentList = (value: unknown): value is OrsrRawDocument[] =>
   value.every(
     (item) =>
       isRecord(item) &&
-      (item["serialNumber"] === undefined ||
-        typeof item["serialNumber"] === "number"),
+      hasOptionalNumber(item, "serialNumber") &&
+      hasOptionalString(item, "name") &&
+      hasOptionalNumber(item, "type") &&
+      hasOptionalString(item, "deliveryDate") &&
+      hasOptionalNumber(item, "pageCount") &&
+      (item["isElectronic"] === undefined ||
+        typeof item["isElectronic"] === "boolean"),
   );
 
 const isOrsrRelatedResponse = (
