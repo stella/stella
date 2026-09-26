@@ -44,7 +44,7 @@ export const resolveInboundSender = async ({
       ),
     )
     .limit(1)
-    .for("share");
+    .for("update");
   const approval = approvals.at(0);
   if (!approval) {
     if (
