@@ -1,13 +1,24 @@
-The run's abort signal reaches every Mistral request: the raw stream
-fetch and structuredOutput's chat.complete. Upstream has no signal on
-either (ai-mistral 0.6.11 main); upstream PR to be opened.
-Remove when an @tanstack/ai-mistral release passes the signal.
+1. The run's abort signal reaches every Mistral request: the raw stream
+   fetch and structuredOutput's chat.complete (ai-mistral 0.6.11 main has
+   neither). Upstream PR to be opened; remove when released.
+2. A non-OK response's error carries its HTTP status and parsed body, and the
+   RUN_ERROR forwards them as rawEvent, as the SDK-based adapters do since
+   TanStack/ai#985. The rethrow after RUN_ERROR is upstream's (tested) and
+   stays. Upstream PR to be opened; remove when released.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cbafaa750d2 100644
+index eb1590b59f2c300617d15087221238ff62cd1683..60c33192bc7e7018d51672cba9b2ad9f2acd45a6 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -48,7 +48,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -3,6 +3,7 @@ import { convertToolsToProviderFormat } from "../tools/tool-converter.js";
+ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../utils/client.js";
+ import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
++import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { undoNullWidening } from "@tanstack/ai-utils";
+ //#region src/adapters/text.ts
+ /** Cast an event object to StreamChunk. Adapters construct events with string
+@@ -48,7 +49,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  			hasEmittedRunStarted: false
  		};
  		try {
@@ -16,7 +27,23 @@ index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cba
  			yield* this.processMistralStreamChunks(stream, options, aguiState);
  		} catch (error) {
  			const err = error;
-@@ -94,7 +94,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -62,6 +63,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					timestamp
+ 				});
+ 			}
++			const rawEvent = toRunErrorRawEvent(err);
+ 			yield asChunk({
+ 				type: "RUN_ERROR",
+ 				runId: aguiState.runId,
+@@ -69,6 +71,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 				timestamp,
+ 				message: err.message || "Unknown error",
+ 				code: err.code,
++				...rawEvent !== void 0 && { rawEvent },
+ 				error: {
+ 					message: err.message || "Unknown error",
+ 					code: err.code
+@@ -94,7 +97,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					strict
  				}
  			}
@@ -25,7 +52,7 @@ index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cba
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
  		let parsed;
-@@ -414,7 +414,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -414,7 +417,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -34,7 +61,7 @@ index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cba
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -426,7 +426,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -426,11 +429,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  		const response = await fetch(url, {
  			method: "POST",
  			headers,
@@ -44,3 +71,15 @@ index eb1590b59f2c300617d15087221238ff62cd1683..3fe3345b3e0d1b9e3003223962b99cba
  		});
  		if (!response.ok) {
  			const errorText = await response.text();
+-			throw new Error(`Mistral API error ${response.status}: ${errorText}`);
++			const apiError = new Error(`Mistral API error ${response.status}: ${errorText}`);
++			// The status and the provider's error body, as the SDK-based adapters' errors carry them.
++			apiError.status = response.status;
++			try {
++				const body = JSON.parse(errorText);
++				if (body && typeof body === "object" && !Array.isArray(body)) apiError.error = body;
++			} catch {}
++			throw apiError;
+ 		}
+ 		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
+ 		const reader = response.body.getReader();

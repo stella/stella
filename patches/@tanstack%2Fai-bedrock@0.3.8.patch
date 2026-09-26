@@ -1,0 +1,33 @@
+Converse's RUN_ERROR carries rawEvent (toRunErrorRawEvent), as the other
+adapters' do since TanStack/ai#985; it had none, so the provider status was lost.
+Upstream PR to be opened. Remove when an @tanstack/ai-bedrock release does it.
+
+diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
+index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f529e50d604 100644
+--- a/dist/esm/adapters/converse-text.js
++++ b/dist/esm/adapters/converse-text.js
+@@ -6,7 +6,7 @@ import { processConverseStream, throwIfConverseStreamError } from "../converse/s
+ import { buildStructuredToolConfig } from "../converse/structured-output.js";
+ import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+-import { toRunErrorPayload } from "@tanstack/ai/adapter-internals";
++import { toRunErrorPayload, toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ //#region src/adapters/converse-text.ts
+ /**
+ * Bedrock Converse text adapter. Wires the Converse translation modules (message
+@@ -126,6 +126,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 			});
+ 		} catch (error) {
+ 			const errorPayload = toRunErrorPayload(error, `${this.name}.chatStream failed`);
++			const rawEvent = toRunErrorRawEvent(error);
+ 			options.logger.errors(`${this.name}.chatStream fatal`, {
+ 				error: errorPayload,
+ 				source: `${this.name}.chatStream`
+@@ -136,6 +137,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 				timestamp: Date.now(),
+ 				message: errorPayload.message,
+ 				...errorPayload.code !== void 0 && { code: errorPayload.code },
++				...rawEvent !== void 0 && { rawEvent },
+ 				error: {
+ 					message: errorPayload.message,
+ 					...errorPayload.code !== void 0 && { code: errorPayload.code }

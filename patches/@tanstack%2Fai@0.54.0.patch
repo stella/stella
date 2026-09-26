@@ -1,3 +1,10 @@
+error-payload.js: toRunErrorRawEvent keeps the provider's HTTP status next to
+the body it forwards, forwards an AWS service exception's name, fault side
+and status (it has no body), and forwards the status alone when the error has
+no body. `code` precedence (#985) is unchanged.
+Upstream: to be raised as an issue (a status field on RUN_ERROR).
+Remove when a @tanstack/ai release carries the status on RUN_ERROR.
+
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
 index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b342445fbe 100644
 --- a/dist/esm/activities/chat/stream/processor.js
@@ -68,3 +75,63 @@ index 240c7373c037311973b4e304e59071a6b7660a56..d982a23b7ca8cf8c009f9db383c3f40e
  		}
  		if (resumeState?.cancelledToolCallIds?.has(toolCall.id)) {
  			results.push({
+diff --git a/dist/esm/activities/error-payload.js b/dist/esm/activities/error-payload.js
+index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a3f55e56f 100644
+--- a/dist/esm/activities/error-payload.js
++++ b/dist/esm/activities/error-payload.js
+@@ -91,12 +91,52 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
+ *   const rawEvent = toRunErrorRawEvent(error)
+ *   yield { type: EventType.RUN_ERROR, ..., ...(rawEvent !== undefined && { rawEvent }) }
+ */
++function httpStatusOf(e) {
++	return typeof e.status === "number" && Number.isInteger(e.status) && e.status >= 100 && e.status <= 599 ? e.status : void 0;
++}
++/**
++* The response's HTTP status travels with the body it came with: an SDK keeps
++* it on the exception, not in the body, and a symbolic `code` in the body
++* (`rate_limit_exceeded`, `model_not_found`) otherwise leaves the event with
++* no status at all. `code` precedence (#985) is untouched.
++*/
++function withHttpStatus(body, e) {
++	const status = httpStatusOf(e);
++	if (status === void 0 || typeof body !== "object" || Array.isArray(body) || "status" in body) return body;
++	return {
++		...body,
++		status
++	};
++}
++/**
++* An AWS SDK service exception carries no body; its identity is its name, its
++* fault side and the response status.
++*/
++function awsExceptionEvidence(e) {
++	if (e.$fault !== "client" && e.$fault !== "server" || typeof e.name !== "string") return void 0;
++	const status = e.$metadata?.httpStatusCode;
++	return {
++		name: e.name,
++		$fault: e.$fault,
++		...typeof status === "number" && { $metadata: { httpStatusCode: status } },
++		...typeof e.message === "string" && { message: e.message }
++	};
++}
++/**
++* A response whose body is not a JSON object (plain text, HTML, empty) still
++* left its HTTP status on the exception.
++*/
++function statusEvidence(e) {
++	const status = httpStatusOf(e);
++	return status === void 0 ? void 0 : { status };
++}
+ function toRunErrorRawEvent(error) {
+ 	if (!error || typeof error !== "object") return void 0;
+ 	const e = error;
+-	if (e.rawEvent !== void 0 && e.rawEvent !== null) return e.rawEvent;
+-	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return e.error;
+-	if (e.metadata !== void 0 && e.metadata !== null) return e.metadata;
++	if (e.rawEvent !== void 0 && e.rawEvent !== null) return withHttpStatus(e.rawEvent, e);
++	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return withHttpStatus(e.error, e);
++	if (e.metadata !== void 0 && e.metadata !== null) return withHttpStatus(e.metadata, e);
++	return awsExceptionEvidence(e) ?? statusEvidence(e);
+ }
+ //#endregion
+ export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };
