@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Toto PDF je chránené heslom. Pred podpísaním ochranu odstráňte.",
         "expiredDescription": "stella desktop nestihol podpisovanie dokončiť. Spustite ho a skúste to znova.",
         "expiredTitle": "Čas na podpísanie vypršal",
+        "inProgressDescription": "Tento súbor sa už podpisuje. Najprv toto podpisovanie v stella desktop dokončite alebo zrušte.",
         "noFileDescription": "K tomuto dokumentu nie je pripojený žiadny súbor na podpis.",
         "notAPdfDescription": "Podpísať možno iba súbory PDF.",
         "readOnlyDescription": "Tento dokument je len na čítanie.",

@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Este PDF está protegido con contraseña. Quita la protección antes de firmar.",
         "expiredDescription": "stella desktop no terminó la firma a tiempo. Ábrelo e inténtalo de nuevo.",
         "expiredTitle": "Se agotó el tiempo para firmar",
+        "inProgressDescription": "Este archivo ya se está firmando. Termina o cancela esa firma en stella desktop primero.",
         "noFileDescription": "Este documento no tiene ningún archivo que firmar.",
         "notAPdfDescription": "Solo se pueden firmar archivos PDF.",
         "readOnlyDescription": "Este documento es de solo lectura.",

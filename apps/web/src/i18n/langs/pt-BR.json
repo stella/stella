@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Este PDF está protegido por senha. Remova a proteção antes de assinar.",
         "expiredDescription": "O stella desktop não concluiu a assinatura a tempo. Inicie-o e tente novamente.",
         "expiredTitle": "Tempo de assinatura esgotado",
+        "inProgressDescription": "Este arquivo já está sendo assinado. Conclua ou cancele essa assinatura no stella desktop primeiro.",
         "noFileDescription": "Este documento não tem arquivo para assinar.",
         "notAPdfDescription": "Somente arquivos PDF podem ser assinados.",
         "readOnlyDescription": "Este documento é somente leitura.",

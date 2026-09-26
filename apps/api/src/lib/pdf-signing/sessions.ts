@@ -8,12 +8,13 @@
  * token, so two desktops racing the same deep link cannot both win.
  */
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, lte } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -66,6 +67,56 @@ const isPdfSigningTokenShape = isOpaqueTokenShape;
  * integration test can drive the real statements against a test database.
  */
 type PdfSigningDatabase = typeof rootDb;
+
+export type OpenedPdfSigningSession =
+  | { status: "created"; expiredSessionIds: SafeId<"pdfSigningSession">[] }
+  | { status: "in-progress" };
+
+/**
+ * Open a new exchange for one person's file field.
+ *
+ * Only one may be open at a time (`pdf_signing_sessions_open_uidx`), and an
+ * exchange past its TTL is dead but still stored as open: nothing sweeps it.
+ * So the dead ones are closed first, in the same transaction (the UPDATE
+ * locks them), and the insert yields to a live one instead of failing on
+ * the index. Two racing requests end with one exchange and one
+ * `in-progress`.
+ */
+export const openPdfSigningSession = async ({
+  now,
+  tx,
+  values,
+}: {
+  now: Date;
+  tx: Pick<Transaction, "insert" | "update">;
+  values: typeof pdfSigningSessions.$inferInsert;
+}): Promise<OpenedPdfSigningSession> => {
+  // audit: skip — the caller records each expiry it closes and the CREATE.
+  const expired = await tx
+    .update(pdfSigningSessions)
+    .set({ closeReason: "expired", closedAt: now, status: "cancelled" })
+    .where(
+      and(
+        eq(pdfSigningSessions.createdBy, values.createdBy),
+        eq(pdfSigningSessions.entityId, values.entityId),
+        eq(pdfSigningSessions.propertyId, values.propertyId),
+        eq(pdfSigningSessions.status, "open"),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
+        lte(pdfSigningSessions.tokenExpiresAt, now),
+      ),
+    )
+    .returning({ id: pdfSigningSessions.id });
+
+  const inserted = await tx
+    .insert(pdfSigningSessions)
+    .values(values)
+    .onConflictDoNothing()
+    .returning({ id: pdfSigningSessions.id });
+
+  return inserted.at(0)
+    ? { status: "created", expiredSessionIds: expired.map(({ id }) => id) }
+    : { status: "in-progress" };
+};
 
 export type RedeemedPdfSigningSession = {
   documentName: string;

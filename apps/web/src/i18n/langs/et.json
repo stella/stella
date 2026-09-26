@@ -5108,6 +5108,7 @@
         "encryptedDescription": "See PDF on parooliga kaitstud. Eemalda kaitse enne allkirjastamist.",
         "expiredDescription": "stella desktop ei jõudnud allkirjastamist lõpetada. Käivita see ja proovi uuesti.",
         "expiredTitle": "Allkirjastamise aeg sai läbi",
+        "inProgressDescription": "Seda faili juba allkirjastatakse. Lõpeta või tühista see allkirjastamine stella desktopis enne.",
         "noFileDescription": "Sellel dokumendil pole allkirjastatavat faili.",
         "notAPdfDescription": "Allkirjastada saab ainult PDF-faile.",
         "readOnlyDescription": "See dokument on kirjutuskaitstud.",

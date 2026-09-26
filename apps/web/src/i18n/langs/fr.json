@@ -5108,6 +5108,7 @@
         "encryptedDescription": "Ce PDF est protégé par mot de passe. Retirez la protection avant de signer.",
         "expiredDescription": "stella desktop n’a pas terminé la signature à temps. Lancez-le et réessayez.",
         "expiredTitle": "Délai de signature dépassé",
+        "inProgressDescription": "Ce fichier est déjà en cours de signature. Terminez ou annulez d’abord cette signature dans stella desktop.",
         "noFileDescription": "Ce document n’a aucun fichier à signer.",
         "notAPdfDescription": "Seuls les fichiers PDF peuvent être signés.",
         "readOnlyDescription": "Ce document est en lecture seule.",
