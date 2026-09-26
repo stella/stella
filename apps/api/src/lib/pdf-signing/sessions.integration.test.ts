@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -12,6 +13,7 @@ import type { rootDb, Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
 import {
   claimFinalizeAttempt,
   MAX_FINALIZE_ATTEMPTS,
@@ -349,7 +351,7 @@ describe("pdf signing finalization attempts", () => {
     // A retry racing a live attempt waits instead of embedding twice.
     expect(await claim(start)).toEqual({ status: "in-progress" });
 
-    await releaseFinalizeAttempt({ sessionId, tx: store() });
+    await releaseFinalizeAttempt({ attempt: 1, sessionId, tx: store() });
     expect(await claim(start)).toEqual({ status: "claimed", attempt: 2 });
 
     // An attempt that died without releasing stops blocking once its lease
@@ -357,9 +359,59 @@ describe("pdf signing finalization attempts", () => {
     const afterLease = new Date(start.getTime() + 10 * MINUTE_MS);
     expect(await claim(afterLease)).toEqual({ status: "claimed", attempt: 3 });
 
-    await releaseFinalizeAttempt({ sessionId, tx: store() });
+    await releaseFinalizeAttempt({ attempt: 3, sessionId, tx: store() });
     expect(MAX_FINALIZE_ATTEMPTS).toBe(3);
     expect(await claim(afterLease)).toEqual({ status: "exhausted" });
+  });
+
+  test("an attempt that outlived its lease cannot disturb the one that took over", async () => {
+    const { sessionId } = await seedHandoff();
+    const start = new Date();
+    const claim = async (now: Date) =>
+      await claimFinalizeAttempt({ now, sessionId, tx: store() });
+    const lapsed = new Date(start.getTime() + 10 * MINUTE_MS);
+
+    expect(await claim(start)).toEqual({ status: "claimed", attempt: 1 });
+    // Attempt 1 runs past its lease; attempt 2 takes over.
+    expect(await claim(lapsed)).toEqual({ status: "claimed", attempt: 2 });
+
+    // Attempt 1 finally fails: its release and its close are both fenced
+    // off, so attempt 2 keeps its lease and the exchange stays open.
+    await releaseFinalizeAttempt({ attempt: 1, sessionId, tx: store() });
+    const closed = await closePdfSigningSession({
+      attempt: 1,
+      closeReason: "signing_failed",
+      recordAuditEvent: async () => {
+        await Promise.resolve();
+      },
+      safeDb: async (callback) => Result.ok(await callback(store())),
+      sessionId,
+    });
+    expect(Result.isOk(closed)).toBe(true);
+    expect(await claim(new Date(lapsed.getTime() + 1000))).toEqual({
+      status: "in-progress",
+    });
+    const rows = await testDb
+      .select({ status: pdfSigningSessions.status })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)?.status).toBe("open");
+  });
+
+  test("the last attempt still running is in progress, not exhausted", async () => {
+    const { sessionId } = await seedHandoff();
+    const start = new Date();
+    await testDb
+      .update(pdfSigningSessions)
+      .set({ finalizeAttempts: MAX_FINALIZE_ATTEMPTS - 1 })
+      .where(eq(pdfSigningSessions.id, sessionId));
+
+    expect(
+      await claimFinalizeAttempt({ now: start, sessionId, tx: store() }),
+    ).toEqual({ status: "claimed", attempt: MAX_FINALIZE_ATTEMPTS });
+    expect(
+      await claimFinalizeAttempt({ now: start, sessionId, tx: store() }),
+    ).toEqual({ status: "in-progress" });
   });
 
   test("never claims or stores on a closed exchange", async () => {
