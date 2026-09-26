@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
-import { isTimestampAuthorityUrlList } from "@/api/lib/pdf-signing/timestamp-authority-urls";
+import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,

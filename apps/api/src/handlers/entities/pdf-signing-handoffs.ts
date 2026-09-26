@@ -11,16 +11,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   preflightPdfSigning,
   STAMP_LABEL_MAX_LENGTH,
-} from "@/api/lib/pdf-signing/handoff-preflight";
-import type { PdfSigningTargetRejection } from "@/api/lib/pdf-signing/pdf-target";
-import { readCurrentPdfSigningTarget } from "@/api/lib/pdf-signing/pdf-target";
+} from "@/api/lib/files/pdf-signing/handoff-preflight";
+import type { PdfSigningTargetRejection } from "@/api/lib/files/pdf-signing/pdf-target";
+import { readCurrentPdfSigningTarget } from "@/api/lib/files/pdf-signing/pdf-target";
 import {
   computePdfSigningHandoffExpiresAt,
   createPdfSigningToken,
   hashPdfSigningToken,
   openPdfSigningSession,
-} from "@/api/lib/pdf-signing/sessions";
-import { sanitizeSigningText } from "@/api/lib/pdf-signing/signing-text";
+} from "@/api/lib/files/pdf-signing/sessions";
+import { sanitizeSigningText } from "@/api/lib/files/pdf-signing/signing-text";
 
 /**
  * A user-supplied PAdES reason/location ends up inside the signature
@@ -188,6 +188,7 @@ const createPdfSigningHandoff = createSafeHandler(
         }
         const opened = await openPdfSigningSession({
           now: new Date(),
+          recordAuditEvent,
           tx,
           values: {
             baseVersionId: current.baseVersionId,
@@ -220,16 +221,6 @@ const createPdfSigningHandoff = createSafeHandler(
             }),
           };
         }
-        await recordAuditEvent(
-          tx,
-          opened.expiredSessionIds.map((expiredSessionId) => ({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-            resourceId: expiredSessionId,
-            changes: { status: { old: "open", new: "cancelled" } },
-            metadata: { closeReason: "expired" },
-          })),
-        );
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

@@ -20,17 +20,20 @@ import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
-import { finalizeSignature, retryable } from "@/api/lib/pdf-signing/finalize";
-import type { PreparedSigningState } from "@/api/lib/pdf-signing/finalize";
+import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
+import {
+  finalizeSignature,
+  retryable,
+} from "@/api/lib/files/pdf-signing/finalize";
+import type { PreparedSigningState } from "@/api/lib/files/pdf-signing/finalize";
 import {
   claimFinalizeAttempt,
   MAX_FINALIZE_ATTEMPTS,
   releaseFinalizeAttempt,
   storeDesktopSignature,
-} from "@/api/lib/pdf-signing/finalize-attempts";
-import type { AuthorizedPdfSigningSession } from "@/api/lib/pdf-signing/sessions";
-import { verifyDesktopSignature } from "@/api/lib/pdf-signing/verify-signature";
+} from "@/api/lib/files/pdf-signing/finalize-attempts";
+import type { AuthorizedPdfSigningSession } from "@/api/lib/files/pdf-signing/sessions";
+import { verifyDesktopSignature } from "@/api/lib/files/pdf-signing/verify-signature";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -165,6 +168,7 @@ const acceptSignature = async (
   const stored = await session.safeDb(
     async (tx) =>
       await storeDesktopSignature({
+        recordAuditEvent: context.recordAuditEvent,
         sessionId: session.sessionId,
         signature,
         tx,
@@ -196,6 +200,7 @@ const claimAttempt = async (
     async (tx) =>
       await claimFinalizeAttempt({
         now: new Date(),
+        recordAuditEvent: context.recordAuditEvent,
         sessionId: session.sessionId,
         tx,
       }),
@@ -330,6 +335,7 @@ export const createSubmitPdfSigningSignatureHandler = ({
             async (tx) =>
               await releaseFinalizeAttempt({
                 attempt,
+                recordAuditEvent: context.recordAuditEvent,
                 sessionId: session.sessionId,
                 tx,
               }),

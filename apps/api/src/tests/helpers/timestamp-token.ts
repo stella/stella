@@ -11,7 +11,7 @@ import type { DigestAlgorithm, TimestampAuthority } from "@libpdf/core";
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
 
-import type { PkiFetcher } from "@/api/lib/pdf-signing/pki-fetch";
+import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
 import type { TestCertificate } from "@/api/tests/helpers/test-pki";
 

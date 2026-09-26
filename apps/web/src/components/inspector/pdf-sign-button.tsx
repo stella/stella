@@ -8,16 +8,16 @@ import { Dialog, DialogPopup, DialogTrigger } from "@stll/ui/dialog";
 import { Loader } from "@stll/ui/loader";
 
 import { PdfSignPlacement } from "@/components/inspector/pdf-sign-placement";
+import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
 import { useDesktopPdfSign } from "@/components/inspector/use-desktop-pdf-sign";
 import { detached } from "@/lib/detached";
-import type { PdfSigningTarget } from "@/lib/pdf-signing";
 
 export const PdfSignButton = ({
   entityId,
   fieldId,
   propertyId,
   workspaceId,
-}: PdfSigningTarget & { fieldId: string }) => {
+}: PdfSignableFile & { fieldId: string }) => {
   const t = useTranslations();
   const label = t("workspaces.files.pdfSigning.action");
   const [open, setOpen] = useState(false);

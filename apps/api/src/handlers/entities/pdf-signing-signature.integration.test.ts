@@ -16,17 +16,17 @@ import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
 import { createSubmitPdfSigningSignatureHandler } from "@/api/handlers/entities/pdf-signing-signature";
 import type { SubmitPdfSigningSignatureDependencies } from "@/api/handlers/entities/pdf-signing-signature";
 import { createSafeId } from "@/api/lib/branded-types";
-import { retryable } from "@/api/lib/pdf-signing/finalize";
+import { retryable } from "@/api/lib/files/pdf-signing/finalize";
 import {
   authorizePdfSigningSession,
   createPdfSigningToken,
   hashPdfSigningToken,
   redeemPdfSigningHandoff,
-} from "@/api/lib/pdf-signing/sessions";
+} from "@/api/lib/files/pdf-signing/sessions";
 import {
   captureSigningDigest,
   signaturePlaceholderSize,
-} from "@/api/lib/pdf-signing/sign-pdf";
+} from "@/api/lib/files/pdf-signing/sign-pdf";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";

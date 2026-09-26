@@ -29,7 +29,7 @@ import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
 import {
   loadStampFont,
   loadStampFontLicense,
-} from "@/api/lib/pdf-signing/stamp-font";
+} from "@/api/lib/files/pdf-signing/stamp-font";
 import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 import {
   RUNTIME_WORKER_FILES,

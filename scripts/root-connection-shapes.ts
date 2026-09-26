@@ -80,6 +80,10 @@ export const ROOT_OPERATION_RESULTS = {
     file: "apps/api/src/lib/confirmation-otp.ts",
     reason: "Burns the code on its own connection and returns the verdict.",
   },
+  authorizePdfSigningSession: {
+    file: "apps/api/src/lib/files/pdf-signing/sessions.ts",
+    reason: "Returns a desktop signing token's authorization verdict.",
+  },
   ensureDefaultDocumentTypes: {
     file: "apps/api/src/lib/auth.ts",
     reason: "Seeds a new organization's document types; returns nothing.",
@@ -87,6 +91,11 @@ export const ROOT_OPERATION_RESULTS = {
   readOrganizationMachineApiKeyPage: {
     file: "apps/api/src/lib/machine-api-key-queries.ts",
     reason: "Returns one page of an organization's machine key rows.",
+  },
+  redeemPdfSigningHandoff: {
+    file: "apps/api/src/lib/files/pdf-signing/sessions.ts",
+    reason:
+      "Spends a signing handoff and returns its session descriptor, or null.",
   },
   resolveMemberAuthorization: {
     file: "apps/api/src/lib/auth.ts",

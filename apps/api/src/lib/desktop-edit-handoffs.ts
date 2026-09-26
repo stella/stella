@@ -12,7 +12,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";
-import { canWriteWorkspaceEntities } from "@/api/lib/workspace-entity-write-access";
+import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 
 export type ConsumedDesktopEditHandoff = {
   apiBaseUrl: string;

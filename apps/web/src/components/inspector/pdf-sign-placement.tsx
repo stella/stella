@@ -25,11 +25,6 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
-import { resolveAppTimeZone } from "@/i18n/time-zone";
-import { detached } from "@/lib/detached";
-import { fileOptions } from "@/lib/files/queries";
 import {
   adjustStampBox,
   canPlaceStamp,
@@ -40,7 +35,12 @@ import {
   type StampBox,
   stampKeyAdjustment,
   type StampPageSize,
-} from "@/lib/pdf-signing-stamp.logic";
+} from "@/components/inspector/pdf-signing-stamp.logic";
+import { useMountEffect } from "@/hooks/use-effect";
+import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import { resolveAppTimeZone } from "@/i18n/time-zone";
+import { detached } from "@/lib/detached";
+import { fileOptions } from "@/lib/files/queries";
 import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
@@ -197,7 +197,7 @@ const ModeOption = ({
 }) => (
   <label
     aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors"
+    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3"
   >
     <input
       checked={checked}

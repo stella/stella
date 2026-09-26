@@ -4,7 +4,7 @@ import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { redeemPdfSigningHandoff } from "@/api/lib/pdf-signing/sessions";
+import { redeemPdfSigningHandoffAsOwner } from "@/api/lib/files/pdf-signing/sessions";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
 const stripTrailingSlashes = (value: string) => {
@@ -28,7 +28,7 @@ const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
       Result.tryPromise({
         try: async () =>
           typeof handoffToken === "string"
-            ? await redeemPdfSigningHandoff(handoffToken)
+            ? await redeemPdfSigningHandoffAsOwner(handoffToken)
             : null,
         catch: (cause) =>
           new HandlerError({

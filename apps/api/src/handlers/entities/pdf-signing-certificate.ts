@@ -5,22 +5,22 @@ import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
-import { inspectSigningCertificate } from "@/api/lib/pdf-signing/certificate";
-import { completeCertificateChain } from "@/api/lib/pdf-signing/certificate-chain";
-import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
-import { certificateRevokedError } from "@/api/lib/pdf-signing/finalize";
-import { storePreparedState } from "@/api/lib/pdf-signing/prepared-state";
-import { createTrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation";
+import { loadPdfSigningBaseBytes } from "@/api/lib/files/pdf-signing/base-bytes";
+import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";
+import { completeCertificateChain } from "@/api/lib/files/pdf-signing/certificate-chain";
+import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
+import { certificateRevokedError } from "@/api/lib/files/pdf-signing/finalize";
+import { storePreparedState } from "@/api/lib/files/pdf-signing/prepared-state";
+import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import {
   captureSigningDigest,
   PdfSigningCertifiedDocumentError,
   PdfSigningWouldBreakSignaturesError,
   signaturePlaceholderSize,
-} from "@/api/lib/pdf-signing/sign-pdf";
-import { PdfSigningStampError } from "@/api/lib/pdf-signing/stamp";
-import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
-import { findRevokedCertificates } from "@/api/lib/pdf-signing/validation-data";
+} from "@/api/lib/files/pdf-signing/sign-pdf";
+import { PdfSigningStampError } from "@/api/lib/files/pdf-signing/stamp";
+import { configuredTimestampAuthorities } from "@/api/lib/files/pdf-signing/timestamp-authority";
+import { findRevokedCertificates } from "@/api/lib/files/pdf-signing/validation-data";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -257,6 +257,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       session.safeDb(
         async (tx) =>
           await storePreparedState({
+            recordAuditEvent,
             sessionId: session.sessionId,
             tx,
             values: {
