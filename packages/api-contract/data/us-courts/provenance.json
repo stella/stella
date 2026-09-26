@@ -1,0 +1,44 @@
+{
+  "generator": "scripts/generate-us-courts.ts",
+  "generatorVersion": 1,
+  "courtListener": {
+    "object": "bulk-data/courts-2026-06-30.csv.bz2",
+    "url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/courts-2026-06-30.csv.bz2",
+    "snapshot": "2026-06-30",
+    "sha256": "d5a7a5aa902cb4cdb1b99eb3e6a160867a77ce4b2401682291081499537ea8be",
+    "decompressedSha256": "110a1578a24788b73a9d351992051b40cb8fcf1e95dee72dd5a42054f413e757",
+    "license": "Public Domain Mark 1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "projection": {
+      "file": "courtlistener-courts.tsv",
+      "columns": [
+        "id",
+        "jurisdiction",
+        "full_name",
+        "short_name",
+        "in_use",
+        "start_date",
+        "end_date",
+        "parent_court_id"
+      ],
+      "sha256": "18872bbec91d99d699c9270eeaf4d82179ee2081d1b477a7f0b04140b843919a"
+    }
+  },
+  "courtsDb": {
+    "repository": "https://github.com/freelawproject/courts-db",
+    "commit": "97b60845aa2558b71f3b8dcc7bd67f30188d0a03",
+    "file": "courts_db/data/courts.json",
+    "sha256": "61a26db4e4c17d9b97613739da20f3cb27cf64a447df0449d9c12d49974a84bf",
+    "license": "BSD-2-Clause",
+    "notice": "courts-db.LICENSE",
+    "projection": {
+      "file": "courts-db-locations.tsv",
+      "columns": ["id", "location"],
+      "sha256": "9395e6ac7b14952f900e90f05639a0ee6c52aba98a7b9c1b1c0558678e782f76"
+    }
+  },
+  "overrides": {
+    "file": "overrides.json",
+    "sha256": "030f9d3f4d3919bda01c6268f091e19089618367b931b458ba67532e1de9d082"
+  }
+}

@@ -3,9 +3,18 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import nodePath from "node:path";
 
+import { US_COURTS } from "@stll/api-contract/us-courts";
+
 import { caseLawCourtWeights } from "@/api/db/schema";
-import { COURT_WEIGHT_SEED } from "@/api/handlers/case-law/court-weight-seed";
+import {
+  COURT_WEIGHT_SEED,
+  courtWeightMapFromSeed,
+} from "@/api/handlers/case-law/court-weight-seed";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  courtTierSqlFromMap,
+  courtWeightFromMap,
+} from "@/api/lib/case-law/court-weights";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const migrationPath = (directory: string) =>
@@ -22,6 +31,17 @@ const FULL_SEED = migrationPath(
 const USA_SEED = migrationPath("20260926100100_case_law_court_weight_seed_usa");
 
 type TestDb = ReturnType<typeof drizzle>;
+
+const USA_ROWS = COURT_WEIGHT_SEED.filter((row) => row.country === "USA");
+
+const byKey = (
+  left: { country: string; courtPattern: string },
+  right: { country: string; courtPattern: string },
+): number =>
+  `${left.country}:${left.courtPattern}` <
+  `${right.country}:${right.courtPattern}`
+    ? -1
+    : 1;
 
 const applyMigration = async (db: TestDb, path: string): Promise<void> => {
   const statements = (await Bun.file(path).text())
@@ -95,14 +115,9 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
       weight: 5,
     },
   ]);
-  expect(first.filter((row) => row.country === "USA")).toMatchObject([
-    {
-      courtPattern: "^supreme court of the united states$",
-      tier: 3,
-      tierLabel: "supreme",
-      weight: 8,
-    },
-  ]);
+  expect(first.filter((row) => row.country === "USA")).toHaveLength(
+    USA_ROWS.length,
+  );
   // Together the two leave exactly the declaration.
   expect(
     first
@@ -162,16 +177,61 @@ test("the USA seed writes no row of another jurisdiction", async () => {
   await applyMigration(db, USA_SEED);
   const after = await readRegistry(db);
   expect(after.filter((row) => row.country !== "USA")).toEqual(before);
-  expect(after.filter((row) => row.country === "USA")).toMatchObject([
-    {
-      courtPattern: "^supreme court of the united states$",
-      tier: 3,
-      tierLabel: "supreme",
-      weight: 8,
-    },
-  ]);
+  expect(
+    after
+      .filter((row) => row.country === "USA")
+      .map(({ country, courtPattern, tier, tierLabel, weight }) => ({
+        country,
+        courtPattern,
+        tier,
+        tierLabel,
+        weight,
+      })),
+  ).toEqual(USA_ROWS.toSorted(byKey));
 
   await applyMigration(db, USA_SEED);
   expect(await readRegistry(db)).toEqual(after);
   await client.close();
 }, 60_000);
+
+// The rank lookup runs in TypeScript on the corpus-index path and as a SQL
+// CASE on the Postgres paths. The United States rows are anchored
+// alternations over thousands of names, so the two regex engines are held
+// equal over every canonical name the directory accepts, not a sample.
+test("Postgres ranks every accepted United States court as TypeScript does", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  await applyMigration(db, FULL_SEED);
+  await applyMigration(db, USA_SEED);
+  const rows = await db.select().from(caseLawCourtWeights);
+  const map = courtWeightMapFromSeed();
+  expect(rows.filter((row) => row.country === "USA")).toHaveLength(
+    USA_ROWS.length,
+  );
+
+  const tierSql = sql.raw(
+    courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      map,
+    }),
+  );
+  const names = US_COURTS.map(({ canonicalName }) => canonicalName);
+  const values = sql.join(
+    names.map((name) => sql`(${name}, 'USA')`),
+    sql`, `,
+  );
+  const ranked = await db.execute<{ court: string; tier: number }>(
+    sql`SELECT d.court, (${tierSql})::int AS tier FROM (VALUES ${values}) AS d(court, country)`,
+  );
+  const inPostgres = new Map(
+    ranked.rows.map(({ court, tier }) => [court, Number(tier)]),
+  );
+  const differing = names.filter(
+    (name) =>
+      inPostgres.get(name) !== courtWeightFromMap(map, name, "USA").tier,
+  );
+  expect(inPostgres.size).toBe(names.length);
+  expect(differing).toEqual([]);
+  await client.close();
+}, 300_000);
