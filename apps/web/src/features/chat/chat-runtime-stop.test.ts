@@ -426,4 +426,36 @@ describe("the composer's Stop", () => {
     expect(page.reloads).toBe(1);
     expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
   });
+
+  test("shows Stop again when asking whether the stop settled fails", async () => {
+    const server = installServer([TURN_A]);
+    const page = openPage();
+    send(page, "018f0000-0000-7000-8000-000000000008");
+    await tick();
+    page.runtime.stop();
+    await tick();
+    // Another instance runs the turn: the stop is recorded, not settled.
+    server.cancels[0]?.answer.resolve(
+      Response.json(
+        { turn: { id: TURN_A, status: "running" } },
+        { status: 202 },
+      ),
+    );
+    // The page asks again after its poll interval (500 ms).
+    for (let poll = 0; poll < 300 && server.cancels.length < 2; poll += 1) {
+      await Bun.sleep(10);
+    }
+    // The fixture must reach the fault: the page asks again.
+    expect(server.cancels).toHaveLength(2);
+    server.cancels[1]?.answer.resolve(
+      Response.json({ message: "Unavailable" }, { status: 503 }),
+    );
+    await tick();
+
+    expect(page.runtime.getSnapshot()).toMatchObject({
+      stop: { status: "failed", turnId: TURN_A },
+      turnAbandoned: false,
+    });
+    expect(page.reloads).toBe(0);
+  });
 });

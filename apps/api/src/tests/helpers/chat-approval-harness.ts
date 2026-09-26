@@ -724,15 +724,22 @@ export const createApprovalHarness = ({
       cancel["turnId"] !== undefined &&
       init?.method === "POST"
     ) {
+      // Marked before the route answers: a run in this process ends its
+      // response before the Stop's answer comes back. A refused Stop ends
+      // nothing, so it takes the mark back.
       if (openConnections.has(cancel["threadId"])) {
         stoppingThreads.add(cancel["threadId"]);
       }
       inFlight += 1;
       try {
-        return await postCancelTurn({
+        const answer = await postCancelTurn({
           threadId: cancel["threadId"],
           turnId: cancel["turnId"],
         });
+        if (!answer.ok) {
+          stoppingThreads.delete(cancel["threadId"]);
+        }
+        return answer;
       } finally {
         inFlight -= 1;
       }

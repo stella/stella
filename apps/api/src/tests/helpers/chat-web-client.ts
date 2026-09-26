@@ -44,6 +44,7 @@ type WebChatSnapshot = {
   isLoading: boolean;
   messages: UIMessage[];
   status: string;
+  stop: { status: "failed" | "idle" | "pending" };
 };
 
 type WebChatRuntime = {
@@ -85,6 +86,7 @@ type WebChatModules = {
     messages: readonly UIMessage[];
     requestActive: boolean;
     sessionGenerating: boolean;
+    stopStatus: WebChatSnapshot["stop"]["status"];
   }) => boolean;
   /** `chat-ui-tools.ts`: a tool part that renders as an approval card. */
   isApprovalPart: (part: unknown) => boolean;
@@ -260,8 +262,13 @@ export type WebChatClient = {
   messages: () => UIMessage[];
   /** Retry on the latest answer (the web app's resend). */
   resend: () => Promise<void>;
-  /** Whether the runtime reports an error and has a request open. */
-  runtimeState: () => { hasError: boolean; requestActive: boolean };
+  /** Whether the runtime reports an error, has a request open, and where
+   *  its Stop stands. */
+  runtimeState: () => {
+    hasError: boolean;
+    requestActive: boolean;
+    stopStatus: WebChatSnapshot["stop"]["status"];
+  };
   sendUserMessage: (id: string, text: string) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
@@ -417,11 +424,12 @@ export const createWebChatClient = async ({
       await act(async () => await runtime.reload());
     },
     runtimeState: () => {
-      const { error, isLoading, status } = runtime.getSnapshot();
+      const { error, isLoading, status, stop } = runtime.getSnapshot();
       return {
         hasError: error !== undefined,
         requestActive:
           isLoading || status === "submitted" || status === "streaming",
+        stopStatus: stop.status,
       };
     },
     sendUserMessage: async (id, text) => {

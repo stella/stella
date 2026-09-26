@@ -1,5 +1,6 @@
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatStopState } from "@/features/chat/chat-runtime";
 import type { useChatSession } from "@/features/chat/hooks/use-chat-session";
 
 /**
@@ -86,24 +87,28 @@ export type UnnamedChatSessionHandler = Exclude<
 
 /**
  * Whether a turn is running, which turns Send into Stop and queues a sent
- * message: a request in flight or starting, or a tool the page still runs on
- * the latest answer. A failed turn is not running.
+ * message: a request in flight or starting, a tool the page still runs on
+ * the latest answer, or a stop the server has not settled yet (the server
+ * refuses a new message until it has). A failed turn is not running.
  */
 export const isChatTurnGenerating = ({
   hasError,
   messages,
   requestActive,
   sessionGenerating,
+  stopStatus,
 }: {
   hasError: boolean;
   messages: readonly PersistedChatMessage[];
   requestActive: boolean;
   /** A send the session has started and TanStack has not yet taken up. */
   sessionGenerating: boolean;
+  stopStatus: ChatStopState["status"];
 }): boolean =>
   !hasError &&
   (requestActive ||
     sessionGenerating ||
+    stopStatus === "pending" ||
     hasRunningToolCallInLatestAssistantMessage({ messages }));
 
 type AssistantMessageActionState = {

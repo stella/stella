@@ -1089,7 +1089,7 @@ const findUncoveredActions = async (
 ): Promise<OracleViolation[]> => {
   const web = await loadWebChat();
   const messages = real.client.messages();
-  const { hasError, requestActive } = real.client.runtimeState();
+  const { hasError, requestActive, stopStatus } = real.client.runtimeState();
   const isGenerating = web.isChatTurnGenerating({
     hasError:
       hasError ||
@@ -1097,6 +1097,7 @@ const findUncoveredActions = async (
     messages,
     requestActive,
     sessionGenerating: false,
+    stopStatus,
   });
   const answers = messages.filter(({ role }) => role === "assistant");
   const offeredOnAnswer = (gate: typeof web.canForkAssistantMessage): boolean =>
@@ -1646,6 +1647,7 @@ describe("a conversation's live view", () => {
             messages,
             requestActive: real.client.runtimeState().requestActive,
             sessionGenerating: false,
+            stopStatus: real.client.runtimeState().stopStatus,
           }),
         ).toBe(false);
       } finally {
