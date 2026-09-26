@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokument",
     "pdfSignMatter": "Akte",
     "pdfSignNoIdentities": "In Ihrem Schlüsselbund ist kein Signaturzertifikat verfügbar.",
+    "pdfSignRetry": "Erneut versuchen",
     "pdfSignSign": "Signieren",
     "pdfSignSigned": "Als Version {versionNumber} signiert",
     "pdfSignSigning": "Wird signiert…",

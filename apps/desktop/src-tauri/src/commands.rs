@@ -137,6 +137,7 @@ pub async fn pdf_sign_respond(
 
   let choice = match response {
     PdfSignDialogResponse::Sign { identity_id } => DialogChoice::Sign { identity_id },
+    PdfSignDialogResponse::Retry => DialogChoice::Retry,
     PdfSignDialogResponse::Cancel => DialogChoice::Cancel,
   };
   let waiting = crate::pdf_signing::submit_dialog_choice(choice);
