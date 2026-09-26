@@ -239,6 +239,14 @@ export const isS3KeyInSigningScope = (
   scope: S3SigningScope,
 ): boolean => key.startsWith(s3SigningScopePrefix(scope));
 
+const assertKeyInSigningScope = (key: string, scope: S3SigningScope): void => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+};
+
 const roleSessionName = (scope: S3SigningScope): string => {
   const scopeHash = new Bun.CryptoHasher("sha256")
     .update(s3SigningScopePrefix(scope))
@@ -491,11 +499,7 @@ const getTenantAwsS3Client = async ({
   key: string;
   scope: S3SigningScope;
 }): Promise<AwsS3Client> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
   if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
@@ -560,11 +564,7 @@ export const readTenantS3ArrayBuffer = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<ArrayBuffer> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
   const client = await tenantS3OperationHooks.resolveClient({
     actions: ["s3:GetObject"],
     key,
@@ -600,11 +600,7 @@ export const writeTenantS3Object = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<void> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
   const client = await tenantS3OperationHooks.resolveClient({
     actions: ["s3:PutObject"],
     key,
@@ -641,11 +637,7 @@ const getPresignClient = async ({
     return await getAwsS3Client();
   }
 
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
 
   return await getScopedAwsS3Client(scope, actions, expiresIn);
 };
