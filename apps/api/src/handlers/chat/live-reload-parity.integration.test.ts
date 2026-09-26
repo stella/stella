@@ -1617,6 +1617,28 @@ describe("a conversation's live view", () => {
   );
 
   test(
+    "keeps a step's results in the order the page shows them",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["plain", "client"] }]],
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: the server call's result is
+        // stored before the page posts the client call's.
+        expect(model.pendingKinds).toEqual(["client"]);
+        await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
+        await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
     "bounds every model call of a turn by the model's catalog output limit",
     async () => {
       const conversation = await openConversation();

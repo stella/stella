@@ -804,14 +804,17 @@ const applyValidatedContinuationTransitions = ({
     ) {
       continue;
     }
-    const callIndex = mergedParts.findIndex(
-      (candidate) =>
-        candidate.type === "tool-call" && candidate.id === part.toolCallId,
-    );
-    if (callIndex === -1) {
+    if (
+      !mergedParts.some(
+        (candidate) =>
+          candidate.type === "tool-call" && candidate.id === part.toolCallId,
+      )
+    ) {
       continue;
     }
-    mergedParts.splice(callIndex + 1, 0, {
+    // Appended, as the client appends a result it adds, so the stored
+    // message keeps the order the page showed.
+    mergedParts.push({
       type: "tool-result",
       toolCallId: part.toolCallId,
       content: part.content,
