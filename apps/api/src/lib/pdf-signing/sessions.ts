@@ -8,7 +8,6 @@
  * the same deep link cannot both win.
  */
 
-import { TaggedError } from "better-result";
 import { and, eq, lte } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -191,11 +190,6 @@ export const lockedCreatorAccess = (
     .for("share"),
 });
 
-/** Thrown inside the redemption transaction to undo it. */
-class RedemptionRefusedError extends TaggedError("RedemptionRefusedError")<{
-  message: string;
-}> {}
-
 /**
  * Redeem a handoff: check the creator's access, consume the handoff, mint
  * the session token and read the descriptor, all in one transaction.
@@ -220,110 +214,99 @@ export const redeemPdfSigningHandoff = async (
   const sessionToken = createPdfSigningToken();
   const expiresAt = computePdfSigningSessionExpiresAt();
 
-  try {
-    return await db.transaction(async (tx) => {
-      const sessions = await tx
-        .select({
-          baseVersionId: pdfSigningSessions.baseVersionId,
-          createdBy: pdfSigningSessions.createdBy,
-          entityId: pdfSigningSessions.entityId,
-          handoffConsumedAt: pdfSigningSessions.handoffConsumedAt,
-          handoffExpiresAt: pdfSigningSessions.handoffExpiresAt,
-          id: pdfSigningSessions.id,
-          organizationId: workspaces.organizationId,
-          stamp: pdfSigningSessions.stamp,
-          status: pdfSigningSessions.status,
-          workspaceId: pdfSigningSessions.workspaceId,
-        })
-        .from(pdfSigningSessions)
-        .innerJoin(
-          workspaces,
-          eq(pdfSigningSessions.workspaceId, workspaces.id),
-        )
-        .where(
-          eq(
-            pdfSigningSessions.handoffTokenHash,
-            hashPdfSigningToken(handoffToken),
-          ),
-        )
-        .limit(1)
-        .for("update", { of: pdfSigningSessions });
-      const session = sessions.at(0);
-      if (
-        !session ||
-        session.status !== "open" ||
-        session.handoffConsumedAt !== null ||
-        session.handoffExpiresAt <= now
-      ) {
-        return null;
-      }
-
-      const access = lockedCreatorAccess(tx, session);
-      const [roles, memberships] = await Promise.all([
-        access.role,
-        access.membership,
-      ]);
-      if (
-        !canWriteWorkspaceEntities({
-          organizationRole: roles.at(0)?.role ?? null,
-          workspaceMemberId: memberships.at(0)?.id ?? null,
-        })
-      ) {
-        return null;
-      }
-
-      await tx
-        .update(pdfSigningSessions)
-        .set({
-          handoffConsumedAt: now,
-          sessionTokenHash: hashPdfSigningToken(sessionToken),
-          tokenExpiresAt: expiresAt,
-        })
-        .where(eq(pdfSigningSessions.id, session.id));
-
-      const descriptors = await tx
-        .select({
-          documentName: entities.name,
-          versionNumber: entityVersions.versionNumber,
-          workspaceName: workspaces.name,
-        })
-        .from(entities)
-        .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
-        .innerJoin(entityVersions, eq(entityVersions.id, session.baseVersionId))
-        .where(
-          and(
-            eq(entities.id, session.entityId),
-            eq(entities.workspaceId, session.workspaceId),
-          ),
-        )
-        .limit(1);
-      const descriptor = descriptors.at(0);
-      if (!descriptor) {
-        // Nothing to show the desktop: keep the handoff unspent.
-        throw new RedemptionRefusedError({
-          message: "The handoff's document is gone.",
-        });
-      }
-
-      await afterConsume?.();
-
-      return {
-        documentName: descriptor.documentName,
-        expiresAt,
-        sessionId: session.id,
-        sessionToken,
-        stampPageNumber:
-          session.stamp === null ? null : session.stamp.pageIndex + 1,
-        versionNumber: descriptor.versionNumber,
-        workspaceName: descriptor.workspaceName,
-      };
-    });
-  } catch (error) {
-    if (RedemptionRefusedError.is(error)) {
+  return await db.transaction(async (tx) => {
+    const sessions = await tx
+      .select({
+        baseVersionId: pdfSigningSessions.baseVersionId,
+        createdBy: pdfSigningSessions.createdBy,
+        entityId: pdfSigningSessions.entityId,
+        handoffConsumedAt: pdfSigningSessions.handoffConsumedAt,
+        handoffExpiresAt: pdfSigningSessions.handoffExpiresAt,
+        id: pdfSigningSessions.id,
+        organizationId: workspaces.organizationId,
+        stamp: pdfSigningSessions.stamp,
+        status: pdfSigningSessions.status,
+        workspaceId: pdfSigningSessions.workspaceId,
+      })
+      .from(pdfSigningSessions)
+      .innerJoin(workspaces, eq(pdfSigningSessions.workspaceId, workspaces.id))
+      .where(
+        eq(
+          pdfSigningSessions.handoffTokenHash,
+          hashPdfSigningToken(handoffToken),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: pdfSigningSessions });
+    const session = sessions.at(0);
+    if (
+      !session ||
+      session.status !== "open" ||
+      session.handoffConsumedAt !== null ||
+      session.handoffExpiresAt <= now
+    ) {
       return null;
     }
-    throw error;
-  }
+
+    const access = lockedCreatorAccess(tx, session);
+    const [roles, memberships] = await Promise.all([
+      access.role,
+      access.membership,
+    ]);
+    if (
+      !canWriteWorkspaceEntities({
+        organizationRole: roles.at(0)?.role ?? null,
+        workspaceMemberId: memberships.at(0)?.id ?? null,
+      })
+    ) {
+      return null;
+    }
+
+    const descriptors = await tx
+      .select({
+        documentName: entities.name,
+        versionNumber: entityVersions.versionNumber,
+        workspaceName: workspaces.name,
+      })
+      .from(entities)
+      .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
+      .innerJoin(entityVersions, eq(entityVersions.id, session.baseVersionId))
+      .where(
+        and(
+          eq(entities.id, session.entityId),
+          eq(entities.workspaceId, session.workspaceId),
+        ),
+      )
+      .limit(1);
+    const descriptor = descriptors.at(0);
+    if (!descriptor) {
+      // Nothing to show the desktop: read before anything is written, so
+      // the handoff stays unspent.
+      return null;
+    }
+
+    await tx
+      .update(pdfSigningSessions)
+      .set({
+        handoffConsumedAt: now,
+        sessionTokenHash: hashPdfSigningToken(sessionToken),
+        tokenExpiresAt: expiresAt,
+      })
+      .where(eq(pdfSigningSessions.id, session.id));
+
+    await afterConsume?.();
+
+    return {
+      documentName: descriptor.documentName,
+      expiresAt,
+      sessionId: session.id,
+      sessionToken,
+      stampPageNumber:
+        session.stamp === null ? null : session.stamp.pageIndex + 1,
+      versionNumber: descriptor.versionNumber,
+      workspaceName: descriptor.workspaceName,
+    };
+  });
 };
 
 export type AuthorizedPdfSigningSession = {
