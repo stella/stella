@@ -69,7 +69,7 @@ describe("admitting a CourtListener record", () => {
     ).toBe("schema-drift");
     expect(
       rejectionOf(
-        courtListenerRecord({ citations: [citationRow({ type: "9" })] }),
+        courtListenerRecord({ citations: [citationRow({ type: "10" })] }),
       ).reason,
     ).toBe("schema-drift");
   });

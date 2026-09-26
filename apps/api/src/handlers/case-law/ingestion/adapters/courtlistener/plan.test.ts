@@ -6,6 +6,7 @@ import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion
 import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
 import { classifyCourtListenerDecision } from "./order-classification";
 import { planCourtListenerRecord } from "./plan";
+import { decodeCourtListenerRaw } from "./raw";
 import { admitCourtListenerRecord } from "./record";
 import {
   citationRow,
@@ -203,6 +204,37 @@ describe("the identifiers", () => {
         `${identifier.type}:${normalizeDecisionIdentifierIn("USA", identifier)}`,
     );
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test("a journal parallel is kept beside the primary and survives raw replay", () => {
+    const journal = citationRow({
+      id: "2",
+      volume: "72",
+      reporter: "Soc. Sec. Rep. Serv.",
+      page: "318",
+      type: "9",
+    });
+    const planned = plan(
+      courtListenerRecord({ citations: [citationRow({ id: "1" }), journal] }),
+    );
+    const replayed = plan(
+      decodeCourtListenerRaw({
+        raw: planned.sourceRaw,
+        contentType: planned.sourceRawContentType,
+      }).unwrap(),
+    );
+
+    expect(planned.caseNumber).toBe("502 U.S. 959");
+    expect(planned.identifiers).toContainEqual({
+      type: "reporter-citation",
+      value: "72 Soc. Sec. Rep. Serv. 318",
+    });
+    expect(planned.diagnostics).toContainEqual({
+      code: "reporter-grammar-unresolved",
+      path: "citations.1",
+    });
+    expect(replayed.identifiers).toEqual(planned.identifiers);
+    expect(replayed.rawHash).toBe(planned.rawHash);
   });
 
   test("a tuple outside the reporter table is kept as printed, with a diagnostic", () => {

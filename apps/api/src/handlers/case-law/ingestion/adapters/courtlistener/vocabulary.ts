@@ -53,8 +53,9 @@ export const isOpinionType = (value: string): value is OpinionType =>
 
 /**
  * The citation row types, by the decimal the CSV holds. Type 8 is a
- * court-assigned neutral citation; every other declared type names a printed
- * reporter. An undeclared type is schema drift, not a reporter by default.
+ * court-assigned neutral citation; every other declared type, the journal
+ * category 9 included, names a printed publication and is kept as a reporter
+ * tuple. An undeclared type is schema drift, not a reporter by default.
  */
 export const CITATION_TYPES = {
   "1": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
@@ -65,6 +66,7 @@ export const CITATION_TYPES = {
   "6": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "7": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "8": DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+  "9": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
 } as const;
 
 export type CitationType = keyof typeof CITATION_TYPES;
