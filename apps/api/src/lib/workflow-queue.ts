@@ -8,7 +8,6 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
-import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
@@ -33,7 +32,10 @@ import {
   errorTag,
 } from "@/api/lib/errors/utils";
 import { createExtractionRunStore } from "@/api/lib/extraction-runs/store";
-import type { ExtractionRunStore } from "@/api/lib/extraction-runs/store";
+import type {
+  ExtractionRunStartStore,
+  ExtractionRunStore,
+} from "@/api/lib/extraction-runs/store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
@@ -260,6 +262,12 @@ type StartWorkflowArgs = {
   propertyIds?: SafeId<"property">[];
   serviceTier?: AIRequestServiceTier;
   runStateStore?: ReturnType<typeof getRootWorkflowRunStateStore> | undefined;
+  /**
+   * Where the run's lifecycle row is written. A request passes the request
+   * door's store; a worker passes the store its host built, so a run it
+   * starts is recorded on the connection the worker was handed.
+   */
+  extractionRunStore: ExtractionRunStartStore;
 };
 
 /**
@@ -422,6 +430,7 @@ export const startWorkflow = async ({
   propertyIds: inputPropertyIds,
   serviceTier = "standard",
   runStateStore = getRootWorkflowRunStateStore(),
+  extractionRunStore,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
@@ -445,6 +454,22 @@ export const startWorkflow = async ({
   // reports instead, releasing the claim first. Releasing is best-effort by
   // necessity — the release travels the connection that just failed — and the
   // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
+  const releaseClaimAndFail = async (
+    cause: unknown,
+  ): Promise<StartWorkflowResult> => {
+    // Compare-and-delete on this request's own id: the release runs after a
+    // failure, so by the time it lands the claim's TTL may have lapsed and a
+    // replacement run may hold the workspace. Releasing that one would hand a
+    // third caller a workspace two runs believe they own.
+    await runStateStore
+      .releaseClaim({ requestId, workspaceId })
+      .catch((releaseError: unknown) =>
+        captureError(releaseError, { workspaceId }),
+      );
+    captureError(cause, { workspaceId });
+    return { status: "failed" };
+  };
+
   const requestIdSet = await Result.tryPromise({
     try: async () =>
       await runStateStore.setRequestId({
@@ -455,37 +480,26 @@ export const startWorkflow = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(requestIdSet)) {
-    // Compare-and-delete on this request's own id: the release runs after a
-    // Valkey failure, so by the time it lands the claim's TTL may have lapsed
-    // and a replacement run may hold the workspace. Releasing that one would
-    // hand a third caller a workspace two runs believe they own.
-    await runStateStore
-      .releaseClaim({ requestId, workspaceId })
-      .catch((releaseError: unknown) =>
-        captureError(releaseError, { workspaceId }),
-      );
-    captureError(requestIdSet.error, { workspaceId });
-    return { status: "failed" };
+    return await releaseClaimAndFail(requestIdSet.error);
   }
 
-  // A run's lifecycle row is written through the owner connection, whichever
-  // path starts the run: a request, or the worker routing classified
-  // documents into playbooks.
-  const extractionRunStore = createExtractionRunStore(rootDb);
-  const createdRunKey = await extractionRunStore
-    .create({
-      ...runKey,
-      requestedBy: userId,
-      scope: extractionRunScope({
-        entityIds: inputEntityIds,
-        propertyIds: inputPropertyIds,
+  // Every run that plans or enqueues work has its lifecycle row, so a start
+  // that cannot record its run dispatches nothing.
+  const runCreated = await Result.tryPromise({
+    try: async () =>
+      await extractionRunStore.create({
+        ...runKey,
+        requestedBy: userId,
+        scope: extractionRunScope({
+          entityIds: inputEntityIds,
+          propertyIds: inputPropertyIds,
+        }),
       }),
-    })
-    .then(() => runKey)
-    .catch((error: unknown) => {
-      captureError(error, { workspaceId });
-      return undefined;
-    });
+    catch: (cause) => cause,
+  });
+  if (Result.isError(runCreated)) {
+    return await releaseClaimAndFail(runCreated.error);
+  }
 
   try {
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
@@ -521,11 +535,9 @@ export const startWorkflow = async ({
     );
 
     if (!hasWork) {
-      if (createdRunKey) {
-        await extractionRunStore
-          .skip(createdRunKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-      }
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -566,11 +578,9 @@ export const startWorkflow = async ({
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
-      if (createdRunKey) {
-        await extractionRunStore
-          .skip(createdRunKey)
-          .catch((error: unknown) => captureError(error, { workspaceId }));
-      }
+      await extractionRunStore
+        .skip(runKey)
+        .catch((error: unknown) => captureError(error, { workspaceId }));
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -599,11 +609,9 @@ export const startWorkflow = async ({
       workspaceId,
     });
 
-    if (createdRunKey) {
-      await extractionRunStore
-        .start({ ...createdRunKey, total: targetCount })
-        .catch((error: unknown) => captureError(error, { workspaceId }));
-    }
+    await extractionRunStore
+      .start({ ...runKey, total: targetCount })
+      .catch((error: unknown) => captureError(error, { workspaceId }));
 
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId);
@@ -646,11 +654,9 @@ export const startWorkflow = async ({
 
     return { status: "started" };
   } catch (error: unknown) {
-    if (createdRunKey) {
-      await extractionRunStore
-        .fail({ ...createdRunKey, errorCode: errorTag(error) })
-        .catch((runError: unknown) => captureError(runError, { workspaceId }));
-    }
+    await extractionRunStore
+      .fail({ ...runKey, errorCode: errorTag(error) })
+      .catch((runError: unknown) => captureError(runError, { workspaceId }));
     await runStateStore.clear(workspaceId);
     broadcastWorkflowStatus(workspaceId);
     captureError(error, { workspaceId });
@@ -1955,12 +1961,19 @@ const onEntityCompleted = async ({
   await runStateStore.refreshActiveLease({ runLockTtlSec, workspaceId });
 };
 
+// A starter a worker binds to its host's run store before handing it on, so
+// the runs it starts cannot be recorded anywhere else.
+type StartSuccessorWorkflow = (
+  args: Omit<StartWorkflowArgs, "extractionRunStore">,
+) => Promise<StartWorkflowResult>;
+
 type MaybeRouteClassifiedDocumentsArgs = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
   planPropertyIds: readonly SafeId<"property">[];
+  startSuccessorWorkflow: StartSuccessorWorkflow;
 };
 
 // Route classified documents into `onClassified` playbooks, but only when the
@@ -1975,6 +1988,7 @@ const maybeRouteClassifiedDocuments = async ({
   userId,
   scopedDb,
   planPropertyIds,
+  startSuccessorWorkflow,
 }: MaybeRouteClassifiedDocumentsArgs): Promise<void> => {
   if (planPropertyIds.length === 0) {
     return;
@@ -1997,7 +2011,7 @@ const maybeRouteClassifiedDocuments = async ({
     organizationId,
     userId,
     scopedDb,
-    startWorkflow,
+    startWorkflow: startSuccessorWorkflow,
     // Reuse the classifier already resolved above rather than having
     // resolveApplicablePlaybooks look it up a second time.
     classifier,
@@ -2025,6 +2039,8 @@ const finishWorkflow = async (
     userId,
     workspaceIds: [workspaceId],
   });
+  const startSuccessorWorkflow: StartSuccessorWorkflow = async (args) =>
+    await startWorkflow({ ...args, extractionRunStore: extractionRuns });
 
   const finalizationResult = await runStateStore.readFinalizationState({
     requestId,
@@ -2110,6 +2126,7 @@ const finishWorkflow = async (
     userId,
     scopedDb,
     planPropertyIds,
+    startSuccessorWorkflow,
   }).catch((error: unknown) => captureError(error, { workspaceId }));
 
   // Grade whatever the workspace still owes: columns created mid-run, and the
@@ -2122,7 +2139,7 @@ const finishWorkflow = async (
     userId,
     scopedDb,
     serviceTier,
-    startWorkflow,
+    startWorkflow: startSuccessorWorkflow,
   });
 };
 

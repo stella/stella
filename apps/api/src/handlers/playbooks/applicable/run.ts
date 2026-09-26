@@ -11,6 +11,7 @@ import {
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
@@ -150,6 +151,7 @@ export const createAutoRunPlaybooks = (
               userId: user.id,
               scopedDb,
               propertyIds: txResult.materializedPropertyIds,
+              extractionRunStore: requestExtractionRunStore,
             }),
           catch: (cause) =>
             new HandlerError({

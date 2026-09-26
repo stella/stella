@@ -52,6 +52,7 @@ import {
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -1970,6 +1971,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
         userId: context.userId,
         scopedDb: context.scopedDb,
         propertyIds: outcome.materializedPropertyIds,
+        extractionRunStore: requestExtractionRunStore,
       }),
     catch: (cause) => cause,
   });

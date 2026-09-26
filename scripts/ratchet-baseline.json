@@ -207,6 +207,7 @@
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
       "apps/api/src/lib/dev-seed-session-store.ts": 1,
       "apps/api/src/lib/document-processing-request.ts": 1,
+      "apps/api/src/lib/extraction-runs/request-run-store.ts": 1,
       "apps/api/src/lib/flows/flow-run-completion-notice.ts": 1,
       "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
@@ -231,7 +232,6 @@
       "apps/api/src/lib/selfhost-auth.ts": 1,
       "apps/api/src/lib/sharepoint-disable-purge.ts": 1,
       "apps/api/src/lib/smoke-session/store.ts": 1,
-      "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
       "apps/api/src/scripts/document-processing-worker.ts": 1
     }

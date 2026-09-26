@@ -2792,7 +2792,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "implicit-root-connection-shapes",
     description:
-      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, object-literal dependency properties, module-level calls and aliases, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts). Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt; everything else takes its connection as a required dependency",
+      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, assignments, object-literal dependency properties, module-level calls, aliases and returned factories, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts), awaited or not. Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt, plus the awaited owner operations listed with their file in ROOT_OPERATION_RESULTS; everything else takes its connection as a required dependency",
     include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
     exclude: (file) =>
       isExcludedSource(file) ||
@@ -3728,15 +3728,23 @@ const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
   "  ok ? await rootDb.transaction(fn) : undefined;",
   "export const deps = { db: rootDb };",
   "export const store = createStore(rootDb);",
-  "export const explicit = async () => await notify([], rootDb);",
+  "export const assign = (holder: { db?: unknown }) => {",
+  "  holder.db = rootDb;",
+  "};",
+  "export const factory = () => createStore(owner);",
+  "export const later = async () => await createStore(root.rootDb);",
+  "export const explicit = async () => {",
+  "  await notify([], rootDb);",
+  "};",
   "export const shadowed = (rootDb: unknown) => ({ db: rootDb });",
   'const text = "db = rootDb";',
 ];
 const SELF_TEST_IMPLICIT_ROOT_CONNECTION = `${IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES.join("\n")}\n`;
 // Expected: default, destructured default, namespace fallback, conditional,
-// dependency property, module-level call (6). The explicit argument inside a
-// function, the shadowing parameter and the string are not shapes.
-const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 6;
+// dependency property, module-level call, assignment, returned factory,
+// awaited returned factory (9). The explicit argument in a statement, the
+// shadowing parameter and the string are not shapes.
+const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 9;
 // A worker host, whose dependency property is the design, not a leak.
 const IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE =
   "apps/api/src/api-background-workers.ts";
