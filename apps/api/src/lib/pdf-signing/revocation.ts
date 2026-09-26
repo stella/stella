@@ -15,6 +15,7 @@
  * freshness rests on the validity window.
  */
 
+import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -79,13 +80,8 @@ export const isCurrent = (
     : nextUpdate.getTime() >= now.getTime() - MAX_CLOCK_SKEW_MS);
 
 /** A verification that throws (malformed key, unknown algorithm) failed. */
-const settlesTrue = async (verification: Promise<boolean>) => {
-  try {
-    return await verification;
-  } catch {
-    return false;
-  }
-};
+const settlesTrue = async (verification: Promise<boolean>) =>
+  (await Result.tryPromise(async () => await verification)).unwrapOr(false);
 
 const allowsOcspSigning = (certificate: pkijs.Certificate) => {
   const extension = certificate.extensions?.find(
@@ -94,13 +90,11 @@ const allowsOcspSigning = (certificate: pkijs.Certificate) => {
   if (extension === undefined) {
     return false;
   }
-  try {
-    return pkijs.ExtKeyUsage.fromBER(
+  return Result.try(() =>
+    pkijs.ExtKeyUsage.fromBER(
       new Uint8Array(extension.extnValue.valueBlock.valueHexView),
-    ).keyPurposes.includes(OCSP_SIGNING_USAGE);
-  } catch {
-    return false;
-  }
+    ).keyPurposes.includes(OCSP_SIGNING_USAGE),
+  ).unwrapOr(false);
 };
 
 /** Whether a certificate is inside its validity window at `at`. */
@@ -157,7 +151,7 @@ const ocspStatus = async (
   issuer: pkijs.Certificate,
   now: Date,
 ): Promise<number | null> => {
-  try {
+  const status = await Result.tryPromise(async (): Promise<number | null> => {
     const response = pkijs.OCSPResponse.fromBER(new Uint8Array(bytes));
     const encoded = response.responseBytes?.response.valueBlock.valueHexView;
     if (
@@ -189,9 +183,8 @@ const ocspStatus = async (
       }
     }
     return null;
-  } catch {
-    return null;
-  }
+  });
+  return status.unwrapOr(null);
 };
 
 /** Whether `bytes` is a current CRL `issuer` signed, and what it says. */
@@ -201,19 +194,22 @@ const crlVerdict = async (
   issuer: pkijs.Certificate,
   now: Date,
 ): Promise<"good" | "revoked" | null> => {
-  try {
-    const crl = pkijs.CertificateRevocationList.fromBER(new Uint8Array(bytes));
-    if (
-      !crl.issuer.isEqual(issuer.subject) ||
-      !isCurrent(crl.thisUpdate.value, crl.nextUpdate?.value, now) ||
-      !(await crl.verify({ issuerCertificate: issuer }))
-    ) {
-      return null;
-    }
-    return crl.isCertificateRevoked(certificate) ? "revoked" : "good";
-  } catch {
-    return null;
-  }
+  const verdict = await Result.tryPromise(
+    async (): Promise<"good" | "revoked" | null> => {
+      const crl = pkijs.CertificateRevocationList.fromBER(
+        new Uint8Array(bytes),
+      );
+      if (
+        !crl.issuer.isEqual(issuer.subject) ||
+        !isCurrent(crl.thisUpdate.value, crl.nextUpdate?.value, now) ||
+        !(await crl.verify({ issuerCertificate: issuer }))
+      ) {
+        return null;
+      }
+      return crl.isCertificateRevoked(certificate) ? "revoked" : "good";
+    },
+  );
+  return verdict.unwrapOr(null);
 };
 
 const ocspRequestFor = async (
