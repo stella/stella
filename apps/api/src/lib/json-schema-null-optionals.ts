@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 // The optional-null rule for agent and model input: a property the schema
@@ -32,6 +34,16 @@ const admitsNull = (schema: unknown): boolean => {
 };
 
 const UNION_KEYWORDS = ["anyOf", "oneOf"] as const;
+
+/**
+ * Whether `text` matches a schema's `pattern`, or `undefined` when the pattern
+ * does not compile as a Unicode expression: a third-party tool schema may
+ * carry one (`^[a-z\_]+$`), and it must not fail the whole input.
+ */
+const matchesPattern = (pattern: string, text: string): boolean | undefined => {
+  const compiled = Result.try(() => new RegExp(pattern, "u"));
+  return Result.isOk(compiled) ? compiled.value.test(text) : undefined;
+};
 
 /**
  * Whether a union branch could be the one `value` was written for: no `const`
@@ -109,7 +121,7 @@ const objectChildSchemas = (
   const patternProperties = schema["patternProperties"];
   if (isRecord(patternProperties)) {
     for (const [pattern, childSchema] of Object.entries(patternProperties)) {
-      if (new RegExp(pattern, "u").test(key)) {
+      if (matchesPattern(pattern, key) === true) {
         children.push(childSchema);
       }
     }
@@ -203,7 +215,7 @@ const rejectsEmptyString = (schema: unknown): boolean => {
     return true;
   }
   const pattern = schema["pattern"];
-  return typeof pattern === "string" && !new RegExp(pattern, "u").test("");
+  return typeof pattern === "string" && matchesPattern(pattern, "") === false;
 };
 
 const isRejectedPlaceholder: AbsentPlaceholderTest = (value, schema) =>

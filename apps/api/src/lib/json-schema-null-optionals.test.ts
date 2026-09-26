@@ -51,6 +51,17 @@ describe("a model's placeholder in an optional field", () => {
     ).toEqual({ name: "draft", note: "null" });
   });
 
+  test("a pattern that does not compile leaves the value as sent", () => {
+    const loose = {
+      type: "object",
+      properties: { slug: { type: "string", pattern: String.raw`^[a-z\_]+$` } },
+      patternProperties: { [String.raw`^x\-`]: { type: "string" } },
+    };
+    expect(
+      withModelPlaceholdersOmitted(loose, { slug: "", "x-tag": null }),
+    ).toEqual({ slug: "", "x-tag": null });
+  });
+
   test('the MCP null rule does not read "" as omitted', () => {
     expect(withNullOptionalsOmitted(schema, { name: "d", note: "" })).toEqual({
       name: "d",
