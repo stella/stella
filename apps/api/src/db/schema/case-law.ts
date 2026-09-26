@@ -47,6 +47,11 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import {
+  CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
+  DECISION_COURT_ID_MAX_LENGTH,
+  decisionCourtIdByCountrySql,
+} from "@/api/lib/case-law/decision-court-id-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -425,6 +430,12 @@ export const caseLawDecisions = p.pgTable(
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
+    /**
+     * The court directory's id for `court`, in a jurisdiction that identifies
+     * courts by directory id (`decision-court-identity.ts`); null everywhere
+     * else. `court` is then the directory's canonical name for it.
+     */
+    courtId: p.varchar("court_id", { length: DECISION_COURT_ID_MAX_LENGTH }),
     // A migration-owned trigger validates inserts and actual country changes,
     // while permitting unrelated updates that repair legacy malformed rows.
     country: p.varchar({ length: 3 }).notNull(),
@@ -601,6 +612,12 @@ export const caseLawDecisions = p.pgTable(
     p.check(
       CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
+    ),
+    // Added NOT VALID: enforced on every insert and update, so a directory
+    // jurisdiction's row cannot be written or changed without its court id.
+    p.check(
+      CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
+      decisionCourtIdByCountrySql(t.country, t.courtId),
     ),
     // The byte budget `case_law_decisions_search_candidate_idx` needs its
     // variable-width columns to stay inside; `varchar(n)` bounds characters,

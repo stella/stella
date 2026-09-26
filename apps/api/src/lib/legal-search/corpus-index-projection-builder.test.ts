@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
 
+import { resolveUsCourt } from "@stll/api-contract/us-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  corpusIndexGroupConfig,
+  corpusIndexGroupContractForJurisdiction,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCaseLawProjectionDocuments,
@@ -36,6 +41,7 @@ const CASE_LAW_INPUT = {
     { type: "docket", value: "4 As 3/2008" },
   ],
   court: "Nejvyšší správní soud",
+  courtId: null,
   decisionDate: null,
   ecli: null,
   metadata: null,
@@ -512,4 +518,71 @@ test("a revision projects to the same documents whatever preceded it", () => {
 
   expect<string[]>(reversed.toReversed()).toEqual(first);
   expect<string[]>(revisions.map(project)).toEqual(first);
+});
+
+test("a court-partitioned decision carries its partition on every passage", () => {
+  const input = {
+    ...DATED_CASE_LAW_INPUT,
+    jurisdiction: "USA",
+    language: "en",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+  } as const satisfies CaseLawProjectionInput;
+  const scotus = resolveUsCourt("scotus");
+  if (scotus.type !== "accepted") {
+    throw new Error("scotus is not an accepted court");
+  }
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input,
+      payload: {
+        text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+        ast: null,
+      },
+      revision: REVISION,
+    });
+    expect(documents.length).toBeGreaterThan(1);
+    // Every passage, not only the opening one: the partition routes splits,
+    // so a passage without it would sit outside every pruned read.
+    expect(documents.map((document) => document.court_partition)).toEqual(
+      documents.map(() => scotus.court.courtPartition),
+    );
+    // Strict mapping: every emitted field is one the group's effective
+    // contract maps, not merely the manifest.
+    const mapped = new Set(
+      corpusIndexGroupConfig(
+        corpusIndexGroupContractForJurisdiction(manifest, "USA"),
+      ).doc_mapping.field_mappings.map(({ name }) => name),
+    );
+    for (const document of documents) {
+      expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual(
+        [],
+      );
+    }
+  }
+});
+
+test("a group under its manifest's contract writes the documents it wrote before", () => {
+  // The court partition is the contract's addition, and nothing else is: a
+  // decision of a base group carries no partition key at all, so its NDJSON
+  // bytes are unchanged.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input: DATED_CASE_LAW_INPUT,
+      payload: { text: "Právní věta", ast: null },
+      revision: REVISION,
+    });
+    for (const document of documents) {
+      expect("court_partition" in document).toBe(false);
+    }
+  }
 });

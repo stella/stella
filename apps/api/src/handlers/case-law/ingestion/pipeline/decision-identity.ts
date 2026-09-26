@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -77,6 +78,14 @@ export const observeDecision = ({
   sourceId,
 }: ObserveDecisionOptions): ObservedDecision => {
   const observed = sanitizeResult(input);
+  // An adapter maps its source's court to a directory id and rejects what the
+  // directory does not admit before a result gets here. One that reaches the
+  // write path unresolved is an adapter defect, and writing it would store a
+  // court the index cannot partition, so the run stops on it.
+  const courtId = resolveDecisionCourtId(observed);
+  if (Result.isError(courtId)) {
+    return panic(courtId.error.message, courtId.error);
+  }
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {

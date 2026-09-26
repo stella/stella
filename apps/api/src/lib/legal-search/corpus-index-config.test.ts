@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 
-import {
-  CASE_LAW_JURISDICTIONS,
-  type CaseLawJurisdiction,
-} from "@stll/api-contract/case-law-jurisdictions";
-import { US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
-import { CASE_LAW_INDEX_GROUPS } from "@/api/lib/legal-search/case-law-index-groups";
+import {
+  CASE_LAW_INDEX_GROUP_CONTRACT_OF,
+  CASE_LAW_INDEX_GROUP_OF,
+  CASE_LAW_INDEX_GROUPS,
+} from "@/api/lib/legal-search/case-law-index-groups";
 import {
   caseLawIndexConfig,
   CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
@@ -15,6 +15,26 @@ import {
   DECISION_TIMESTAMP_FIELD,
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  corpusIndexGroupConfig,
+  resolveCorpusIndexGroupContract,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+
+/** Jurisdictions whose group's contract keeps `court` a tag field. */
+type CourtTaggedJurisdiction = {
+  [
+    J in CaseLawJurisdiction
+  ]: (typeof CASE_LAW_INDEX_GROUP_CONTRACT_OF)[(typeof CASE_LAW_INDEX_GROUP_OF)[J]] extends "base"
+    ? J
+    : never;
+}[CaseLawJurisdiction];
+
+const isCourtTaggedJurisdiction = (
+  jurisdiction: CaseLawJurisdiction,
+): jurisdiction is CourtTaggedJurisdiction =>
+  CASE_LAW_INDEX_GROUP_CONTRACT_OF[CASE_LAW_INDEX_GROUP_OF[jurisdiction]] ===
+  "base";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   const fields = new Map(
@@ -108,10 +128,10 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
  *   Najwyższy, NSA, Trybunał Konstytucyjny and the voivodeship
  *   administrative courts.
  * - SVK: Ústavný súd, NS, NSS, the krajské courts, and the okresné courts.
- * - USA: the courts `us-courts.ts` admits for writing
- *   (`resolveWritableUsCourt`), one canonical name each. The directory
- *   accepts thousands more, but a writer admits only a writable court, so
- *   that set, not the directory, is the court domain of the one USA index.
+ *
+ * Only a jurisdiction whose group's effective contract tags `court` owes a
+ * bound. USA's group tags a bounded court partition instead
+ * (`corpus-index-group-contract.test.ts`), so it has no court tag to argue.
  */
 const COURT_DOMAIN_BOUND = {
   AUT: 200,
@@ -120,8 +140,7 @@ const COURT_DOMAIN_BOUND = {
   HUN: 200,
   POL: 400,
   SVK: 200,
-  USA: US_WRITABLE_COURT_IDS.size,
-} as const satisfies Record<CaseLawJurisdiction, number>;
+} as const satisfies Record<CourtTaggedJurisdiction, number>;
 
 // A tag field whose values outgrow the engine's per-split limit stops being
 // recorded, and the only symptom is that every query opens every split. Court
@@ -138,23 +157,46 @@ test("court stays a viable tag field in every index", () => {
   for (const bound of Object.values(COURT_DOMAIN_BOUND)) {
     expect(bound).toBeLessThan(TAG_FIELD_VALUE_LIMIT / 2);
   }
-  // Group members are declared jurisdictions, so every member has a bound.
-  for (const [group, countries] of CASE_LAW_INDEX_GROUPS) {
-    const groupBound = countries.reduce(
-      (total, country) => total + COURT_DOMAIN_BOUND[country],
-      0,
-    );
-    expect([group, groupBound < TAG_FIELD_VALUE_LIMIT / 2]).toEqual([
-      group,
-      true,
-    ]);
+  // Bound against each group's effective tag fields: a group whose contract
+  // tags `court` owes a bound for every member, and one that does not owes
+  // none. Every generation is checked, since a contract resolves per one.
+  const courtTagged = new Set<string>();
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    for (const [group, countries] of CASE_LAW_INDEX_GROUPS) {
+      const tags = corpusIndexGroupConfig(
+        resolveCorpusIndexGroupContract({ manifest, indexGroup: group }),
+      ).doc_mapping.tag_fields;
+      if (!tags.includes("court")) {
+        continue;
+      }
+      const groupBound = countries.reduce(
+        (total, country) =>
+          total +
+          (isCourtTaggedJurisdiction(country)
+            ? COURT_DOMAIN_BOUND[country]
+            : Number.POSITIVE_INFINITY),
+        0,
+      );
+      expect([group, groupBound < TAG_FIELD_VALUE_LIMIT / 2]).toEqual([
+        group,
+        true,
+      ]);
+      for (const country of countries) {
+        courtTagged.add(country);
+      }
+    }
   }
 
-  // Total over the jurisdictions the corpus ships, so onboarding one is a
-  // decision about its court registry rather than a silent inheritance.
-  expect(Object.keys(COURT_DOMAIN_BOUND).toSorted()).toEqual([
-    ...CASE_LAW_JURISDICTIONS,
-  ]);
+  // Exactly the jurisdictions an index tags `court` for, so onboarding one
+  // is a decision about its court registry rather than a silent inheritance,
+  // and a jurisdiction that stops tagging it leaves no unused bound behind.
+  expect(Object.keys(COURT_DOMAIN_BOUND).toSorted()).toEqual(
+    [...courtTagged].toSorted(),
+  );
   expect(
     caseLawIndexConfig("case_law_v3_pol").doc_mapping.tag_fields,
   ).toContain("court");

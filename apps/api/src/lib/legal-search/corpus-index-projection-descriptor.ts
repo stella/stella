@@ -7,6 +7,10 @@ import {
 } from "@/api/lib/case-law/publisher-summary";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  corpusIndexGroupContractForJurisdiction,
+  requireCourtPartitionIdentity,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
@@ -41,6 +45,8 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
   caseNumber: string;
   identifiers: readonly { type: string; value: string }[];
   court: string;
+  /** The directory court id, where the jurisdiction stores one. */
+  courtId: string | null;
   decisionDate: string | null;
   ecli: string | null;
   /**
@@ -134,6 +140,40 @@ const publisherFingerprintFields = (
   }
 };
 
+/**
+ * What a group contract adds to a fingerprint: nothing for a group under its
+ * manifest's contract, so every such fingerprint keeps its bytes. A
+ * court-partitioned group covers its effective contract and the court
+ * identity it writes, so a contract change or a court correction re-projects
+ * the decision.
+ */
+const groupContractFingerprintFields = (
+  manifest: CorpusIndexManifest,
+  input: CaseLawProjectionInput,
+): { groupContract?: Record<string, string> } => {
+  const contract = corpusIndexGroupContractForJurisdiction(
+    manifest,
+    input.jurisdiction,
+  );
+  switch (contract.type) {
+    case "base":
+      return {};
+    case "court_partition_v1": {
+      const { courtId, courtPartition } = requireCourtPartitionIdentity(input);
+      return {
+        groupContract: {
+          effectiveDigest: contract.effectiveDigest,
+          courtId,
+          courtPartition,
+        },
+      };
+    }
+    default:
+      contract satisfies never;
+      return panic(`Unhandled group contract: ${String(contract)}`);
+  }
+};
+
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
   input: CorpusIndexProjectionInput,
@@ -202,6 +242,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
             input.decisionDate ?? UNDATED_DECISION_TIMESTAMP,
           ecli: input.ecli,
           ...publisher,
+          ...groupContractFingerprintFields(manifest, input),
         }),
       };
     }

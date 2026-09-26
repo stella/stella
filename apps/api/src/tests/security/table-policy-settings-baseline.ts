@@ -81,6 +81,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "contact_search_documents",
   "contacts",
   "corpus_index_generations",
+  "corpus_index_group_enrollments",
   "corpus_index_projection_intents",
   "corpus_index_projection_revisions",
   "corpus_index_projection_states",

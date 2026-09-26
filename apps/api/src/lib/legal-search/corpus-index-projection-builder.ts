@@ -12,6 +12,11 @@ import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  COURT_PARTITION_FIELD,
+  corpusIndexGroupContractForJurisdiction,
+  requireCourtPartitionIdentity,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
   corpusIndexPublisherFields,
   corpusIndexStemFields,
   type CorpusIndexManifest,
@@ -43,6 +48,7 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   anchor_id?: string;
   case_number: string;
   court: string;
+  court_partition?: string;
   decision_date?: string;
   decision_date_ts: string;
   decision_year?: number;
@@ -160,6 +166,33 @@ const publisherProjection = (
   }
 };
 
+/**
+ * What the decision's group contract adds to every passage. A court-partitioned
+ * group routes splits by the partition, so a passage without it would land in
+ * no partition the reader prunes to: it is written on each one.
+ */
+const groupContractFields = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+  input: CaseLawProjectionInput,
+): { [COURT_PARTITION_FIELD]?: string } => {
+  const contract = corpusIndexGroupContractForJurisdiction(
+    manifest,
+    input.jurisdiction,
+  );
+  switch (contract.type) {
+    case "base":
+      return {};
+    case "court_partition_v1":
+      return {
+        [COURT_PARTITION_FIELD]:
+          requireCourtPartitionIdentity(input).courtPartition,
+      };
+    default:
+      contract satisfies never;
+      return panic(`Unhandled group contract: ${String(contract)}`);
+  }
+};
+
 export const buildCaseLawProjectionDocuments = ({
   manifest,
   input,
@@ -174,6 +207,7 @@ export const buildCaseLawProjectionDocuments = ({
   }
   const shared = {
     ...sharedFields(input, revision),
+    ...groupContractFields(manifest, input),
     case_number: input.caseNumber,
     court: input.court,
     decision_date_ts: input.decisionDate ?? UNDATED_DECISION_TIMESTAMP,

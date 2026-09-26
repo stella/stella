@@ -454,6 +454,20 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (status, updated_at)
       ON TABLE "corpus_index_generations" TO stella_ingestion
   `,
+  // A group's contract binding is written once; ingestion may insert it and
+  // move only its readiness.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_enrollments"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_enrollments"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (provisioning_status, attested_at, updated_at)
+      ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}

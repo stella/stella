@@ -21,6 +21,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
+  corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
@@ -220,6 +221,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     cluster: "required",
     manifest_digest: "required",
     status: "required",
+  },
+  // Whether a serving group under its own contract is ready to be read: the
+  // bound digest and the readiness. The physical id and the timestamps are
+  // operator bookkeeping.
+  corpus_index_group_enrollments: {
+    family: "required",
+    generation: "required",
+    index_group: "required",
+    effective_digest: "required",
+    provisioning_status: "required",
   },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The applied revision, the work schedule and the failure detail are

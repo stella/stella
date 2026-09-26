@@ -100,6 +100,7 @@ export type CaseLawProjectionCanonicalInput = {
   caseNumber: string;
   identifiers: readonly { type: string; value: string }[];
   court: string;
+  courtId: string | null;
   decisionDate: string | null;
   ecli: string | null;
   metadata: Record<string, unknown> | null;
@@ -117,6 +118,7 @@ export const caseLawProjectionInputFromCanonical = ({
   caseNumber,
   identifiers,
   court,
+  courtId,
   decisionDate,
   ecli,
   metadata,
@@ -135,6 +137,7 @@ export const caseLawProjectionInputFromCanonical = ({
   caseNumber,
   identifiers,
   court,
+  courtId,
   decisionDate,
   ecli,
   metadata,
@@ -374,6 +377,7 @@ const lockCaseLawProjectionInput = async (
       redactedAt: caseLawDecisions.redactedAt,
       caseNumber: caseLawDecisions.caseNumber,
       court: caseLawDecisions.court,
+      courtId: caseLawDecisions.courtId,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
       metadata: caseLawDecisions.metadata,

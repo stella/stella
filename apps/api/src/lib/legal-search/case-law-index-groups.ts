@@ -46,6 +46,36 @@ export const CASE_LAW_INDEX_GROUP_OF = {
 export type CaseLawIndexGroup =
   (typeof CASE_LAW_INDEX_GROUP_OF)[CaseLawJurisdiction];
 
+/**
+ * Group contracts beyond the generation's own manifest. A group under one of
+ * these is created with an effective index configuration derived from, but
+ * not equal to, the manifest's, and is enrolled and attested per group
+ * (`corpus-index-group-contract.ts`).
+ */
+export const CORPUS_INDEX_GROUP_CONTRACT_VERSIONS = [
+  "court_partition_v1",
+] as const;
+
+export type CorpusIndexGroupContractVersion =
+  (typeof CORPUS_INDEX_GROUP_CONTRACT_VERSIONS)[number];
+
+/**
+ * The contract each case-law index group is created under. Total, so a new
+ * group answers explicitly: `base` keeps the manifest's configuration exactly,
+ * which is what every group that existed before a group contract did.
+ */
+export const CASE_LAW_INDEX_GROUP_CONTRACT_OF = {
+  aut: "base",
+  cs_sk: "base",
+  eu: "base",
+  hun: "base",
+  pol: "base",
+  usa: "court_partition_v1",
+} as const satisfies Record<
+  CaseLawIndexGroup,
+  "base" | CorpusIndexGroupContractVersion
+>;
+
 /** First case-law generation whose physical indexes are per group. */
 export const CASE_LAW_INDEX_GROUPING_FROM_GENERATION = 3;
 

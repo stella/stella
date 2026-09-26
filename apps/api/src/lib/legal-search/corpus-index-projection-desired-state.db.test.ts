@@ -381,3 +381,61 @@ test("a retiring generation is told to erase but never to take new content", asy
     { generation: "case_law_v6", action: "erase", epoch: 3n },
   ]);
 });
+
+test("a court correction on a court-partitioned decision replaces its desired projection", async () => {
+  const usaDecisionId = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000105",
+  );
+  await db.insert(caseLawDecisions).values({
+    id: usaDecisionId,
+    sourceId: CASE_LAW_SOURCE_ID,
+    caseNumber: "No. 19-1392",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    contentHash: "c".repeat(64),
+  });
+  const subject = { family: "case_law", entityId: usaDecisionId } as const;
+  const reconcile = async () =>
+    await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+        ),
+    );
+  const desired = async () =>
+    await db
+      .select({
+        epoch: corpusIndexProjectionStates.desiredEpoch,
+        fingerprint: corpusIndexProjectionStates.desiredFingerprint,
+        indexId: corpusIndexProjectionStates.desiredIndexId,
+        workStatus: corpusIndexProjectionStates.workStatus,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, usaDecisionId));
+
+  await reconcile();
+  const [before] = await desired();
+  expect(before).toMatchObject({ epoch: 1n, indexId: "case_law_v5_usa" });
+  await db
+    .update(caseLawDecisions)
+    .set({ court: "Court of Appeals for the First Circuit", courtId: "ca1" })
+    .where(eq(caseLawDecisions.id, usaDecisionId));
+  expect(await reconcile()).toEqual({
+    epoch: 2n,
+    changed: true,
+    generationCount: 1,
+  });
+  const [after] = await desired();
+  // Same index and a new fingerprint, eligible for append: the append path
+  // replaces the applied revision rather than leaving it standing.
+  expect(after).toMatchObject({
+    epoch: 2n,
+    indexId: "case_law_v5_usa",
+    workStatus: "eligible",
+  });
+  expect(after?.fingerprint).not.toBe(before?.fingerprint);
+  expect(await reconcile()).toMatchObject({ changed: false });
+});

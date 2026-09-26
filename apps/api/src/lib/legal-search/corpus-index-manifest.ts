@@ -20,10 +20,12 @@
  * Index creation is Plane's, not this repository's: nothing here calls
  * `CorpusIndexClient.createIndex`. The contract Plane owes a newly routed
  * group is therefore stated rather than enforced here — for every serving and
- * building generation, create `corpusIndexConfigFromManifest(manifest,
- * corpusIndexIdFromManifest(manifest, jurisdiction))` for each declared
- * jurisdiction, which is idempotent per group because the id is the group's
- * and creating one group touches no other. Until that index exists the
+ * building generation, create `corpusIndexGroupConfig(contract)` for each
+ * group's resolved contract (`corpus-index-group-contract.ts`), which is
+ * idempotent per group because the id is the group's and creating one group
+ * touches no other. A group under a contract other than `base` is also bound
+ * and attested per group before anything reads or writes it
+ * (`corpus-index-group-enrollment-store.ts`). Until that index exists the
  * generation's projection for that group cannot drain; every other group keeps
  * draining, because a projection attempt is per physical index.
  */
@@ -36,7 +38,10 @@ import {
   type CaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 
-import type { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-groups";
+import {
+  CASE_LAW_INDEX_GROUP_CONTRACT_OF,
+  type CASE_LAW_INDEX_GROUP_OF,
+} from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_FINAL_INDEX_CONFIG_VERSION,
@@ -794,11 +799,15 @@ export const corpusIndexManifestDigest = (
   return digest;
 };
 
-export const corpusIndexConfigFromManifest = (
-  manifest: CorpusIndexManifest,
+/**
+ * A physical configuration from an unindexed one: the id set and the
+ * maturation period rendered as the engine reports it back.
+ */
+export const corpusIndexConfigWithId = (
+  unindexedConfig: Omit<CorpusIndexConfig, "index_id">,
   indexId: string,
 ): CorpusIndexConfig => {
-  const config = structuredClone(manifest.engine.indexConfig);
+  const config = structuredClone(unindexedConfig);
   return {
     ...config,
     index_id: indexId,
@@ -812,6 +821,34 @@ export const corpusIndexConfigFromManifest = (
       },
     },
   };
+};
+
+/**
+ * The configuration of a physical index created under the manifest's own
+ * contract. A case-law group declared under another contract
+ * (`CASE_LAW_INDEX_GROUP_CONTRACT_OF`) is refused: its configuration is the
+ * group contract's, and creating it from the manifest would build an index
+ * the group's writers and readers do not agree with.
+ */
+export const corpusIndexConfigFromManifest = (
+  manifest: CorpusIndexManifest,
+  indexId: string,
+): CorpusIndexConfig => {
+  if (manifest.family === "case_law") {
+    for (const [group, contract] of Object.entries(
+      CASE_LAW_INDEX_GROUP_CONTRACT_OF,
+    )) {
+      if (
+        contract !== "base" &&
+        indexId === `${manifest.generation}_${group}`
+      ) {
+        return panic(
+          `Corpus index ${indexId} is created under the ${contract} group contract`,
+        );
+      }
+    }
+  }
+  return corpusIndexConfigWithId(manifest.engine.indexConfig, indexId);
 };
 
 /**

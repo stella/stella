@@ -2,10 +2,8 @@ import { Result } from "better-result";
 
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import {
-  readServingCorpusIndexGenerationTx,
-  type ServingCorpusIndexGeneration,
-} from "@/api/lib/legal-search/corpus-index-generation-store";
+import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
   corpusIndexRoute,
   requireCorpusIndexManifest,
@@ -182,16 +180,24 @@ const parseTermsBuckets = (
 };
 
 type CorpusIndexBrowseFacetsDependencies = {
-  readServingGeneration: () => Promise<ServingCorpusIndexGeneration>;
+  /** The serving generation, refusing a scoped read of an unready group. */
+  readServingGeneration: (
+    jurisdiction: string | undefined,
+  ) => Promise<ServingCorpusIndexGeneration>;
 };
 
 const defaultCorpusIndexBrowseFacetsDependencies = {
-  readServingGeneration: async () => {
+  readServingGeneration: async (jurisdiction) => {
     const { caseLawPublicReadDb } =
       await import("@/api/lib/case-law-public-read-db");
-    return await caseLawPublicReadDb(
-      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+    const { serving } = await caseLawPublicReadDb(
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction,
+        }),
     );
+    return serving;
   },
 } satisfies CorpusIndexBrowseFacetsDependencies;
 
@@ -200,7 +206,7 @@ export const corpusIndexBrowseFacets = async (
   dependencies: CorpusIndexBrowseFacetsDependencies = defaultCorpusIndexBrowseFacetsDependencies,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const family = query.documentFamily ?? "case_law";
-  const serving = await dependencies.readServingGeneration();
+  const serving = await dependencies.readServingGeneration(query.jurisdiction);
   const generation = serving.generation;
   const readContract = corpusIndexReadContract(family, generation);
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when

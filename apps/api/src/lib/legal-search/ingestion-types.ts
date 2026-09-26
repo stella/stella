@@ -131,6 +131,13 @@ export type IngestionResult = {
   sheetNumber?: string | undefined;
   ecli?: string | undefined;
   court: string;
+  /**
+   * The court directory's exact id for `court`, required where the
+   * jurisdiction identifies courts by directory id and absent everywhere
+   * else. `court` is then the directory's canonical name for it
+   * (`resolveDecisionCourtId`).
+   */
+  courtId?: string | undefined;
   country: string;
   language: string;
   decisionDate?: string | undefined;
