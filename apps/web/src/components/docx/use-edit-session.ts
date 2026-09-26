@@ -457,3 +457,5 @@ export const useEditSession = ({
     resetError,
   };
 };
+
+export type EditSession = ReturnType<typeof useEditSession>;

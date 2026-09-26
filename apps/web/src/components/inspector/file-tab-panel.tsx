@@ -21,7 +21,7 @@ import {
   REVIEW_SUGGESTION_ORIGIN,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { useFileAnonymizationPipeline } from "@/components/inspector/anonymize-pdf";
 import {
   EmailChatResolutionAlert,

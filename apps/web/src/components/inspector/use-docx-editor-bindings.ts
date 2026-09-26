@@ -3,7 +3,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";

@@ -23,7 +23,7 @@ import type { RefObject } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
 
