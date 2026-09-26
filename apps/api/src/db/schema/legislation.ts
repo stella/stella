@@ -4,6 +4,7 @@ import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-st
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
 import {
+  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -171,6 +172,15 @@ export const legislationDocuments = p.pgTable(
       .bigint("projection_epoch", { mode: "bigint" })
       .default(0n)
       .notNull(),
+    /**
+     * Advanced by the database whenever the payload or the version identity
+     * changes (migration `20260926150000_legislation_payload_revision`); a
+     * write that supplies a different value is refused.
+     */
+    payloadRevision: p
+      .bigint("payload_revision", { mode: "bigint" })
+      .default(1n)
+      .notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -283,6 +293,26 @@ export const legislationDocuments = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
   ],
+);
+
+/**
+ * Works whose versions changed, one row per affected `(country, eli)`. Filled
+ * only by triggers on `legislation_documents`: every insert and delete, and
+ * every update that advances `payload_revision`. A queue, not a watermark;
+ * ids order nothing.
+ */
+export const legislationWorkChanges = p.pgTable(
+  "legislation_work_changes",
+  {
+    id: p
+      .bigint({ mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity({ name: "legislation_work_changes_id_seq" }),
+    country: p.varchar({ length: 3 }).notNull(),
+    eli: p.varchar({ length: 512 }).notNull(),
+    changedAt: timestamptz("changed_at").defaultNow().notNull(),
+  },
+  () => [...caseLawIngestionOnlyPolicies()],
 );
 
 export const legislationSearchDocuments = p.pgTable(

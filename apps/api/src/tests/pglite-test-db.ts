@@ -19,6 +19,7 @@ import {
   createSchemaPglite,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteLegislationPayloadRevision,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
@@ -376,6 +377,13 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
   `,
+  // Written only by the legislation triggers, as the legislation writer.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "legislation_work_changes" FROM stella
+  `,
+  `
+    GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -505,6 +513,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
+  await installPgliteLegislationPayloadRevision(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
