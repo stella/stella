@@ -35,6 +35,8 @@ import { stampTextCheck } from "@/api/lib/pdf-signing/stamp-text";
 /** The stamp cannot be put on the document it was placed for. */
 export class PdfSigningStampError extends TaggedError("PdfSigningStampError")<{
   message: string;
+  /** `unrenderable`: text it cannot draw; `overflow`: text that does not fit. */
+  reason: "unrenderable" | "overflow" | "placement";
 }> {}
 
 /** Names the stamp's signature field gets, numbered past existing ones. */
@@ -54,7 +56,9 @@ const FRACTION_TOLERANCE = 1e-6;
 const SIZE_TOLERANCE = 1e-3;
 
 const MAX_FONT_SIZE = 10;
-const MIN_FONT_SIZE = 3;
+/** Smaller than this and a stamp is not readable on paper. */
+const MIN_FONT_SIZE = 6;
+const FONT_SIZE_STEP = 0.5;
 const LINE_HEIGHT = 1.25;
 /** /F Print: the stamp prints with the page. */
 const ANNOTATION_FLAG_PRINT = 4;
@@ -376,6 +380,88 @@ const nextFieldName = (pdf: PDF) => {
   return `${STAMP_FIELD_PREFIX}${index}`;
 };
 
+/** Split a word too wide for a row into pieces that fit, by grapheme. */
+const breakWord = (
+  word: string,
+  maxWidth: number,
+  unitWidth: (text: string) => number,
+) => {
+  const pieces: string[] = [];
+  let piece = "";
+  for (const { segment } of new Intl.Segmenter().segment(word)) {
+    if (piece !== "" && unitWidth(piece + segment) > maxWidth) {
+      pieces.push(piece);
+      piece = "";
+    }
+    piece += segment;
+  }
+  return piece === "" ? pieces : [...pieces, piece];
+};
+
+/** Greedy word wrap of one logical line into rows no wider than `maxWidth`. */
+const wrapLine = (
+  line: string,
+  maxWidth: number,
+  unitWidth: (text: string) => number,
+) => {
+  const rows: string[] = [];
+  let row = "";
+  for (const word of line.split(/\s+/u).filter((entry) => entry !== "")) {
+    const candidate = row === "" ? word : `${row} ${word}`;
+    if (unitWidth(candidate) <= maxWidth) {
+      row = candidate;
+      continue;
+    }
+    if (row !== "") {
+      rows.push(row);
+    }
+    const pieces = breakWord(word, maxWidth, unitWidth);
+    rows.push(...pieces.slice(0, -1));
+    row = pieces.at(-1) ?? "";
+  }
+  return row === "" ? rows : [...rows, row];
+};
+
+/**
+ * The largest readable size, 10 pt down to 6 pt, at which the lines wrap
+ * inside the box, or `null` when they do not fit even at 6 pt. Sizes are
+ * physical points; `unit` converts them to the page's user space.
+ */
+export const layoutStampText = ({
+  height,
+  lines,
+  unit,
+  unitWidth,
+  width,
+}: {
+  height: number;
+  lines: readonly string[];
+  /** User-space length of one point (1 / UserUnit). */
+  unit: number;
+  /** Width of `text` at a font size of 1. */
+  unitWidth: (text: string) => number;
+  width: number;
+}): { fontSize: number; padding: number; rows: string[] } | null => {
+  const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
+  const innerWidth = width - 2 * padding;
+  const innerHeight = height - 2 * padding;
+  for (
+    let points = MAX_FONT_SIZE;
+    points >= MIN_FONT_SIZE;
+    points -= FONT_SIZE_STEP
+  ) {
+    const fontSize = points * unit;
+    const rows = lines.flatMap((line) =>
+      wrapLine(line, innerWidth / fontSize, unitWidth),
+    );
+    const used = fontSize + (rows.length - 1) * fontSize * LINE_HEIGHT;
+    if (used <= innerHeight) {
+      return { fontSize, padding, rows };
+    }
+  }
+  return null;
+};
+
 /** Counter-rotates the appearance so the stamp reads upright on screen. */
 const APPEARANCE_MATRIX = {
   0: [1, 0, 0, 1],
@@ -405,6 +491,7 @@ export const addSignatureStamp = ({
   if (page === undefined) {
     throw new PdfSigningStampError({
       message: "The stamp's page is not in this document.",
+      reason: "placement",
     });
   }
   const [x1, y1, x2, y2] = stamp.rect;
@@ -418,29 +505,31 @@ export const addSignatureStamp = ({
     throw new PdfSigningStampError({
       message:
         "The stamp's text cannot be shown in a visible stamp. Sign invisibly instead.",
+      reason: "unrenderable",
     });
   }
   const font = pdf.embedFont(fontBytes);
-  // Font sizes and padding are physical points; in this page's user space
-  // they are that many points divided by its unit.
-  const unit = 1 / pageUserUnit(page.dict);
-  const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
   const unitWidth = (text: string) =>
     [...text].reduce(
       (total, character) =>
         total + font.getWidth(character.codePointAt(0) ?? 0) / 1000,
       0,
     );
-  const fontSize = Math.max(
-    MIN_FONT_SIZE * unit,
-    Math.min(
-      MAX_FONT_SIZE * unit,
-      (height - 2 * padding) / (lines.length * LINE_HEIGHT),
-      ...lines.map(
-        (line) => (width - 2 * padding) / Math.max(unitWidth(line), 0.01),
-      ),
-    ),
-  );
+  const layout = layoutStampText({
+    height,
+    lines,
+    unit: 1 / pageUserUnit(page.dict),
+    unitWidth,
+    width,
+  });
+  if (layout === null) {
+    throw new PdfSigningStampError({
+      message:
+        "The stamp's text does not fit its box at a readable size. Draw a larger box, shorten the text or sign invisibly.",
+      reason: "overflow",
+    });
+  }
+  const { fontSize, padding, rows } = layout;
 
   const operators = [
     "q",
@@ -453,7 +542,7 @@ export const addSignatureStamp = ({
     "0.1 0.1 0.1 rg",
     `/F1 ${num(fontSize)} Tf`,
   ];
-  for (const [index, line] of lines.entries()) {
+  for (const [index, line] of rows.entries()) {
     const lineWidth = unitWidth(line) * fontSize;
     const x = stamp.direction === "rtl" ? width - padding - lineWidth : padding;
     const y = height - padding - fontSize - index * fontSize * LINE_HEIGHT;
@@ -497,6 +586,7 @@ export const addSignatureStamp = ({
   if (!(widgetRef instanceof PdfRef) || pdf.getObject(widgetRef) !== widget) {
     throw new PdfSigningStampError({
       message: "The stamp's field could not be located.",
+      reason: "placement",
     });
   }
 

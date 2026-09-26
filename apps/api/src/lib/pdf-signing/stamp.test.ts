@@ -208,10 +208,19 @@ const stampOn = (
 const signWithStamp = async (
   rotation: StampRotation,
   signerName = "Jiří Čermák",
+  {
+    box = { x: 0.5, y: 0.8, width: 0.4, height: 0.1 },
+    location = "Brno",
+    reason = null,
+  }: {
+    box?: { x: number; y: number; width: number; height: number };
+    location?: string | null;
+    reason?: string | null;
+  } = {},
 ) => {
   const basePdf = await buildPage(rotation);
   const placed = placeStamp({
-    box: { x: 0.5, y: 0.8, width: 0.4, height: 0.1 },
+    box,
     pageIndex: 0,
     pdf: await PDF.load(basePdf),
   });
@@ -224,13 +233,13 @@ const signWithStamp = async (
     certificate: signer.der,
     certificateChain: [],
     keyType: "RSA" as const,
-    location: "Brno",
+    location,
     placeholderSize: signaturePlaceholderSize({
       certificate: signer.der,
       certificateChain: [],
       timestamped: false,
     }),
-    reason: null,
+    reason,
     reserveTimestamp: false,
     signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
     signingTime: SIGNING_TIME,
@@ -347,6 +356,58 @@ describe("signing with a visible stamp", () => {
       );
       expect(refused).toBeInstanceOf(PdfSigningStampError);
     }
+  });
+
+  test("wraps the longest accepted text inside the largest box", async () => {
+    // A 64-character name (the X.520 upper bound) and a reason and location
+    // at the handoff's 256-character cap, in a 400 x 200 pt box.
+    const name =
+      "Maximilián Křižovnický-Dvořáková von Hohenzollern-Sigmaringen Jr";
+    const reason = "Schváleno ".repeat(26).slice(0, 256);
+    const location = "Nábřeží ".repeat(33).slice(0, 256);
+    const { applied } = await signWithStamp(0, name, {
+      box: { x: 0.1, y: 0.1, width: 400 / 600, height: 200 / 800 },
+      location,
+      reason,
+    });
+    const { appearance, page, pdf } = await readStamp(applied.bytes);
+    if (!(appearance instanceof PdfStream) || !page) {
+      throw new Error("no stamp appearance");
+    }
+    const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
+    const font = appearance
+      .getDict("Resources", resolve)
+      ?.getDict("Font", resolve)
+      ?.getDict("F1", resolve);
+    const toUnicode = font?.get("ToUnicode");
+    const cmap =
+      toUnicode instanceof PdfRef ? pdf.getObject(toUnicode) : undefined;
+    if (!(cmap instanceof PdfStream)) {
+      throw new Error("no ToUnicode map");
+    }
+    const content = new TextDecoder().decode(appearance.getDecodedData());
+    const text = decodeShownText(
+      content,
+      new TextDecoder().decode(cmap.getDecodedData()),
+    ).replaceAll("\n", " ");
+
+    // Every word is there, wrapped over rows, none clipped away.
+    expect(text.replaceAll(/\s+/gu, " ")).toContain(name);
+    expect(text.replaceAll(/\s+/gu, "")).toContain(
+      reason.replaceAll(/\s+/gu, ""),
+    );
+    const fontSize = Number(/\/F1 ([\d.]+) Tf/u.exec(content)?.[1]);
+    expect(fontSize).toBeGreaterThanOrEqual(6);
+  });
+
+  test("refuses, before any digest, text that will not fit its box readably", async () => {
+    const refused = await signWithStamp(0, "Jiří Čermák", {
+      box: { x: 0.1, y: 0.1, width: 72 / 600, height: 24 / 800 },
+      reason: "Schváleno ".repeat(20),
+    }).catch((error: unknown) => error);
+
+    expect(refused).toBeInstanceOf(PdfSigningStampError);
+    expect(PdfSigningStampError.is(refused) && refused.reason).toBe("overflow");
   });
 
   test("the signature still covers every byte it signed", async () => {
