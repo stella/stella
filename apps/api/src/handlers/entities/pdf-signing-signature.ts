@@ -12,17 +12,18 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
+import type { DocumentSource } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
-import { readVersionPdfSigningTarget } from "@/api/lib/pdf-signing/pdf-target";
 import {
   applySignature,
   PdfSigningDigestMismatchError,
-  pdfSigningLevel,
 } from "@/api/lib/pdf-signing/sign-pdf";
+import type { AppliedSignature } from "@/api/lib/pdf-signing/sign-pdf";
+import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
@@ -63,6 +64,31 @@ const decodeBase64 = (value: string): Uint8Array | null => {
     ? new Uint8Array(bytes)
     : null;
 };
+
+const decodeCertificateChain = (chain: string[] | null) =>
+  (chain ?? []).map((entry) => new Uint8Array(Buffer.from(entry, "base64")));
+
+/** Provenance of the signed version: what was signed, with what, how. */
+const signatureSource = ({
+  applied,
+  baseVersionId,
+  signerCertificateDer,
+  signingTime,
+}: {
+  applied: AppliedSignature;
+  baseVersionId: string;
+  signerCertificateDer: Uint8Array;
+  signingTime: Date;
+}): DocumentSource => ({
+  kind: "signature",
+  baseVersionId,
+  certificateSha256Hex: new Bun.CryptoHasher("sha256")
+    .update(signerCertificateDer)
+    .digest("hex"),
+  level: applied.level,
+  signingTime: signingTime.toISOString(),
+  timestampAuthorityUrl: applied.timestampAuthorityUrl,
+});
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -121,40 +147,19 @@ const submitPdfSigningSignature = createSafeTokenHandler(
       server,
     });
 
-    const basePdf = yield* Result.await(
+    // The same read refuses a base the document has moved away from, so the
+    // file name below is the pinned version's.
+    const { bytes: basePdf, fileName } = yield* Result.await(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),
     );
-
-    const fileName = yield* Result.await(
-      session.safeDb(async (tx) => {
-        const target = await readVersionPdfSigningTarget({
-          entityVersionId: session.baseVersionId,
-          propertyId: session.propertyId,
-          tx,
-          workspaceId: session.workspaceId,
-        });
-        return target?.status === "signable"
-          ? target.fileContent.fileName
-          : null;
-      }),
-    );
-    if (fileName === null) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          code: "pdf_signing_base_version_diverged",
-          message: "The document file changed while it was being signed.",
-        }),
-      );
-    }
 
     const signedPdf = await Result.tryPromise({
       try: async () =>
         await applySignature({
           basePdf,
           certificate: new Uint8Array(signerCertificateDer),
-          certificateChain: (session.signerCertificateChain ?? []).map(
-            (entry) => new Uint8Array(Buffer.from(entry, "base64")),
+          certificateChain: decodeCertificateChain(
+            session.signerCertificateChain,
           ),
           expectedDigestHex: digestHex,
           keyType,
@@ -163,13 +168,13 @@ const submitPdfSigningSignature = createSafeTokenHandler(
           signature,
           signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
           signingTime,
+          timestampAuthorities: configuredTimestampAuthorities(),
         }),
       catch: (cause) => cause,
     });
 
     if (Result.isError(signedPdf)) {
-      const digestMismatch = PdfSigningDigestMismatchError.is(signedPdf.error);
-      if (digestMismatch) {
+      if (PdfSigningDigestMismatchError.is(signedPdf.error)) {
         yield* Result.await(
           closePdfSigningSession({
             closeReason: "digest_mismatch",
@@ -200,22 +205,19 @@ const submitPdfSigningSignature = createSafeTokenHandler(
     const written = await Result.tryPromise({
       try: async () =>
         await createEntityVersionFromBuffer({
-          buffer: signedPdf.value,
+          buffer: signedPdf.value.bytes,
           entityId: session.entityId,
           fileName,
           mimeType: PDF_MIME_TYPE,
           organizationId: session.organizationId,
           recordAuditEvent,
           safeDb: session.safeDb,
-          source: {
-            kind: "signature",
+          source: signatureSource({
+            applied: signedPdf.value,
             baseVersionId: session.baseVersionId,
-            certificateSha256Hex: new Bun.CryptoHasher("sha256")
-              .update(signerCertificateDer)
-              .digest("hex"),
-            level: pdfSigningLevel(),
-            signingTime: signingTime.toISOString(),
-          },
+            signerCertificateDer,
+            signingTime,
+          }),
           userId: session.userId,
           workspaceId: session.workspaceId,
           writePolicy: {
