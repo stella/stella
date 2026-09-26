@@ -114,7 +114,7 @@ const KEPT_RESPONSE_HEADERS = [
 ];
 /** A scenario makes one request; a retried failure a few more. */
 const MAX_REQUESTS_PER_SCENARIO = 4;
-const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 /** Identifier keys whose values are replaced, at any depth. */
 const IDENTIFIER_KEYS = new Set([
@@ -166,29 +166,80 @@ export const sanitizeJson = (value: unknown, secret: string): unknown => {
 };
 
 /** An SSE or JSON body with every JSON payload sanitized, framing kept. */
-export const sanitizeTextBody = (text: string, secret: string): string => {
+/** Refuses anything to be stored that carries the recording key. */
+export const refuseSecret = (text: string, secret: string): void => {
   if (secret !== "" && text.includes(secret)) {
-    return panic("A provider response contains the recording key");
+    panic("A provider response contains the recording key");
   }
+};
+
+/** Response and request identifiers as providers spell them in free text. */
+const IDENTIFIER_TOKEN =
+  /\b(?:chatcmpl|gen|msg|req|resp|response)[-_](?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,}\b/gu;
+
+const parseJson = (text: string): { value: unknown } | undefined => {
   try {
-    return JSON.stringify(sanitizeJson(JSON.parse(text), secret));
+    return { value: JSON.parse(text) };
   } catch {
-    // Not one JSON document: an event stream.
+    return undefined;
+  }
+};
+
+/**
+ * Text that is not JSON (a cut payload, a plain-text error) keeps its
+ * bytes, with any identifier token replaced.
+ */
+const sanitizeFreeText = (text: string, secret: string): string => {
+  refuseSecret(text, secret);
+  return text.replaceAll(IDENTIFIER_TOKEN, "[id]");
+};
+
+/** One JSON document, or free text when it is not one. */
+const sanitizeDocument = (text: string, secret: string): string => {
+  refuseSecret(text, secret);
+  const parsed = parseJson(text);
+  return parsed === undefined
+    ? sanitizeFreeText(text, secret)
+    : JSON.stringify(sanitizeJson(parsed.value, secret));
+};
+
+/** An SSE or JSON body with every payload sanitized, framing kept. */
+export const sanitizeTextBody = (text: string, secret: string): string => {
+  refuseSecret(text, secret);
+  if (parseJson(text) !== undefined) {
+    return sanitizeDocument(text, secret);
   }
   return text
     .split(/(\r?\n)/u)
     .map((line) => {
       if (!line.startsWith("data:")) {
-        return line;
+        return sanitizeFreeText(line, secret);
       }
       const data = line.slice("data:".length).trimStart();
-      try {
-        return `data: ${JSON.stringify(sanitizeJson(JSON.parse(data), secret))}`;
-      } catch {
-        return line;
-      }
+      return data === "[DONE]"
+        ? line
+        : `data: ${sanitizeDocument(data, secret)}`;
     })
     .join("");
+};
+
+/**
+ * An event stream frame's payload, whatever its shape: an object, a JSON
+ * scalar or array kept as text, or bytes that are not JSON at all.
+ */
+export const sanitizeEventPayload = (
+  payload: string | Record<string, unknown>,
+  secret: string,
+): string | Record<string, unknown> => {
+  if (typeof payload === "string") {
+    return sanitizeDocument(payload, secret);
+  }
+  const sanitized = sanitizeJson(payload, secret);
+  return typeof sanitized === "object" &&
+    sanitized !== null &&
+    !Array.isArray(sanitized)
+    ? Object.fromEntries(Object.entries(sanitized))
+    : panic("An object payload sanitized to a non-object");
 };
 
 export const keptHeaders = (headers: Headers): Record<string, string> =>
@@ -203,13 +254,28 @@ export const keptHeaders = (headers: Headers): Record<string, string> =>
 const readBounded = async (response: Response): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let length = 0;
-  for await (const chunk of response.body ?? []) {
-    length += chunk.byteLength;
-    if (length > MAX_RESPONSE_BYTES) {
-      await response.body?.cancel();
-      return panic("A provider response exceeds the recording size limit");
+  if (response.body !== null) {
+    const reader = response.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        length += value.byteLength;
+        if (length > MAX_RESPONSE_BYTES) {
+          return panic("A provider response exceeds the recording size limit");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      // Stops the producer on every early exit; a no-op after EOF.
+      try {
+        await reader.cancel();
+      } finally {
+        reader.releaseLock();
+      }
     }
-    chunks.push(chunk);
   }
   const bytes = new Uint8Array(length);
   let offset = 0;
@@ -218,13 +284,6 @@ const readBounded = async (response: Response): Promise<Uint8Array> => {
     offset += chunk.byteLength;
   }
   return bytes;
-};
-
-/** Refuses anything to be stored that carries the recording key. */
-export const refuseSecret = (text: string, secret: string): void => {
-  if (secret !== "" && text.includes(secret)) {
-    panic("A provider response contains the recording key");
-  }
 };
 
 /** A fetch that forwards to the provider and keeps what it answered. */
@@ -238,7 +297,10 @@ const installRecorder = ({
   const upstream = globalThis.fetch;
   const origins = new Set<string>(ORIGINS[provider]);
   const exchanges: ProviderWireExchange[] = [];
-  const recorder = async (
+  /** The first refusal: the SDK sees only a failed fetch, the recording
+   *  fails with the reason. */
+  const refusal: { error: unknown } = { error: undefined };
+  const forward = async (
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
@@ -263,15 +325,13 @@ const installRecorder = ({
     )
       ? {
           encoding: "aws-eventstream",
-          messages: decodeAwsEventStream(bytes).map((message) => ({
-            headers: message.headers,
-            payload:
-              typeof message.payload === "string"
-                ? message.payload
-                : Object.fromEntries(
-                    Object.entries(sanitizeJson(message.payload, secret) ?? {}),
-                  ),
-          })),
+          messages: decodeAwsEventStream(bytes).map((message) => {
+            refuseSecret(JSON.stringify(message.headers), secret);
+            return {
+              headers: message.headers,
+              payload: sanitizeEventPayload(message.payload, secret),
+            };
+          }),
         }
       : {
           encoding: "text",
@@ -290,11 +350,23 @@ const installRecorder = ({
       status: response.status,
     });
   };
+  const recorder = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    try {
+      return await forward(input, init);
+    } catch (error) {
+      refusal.error ??= error;
+      throw error;
+    }
+  };
   globalThis.fetch = Object.assign(recorder, {
     preconnect: () => undefined,
   });
   return {
     exchanges,
+    refusal,
     restore: () => {
       globalThis.fetch = upstream;
     },
@@ -369,6 +441,13 @@ export const recordOne = async ({
     await runWireScenario({ apiKey: secret, model, provider, scenario });
   } finally {
     recorder.restore();
+  }
+  const refused = recorder.refusal.error;
+  if (refused !== undefined) {
+    return panic(
+      `The recording was refused: ${refused instanceof Error ? refused.message : "unknown reason"}`,
+      refused,
+    );
   }
   return v.parse(providerWireCassetteSchema, {
     exchanges: recorder.exchanges,
