@@ -166,6 +166,20 @@ const displayedPage = (pdf: PDF, page: PdfDict) => {
   return { box, rotation };
 };
 
+/**
+ * How many points one unit of this page's user space is (/UserUnit, PDF
+ * 1.6; 1 when absent or unusable). Size limits and font sizes are physical,
+ * so they are divided by it before comparing with user-space lengths.
+ */
+export const pageUserUnit = (page: PdfDict): number => {
+  const value = page.get("UserUnit");
+  return value instanceof PdfNumber &&
+    Number.isFinite(value.value) &&
+    value.value > 0
+    ? value.value
+    : 1;
+};
+
 const isFraction = (value: number) =>
   Number.isFinite(value) &&
   value >= -FRACTION_TOLERANCE &&
@@ -234,17 +248,20 @@ export const placeStamp = ({
   const displayedHeight = turned ? crop.width : crop.height;
   const width = box.width * displayedWidth;
   const height = box.height * displayedHeight;
+  const userUnit = pageUserUnit(page.dict);
+  const physicalWidth = width * userUnit;
+  const physicalHeight = height * userUnit;
   // A box drawn at exactly a limit comes back a hair off it after the
   // browser's fraction round trip.
   if (
-    width < STAMP_SIZE_LIMITS.minWidth - SIZE_TOLERANCE ||
-    height < STAMP_SIZE_LIMITS.minHeight - SIZE_TOLERANCE
+    physicalWidth < STAMP_SIZE_LIMITS.minWidth - SIZE_TOLERANCE ||
+    physicalHeight < STAMP_SIZE_LIMITS.minHeight - SIZE_TOLERANCE
   ) {
     return { status: "rejected", reason: "too_small" };
   }
   if (
-    width > STAMP_SIZE_LIMITS.maxWidth + SIZE_TOLERANCE ||
-    height > STAMP_SIZE_LIMITS.maxHeight + SIZE_TOLERANCE
+    physicalWidth > STAMP_SIZE_LIMITS.maxWidth + SIZE_TOLERANCE ||
+    physicalHeight > STAMP_SIZE_LIMITS.maxHeight + SIZE_TOLERANCE
   ) {
     return { status: "rejected", reason: "too_large" };
   }
@@ -395,7 +412,10 @@ export const addSignatureStamp = ({
   const height = turned ? x2 - x1 : y2 - y1;
 
   const font = pdf.embedFont(fontBytes);
-  const padding = Math.min(6, height * 0.1, width * 0.05);
+  // Font sizes and padding are physical points; in this page's user space
+  // they are that many points divided by its unit.
+  const unit = 1 / pageUserUnit(page.dict);
+  const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
   const unitWidth = (text: string) =>
     [...text].reduce(
       (total, character) =>
@@ -403,9 +423,9 @@ export const addSignatureStamp = ({
       0,
     );
   const fontSize = Math.max(
-    MIN_FONT_SIZE,
+    MIN_FONT_SIZE * unit,
     Math.min(
-      MAX_FONT_SIZE,
+      MAX_FONT_SIZE * unit,
       (height - 2 * padding) / (lines.length * LINE_HEIGHT),
       ...lines.map(
         (line) => (width - 2 * padding) / Math.max(unitWidth(line), 0.01),
