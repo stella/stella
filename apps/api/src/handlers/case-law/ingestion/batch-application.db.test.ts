@@ -11,7 +11,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -71,7 +71,7 @@ beforeAll(async () => {
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
   scopedDb = async (callback) =>
     await db.transaction(async (tx) => await callback(asTestRaw(tx)));
-}, 120_000);
+}, propertyTestTimeout(120_000));
 
 afterAll(async () => {
   await client.close();
@@ -526,28 +526,32 @@ describe("a rejected record whose ledger row cannot be written", () => {
 });
 
 describe("the batch bounds", () => {
-  test("a crawl page over the record bound is applied in bounded batches", async () => {
-    const sourceId = await crawlSource();
-    const { corpus, landed } = landingTransfer();
-    const count = CASE_LAW_INGESTION_BATCH_LIMITS.records + 1;
+  test(
+    "a crawl page over the record bound is applied in bounded batches",
+    async () => {
+      const sourceId = await crawlSource();
+      const { corpus, landed } = landingTransfer();
+      const count = CASE_LAW_INGESTION_BATCH_LIMITS.records + 1;
 
-    const applied = await crawlCaller.apply({
-      sourceId,
-      decisions: records(count),
-      corpus,
-    });
+      const applied = await crawlCaller.apply({
+        sourceId,
+        decisions: records(count),
+        corpus,
+      });
 
-    expect(applied.type).toBe("certified");
-    // One pack per bounded batch: the page did not travel as one.
-    expect(landed).toHaveLength(2);
-    expect(await decisionRows(sourceId)).toEqual(settledRows(count));
-    // Both parts were written under the page's one observation.
-    const observations = await db
-      .selectDistinct({ order: caseLawDecisions.sourceObservationOrder })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.sourceId, sourceId));
-    expect(observations).toHaveLength(1);
-  }, 120_000);
+      expect(applied.type).toBe("certified");
+      // One pack per bounded batch: the page did not travel as one.
+      expect(landed).toHaveLength(2);
+      expect(await decisionRows(sourceId)).toEqual(settledRows(count));
+      // Both parts were written under the page's one observation.
+      const observations = await db
+        .selectDistinct({ order: caseLawDecisions.sourceObservationOrder })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      expect(observations).toHaveLength(1);
+    },
+    propertyTestTimeout(120_000),
+  );
 
   test("a page is admitted in parts, and a record over the byte bound is a part of its own", () => {
     const oversized = {
