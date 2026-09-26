@@ -347,7 +347,7 @@ export const ChatMatterPicker = ({
           <p className="text-muted-foreground text-xs leading-snug text-pretty">
             {t("inspector.matterPicker.description")}
           </p>
-          <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 transition-shadow focus-within:ring-2">
+          <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
             <SearchIcon
               aria-hidden="true"
               className="text-muted-foreground size-3.5 shrink-0"

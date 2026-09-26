@@ -15,28 +15,12 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 33,
+    "count": 7,
     "files": {
       "apps/desktop/src/mainview/index.css": 2,
       "apps/landing/src/components/react/ProductShowcase.tsx": 3,
       "apps/landing/src/styles/docs.css": 1,
-      "apps/landing/src/styles/global.css": 1,
-      "apps/web/src/components/chat-pasted-text-node.tsx": 1,
-      "apps/web/src/components/chat/ask-user-card.tsx": 2,
-      "apps/web/src/components/chat/chat-matter-picker.tsx": 1,
-      "apps/web/src/components/chat/chat-thread-messages.tsx": 2,
-      "apps/web/src/components/chat/docked-composer.tsx": 1,
-      "apps/web/src/components/chat/entity-link.tsx": 2,
-      "apps/web/src/components/chat/needs-matter-card.tsx": 3,
-      "apps/web/src/components/chat/prompt-slash-list.tsx": 1,
-      "apps/web/src/components/chat/prompt-suggestions.tsx": 2,
-      "apps/web/src/components/chat/source-chips.tsx": 2,
-      "apps/web/src/components/chat/streamdown-mention-link.tsx": 1,
-      "apps/web/src/components/chat/tool-call-card.tsx": 2,
-      "apps/web/src/components/chat/web-search-sources.tsx": 1,
-      "apps/web/src/features/chat/components/chat-title-rename.tsx": 1,
-      "apps/web/src/features/chat/components/chat-web-search-toggle.tsx": 2,
-      "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx": 2
+      "apps/landing/src/styles/global.css": 1
     }
   },
   "super-linear-regexes": {

@@ -279,7 +279,7 @@ const PublisherSourceChip = ({
     <button
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs transition-colors",
+        "bg-muted/50 px-1.5 py-0.5 text-xs",
         "hover:bg-muted cursor-pointer",
       )}
       onClick={handleClick}
@@ -410,7 +410,7 @@ const SourceChip = ({
     <button
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs transition-colors",
+        "bg-muted/50 px-1.5 py-0.5 text-xs",
         resolvedWorkspaceId
           ? "hover:bg-muted cursor-pointer"
           : "cursor-default",

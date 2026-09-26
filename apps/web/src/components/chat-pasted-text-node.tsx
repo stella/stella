@@ -135,7 +135,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           className={cn(
             CHIP_BASE_CLASS,
             "hover:bg-muted",
-            "focus-visible:ring-ring transition-colors focus-visible:ring-2 focus-visible:outline-none",
+            "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
             "cursor-pointer select-none",
           )}
           contentEditable={false}

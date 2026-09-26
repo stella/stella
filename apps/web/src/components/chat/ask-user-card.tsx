@@ -407,7 +407,6 @@ export const AskUserCard = ({
                       <button
                         className={cn(
                           "rounded-md border px-2 py-1 text-xs",
-                          "transition-colors",
                           answers[i] === opt
                             ? "border-foreground bg-foreground text-background"
                             : "hover:bg-muted",
@@ -420,7 +419,7 @@ export const AskUserCard = ({
                       </button>
                     ))}
                     <button
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
                       onClick={() => toggleCustom(i)}
                       type="button"
                     >

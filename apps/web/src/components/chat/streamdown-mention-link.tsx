@@ -1209,7 +1209,7 @@ const FaviconCitationChip = ({
         aria-label={`${hoverTitle} (${hostname})`}
         className={cn(
           "text-foreground decoration-border underline",
-          "underline-offset-2 transition-colors",
+          "underline-offset-2",
           "hover:decoration-foreground cursor-pointer",
           "inline-flex items-center gap-1",
         )}

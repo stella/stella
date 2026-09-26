@@ -44,7 +44,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
           "flex cursor-pointer list-none items-center gap-1.5",
           "px-2.5 py-1.5 text-xs",
           "[&::-webkit-details-marker]:hidden",
-          "hover:bg-muted/40 rounded-md transition-colors",
+          "hover:bg-muted/40 rounded-md",
         )}
       >
         <ChevronRightIcon

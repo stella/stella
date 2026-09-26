@@ -67,7 +67,7 @@ export const EntityLink = ({
         className={cn(
           "inline-flex items-center gap-0.5",
           "text-foreground decoration-foreground-disabled underline",
-          "underline-offset-2 transition-colors",
+          "underline-offset-2",
           "hover:decoration-foreground cursor-pointer",
         )}
         onClick={() =>
@@ -159,7 +159,7 @@ export const EntityLink = ({
       className={cn(
         "inline-flex items-center gap-0.5",
         "text-foreground decoration-foreground-disabled underline",
-        "underline-offset-2 transition-colors",
+        "underline-offset-2",
         "hover:decoration-foreground cursor-pointer",
       )}
       onClick={handleClick}

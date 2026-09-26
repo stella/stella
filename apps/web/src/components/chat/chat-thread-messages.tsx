@@ -1739,7 +1739,6 @@ const AssistantProcessGroup = ({
           !isOpen &&
             "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
           "text-muted-foreground",
-          "transition-colors",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
@@ -1854,7 +1853,6 @@ const AssistantThinkingPart = ({
           !isOpen &&
             "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
           "text-muted-foreground",
-          "transition-colors",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
