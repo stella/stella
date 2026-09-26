@@ -133,14 +133,14 @@ export const JurisdictionPicker = ({
           return (
             <div
               className={cn(
-                "border-border/70 flex items-center gap-2 border-b px-2 py-1.5 transition-colors last:border-b-0",
+                "border-border/70 flex items-center gap-2 border-b px-2 py-1.5 last:border-b-0",
                 isSelected && "bg-accent text-foreground",
               )}
               key={country.code}
             >
               <button
                 className={cn(
-                  "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors",
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
                   !isSelected && "hover:bg-accent",
                 )}
                 onClick={() => toggleCountry(country.code)}
@@ -175,7 +175,7 @@ export const JurisdictionPicker = ({
                         name: country.name,
                       })}
                       className={cn(
-                        "hover:bg-background/40 flex size-8 items-center justify-center rounded-md transition-colors",
+                        "hover:bg-background/40 flex size-8 items-center justify-center rounded-md",
                         isPrimary
                           ? "text-primary"
                           : "text-muted-foreground hover:text-foreground",

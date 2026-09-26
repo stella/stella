@@ -124,7 +124,7 @@ const ShortcutRow = ({
   return (
     <li
       className={cn(
-        "group flex items-center justify-between gap-4 rounded px-1 py-1 transition-colors",
+        "group flex items-center justify-between gap-4 rounded px-1 py-1",
         isFlashing && "bg-accent/60",
       )}
     >

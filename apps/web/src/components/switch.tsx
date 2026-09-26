@@ -11,7 +11,7 @@ import { cn } from "@stll/ui/utils";
 const Switch = ({ className, ...props }: SwitchPrimitive.Root.Props) => (
   <SwitchPrimitive.Root
     className={cn(
-      "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64",
+      "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input relative inline-flex h-5 w-9 shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64",
       className,
     )}
     data-slot="switch"

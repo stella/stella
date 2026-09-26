@@ -304,7 +304,7 @@ const OTPPanelContent = ({
         <InputOTP
           autoFocus
           containerClassName={cn(
-            "rounded-md transition-shadow",
+            "rounded-md",
             isOtpPulsing && "ring-primary ring-2",
           )}
           maxLength={OTP_LENGTH}

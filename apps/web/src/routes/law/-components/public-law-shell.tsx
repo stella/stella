@@ -75,7 +75,7 @@ const sectionOfRoute = (routeId: string | undefined): LawSection | null => {
   return null;
 };
 
-const CRUMB_LINK_CLASS = "hover:text-foreground shrink-0 transition-colors";
+const CRUMB_LINK_CLASS = "hover:text-foreground shrink-0";
 const CRUMB_ACTIVE_PROPS = { className: "text-foreground font-medium" };
 const CRUMB_ACTIVE_OPTIONS = { exact: true, includeSearch: false };
 

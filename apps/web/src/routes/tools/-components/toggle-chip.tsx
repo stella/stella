@@ -43,7 +43,7 @@ export function ToggleChip({
     <Button
       aria-pressed={active}
       className={cn(
-        "h-auto rounded-md px-2 py-0.5 transition-colors",
+        "h-auto rounded-md px-2 py-0.5",
         active ? SELECTED_TOGGLE_CHIP_CLASS : "text-muted-foreground",
         className,
       )}
