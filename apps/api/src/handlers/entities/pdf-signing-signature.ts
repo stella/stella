@@ -1,67 +1,50 @@
+/**
+ * Phase 2: the desktop posts its signature and the API embeds it.
+ *
+ * Contract for the desktop:
+ * - 200: the signed version exists. A repeat of a call that already
+ *   finalized answers the same way, so a lost response is safe to retry.
+ * - 503: a transient failure. The exchange stays open, the verified
+ *   signature is kept, and posting the same signature again retries without
+ *   a new PIN, within the attempt cap and the session's TTL.
+ * - 409, 413, 422: the exchange is closed with the reason the browser shows.
+ * - 400, 401, 403, 404: the request itself was refused; nothing changed.
+ */
+
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-
-import { pdfSigningSessions } from "@/api/db/schema";
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditRecorder,
-} from "@/api/lib/audit-log";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { DocumentSource } from "@/api/lib/document-source";
-import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
-import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { loadPdfSigningBaseBytes } from "@/api/lib/pdf-signing/base-bytes";
-import { chainReachesRoot } from "@/api/lib/pdf-signing/certificate-chain";
 import { closePdfSigningSession } from "@/api/lib/pdf-signing/close-session";
-import type { AuthorizedPdfSigningSession } from "@/api/lib/pdf-signing/sessions";
+import { finalizeSignature, retryable } from "@/api/lib/pdf-signing/finalize";
+import type { PreparedSigningState } from "@/api/lib/pdf-signing/finalize";
 import {
-  applySignature,
-  PdfSigningDigestMismatchError,
-} from "@/api/lib/pdf-signing/sign-pdf";
-import type { AppliedSignature } from "@/api/lib/pdf-signing/sign-pdf";
-import { configuredTimestampAuthorities } from "@/api/lib/pdf-signing/timestamp-authority";
+  claimFinalizeAttempt,
+  MAX_FINALIZE_ATTEMPTS,
+  releaseFinalizeAttempt,
+  storeDesktopSignature,
+} from "@/api/lib/pdf-signing/finalize-attempts";
+import type { AuthorizedPdfSigningSession } from "@/api/lib/pdf-signing/sessions";
 import { verifyDesktopSignature } from "@/api/lib/pdf-signing/verify-signature";
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
-import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-import { authorizePdfSigningCredentials } from "./pdf-signing-credentials";
+import { authorizePdfSigningFinalizeCredentials } from "./pdf-signing-credentials";
 
-/** An RSA-4096 PKCS#1 signature is 512 bytes; base64 of it is under 1 KiB. */
+/** An RSA-8192 PKCS#1 signature is 1024 bytes; base64 of it is under 2 KiB. */
 const SIGNATURE_BASE64_MAX_LENGTH = 4096;
 
 const signaturePayloadSchema = t.Object({
   signature: t.String({ minLength: 1, maxLength: SIGNATURE_BASE64_MAX_LENGTH }),
 });
-
-/**
- * HTTP status per version-writer rejection. Total over the writer's codes, so
- * a new rejection reaches a decision here rather than a generic 500.
- */
-const VERSION_WRITE_STATUS = {
-  "current-version-changed": 409,
-  "current-version-not-found": 409,
-  "document-too-large": 413,
-  "edit-session-open": 409,
-  "entity-not-found": 404,
-  "entity-read-only": 409,
-  "missing-file-field": 409,
-  "source-version-not-found": 409,
-  "target-file-not-found": 409,
-  "workspace-not-active": 409,
-} as const satisfies Record<EntityVersionTargetErrorCode, 404 | 409 | 413>;
 
 const decodeBase64 = (value: string): Uint8Array | null => {
   const bytes = Buffer.from(value, "base64");
@@ -70,31 +53,22 @@ const decodeBase64 = (value: string): Uint8Array | null => {
     : null;
 };
 
-const decodeCertificateChain = (chain: string[] | null) =>
-  (chain ?? []).map((entry) => new Uint8Array(Buffer.from(entry, "base64")));
+const signingSessionNotFound = () =>
+  new HandlerError({ status: 404, message: "Signing session not found." });
 
-/** Provenance of the signed version: what was signed, with what, how. */
-const signatureSource = ({
-  applied,
-  baseVersionId,
-  signerCertificateDer,
-  signingTime,
-}: {
-  applied: AppliedSignature;
-  baseVersionId: string;
-  signerCertificateDer: Uint8Array;
-  signingTime: Date;
-}): DocumentSource => ({
-  kind: "signature",
-  baseVersionId,
-  certificateSha256Hex: new Bun.CryptoHasher("sha256")
-    .update(signerCertificateDer)
-    .digest("hex"),
-  level: applied.level,
-  signingTime: signingTime.toISOString(),
-  timestampAuthorityUrl: applied.timestampAuthorityUrl,
-  warnings: applied.warnings,
-});
+const signatureConflict = () =>
+  new HandlerError({
+    status: 400,
+    code: "pdf_signing_signature_conflict",
+    message: "This session already holds a different signature.",
+  });
+
+const attemptsExhausted = () =>
+  new HandlerError({
+    status: 422,
+    code: "pdf_signing_finalize_attempts_exhausted",
+    message: "The signature could not be added after several attempts.",
+  });
 
 /** Everything phase 1 stored, or `null` when the certificate never arrived. */
 const preparedState = ({
@@ -104,7 +78,7 @@ const preparedState = ({
   signedAttributes,
   signerCertificateDer,
   signingTime,
-}: AuthorizedPdfSigningSession) =>
+}: AuthorizedPdfSigningSession): PreparedSigningState | null =>
   digestHex === null ||
   keyType === null ||
   placeholderSize === null ||
@@ -121,18 +95,17 @@ const preparedState = ({
         signingTime,
       };
 
-/** End the exchange for a failure no retry can fix, then report it. */
-const closeAndFail = async ({
-  closeReason,
-  error,
-  recordAuditEvent,
-  session,
-}: {
-  closeReason: PdfSigningSessionCloseReason;
-  error: HandlerError;
+type SessionContext = {
   recordAuditEvent: AuditRecorder;
   session: AuthorizedPdfSigningSession;
-}): Promise<Result<never, HandlerError>> => {
+};
+
+/** End the exchange for a failure no retry can fix, then report it. */
+const closeAndFail = async (
+  { recordAuditEvent, session }: SessionContext,
+  closeReason: PdfSigningSessionCloseReason,
+  error: HandlerError,
+): Promise<Result<never, HandlerError>> => {
   const closed = await closePdfSigningSession({
     closeReason,
     recordAuditEvent,
@@ -143,76 +116,110 @@ const closeAndFail = async ({
 };
 
 /**
- * Store the signed PDF as the new current version and finalize the exchange
- * in the same transaction: an exchange can never be marked finalized without
- * the version it names, nor the reverse.
+ * Verify the posted signature once and keep it. A signature that was
+ * already kept is only compared: it was verified when it arrived, and a
+ * retry may repeat it but never replace it.
  */
-const writeSignedVersion = async ({
-  applied,
-  fileName,
-  recordAuditEvent,
-  session,
-  signerCertificateDer,
-  signingTime,
-}: {
-  applied: AppliedSignature;
-  fileName: string;
-  recordAuditEvent: AuditRecorder;
-  session: AuthorizedPdfSigningSession;
-  signerCertificateDer: Uint8Array;
-  signingTime: Date;
-}) =>
-  await Result.tryPromise({
-    try: async () =>
-      await createEntityVersionFromBuffer({
-        buffer: applied.bytes,
-        entityId: session.entityId,
-        fileName,
-        mimeType: PDF_MIME_TYPE,
-        organizationId: session.organizationId,
-        recordAuditEvent,
-        safeDb: session.safeDb,
-        source: signatureSource({
-          applied,
-          baseVersionId: session.baseVersionId,
-          signerCertificateDer,
-          signingTime,
-        }),
-        userId: session.userId,
-        workspaceId: session.workspaceId,
-        writePolicy: {
-          type: "pdf-signature",
-          expectedCurrentVersionId: session.baseVersionId,
-          filePropertyId: session.propertyId,
-        },
-        afterWrite: async (tx, result) => {
-          await tx
-            .update(pdfSigningSessions)
-            .set({
-              closedAt: new Date(),
-              finalizedVersionId: result.entityVersionId,
-              status: "finalized",
-            })
-            .where(eq(pdfSigningSessions.id, session.sessionId));
+const acceptSignature = async (
+  context: SessionContext,
+  prepared: PreparedSigningState,
+  signature: Uint8Array,
+): Promise<Result<void, HandlerError>> => {
+  const { session } = context;
+  if (session.signature !== null) {
+    return Buffer.from(session.signature).equals(Buffer.from(signature))
+      ? Result.ok(undefined)
+      : Result.err(signatureConflict());
+  }
 
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-            resourceId: session.sessionId,
-            changes: {
-              status: { old: "open", new: "finalized" },
-              finalizedVersionId: { old: null, new: result.entityVersionId },
-            },
-          });
-        },
+  // Checked before any PDF work: a signature that does not verify would
+  // only produce a document every validator rejects.
+  const verified = verifyDesktopSignature({
+    certificate: prepared.signerCertificateDer,
+    keyType: prepared.keyType,
+    signature,
+    signedAttributes: prepared.signedAttributes,
+  });
+  if (!verified) {
+    return await closeAndFail(
+      context,
+      "signature_invalid",
+      new HandlerError({
+        status: 422,
+        code: "pdf_signing_signature_invalid",
+        message:
+          "The signature does not match the selected certificate. Start signing again.",
       }),
-    catch: (cause) =>
+    );
+  }
+
+  const stored = await session.safeDb(
+    async (tx) =>
+      await storeDesktopSignature({
+        sessionId: session.sessionId,
+        signature,
+        tx,
+      }),
+  );
+  if (Result.isError(stored)) {
+    return Result.err(
       new HandlerError({
         status: 500,
-        message: "Failed to store the signed document.",
-        cause,
+        message: "Failed to keep the signature.",
+        cause: stored.error,
       }),
-  });
+    );
+  }
+  if (stored.value.status === "closed") {
+    return Result.err(signingSessionNotFound());
+  }
+  return stored.value.status === "conflict"
+    ? Result.err(signatureConflict())
+    : Result.ok(undefined);
+};
+
+/** Start an attempt, or explain why none may start now. */
+const claimAttempt = async (
+  context: SessionContext,
+): Promise<Result<number, HandlerError>> => {
+  const { session } = context;
+  const claim = await session.safeDb(
+    async (tx) =>
+      await claimFinalizeAttempt({
+        now: new Date(),
+        sessionId: session.sessionId,
+        tx,
+      }),
+  );
+  if (Result.isError(claim)) {
+    return Result.err(
+      retryable(
+        "pdf_signing_finalize_unavailable",
+        "Signing could not start. Try again.",
+        claim.error,
+      ).error,
+    );
+  }
+  switch (claim.value.status) {
+    case "claimed": {
+      return Result.ok(claim.value.attempt);
+    }
+    case "in-progress": {
+      return Result.err(
+        retryable(
+          "pdf_signing_finalize_in_progress",
+          "This signature is still being added. Try again shortly.",
+        ).error,
+      );
+    }
+    case "exhausted": {
+      return await closeAndFail(context, "signing_failed", attemptsExhausted());
+    }
+    case "closed": {
+      return Result.err(signingSessionNotFound());
+    }
+  }
+};
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -223,12 +230,19 @@ const config = {
 const submitPdfSigningSignature = createSafeTokenHandler(
   config,
   async function* ({ body, params, request, server }) {
-    const session = yield* Result.await(
-      authorizePdfSigningCredentials({
+    const credentials = yield* Result.await(
+      authorizePdfSigningFinalizeCredentials({
         sessionId: params.sessionId,
         sessionToken: body?.sessionToken,
       }),
     );
+    if (credentials.kind === "finalized") {
+      return Result.ok({
+        versionId: credentials.versionId,
+        versionNumber: credentials.versionNumber,
+      });
+    }
+    const { session } = credentials;
 
     const payload = validatePostAuth(signaturePayloadSchema, body);
     if (!payload.ok) {
@@ -236,7 +250,6 @@ const submitPdfSigningSignature = createSafeTokenHandler(
         new HandlerError({ status: 400, message: payload.message }),
       );
     }
-
     const signature = decodeBase64(payload.value.signature);
     if (signature === null) {
       return Result.err(
@@ -251,154 +264,51 @@ const submitPdfSigningSignature = createSafeTokenHandler(
     if (prepared === null) {
       return Result.err(
         new HandlerError({
-          status: 409,
+          status: 400,
           code: "pdf_signing_certificate_missing",
           message: "Post the signing certificate before the signature.",
         }),
       );
     }
 
-    const recordAuditEvent = createAuditRecorder({
-      organizationId: session.organizationId,
-      workspaceId: session.workspaceId,
-      userId: session.userId,
-      request,
-      server,
-    });
-
-    const {
-      digestHex,
-      keyType,
-      placeholderSize,
-      signedAttributes,
-      signerCertificateDer,
-      signingTime,
-    } = prepared;
-
-    // Checked before any PDF work: a signature that does not verify would
-    // only produce a document every validator rejects.
-    if (
-      !verifyDesktopSignature({
-        certificate: signerCertificateDer,
-        keyType,
-        signature,
-        signedAttributes,
-      })
-    ) {
-      return await closeAndFail({
-        closeReason: "signature_invalid",
-        error: new HandlerError({
-          status: 422,
-          code: "pdf_signing_signature_invalid",
-          message:
-            "The signature does not match the selected certificate. Start signing again.",
-        }),
-        recordAuditEvent,
-        session,
-      });
-    }
-
-    // The same read refuses a base the document has moved away from, so the
-    // file name below is the pinned version's.
-    const { bytes: basePdf, fileName } = yield* Result.await(
-      loadPdfSigningBaseBytes({ recordAuditEvent, session }),
-    );
-
-    const certificateChain = decodeCertificateChain(
-      session.signerCertificateChain,
-    );
-    const signedPdf = await Result.tryPromise({
-      try: async () =>
-        await applySignature({
-          basePdf,
-          certificate: new Uint8Array(signerCertificateDer),
-          certificateChain,
-          certificateChainComplete: chainReachesRoot(
-            signerCertificateDer,
-            certificateChain,
-          ),
-          expectedDigestHex: digestHex,
-          keyType,
-          location: session.location,
-          placeholderSize,
-          reason: session.reason,
-          signature,
-          signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
-          signingTime,
-          timestampAuthorities: configuredTimestampAuthorities(),
-        }),
-      catch: (cause) => cause,
-    });
-
-    if (Result.isError(signedPdf)) {
-      if (PdfSigningDigestMismatchError.is(signedPdf.error)) {
-        return await closeAndFail({
-          closeReason: "digest_mismatch",
-          error: new HandlerError({
-            status: 409,
-            code: "pdf_signing_digest_mismatch",
-            message:
-              "The prepared signature no longer matches this document. Start signing again.",
-          }),
-          recordAuditEvent,
-          session,
-        });
-      }
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          code: "pdf_signing_failed",
-          message: "The signature could not be embedded in this PDF.",
-          cause: signedPdf.error,
-        }),
-      );
-    }
-
-    const written = await writeSignedVersion({
-      applied: signedPdf.value,
-      fileName,
-      recordAuditEvent,
-      session,
-      signerCertificateDer,
-      signingTime,
-    });
-
-    if (Result.isError(written)) {
-      return Result.err(written.error);
-    }
-    if (Result.isError(written.value)) {
-      const rejection = written.value.error;
-      if (rejection.code === "current-version-changed") {
-        yield* Result.await(
-          closePdfSigningSession({
-            closeReason: "base_version_diverged",
-            recordAuditEvent,
-            safeDb: session.safeDb,
-            sessionId: session.sessionId,
-          }),
-        );
-      }
-      return Result.err(
-        new HandlerError({
-          status: VERSION_WRITE_STATUS[rejection.code],
-          message: rejection.message,
-        }),
-      );
-    }
-
-    const version = written.value.value;
-    broadcastWorkspaceResourceUpdated(
-      session.workspaceId,
-      resourceRef({
-        type: RESOURCE_TYPE.ENTITY_VERSION,
-        id: version.entityVersionId,
+    const context: SessionContext = {
+      recordAuditEvent: createAuditRecorder({
+        organizationId: session.organizationId,
+        workspaceId: session.workspaceId,
+        userId: session.userId,
+        request,
+        server,
       }),
-    );
+      session,
+    };
 
-    return Result.ok({
-      versionId: version.entityVersionId,
-      versionNumber: version.versionNumber,
+    yield* Result.await(acceptSignature(context, prepared, signature));
+    const attempt = yield* Result.await(claimAttempt(context));
+
+    const finalized = await finalizeSignature({
+      ...context,
+      prepared,
+      signature,
     });
+    if (Result.isOk(finalized)) {
+      return Result.ok(finalized.value);
+    }
+
+    const failure = finalized.error;
+    if (failure.kind === "retryable" && attempt < MAX_FINALIZE_ATTEMPTS) {
+      yield* Result.await(
+        session.safeDb(
+          async (tx) =>
+            await releaseFinalizeAttempt({ sessionId: session.sessionId, tx }),
+        ),
+      );
+      return Result.err(failure.error);
+    }
+    // A terminal failure, or the last attempt failing: either way no retry
+    // is left, so the exchange closes rather than waiting out its TTL.
+    return failure.kind === "terminal"
+      ? await closeAndFail(context, failure.closeReason, failure.error)
+      : await closeAndFail(context, "signing_failed", attemptsExhausted());
   },
 );
 

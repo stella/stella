@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokuments",
     "pdfSignMatter": "Lieta",
     "pdfSignNoIdentities": "Atslēgu saišķī nav pieejams neviens parakstīšanas sertifikāts.",
+    "pdfSignRetry": "Mēģināt vēlreiz",
     "pdfSignSign": "Parakstīt",
     "pdfSignSigned": "Parakstīts kā versija {versionNumber}",
     "pdfSignSigning": "Notiek parakstīšana…",

@@ -130,6 +130,17 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
         signatureAlgorithm: inspection.signatureAlgorithm,
       });
     }
+    // Once a signature is kept, re-preparing would publish a digest that
+    // signature does not cover.
+    if (session.signature !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          code: "pdf_signing_signature_already_submitted",
+          message: "This session already holds a signature.",
+        }),
+      );
+    }
 
     const { bytes: basePdf } = yield* Result.await(
       loadPdfSigningBaseBytes({ recordAuditEvent, session }),

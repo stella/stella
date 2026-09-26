@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokumentum",
     "pdfSignMatter": "Ügy",
     "pdfSignNoIdentities": "A kulcskarikán nincs elérhető aláírási tanúsítvány.",
+    "pdfSignRetry": "Újra",
     "pdfSignSign": "Aláírás",
     "pdfSignSigned": "Aláírva {versionNumber}. verzióként",
     "pdfSignSigning": "Aláírás folyamatban…",

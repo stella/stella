@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokument",
     "pdfSignMatter": "Sprawa",
     "pdfSignNoIdentities": "W pęku kluczy nie ma dostępnego certyfikatu podpisu.",
+    "pdfSignRetry": "Spróbuj ponownie",
     "pdfSignSign": "Podpisz",
     "pdfSignSigned": "Podpisano jako wersja {versionNumber}",
     "pdfSignSigning": "Podpisywanie…",

@@ -62,6 +62,7 @@
     "pdfSignDocument": "Dokument",
     "pdfSignMatter": "Spis",
     "pdfSignNoIdentities": "V kľúčenke nie je k dispozícii žiadny podpisový certifikát.",
+    "pdfSignRetry": "Skúsiť znova",
     "pdfSignSign": "Podpísať",
     "pdfSignSigned": "Podpísané ako verzia {versionNumber}",
     "pdfSignSigning": "Podpisuje sa…",
