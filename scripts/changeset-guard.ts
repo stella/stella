@@ -183,21 +183,17 @@ export const checkChangesetPackages = ({
   );
   // Workspace names follow @stll/<directory>, as the generated package lists do.
   const directories = new Map(
-    policy.packageFiles.map((file) => {
+    policy.packageFiles.map((file): [string, string] => {
       const directory = path.posix.dirname(file);
-      return [
-        `@stll/${path.posix.basename(directory)}`,
-        `${directory}/`,
-      ] as const;
+      return [`@stll/${path.posix.basename(directory)}`, `${directory}/`];
     }),
   );
   const unrelated: string[] = [];
   for (const { file, contents } of entries) {
     for (const name of parseChangesetEntry(contents).packages) {
-      const directory = directories.get(name);
-      if (directory === undefined) {
+      const directory =
+        directories.get(name) ??
         panic(`${file} names a package outside the release policy: ${name}`);
-      }
       if (!releaseFiles.some((changed) => changed.startsWith(directory))) {
         unrelated.push(`${file}: ${name}`);
       }
@@ -306,26 +302,23 @@ const hasCommit = (ref: string): boolean =>
   git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).ok;
 
 /**
- * A missing base ref is the one case worth a network call: a fresh clone or a
- * worktree that has never fetched. Fetching that one branch without tags keeps
- * it under a second. A stale (but present) base is left alone: it only widens
- * the diff, which can never turn a required changeset into an unrequired one.
+ * Refresh a remote base before diffing: a stale one widens the diff with
+ * commits that have since landed, and the package check would then credit a
+ * changeset with an edit the change no longer carries, passing here and
+ * failing in CI. Fetching one branch without tags keeps it under a second;
+ * offline, the local ref is used as it is.
  */
 const resolveBase = (base: string): string | null => {
-  if (hasCommit(base)) {
-    return base;
-  }
   const separator = base.indexOf("/");
-  if (separator <= 0) {
-    return null;
+  if (separator > 0) {
+    git([
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      base.slice(0, separator),
+      base.slice(separator + 1),
+    ]);
   }
-  git([
-    "fetch",
-    "--quiet",
-    "--no-tags",
-    base.slice(0, separator),
-    base.slice(separator + 1),
-  ]);
   return hasCommit(base) ? base : null;
 };
 
