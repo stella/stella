@@ -253,6 +253,32 @@ describe("upstream failures", () => {
       "unexpected JSON payload shape",
     );
   });
+
+  test("a null nested entry is an API error", async () => {
+    restore = installFetchStub(async () =>
+      jsonResponse({ results: [{ id: 1, identifiers: [null] }] }),
+    );
+
+    await expect(lookupByIco("31333532")).rejects.toBeInstanceOf(RpoAPIError);
+  });
+
+  test("a malformed leaf field is an API error", async () => {
+    restore = installFetchStub(async () =>
+      jsonResponse({
+        results: [
+          {
+            id: 1,
+            identifiers: [{ value: "31333532" }],
+            fullNames: [{ value: { text: "ESET" } }],
+          },
+        ],
+      }),
+    );
+
+    await expect(searchByName("ESET")).rejects.toThrow(
+      "unexpected JSON payload shape",
+    );
+  });
 });
 
 describe("searchByName", () => {

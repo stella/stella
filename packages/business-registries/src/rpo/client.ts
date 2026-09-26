@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { isRecord } from "../shared/guards.js";
 import {
   performRegistryRequest,
@@ -31,12 +33,16 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 
+// Record lists may be absent; when present, every entry is an object.
+const isOptionalRecordList = (value: unknown): boolean =>
+  value === undefined || (Array.isArray(value) && value.every(isRecord));
+
 const isRpoSearchHit = (value: unknown): value is RpoRawSearchHit =>
   isRecord(value) &&
   typeof value["id"] === "number" &&
-  (value["identifiers"] === undefined || Array.isArray(value["identifiers"])) &&
-  (value["fullNames"] === undefined || Array.isArray(value["fullNames"])) &&
-  (value["addresses"] === undefined || Array.isArray(value["addresses"]));
+  isOptionalRecordList(value["identifiers"]) &&
+  isOptionalRecordList(value["fullNames"]) &&
+  isOptionalRecordList(value["addresses"]);
 
 const isRpoSearchResponse = (value: unknown): value is RpoRawSearchResponse =>
   isRecord(value) &&
@@ -57,21 +63,39 @@ const ENTITY_LIST_FIELDS = [
 
 const isRpoEntity = (value: unknown): value is RpoRawEntity =>
   isRecord(value) &&
-  ENTITY_LIST_FIELDS.every(
-    (field) => value[field] === undefined || Array.isArray(value[field]),
-  ) &&
+  ENTITY_LIST_FIELDS.every((field) => isOptionalRecordList(value[field])) &&
   isRpoSearchHit(value);
 
-const readErrorMessage = async (response: Response): Promise<string | null> => {
-  try {
-    const body: unknown = await response.json();
-    return isRecord(body) && typeof body["message"] === "string"
-      ? body["message"]
-      : null;
-  } catch {
+// The guards check the record structure; a payload whose leaf fields break the
+// parser still surfaces as an upstream error, never an internal one.
+const parseUpstream = <T>(parse: () => T): T => {
+  const parsed = Result.try(parse);
+  if (parsed.isErr()) {
+    throw new RpoAPIError({
+      message: "RPO 200: unexpected JSON payload shape",
+      httpStatus: 200,
+      cause: parsed.error,
+    });
+  }
+  return parsed.value;
+};
+
+const readErrorMessage = async (
+  response: Response,
+  signal: AbortSignal | undefined,
+): Promise<string | null> => {
+  const body = await Result.tryPromise({
+    try: async (): Promise<unknown> => await response.json(),
+    catch: (cause) => cause,
+  });
+  if (body.isErr()) {
+    signal?.throwIfAborted();
     // Outage pages and proxies answer with HTML; the status is the signal.
     return null;
   }
+  return isRecord(body.value) && typeof body.value["message"] === "string"
+    ? body.value["message"]
+    : null;
 };
 
 /** GET a JSON resource. Resolves to `null` on 404 (no such record). */
@@ -93,7 +117,7 @@ const rpoGet = async <T>(
     return null;
   }
   if (!response.ok) {
-    const upstreamMessage = await readErrorMessage(response);
+    const upstreamMessage = await readErrorMessage(response, signal);
     throw new RpoAPIError({
       message: `RPO ${response.status}: ${upstreamMessage ?? response.statusText}`,
       httpStatus: response.status,
@@ -207,14 +231,16 @@ export const lookupByIco = async (
   // The current view drops closed records, and a terminated entity has only
   // closed names and seats. The search row always carries the full name and
   // seat history, so it supplies both in that view.
-  const parsed = parseEntity(
-    current
-      ? {
-          ...entity,
-          fullNames: hit.fullNames ?? entity.fullNames ?? [],
-          addresses: hit.addresses ?? entity.addresses ?? [],
-        }
-      : entity,
+  const parsed = parseUpstream(() =>
+    parseEntity(
+      current
+        ? {
+            ...entity,
+            fullNames: hit.fullNames ?? entity.fullNames ?? [],
+            addresses: hit.addresses ?? entity.addresses ?? [],
+          }
+        : entity,
+    ),
   );
   return parsed?.ico === ico ? parsed : null;
 };
@@ -267,8 +293,7 @@ export const searchByName = async (
     nameRank(foldForMatch(result.name), query) * 2 +
     (result.status.type === "active" ? 0 : 1);
   const hits = await search({ fullName: trimmed }, options?.signal);
-  return hits
-    .map(parseSearchHit)
+  return parseUpstream(() => hits.map(parseSearchHit))
     .filter((result) => result !== null)
     .map((result, index) => ({ result, index, rank: rank(result) }))
     .toSorted((a, b) => a.rank - b.rank || a.index - b.index)
