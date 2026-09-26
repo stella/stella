@@ -2,20 +2,20 @@ import { panic } from "better-result";
 
 import type { CorrespondenceFiler } from "@stll/api-contract/correspondence";
 
+import type { SafeId } from "@/api/lib/branded-types";
+import type { CorrespondenceActor } from "@/api/lib/correspondence/access";
 import {
   hasAlignedAuthentication,
   type MailAuthentication,
 } from "@/api/lib/inbound-mail/authentication";
 
 export type InboundFiler = {
-  user: Pick<
-    Extract<CorrespondenceFiler, { type: "user" }>,
-    "type" | "userId" | "filedAt"
-  >;
-  shared_mailbox: Pick<
-    Extract<CorrespondenceFiler, { type: "shared_mailbox" }>,
-    "type" | "allowedSenderId" | "address" | "approvedBy" | "filedAt"
-  >;
+  user: Extract<CorrespondenceActor, { type: "user" }> & { filedAt: string };
+  shared_mailbox: Extract<CorrespondenceActor, { type: "shared_mailbox" }> &
+    Pick<
+      Extract<CorrespondenceFiler, { type: "shared_mailbox" }>,
+      "address" | "filedAt"
+    > & { approvedBy: SafeId<"user"> };
 }[CorrespondenceFiler["type"]];
 
 export type SenderMembership =

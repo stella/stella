@@ -140,7 +140,9 @@ describe("correspondence drop-log read boundary", () => {
     const collected: DropItem[] = [];
     let cursor: string | undefined;
     for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
-      const page = asTestRaw<DropPage>(await read({ cursor, limit: 2 }));
+      const page = asTestRaw<DropPage>(
+        await read({ ...(cursor === undefined ? {} : { cursor }), limit: 2 }),
+      );
       expect(page.limit).toBe(2);
       expect(page.items.length).toBeLessThanOrEqual(2);
       collected.push(...page.items);

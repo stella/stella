@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   evaluateInboundAcceptance,
   type SenderMembership,
@@ -9,6 +10,11 @@ import {
   parseInboundAddressToken,
 } from "@/api/lib/inbound-mail/address";
 import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+
+const memberId = mintAuthProviderId<"user">();
+const approverId = mintAuthProviderId<"user">();
+const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
 
 const auth = {
   source: "provider",
@@ -21,12 +27,12 @@ const auth = {
 
 describe("inbound acceptance", () => {
   test.each([
-    { type: "user", userId: "member-id", filedAt: "2026-09-26T12:00:00Z" },
+    { type: "user", userId: memberId, filedAt: "2026-09-26T12:00:00Z" },
     {
       type: "shared_mailbox",
-      allowedSenderId: "mailbox-id",
+      allowedSenderId,
       address: "office@example.com",
-      approvedBy: "admin-id",
+      approvedBy: approverId,
       filedAt: "2026-09-26T12:00:00Z",
     },
   ] as const)("retains the authorized filer provenance: %j", (filer) => {
@@ -50,7 +56,7 @@ describe("inbound acceptance", () => {
                 status: "allowed",
                 filer: {
                   type: "user",
-                  userId: "member-id",
+                  userId: memberId,
                   filedAt: "2026-09-26T12:00:00Z",
                 },
               }
