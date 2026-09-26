@@ -1,5 +1,5 @@
 /**
- * Local OCR: reads the source PDF from object storage, runs
+ * Local OCR: reads the source PDF within the run's storage scope, runs
  * `ocr-local-worker.ts` in an isolated subprocess, and revalidates its
  * JSON output before assembling the shared result shape. The worker
  * process lives for exactly one document, so renderer and inference
@@ -24,7 +24,11 @@ import {
   resolveRuntimeWorkerPath,
   RUNTIME_WORKER_FILES,
 } from "@/api/lib/runtime-worker-path";
-import { getS3ObjectSizeWithSignal, getS3ObjectWithSignal } from "@/api/lib/s3";
+import type { S3SigningScope } from "@/api/lib/s3-presign";
+import {
+  readTenantS3ArrayBuffer,
+  readTenantS3ObjectSize,
+} from "@/api/lib/s3-presign";
 import { spawnWorker } from "@/api/lib/subprocess";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -61,18 +65,19 @@ const parseWorkerOutput = (raw: string): DocumentOcrPage[] => {
 };
 
 export const recognizePdfTextLocally = async ({
-  readSource = getS3ObjectWithSignal,
-  readSourceSize = getS3ObjectSizeWithSignal,
   resolveModelDir = () => envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR,
+  runWorker = spawnWorker,
+  scope,
   signal,
   sourceKey,
 }: {
+  /** The run's organization/workspace; the source is read within it. */
+  scope: S3SigningScope;
   signal: AbortSignal;
   /** A file key: the source was scanned when it was stored. */
   sourceKey: FileKey;
-  readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
-  readSourceSize?: (key: string, signal: AbortSignal) => Promise<number | null>;
   resolveModelDir?: () => string | undefined;
+  runWorker?: typeof spawnWorker;
 }): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -86,7 +91,11 @@ export const recognizePdfTextLocally = async ({
 
       // Refuse an oversized source before materializing it; the post-read
       // check backstops storage backends that do not report a length.
-      const declaredSize = await readSourceSize(sourceKey, signal);
+      const declaredSize = await readTenantS3ObjectSize({
+        key: sourceKey,
+        scope,
+        signal,
+      });
       if (
         declaredSize !== null &&
         declaredSize > LIMITS.documentOcrSourceMaxBytes
@@ -96,7 +105,11 @@ export const recognizePdfTextLocally = async ({
           message: "OCR source document exceeded the allowed size",
         });
       }
-      const source = await readSource(sourceKey, signal);
+      const source = await readTenantS3ArrayBuffer({
+        key: sourceKey,
+        scope,
+        signal,
+      });
       if (source.byteLength > LIMITS.documentOcrSourceMaxBytes) {
         throw new DocumentOcrError({
           code: "response_too_large",
@@ -104,7 +117,7 @@ export const recognizePdfTextLocally = async ({
         });
       }
       signal.throwIfAborted();
-      const output = await spawnWorker({
+      const output = await runWorker({
         workerPath: WORKER_PATH,
         args: [modelDir],
         stdin: new Blob([source]),
