@@ -486,7 +486,11 @@ describe("Harvard XML opinions", () => {
     // The footnote mark stays where the court printed it.
     expect(blocks[1]?.plainText).toContain("section 41,1 because");
     expect(citationScopes).toEqual([
-      { opinionId: "cl-opinion:5659399", blockIds: blocks.map(({ id }) => id) },
+      {
+        opinionId: "cl-opinion:5659399",
+        blockIds: blocks.map(({ id }) => id),
+        boundaries: "proven",
+      },
     ]);
   });
 
@@ -601,8 +605,16 @@ describe("Harvard XML opinions", () => {
       return;
     }
     expect(outcome.citationScopes).toEqual([
-      { opinionId: "cl-opinion:20", blockIds: ["o20-b1"] },
-      { opinionId: "cl-opinion:10", blockIds: ["o10-b1", "o10-b2", "o10-b3"] },
+      {
+        opinionId: "cl-opinion:20",
+        blockIds: ["o20-b1"],
+        boundaries: "proven",
+      },
+      {
+        opinionId: "cl-opinion:10",
+        blockIds: ["o10-b1", "o10-b2", "o10-b3"],
+        boundaries: "proven",
+      },
     ]);
     expect(
       outcome.blocks.map((block) =>
@@ -637,8 +649,16 @@ describe("Harvard XML opinions composed into scopes", () => {
     expect(outcome.blocks[0]).toMatchObject({ role: "parties" });
     expect(outcome.blocks[3]).toMatchObject({ role: "dissent" });
     expect(outcome.citationScopes).toEqual([
-      { opinionId: "cl-opinion:7", blockIds: ["o7-b2"] },
-      { opinionId: "cl-opinion:7/2", blockIds: ["o7-b3", "o7-b4"] },
+      {
+        opinionId: "cl-opinion:7",
+        blockIds: ["o7-b2"],
+        boundaries: "proven",
+      },
+      {
+        opinionId: "cl-opinion:7/2",
+        blockIds: ["o7-b3", "o7-b4"],
+        boundaries: "proven",
+      },
     ]);
     expect(outcome.principal.body).toBe("We affirm.");
     expect(outcome.principal.structuralOpinion).toBe(true);
@@ -654,9 +674,21 @@ describe("Harvard XML opinions composed into scopes", () => {
     const outcome = composeCourtListenerText([{ row, type: "020lead" }]);
     expect(outcome.status === "parsed" ? outcome.citationScopes : null).toEqual(
       [
-        { opinionId: "cl-opinion:8", blockIds: ["o8-b1"] },
-        { opinionId: "cl-opinion:8/2", blockIds: ["o8-b2"] },
-        { opinionId: "cl-opinion:8/3", blockIds: ["o8-b3"] },
+        {
+          opinionId: "cl-opinion:8",
+          blockIds: ["o8-b1"],
+          boundaries: "proven",
+        },
+        {
+          opinionId: "cl-opinion:8/2",
+          blockIds: ["o8-b2"],
+          boundaries: "proven",
+        },
+        {
+          opinionId: "cl-opinion:8/3",
+          blockIds: ["o8-b3"],
+          boundaries: "proven",
+        },
       ],
     );
   });

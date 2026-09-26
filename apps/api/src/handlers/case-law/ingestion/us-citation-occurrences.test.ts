@@ -65,15 +65,22 @@ const documentOf = (blocks: Block[]): DocumentAst => ({
   blocks,
 });
 
+type TestCitationScope = Omit<CitationOpinionScope, "boundaries"> & {
+  boundaries?: CitationOpinionScope["boundaries"];
+};
+
 const extract = (
   blocks: Block[],
-  citationScopes?: CitationOpinionScope[],
+  citationScopes?: readonly TestCitationScope[],
 ): DecisionCitationExtraction => {
   const result = extractDecisionCitations({
     country: "USA",
     sections: blocks.map((block, index) => ({ index, text: block.plainText })),
     documentAst: documentOf(blocks),
-    citationScopes,
+    citationScopes: citationScopes?.map((scope) => ({
+      ...scope,
+      boundaries: scope.boundaries ?? "proven",
+    })),
   });
   if (Result.isError(result)) {
     throw result.error;
@@ -117,7 +124,7 @@ const edgeOf = ({
 /** Each occurrence as its text, its form and what it names. */
 const readingOf = (
   blocks: Block[],
-  citationScopes?: CitationOpinionScope[],
+  citationScopes?: readonly TestCitationScope[],
 ) => {
   const { citations, occurrences } = extract(blocks, citationScopes);
   return {
@@ -337,6 +344,34 @@ describe("adversarial references", () => {
 });
 
 describe("scopes", () => {
+  test("keeps full references and abstains from short forms in unproven boundaries", () => {
+    const blocks = [
+      paragraph("a", "347 U.S. 483. Id. at 495."),
+      paragraph("b", "163 U.S. 537. 347 U.S., at 540."),
+    ];
+    const { citations, occurrences } = extract(blocks, [
+      { opinionId: "o", blockIds: ["a", "b"], boundaries: "unproven" },
+    ]);
+
+    expect(
+      occurrences.map(({ form, target }) => [
+        form,
+        target.status === "identified"
+          ? target.identifiers.map(({ value }) => value)
+          : target.reason,
+      ]),
+    ).toEqual([
+      ["full", ["347 U.S. 483"]],
+      ["id", "scope-unknown"],
+      ["full", ["163 U.S. 537"]],
+      ["volume-reporter", "scope-unknown"],
+    ]);
+    expect(citations.map(({ identifierValue }) => identifierValue)).toEqual([
+      "347 U.S. 483",
+      "163 U.S. 537",
+    ]);
+  });
+
   test("paragraphs of one known opinion share their last clause", () => {
     expect(
       readingOf(
@@ -401,17 +436,21 @@ describe("scopes", () => {
       paragraph("c", "Id."),
     ];
     const cases = {
-      "unknown-block": [{ opinionId: "o", blockIds: ["a", "z"] }],
+      "unknown-block": [
+        { opinionId: "o", blockIds: ["a", "z"], boundaries: "proven" },
+      ],
       "duplicate-block": [
-        { opinionId: "o", blockIds: ["a"] },
-        { opinionId: "p", blockIds: ["a"] },
+        { opinionId: "o", blockIds: ["a"], boundaries: "proven" },
+        { opinionId: "p", blockIds: ["a"], boundaries: "proven" },
       ],
       "duplicate-opinion": [
-        { opinionId: "o", blockIds: ["a"] },
-        { opinionId: "o", blockIds: ["b"] },
+        { opinionId: "o", blockIds: ["a"], boundaries: "proven" },
+        { opinionId: "o", blockIds: ["b"], boundaries: "proven" },
       ],
-      "discontiguous-opinion": [{ opinionId: "o", blockIds: ["a", "c"] }],
-      "empty-opinion": [{ opinionId: "o", blockIds: [] }],
+      "discontiguous-opinion": [
+        { opinionId: "o", blockIds: ["a", "c"], boundaries: "proven" },
+      ],
+      "empty-opinion": [{ opinionId: "o", blockIds: [], boundaries: "proven" }],
     } as const;
     for (const [defect, citationScopes] of Object.entries(cases)) {
       const result = extractDecisionCitations({
@@ -427,6 +466,21 @@ describe("scopes", () => {
           : null,
       ).toBe(defect);
     }
+  });
+
+  test("rejects a scope missing its boundary declaration", () => {
+    const result = extractDecisionCitations({
+      country: "USA",
+      sections: [],
+      documentAst: documentOf([paragraph("a", "Id."), paragraph("b", "x")]),
+      citationScopes: JSON.parse('[{"opinionId":"o","blockIds":["a"]}]'),
+    });
+    expect(
+      Result.isError(result) &&
+        result.error instanceof CitationScopesRejectedError
+        ? result.error.defect
+        : null,
+    ).toBe("invalid-boundaries");
   });
 });
 

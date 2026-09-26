@@ -318,6 +318,15 @@ const unresolved = (reason: CitationUnresolvedReason): Resolution => ({
 const missing = (registry: ScopeRegistry): Resolution =>
   unresolved(registry.known ? "missing-antecedent" : "scope-unknown");
 
+/** A short form cannot borrow across source text whose opinion boundaries are unproven. */
+export const abstainShort = (registry: ScopeRegistry): Reading => {
+  recordBarrier(registry);
+  return {
+    resolution: unresolved("scope-unknown"),
+    pinReporter: { type: "none" },
+  };
+};
+
 /** `incomplete` when entries were left uninspected, so `roots` may be short. */
 type Candidates = { roots: Set<number>; incomplete: boolean };
 

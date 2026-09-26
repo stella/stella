@@ -52,7 +52,11 @@ const extract = (ast: DocumentAst) => {
     sections: [],
     documentAst: ast,
     citationScopes: [
-      { opinionId: "o", blockIds: ast.blocks.map(({ id }) => id) },
+      {
+        opinionId: "o",
+        blockIds: ast.blocks.map(({ id }) => id),
+        boundaries: "proven",
+      },
     ],
   });
   if (Result.isError(result)) {
