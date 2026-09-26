@@ -21,6 +21,7 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexProjectionFailureKind,
@@ -510,13 +511,43 @@ export const prepareCorpusProjectionReplacementsTx = async <
  * have read one clock for the start attempt and this cancellation, or the two
  * statements would compare the same lease against two different instants.
  */
-const appendCancelReason = (transitionAt: Date): SQL<string> =>
+const appendCancelReason = (
+  transitionAt: Date,
+  unattestedIndexIds: readonly string[],
+): SQL<string> =>
   sql<string>`CASE
     WHEN ${corpusIndexProjectionIntents.leaseExpiresAt} IS NULL
       OR ${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz
     THEN ${CORPUS_INDEX_APPEND_CANCEL_REASON.leaseExpired}
+    ${
+      unattestedIndexIds.length === 0
+        ? sql``
+        : sql`WHEN ${inArray(corpusIndexProjectionIntents.indexId, [...unattestedIndexIds])}
+    THEN ${CORPUS_INDEX_APPEND_CANCEL_REASON.groupNotAttested}`
+    }
     ELSE ${CORPUS_INDEX_APPEND_CANCEL_REASON.desiredStateChanged}
   END`;
+
+/**
+ * The append-start half of the attestation gate. Reservation already skips an
+ * unattested group, but its attestation can be withdrawn between reservation
+ * and start, so the start rechecks it after the generation fence and before
+ * the state and intent locks. The attested rows stay share-locked until the
+ * start commits, so a concurrent withdrawal waits for it; a withdrawal after
+ * that commit meets a request already started, which settles like any other.
+ * A revision refused here is cancelled, not failed: its desired state still
+ * needs work and is reserved again once the group is attested.
+ */
+const unattestedAtAppendStart = async (
+  tx: Transaction,
+  manifest: CorpusIndexManifest,
+): Promise<string[]> =>
+  await unattestedCorpusIndexIdsTx(tx, manifest, { lock: "share" });
+
+const attestedAtAppendStart = (unattestedIndexIds: readonly string[]) =>
+  unattestedIndexIds.length === 0
+    ? undefined
+    : notInArray(corpusIndexProjectionIntents.indexId, [...unattestedIndexIds]);
 
 type StartCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
@@ -547,11 +578,12 @@ export const startCorpusProjectionAppendTx = async (
   if (identity === undefined) {
     return "lease_lost";
   }
-  await lockActiveCorpusProjectionManifestForMutation(
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
   );
+  const unattestedIndexIds = await unattestedAtAppendStart(tx, manifest);
   await tx
     .select({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)
@@ -597,6 +629,7 @@ export const startCorpusProjectionAppendTx = async (
         eq(corpusIndexProjectionIntents.status, "reserved"),
         eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
         sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
+        attestedAtAppendStart(unattestedIndexIds),
         sql`EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
@@ -621,7 +654,7 @@ export const startCorpusProjectionAppendTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: appendCancelReason(transitionAt),
+      lastError: appendCancelReason(transitionAt, unattestedIndexIds),
       updatedAt: transitionAt,
     })
     .where(
@@ -676,11 +709,12 @@ export const startCorpusProjectionAppendBatchTx = async (
       "Corpus projection append-start leases must be unique and scoped",
     );
   }
-  await lockActiveCorpusProjectionManifestForMutation(
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
     tx,
     first.family,
     first.generation,
   );
+  const unattestedIndexIds = await unattestedAtAppendStart(tx, manifest);
   const entityIdList = [...entityIds];
   await tx
     .select({ entityId: corpusIndexProjectionStates.entityId })
@@ -734,6 +768,7 @@ export const startCorpusProjectionAppendBatchTx = async (
         eq(corpusIndexProjectionIntents.generation, first.generation),
         eq(corpusIndexProjectionIntents.status, "reserved"),
         sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
+        attestedAtAppendStart(unattestedIndexIds),
         sql`EXISTS (
           SELECT 1
           FROM ${corpusIndexProjectionStates} state
@@ -756,7 +791,7 @@ export const startCorpusProjectionAppendBatchTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: appendCancelReason(transitionAt),
+      lastError: appendCancelReason(transitionAt, unattestedIndexIds),
       updatedAt: transitionAt,
     })
     .where(

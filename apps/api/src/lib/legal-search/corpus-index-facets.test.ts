@@ -7,6 +7,8 @@ import {
   corpusIndexBrowseFacets as readCorpusIndexBrowseFacets,
 } from "@/api/lib/legal-search/corpus-index-facets";
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 
 const segmentSizeSchema = v.pipe(
   v.object({ terms: v.object({ segment_size: v.number() }) }),
@@ -46,7 +48,21 @@ const corpusIndexBrowseFacets = async (
   query: Parameters<typeof readCorpusIndexBrowseFacets>[0],
 ) =>
   await readCorpusIndexBrowseFacets(query, {
-    readServingGeneration: async () => await Promise.resolve(servingGeneration),
+    readServingTarget: async (jurisdiction) => {
+      // No enrolled group is attested in these cases.
+      const resolution = corpusIndexReadTarget({
+        manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
+        jurisdiction,
+        attestedGroups: new Set(),
+      });
+      if (resolution.type === "unready") {
+        throw new Error(`unready: ${resolution.contract.indexId}`);
+      }
+      return await Promise.resolve({
+        serving: servingGeneration,
+        route: resolution.target.route,
+      });
+    },
   });
 
 beforeEach(() => {
@@ -164,7 +180,12 @@ test("facets use only manifest-owned fields", async () => {
 
   await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
 
-  expect(requests.at(0)?.url).toContain("/case_law_v5_*/search");
+  // Every group a read may reach, and never an enrolled group's index that
+  // is not attested.
+  expect(requests.at(0)?.url).toContain(
+    "/case_law_v5_aut*,case_law_v5_cs_sk*,case_law_v5_eu*,case_law_v5_hun*,case_law_v5_pol*/search",
+  );
+  expect(requests.at(0)?.url).not.toContain("usa");
   expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
   expect(requestedAggregations()["year"]).toMatchObject({
     terms: { field: "decision_year" },
@@ -299,7 +320,7 @@ test("a count-ordered facet missing its error bound fails", async () => {
   expect(Result.isError(result)).toBe(true);
 });
 
-test("scopes to one jurisdiction index, and to the generation glob without one", async () => {
+test("scopes to one jurisdiction index, and to every reachable index without one", async () => {
   responseBody = engineResponse();
   const generation = servingGeneration.generation;
 
@@ -311,7 +332,9 @@ test("scopes to one jurisdiction index, and to the generation glob without one",
   await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(requests.at(0)?.url).toContain(`/${generation}_cs_sk/search`);
-  expect(requests.at(1)?.url).toContain(`/${generation}_*/search`);
+  expect(requests.at(1)?.url).toContain(
+    `/${["aut", "cs_sk", "eu", "hun", "pol"].map((group) => `${generation}_${group}*`).join(",")}/search`,
+  );
 });
 
 test("a scoped query on a shared index carries its jurisdiction as a clause", async () => {

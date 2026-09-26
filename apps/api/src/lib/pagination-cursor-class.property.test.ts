@@ -133,6 +133,7 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
                 score,
                 sort,
                 windowStart,
+                target: null,
               }),
             ),
           ).toBe(true),

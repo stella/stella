@@ -22,7 +22,6 @@ import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
@@ -176,7 +175,7 @@ const searchResult = async (
     );
   }
 
-  const { serving, manifest, contract } = await caseLawPublicReadDb(
+  const { serving, route, contract, cursorTarget } = await caseLawPublicReadDb(
     async (tx) =>
       await readServingCorpusIndexTargetTx(tx, {
         family,
@@ -186,12 +185,9 @@ const searchResult = async (
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
-  // that index holds other jurisdictions; unscoped → the generation glob
-  // (corpus index multi-index search across all of the generation's indexes).
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    manifest,
-    query.jurisdiction,
-  );
+  // that index holds other jurisdictions; unscoped → every index of the
+  // generation a read may reach (`corpusIndexReadTarget`).
+  const { indexId, jurisdictionClause } = route;
 
   // The jurisdiction also selects the expansion dictionary, which is why the
   // resolver takes it separately from the clause.
@@ -229,19 +225,27 @@ const searchResult = async (
     return Result.ok({ hits: [], facets: null, nextCursor: null, limit });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
-  // dictionary fails the read rather than paging a different result set.
+  // dictionary or read target fails the read rather than paging a different
+  // result set.
   if (
+    parsedCursor !== null &&
     isStaleCorpusSearchCursor(parsedCursor, {
       dictionary: resolved.dictionary,
       sort: DEFAULT_SEARCH_SORT,
+      target: cursorTarget,
     })
   ) {
     return Result.err(
-      new InvalidLegalSearchCursorError({
-        message:
-          "Search cursor was built against a different expansion dictionary.",
-        reason: "dictionary_mismatch",
-      }),
+      parsedCursor.target === cursorTarget
+        ? new InvalidLegalSearchCursorError({
+            message:
+              "Search cursor was built against a different expansion dictionary.",
+            reason: "dictionary_mismatch",
+          })
+        : new InvalidLegalSearchCursorError({
+            message: "Search cursor was built against a different read target.",
+            reason: "target_mismatch",
+          }),
     );
   }
 
@@ -331,6 +335,7 @@ const searchResult = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: resolved.dictionary,
+          target: cursorTarget,
         });
 
   const hits: LegalSearchHit[] = pageRanked.flatMap((hit) => {

@@ -186,7 +186,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1330,
+          "maxLength": 1623,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
