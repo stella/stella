@@ -1,4 +1,5 @@
 import { Ajv } from "ajv";
+import type { ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
 import fc from "fast-check";
 
@@ -17,6 +18,17 @@ export const createWireSchemaValidator = (): Ajv => {
   ajv.addKeyword({ keyword: AGENT_INPUT_NORMALIZATION_KEY });
   return ajv;
 };
+
+/**
+ * Compiles a schema exactly as the surface publishes it. The SDK types an
+ * absent `$schema` as `string | undefined`, which Ajv's schema type does not
+ * admit under exact optional properties; the published object is read as a
+ * plain JSON object instead.
+ */
+export const compileWireSchema = (
+  ajv: Ajv,
+  schema: Readonly<Record<string, unknown>>,
+): ValidateFunction => ajv.compile(schema);
 
 type SchemaNode = Record<string, unknown>;
 

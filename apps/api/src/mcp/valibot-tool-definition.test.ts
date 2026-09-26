@@ -16,6 +16,7 @@ import {
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
 import {
+  compileWireSchema,
   createWireSchemaValidator,
   schemaComparisonArbitrary,
 } from "@/api/tests/helpers/wire-json-schema";
@@ -255,8 +256,8 @@ describe("Valibot-backed MCP tool definitions", () => {
           expect(JSON.stringify(compacted).length).toBeLessThanOrEqual(
             JSON.stringify(uncompacted).length,
           );
-          const acceptsCompacted = validator.compile(compacted);
-          const acceptsUncompacted = validator.compile(uncompacted);
+          const acceptsCompacted = compileWireSchema(validator, compacted);
+          const acceptsUncompacted = compileWireSchema(validator, uncompacted);
           for (const value of values) {
             expect(acceptsCompacted(value)).toBe(acceptsUncompacted(value));
           }

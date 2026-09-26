@@ -32,6 +32,7 @@ import {
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
 import {
+  compileWireSchema,
   createWireSchemaValidator,
   schemaComparisonArbitrary,
 } from "@/api/tests/helpers/wire-json-schema";
@@ -497,13 +498,13 @@ describe("MCP wire schemas under an independent validator", () => {
     (mode) => {
       for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
         expect(
-          () => validator.compile(tool.inputSchema),
+          () => compileWireSchema(validator, tool.inputSchema),
           `${tool.name} inputSchema`,
         ).not.toThrow();
         if (tool.outputSchema !== undefined) {
           const { outputSchema } = tool;
           expect(
-            () => validator.compile(outputSchema),
+            () => compileWireSchema(validator, outputSchema),
             `${tool.name} outputSchema`,
           ).not.toThrow();
         }
@@ -528,8 +529,8 @@ describe("MCP wire schemas under an independent validator", () => {
         `${tool} compacted output schema`,
       ).toBeLessThan(JSON.stringify(uncompacted).length);
 
-      const acceptsCompacted = validator.compile(outputSchema);
-      const acceptsUncompacted = validator.compile(uncompacted);
+      const acceptsCompacted = compileWireSchema(validator, outputSchema);
+      const acceptsUncompacted = compileWireSchema(validator, uncompacted);
       let accepted = 0;
       let rejected = 0;
       fc.assert(

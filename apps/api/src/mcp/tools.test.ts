@@ -65,7 +65,10 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createWireSchemaValidator } from "@/api/tests/helpers/wire-json-schema";
+import {
+  compileWireSchema,
+  createWireSchemaValidator,
+} from "@/api/tests/helpers/wire-json-schema";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const wireSchemaValidator = createWireSchemaValidator();
@@ -91,7 +94,7 @@ const handleMcpToolCall = async (
       result.structuredContent,
       `${call.toolName} succeeded without structured content`,
     ).toBeDefined();
-    const validate = wireSchemaValidator.compile(outputSchema);
+    const validate = compileWireSchema(wireSchemaValidator, outputSchema);
     expect(
       validate(result.structuredContent),
       `${call.toolName} result against its advertised output schema: ${wireSchemaValidator.errorsText(validate.errors)}`,
