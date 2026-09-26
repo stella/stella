@@ -17,6 +17,8 @@ import {
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
+  SIZE_LINT_POLICY_OVERRIDES,
+  SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
@@ -899,7 +901,10 @@ export default defineConfig({
       "error",
       { checkConditionalExpressions: true },
     ],
-    complexity: ["error", 50],
+    ...SIZE_LINT_RULES,
+    // libraryRules sets the bare `complexity` key, which outranks the
+    // canonical id above.
+    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
     // Annotations on literal initializers are deliberate widening
     // (`const marker: string = "…"`); removing them narrows to the literal.
@@ -1244,6 +1249,7 @@ export default defineConfig({
 
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
+    ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
