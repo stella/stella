@@ -286,11 +286,61 @@ const countAsCasts = (content: string): number => {
   return total;
 };
 
+// `transition` is also an ordinary word and a discriminator value
+// (`kind: "transition"`), so it counts only in a class-list position.
+const BARE_TRANSITION_UTILITY = "transition";
+
 const LEGACY_PAINT_TRANSITION_UTILITIES: ReadonlySet<string> = new Set([
-  "transition",
   "transition-colors",
   "transition-shadow",
 ]);
+
+const CLASS_LIST_HELPERS: ReadonlySet<string> = new Set([
+  "clsx",
+  "cn",
+  "cva",
+  "twMerge",
+]);
+
+// Bindings and attributes such as `className`, `contentClassName`,
+// `CARD_CLASS` or `SIZE_CLASS_NAMES`.
+const CLASS_LIST_NAME = /class(?:_?names?|es)?$/iu;
+
+type StringPosition = "class-list" | "other";
+
+const isClassListBinding = (name: ts.Node): boolean =>
+  (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
+  CLASS_LIST_NAME.test(name.text);
+
+const stringPosition = (node: ts.Node): StringPosition => {
+  for (
+    let current = node.parent;
+    !ts.isSourceFile(current);
+    current = current.parent
+  ) {
+    if (ts.isJsxAttribute(current)) {
+      return CLASS_LIST_NAME.test(current.name.getText())
+        ? "class-list"
+        : "other";
+    }
+    if (
+      ts.isCallExpression(current) &&
+      ts.isIdentifier(current.expression) &&
+      CLASS_LIST_HELPERS.has(current.expression.text)
+    ) {
+      return "class-list";
+    }
+    if (
+      (ts.isVariableDeclaration(current) ||
+        ts.isPropertyAssignment(current) ||
+        ts.isPropertyDeclaration(current)) &&
+      isClassListBinding(current.name)
+    ) {
+      return "class-list";
+    }
+  }
+  return "other";
+};
 
 const PAINT_TRANSITION_PROPERTIES = [
   "background",
@@ -312,7 +362,10 @@ const PAINT_TRANSITION_PROPERTY_SET: ReadonlySet<string> = new Set(
   PAINT_TRANSITION_PROPERTIES,
 );
 
-const countLegacyPaintTransitionTokens = (value: string): number => {
+const countLegacyPaintTransitionTokens = (
+  value: string,
+  position: StringPosition,
+): number => {
   let count = 0;
   for (const token of value.split(/[\s"'`{}()]+/u)) {
     const variantBoundary = token.lastIndexOf(":");
@@ -321,6 +374,10 @@ const countLegacyPaintTransitionTokens = (value: string): number => {
     const utility = withoutLeadingImportant.endsWith("!")
       ? withoutLeadingImportant.slice(0, -1)
       : withoutLeadingImportant;
+    if (utility === BARE_TRANSITION_UTILITY) {
+      count += position === "class-list" ? 1 : 0;
+      continue;
+    }
     if (LEGACY_PAINT_TRANSITION_UTILITIES.has(utility)) {
       count += 1;
       continue;
@@ -379,7 +436,11 @@ const countLegacyPaintTransitions: FileCounter = (content, file) => {
       ts.isTemplateMiddle(node) ||
       ts.isTemplateTail(node)
     ) {
-      total += countLegacyPaintTransitionTokens(node.text);
+      // Walking ancestors is only needed when the bare utility can occur.
+      const position = node.text.includes(BARE_TRANSITION_UTILITY)
+        ? stringPosition(node)
+        : "other";
+      total += countLegacyPaintTransitionTokens(node.text, position);
     }
     ts.forEachChild(node, visit);
   };
@@ -3339,7 +3400,16 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
 const EXPECTED_PACKAGE_AS_CASTS = 2;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
-  `const direct = "transition transition-colors";`,
+  `const directClass = "transition transition-colors";`,
+  `const helper = cn("rounded", active && "transition");`,
+  `const Row = () => <div className="px-2 transition" />;`,
+  `const Picker = () => <Popover contentClassName="px-2 transition" />;`,
+  // Not counted: a bare `transition` outside a class list is a word or a
+  // discriminator value, not a utility.
+  `const step = { kind: "transition" };`,
+  `type Variables = { type: "transition"; reason?: string };`,
+  `const label = "transition";`,
+  `const Step = () => <Tour data-kind="transition" />;`,
   `const variant = "hover:transition-shadow";`,
   `const mixed = "transition-[background-color,opacity]";`,
   `const arbitrary = \`transition-[transform,box-shadow]\`;`,
@@ -3349,7 +3419,7 @@ const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const control = "transition-none duration-150 transition-induced";`,
 ] as const;
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS = `${LEGACY_PAINT_TRANSITION_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_LEGACY_PAINT_TRANSITIONS = 6;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS = 9;
 
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
 .paint {
