@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/pdf-signing/sign-pdf";
 import {
   formatStampTime,
+  PdfSigningStampError,
   placeStamp,
   STAMP_SIZE_LIMITS,
 } from "@/api/lib/pdf-signing/stamp";
@@ -204,7 +205,10 @@ const stampOn = (
   timeZone: "Europe/Prague",
 });
 
-const signWithStamp = async (rotation: StampRotation) => {
+const signWithStamp = async (
+  rotation: StampRotation,
+  signerName = "Jiří Čermák",
+) => {
   const basePdf = await buildPage(rotation);
   const placed = placeStamp({
     box: { x: 0.5, y: 0.8, width: 0.4, height: 0.1 },
@@ -214,7 +218,7 @@ const signWithStamp = async (rotation: StampRotation) => {
   if (placed.status !== "placed") {
     throw new Error("fixture stamp did not place");
   }
-  const signer = await createTestCertificate({ commonName: "Jiří Čermák" });
+  const signer = await createTestCertificate({ commonName: signerName });
   const invocation = {
     basePdf,
     certificate: signer.der,
@@ -335,6 +339,15 @@ describe("signing with a visible stamp", () => {
       expect(appearance).toBeInstanceOf(PdfStream);
     },
   );
+
+  test("refuses, before any digest, a name it would draw as blanks or misordered", async () => {
+    for (const name of ["山田太郎", "محمد علي"]) {
+      const refused = await signWithStamp(0, name).catch(
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(PdfSigningStampError);
+    }
+  });
 
   test("the signature still covers every byte it signed", async () => {
     const { applied } = await signWithStamp(90);

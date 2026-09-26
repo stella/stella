@@ -2,8 +2,12 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { resolveStampRequest } from "@/api/lib/pdf-signing/handoff-preflight";
+import {
+  drawableStamp,
+  resolveStampRequest,
+} from "@/api/lib/pdf-signing/handoff-preflight";
 import type { StampRequest } from "@/api/lib/pdf-signing/handoff-preflight";
+import { ENGLISH_STAMP_LABELS } from "@/api/lib/pdf-signing/stamp-text";
 
 const onePage = async () => {
   const created = PDF.create();
@@ -73,5 +77,68 @@ describe("resolving a requested stamp", () => {
     expect(codeOf(resolveStampRequest(pdf, request({ pageIndex: 2 })))).toBe(
       "pdf_signing_stamp_page_not_found",
     );
+  });
+});
+
+describe("text a stamp can draw", () => {
+  const placedStamp = async (labels: StampRequest["labels"]) => {
+    const resolved = resolveStampRequest(
+      await onePage(),
+      request({ direction: "rtl", labels }),
+    );
+    if (!Result.isOk(resolved)) {
+      throw new Error("fixture stamp did not resolve");
+    }
+    return resolved.value;
+  };
+
+  test("keeps the signer's labels when they can be drawn", async () => {
+    const stamp = await placedStamp({
+      date: "Datum",
+      location: "Místo",
+      reason: "Důvod",
+      signedBy: "Digitálně podepsal",
+    });
+
+    const drawn = await drawableStamp({ location: null, reason: null, stamp });
+    expect(Result.isOk(drawn) && drawn.value.labels.signedBy).toBe(
+      "Digitálně podepsal",
+    );
+  });
+
+  test("falls back to English labels for a script it cannot shape", async () => {
+    const stamp = await placedStamp({
+      date: "التاريخ",
+      location: "المكان",
+      reason: "السبب",
+      signedBy: "موقّع رقميًا من",
+    });
+
+    const drawn = await drawableStamp({ location: null, reason: null, stamp });
+    expect(Result.isOk(drawn) && drawn.value.labels).toEqual(
+      ENGLISH_STAMP_LABELS,
+    );
+    expect(Result.isOk(drawn) && drawn.value.direction).toBe("ltr");
+  });
+
+  test("refuses a reason or location it would draw wrongly or not at all", async () => {
+    const stamp = await placedStamp(ENGLISH_STAMP_LABELS);
+
+    for (const text of ["عقد البيع", "契約書", "ข้อตกลง"]) {
+      const drawn = await drawableStamp({
+        location: null,
+        reason: text,
+        stamp,
+      });
+      expect(Result.isError(drawn) && drawn.error.code).toBe(
+        "pdf_signing_stamp_unrenderable",
+      );
+    }
+    const latin = await drawableStamp({
+      location: "Łódź",
+      reason: null,
+      stamp,
+    });
+    expect(Result.isOk(latin)).toBe(true);
   });
 });

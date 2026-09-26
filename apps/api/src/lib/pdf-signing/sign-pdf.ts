@@ -47,6 +47,7 @@ import type { TrackedRevocationProvider } from "@/api/lib/pdf-signing/revocation
 import {
   addSignatureStamp,
   certificateSubjectName,
+  PdfSigningStampError,
   stampLines,
 } from "@/api/lib/pdf-signing/stamp";
 import type { SignatureStamp } from "@/api/lib/pdf-signing/stamp";
@@ -350,6 +351,9 @@ export const captureSigningDigest = async (
         const fieldName = await prepareSignatureField(pdf, invocation);
         await pdf.sign(buildSignOptions(invocation, signer, {}, fieldName));
       } catch (error) {
+        if (PdfSigningStampError.is(error)) {
+          throw error;
+        }
         if (error instanceof PlaceholderError) {
           throw new PdfSigningPlaceholderTooSmallError({
             message: "The signature would not fit the space reserved for it.",

@@ -133,8 +133,10 @@ const createPdfSigningHandoff = createSafeHandler(
     const preflighted = yield* Result.await(
       preflightPdfSigning({
         entityId,
+        location: sanitizeSigningAnnotation(location),
         organizationId: session.activeOrganizationId,
         propertyId,
+        reason: sanitizeSigningAnnotation(reason),
         safeDb,
         stamp,
         workspaceId,
