@@ -292,7 +292,12 @@ export const createChatRuntime = ({
       }
       return;
     }
-    if (waiter.sawResuming) {
+    // Answers conclude once their submission ran, or once nothing is left to
+    // submit: the interrupts were withdrawn before the batch was complete, by
+    // a message that superseded them (`supersedePendingInterrupts`) or by the
+    // run ending elsewhere. TanStack publishes that as an empty, idle state
+    // with no error, and the server settles the call either way.
+    if (waiter.sawResuming || state.interrupts.length === 0) {
       interruptSubmissionWaiter = undefined;
       for (const resolution of waiter.resolutions) {
         resolution.resolve();
@@ -475,6 +480,11 @@ export const createChatRuntime = ({
   // effects are no-ops. A request in flight is a resume being submitted, so
   // leave it alone: TanStack refuses the send, `ChatMessageStartError` keeps
   // its "busy, retry" meaning, and the send queue retries after the turn.
+  // A send that fails after the reset is the turn's error like any other:
+  // `onError` refreshes the thread from the server, whose transcript still
+  // ends on the awaited call if the message was never accepted, and the
+  // rebuilt runtime answers it through the reload path in
+  // `answerToolApproval`.
   const supersedePendingInterrupts = (): void => {
     if (client.getResumeState() === null) {
       return;

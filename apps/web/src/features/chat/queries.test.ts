@@ -2224,10 +2224,13 @@ describe("chat runtime", () => {
     },
   ];
 
-  const createApprovalInterrupt = (runId: string) => ({
-    id: "approval_tool-save",
+  const createApprovalInterrupt = (
+    runId: string,
+    toolCallId = "tool-save",
+  ) => ({
+    id: `approval_${toolCallId}`,
     reason: "tool_call",
-    toolCallId: "tool-save",
+    toolCallId,
     metadata: {
       kind: "approval",
       toolName: "save_playbook",
@@ -2235,11 +2238,11 @@ describe("chat runtime", () => {
       "tanstack:interruptBinding": {
         v: 1,
         kind: "tool-approval",
-        interruptId: "approval_tool-save",
+        interruptId: `approval_${toolCallId}`,
         interruptedRunId: runId,
         generation: 0,
         toolName: "save_playbook",
-        toolCallId: "tool-save",
+        toolCallId,
         originalArgs: { name: "Employment terms" },
         inputSchemaHash: "server-owned",
         approvalSchemaHash: "server-owned",
@@ -2403,6 +2406,218 @@ describe("chat runtime", () => {
       },
     });
     expectSupersededSend(sent);
+  });
+
+  // An answer to one card of a batch waits for the rest of the batch before
+  // it is submitted. A message that supersedes the batch withdraws what the
+  // answer waited for; the answer concludes then, it does not wait forever.
+  test("concludes a partly answered approval batch when a new message supersedes it", async () => {
+    const threadId = toChatThreadId("thread-superseded-batch");
+    const requests: unknown[] = [];
+    const toolCallChunks = (id: string) => [
+      {
+        type: "TOOL_CALL_START",
+        parentMessageId: assistantMessageId,
+        toolCallId: id,
+        toolCallName: "save_playbook",
+        toolName: "save_playbook",
+      },
+      {
+        type: "TOOL_CALL_ARGS",
+        delta: JSON.stringify({ name: "Employment terms" }),
+        toolCallId: id,
+      },
+      {
+        type: "TOOL_CALL_END",
+        input: { name: "Employment terms" },
+        toolCallId: id,
+        toolCallName: "save_playbook",
+        toolName: "save_playbook",
+      },
+    ];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse([
+          { type: "RUN_STARTED", threadId, runId },
+          ...toolCallChunks("tool-first"),
+          ...toolCallChunks("tool-second"),
+          {
+            type: "RUN_FINISHED",
+            threadId,
+            runId,
+            finishReason: "tool_calls",
+            outcome: {
+              type: "interrupt",
+              interrupts: [
+                createApprovalInterrupt(runId, "tool-first"),
+                createApprovalInterrupt(runId, "tool-second"),
+              ],
+            },
+          },
+        ]);
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222303",
+        "Save both playbooks",
+      ),
+    );
+
+    const firstAnswer = runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-first",
+    });
+    // The answer is applied on a microtask; let it wait for the batch.
+    await new Promise((resolve) => {
+      setTimeout(() => resolve(undefined), 0);
+    });
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222304",
+        "Save neither for now.",
+      ),
+    );
+    await firstAnswer;
+
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).not.toHaveProperty("resume");
+    expect(runtime.getSnapshot()).toMatchObject({
+      error: undefined,
+      status: "ready",
+    });
+  });
+
+  // The local interrupt state is dropped before the server accepts the new
+  // message. A send that then fails is the turn's error: the runtime reports
+  // it so the thread refreshes from the server, and a runtime rebuilt from a
+  // transcript that still ends on the approval answers it without a native
+  // interrupt.
+  test("reports a send that fails after superseding an approval, which the rebuilt runtime can still answer", async () => {
+    const threadId = toChatThreadId("thread-superseded-send-failed");
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createPendingInterruptChunks({
+            interrupt: createApprovalInterrupt(runId),
+            runId,
+            threadId,
+            toolCall: {
+              id: "tool-save",
+              input: { name: "Employment terms" },
+              name: "save_playbook",
+            },
+          }),
+        );
+      }
+      if (requests.length === 2) {
+        return new Response(
+          JSON.stringify({ code: "INTERNAL", message: "Unavailable" }),
+          { headers: { "Content-Type": "application/json" }, status: 500 },
+        );
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const reported: Error[] = [];
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        reported.push(error);
+      },
+      onFinish: () => {},
+    });
+    const firstMessageId = "22222222-2222-4222-8222-222222222305";
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(firstMessageId, "Save the playbook"),
+    );
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222306",
+        "Before saving, list the position titles.",
+      ),
+    );
+
+    expect(requests).toHaveLength(2);
+    expect(reported).toHaveLength(1);
+    expect(runtime.getSnapshot().status).toBe("error");
+
+    // The server never accepted the message: its transcript still ends on
+    // the approval request (the failed message and the assistant placeholder
+    // TanStack appended for it are local only), and the refresh rebuilds the
+    // runtime from it.
+    const serverTranscript = runtime.getSnapshot().messages.slice(0, 2);
+    expect(serverTranscript.at(-1)?.parts.at(0)).toMatchObject({
+      state: "approval-requested",
+      type: "tool-call",
+    });
+    const rebuilt = createChatRuntime({
+      context: undefined,
+      initialMessages: serverTranscript,
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+    await rebuilt.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-save",
+    });
+
+    expect(requests).toHaveLength(3);
+    expect(requests.at(2)).toMatchObject({
+      forwardedProps: {
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              approval: { approved: true, id: "approval_tool-save" },
+              state: "approval-responded",
+              type: "tool-call",
+            },
+          ],
+        },
+      },
+    });
   });
 
   // A refused chat request must not reach the user as the connection
