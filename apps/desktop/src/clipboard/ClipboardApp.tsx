@@ -348,6 +348,7 @@ type ClipboardCardStyle = CSSProperties & {
 
 type ClipboardGroupStyle = CSSProperties & {
   "--clipboard-group-accent"?: string;
+  "--clipboard-window-tint"?: string;
 };
 
 type ClipboardCardFooterMetadataProps = {
@@ -1600,6 +1601,14 @@ const ClipboardApp = () => {
   const activeGroup =
     snapshot.groups.find((group) => group.id === selectedGroupId) ?? null;
   const activeGroupId = activeGroup?.id ?? null;
+  // The window's group tint fades out on opacity, so its colour outlives the
+  // filter: `--clipboard-window-tint` keeps the last group's colour while
+  // `--clipboard-group-accent` follows the active group only.
+  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(null);
+  if (activeGroup !== null && activeGroup.color !== lastGroupAccent) {
+    setLastGroupAccent(activeGroup.color);
+  }
+  const windowTint = activeGroup?.color ?? lastGroupAccent;
   // Typing must never wait on filtering and card re-render: the rail catches
   // up in a deferred render that further keystrokes interrupt. Clearing stays
   // synchronous (the empty filter is free) so the reopen reset can focus the
@@ -2366,9 +2375,18 @@ const ClipboardApp = () => {
     );
   }
 
-  const windowStyle: ClipboardGroupStyle | undefined = activeGroup
-    ? { "--clipboard-group-accent": activeGroup.color }
-    : undefined;
+  const windowStyle: ClipboardGroupStyle | undefined = (() => {
+    if (windowTint === null) {
+      return undefined;
+    }
+    if (activeGroup === null) {
+      return { "--clipboard-window-tint": windowTint };
+    }
+    return {
+      "--clipboard-group-accent": activeGroup.color,
+      "--clipboard-window-tint": windowTint,
+    };
+  })();
 
   return (
     <div

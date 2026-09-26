@@ -15,10 +15,8 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 2,
-    "files": {
-      "apps/desktop/src/mainview/index.css": 2
-    }
+    "count": 0,
+    "files": {}
   },
   "super-linear-regexes": {
     "count": 0,
