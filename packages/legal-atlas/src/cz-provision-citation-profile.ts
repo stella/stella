@@ -14,8 +14,8 @@
  * "latest wins" rule it does so silently.
  */
 
+import { succession } from "./provision-citation-profile";
 import type {
-  ActTitleSpec,
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
@@ -70,29 +70,6 @@ const HUMAN_RIGHTS_CONVENTION = [
   `${noun} o ochraně lidských práv a základních svobod`,
   `${noun} o ochraně lidských práv`,
 ]);
-
-type SuccessionOptions = {
-  spellings: readonly string[];
-  older: WorkIdentifier;
-  newer: WorkIdentifier;
-  /** The day the newer act took effect (e-Sbírka `datum účinnosti od`). */
-  on: string;
-};
-
-/**
- * A name two acts bore in turn: the older until the newer took effect, the
- * newer from then. A citation that names its act outright (`z roku 1965`,
- * `č. 65/1965 Sb.`) still opens the older one after the switch.
- */
-const succession = ({
-  newer,
-  older,
-  on,
-  spellings,
-}: SuccessionOptions): readonly ActTitleSpec[] => [
-  { spellings, identifier: older, citedUntil: on },
-  { spellings, identifier: newer, citedFrom: on },
-];
 
 /**
  * A short title `zákon o …` in every case a citing sentence puts it in, plus

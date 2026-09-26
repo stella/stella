@@ -120,6 +120,29 @@ export type ActTitleSpec = CitedWindow &
     identifier: WorkIdentifier;
   };
 
+type SuccessionOptions = {
+  spellings: readonly string[];
+  older: WorkIdentifier;
+  newer: WorkIdentifier;
+  /** The day the newer act took effect. */
+  on: string;
+};
+
+/**
+ * A name two acts bore in turn: the older until the newer took effect, the
+ * newer from then. A citation that names its act outright (`z roku 1965`,
+ * `č. 65/1965 Sb.`) still opens the older one after the switch.
+ */
+export const succession = ({
+  newer,
+  older,
+  on,
+  spellings,
+}: SuccessionOptions): readonly ActTitleSpec[] => [
+  { spellings, identifier: older, citedUntil: on },
+  { spellings, identifier: newer, citedFrom: on },
+];
+
 /** How a provision path renders as the publisher's deep-link anchor. */
 export type AnchorScheme = {
   /** What joins two path segments: `-` for e-sbirka, `.` for Slov-Lex. */

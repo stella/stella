@@ -11,6 +11,7 @@
  * reason the alias table is profile data and not a shared dictionary.
  */
 
+import { succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
   WorkIdentifier,
@@ -27,6 +28,12 @@ const zb = (number: number, year: number): WorkIdentifier => ({
   year,
   collection: "Zb.",
 });
+
+/** The day 300/2005 and 301/2005 Z. z. replaced the 1961 criminal codes. */
+const CRIMINAL_RECODIFICATION = "2006-01-01";
+
+/** The day 311/2001 Z. z. replaced 65/1965 Zb. */
+const LABOUR_CODE_RECODIFICATION = "2002-04-01";
 
 export const SK_PROFILE = {
   jurisdiction: "SVK",
@@ -102,11 +109,26 @@ export const SK_PROFILE = {
   ],
 
   aliases: [
-    { spellings: ["TZ", "tr. zák."], identifier: zz(300, 2005) },
-    { spellings: ["TP", "tr. por."], identifier: zz(301, 2005) },
+    ...succession({
+      spellings: ["TZ", "tr. zák."],
+      older: zb(140, 1961),
+      newer: zz(300, 2005),
+      on: CRIMINAL_RECODIFICATION,
+    }),
+    ...succession({
+      spellings: ["TP", "tr. por."],
+      older: zb(141, 1961),
+      newer: zz(301, 2005),
+      on: CRIMINAL_RECODIFICATION,
+    }),
     { spellings: ["OZ", "obč. zák."], identifier: zb(40, 1964) },
     { spellings: ["ObZ", "ObchZ", "obch. zák."], identifier: zb(513, 1991) },
-    { spellings: ["ZP", "Zák. práce"], identifier: zz(311, 2001) },
+    ...succession({
+      spellings: ["ZP", "Zák. práce"],
+      older: zb(65, 1965),
+      newer: zz(311, 2001),
+      on: LABOUR_CODE_RECODIFICATION,
+    }),
     { spellings: ["CSP", "C. s. p."], identifier: zz(160, 2015) },
     { spellings: ["CMP", "C. m. p."], identifier: zz(161, 2015) },
     { spellings: ["SSP", "S. s. p."], identifier: zz(162, 2015) },
@@ -121,18 +143,22 @@ export const SK_PROFILE = {
   ],
 
   titles: [
-    {
+    ...succession({
       spellings: ["Trestný zákon", "Trestného zákona", "Trestnom zákone"],
-      identifier: zz(300, 2005),
-    },
-    {
+      older: zb(140, 1961),
+      newer: zz(300, 2005),
+      on: CRIMINAL_RECODIFICATION,
+    }),
+    ...succession({
       spellings: [
         "Trestný poriadok",
         "Trestného poriadku",
         "Trestnom poriadku",
       ],
-      identifier: zz(301, 2005),
-    },
+      older: zb(141, 1961),
+      newer: zz(301, 2005),
+      on: CRIMINAL_RECODIFICATION,
+    }),
     {
       spellings: [
         "Občiansky zákonník",
@@ -149,10 +175,12 @@ export const SK_PROFILE = {
       ],
       identifier: zb(513, 1991),
     },
-    {
+    ...succession({
       spellings: ["Zákonník práce", "Zákonníka práce", "Zákonníku práce"],
-      identifier: zz(311, 2001),
-    },
+      older: zb(65, 1965),
+      newer: zz(311, 2001),
+      on: LABOUR_CODE_RECODIFICATION,
+    }),
     {
       spellings: [
         "Civilný sporový poriadok",
@@ -205,10 +233,13 @@ export const SK_PROFILE = {
       ],
       identifier: zz(233, 1995),
     },
-    {
+    // 143/1998 Z. z. took the title and the field on 1 July 1998.
+    ...succession({
       spellings: ["zákon o civilnom letectve", "zákona o civilnom letectve"],
-      identifier: zb(47, 1956),
-    },
+      older: zb(47, 1956),
+      newer: zz(143, 1998),
+      on: "1998-07-01",
+    }),
     {
       spellings: ["zákon o združovaní občanov", "zákona o združovaní občanov"],
       identifier: zb(83, 1990),
