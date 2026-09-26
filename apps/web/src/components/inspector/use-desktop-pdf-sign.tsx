@@ -25,6 +25,8 @@ import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
+  pdf_signing_certified_document:
+    "workspaces.files.pdfSigning.cancelledCertifiedDescription",
   pdf_signing_encrypted: "workspaces.files.pdfSigning.encryptedDescription",
   pdf_signing_not_a_file: "workspaces.files.pdfSigning.noFileDescription",
   pdf_signing_not_a_pdf: "workspaces.files.pdfSigning.notAPdfDescription",

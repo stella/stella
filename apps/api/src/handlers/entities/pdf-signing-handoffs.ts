@@ -1,16 +1,23 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { pdfSigningSessions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { readEntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { certificationForbidsChanges } from "@/api/lib/pdf-signing/doc-mdp";
 import type { PdfSigningTargetRejection } from "@/api/lib/pdf-signing/pdf-target";
-import { readCurrentPdfSigningTarget } from "@/api/lib/pdf-signing/pdf-target";
+import {
+  pdfSigningFileDescriptor,
+  readCurrentPdfSigningTarget,
+} from "@/api/lib/pdf-signing/pdf-target";
 import {
   computePdfSigningHandoffExpiresAt,
   createPdfSigningToken,
@@ -103,15 +110,90 @@ const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
+/**
+ * Refuse, before the desktop opens, a PDF whose certification forbids any
+ * change. Reads the stored bytes outside any transaction; a target that is
+ * missing or not signable is left for the main check to report.
+ */
+const refuseLockedCertification = async ({
+  entityId,
+  organizationId,
+  propertyId,
+  safeDb,
+  workspaceId,
+}: {
+  entityId: SafeId<"entity">;
+  organizationId: SafeId<"organization">;
+  propertyId: SafeId<"property">;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+}): Promise<Result<void, HandlerError>> => {
+  const current = await safeDb(
+    async (tx) =>
+      await readCurrentPdfSigningTarget({
+        entityId,
+        propertyId,
+        tx,
+        workspaceId,
+      }),
+  );
+  if (Result.isError(current)) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to read the document to sign.",
+        cause: current.error,
+      }),
+    );
+  }
+  if (!current.value || current.value.target.status !== "signable") {
+    return Result.ok(undefined);
+  }
+  const bytes = await readEntityVersionFile(
+    pdfSigningFileDescriptor({
+      entityId,
+      entityVersionId: current.value.baseVersionId,
+      fileContent: current.value.target.fileContent,
+      propertyId,
+      workspaceId,
+    }),
+    organizationId,
+  );
+  if (Result.isError(bytes)) {
+    return Result.err(bytes.error);
+  }
+  return (await certificationForbidsChanges(new Uint8Array(bytes.value)))
+    ? Result.err(
+        new HandlerError({
+          status: 422,
+          code: "pdf_signing_certified_document",
+          message:
+            "This PDF is certified and its certification does not allow further signatures.",
+        }),
+      )
+    : Result.ok(undefined);
+};
+
 const createPdfSigningHandoff = createSafeHandler(
   config,
   async function* ({
     body: { entityId, location, propertyId, reason },
     recordAuditEvent,
     safeDb,
+    session,
     user,
     workspaceId,
   }) {
+    yield* Result.await(
+      refuseLockedCertification({
+        entityId,
+        organizationId: session.activeOrganizationId,
+        propertyId,
+        safeDb,
+        workspaceId,
+      }),
+    );
+
     const sessionId = createSafeId<"pdfSigningSession">();
     const handoffToken = createPdfSigningToken();
     const expiresAt = computePdfSigningHandoffExpiresAt();
