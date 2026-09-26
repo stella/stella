@@ -14,6 +14,7 @@ import {
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
+import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -90,6 +91,11 @@ const createContext = ({
   });
 };
 
+// Every organization also has the shipped built-in skills, with no row; these
+// cases are about the stored rows.
+const installedOnly = (tools: readonly ResolvedSkillTool[]) =>
+  tools.filter((tool) => tool.source === CHAT_SKILL_SOURCE.installed);
+
 describe("MCP gateway skill tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -106,7 +112,7 @@ describe("MCP gateway skill tools", () => {
       rows: [skillRow({ slug: "alpha" }), skillRow({ slug: "beta" })],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     expect(tools.map((tool) => tool.exposedName)).toEqual([
       "skill__alpha",
@@ -133,7 +139,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     expect(tools).toHaveLength(1);
     expect(tools.at(0)).toMatchObject({
@@ -152,7 +158,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const tools = installedOnly(await loadVisibleSkillTools({ context }));
 
     const names = tools.map((tool) => tool.exposedName);
     expect(names).toHaveLength(2);

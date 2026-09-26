@@ -29,6 +29,7 @@ type SkillHandlerContextOptions = {
   auditEvents?: AuditEvent[];
   body?: unknown;
   params?: unknown;
+  query?: unknown;
 };
 
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
