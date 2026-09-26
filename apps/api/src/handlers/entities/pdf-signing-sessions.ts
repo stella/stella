@@ -60,7 +60,11 @@ const readSessionRow = async ({
   );
 
 const sessionNotFound = () =>
-  new HandlerError({ status: 404, message: "Signing session not found." });
+  new HandlerError({
+    status: 404,
+    code: "pdf_signing_session_not_found",
+    message: "Signing session not found.",
+  });
 
 const statusConfig = {
   params: paramsSchema,

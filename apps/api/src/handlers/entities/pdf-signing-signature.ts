@@ -54,7 +54,11 @@ const decodeBase64 = (value: string): Uint8Array | null => {
 };
 
 const signingSessionNotFound = () =>
-  new HandlerError({ status: 404, message: "Signing session not found." });
+  new HandlerError({
+    status: 404,
+    code: "pdf_signing_session_not_found",
+    message: "Signing session not found.",
+  });
 
 const signatureConflict = () =>
   new HandlerError({

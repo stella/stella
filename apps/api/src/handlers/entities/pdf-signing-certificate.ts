@@ -297,6 +297,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
         return Result.err(
           new HandlerError({
             status: 404,
+            code: "pdf_signing_session_not_found",
             message: "Signing session not found.",
           }),
         );
