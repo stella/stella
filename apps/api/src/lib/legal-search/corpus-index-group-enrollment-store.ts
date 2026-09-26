@@ -70,7 +70,7 @@ const enrollmentKey = ({ manifest, indexGroup }: CorpusIndexGroupTarget) =>
   );
 
 /** A bound group's recorded digest differs from the one declared now. */
-export class CorpusIndexGroupContractMismatchError extends TaggedError(
+class CorpusIndexGroupContractMismatchError extends TaggedError(
   "CorpusIndexGroupContractMismatchError",
 )<{ message: string; indexId: string }> {}
 
@@ -254,7 +254,7 @@ export const readCorpusIndexGroupReadinessTx = async (
       });
 
 /** A read or write reached a group whose index is not attested. */
-export class CorpusIndexGroupNotReadyError extends TaggedError(
+class CorpusIndexGroupNotReadyError extends TaggedError(
   "CorpusIndexGroupNotReadyError",
 )<{
   message: string;
@@ -281,7 +281,7 @@ type CorpusIndexGroupRegistry = {
  * What the registry holds for `manifest`'s groups. Empty, with no read, for a
  * manifest the registry records no group of.
  */
-export const readCorpusIndexGroupRegistryTx = async (
+const readCorpusIndexGroupRegistryTx = async (
   tx: ReadTransaction,
   manifest: CorpusIndexManifest,
   { lock }: AttestedGroupsOptions = {},
@@ -328,7 +328,7 @@ export const readCorpusIndexGroupRegistryTx = async (
 };
 
 /** The registered groups of `manifest` whose current digest is attested. */
-export const attestedCorpusIndexGroupsTx = async (
+const attestedCorpusIndexGroupsTx = async (
   tx: ReadTransaction,
   manifest: CorpusIndexManifest,
   options: AttestedGroupsOptions = {},

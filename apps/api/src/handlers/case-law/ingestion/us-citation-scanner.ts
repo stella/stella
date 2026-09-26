@@ -272,7 +272,7 @@ export type ShortToken = Span & {
   pin: ScannedPin | null;
 };
 
-export type BarrierToken = Span & { kind: "barrier"; barrier: BarrierKind };
+type BarrierToken = Span & { kind: "barrier"; barrier: BarrierKind };
 
 export type Token = FullToken | VolumeShortToken | ShortToken | BarrierToken;
 
@@ -570,7 +570,7 @@ const scanTextOf = (inlines: readonly Inline[]): string => {
   return out;
 };
 
-export type RunEvent =
+type RunEvent =
   | { kind: "token"; at: number; token: Token }
   | { kind: "sentence-end"; at: number };
 

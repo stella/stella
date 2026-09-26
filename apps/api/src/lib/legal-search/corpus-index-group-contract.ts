@@ -72,7 +72,7 @@ type FieldMapping = CorpusIndexConfig["doc_mapping"]["field_mappings"][number];
  * a projection fingerprint and a cursor carry, and what an operator attests a
  * physical index against.
  */
-export type CourtPartitionContractArtifact = {
+type CourtPartitionContractArtifact = {
   contract: "court_partition_v1";
   family: "case_law";
   generation: string;
@@ -98,7 +98,7 @@ type GroupContractCommon = {
   indexConfig: UnindexedConfig;
 };
 
-export type BaseGroupContract = GroupContractCommon & { type: "base" };
+type BaseGroupContract = GroupContractCommon & { type: "base" };
 
 export type CourtPartitionGroupContract = GroupContractCommon & {
   type: "court_partition_v1";
@@ -358,7 +358,7 @@ export type CorpusIndexReadTargetResolution =
  * The manifest records them (`route.byJurisdiction`), and their indexes exist
  * for as long as the generation is active.
  */
-export const createdCaseLawBaseGroups = (
+const createdCaseLawBaseGroups = (
   manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
 ): ReadonlySet<string> =>
   new Set(

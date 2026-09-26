@@ -299,8 +299,6 @@ const renderTable = ({ editions, foreignFolds, spellings }: Table): string => {
     `// https://github.com/${UPSTREAM_REPO} at ${UPSTREAM_COMMIT}.`,
     "// Do not edit by hand. Derived data; see ./us-reporters.LICENSE.",
     "",
-    `export const US_REPORTERS_SOURCE_COMMIT = ${JSON.stringify(UPSTREAM_COMMIT)};`,
-    "",
     "/** One reporter that publishes under an edition, and the years it covers. */",
     "export type UsReporterEditionRecord = {",
     "  readonly name: string;",

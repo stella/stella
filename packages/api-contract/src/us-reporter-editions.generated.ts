@@ -2,9 +2,6 @@
 // https://github.com/freelawproject/reporters-db at e095e6bf914ffd0a7b272f3764179cf3dbdf246c.
 // Do not edit by hand. Derived data; see ./us-reporters.LICENSE.
 
-export const US_REPORTERS_SOURCE_COMMIT =
-  "e095e6bf914ffd0a7b272f3764179cf3dbdf246c";
-
 /** One reporter that publishes under an edition, and the years it covers. */
 export type UsReporterEditionRecord = {
   readonly name: string;

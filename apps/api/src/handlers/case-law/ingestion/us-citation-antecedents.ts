@@ -197,7 +197,7 @@ const nameBefore = (text: string): NameEvidence | null => {
 // ---------------------------------------------------------------------------
 // Scope state
 
-export type Resolution =
+type Resolution =
   | { type: "bundle"; bundle: number }
   | { type: "unresolved"; reason: CitationUnresolvedReason };
 
