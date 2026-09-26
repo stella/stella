@@ -247,7 +247,7 @@ export const captureSigningDigest = async (
       const pdf = await PDF.load(invocation.basePdf);
       // Checked here, before any digest exists, so the desktop never asks
       // for a PIN on a document the signature would invalidate.
-      if (readDocMdpPermission(pdf) === 1) {
+      if (readDocMdpPermission({ pdf, source: invocation.basePdf }) === 1) {
         throw new PdfSigningCertifiedDocumentError({
           message:
             "This PDF is certified and its certification forbids changes.",
