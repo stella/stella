@@ -6,6 +6,7 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -121,6 +122,10 @@ import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied"
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  openFreshLoginClient,
+  startDatabaseLoginProbe,
+} from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -577,6 +582,14 @@ const startServer = async (): Promise<void> => {
 
   const backgroundWorkers = initApiBackgroundWorkers();
 
+  // Deployed processes only; local runs and tests never start it. Same URL as
+  // the pools in `db/root.ts`.
+  const closeDatabaseLoginProbe = envBase.isDev
+    ? async () => undefined
+    : startDatabaseLoginProbe({
+        openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
+      });
+
   scopeRequestAsyncStores();
 
   api.listen({
@@ -615,6 +628,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: backgroundWorkers.close,
+      closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is
       // nothing claimed to drain.
       drainScheduler: scheduler.loop?.drained,

@@ -9,6 +9,7 @@ type ApiShutdownOutcome =
 
 type ShutdownApiServicesOptions = {
   closeBackgroundWorkers: () => Promise<void>;
+  closeDatabaseLoginProbe: () => Promise<void>;
   drainScheduler: Promise<void> | undefined;
   onHttpStopError: (error: unknown) => void;
   stopHttp: () => Promise<void>;
@@ -19,6 +20,7 @@ type ShutdownApiServicesOptions = {
 
 export const shutdownApiServices = async ({
   closeBackgroundWorkers,
+  closeDatabaseLoginProbe,
   drainScheduler,
   onHttpStopError,
   stopHttp,
@@ -38,6 +40,7 @@ export const shutdownApiServices = async ({
       httpStopped,
       drainScheduler,
       closeBackgroundWorkers(),
+      closeDatabaseLoginProbe(),
     ]).then((results) =>
       results.some((result) => result.status === "rejected")
         ? API_SHUTDOWN_OUTCOME.failed
