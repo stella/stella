@@ -34,7 +34,7 @@ pub use identity::{SigningError, SigningIdentity, SigningKeyType};
 /// nor EC (no PDF signature algorithm pairs with it), a certificate outside
 /// its validity window, one whose KeyUsage permits neither digitalSignature
 /// nor nonRepudiation, and one whose extended key usages are all for
-/// something else (servers, code, VPN endpoints).
+/// something else (servers, login, code, VPN endpoints).
 ///
 /// Reading identities never touches key material, so this does not prompt.
 #[cfg(target_os = "macos")]
