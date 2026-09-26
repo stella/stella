@@ -38,7 +38,7 @@ CREATE TABLE "pdf_signing_sessions" (
   -- A reason is only meaningful on a cancelled exchange, and the vocabulary is
   -- what the browser branches on to explain the outcome.
   CONSTRAINT "pdf_signing_sessions_close_reason_check"
-    CHECK ("close_reason" is null or "close_reason" in ('user_cancelled', 'base_version_diverged', 'digest_mismatch', 'unsupported_platform', 'certificate_rejected')),
+    CHECK ("close_reason" is null or "close_reason" in ('user_cancelled', 'base_version_diverged', 'digest_mismatch', 'unsupported_platform', 'certificate_rejected', 'certified_document', 'signing_failed')),
   CONSTRAINT "pdf_signing_sessions_key_type_check"
     CHECK ("key_type" is null or "key_type" in ('RSA', 'EC'))
 );--> statement-breakpoint

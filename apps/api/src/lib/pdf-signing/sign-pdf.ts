@@ -28,6 +28,7 @@ import { TaggedError } from "better-result";
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/pdf-signing/certificate";
+import { readDocMdpPermission } from "@/api/lib/pdf-signing/doc-mdp";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -49,6 +50,14 @@ class PdfSigningError extends TaggedError("PdfSigningError")<{
 
 export class PdfSigningDigestMismatchError extends TaggedError(
   "PdfSigningDigestMismatchError",
+)<{ message: string }> {}
+
+/**
+ * The document carries a certification that permits no changes, so any
+ * signature appended to it would break the certification.
+ */
+export class PdfSigningCertifiedDocumentError extends TaggedError(
+  "PdfSigningCertifiedDocumentError",
 )<{ message: string }> {}
 
 /** Phase 1's abort. Private to this module: it is control flow, not a fault. */
@@ -135,6 +144,14 @@ export const captureSigningDigest = async (
   await withTimeout(
     async () => {
       const pdf = await PDF.load(invocation.basePdf);
+      // Checked here, before any digest exists, so the desktop never asks
+      // for a PIN on a document the signature would invalidate.
+      if (readDocMdpPermission(pdf) === 1) {
+        throw new PdfSigningCertifiedDocumentError({
+          message:
+            "This PDF is certified and its certification forbids changes.",
+        });
+      }
       try {
         await pdf.sign(buildSignOptions(invocation, signer));
       } catch (error) {

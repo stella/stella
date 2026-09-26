@@ -5,8 +5,10 @@ import crypto from "node:crypto";
 import {
   applySignature,
   captureSigningDigest,
+  PdfSigningCertifiedDocumentError,
   PdfSigningDigestMismatchError,
 } from "@/api/lib/pdf-signing/sign-pdf";
+import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
@@ -164,5 +166,26 @@ describe("two-phase PDF signing", () => {
       signature,
     }).catch((error: unknown) => error);
     expect(rejected).toBeInstanceOf(PdfSigningDigestMismatchError);
+  });
+
+  test("refuses before any digest exists when a certification forbids changes", async () => {
+    const { invocation } = await buildInvocation();
+
+    const locked = await captureSigningDigest({
+      ...invocation,
+      basePdf: await buildCertifiedPdf({ permission: 1 }),
+    }).catch((error: unknown) => error);
+    expect(locked).toBeInstanceOf(PdfSigningCertifiedDocumentError);
+
+    // Form filling and signing (P=2) and annotating (P=3) both admit an
+    // approval signature, so those certifications still prepare a digest.
+    for (const permission of [2, 3]) {
+      expect(
+        await captureSigningDigest({
+          ...invocation,
+          basePdf: await buildCertifiedPdf({ permission }),
+        }),
+      ).toMatch(/^[0-9a-f]{64}$/u);
+    }
   });
 });
