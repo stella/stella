@@ -19,6 +19,7 @@ import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 const SKILL_FILE_NAME = "SKILL.md";
@@ -169,7 +170,7 @@ type GithubRefExists = (options: {
   owner: string;
   ref: string;
   repo: string;
-}) => Promise<boolean>;
+}) => Promise<Result<boolean, HandlerError>>;
 
 export type GithubTreeItem = {
   path: string;
@@ -185,10 +186,12 @@ type SkillSourceRequestBudget = {
   timeoutMessage?: string;
 };
 
+type GithubTreeResult = Result<GithubTreeItem[], HandlerError>;
+
 export type SkillPackageFetchContext = {
   githubAccess?: GithubSkillFetchAccess;
   requestBudget?: SkillSourceRequestBudget;
-  githubTrees: Map<string, Promise<GithubTreeItem[]>>;
+  githubTrees: Map<string, Promise<GithubTreeResult>>;
 };
 
 export const createSkillPackageFetchContext = (
@@ -219,8 +222,8 @@ export const getOrCreateGithubTreeRequest = ({
 }: {
   cacheKey: string;
   context: SkillPackageFetchContext;
-  load: () => Promise<GithubTreeItem[]>;
-}): Promise<GithubTreeItem[]> => {
+  load: () => Promise<GithubTreeResult>;
+}): Promise<GithubTreeResult> => {
   const cached = context.githubTrees.get(cacheKey);
   if (cached) {
     return cached;
@@ -230,6 +233,27 @@ export const getOrCreateGithubTreeRequest = ({
   return request;
 };
 
+type SettleSkillPackageOptions<T> = {
+  run: () => Promise<Result<T, HandlerError>>;
+  toError: (cause: unknown) => HandlerError;
+};
+
+/**
+ * Answers a rejection and an unexpected exception (a malformed archive, an
+ * unparsable GitHub response) through the same `toError`, so an entry point
+ * reports both in one shape.
+ */
+const settleSkillPackage = async <T>({
+  run,
+  toError,
+}: SettleSkillPackageOptions<T>): Promise<Result<T, HandlerError>> => {
+  const settled = await Result.tryPromise({ try: run, catch: toError });
+  if (settled.isErr()) {
+    return Result.err(settled.error);
+  }
+  return settled.value.mapError(toError);
+};
+
 /**
  * Parses an uploaded skill pack. Takes a `ScannedFile`, so every upload path
  * runs the file scan before its bytes reach the parser.
@@ -237,44 +261,47 @@ export const getOrCreateGithubTreeRequest = ({
 export const parseUploadedSkillPackage = async (
   file: ScannedFile,
 ): Promise<Result<ImportedSkillPackage, HandlerError>> =>
-  await Result.tryPromise({
-    try: async () => {
+  await settleSkillPackage({
+    run: async () => {
       const buffer = file.bytes;
       if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.skillPack) {
-        throw new HandlerError({
-          status: 400,
-          message: "Skill pack is too large",
-        });
+        return rejectSkillPackage("Skill pack is too large");
       }
 
       const parsed = isZipFile({ buffer, name: file.fileName })
         ? await parseZipSkillPackage(buffer)
-        : {
-            ...parseMarkdownSkillPackage(decodeUtf8(buffer)),
-            skippedFiles: [],
-          };
-      return { ...parsed, sourceUrl: null };
+        : parseMarkdownSkillPackageBytes(buffer);
+      if (parsed.isErr()) {
+        return Result.err(parsed.error);
+      }
+      return Result.ok({ ...parsed.value, sourceUrl: null });
     },
-    catch: toHandlerError,
+    toError: toHandlerError,
   });
 
 export const fetchSkillPackageFromUrl = async (
   rawUrl: string,
   context = createSkillPackageFetchContext(),
 ): Promise<Result<FetchedSkillPackage, HandlerError>> =>
-  await Result.tryPromise({
-    try: async (): Promise<FetchedSkillPackage> => {
+  await settleSkillPackage({
+    run: async (): Promise<Result<FetchedSkillPackage, HandlerError>> => {
       const githubPath = await parseGithubSkillPath(
         rawUrl,
         context.requestBudget,
       );
-      if (githubPath) {
+      if (githubPath.isErr()) {
+        return Result.err(githubPath.error);
+      }
+      if (githubPath.value) {
         const parsed = await fetchGithubSkillPackage(
-          githubPath,
+          githubPath.value,
           redactSkillSourceUrlForStorage(rawUrl),
           context,
         );
-        return { ...parsed, urlReplayIdentity: "source-url" };
+        if (parsed.isErr()) {
+          return Result.err(parsed.error);
+        }
+        return Result.ok({ ...parsed.value, urlReplayIdentity: "source-url" });
       }
 
       const url = new URL(rawUrl);
@@ -283,24 +310,28 @@ export const fetchSkillPackageFromUrl = async (
         FILE_SIZE_LIMIT_BYTES.skillPack,
         context.requestBudget,
       );
-      const contentType = response.headers.get("content-type") ?? "";
+      if (response.isErr()) {
+        return Result.err(response.error);
+      }
+      const { body, headers } = response.value;
+      const contentType = headers.get("content-type") ?? "";
       const parsed = isZipSkillSource({
-        buffer: response.body,
+        buffer: body,
         contentType,
         path: url.pathname,
       })
-        ? await parseZipSkillPackage(response.body)
-        : {
-            ...parseMarkdownSkillPackage(decodeUtf8(response.body)),
-            skippedFiles: [],
-          };
-      return {
-        ...parsed,
+        ? await parseZipSkillPackage(body)
+        : parseMarkdownSkillPackageBytes(body);
+      if (parsed.isErr()) {
+        return Result.err(parsed.error);
+      }
+      return Result.ok({
+        ...parsed.value,
         sourceUrl: redactSkillSourceUrlForStorage(rawUrl),
         urlReplayIdentity: "content-hash",
-      };
+      });
     },
-    catch: toHandlerError,
+    toError: toHandlerError,
   });
 
 /**
@@ -310,42 +341,50 @@ export const fetchSkillPackageFromUrl = async (
  */
 export const fetchGithubCatalogueSkillPackage = async ({
   fetchFiles = async (skillTarget) => {
-    const { files } = await fetchGithubSkillFiles(skillTarget, {
+    const fetched = await fetchGithubSkillFiles(skillTarget, {
       githubAccess: {
         source: "catalogue",
         ...(githubToken ? { githubToken } : {}),
       },
       githubTrees: new Map(),
     });
-    return files;
+    return fetched.map(({ files }) => files);
   },
   githubToken,
   sourceUrl,
   target,
 }: {
-  fetchFiles?: (target: GithubSkillPath) => Promise<SkillFile[]>;
+  fetchFiles?: (
+    target: GithubSkillPath,
+  ) => Promise<Result<SkillFile[], HandlerError>>;
   githubToken?: string;
   sourceUrl: string;
   target: GithubSkillPath;
 }): Promise<Result<ParsedSkillPackage, HandlerError>> =>
-  await Result.tryPromise({
-    try: async () => {
+  await settleSkillPackage({
+    run: async () => {
       const files = await fetchFiles(target);
-      const parsed = parseSkillFiles(files);
-      return {
-        ...parsed,
+      if (files.isErr()) {
+        return Result.err(files.error);
+      }
+      const parsed = parseSkillFiles(files.value);
+      if (parsed.isErr()) {
+        return Result.err(parsed.error);
+      }
+      return Result.ok({
+        ...parsed.value,
         sourceUrl: redactSkillSourceUrlForStorage(sourceUrl),
-      };
+      });
     },
-    catch: toCatalogueHandlerError,
+    toError: toCatalogueHandlerError,
   });
 
 export const discoverSkillPackagesFromUrl = async (
   rawUrl: string,
   fetchBytes: typeof safeOutboundFetchBytes = safeOutboundFetchBytes,
 ): Promise<Result<SkillPackageDiscovery, HandlerError>> =>
-  await Result.tryPromise({
-    try: async () => {
+  await settleSkillPackage({
+    run: async (): Promise<Result<SkillPackageDiscovery, HandlerError>> => {
       const budget = {
         deadlineAt:
           Temporal.Now.instant().epochMilliseconds +
@@ -353,34 +392,39 @@ export const discoverSkillPackagesFromUrl = async (
         fetchBytes,
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
-      if (!githubTarget) {
-        const parsed = await fetchSkillPackageFromUrl(rawUrl);
-        if (Result.isError(parsed)) {
-          throw parsed.error;
-        }
-        return {
-          commitSha: null,
-          invalidSkillCount: 0,
-          repositoryUrl: null,
-          skills: [
-            toDiscoveredSkill({
-              integrity: {
-                type: "content-hash",
-                value: hashSkillPackageContent(parsed.value),
-              },
-              parsed: parsed.value,
-              sourceUrl: rawUrl,
-            }),
-          ],
-        };
+      if (githubTarget.isErr()) {
+        return Result.err(githubTarget.error);
+      }
+      if (githubTarget.value) {
+        return await discoverGithubSkillPackages(githubTarget.value, budget);
       }
 
-      return await discoverGithubSkillPackages(githubTarget, budget);
+      const parsed = await fetchSkillPackageFromUrl(rawUrl);
+      if (parsed.isErr()) {
+        return Result.err(parsed.error);
+      }
+      return Result.ok({
+        commitSha: null,
+        invalidSkillCount: 0,
+        repositoryUrl: null,
+        skills: [
+          toDiscoveredSkill({
+            integrity: {
+              type: "content-hash",
+              value: hashSkillPackageContent(parsed.value),
+            },
+            parsed: parsed.value,
+            sourceUrl: rawUrl,
+          }),
+        ],
+      });
     },
-    catch: toHandlerError,
+    toError: toHandlerError,
   });
 
-const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
+const parseMarkdownSkillPackage = (
+  source: string,
+): Result<ParsedSkillPackage, HandlerError> =>
   parseSkillFiles([
     {
       content: source,
@@ -388,6 +432,20 @@ const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
       sizeBytes: encodedSize(source),
     },
   ]);
+
+const parseMarkdownSkillPackageBytes = (
+  buffer: ArrayBuffer | Uint8Array,
+): Result<ImportedSkillPackage, HandlerError> => {
+  const source = decodeUtf8(buffer);
+  if (source.isErr()) {
+    return Result.err(source.error);
+  }
+  const parsed = parseMarkdownSkillPackage(source.value);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  return Result.ok({ ...parsed.value, skippedFiles: [] });
+};
 
 type ZipPackageEntry = {
   file: JSZip.JSZipObject;
@@ -440,15 +498,12 @@ const classifyPackageFilePath = ({
 
 const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
-): Promise<ImportedSkillPackage> => {
+): Promise<Result<ImportedSkillPackage, HandlerError>> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files);
   if (entries.length > LIMITS.agentSkillArchiveFilesMax) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill pack has too many files",
-    });
+    return rejectSkillPackage("Skill pack has too many files");
   }
 
   const packageEntries: ZipPackageEntry[] = [];
@@ -466,7 +521,10 @@ const parseZipSkillPackage = async (
   const skillFilePath = findSkillFilePath(
     packageEntries.map((entry) => entry.path),
   );
-  const rootPrefix = skillFolderPrefix(skillFilePath);
+  if (skillFilePath.isErr()) {
+    return Result.err(skillFilePath.error);
+  }
+  const rootPrefix = skillFolderPrefix(skillFilePath.value);
   const files: SkillFile[] = [];
   const skippedFiles: SkippedSkillFile[] = [];
   let totalUncompressedBytes = 0;
@@ -475,7 +533,7 @@ const parseZipSkillPackage = async (
     const verdict = classifyPackageFilePath({
       path,
       rootPrefix,
-      skillFilePath,
+      skillFilePath: skillFilePath.value,
     });
     if (verdict.type === "skipped") {
       skippedFiles.push({ path, reason: verdict.reason });
@@ -484,18 +542,28 @@ const parseZipSkillPackage = async (
 
     const declaredSize = zipUncompressedSize(file);
     if (declaredSize !== null) {
-      assertZipUncompressedLimit(totalUncompressedBytes + declaredSize);
+      const declaredLimit = checkZipUncompressedLimit(
+        totalUncompressedBytes + declaredSize,
+      );
+      if (declaredLimit.isErr()) {
+        return Result.err(declaredLimit.error);
+      }
     }
 
     const bytes = await file.async("uint8array");
     totalUncompressedBytes += bytes.byteLength;
-    assertZipUncompressedLimit(totalUncompressedBytes);
+    const inflatedLimit = checkZipUncompressedLimit(totalUncompressedBytes);
+    if (inflatedLimit.isErr()) {
+      return Result.err(inflatedLimit.error);
+    }
 
     // SKILL.md must be text; a resource that is not (a binary asset) is left
     // out and reported rather than failing the whole package.
-    const content =
-      verdict.type === "entrypoint" ? decodeUtf8(bytes) : tryDecodeUtf8(bytes);
-    if (content === null) {
+    const content = decodePackageFile({ bytes, verdict });
+    if (content.isErr()) {
+      return Result.err(content.error);
+    }
+    if (content.value === null) {
       skippedFiles.push({
         path,
         reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
@@ -503,55 +571,86 @@ const parseZipSkillPackage = async (
       continue;
     }
 
-    files.push({ content, path, sizeBytes: bytes.byteLength });
+    files.push({ content: content.value, path, sizeBytes: bytes.byteLength });
   }
 
-  return { ...parseSkillFiles(files), skippedFiles };
-};
-
-const assertZipUncompressedLimit = (totalBytes: number) => {
-  if (totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes) {
-    return;
+  const parsed = parseSkillFiles(files);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
   }
-
-  throw new HandlerError({
-    status: 400,
-    message: "Skill pack uncompressed content is too large",
-  });
+  return Result.ok({ ...parsed.value, skippedFiles });
 };
 
-const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
+type DecodePackageFileOptions = {
+  bytes: ArrayBuffer | Uint8Array;
+  verdict: Exclude<PackagePathVerdict, { type: "skipped" }>;
+};
+
+/**
+ * The entry point must decode as UTF-8; a resource that does not answers
+ * `null`, so the caller reports it as skipped.
+ */
+const decodePackageFile = ({
+  bytes,
+  verdict,
+}: DecodePackageFileOptions): Result<string | null, HandlerError> => {
+  switch (verdict.type) {
+    case "entrypoint":
+      return decodeUtf8(bytes);
+    case "resource":
+      return Result.ok(tryDecodeUtf8(bytes));
+    default:
+      return unreachable("Unknown package path verdict");
+  }
+};
+
+const checkZipUncompressedLimit = (
+  totalBytes: number,
+): Result<void, HandlerError> =>
+  totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes
+    ? Result.ok()
+    : rejectSkillPackage("Skill pack uncompressed content is too large");
+
+const parseSkillFiles = (
+  files: readonly SkillFile[],
+): Result<ParsedSkillPackage, HandlerError> => {
   const skillFile = findSkillFile(files);
-  const rootPrefix = skillFolderPrefix(skillFile.path);
-  const relativeSkillSource = skillFile.content;
+  if (skillFile.isErr()) {
+    return Result.err(skillFile.error);
+  }
+  const rootPrefix = skillFolderPrefix(skillFile.value.path);
+  const relativeSkillSource = skillFile.value.content;
   const parsedFile = parseSkillFile(relativeSkillSource);
   if (parsedFile.isErr()) {
-    throw new HandlerError({
-      status: 400,
-      message: parsedFile.error.message,
-      cause: parsedFile.error,
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: parsedFile.error.message,
+        cause: parsedFile.error,
+      }),
+    );
   }
   const parsed = parsedFile.value;
   const name = parsed.metadata.name;
 
   if (!SKILL_NAME_PATTERN.test(name)) {
-    throw new HandlerError({
-      status: 400,
-      message:
-        "Skill name must use lowercase letters and digits, joined by single hyphens",
-    });
+    return rejectSkillPackage(
+      "Skill name must use lowercase letters and digits, joined by single hyphens",
+    );
   }
-  assertFrontmatterLimits(parsed.metadata);
+  const frontmatter = checkFrontmatterLimits(parsed.metadata);
+  if (frontmatter.isErr()) {
+    return Result.err(frontmatter.error);
+  }
   if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill instructions are too large",
-    });
+    return rejectSkillPackage("Skill instructions are too large");
   }
 
   const resources = collectResources({ files, rootPrefix });
-  return {
+  if (resources.isErr()) {
+    return Result.err(resources.error);
+  }
+  return Result.ok({
     body: parsed.body,
     compatibility: parsed.metadata.compatibility ?? null,
     description: parsed.metadata.description,
@@ -559,14 +658,16 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
     license: parsed.metadata.license ?? null,
     metadata: parsed.metadata.metadata ?? {},
     name,
-    resources,
+    resources: resources.value,
     sourceUrl: null,
     version: parsed.metadata.version,
-  };
+  });
 };
 
 /** The shallowest SKILL.md in the package is its entry point. */
-const findSkillFilePath = (paths: readonly string[]): string => {
+const findSkillFilePath = (
+  paths: readonly string[],
+): Result<string, HandlerError> => {
   const skillFilePath = paths
     .filter(
       (path) =>
@@ -574,25 +675,26 @@ const findSkillFilePath = (paths: readonly string[]): string => {
     )
     .toSorted((a, b) => a.length - b.length)
     .at(0);
-  if (skillFilePath === undefined) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill pack must include SKILL.md",
-    });
-  }
-  return skillFilePath;
+  return skillFilePath === undefined
+    ? rejectSkillPackage("Skill pack must include SKILL.md")
+    : Result.ok(skillFilePath);
 };
 
 const skillFolderPrefix = (skillFilePath: string): string =>
   skillFilePath.slice(0, -SKILL_FILE_NAME.length);
 
-const findSkillFile = (files: readonly SkillFile[]): SkillFile => {
+const findSkillFile = (
+  files: readonly SkillFile[],
+): Result<SkillFile, HandlerError> => {
   const skillFilePath = findSkillFilePath(files.map((file) => file.path));
-  const skillFile = files.find((file) => file.path === skillFilePath);
+  if (skillFilePath.isErr()) {
+    return Result.err(skillFilePath.error);
+  }
+  const skillFile = files.find((file) => file.path === skillFilePath.value);
   if (!skillFile) {
     return panic("The chosen SKILL.md path is one of the package files");
   }
-  return skillFile;
+  return Result.ok(skillFile);
 };
 
 const collectResources = ({
@@ -601,7 +703,7 @@ const collectResources = ({
 }: {
   files: readonly SkillFile[];
   rootPrefix: string;
-}): ParsedSkillResource[] => {
+}): Result<ParsedSkillResource[], HandlerError> => {
   const resources: ParsedSkillResource[] = [];
   const resourcePaths = new Set<string>();
 
@@ -620,20 +722,21 @@ const collectResources = ({
       continue;
     }
 
-    assertSkillResourcePath(normalizedPath);
+    const resourcePath = checkSkillResourcePath(normalizedPath);
+    if (resourcePath.isErr()) {
+      return Result.err(resourcePath.error);
+    }
     if (resourcePaths.has(normalizedPath)) {
-      throw new HandlerError({
-        status: 400,
-        message: `Skill contains a duplicate resource path: ${normalizedPath}`,
-      });
+      return rejectSkillPackage(
+        `Skill contains a duplicate resource path: ${normalizedPath}`,
+      );
     }
     resourcePaths.add(normalizedPath);
 
     if (file.content.length > LIMITS.agentSkillResourceMaxChars) {
-      throw new HandlerError({
-        status: 400,
-        message: `Skill resource is too large: ${normalizedPath}`,
-      });
+      return rejectSkillPackage(
+        `Skill resource is too large: ${normalizedPath}`,
+      );
     }
 
     const kind = getSkillResourceKind(normalizedPath);
@@ -650,66 +753,63 @@ const collectResources = ({
   }
 
   if (resources.length > LIMITS.agentSkillResourcesPerSkill) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill pack has too many resources",
-    });
+    return rejectSkillPackage("Skill pack has too many resources");
   }
 
   // oxlint-disable-next-line require-cached-collator/require-cached-collator -- file path, sorted for deterministic archive layout, not display text
-  return resources.toSorted((a, b) => a.path.localeCompare(b.path));
+  return Result.ok(resources.toSorted((a, b) => a.path.localeCompare(b.path)));
 };
 
-const assertFrontmatterLimits = (metadata: SkillMetadata) => {
-  assertFrontmatterField({
-    field: "description",
-    limit: LIMITS.agentSkillDescriptionMaxChars,
-    value: metadata.description,
+const checkFrontmatterLimits = (
+  metadata: SkillMetadata,
+): Result<void, HandlerError> =>
+  Result.gen(function* () {
+    yield* checkFrontmatterField({
+      field: "description",
+      limit: LIMITS.agentSkillDescriptionMaxChars,
+      value: metadata.description,
+    });
+    yield* checkFrontmatterField({
+      field: "version",
+      limit: LIMITS.agentSkillVersionMaxChars,
+      value: metadata.version,
+    });
+    yield* checkFrontmatterField({
+      field: "license",
+      limit: LIMITS.agentSkillLicenseMaxChars,
+      value: metadata.license,
+    });
+    yield* checkNoBidiFormattingControls({
+      field: "version",
+      value: metadata.version,
+    });
+    yield* checkNoBidiFormattingControls({
+      field: "license",
+      value: metadata.license,
+    });
+    yield* checkFrontmatterField({
+      field: "compatibility",
+      limit: LIMITS.agentSkillCompatibilityMaxChars,
+      value: metadata.compatibility,
+    });
+    yield* checkFrontmatterMetadata(metadata.metadata);
+    return Result.ok();
   });
-  assertFrontmatterField({
-    field: "version",
-    limit: LIMITS.agentSkillVersionMaxChars,
-    value: metadata.version,
-  });
-  assertFrontmatterField({
-    field: "license",
-    limit: LIMITS.agentSkillLicenseMaxChars,
-    value: metadata.license,
-  });
-  assertNoBidiFormattingControls({
-    field: "version",
-    value: metadata.version,
-  });
-  assertNoBidiFormattingControls({
-    field: "license",
-    value: metadata.license,
-  });
-  assertFrontmatterField({
-    field: "compatibility",
-    limit: LIMITS.agentSkillCompatibilityMaxChars,
-    value: metadata.compatibility,
-  });
-  assertFrontmatterMetadata(metadata.metadata);
-};
 
-const assertNoBidiFormattingControls = ({
+const checkNoBidiFormattingControls = ({
   field,
   value,
 }: {
   field: string;
   value: string | null | undefined;
-}) => {
-  if (!value || !BIDI_FORMATTING_CONTROL_PATTERN.test(value)) {
-    return;
-  }
+}): Result<void, HandlerError> =>
+  !value || !BIDI_FORMATTING_CONTROL_PATTERN.test(value)
+    ? Result.ok()
+    : rejectSkillPackage(
+        `Skill ${field} contains bidirectional formatting controls`,
+      );
 
-  throw new HandlerError({
-    status: 400,
-    message: `Skill ${field} contains bidirectional formatting controls`,
-  });
-};
-
-const assertFrontmatterField = ({
+const checkFrontmatterField = ({
   field,
   limit,
   value,
@@ -717,52 +817,45 @@ const assertFrontmatterField = ({
   field: string;
   limit: number;
   value: string | null | undefined;
-}) => {
-  if (!value || value.length <= limit) {
-    return;
-  }
+}): Result<void, HandlerError> =>
+  !value || value.length <= limit
+    ? Result.ok()
+    : rejectSkillPackage(`Skill ${field} is too large`);
 
-  throw new HandlerError({
-    status: 400,
-    message: `Skill ${field} is too large`,
-  });
-};
-
-const assertFrontmatterMetadata = (
+const checkFrontmatterMetadata = (
   metadata: Record<string, string> | undefined,
-) => {
+): Result<void, HandlerError> => {
   const entries = Object.entries(metadata ?? {});
   if (entries.length > LIMITS.agentSkillMetadataEntriesMax) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill metadata has too many entries",
-    });
+    return rejectSkillPackage("Skill metadata has too many entries");
   }
 
   for (const [key, value] of entries) {
     if (key.length > LIMITS.agentSkillMetadataKeyMaxChars) {
-      throw new HandlerError({
-        status: 400,
-        message: "Skill metadata key is too large",
-      });
+      return rejectSkillPackage("Skill metadata key is too large");
     }
     if (value.length > LIMITS.agentSkillMetadataValueMaxChars) {
-      throw new HandlerError({
-        status: 400,
-        message: "Skill metadata value is too large",
-      });
+      return rejectSkillPackage("Skill metadata value is too large");
     }
   }
+  return Result.ok();
 };
 
 const fetchGithubSkillPackage = async (
   target: GithubSkillPath,
   originalUrl: string,
   context: SkillPackageFetchContext,
-): Promise<ImportedSkillPackage> => {
-  const { files, skippedFiles } = await fetchGithubSkillFiles(target, context);
+): Promise<Result<ImportedSkillPackage, HandlerError>> => {
+  const fetched = await fetchGithubSkillFiles(target, context);
+  if (fetched.isErr()) {
+    return Result.err(fetched.error);
+  }
+  const { files, skippedFiles } = fetched.value;
   const parsed = parseSkillFiles(files);
-  return { ...parsed, skippedFiles, sourceUrl: originalUrl };
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  return Result.ok({ ...parsed.value, skippedFiles, sourceUrl: originalUrl });
 };
 
 type GithubSkillFiles = {
@@ -773,23 +866,29 @@ type GithubSkillFiles = {
 const fetchGithubSkillFiles = async (
   target: GithubSkillPath,
   context: SkillPackageFetchContext,
-): Promise<GithubSkillFiles> => {
+): Promise<Result<GithubSkillFiles, HandlerError>> => {
   const files: SkillFile[] = [];
   const skippedFiles: SkippedSkillFile[] = [];
   let totalFileBytes = 0;
   let resourceCount = 0;
   const resourcePaths = new Set<string>();
   const commitSha = await resolveGithubCommitSha(target, context.requestBudget);
+  if (commitSha.isErr()) {
+    return Result.err(commitSha.error);
+  }
   const tree = await fetchGithubTreeOnce({
-    commitSha,
+    commitSha: commitSha.value,
     context,
     owner: target.owner,
     repo: target.repo,
     rootPath: target.rootPath,
     selectedSkillPath: target.selectedSkillPath,
   });
+  if (tree.isErr()) {
+    return Result.err(tree.error);
+  }
 
-  for (const item of tree) {
+  for (const item of tree.value) {
     if (item.type !== "blob" && item.type !== "file") {
       continue;
     }
@@ -815,48 +914,63 @@ const fetchGithubSkillFiles = async (
     }
 
     if (normalizedPath !== SKILL_FILE_NAME) {
-      assertSkillResourcePath(normalizedPath);
+      const resourcePath = checkSkillResourcePath(normalizedPath);
+      if (resourcePath.isErr()) {
+        return Result.err(resourcePath.error);
+      }
       if (resourcePaths.has(normalizedPath)) {
-        throw new HandlerError({
-          status: 400,
-          message: `Skill contains a duplicate resource path: ${normalizedPath}`,
-        });
+        return rejectSkillPackage(
+          `Skill contains a duplicate resource path: ${normalizedPath}`,
+        );
       }
       resourcePaths.add(normalizedPath);
       resourceCount += 1;
-      assertGithubResourceCount(resourceCount);
+      if (resourceCount > LIMITS.agentSkillResourcesPerSkill) {
+        return rejectSkillPackage("Skill has too many resources");
+      }
     }
 
     const declaredSize = item.size ?? null;
-    assertGithubDeclaredFileSize({
-      path: normalizedPath,
-      size: declaredSize,
-    });
     if (declaredSize !== null) {
-      assertGithubTotalFileBytes(totalFileBytes + declaredSize);
+      if (declaredSize > GITHUB_SKILL_FILE_MAX_BYTES) {
+        return rejectSkillPackage(`Skill file is too large: ${normalizedPath}`);
+      }
+      const declaredTotal = checkGithubTotalFileBytes(
+        totalFileBytes + declaredSize,
+      );
+      if (declaredTotal.isErr()) {
+        return Result.err(declaredTotal.error);
+      }
     }
 
     const raw = await fetchSafeBytes(
       githubRawUrl({
         owner: target.owner,
         path: item.path,
-        ref: commitSha,
+        ref: commitSha.value,
         repo: target.repo,
       }),
       GITHUB_SKILL_FILE_MAX_BYTES,
       context.requestBudget,
       context.githubAccess,
     );
-    totalFileBytes += raw.body.byteLength;
-    assertGithubTotalFileBytes(totalFileBytes);
+    if (raw.isErr()) {
+      return Result.err(raw.error);
+    }
+    const { body } = raw.value;
+    totalFileBytes += body.byteLength;
+    const fetchedTotal = checkGithubTotalFileBytes(totalFileBytes);
+    if (fetchedTotal.isErr()) {
+      return Result.err(fetchedTotal.error);
+    }
 
     // SKILL.md must be text; a resource that is not is left out and
     // reported, as a zip upload does.
-    const content =
-      verdict.type === "entrypoint"
-        ? decodeUtf8(raw.body)
-        : tryDecodeUtf8(raw.body);
-    if (content === null) {
+    const content = decodePackageFile({ bytes: body, verdict });
+    if (content.isErr()) {
+      return Result.err(content.error);
+    }
+    if (content.value === null) {
       skippedFiles.push({
         path: normalizedPath,
         reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
@@ -864,13 +978,13 @@ const fetchGithubSkillFiles = async (
       continue;
     }
     files.push({
-      content,
+      content: content.value,
       path: normalizedPath,
-      sizeBytes: raw.body.byteLength,
+      sizeBytes: body.byteLength,
     });
   }
 
-  return { files, skippedFiles };
+  return Result.ok({ files, skippedFiles });
 };
 
 const fetchGithubTreeOnce = async ({
@@ -887,9 +1001,9 @@ const fetchGithubTreeOnce = async ({
   repo: string;
   rootPath: string;
   selectedSkillPath: string | null;
-}): Promise<GithubTreeItem[]> => {
+}): Promise<GithubTreeResult> => {
   if (selectedSkillPath !== null) {
-    const directoryTree = await fetchGithubScopedTree({
+    const scopedTree = await fetchGithubScopedTree({
       commitSha,
       context,
       owner,
@@ -897,6 +1011,10 @@ const fetchGithubTreeOnce = async ({
       repo,
       rootPath,
     });
+    if (scopedTree.isErr()) {
+      return Result.err(scopedTree.error);
+    }
+    const directoryTree = scopedTree.value;
     const resourceRoots = directoryTree.filter((item) => {
       if (item.type !== "tree") {
         return false;
@@ -916,10 +1034,9 @@ const fetchGithubTreeOnce = async ({
       limit: GITHUB_DISCOVERY_CONCURRENCY,
       transform: async (resourceRoot) => {
         if (!resourceRoot.sha) {
-          throw new HandlerError({
-            status: 400,
-            message: "GitHub skill resource folder could not be resolved",
-          });
+          return rejectSkillPackage(
+            "GitHub skill resource folder could not be resolved",
+          );
         }
         return await fetchGithubTreeAtSha({
           context,
@@ -931,6 +1048,9 @@ const fetchGithubTreeOnce = async ({
         });
       },
     });
+    if (resourceTrees.isErr()) {
+      return Result.err(resourceTrees.error);
+    }
     // Files beside SKILL.md are listed so the import can report them; the
     // folders that hold no resources are never listed.
     const siblingFiles = directoryTree.filter(
@@ -938,11 +1058,11 @@ const fetchGithubTreeOnce = async ({
         (item.type === "blob" || item.type === "file") &&
         item.path !== selectedSkillPath,
     );
-    return [
+    return Result.ok([
       { path: selectedSkillPath, type: "blob" },
       ...siblingFiles,
-      ...resourceTrees.flat(),
-    ];
+      ...resourceTrees.value.flat(),
+    ]);
   }
 
   return await fetchGithubScopedTree({
@@ -969,14 +1089,11 @@ const fetchGithubScopedTree = async ({
   recursive: boolean;
   repo: string;
   rootPath: string;
-}): Promise<GithubTreeItem[]> => {
+}): Promise<GithubTreeResult> => {
   let treeish = commitSha;
   const pathParts = rootPath.split("/").filter((part) => part.length > 0);
   if (pathParts.length > LIMITS.agentSkillGithubDirectoriesMax) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub skill folder is too deeply nested",
-    });
+    return rejectSkillPackage("GitHub skill folder is too deeply nested");
   }
 
   for (const pathPart of pathParts) {
@@ -987,17 +1104,17 @@ const fetchGithubScopedTree = async ({
       repo,
       treeish,
     });
-    const directory = level.find(
+    if (level.isErr()) {
+      return level;
+    }
+    const directory = level.value.find(
       (item) =>
         item.path === pathPart &&
         item.type === "tree" &&
         typeof item.sha === "string",
     );
     if (!directory?.sha) {
-      throw new HandlerError({
-        status: 400,
-        message: "GitHub skill folder could not be resolved",
-      });
+      return rejectSkillPackage("GitHub skill folder could not be resolved");
     }
     treeish = directory.sha;
   }
@@ -1026,7 +1143,7 @@ const fetchGithubTreeAtSha = async ({
   recursive: boolean;
   repo: string;
   treeish: string;
-}): Promise<GithubTreeItem[]> => {
+}): Promise<GithubTreeResult> => {
   const tree = await fetchGithubTreeRequest({
     context,
     owner,
@@ -1038,19 +1155,21 @@ const fetchGithubTreeAtSha = async ({
     return tree;
   }
   const prefix = `${pathPrefix}/`;
-  return tree.map((item) => {
-    const scoped: GithubTreeItem = {
-      path: `${prefix}${item.path}`,
-      type: item.type,
-    };
-    if (item.sha !== undefined) {
-      scoped.sha = item.sha;
-    }
-    if (item.size !== undefined) {
-      scoped.size = item.size;
-    }
-    return scoped;
-  });
+  return tree.map((items) =>
+    items.map((item) => {
+      const scoped: GithubTreeItem = {
+        path: `${prefix}${item.path}`,
+        type: item.type,
+      };
+      if (item.sha !== undefined) {
+        scoped.sha = item.sha;
+      }
+      if (item.size !== undefined) {
+        scoped.size = item.size;
+      }
+      return scoped;
+    }),
+  );
 };
 
 const fetchGithubTreeRequest = async ({
@@ -1065,7 +1184,7 @@ const fetchGithubTreeRequest = async ({
   recursive: boolean;
   repo: string;
   treeish: string;
-}): Promise<GithubTreeItem[]> => {
+}): Promise<GithubTreeResult> => {
   const cacheKey = `${owner}\0${repo}\0${treeish}\0${recursive ? "recursive" : "direct"}`;
   return await getOrCreateGithubTreeRequest({
     cacheKey,
@@ -1090,14 +1209,14 @@ export const findGithubSkillEntrypoints = ({
   rootPath: string;
   selectedSkillPath?: string | null;
   tree: readonly GithubTreeItem[];
-}): string[] => {
+}): Result<string[], HandlerError> => {
   if (selectedSkillPath !== null) {
     const selected = tree.find(
       (item) =>
         item.path === selectedSkillPath &&
         (item.type === "blob" || item.type === "file"),
     );
-    return selected ? [selected.path] : [];
+    return Result.ok(selected ? [selected.path] : []);
   }
 
   const normalizedRoot = rootPath
@@ -1125,22 +1244,23 @@ export const findGithubSkillEntrypoints = ({
     }
     skillPaths.push(item.path);
     if (skillPaths.length > GITHUB_DISCOVERY_MAX_SKILLS) {
-      throw new HandlerError({
-        status: 400,
-        message: `A repository or folder may contain at most ${GITHUB_DISCOVERY_MAX_SKILLS} skills`,
-      });
+      return rejectSkillPackage(
+        `A repository or folder may contain at most ${GITHUB_DISCOVERY_MAX_SKILLS} skills`,
+      );
     }
   }
 
-  return skillPaths.toSorted((left, right) => {
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-    return 0;
-  });
+  return Result.ok(
+    skillPaths.toSorted((left, right) => {
+      if (left < right) {
+        return -1;
+      }
+      if (left > right) {
+        return 1;
+      }
+      return 0;
+    }),
+  );
 };
 
 const relativeGithubSkillPath = ({
@@ -1162,44 +1282,12 @@ const relativeGithubSkillPath = ({
   return path.startsWith(rootPrefix) ? path.slice(rootPrefix.length) : null;
 };
 
-const assertGithubResourceCount = (resourceCount: number) => {
-  if (resourceCount <= LIMITS.agentSkillResourcesPerSkill) {
-    return;
-  }
-
-  throw new HandlerError({
-    status: 400,
-    message: "Skill has too many resources",
-  });
-};
-
-const assertGithubDeclaredFileSize = ({
-  path,
-  size,
-}: {
-  path: string;
-  size: number | null;
-}) => {
-  if (size === null || size <= GITHUB_SKILL_FILE_MAX_BYTES) {
-    return;
-  }
-
-  throw new HandlerError({
-    status: 400,
-    message: `Skill file is too large: ${path}`,
-  });
-};
-
-const assertGithubTotalFileBytes = (totalBytes: number) => {
-  if (totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes) {
-    return;
-  }
-
-  throw new HandlerError({
-    status: 400,
-    message: "Skill GitHub content is too large",
-  });
-};
+const checkGithubTotalFileBytes = (
+  totalBytes: number,
+): Result<void, HandlerError> =>
+  totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes
+    ? Result.ok()
+    : rejectSkillPackage("Skill GitHub content is too large");
 
 const githubRawUrl = ({
   owner,
@@ -1278,41 +1366,33 @@ const githubTreeUrl = ({
   return url;
 };
 
-export const decodeGithubPathParts = (pathname: string): string[] => {
+export const decodeGithubPathParts = (
+  pathname: string,
+): Result<string[], HandlerError> => {
   const parts: string[] = [];
   for (const encodedPart of pathname.split("/")) {
     if (encodedPart.length === 0) {
       continue;
     }
-    let part: string;
-    try {
-      part = decodeURIComponent(encodedPart);
-    } catch {
-      throw new HandlerError({
-        status: 400,
-        message: "GitHub URL path encoding is invalid",
-      });
+    const part = Result.try(() => decodeURIComponent(encodedPart));
+    if (part.isErr()) {
+      return rejectSkillPackage("GitHub URL path encoding is invalid");
     }
-    if (part.includes("/") || part.includes("\\")) {
-      throw new HandlerError({
-        status: 400,
-        message: "GitHub URL path is invalid",
-      });
+    if (part.value.includes("/") || part.value.includes("\\")) {
+      return rejectSkillPackage("GitHub URL path is invalid");
     }
-    parts.push(part);
+    parts.push(part.value);
   }
-  return parts;
+  return Result.ok(parts);
 };
 
-const pathParts = (url: URL): string[] => decodeGithubPathParts(url.pathname);
+const pathParts = (url: URL): Result<string[], HandlerError> =>
+  decodeGithubPathParts(url.pathname);
 
-const normalizePackageFilePath = (path: string): string | null => {
-  try {
-    return normalizeResourcePath(path);
-  } catch {
-    return null;
-  }
-};
+// `normalizeResourcePath` panics on a path that escapes the skill folder; such
+// a package file is ignored rather than failing the import.
+const normalizePackageFilePath = (path: string): string | null =>
+  Result.try(() => normalizeResourcePath(path)).unwrapOr(null);
 
 // Identifies the SKILL.md a GitHub preview showed, independent of resources.
 const hashSkillEntrypoint = (source: string) => {
@@ -1333,71 +1413,84 @@ const fetchSafeBytes = async (
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
   budget?: SkillSourceRequestBudget,
   access: GithubSkillFetchAccess = USER_GITHUB_FETCH_ACCESS,
-) => {
-  consumeSkillSourceRequestBudget(budget);
+): Promise<Result<SafeOutboundFetchResponse, HandlerError>> => {
+  const timeoutMs = startSkillSourceRequest(budget);
+  if (timeoutMs.isErr()) {
+    return Result.err(timeoutMs.error);
+  }
   const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
     maxBytes,
-    timeoutMs: githubRequestTimeoutMs(budget),
+    timeoutMs: timeoutMs.value,
     url,
   });
   if (Result.isError(response)) {
-    throw new HandlerError({
-      status: access.source === "catalogue" ? 503 : 400,
-      message: response.error.message,
-      cause: response.error,
-    });
+    return Result.err(
+      new HandlerError({
+        status: access.source === "catalogue" ? 503 : 400,
+        message: response.error.message,
+        cause: response.error,
+      }),
+    );
   }
   if (!response.value.ok) {
-    throw new HandlerError({
-      status:
-        access.source === "catalogue"
-          ? catalogueUpstreamStatus(response.value.status)
-          : 400,
-      message: `Skill source returned HTTP ${response.value.status}`,
-    });
+    return Result.err(
+      new HandlerError({
+        status:
+          access.source === "catalogue"
+            ? catalogueUpstreamStatus(response.value.status)
+            : 400,
+        message: `Skill source returned HTTP ${response.value.status}`,
+      }),
+    );
   }
-  return response.value;
+  return Result.ok(response.value);
 };
 
-const consumeSkillSourceRequestBudget = (
+/**
+ * Spends one outbound request from the budget and answers the timeout that
+ * request may take.
+ */
+const startSkillSourceRequest = (
   budget: SkillSourceRequestBudget | undefined,
-): void => {
-  if (budget?.remainingRequests === undefined) {
-    return;
+): Result<number, HandlerError> => {
+  if (budget === undefined) {
+    return Result.ok(GITHUB_API_TIMEOUT_MS);
   }
-  if (budget.remainingRequests <= 0) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill import exceeded its outbound request limit",
-    });
-  }
-  budget.remainingRequests -= 1;
-};
-
-const githubRequestTimeoutMs = (
-  budget: SkillSourceRequestBudget | undefined,
-): number => {
-  if (!budget) {
-    return GITHUB_API_TIMEOUT_MS;
+  if (budget.remainingRequests !== undefined) {
+    if (budget.remainingRequests <= 0) {
+      return rejectSkillPackage(
+        "Skill import exceeded its outbound request limit",
+      );
+    }
+    budget.remainingRequests -= 1;
   }
   const remainingMs =
     budget.deadlineAt - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
-    throw new HandlerError({
-      status: 400,
-      message: budget.timeoutMessage ?? "GitHub skill discovery timed out",
-    });
+    return rejectSkillPackage(
+      budget.timeoutMessage ?? "GitHub skill discovery timed out",
+    );
   }
-  return Math.min(GITHUB_API_TIMEOUT_MS, remainingMs);
+  return Result.ok(Math.min(GITHUB_API_TIMEOUT_MS, remainingMs));
 };
 
 const githubRefExists = async (
   { owner, ref, repo }: Parameters<GithubRefExists>[0],
   budget?: SkillSourceRequestBudget,
-): Promise<boolean> =>
-  (await githubRefKindExists({ budget, kind: "heads", owner, ref, repo })) ||
-  (await githubRefKindExists({ budget, kind: "tags", owner, ref, repo }));
+): Promise<Result<boolean, HandlerError>> => {
+  const heads = await githubRefKindExists({
+    budget,
+    kind: "heads",
+    owner,
+    ref,
+    repo,
+  });
+  if (heads.isErr() || heads.value) {
+    return heads;
+  }
+  return await githubRefKindExists({ budget, kind: "tags", owner, ref, repo });
+};
 
 const githubRefKindExists = async ({
   budget,
@@ -1411,31 +1504,35 @@ const githubRefKindExists = async ({
   owner: string;
   ref: string;
   repo: string;
-}): Promise<boolean> => {
-  consumeSkillSourceRequestBudget(budget);
+}): Promise<Result<boolean, HandlerError>> => {
+  const timeoutMs = startSkillSourceRequest(budget);
+  if (timeoutMs.isErr()) {
+    return Result.err(timeoutMs.error);
+  }
   const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
-    timeoutMs: githubRequestTimeoutMs(budget),
+    timeoutMs: timeoutMs.value,
     url: githubRefUrl({ kind, owner, ref, repo }),
   });
   if (Result.isError(response)) {
-    throw new HandlerError({
-      status: 400,
-      message: response.error.message,
-      cause: response.error,
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: response.error.message,
+        cause: response.error,
+      }),
+    );
   }
   if (response.value.status === 404) {
-    return false;
+    return Result.ok(false);
   }
   if (!response.value.ok) {
-    throw new HandlerError({
-      status: 400,
-      message: `Skill source returned HTTP ${response.value.status}`,
-    });
+    return rejectSkillPackage(
+      `Skill source returned HTTP ${response.value.status}`,
+    );
   }
-  return true;
+  return Result.ok(true);
 };
 
 export const resolveGithubRefAndPath = async ({
@@ -1450,10 +1547,7 @@ export const resolveGithubRefAndPath = async ({
   parts: readonly string[];
   refExists?: GithubRefExists;
   repo: string;
-}): Promise<Pick<
-  GithubSkillPath,
-  "ref" | "rootPath" | "selectedSkillPath"
-> | null> => {
+}): Promise<Result<ResolvedGithubPath | null, HandlerError>> => {
   // Commit-pinned URLs are unambiguous: the SHA is always one path segment.
   // Resolve it before trying longest-first branch/tag candidates so a nested
   // path does not trigger one GitHub ref probe per ancestor.
@@ -1464,7 +1558,7 @@ export const resolveGithubRefAndPath = async ({
     parts.length - 1 >= minPathParts
   ) {
     const path = parts.slice(1);
-    return resolvedGithubPath({ path, ref: pinnedCommit });
+    return Result.ok(resolvedGithubPath({ path, ref: pinnedCommit }));
   }
 
   const firstRefPartCount = Math.min(
@@ -1477,19 +1571,27 @@ export const resolveGithubRefAndPath = async ({
     refPartCount--
   ) {
     const ref = parts.slice(0, refPartCount).join("/");
-    if (
-      !GITHUB_COMMIT_SHA_PATTERN.test(ref) &&
-      !(await refExists({ owner, ref, repo }))
-    ) {
-      continue;
+    if (!GITHUB_COMMIT_SHA_PATTERN.test(ref)) {
+      const exists = await refExists({ owner, ref, repo });
+      if (exists.isErr()) {
+        return Result.err(exists.error);
+      }
+      if (!exists.value) {
+        continue;
+      }
     }
 
     const path = parts.slice(refPartCount);
-    return resolvedGithubPath({ path, ref });
+    return Result.ok(resolvedGithubPath({ path, ref }));
   }
 
-  return null;
+  return Result.ok(null);
 };
+
+type ResolvedGithubPath = Pick<
+  GithubSkillPath,
+  "ref" | "rootPath" | "selectedSkillPath"
+>;
 
 const resolvedGithubPath = ({
   path,
@@ -1497,7 +1599,7 @@ const resolvedGithubPath = ({
 }: {
   path: readonly string[];
   ref: string;
-}): Pick<GithubSkillPath, "ref" | "rootPath" | "selectedSkillPath"> => {
+}): ResolvedGithubPath => {
   const selectedSkillPath =
     path.at(-1) === SKILL_FILE_NAME ? path.join("/") : null;
   return {
@@ -1514,31 +1616,47 @@ export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
   return url.toString();
 };
 
-const parseSkillUrl = (rawUrl: string): URL => {
-  if (!URL.canParse(rawUrl)) {
-    throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
+/**
+ * A GitHub skill URL on an allowed host, split into its decoded path segments;
+ * `null` for a URL on any other host.
+ */
+const parseGithubSkillUrl = (
+  rawUrl: string,
+): Result<{ parts: string[]; url: URL } | null, HandlerError> => {
+  const url = URL.parse(rawUrl);
+  if (url === null) {
+    return rejectSkillPackage("Skill URL is invalid");
   }
-  return new URL(rawUrl);
+  if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
+    return Result.ok(null);
+  }
+  const safe = checkSafeGithubSkillUrl(url);
+  if (safe.isErr()) {
+    return Result.err(safe.error);
+  }
+  return pathParts(url).map((parts) => ({ parts, url }));
 };
 
 const parseGithubSkillPath = async (
   rawUrl: string,
   budget?: SkillSourceRequestBudget,
-): Promise<GithubSkillPath | null> => {
-  const url = parseSkillUrl(rawUrl);
-
-  if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
-    return null;
+): Promise<Result<GithubSkillPath | null, HandlerError>> => {
+  const githubUrl = parseGithubSkillUrl(rawUrl);
+  if (githubUrl.isErr() || githubUrl.value === null) {
+    return githubUrl.map(() => null);
   }
-  assertSafeGithubSkillUrl(url);
+  const { parts: urlParts, url } = githubUrl.value;
 
   if (url.hostname === "raw.githubusercontent.com") {
-    const [owner, rawRepo, ...parts] = pathParts(url);
+    const [owner, rawRepo, ...parts] = urlParts;
     const repo = normalizeGithubRepositoryName(rawRepo);
     if (!owner || !repo || parts.length < 2) {
-      return null;
+      return Result.ok(null);
     }
-    assertGithubRepositoryCoordinates({ owner, repo });
+    const coordinates = checkGithubRepositoryCoordinates({ owner, repo });
+    if (coordinates.isErr()) {
+      return Result.err(coordinates.error);
+    }
     const resolved = await resolveGithubRefAndPath({
       refExists: async (options) => await githubRefExists(options, budget),
       minPathParts: 1,
@@ -1546,17 +1664,25 @@ const parseGithubSkillPath = async (
       parts,
       repo,
     });
-    return resolved ? { owner, repo, ...resolved } : null;
+    if (resolved.isErr()) {
+      return Result.err(resolved.error);
+    }
+    return Result.ok(
+      resolved.value ? { owner, repo, ...resolved.value } : null,
+    );
   }
 
-  const [owner, rawRepo, kind, ...parts] = pathParts(url);
+  const [owner, rawRepo, kind, ...parts] = urlParts;
   const repo = normalizeGithubRepositoryName(rawRepo);
   if (!owner || !repo || !kind || parts.length === 0) {
-    return null;
+    return Result.ok(null);
   }
-  assertGithubRepositoryCoordinates({ owner, repo });
+  const coordinates = checkGithubRepositoryCoordinates({ owner, repo });
+  if (coordinates.isErr()) {
+    return Result.err(coordinates.error);
+  }
   if (kind !== "tree" && kind !== "blob") {
-    return null;
+    return Result.ok(null);
   }
 
   const resolved = await resolveGithubRefAndPath({
@@ -1566,48 +1692,50 @@ const parseGithubSkillPath = async (
     parts,
     repo,
   });
-  return resolved ? { owner, repo, ...resolved } : null;
+  if (resolved.isErr()) {
+    return Result.err(resolved.error);
+  }
+  return Result.ok(resolved.value ? { owner, repo, ...resolved.value } : null);
 };
 
 const parseGithubDiscoveryPath = async (
   rawUrl: string,
   budget: SkillSourceRequestBudget,
-): Promise<GithubSkillPath | null> => {
-  const url = parseSkillUrl(rawUrl);
-
-  if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
-    return null;
+): Promise<Result<GithubSkillPath | null, HandlerError>> => {
+  const githubUrl = parseGithubSkillUrl(rawUrl);
+  if (githubUrl.isErr() || githubUrl.value === null) {
+    return githubUrl.map(() => null);
   }
-  assertSafeGithubSkillUrl(url);
+  const { parts: urlParts, url } = githubUrl.value;
 
   if (url.hostname === "raw.githubusercontent.com") {
     return await parseGithubSkillPath(rawUrl, budget);
   }
 
-  const [owner, rawRepo, kind, ...parts] = pathParts(url);
+  const [owner, rawRepo, kind, ...parts] = urlParts;
   const repo = normalizeGithubRepositoryName(rawRepo);
   if (!owner || !repo) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub repository URL is invalid",
-    });
+    return rejectSkillPackage("GitHub repository URL is invalid");
   }
-  assertGithubRepositoryCoordinates({ owner, repo });
+  const coordinates = checkGithubRepositoryCoordinates({ owner, repo });
+  if (coordinates.isErr()) {
+    return Result.err(coordinates.error);
+  }
 
   if (!kind) {
-    return {
+    const ref = await resolveGithubDefaultBranch({ budget, owner, repo });
+    return ref.map((defaultBranch) => ({
       owner,
-      ref: await resolveGithubDefaultBranch({ budget, owner, repo }),
+      ref: defaultBranch,
       repo,
       rootPath: "",
       selectedSkillPath: null,
-    };
+    }));
   }
   if ((kind !== "tree" && kind !== "blob") || parts.length === 0) {
-    throw new HandlerError({
-      status: 400,
-      message: "Use a GitHub repository, folder, or SKILL.md URL",
-    });
+    return rejectSkillPackage(
+      "Use a GitHub repository, folder, or SKILL.md URL",
+    );
   }
 
   const resolved = await resolveGithubRefAndPath({
@@ -1617,40 +1745,36 @@ const parseGithubDiscoveryPath = async (
     parts,
     repo,
   });
-  if (!resolved) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub branch or folder could not be resolved",
-    });
+  if (resolved.isErr()) {
+    return Result.err(resolved.error);
   }
-  return { owner, repo, ...resolved };
+  if (!resolved.value) {
+    return rejectSkillPackage("GitHub branch or folder could not be resolved");
+  }
+  return Result.ok({ owner, repo, ...resolved.value });
 };
 
 const discoverGithubSkillPackages = async (
   target: GithubSkillPath,
   budget: SkillSourceRequestBudget,
-): Promise<SkillPackageDiscovery> => {
-  const commitSha = await resolveGithubCommitSha(target, budget);
-  const context: SkillPackageFetchContext = {
-    githubTrees: new Map(),
-    requestBudget: budget,
-  };
-  const skillPaths =
-    target.selectedSkillPath === null
-      ? findGithubSkillEntrypoints({
-          rootPath: target.rootPath,
-          tree: await fetchGithubTreeOnce({
-            commitSha,
-            context,
-            owner: target.owner,
-            repo: target.repo,
-            rootPath: target.rootPath,
-            selectedSkillPath: null,
-          }),
-        })
-      : [target.selectedSkillPath];
+): Promise<Result<SkillPackageDiscovery, HandlerError>> => {
+  const resolvedCommitSha = await resolveGithubCommitSha(target, budget);
+  if (resolvedCommitSha.isErr()) {
+    return Result.err(resolvedCommitSha.error);
+  }
+  const commitSha = resolvedCommitSha.value;
+  const skillPaths = await findDiscoverableSkillPaths({
+    budget,
+    commitSha,
+    target,
+  });
+  if (skillPaths.isErr()) {
+    return Result.err(skillPaths.error);
+  }
   const entries = await mapWithConcurrency({
-    transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
+    transform: async (
+      skillPath,
+    ): Promise<Result<DiscoveredSkillPackage | null, HandlerError>> => {
       const sourceBytes = await fetchGithubSkillSourceBytes({
         budget,
         commitSha,
@@ -1658,50 +1782,120 @@ const discoverGithubSkillPackages = async (
         path: skillPath,
         repo: target.repo,
       });
-      if (sourceBytes === null) {
-        return null;
+      if (sourceBytes.isErr() || sourceBytes.value === null) {
+        return sourceBytes.map(() => null);
       }
-      try {
-        const source = decodeUtf8(sourceBytes);
-        const parsed = parseMarkdownSkillPackage(source);
-        const skillDir =
-          skillPath === SKILL_FILE_NAME
-            ? ""
-            : skillPath.slice(0, -`/${SKILL_FILE_NAME}`.length);
-        const sourceUrl = githubPinnedSkillUrl({
+      const bytes = sourceBytes.value;
+      // A skill that does not parse, for any reason, is counted as invalid
+      // rather than failing the whole discovery.
+      const discovered = Result.try(() =>
+        toDiscoveredGithubSkill({
           commitSha,
-          owner: target.owner,
-          repo: target.repo,
-          skillDir,
-        });
-        return toDiscoveredSkill({
-          integrity: {
-            type: "github-commit",
-            entrypointHash: parsed.entrypointHash,
-            sourceUrl,
-            value: commitSha,
-          },
-          path: skillDir || ".",
-          parsed,
-          sourceUrl,
-        });
-      } catch {
-        return null;
-      }
+          skillPath,
+          sourceBytes: bytes,
+          target,
+        }),
+      );
+      return Result.ok(Result.flatten(discovered).unwrapOr(null));
     },
-    items: skillPaths,
+    items: skillPaths.value,
     limit: GITHUB_DISCOVERY_CONCURRENCY,
   });
-  const skills = entries.filter(
+  if (entries.isErr()) {
+    return Result.err(entries.error);
+  }
+  const skills = entries.value.filter(
     (entry): entry is DiscoveredSkillPackage => entry !== null,
   );
 
-  return {
+  return Result.ok({
     commitSha,
-    invalidSkillCount: entries.length - skills.length,
+    invalidSkillCount: entries.value.length - skills.length,
     repositoryUrl: `https://github.com/${target.owner}/${target.repo}`,
     skills,
-  };
+  });
+};
+
+type FindDiscoverableSkillPathsOptions = {
+  budget: SkillSourceRequestBudget;
+  commitSha: string;
+  target: GithubSkillPath;
+};
+
+const findDiscoverableSkillPaths = async ({
+  budget,
+  commitSha,
+  target,
+}: FindDiscoverableSkillPathsOptions): Promise<
+  Result<string[], HandlerError>
+> => {
+  if (target.selectedSkillPath !== null) {
+    return Result.ok([target.selectedSkillPath]);
+  }
+  const tree = await fetchGithubTreeOnce({
+    commitSha,
+    context: { githubTrees: new Map(), requestBudget: budget },
+    owner: target.owner,
+    repo: target.repo,
+    rootPath: target.rootPath,
+    selectedSkillPath: null,
+  });
+  if (tree.isErr()) {
+    return Result.err(tree.error);
+  }
+  return findGithubSkillEntrypoints({
+    rootPath: target.rootPath,
+    tree: tree.value,
+  });
+};
+
+type ToDiscoveredGithubSkillOptions = {
+  commitSha: string;
+  skillPath: string;
+  sourceBytes: ArrayBuffer;
+  target: GithubSkillPath;
+};
+
+const toDiscoveredGithubSkill = ({
+  commitSha,
+  skillPath,
+  sourceBytes,
+  target,
+}: ToDiscoveredGithubSkillOptions): Result<
+  DiscoveredSkillPackage,
+  HandlerError
+> => {
+  const source = decodeUtf8(sourceBytes);
+  if (source.isErr()) {
+    return Result.err(source.error);
+  }
+  const parsed = parseMarkdownSkillPackage(source.value);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  const skillDir =
+    skillPath === SKILL_FILE_NAME
+      ? ""
+      : skillPath.slice(0, -`/${SKILL_FILE_NAME}`.length);
+  const sourceUrl = githubPinnedSkillUrl({
+    commitSha,
+    owner: target.owner,
+    repo: target.repo,
+    skillDir,
+  });
+  return Result.ok(
+    toDiscoveredSkill({
+      integrity: {
+        type: "github-commit",
+        entrypointHash: parsed.value.entrypointHash,
+        sourceUrl,
+        value: commitSha,
+      },
+      path: skillDir || ".",
+      parsed: parsed.value,
+      sourceUrl,
+    }),
+  );
 };
 
 const toDiscoveredSkill = ({
@@ -1713,27 +1907,17 @@ const toDiscoveredSkill = ({
   integrity: SkillSourceIntegrity;
   parsed: ParsedSkillPackage;
   path?: string | null;
-  sourceUrl: string | null;
-}): DiscoveredSkillPackage => {
-  const resolvedSourceUrl = sourceUrl ?? parsed.sourceUrl;
-  if (!resolvedSourceUrl) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill source URL is missing",
-    });
-  }
-
-  return {
-    compatibility: parsed.compatibility,
-    description: parsed.description,
-    integrity,
-    license: parsed.license,
-    name: parsed.name,
-    path,
-    sourceUrl: resolvedSourceUrl,
-    version: parsed.version,
-  };
-};
+  sourceUrl: string;
+}): DiscoveredSkillPackage => ({
+  compatibility: parsed.compatibility,
+  description: parsed.description,
+  integrity,
+  license: parsed.license,
+  name: parsed.name,
+  path,
+  sourceUrl,
+  version: parsed.version,
+});
 
 export const verifySkillPackageIntegrity = ({
   integrity,
@@ -1789,40 +1973,44 @@ export const canonicalizeGithubCommitSkillUrl = ({
   commitSha: string;
   rawUrl: string;
 }): string | null => {
-  try {
-    const url = new URL(rawUrl.trim());
-    assertSafeGithubSkillUrl(url);
-    if (
-      url.hostname !== "github.com" ||
-      url.port.length > 0 ||
-      url.search.length > 0
-    ) {
-      return null;
-    }
-    const [owner, rawRepo, kind, pinnedCommitSha, ...skillDirParts] =
-      pathParts(url);
-    const repo = normalizeGithubRepositoryName(rawRepo);
-    if (!owner || !repo || !pinnedCommitSha) {
-      return null;
-    }
-    assertGithubRepositoryCoordinates({ owner, repo });
-    const normalizedCommitSha = commitSha.toLowerCase();
-    if (
-      kind !== "tree" ||
-      !GITHUB_COMMIT_SHA_PATTERN.test(normalizedCommitSha) ||
-      pinnedCommitSha.toLowerCase() !== normalizedCommitSha
-    ) {
-      return null;
-    }
-    return githubPinnedSkillUrl({
-      commitSha: normalizedCommitSha,
-      owner: owner.toLowerCase(),
-      repo: repo.toLowerCase(),
-      skillDir: skillDirParts.join("/"),
-    });
-  } catch {
+  const url = URL.parse(rawUrl.trim());
+  if (
+    url === null ||
+    checkSafeGithubSkillUrl(url).isErr() ||
+    url.hostname !== "github.com" ||
+    url.port.length > 0 ||
+    url.search.length > 0
+  ) {
     return null;
   }
+  const parts = pathParts(url);
+  if (parts.isErr()) {
+    return null;
+  }
+  const [owner, rawRepo, kind, pinnedCommitSha, ...skillDirParts] = parts.value;
+  const repo = normalizeGithubRepositoryName(rawRepo);
+  if (
+    !owner ||
+    !repo ||
+    !pinnedCommitSha ||
+    checkGithubRepositoryCoordinates({ owner, repo }).isErr()
+  ) {
+    return null;
+  }
+  const normalizedCommitSha = commitSha.toLowerCase();
+  if (
+    kind !== "tree" ||
+    !GITHUB_COMMIT_SHA_PATTERN.test(normalizedCommitSha) ||
+    pinnedCommitSha.toLowerCase() !== normalizedCommitSha
+  ) {
+    return null;
+  }
+  return githubPinnedSkillUrl({
+    commitSha: normalizedCommitSha,
+    owner: owner.toLowerCase(),
+    repo: repo.toLowerCase(),
+    skillDir: skillDirParts.join("/"),
+  });
 };
 
 const resolveGithubDefaultBranch = async ({
@@ -1833,32 +2021,38 @@ const resolveGithubDefaultBranch = async ({
   budget?: SkillSourceRequestBudget;
   owner: string;
   repo: string;
-}): Promise<string> => {
+}): Promise<Result<string, HandlerError>> => {
   const response = await fetchSafeBytes(
     githubRepositoryUrl({ owner, repo }),
     FILE_SIZE_LIMIT_BYTES.skillPack,
     budget,
   );
-  const value: unknown = JSON.parse(decodeUtf8(response.body));
+  if (response.isErr()) {
+    return Result.err(response.error);
+  }
+  const body = decodeUtf8(response.value.body);
+  if (body.isErr()) {
+    return Result.err(body.error);
+  }
+  const value: unknown = JSON.parse(body.value);
   if (
     !isRecord(value) ||
     typeof value["default_branch"] !== "string" ||
     value["default_branch"].trim().length === 0
   ) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub repository default branch is unavailable",
-    });
+    return rejectSkillPackage(
+      "GitHub repository default branch is unavailable",
+    );
   }
-  return value["default_branch"].trim();
+  return Result.ok(value["default_branch"].trim());
 };
 
 const resolveGithubCommitSha = async (
   target: GithubSkillPath,
   budget?: SkillSourceRequestBudget,
-): Promise<string> => {
+): Promise<Result<string, HandlerError>> => {
   if (GITHUB_COMMIT_SHA_PATTERN.test(target.ref)) {
-    return target.ref.toLowerCase();
+    return Result.ok(target.ref.toLowerCase());
   }
   const response = await fetchSafeBytes(
     githubCommitUrl({
@@ -1869,15 +2063,19 @@ const resolveGithubCommitSha = async (
     FILE_SIZE_LIMIT_BYTES.skillPack,
     budget,
   );
-  const value: unknown = JSON.parse(decodeUtf8(response.body));
+  if (response.isErr()) {
+    return Result.err(response.error);
+  }
+  const body = decodeUtf8(response.value.body);
+  if (body.isErr()) {
+    return Result.err(body.error);
+  }
+  const value: unknown = JSON.parse(body.value);
   const sha = isRecord(value) ? value["sha"] : null;
   if (typeof sha !== "string" || !GITHUB_COMMIT_SHA_PATTERN.test(sha)) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub commit could not be resolved",
-    });
+    return rejectSkillPackage("GitHub commit could not be resolved");
   }
-  return sha.toLowerCase();
+  return Result.ok(sha.toLowerCase());
 };
 
 const fetchGithubTree = async ({
@@ -1894,26 +2092,29 @@ const fetchGithubTree = async ({
   recursive: boolean;
   repo: string;
   treeish: string;
-}): Promise<GithubTreeItem[]> => {
+}): Promise<GithubTreeResult> => {
   const response = await fetchSafeBytes(
     githubTreeUrl({ owner, recursive, repo, treeish }),
     GITHUB_TREE_MAX_BYTES,
     budget,
     access,
   );
-  const value: unknown = JSON.parse(decodeUtf8(response.body));
+  if (response.isErr()) {
+    return Result.err(response.error);
+  }
+  const body = decodeUtf8(response.value.body);
+  if (body.isErr()) {
+    return Result.err(body.error);
+  }
+  const value: unknown = JSON.parse(body.value);
   if (!isRecord(value) || value["truncated"] === true) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub repository tree is too large to inspect safely",
-    });
+    return rejectSkillPackage(
+      "GitHub repository tree is too large to inspect safely",
+    );
   }
   const tree = value["tree"];
   if (!Array.isArray(tree)) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub repository tree is invalid",
-    });
+    return rejectSkillPackage("GitHub repository tree is invalid");
   }
   const parsed: GithubTreeItem[] = [];
   for (const item of tree) {
@@ -1933,7 +2134,7 @@ const fetchGithubTree = async ({
       });
     }
   }
-  return parsed;
+  return Result.ok(parsed);
 };
 
 const fetchGithubSkillSourceBytes = async ({
@@ -1948,34 +2149,38 @@ const fetchGithubSkillSourceBytes = async ({
   owner: string;
   path: string;
   repo: string;
-}): Promise<ArrayBuffer | null> => {
-  consumeSkillSourceRequestBudget(budget);
+}): Promise<Result<ArrayBuffer | null, HandlerError>> => {
+  const timeoutMs = startSkillSourceRequest(budget);
+  if (timeoutMs.isErr()) {
+    return Result.err(timeoutMs.error);
+  }
   const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
-    timeoutMs: githubRequestTimeoutMs(budget),
+    timeoutMs: timeoutMs.value,
     url: githubRawUrl({ owner, path, ref: commitSha, repo }),
   });
   if (Result.isError(response)) {
     if (response.error.message === "Response body exceeded size limit") {
-      return null;
+      return Result.ok(null);
     }
-    throw new HandlerError({
-      status: 400,
-      message: response.error.message,
-      cause: response.error,
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: response.error.message,
+        cause: response.error,
+      }),
+    );
   }
   if (!response.value.ok) {
     if (response.value.status === 404) {
-      return null;
+      return Result.ok(null);
     }
-    throw new HandlerError({
-      status: 400,
-      message: `Skill source returned HTTP ${response.value.status}`,
-    });
+    return rejectSkillPackage(
+      `Skill source returned HTTP ${response.value.status}`,
+    );
   }
-  return response.value.body;
+  return Result.ok(response.value.body);
 };
 
 const githubPinnedSkillUrl = ({
@@ -2006,26 +2211,25 @@ const normalizeGithubRepositoryName = (
   return value.endsWith(".git") ? value.slice(0, -4) : value;
 };
 
-const assertGithubRepositoryCoordinates = ({
+const checkGithubRepositoryCoordinates = ({
   owner,
   repo,
 }: {
   owner: string;
   repo: string;
-}) => {
-  if (
-    GITHUB_OWNER_PATTERN.test(owner) &&
-    GITHUB_REPO_PATTERN.test(repo) &&
-    repo.split("").some((character) => character !== ".")
-  ) {
-    return;
-  }
-  throw new HandlerError({
-    status: 400,
-    message: "GitHub repository URL is invalid",
-  });
-};
+}): Result<void, HandlerError> =>
+  GITHUB_OWNER_PATTERN.test(owner) &&
+  GITHUB_REPO_PATTERN.test(repo) &&
+  repo.split("").some((character) => character !== ".")
+    ? Result.ok()
+    : rejectSkillPackage("GitHub repository URL is invalid");
 
+/**
+ * Runs `transform` over `items` with at most `limit` in flight. The first
+ * failure stops new work; transforms already running settle before it is
+ * answered. An exception a transform raises is answered as `toHandlerError`
+ * would at the entry point.
+ */
 const mapWithConcurrency = async <T, R>({
   items,
   limit,
@@ -2033,10 +2237,10 @@ const mapWithConcurrency = async <T, R>({
 }: {
   items: readonly T[];
   limit: number;
-  transform: (item: T) => Promise<R>;
-}): Promise<R[]> => {
+  transform: (item: T) => Promise<Result<R, HandlerError>>;
+}): Promise<Result<R[], HandlerError>> => {
   const results: R[] = [];
-  const failures: { error: unknown }[] = [];
+  const failures: HandlerError[] = [];
   let nextIndex = 0;
   const work = async (): Promise<void> => {
     if (failures.length > 0) {
@@ -2048,38 +2252,28 @@ const mapWithConcurrency = async <T, R>({
     if (item === undefined) {
       return;
     }
-    try {
-      results[index] = await transform(item);
-    } catch (error) {
-      failures.push({ error });
+    const settled = await Result.tryPromise({
+      try: async () => await transform(item),
+      catch: toHandlerError,
+    });
+    const transformed = Result.flatten(settled);
+    if (transformed.isErr()) {
+      failures.push(transformed.error);
       return;
     }
+    results[index] = transformed.value;
     return work();
   };
   const workers = Array.from({ length: Math.min(limit, items.length) }, work);
   await Promise.all(workers);
   const failure = failures.at(0);
-  if (failure) {
-    throw failure.error;
-  }
-  return results;
+  return failure ? Result.err(failure) : Result.ok(results);
 };
 
-const assertSafeGithubSkillUrl = (url: URL) => {
-  if (
-    url.protocol === "https:" &&
-    !url.username &&
-    !url.password &&
-    !url.hash
-  ) {
-    return;
-  }
-
-  throw new HandlerError({
-    status: 400,
-    message: "GitHub skill URL is not allowed",
-  });
-};
+const checkSafeGithubSkillUrl = (url: URL): Result<void, HandlerError> =>
+  url.protocol === "https:" && !url.username && !url.password && !url.hash
+    ? Result.ok()
+    : rejectSkillPackage("GitHub skill URL is not allowed");
 
 export const isZipSkillSource = ({
   buffer,
@@ -2122,17 +2316,18 @@ const isZipFile = ({
 const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null =>
   Result.try(() => UTF8_DECODER.decode(buffer)).unwrapOr(null);
 
-const decodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string => {
-  try {
-    return UTF8_DECODER.decode(buffer);
-  } catch (error) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill files must be UTF-8 text",
-      cause: error,
-    });
-  }
-};
+const decodeUtf8 = (
+  buffer: ArrayBuffer | Uint8Array,
+): Result<string, HandlerError> =>
+  Result.try({
+    try: () => UTF8_DECODER.decode(buffer),
+    catch: (cause) =>
+      new HandlerError({
+        status: 400,
+        message: "Skill files must be UTF-8 text",
+        cause,
+      }),
+  });
 
 const encodedSize = (value: string): number =>
   UTF8_ENCODER.encode(value).byteLength;
@@ -2182,12 +2377,10 @@ const toCatalogueHandlerError = (cause: unknown): HandlerError => {
 const catalogueUpstreamStatus = (status: number): 502 | 503 =>
   status === 429 || status >= 500 ? 503 : 502;
 
-const assertSkillResourcePath = (path: string) => {
-  if (path.length <= SKILL_PACKAGE_LIMITS.resourcePathMaxChars) {
-    return;
-  }
-  throw new HandlerError({
-    status: 400,
-    message: `Skill resource path is too long: ${path}`,
-  });
-};
+const checkSkillResourcePath = (path: string): Result<void, HandlerError> =>
+  path.length <= SKILL_PACKAGE_LIMITS.resourcePathMaxChars
+    ? Result.ok()
+    : rejectSkillPackage(`Skill resource path is too long: ${path}`);
+
+const rejectSkillPackage = (message: string) =>
+  Result.err(new HandlerError({ status: 400, message }));

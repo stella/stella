@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
@@ -10,6 +11,7 @@ import {
   createSkillPackageFetchContext,
   decodeGithubPathParts,
   discoverSkillPackagesFromUrl,
+  fetchGithubCatalogueSkillPackage,
   fetchSkillPackageFromUrl,
   findGithubSkillEntrypoints,
   getOrCreateGithubTreeRequest,
@@ -19,6 +21,7 @@ import {
   resolveGithubRefAndPath,
   verifySkillPackageIntegrity,
 } from "./skill-package";
+import type { SkillFile } from "./skill-package";
 
 const parseUpload = async (file: File) =>
   await parseUploadedSkillPackage(
@@ -543,7 +546,7 @@ Instructions.`,
     expect(
       decodeGithubPathParts(
         "/example/skills/tree/0123456789abcdef0123456789abcdef01234567/legal%20review/%25-check",
-      ),
+      ).unwrap(),
     ).toEqual([
       "example",
       "skills",
@@ -552,9 +555,14 @@ Instructions.`,
       "legal review",
       "%-check",
     ]);
-    expect(() =>
-      decodeGithubPathParts("/example/skills/tree/main/legal%2Freview"),
-    ).toThrow("GitHub URL path is invalid");
+    const escaped = decodeGithubPathParts(
+      "/example/skills/tree/main/legal%2Freview",
+    );
+    if (Result.isOk(escaped)) {
+      throw new Error("Expected an encoded path separator to be refused");
+    }
+    expect(escaped.error.status).toBe(400);
+    expect(escaped.error.message).toBe("GitHub URL path is invalid");
   });
 
   test("shares one GitHub tree request across a repository import batch", async () => {
@@ -562,7 +570,7 @@ Instructions.`,
     let loadCount = 0;
     const load = async () => {
       loadCount += 1;
-      return [{ path: "review/SKILL.md", type: "blob" }];
+      return Result.ok([{ path: "review/SKILL.md", type: "blob" }]);
     };
 
     const first = getOrCreateGithubTreeRequest({
@@ -576,7 +584,8 @@ Instructions.`,
       load,
     });
 
-    expect(await Promise.all([first, second])).toEqual([
+    const loaded = await Promise.all([first, second]);
+    expect(loaded.map((tree) => tree.unwrap())).toEqual([
       [{ path: "review/SKILL.md", type: "blob" }],
       [{ path: "review/SKILL.md", type: "blob" }],
     ]);
@@ -596,7 +605,7 @@ Instructions.`,
       ],
     });
 
-    expect(result).toEqual([
+    expect(result.unwrap()).toEqual([
       "packages/legal/research/SKILL.md",
       "packages/legal/review/SKILL.md",
     ]);
@@ -608,9 +617,68 @@ Instructions.`,
       type: "blob",
     }));
 
-    expect(() =>
-      findGithubSkillEntrypoints({ rootPath: "skills", tree }),
-    ).toThrow("at most 50 skills");
+    const result = findGithubSkillEntrypoints({ rootPath: "skills", tree });
+    if (Result.isOk(result)) {
+      throw new Error("Expected an oversized repository to be refused");
+    }
+    expect(result.error.status).toBe(400);
+    expect(result.error.message).toContain("at most 50 skills");
+  });
+
+  test("answers every catalogue package failure as an upstream error", async () => {
+    const target = {
+      owner: "example",
+      ref: "0123456789abcdef0123456789abcdef01234567",
+      repo: "skills",
+      rootPath: "review",
+      selectedSkillPath: null,
+    };
+    const fetchCatalogue = async (
+      fetchFiles: () => Promise<Result<SkillFile[], HandlerError>>,
+    ) =>
+      await fetchGithubCatalogueSkillPackage({
+        fetchFiles,
+        sourceUrl: "https://github.com/example/skills/tree/main?token=secret",
+        target,
+      });
+    const skillFile = (content: string): SkillFile => ({
+      content,
+      path: "SKILL.md",
+      sizeBytes: content.length,
+    });
+
+    const valid = await fetchCatalogue(async () =>
+      Result.ok([
+        skillFile("---\nname: review\ndescription: Review.\n---\n\nBody."),
+      ]),
+    );
+    expect(valid.unwrap().sourceUrl).toBe(
+      "https://github.com/example/skills/tree/main",
+    );
+
+    const invalid = await fetchCatalogue(async () =>
+      Result.ok([
+        skillFile("---\nname: Not Valid\ndescription: Review.\n---\n\nBody."),
+      ]),
+    );
+    const unavailable = await fetchCatalogue(async () =>
+      Result.err(new HandlerError({ status: 503, message: "Upstream busy" })),
+    );
+    const crashed = await fetchCatalogue(
+      async () => await Promise.reject(new Error("socket closed")),
+    );
+
+    expect(
+      [invalid, unavailable, crashed].map((result) =>
+        result.isErr()
+          ? { message: result.error.message, status: result.error.status }
+          : null,
+      ),
+    ).toEqual([
+      { message: "Catalogue skill package is invalid", status: 502 },
+      { message: "Upstream busy", status: 503 },
+      { message: "Catalogue skill package is invalid", status: 502 },
+    ]);
   });
 
   test("strips query strings from persisted skill source URLs", () => {
@@ -649,11 +717,11 @@ Instructions.`,
       minPathParts: 0,
       owner: "org",
       parts: ["feature", "foo", "skill"],
-      refExists: async ({ ref }) => ref === "feature/foo",
+      refExists: async ({ ref }) => Result.ok(ref === "feature/foo"),
       repo: "repo",
     });
 
-    expect(result).toEqual({
+    expect(result.unwrap()).toEqual({
       ref: "feature/foo",
       rootPath: "skill",
       selectedSkillPath: null,
@@ -669,12 +737,12 @@ Instructions.`,
       parts: [commitSha, "skills", "review", "SKILL.md"],
       refExists: async () => {
         refProbeCount += 1;
-        return false;
+        return Result.ok(false);
       },
       repo: "repo",
     });
 
-    expect(result).toEqual({
+    expect(result.unwrap()).toEqual({
       ref: commitSha,
       rootPath: "skills/review",
       selectedSkillPath: "skills/review/SKILL.md",
@@ -687,11 +755,12 @@ Instructions.`,
       minPathParts: 1,
       owner: "org",
       parts: ["release", "2026", "skills", "review", "SKILL.md"],
-      refExists: async ({ ref }) => ref === "release/2026" || ref === "release",
+      refExists: async ({ ref }) =>
+        Result.ok(ref === "release/2026" || ref === "release"),
       repo: "repo",
     });
 
-    expect(result).toEqual({
+    expect(result.unwrap()).toEqual({
       ref: "release/2026",
       rootPath: "skills/review",
       selectedSkillPath: "skills/review/SKILL.md",
