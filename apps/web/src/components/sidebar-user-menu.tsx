@@ -34,7 +34,7 @@ import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import {
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
-  useSidebar,
+  useSidebarLayout,
 } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
@@ -77,8 +77,8 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const signOut = useSignOut();
-  const { state, isMobile } = useSidebar();
-  const isCollapsed = state === "collapsed" && !isMobile;
+  const sidebarLayout = useSidebarLayout();
+  const isCollapsed = sidebarLayout === "rail";
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
@@ -94,7 +94,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           render={
             <MenuTrigger
               className={cn(
-                sidebarIdentityTriggerClassName(isCollapsed),
+                sidebarIdentityTriggerClassName(sidebarLayout),
                 "data-popup-open:bg-sidebar-accent",
               )}
             />

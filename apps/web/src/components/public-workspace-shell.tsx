@@ -34,6 +34,7 @@ import {
   SidebarProvider,
   SidebarToggleHotkey,
   useSidebar,
+  useSidebarLayout,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
@@ -200,8 +201,9 @@ const PublicSidebar = ({
   const currentHref = useRouterState({
     select: (state) => state.location.href,
   });
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const { toggleSidebar } = useSidebar();
+  const sidebarLayout = useSidebarLayout();
+  const isCollapsed = sidebarLayout === "rail";
   const feedbackChannel = resolveFeedbackChannel(authStatus.status);
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const searchHotkeyLabel = formatHotkeyForPlatform(
@@ -355,7 +357,9 @@ const PublicSidebar = ({
                 render={
                   <button
                     aria-label={t("auth.signIn")}
-                    className={cn(sidebarIdentityTriggerClassName(isCollapsed))}
+                    className={cn(
+                      sidebarIdentityTriggerClassName(sidebarLayout),
+                    )}
                     onClick={() => requestAuth(currentHref)}
                     type="button"
                   />

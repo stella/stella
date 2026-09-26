@@ -30,6 +30,7 @@ import {
   SidebarTrigger as SidebarTriggerShell,
   useSidebar,
   useSidebarInlineSize,
+  useSidebarLayout,
 } from "@stll/ui/sidebar";
 
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
@@ -145,4 +146,5 @@ export {
   SidebarTrigger,
   useSidebar,
   useSidebarInlineSize,
+  useSidebarLayout,
 };
