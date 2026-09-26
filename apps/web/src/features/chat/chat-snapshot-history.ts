@@ -1,6 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
+import { panic } from "better-result";
 
 type SnapshotChunk = Extract<
   StreamChunk,
@@ -58,6 +59,35 @@ export const keepPostedMessages = (
 };
 
 /**
+ * Which events replace the page's messages, per event type: an upstream event
+ * added or renamed fails the typecheck until it is decided here.
+ */
+const REPLACES_MESSAGES = {
+  CUSTOM: false,
+  MESSAGES_SNAPSHOT: true,
+  REASONING_ENCRYPTED_VALUE: false,
+  REASONING_END: false,
+  REASONING_MESSAGE_CONTENT: false,
+  REASONING_MESSAGE_END: false,
+  REASONING_MESSAGE_START: false,
+  REASONING_START: false,
+  RUN_ERROR: false,
+  RUN_FINISHED: false,
+  RUN_STARTED: false,
+  STATE_DELTA: false,
+  STATE_SNAPSHOT: false,
+  STEP_FINISHED: false,
+  STEP_STARTED: false,
+  TEXT_MESSAGE_CONTENT: false,
+  TEXT_MESSAGE_END: false,
+  TEXT_MESSAGE_START: false,
+  TOOL_CALL_ARGS: false,
+  TOOL_CALL_END: false,
+  TOOL_CALL_RESULT: false,
+  TOOL_CALL_START: false,
+} as const satisfies Record<StreamChunk["type"], boolean>;
+
+/**
  * `source` with every snapshot keeping the messages the page posted.
  *
  * @yields Each chunk of `source`, a snapshot with the posted messages kept.
@@ -67,8 +97,13 @@ export const keepPostedMessagesInSnapshots = async function* (
   source: AsyncIterable<StreamChunk>,
 ): AsyncIterable<StreamChunk> {
   for await (const chunk of source) {
-    yield chunk.type === EventType.MESSAGES_SNAPSHOT
-      ? { ...chunk, messages: keepPostedMessages(posted, chunk.messages) }
-      : chunk;
+    if (!REPLACES_MESSAGES[chunk.type]) {
+      yield chunk;
+      continue;
+    }
+    if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+      return panic(`${chunk.type} replaces messages but is not a snapshot`);
+    }
+    yield { ...chunk, messages: keepPostedMessages(posted, chunk.messages) };
   }
 };
