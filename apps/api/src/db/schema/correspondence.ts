@@ -4,10 +4,12 @@ import {
   CORRESPONDENCE_DIRECTIONS,
   CORRESPONDENCE_DROP_REASONS,
   CORRESPONDENCE_HANDLING_STATES,
+  CORRESPONDENCE_INTAKES,
   CORRESPONDENCE_SCAN_VERDICTS,
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   type CorrespondenceAddress,
+  type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 
 import {
@@ -26,6 +28,10 @@ import {
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
+
+const FORWARDED_INTAKES = CORRESPONDENCE_INTAKES.filter(
+  (intake) => intake !== "direct",
+);
 
 const valuesSql = (values: readonly string[]) =>
   sql.join(
@@ -47,6 +53,12 @@ export const correspondence = p.pgTable.withRLS(
       .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
       .notNull(),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
+    intake: p.text("intake", { enum: CORRESPONDENCE_INTAKES }).notNull(),
+    authenticatedSenderAddress: p
+      .text("authenticated_sender_address")
+      .notNull(),
+    originalSignature:
+      jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
     messageId: p.text("message_id"),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
@@ -91,6 +103,14 @@ export const correspondence = p.pgTable.withRLS(
     p
       .index("correspondence_ws_assignee_idx")
       .on(table.workspaceId, table.assigneeId, table.handlingState),
+    p.check(
+      "correspondence_intake_check",
+      sql`${table.intake} in (${valuesSql(CORRESPONDENCE_INTAKES)})`,
+    ),
+    p.check(
+      "correspondence_original_signature_check",
+      sql`((${table.intake} = 'direct' and ${table.originalSignature} is null) or (${table.intake} in (${valuesSql(FORWARDED_INTAKES)}) and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or (${table.intake} = 'forwarded_attachment' and ${table.originalSignature}->>'status' = 'verified' and jsonb_typeof(${table.originalSignature}->'domain') = 'string' and length(${table.originalSignature}->>'domain') > 0)) is true`,
+    ),
     p.check(
       "correspondence_direction_check",
       sql`${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})`,
