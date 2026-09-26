@@ -188,3 +188,47 @@ describe("raw mail through the inbound filing boundary", () => {
     expect(store.deliveries).toHaveLength(0);
   });
 });
+
+test("unavailable authentication or scanning cannot become a terminal delivery", async () => {
+  const raw = await fixture("member-cc.eml");
+  for (const unavailable of ["spf", "dkim", "dmarc", "scan"] as const) {
+    const store = memoryStore();
+    const result = await ingestInboundMail({
+      raw,
+      envelope,
+      receivedAt,
+      inboundDomain: "inbound.example.test",
+      scan: unavailable === "scan" ? "unavailable" : "pass",
+      persist: store.persist,
+      verify: async () =>
+        Result.ok({
+          source: "local",
+          evidence: "identifiers",
+          fromDomain: "example.test",
+          spf: {
+            result: unavailable === "spf" ? "temperror" : "pass",
+            domain: "example.test",
+            alignment: "strict",
+          },
+          dkim: [
+            {
+              result: unavailable === "dkim" ? "temperror" : "none",
+              domain: "example.test",
+              alignment: "strict",
+            },
+          ],
+          dmarc: (
+            {
+              spf: "fail",
+              dkim: "fail",
+              dmarc: "temperror",
+              scan: "pass",
+            } as const
+          )[unavailable],
+        }),
+    });
+    expect(result.isErr()).toBe(true);
+    expect(store.deliveries).toHaveLength(0);
+    expect(store.records.size).toBe(0);
+  }
+});

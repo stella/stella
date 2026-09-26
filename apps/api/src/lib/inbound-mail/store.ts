@@ -1,7 +1,15 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { CorrespondenceDropReason } from "@stll/api-contract/correspondence";
 
+import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_USER_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
+  SETTING_WORKSPACE_IDS,
+  WORKSPACE_ACCESS_MODE,
+  stella,
+} from "@/api/db/rls";
 import {
   correspondenceDropLogs,
   matterInboundAddresses,
@@ -19,6 +27,7 @@ import type {
 } from "@/api/lib/inbound-mail/ingest";
 import {
   resolveInboundSender,
+  lookupInboundPrimaryAccount,
   type InboundTransaction,
 } from "@/api/lib/inbound-mail/sender";
 import { brandDerivedCorrespondenceDropId } from "@/api/lib/safe-id-boundaries";
@@ -58,8 +67,14 @@ export const createInboundMailStore =
   }: CreateInboundStoreOptions<TTransaction>): InboundDeliveryStore =>
   async ({ token, deliveryKey, receivedAt, delivery }) =>
     await database.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('app.inbound_token', ${token}, true)`,
+      );
       const hints = await tx
-        .select({ workspaceId: matterInboundAddresses.workspaceId })
+        .select({
+          workspaceId: matterInboundAddresses.workspaceId,
+          organizationId: matterInboundAddresses.organizationId,
+        })
         .from(matterInboundAddresses)
         .where(eq(matterInboundAddresses.token, token))
         .limit(1);
@@ -67,6 +82,23 @@ export const createInboundMailStore =
       if (!hint) {
         return { status: "dropped", reason: "unknown_recipient" };
       }
+      const primaryUserId =
+        delivery.status === "candidate"
+          ? await lookupInboundPrimaryAccount({
+              tx,
+              organizationId: hint.organizationId,
+              sender: delivery.sender,
+            })
+          : null;
+      const setMatterContext = async () => {
+        await tx.execute(sql`select
+          set_config('role', ${stella.name}, true),
+          set_config(${SETTING_USER_ID}, '', true),
+          set_config(${SETTING_ORGANIZATION_ID}, ${hint.organizationId}, true),
+          set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
+          set_config(${SETTING_WORKSPACE_IDS}, ${`{${hint.workspaceId}}`}, true)`);
+      };
+      await setMatterContext();
       const matters = await tx
         .select({
           id: workspaces.id,
@@ -74,7 +106,12 @@ export const createInboundMailStore =
           status: workspaces.status,
         })
         .from(workspaces)
-        .where(eq(workspaces.id, hint.workspaceId))
+        .where(
+          and(
+            eq(workspaces.id, hint.workspaceId),
+            eq(workspaces.organizationId, hint.organizationId),
+          ),
+        )
         .limit(1)
         .for("update");
       const matter = matters.at(0);
@@ -121,11 +158,13 @@ export const createInboundMailStore =
       }
       const membership = await resolveInboundSender({
         tx,
+        primaryUserId,
         workspaceId: matter.id,
         organizationId: matter.organizationId,
         sender: delivery.sender,
         receivedAt,
       });
+      await setMatterContext();
       const accepted = evaluateInboundAcceptance({
         outerSender: delivery.sender,
         authentication: delivery.authentication,

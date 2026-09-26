@@ -394,14 +394,14 @@ export const createLocalMailVerifier =
       fromDomain,
       spf: {
         result: spf ? authResult(spf.status.result) : "none",
-        domain: spf ? spf.domain : null,
+        domain: spf?.domain ?? null,
         alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
       },
       dkim: dkim.results.map((signature) => ({
         result: signature.status.underSized
           ? "fail"
           : authResult(signature.status.result),
-        domain: signature.signingDomain,
+        domain: signature.signingDomain ?? null,
         alignment: dmarc && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
       })),
       dmarc: dmarc ? authResult(dmarc.status.result) : "none",

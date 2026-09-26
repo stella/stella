@@ -1,22 +1,14 @@
 import { panic } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
-import {
-  SETTING_ORGANIZATION_ID,
-  SETTING_USER_ID,
-  SETTING_WORKSPACE_ACCESS_MODE,
-  SETTING_WORKSPACE_IDS,
-  stellaAuthorizedWorkspaces,
-  WORKSPACE_ACCESS_MODE,
-} from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
-  workspaceMembers,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { correspondenceUserHasAccess } from "@/api/lib/correspondence/access";
 import type { SenderMembership } from "@/api/lib/inbound-mail/acceptance";
 
 export type InboundTransaction = Pick<
@@ -24,65 +16,13 @@ export type InboundTransaction = Pick<
   "select" | "insert" | "execute"
 >;
 
-type ResolveUserAccessOptions = {
-  tx: InboundTransaction;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: string;
-};
-
-const userHasAccess = async ({
-  tx,
-  organizationId,
-  workspaceId,
-  userId,
-}: ResolveUserAccessOptions) => {
-  // Membership/assignment locks survive through the correspondence write. The
-  // shared authorization view remains the authority for admin and matter scope.
-  const membership = await tx
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
-    )
-    .limit(1)
-    .for("share");
-  if (membership.length === 0) {
-    return false;
-  }
-  await tx
-    .select({ id: workspaceMembers.id })
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, userId),
-      ),
-    )
-    .limit(1)
-    .for("share");
-  await tx.execute(
-    sql`select set_config(${SETTING_USER_ID}, ${userId}, true), set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true), set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.membership}, true), set_config(${SETTING_WORKSPACE_IDS}, '{}', true)`,
-  );
-  const accessible = await tx
-    .select({ id: stellaAuthorizedWorkspaces.authorizedWorkspaceId })
-    .from(stellaAuthorizedWorkspaces)
-    .where(
-      and(
-        eq(stellaAuthorizedWorkspaces.authorizedWorkspaceId, workspaceId),
-        eq(stellaAuthorizedWorkspaces.workspaceStatus, "active"),
-      ),
-    )
-    .limit(1);
-  return accessible.length === 1;
-};
-
 type ResolveInboundSenderOptions = {
   tx: InboundTransaction;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   sender: string;
   receivedAt: string;
+  primaryUserId: SafeId<"user"> | null;
 };
 
 export const resolveInboundSender = async ({
@@ -91,6 +31,7 @@ export const resolveInboundSender = async ({
   workspaceId,
   sender,
   receivedAt,
+  primaryUserId,
 }: ResolveInboundSenderOptions): Promise<SenderMembership> => {
   const approvals = await tx
     .select()
@@ -106,32 +47,18 @@ export const resolveInboundSender = async ({
     .for("share");
   const approval = approvals.at(0);
   if (!approval) {
-    const primary = await tx
-      .select({ id: user.id })
-      .from(user)
-      .innerJoin(
-        member,
-        and(
-          eq(member.userId, user.id),
-          eq(member.organizationId, organizationId),
-        ),
-      )
-      .where(and(eq(user.email, sender), eq(user.emailVerified, true)))
-      .limit(1)
-      .for("share", { of: user });
-    const account = primary.at(0);
     if (
-      account &&
-      (await userHasAccess({
+      primaryUserId &&
+      (await correspondenceUserHasAccess({
         tx,
         organizationId,
         workspaceId,
-        userId: account.id,
+        userId: primaryUserId,
       }))
     ) {
       return {
         status: "allowed",
-        filer: { type: "user", userId: account.id, filedAt: receivedAt },
+        filer: { type: "user", userId: primaryUserId, filedAt: receivedAt },
       };
     }
     return { status: "denied" };
@@ -169,7 +96,7 @@ export const resolveInboundSender = async ({
     case "verified_alias":
       if (
         !approval.ownerUserId ||
-        !(await userHasAccess({
+        !(await correspondenceUserHasAccess({
           tx,
           organizationId,
           workspaceId,
@@ -205,4 +132,31 @@ export const resolveInboundSender = async ({
       return panic("Unhandled sender approval kind");
     }
   }
+};
+
+// The account row is locked in the worker's owner phase: the request role has
+// read-only access to auth users and cannot acquire this row lock.
+export const lookupInboundPrimaryAccount = async ({
+  tx,
+  organizationId,
+  sender,
+}: {
+  tx: InboundTransaction;
+  organizationId: SafeId<"organization">;
+  sender: string;
+}) => {
+  const primary = await tx
+    .select({ id: user.id })
+    .from(user)
+    .innerJoin(
+      member,
+      and(
+        eq(member.userId, user.id),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .where(and(eq(user.email, sender), eq(user.emailVerified, true)))
+    .limit(1)
+    .for("share", { of: user });
+  return primary.at(0)?.id ?? null;
 };
