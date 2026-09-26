@@ -233,7 +233,7 @@ const openPage = (): Page => {
         errors.push(error);
       },
       onFinish: () => {},
-      onTurnStopped: () => {
+      reloadThread: () => {
         page.reloads += 1;
       },
     }),
@@ -411,5 +411,19 @@ describe("the composer's Stop", () => {
       stop: { status: "idle" },
     });
     expect(page.reloads).toBe(1);
+  });
+
+  test("leaving the thread closes the request and asks the server nothing", async () => {
+    const server = installServer([TURN_A]);
+    const page = openPage();
+    send(page, "018f0000-0000-7000-8000-000000000007");
+    await tick();
+
+    page.runtime.leave();
+    await tick();
+
+    expect(server.log).toEqual([`chat ${TURN_A}`, `abort ${TURN_A}`]);
+    expect(page.reloads).toBe(1);
+    expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
   });
 });

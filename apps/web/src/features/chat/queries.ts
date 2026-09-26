@@ -1432,7 +1432,7 @@ export const acquireChatRuntime = ({
       // the refetch lands, then the idle reconcile replaces it.
       refreshPersistedThread();
     },
-    onTurnStopped: refreshPersistedThread,
+    reloadThread: refreshPersistedThread,
   });
   chatRuntimeRegistry.set(registryKey, {
     runtime,

@@ -522,6 +522,7 @@ export const useChatSession = ({
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
+  const leave = chat.leave;
   const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
@@ -1474,6 +1475,7 @@ export const useChatSession = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
