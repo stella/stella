@@ -196,6 +196,10 @@
           <span class="label" id="serverLabel"></span>
           <span class="value" id="apiOrigin"></span>
         </p>
+        <p>
+          <span class="label" id="appearanceLabel"></span>
+          <span class="value" id="appearance"></span>
+        </p>
       </div>
       <label class="picker" hidden id="picker">
         <span class="label" id="certificateLabel"></span>
@@ -234,6 +238,14 @@
       setText("versionLabel", strings.pdfSignVersion);
       setText("workspaceLabel", strings.pdfSignMatter);
       setText("serverLabel", strings.pdfSignServer);
+      setText("appearanceLabel", strings.pdfSignAppearance);
+      const stampPage = params.get("stampPage");
+      setText(
+        "appearance",
+        stampPage
+          ? (strings.pdfSignStampOnPage || "").replace("{pageNumber}", stampPage)
+          : strings.pdfSignInvisible,
+      );
       setText("certificateLabel", strings.pdfSignCertificate);
       setText("cancelBtn", strings.cancel);
       setText("signBtn", strings.pdfSignSign);
