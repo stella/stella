@@ -37,8 +37,11 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 
 const cassettes = loadProviderWireCassettes();
 
-const { providerWireFinish: finish, providerWireToolInput: toolInput } =
-  CHAT_ORACLE;
+const {
+  providerWireFinish: finish,
+  providerWireToolInput: toolInput,
+  providerWireUsage: usage,
+} = CHAT_ORACLE;
 
 /** Why an unmet run is on the ledger. */
 type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
@@ -50,7 +53,7 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
  * removed, and its size is pinned to UNMET_SIZE, which only goes down.
  */
 const UNMET: Readonly<Record<string, UnmetEntry>> = {
-  "anthropic/length": { oracles: [finish], reason: "maintenance" },
+  "anthropic/length": { oracles: [usage], reason: "maintenance" },
   "anthropic/refusal": { oracles: [finish], reason: "maintenance" },
   "anthropic/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/early-eof": { oracles: [finish], reason: "maintenance" },
@@ -60,18 +63,17 @@ const UNMET: Readonly<Record<string, UnmetEntry>> = {
   },
   "bedrock/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "bedrock/tool-call": { oracles: [toolInput], reason: "maintenance" },
-  "google/length": { oracles: [finish], reason: "maintenance" },
   "google/refusal": { oracles: [finish], reason: "maintenance" },
   "google/strict-null": { oracles: [toolInput], reason: "maintenance" },
   "mistral/early-eof": { oracles: [finish], reason: "maintenance" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "maintenance" },
-  "openai/length": { oracles: [finish], reason: "maintenance" },
+  "openai/length": { oracles: [usage], reason: "maintenance" },
   "openrouter/early-eof": { oracles: [finish], reason: "maintenance" },
   "openrouter/strict-null": { oracles: [toolInput], reason: "maintenance" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 15;
+const UNMET_SIZE = 14;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;

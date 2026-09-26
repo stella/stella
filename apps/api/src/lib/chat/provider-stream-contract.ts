@@ -38,6 +38,85 @@ const runError = (
   },
 });
 
+type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
+type RunFinishedChunk = Extract<StreamChunk, { type: EventType.RUN_FINISHED }>;
+
+/**
+ * The run error code of a response the model stopped writing because it
+ * reached the output ceiling the request set (Anthropic, Gemini).
+ */
+const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+/**
+ * OpenAI's Responses adapter reports a response that ended incomplete with
+ * this code, and the reason it ended as the message.
+ */
+const INCOMPLETE_RESPONSE_CODE = "incomplete";
+const OUTPUT_CEILING_REASON = "max_output_tokens";
+
+const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
+  chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+  (chunk.code === INCOMPLETE_RESPONSE_CODE &&
+    chunk.message === OUTPUT_CEILING_REASON);
+
+/**
+ * A response cut off at the output ceiling, read as a `length` finish.
+ *
+ * Several adapters report that stop as a `RUN_ERROR` by design, where they
+ * report every other one as a `RUN_FINISHED`. The engine, middleware and
+ * caller must agree that the run reached the ceiling rather than recording a
+ * failure while keeping its partial text, so the stop is read as `length`
+ * before anything else sees it. The adapters' own events are left as they
+ * are: the pass keys on the event, not on who reported it, so an adapter that
+ * already ends a ceiling stop with `RUN_FINISHED` passes through untouched.
+ *
+ * The finish is held until the stream ends. An adapter that reports the stop
+ * and then finishes anyway (Gemini) has its closing events pass in order, and
+ * its trailing `RUN_FINISHED` gives the finish the usage the stop lacked.
+ *
+ * @yields Every chunk of the run, with a ceiling stop read as `length`.
+ */
+export const readOutputCeilingStopAsLength = async function* (
+  chunks: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  let runIdentity: { runId: string; threadId: string } | undefined;
+  let held: RunFinishedChunk | undefined;
+  for await (const chunk of chunks) {
+    if (chunk.type === EventType.RUN_STARTED) {
+      runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+    }
+    if (
+      chunk.type === EventType.RUN_ERROR &&
+      held === undefined &&
+      runIdentity !== undefined &&
+      isOutputCeilingStop(chunk)
+    ) {
+      held = {
+        type: EventType.RUN_FINISHED,
+        finishReason: "length",
+        runId: runIdentity.runId,
+        threadId: runIdentity.threadId,
+        ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+        ...(chunk.model === undefined ? {} : { model: chunk.model }),
+        ...(chunk.timestamp === undefined
+          ? {}
+          : { timestamp: chunk.timestamp }),
+        ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+      };
+      continue;
+    }
+    if (held !== undefined && chunk.type === EventType.RUN_FINISHED) {
+      if (held.usage === undefined && chunk.usage !== undefined) {
+        held = { ...held, usage: chunk.usage };
+      }
+      continue;
+    }
+    yield chunk;
+  }
+  if (held !== undefined) {
+    yield held;
+  }
+};
+
 type ChatStreamOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
 
 async function* withOneTerminalEvent(
@@ -106,7 +185,10 @@ export const withProviderStreamContract = (
   adapter: AnyTextAdapter,
 ): AnyTextAdapter => {
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
-    withOneTerminalEvent(adapter.chatStream(options), options);
+    withOneTerminalEvent(
+      readOutputCeilingStopAsLength(adapter.chatStream(options)),
+      options,
+    );
   return new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {
