@@ -29,6 +29,10 @@ import type { MailVerifier } from "@/api/lib/inbound-mail/authentication";
 import { ingestInboundMail } from "@/api/lib/inbound-mail/ingest";
 import { createInboundMailPersistence } from "@/api/lib/inbound-mail/persistence";
 import {
+  receiveSesInboundMail,
+  SesInboundError,
+} from "@/api/lib/inbound-mail/ses";
+import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
@@ -236,6 +240,107 @@ afterAll(async () => {
 });
 
 describe("inbound mail persisted under forced RLS", () => {
+  test("oversized provider deliveries acknowledge only after replay-safe token-scoped drops", async () => {
+    const persist = createInboundMailPersistence({
+      database: db,
+      scopedDbForMatter: (scope) =>
+        createScopedDb(
+          db,
+          [scope.workspaceId],
+          scope.organizationId,
+          scope.userId,
+        ),
+    });
+    const event = {
+      notificationType: "Received",
+      mail: {
+        messageId: "oversized-delivery",
+        source: "member@example.test",
+        timestamp: receivedAt,
+      },
+      receipt: {
+        recipients: [
+          `${token}@inbound.example.test`,
+          `${token}@inbound.example.test`,
+        ],
+        action: {
+          type: "S3",
+          bucketName: "inbound-bucket",
+          objectKey: "mail/oversized-delivery",
+        },
+        spfVerdict: { status: "PASS" },
+        dkimVerdict: { status: "PASS" },
+        dmarcVerdict: { status: "PASS" },
+        virusVerdict: { status: "PASS" },
+      },
+    };
+    const options = {
+      event,
+      inboundDomain: "inbound.example.test",
+      bucket: "inbound-bucket",
+      keyPrefix: "mail/",
+      readObject: async () => {
+        throw new SesInboundError({
+          message: "Inbound message exceeds size limit",
+          reason: "message-too-large",
+        });
+      },
+      persist,
+    };
+    const uncommitted = await receiveSesInboundMail({
+      ...options,
+      persist: async () => {
+        throw new DOMException("Injected persistence outage", "NetworkError");
+      },
+    });
+    expect(uncommitted.isErr()).toBe(true);
+    if (uncommitted.isErr()) {
+      expect(uncommitted.error.reason).toBe("persistence-unavailable");
+    }
+    expect(await drops()).toHaveLength(0);
+    for (let replay = 0; replay < 2; replay += 1) {
+      const result = await receiveSesInboundMail(options);
+      expect(result.isOk() && result.value).toEqual([
+        { status: "dropped", reason: "message_too_large" },
+      ]);
+    }
+    expect(await drops()).toMatchObject([
+      { workspaceId, reason: "message_too_large", senderAddress: "" },
+    ]);
+    expect(await drops()).toHaveLength(1);
+    expect(await records()).toHaveLength(0);
+    const unknown = await receiveSesInboundMail({
+      ...options,
+      event: {
+        ...event,
+        receipt: {
+          ...event.receipt,
+          recipients: [`${generateInboundAddressToken()}@inbound.example.test`],
+        },
+      },
+    });
+    expect(unknown.isOk() && unknown.value).toEqual([
+      { status: "dropped", reason: "unknown_recipient" },
+    ]);
+    expect(await drops()).toHaveLength(1);
+    const other = await receiveSesInboundMail({
+      ...options,
+      event: {
+        ...event,
+        receipt: {
+          ...event.receipt,
+          recipients: [`${otherToken}@inbound.example.test`],
+        },
+      },
+    });
+    expect(other.isOk() && other.value).toEqual([
+      { status: "dropped", reason: "message_too_large" },
+    ]);
+    expect((await drops()).map((row) => row.workspaceId).toSorted()).toEqual(
+      [workspaceId, otherWorkspaceId].toSorted(),
+    );
+  });
+
   test("member CC files an outgoing record with user provenance", async () => {
     const result = await deliver(await fixture("member-cc.eml"));
     expect(result.isOk() && result.value).toMatchObject([{ status: "filed" }]);

@@ -1,5 +1,6 @@
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
+import { Readable } from "node:stream";
 import * as v from "valibot";
 
 import type { AttachmentScanVerdict } from "@/api/lib/inbound-mail/acceptance";
@@ -10,6 +11,11 @@ import {
   type MailAuthResult,
   type MailVerifier,
 } from "@/api/lib/inbound-mail/authentication";
+import {
+  ingestInboundMail,
+  recordOversizedInboundMail,
+  type InboundDeliveryStore,
+} from "@/api/lib/inbound-mail/ingest";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/inbound-mail/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -83,31 +89,43 @@ export const createSesS3ObjectReader =
         reason: "object-unavailable",
       });
     }
-    const reader = object.Body.transformToWebStream().getReader();
+    // Keep Node responses native: converting then cancelling them through
+    // Readable.toWeb can enqueue into an already-closed controller in Bun.
+    const stream =
+      object.Body instanceof Readable
+        ? object.Body
+        : object.Body.transformToWebStream();
     const chunks: Uint8Array[] = [];
     let length = 0;
     if (
       object.ContentLength !== undefined &&
       object.ContentLength > INBOUND_MAIL_LIMITS.rawBytes
     ) {
-      await reader.cancel();
+      if (stream instanceof Readable) {
+        stream.destroy();
+      } else {
+        await stream.cancel();
+      }
       throw new SesInboundError({
         message: "Inbound message exceeds size limit",
         reason: "message-too-large",
       });
     }
-    for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) {break;}
-      length += chunk.value.byteLength;
+    for await (const chunk of stream) {
+      if (!(chunk instanceof Uint8Array)) {
+        throw new SesInboundError({
+          message: "Inbound object has invalid byte chunks",
+          reason: "object-unavailable",
+        });
+      }
+      length += chunk.byteLength;
       if (length > INBOUND_MAIL_LIMITS.rawBytes) {
-        await reader.cancel();
         throw new SesInboundError({
           message: "Inbound message exceeds size limit",
           reason: "message-too-large",
         });
       }
-      chunks.push(chunk.value);
+      chunks.push(chunk);
     }
     const raw = new Uint8Array(length);
     let offset = 0;
@@ -154,6 +172,25 @@ export const readSesInboundDelivery = async ({
       }),
     );
   }
+  const metadata = {
+    receivedAt: mail.timestamp,
+    envelope: {
+      mailFrom: mail.source,
+      recipients: receipt.recipients,
+      remoteIp: "",
+      helo: "",
+    },
+  };
+  const oversized = () =>
+    Result.ok({
+      status: "oversized" as const,
+      ...metadata,
+      // The bounded reader cannot hash the complete object. Provider identity
+      // stays stable across retries without retaining object keys in drop logs.
+      deliveryKey: new Bun.CryptoHasher("sha256")
+        .update(JSON.stringify(["ses", bucket, receipt.action.objectKey]))
+        .digest("hex"),
+    });
   const object = await Result.tryPromise({
     try: () =>
       withTimeout(
@@ -172,21 +209,19 @@ export const readSesInboundDelivery = async ({
             reason: "object-unavailable",
           }),
   });
-  if (object.isErr()) {return object;}
+  if (object.isErr()) {
+    return object.error.reason === "message-too-large" ? oversized() : object;
+  }
   if (object.value.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
-    return Result.err(
-      new SesInboundError({
-        message: "Inbound message exceeds size limit",
-        reason: "message-too-large",
-      }),
-    );
+    return oversized();
   }
   const verify: MailVerifier = async ({ fromAddress }) => {
     const fromDomain = mailboxDomain(fromAddress);
-    if (!fromDomain)
-      {return Result.err(
+    if (!fromDomain) {
+      return Result.err(
         new MailAuthenticationError({ message: "Invalid author domain" }),
-      );}
+      );
+    }
     return Result.ok({
       source: "provider",
       evidence: "provider-dmarc",
@@ -207,16 +242,52 @@ export const readSesInboundDelivery = async ({
     } satisfies MailAuthentication);
   };
   return Result.ok({
+    status: "received" as const,
+    ...metadata,
     raw: object.value,
-    receivedAt: mail.timestamp,
-    deliveryId: mail.messageId,
-    envelope: {
-      mailFrom: mail.source,
-      recipients: receipt.recipients,
-      remoteIp: "",
-      helo: "",
-    },
     scan: SCAN_RESULT[receipt.virusVerdict.status],
     verify,
   });
+};
+
+type ReceiveSesInboundMailOptions = ReadSesDeliveryOptions & {
+  inboundDomain: string;
+  persist: InboundDeliveryStore;
+};
+
+// The host authenticates the publisher and retains the source until success.
+// Permanent size rejection is acknowledged only after its scoped drop commits.
+export const receiveSesInboundMail = async ({
+  inboundDomain,
+  persist,
+  ...source
+}: ReceiveSesInboundMailOptions) => {
+  const result = await readSesInboundDelivery(source);
+  if (result.isErr()) {
+    return result;
+  }
+  const delivery = result.value;
+  switch (delivery.status) {
+    case "oversized":
+      return await recordOversizedInboundMail({
+        envelope: delivery.envelope,
+        receivedAt: delivery.receivedAt,
+        deliveryKey: delivery.deliveryKey,
+        inboundDomain,
+        persist,
+      });
+    case "received":
+      return await ingestInboundMail({
+        raw: delivery.raw,
+        envelope: delivery.envelope,
+        receivedAt: delivery.receivedAt,
+        verify: delivery.verify,
+        scan: delivery.scan,
+        inboundDomain,
+        persist,
+      });
+    default:
+      delivery satisfies never;
+      return panic("Unhandled inbound source disposition");
+  }
 };
