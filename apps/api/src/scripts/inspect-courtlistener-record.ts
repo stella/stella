@@ -5,8 +5,12 @@
  * admits and plans each record, reads its stored raw back through the field
  * inventory and the decoder, and prints one JSON line per record followed by
  * a summary. It writes nothing: no database, no object store, no network.
- * Text is not parsed here, so every classification that needs the principal
- * text reports it as unavailable.
+ *
+ * Each record's opinion rows also go through the text parsers, even where
+ * another table's drift rejects the record: which column each opinion's text
+ * came from, why the others were refused, what was held, and the order or
+ * opinion class the parsed principal text gives. A parsed text is not a
+ * write-ready decision; the complete mapper decides that.
  *
  *   bun run src/scripts/inspect-courtlistener-record.ts <records.ndjson[.gz]> \
  *     [--limit <n>] [--summary-only]
@@ -31,7 +35,20 @@ import {
   decodeCourtListenerRaw,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/raw";
 import { admitCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/record";
+import {
+  hasVisibleText,
+  isCsvRow,
+  OPINION_COLUMNS,
+} from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
+import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+import {
+  composeCourtListenerText,
+  type CourtListenerTextOpinion,
+} from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
+
+const isOpinionRow = isCsvRow(OPINION_COLUMNS);
 
 const USAGE =
   "Usage: bun run src/scripts/inspect-courtlistener-record.ts <records.ndjson[.gz]> [--limit <n>] [--summary-only]";
@@ -76,6 +93,93 @@ const rawReadBack = (plan: CourtListenerDecisionPlan) => {
   return { undeclaredFields, missingParts, rawHashStable };
 };
 
+/**
+ * The record's opinion rows, where every one has the pinned columns and a
+ * declared type. Text is parsed from these alone, so a record the contract
+ * rejects for another table's drift still reports what its text would be.
+ */
+const textOpinionsOf = (input: unknown): CourtListenerTextOpinion[] | null => {
+  if (!isRecord(input) || !Array.isArray(input["opinions"])) {
+    return null;
+  }
+  const opinions: CourtListenerTextOpinion[] = [];
+  for (const row of input["opinions"]) {
+    if (!isOpinionRow(row) || !isOpinionType(row.type)) {
+      return null;
+    }
+    opinions.push({ row, type: row.type });
+  }
+  return opinions.length > 0 ? opinions : null;
+};
+
+const scdbPresentIn = (input: unknown): boolean => {
+  const cluster = isRecord(input) ? input["cluster"] : null;
+  const scdbId = isRecord(cluster) ? cluster["scdb_id"] : null;
+  return typeof scdbId === "string" && hasVisibleText(scdbId);
+};
+
+/** What the text parsers make of the record, with no source text in it. */
+const inspectText = (input: unknown) => {
+  const opinions = textOpinionsOf(input);
+  if (opinions === null) {
+    return null;
+  }
+  const outcome = composeCourtListenerText(opinions);
+  const principal =
+    outcome.status === "parsed"
+      ? outcome.principal
+      : ({ status: "unavailable" } as const);
+  const classification = classifyCourtListenerDecision({
+    opinionTypes: opinions.map(({ type }) => type),
+    scdbPresent: scdbPresentIn(input),
+    principal,
+  });
+  return {
+    principal,
+    report: {
+      status: outcome.status,
+      reason: outcome.status === "held" ? outcome.reason : null,
+      blocks: outcome.status === "parsed" ? outcome.blocks.length : null,
+      scopes:
+        outcome.status === "parsed" ? outcome.citationScopes.length : null,
+      opinions: outcome.opinions.map(
+        ({
+          attempts,
+          classConflicts,
+          counts,
+          coverage,
+          format,
+          opinionId,
+          scopes,
+          selection,
+          structure,
+          type,
+        }) => ({
+          opinionId,
+          type,
+          selection,
+          format,
+          structure,
+          coverage,
+          scopes,
+          classConflicts,
+          counts,
+          attempts: attempts.map(
+            (attempt) =>
+              `${attempt.format}/${attempt.structure}:${attempt.reason}`,
+          ),
+        }),
+      ),
+      classification: {
+        kind: classification.kind,
+        rule: classification.rule,
+        principalLength: classification.evidence.principalLength,
+        matchedPatterns: classification.evidence.matchedPatterns,
+      },
+    },
+  };
+};
+
 const inspect = (line: string) => {
   const parsed = Result.try({
     try: (): unknown => JSON.parse(line),
@@ -84,6 +188,7 @@ const inspect = (line: string) => {
   if (Result.isError(parsed)) {
     return { outcome: "unreadable-line" as const };
   }
+  const text = inspectText(parsed.value);
   const planned = planCourtListenerRecord(parsed.value);
   if (Result.isError(planned)) {
     const { clusterId, diagnostics, omittedDiagnostics, reason } =
@@ -94,15 +199,17 @@ const inspect = (line: string) => {
       reason,
       diagnostics,
       omittedDiagnostics,
+      text: text?.report ?? null,
     };
   }
   const plan = planned.value;
   const classification = classifyCourtListenerDecision({
     opinionTypes: plan.opinions.map(({ type }) => type),
     scdbPresent: plan.scdbPresent,
-    principal: { status: "unavailable" },
+    principal: text?.principal ?? { status: "unavailable" },
   });
   return {
+    text: text?.report ?? null,
     outcome: "planned" as const,
     clusterId: plan.sourceDocumentId,
     courtId: plan.courtId,
@@ -135,8 +242,62 @@ const rejections = new Map<string, number>();
 const classifications = new Map<string, number>();
 const diagnosticCodes = new Map<string, number>();
 const undeclared = new Set<string>();
+const textCounts = {
+  clusters: new Map<string, number>(),
+  heldReasons: new Map<string, number>(),
+  chosenFormats: new Map<string, number>(),
+  opinionOutcomes: new Map<string, number>(),
+  unusable: new Map<string, number>(),
+  requiresAssets: new Map<string, number>(),
+  unsupported: new Map<string, number>(),
+  coverage: new Map<string, number>(),
+  classifications: new Map<string, number>(),
+  classificationRules: new Map<string, number>(),
+  unknownConstructs: new Map<string, number>(),
+};
 let unstableRaw = 0;
 let read = 0;
+
+const countText = (
+  report: NonNullable<ReturnType<typeof inspectText>>["report"],
+) => {
+  increment(textCounts.clusters, report.status);
+  if (report.reason !== null) {
+    increment(textCounts.heldReasons, report.reason);
+  }
+  increment(textCounts.classifications, report.classification.kind);
+  increment(
+    textCounts.classificationRules,
+    `${report.classification.kind}:${report.classification.rule}`,
+  );
+  for (const opinion of report.opinions) {
+    increment(textCounts.opinionOutcomes, opinion.selection);
+    for (const attempt of opinion.attempts) {
+      increment(textCounts.unusable, attempt);
+    }
+    const chosen = `${opinion.format ?? "none"}/${opinion.structure ?? "-"}`;
+    if (opinion.selection === "parsed") {
+      increment(textCounts.chosenFormats, chosen);
+      // A row parsed in a held cluster is scoped by nobody.
+      increment(
+        textCounts.coverage,
+        opinion.coverage ?? `cluster-${report.status}`,
+      );
+    } else if (opinion.selection === "requires-assets") {
+      increment(textCounts.requiresAssets, chosen);
+    } else if (opinion.selection === "unsupported") {
+      increment(textCounts.unsupported, opinion.format ?? "none");
+    }
+    for (const [name, count] of Object.entries(
+      opinion.counts?.unknownConstructs ?? {},
+    )) {
+      textCounts.unknownConstructs.set(
+        name,
+        (textCounts.unknownConstructs.get(name) ?? 0) + count,
+      );
+    }
+  }
+};
 
 for await (const line of lines) {
   if (line.trim() === "") {
@@ -148,6 +309,9 @@ for await (const line of lines) {
   read += 1;
   const report = inspect(line);
   increment(outcomes, report.outcome);
+  if (report.outcome !== "unreadable-line" && report.text !== null) {
+    countText(report.text);
+  }
   if (report.outcome === "rejected") {
     increment(rejections, report.reason);
   }
@@ -176,6 +340,12 @@ console.log(
       diagnostics: Object.fromEntries(diagnosticCodes),
       undeclaredFields: [...undeclared],
       unstableRaw,
+      text: Object.fromEntries(
+        Object.entries(textCounts).map(([key, counts]) => [
+          key,
+          Object.fromEntries(counts),
+        ]),
+      ),
     },
   }),
 );
