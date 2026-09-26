@@ -30,7 +30,8 @@
  *
  * devModelId constraints (see validateTanStackDevModelOverride in
  * apps/api/src/lib/tanstack-ai-models.ts):
- *  - Rejected outside dev (env.isDev must be true).
+ *  - Rejected unless local development access is open
+ *    (NODE_ENV=development with STELLA_LOCAL_DEV=1).
  *  - Charset [A-Za-z0-9._:/-], max length 160.
  *  - `provider::modelId` form: the provider must be TanStack-supported and
  *    configured for the active org (or have instance credentials when the

@@ -68,6 +68,7 @@ import {
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listDecisions = createSafePublicHandler(
   {
@@ -301,7 +302,7 @@ export const publicCaseLawRoute = new Elysia({
   prefix: "/case",
 })
   .onBeforeHandle(({ set }) => {
-    if (env.isDev || env.FEATURE_PUBLIC_LAW) {
+    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
       return undefined;
     }
 

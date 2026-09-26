@@ -7,6 +7,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -29,6 +30,7 @@ import {
   buildWorkflowReference,
   TEMPLATE_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/template-workflow-reference";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -481,9 +483,10 @@ describe("MCP resources", () => {
 
   test("lists and reads the legislation workflow only behind its own gate", async () => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    const previousIsDev = env.isDev;
     env.FEATURE_PUBLIC_LAW = false;
-    env.isDev = false;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
     try {
       // The four corpus tools are filtered out of tools/list on this
       // deployment, so a reference telling a model to call them would hand it
@@ -509,7 +512,7 @@ describe("MCP resources", () => {
       );
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   });
 

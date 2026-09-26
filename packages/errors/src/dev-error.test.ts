@@ -12,7 +12,7 @@ test("no-ops outside dev", () => {
   const spy = mock(() => undefined);
   console.error = spy;
   const sink = mock(() => undefined);
-  const log = createDevErrorLogger({ isDev: false, sink });
+  const log = createDevErrorLogger({ echoErrors: false, sink });
 
   log(new Error("boom"), { requestId: "r1" });
 
@@ -24,7 +24,7 @@ test("echoes to console and forwards to the sink in dev", () => {
   const spy = mock(() => undefined);
   console.error = spy;
   const sink = mock(() => undefined);
-  const log = createDevErrorLogger({ isDev: true, sink });
+  const log = createDevErrorLogger({ echoErrors: true, sink });
   const error = new Error("boom");
 
   log(error, { requestId: "r1" });
@@ -38,7 +38,7 @@ test("echoes to console and forwards to the sink in dev", () => {
 test("works without a sink", () => {
   const spy = mock(() => undefined);
   console.error = spy;
-  const log = createDevErrorLogger({ isDev: true });
+  const log = createDevErrorLogger({ echoErrors: true });
 
   log(new Error("boom"));
 

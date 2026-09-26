@@ -70,6 +70,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // import is erased at build time and never creates a runtime import cycle
 // (api-handlers must stay importable without pulling in the MCP graph).
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
@@ -1404,7 +1405,7 @@ const logAndCaptureSafeError = ({
   // which rejection fired.
   Object.assign(attributes, identityFields(evidence));
 
-  if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
+  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS) {
     Object.assign(attributes, unredactedErrorFields(error));
   }
 

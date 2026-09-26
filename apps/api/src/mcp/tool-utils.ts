@@ -49,6 +49,7 @@ import type {
   InternalToolSuccess,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -992,7 +993,7 @@ export const buildMatterUrl = (workspaceId: string) =>
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
 export const isPublicLawAppUrlEnabled = (): boolean =>
-  env.isDev || env.FEATURE_PUBLIC_LAW;
+  isLocalDevOpen() || env.FEATURE_PUBLIC_LAW;
 
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,

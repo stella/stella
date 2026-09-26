@@ -9,6 +9,8 @@
  */
 import * as v from "valibot";
 
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
@@ -28,46 +30,6 @@ import {
   isRailwayPrivateHostname,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
-
-/**
- * NODE_ENV values that identify a deployed (non-local) Stella
- * environment. Used to gate strict env validation and the
- * `isDev` default below. Kept here so every entrypoint that
- * imports `envBase` sees the same definition.
- */
-export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
-
-/** NODE_ENV values that identify a local (developer or test) run. */
-const LOCAL_NODE_ENVS = new Set(["development", "test"]);
-
-export const KNOWN_NODE_ENVS = [...LOCAL_NODE_ENVS, ...DEPLOYED_NODE_ENVS];
-
-export const NODE_ENV_KIND = {
-  local: "local",
-  deployed: "deployed",
-  unknown: "unknown",
-} as const;
-
-type NodeEnvKind = (typeof NODE_ENV_KIND)[keyof typeof NODE_ENV_KIND];
-
-/**
- * Which kind of environment a NODE_ENV value names. Callers turn `unknown`
- * into a boot failure or a reported issue: a misspelled value must not read
- * as local, which is what relaxes the transport invariants below and opens
- * the local-only routes. Unset is local, because every deployed image pins
- * NODE_ENV while scripts and one-off commands routinely run without it.
- */
-export const classifyNodeEnv = (nodeEnv: string | undefined): NodeEnvKind => {
-  if (nodeEnv === undefined || nodeEnv === "") {
-    return NODE_ENV_KIND.local;
-  }
-  if (LOCAL_NODE_ENVS.has(nodeEnv)) {
-    return NODE_ENV_KIND.local;
-  }
-  return DEPLOYED_NODE_ENVS.has(nodeEnv)
-    ? NODE_ENV_KIND.deployed
-    : NODE_ENV_KIND.unknown;
-};
 
 const databasePoolMaxValueSchema = v.pipe(
   v.string(),
@@ -242,7 +204,6 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "true",
   ),
-  isDev: v.boolean(),
 };
 
 /** Alternative inputs accepted by resolveDatabaseUrl(). */
@@ -311,7 +272,7 @@ type EnvBaseInvariantInput = {
   S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
   S3_ENDPOINT: string;
   S3_SECRET_ACCESS_KEY?: string | undefined;
-  isDev: boolean;
+  runtimeMode: RuntimeMode;
 };
 
 const rollbackInputInvariantViolation = ({
@@ -331,12 +292,13 @@ const databaseTransportInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
   DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
-  isDev,
+  runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
+  const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
   const hasPublicLawDatabaseUrl =
     PUBLIC_LAW_DATABASE_URL !== undefined ||
     CASE_LAW_DATABASE_URL !== undefined;
-  if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
+  if (!localDevOpen && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (
@@ -351,7 +313,7 @@ const databaseTransportInvariantViolation = ({
   ) {
     return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
-  if (!isDev && hasPublicLawDatabaseUrl) {
+  if (!localDevOpen && hasPublicLawDatabaseUrl) {
     return "Public-law database URLs are only supported in local development.";
   }
   return null;
@@ -372,9 +334,13 @@ const isSecureRedisUrl = (value: string) => {
 // REDIS_URL gets it, not only the ones whose entrypoint requires the key.
 const redisTransportInvariantViolation = ({
   REDIS_URL,
-  isDev,
+  runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
-  if (REDIS_URL !== undefined && !isDev && !isSecureRedisUrl(REDIS_URL)) {
+  if (
+    REDIS_URL !== undefined &&
+    runtimeMode.mode !== RUNTIME_MODE.open &&
+    !isSecureRedisUrl(REDIS_URL)
+  ) {
     return "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.";
   }
   return null;
@@ -383,7 +349,7 @@ const redisTransportInvariantViolation = ({
 const corpusEndpointInvariantViolation = ({
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
-  isDev,
+  runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
   const q09SearchTargetsPrivateService =
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
@@ -399,7 +365,7 @@ const corpusEndpointInvariantViolation = ({
     return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.";
   }
   if (
-    !isDev &&
+    runtimeMode.mode !== RUNTIME_MODE.open &&
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
     !q09SearchTargetsPrivateService
   ) {
@@ -451,10 +417,10 @@ const storageAndIndexInvariantViolation = ({
   S3_CREDENTIALS_PROVIDER,
   S3_ENDPOINT,
   S3_SECRET_ACCESS_KEY,
-  isDev,
+  runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
   if (
-    !isDev &&
+    runtimeMode.mode !== RUNTIME_MODE.open &&
     !isTlsOrLoopbackUrl(S3_ENDPOINT, {
       plaintextProtocol: "http:",
       tlsProtocol: "https:",
@@ -486,7 +452,7 @@ const storageAndIndexInvariantViolation = ({
     searchProvider: LEGAL_SEARCH_PROVIDER,
     projectionOwner: CORPUS_PROJECTION_OWNER,
     corpusBucket: LEGAL_CORPUS_S3_BUCKET,
-    isDev,
+    runtimeMode,
   });
 };
 
