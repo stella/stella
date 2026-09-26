@@ -68,6 +68,8 @@ const INLINES = new Set([
   "bracketnum",
   "cite",
   "code",
+  "content",
+  "counselor",
   "courtname",
   "cross_reference",
   "del",
@@ -101,7 +103,6 @@ const CONTAINERS = new Set([
   "bodytext",
   "casebody",
   "center",
-  "content",
   "div",
   "dl",
   "excerpt",
@@ -113,7 +114,7 @@ const CONTAINERS = new Set([
   "ul",
 ]);
 
-const HEADINGS = new Set(["author", "h1", "h2", "h3", "h4", "h5", "h6"]);
+const HEADINGS = new Set(["author", "h", "h1", "h2", "h3", "h4", "h5", "h6"]);
 
 /**
  * Paragraph elements. The Harvard case-XML names appear in `headmatter` and

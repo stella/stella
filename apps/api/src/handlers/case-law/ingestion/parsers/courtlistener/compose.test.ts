@@ -784,3 +784,42 @@ test("apparatus deduplicates exact semantic runs, never matching body text", () 
     result.blocks.find((block) => block.plainText === "A & B < C."),
   ).toMatchObject({ role: "syllabus" });
 });
+
+test("marked HTML notes outside the opinion container keep their own contiguous scope", () => {
+  const result = parsed(
+    composeCourtListenerText([
+      {
+        row: opinionRow({
+          xml_harvard: "",
+          html_anon_2020:
+            '<div class="opinion" opiniontype="majority"><p>Body: 410 U.S. 113.</p></div><div class="footnote" label="1"><p>See 347 U.S. 483.</p><p>Id. at 485.</p></div>',
+        }),
+        type: "020lead",
+      },
+    ]),
+  );
+  const noteBlocks = result.blocks.filter(
+    (block) => block.type === "paragraph" && block.note !== undefined,
+  );
+  expect(noteBlocks).toHaveLength(2);
+  expect(result.citationScopes.at(-1)).toMatchObject({
+    boundaries: "proven",
+    blockIds: noteBlocks.map((block) => block.id),
+  });
+  const extracted = extractDecisionCitations({
+    country: "USA",
+    documentAst: asDocument(result.blocks),
+    citationScopes: result.citationScopes,
+    sections: result.sections,
+  }).unwrap();
+  const targets = extracted.occurrences
+    .filter(({ form }) => form === "id")
+    .map(({ target }) => target);
+  expect(targets).toEqual([
+    {
+      status: "identified",
+      identifiers: [{ type: "reporter-citation", value: "347 U.S. 483" }],
+    },
+  ]);
+  expect(result.principal.body).toBe("Body: 410 U.S. 113.");
+});

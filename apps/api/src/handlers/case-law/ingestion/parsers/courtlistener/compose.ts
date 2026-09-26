@@ -154,8 +154,21 @@ const scopeRow = (
   let proven = 0;
   let unproven = 0;
   let classConflicts = 0;
+  let outsideNotes = 0;
   for (const unit of units) {
     if (unit.kind === "outside") {
+      // Some HTML conversions append marked notes after the opinion container.
+      // Their own boundaries are explicit even when ownership by a sub-opinion is not.
+      for (const group of blockGroups(unit.blocks)) {
+        const first = group.at(0);
+        if (first?.type !== "paragraph" || first.note === undefined) continue;
+        outsideNotes += 1;
+        scopes.push({
+          opinionId: `${base}/note-${outsideNotes}`,
+          blockIds: group.map(({ id }) => id),
+          boundaries: unit.boundaries === "markup" ? "proven" : "unproven",
+        });
+      }
       continue;
     }
     const unitType = unitClass(type, unit.domType, unit.position);
@@ -239,7 +252,9 @@ const appendSections = (
   for (const block of blocks) {
     let type = bodyType;
     if (block.type === "paragraph") {
-      if (
+      if (block.note !== undefined && bodyType === "header") {
+        type = "unknown";
+      } else if (
         isApparatusRole(block.role) ||
         block.role === "panel" ||
         block.role === "parties" ||
