@@ -29,7 +29,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
-export type PreparedCorrespondenceAttachment = {
+type PreparedCorrespondenceAttachment = {
   entityId: SafeId<"entity">;
   filename: string;
   mediaType: string;
@@ -116,7 +116,7 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   return null;
 };
 
-export const correspondenceDedupKey = ({
+const correspondenceDedupKey = ({
   intake,
   messageId,
   contentHash,
