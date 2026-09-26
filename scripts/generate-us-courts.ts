@@ -1076,9 +1076,7 @@ export const renderDirectory = (
     " * `us-courts.ts` reads it into checked rows once.",
     " */",
     "// oxfmt-ignore",
-    "export const US_COURT_DIRECTORY_TEXT: string = `" +
-      entries.map(renderEntry).join("\n") +
-      "`;",
+    `export const US_COURT_DIRECTORY_TEXT: string = \`${entries.map(renderEntry).join("\n")}\`;`,
     "",
   ].join("\n");
 
@@ -1091,7 +1089,7 @@ export const renderDirectory = (
 export const renderWritableCourts = (
   entries: readonly DirectoryEntry[],
 ): string => {
-  const accepted = new Map(
+  const acceptedById = new Map(
     entries.flatMap((entry) =>
       entry.status === "accepted" ? [[entry.id, entry] as const] : [],
     ),
@@ -1112,7 +1110,7 @@ export const renderWritableCourts = (
     "export const US_WRITABLE_COURTS: readonly UsWritableCourt[] = [",
     ...US_WRITABLE_COURT_ID_LIST.map((id) => {
       const court =
-        accepted.get(id) ??
+        acceptedById.get(id) ??
         panic(`writable court ${id} is not an accepted directory court`);
       return `  { id: ${literal(id)}, canonicalName: ${literal(court.canonicalName)} },`;
     }),
