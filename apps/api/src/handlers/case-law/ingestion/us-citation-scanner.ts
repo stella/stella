@@ -499,7 +499,17 @@ const ABBREVIATIONS = new Set([
 
 const SENTENCE_MARK_RE = /[.?!]/gu;
 const AFTER_SENTENCE_RE = /^["”’)\]]*(?:\s+["“‘(\p{Lu}\p{N}]|\s*$)/u;
-const WORD_BEFORE_RE = /([\p{L}\p{N}'.]*)$/u;
+const WORD_CHAR_RE = /^[\p{L}\p{N}'.]$/u;
+
+/** The letters, digits, apostrophes and periods that end `text`. */
+const wordBefore = (text: string): string => {
+  const chars = Array.from(text);
+  let start = chars.length;
+  while (start > 0 && WORD_CHAR_RE.test(chars[start - 1] ?? "")) {
+    start -= 1;
+  }
+  return chars.slice(start).join("");
+};
 
 /** Offsets in `text[from, to)` where a sentence ends. */
 const sentenceEnds = (text: string, from: number, to: number): number[] => {
@@ -515,8 +525,9 @@ const sentenceEnds = (text: string, from: number, to: number): number[] => {
       continue;
     }
     if (match[0] === ".") {
-      const word = WORD_BEFORE_RE.exec(text.slice(Math.max(0, at - 32), at));
-      const bare = (word?.[1] ?? "").toLocaleLowerCase("und");
+      const bare = wordBefore(
+        text.slice(Math.max(0, at - 32), at),
+      ).toLocaleLowerCase("und");
       if (
         ABBREVIATIONS.has(bare) ||
         bare.includes(".") ||

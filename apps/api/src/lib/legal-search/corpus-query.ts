@@ -630,8 +630,8 @@ export const caseLawCorpusQuery = ({
   }
   if (filters.court) {
     clauses.push(`court:${quoteCorpusValue(filters.court)}`);
-    const partitions = filters.courtPartitions ?? [];
-    if (partitions.length > 0) {
+    const partitions = filters.courtPartitions;
+    if (partitions !== undefined && partitions.length > 0) {
       clauses.push(
         `(${partitions
           .map(
