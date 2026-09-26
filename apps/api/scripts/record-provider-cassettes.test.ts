@@ -1,3 +1,5 @@
+import { EventType } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
@@ -28,6 +30,7 @@ import {
   sanitizeEventPayload,
   sanitizeJson,
   sanitizeTextBody,
+  wireCarriesNull,
 } from "./record-provider-cassettes";
 
 const SECRET = "sk-recording-secret";
@@ -114,6 +117,24 @@ describe("provider cassette recording redaction", () => {
     expect(sanitizeTextBody(body, SECRET)).toBe(
       'event: message_start\r\ndata: {"message":{"id":"[id]"}}\r\n\r\n: keep-alive\r\ndata: [DONE]\r\n\r\n',
     );
+  });
+
+  test("keeps a strict-null recording only when the wire carries a JSON null", () => {
+    const streamed = (...deltas: string[]): StreamChunk[] =>
+      deltas.map((delta) => ({
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "call-1",
+        delta,
+        timestamp: 1,
+      }));
+    expect(
+      wireCarriesNull(streamed('{"name":"draft",', '"note":nu', "ll}")),
+    ).toBe(true);
+    // A model that writes the string "null" recorded something else.
+    expect(wireCarriesNull(streamed('{"name":"draft","note":"null"}'))).toBe(
+      false,
+    );
+    expect(wireCarriesNull(streamed('{"name":"draft"}'))).toBe(false);
   });
 
   test("keeps only the response headers an SDK reads", () => {

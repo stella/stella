@@ -4,9 +4,12 @@ import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
 import { Temporal } from "@stll/time";
+
+import { arrayOrEmpty } from "@/api/lib/array";
+import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -38,7 +41,197 @@ const runError = (
   },
 });
 
+type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
+type RunFinishedChunk = Extract<StreamChunk, { type: EventType.RUN_FINISHED }>;
+
+/**
+ * The run error code of a response the model stopped writing because it
+ * reached the output ceiling the request set (Anthropic, Gemini).
+ */
+const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+/**
+ * OpenAI's Responses adapter reports a response that ended incomplete with
+ * this code, and the reason it ended as the message.
+ */
+const INCOMPLETE_RESPONSE_CODE = "incomplete";
+const OUTPUT_CEILING_REASON = "max_output_tokens";
+
+// These upstream variants use string-literal discriminants rather than
+// EventType members. Named, checked literals keep Oxlint's exhaustiveness
+// analysis aligned with the SDK union.
+const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
+const TOOL_CALL_END_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_END" satisfies StreamChunk["type"];
+const TOOL_CALL_START_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_START" satisfies StreamChunk["type"];
+
+const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
+  chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+  (chunk.code === INCOMPLETE_RESPONSE_CODE &&
+    chunk.message === OUTPUT_CEILING_REASON);
+
+/**
+ * A response cut off at the output ceiling, read as a `length` finish.
+ *
+ * Several adapters report that stop as a `RUN_ERROR` by design, where they
+ * report every other one as a `RUN_FINISHED`. The engine, middleware and
+ * caller must agree that the run reached the ceiling rather than recording a
+ * failure while keeping its partial text, so the stop is read as `length`
+ * before anything else sees it. The adapters' own events are left as they
+ * are: the pass keys on the event, not on who reported it, so an adapter that
+ * already ends a ceiling stop with `RUN_FINISHED` passes through untouched.
+ *
+ * The finish is held until the stream ends. An adapter that reports the stop
+ * and then finishes anyway (Gemini) has its closing events pass in order, and
+ * its trailing `RUN_FINISHED` gives the finish the usage the stop lacked.
+ *
+ * @yields Every chunk of the run, with a ceiling stop read as `length`.
+ */
+export const readOutputCeilingStopAsLength = async function* (
+  chunks: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  let runIdentity: { runId: string; threadId: string } | undefined;
+  let held: RunFinishedChunk | undefined;
+  for await (const chunk of chunks) {
+    switch (chunk.type) {
+      case EventType.RUN_STARTED: {
+        runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+        break;
+      }
+      case EventType.RUN_ERROR: {
+        if (
+          held !== undefined ||
+          runIdentity === undefined ||
+          !isOutputCeilingStop(chunk)
+        ) {
+          break;
+        }
+        held = {
+          type: EventType.RUN_FINISHED,
+          finishReason: "length",
+          runId: runIdentity.runId,
+          threadId: runIdentity.threadId,
+          ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+          ...(chunk.model === undefined ? {} : { model: chunk.model }),
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
+          ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+        };
+        continue;
+      }
+      case EventType.RUN_FINISHED: {
+        if (held === undefined) {
+          break;
+        }
+        if (held.usage === undefined && chunk.usage !== undefined) {
+          held = { ...held, usage: chunk.usage };
+        }
+        continue;
+      }
+      case EventType.TEXT_MESSAGE_START:
+      case EventType.TEXT_MESSAGE_CONTENT:
+      case EventType.TEXT_MESSAGE_END:
+      case TOOL_CALL_START_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_ARGS:
+      case TOOL_CALL_END_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_RESULT:
+      case EventType.STEP_STARTED:
+      case EventType.STEP_FINISHED:
+      case EventType.MESSAGES_SNAPSHOT:
+      case EventType.STATE_SNAPSHOT:
+      case EventType.STATE_DELTA:
+      case CUSTOM_STREAM_CHUNK_TYPE:
+      case EventType.REASONING_START:
+      case EventType.REASONING_MESSAGE_START:
+      case EventType.REASONING_MESSAGE_CONTENT:
+      case EventType.REASONING_MESSAGE_END:
+      case EventType.REASONING_END:
+      case EventType.REASONING_ENCRYPTED_VALUE: {
+        break;
+      }
+      default: {
+        chunk satisfies never;
+        panic(`Unhandled chunk: ${String(chunk)}`);
+      }
+    }
+    yield chunk;
+  }
+  if (held !== undefined) {
+    yield held;
+  }
+};
+
 type ChatStreamOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
+
+// Each tool call's input as its tool declares it. A strict provider spells an
+// optional field it is not setting as `null`, some routes fill an optional
+// string with "", and a model on any provider may write either; where the
+// field's own schema refuses the placeholder, it reads as omitted, so the
+// input checked, stored and shown is the declared shape on every provider.
+async function* withDeclaredToolInput(
+  chunks: AsyncIterable<StreamChunk>,
+  options: ChatStreamOptions,
+): AsyncIterable<StreamChunk> {
+  const schemas = new Map<string, unknown>();
+  for (const tool of arrayOrEmpty(options.tools)) {
+    const toolName: unknown = tool.name;
+    if (typeof toolName === "string") {
+      schemas.set(toolName, tool.inputSchema);
+    }
+  }
+  const names = new Map<string, string>();
+  /** The argument text each call streamed, for an end that carries none. */
+  const argumentText = new Map<string, string>();
+  for await (const chunk of chunks) {
+    if (chunk.type === EventType.TOOL_CALL_START) {
+      names.set(chunk.toolCallId, chunk.toolCallName);
+    }
+    if (chunk.type === EventType.TOOL_CALL_ARGS) {
+      argumentText.set(
+        chunk.toolCallId,
+        (argumentText.get(chunk.toolCallId) ?? "") + chunk.delta,
+      );
+    }
+    if (chunk.type !== EventType.TOOL_CALL_END) {
+      yield chunk;
+      continue;
+    }
+    // `input` is optional on the event, and some adapters (Bedrock) end a
+    // call without parsing what it streamed.
+    const input =
+      chunk.input ?? parsedArguments(argumentText.get(chunk.toolCallId));
+    argumentText.delete(chunk.toolCallId);
+    if (input === undefined) {
+      yield chunk;
+      continue;
+    }
+    const endName: unknown = Reflect.get(chunk, "toolCallName");
+    const name =
+      typeof endName === "string" ? endName : names.get(chunk.toolCallId);
+    const schema = name === undefined ? undefined : schemas.get(name);
+    yield {
+      ...chunk,
+      input:
+        schema === undefined
+          ? input
+          : withModelPlaceholdersOmitted(schema, input),
+    };
+  }
+}
+
+/** Streamed argument text as the object it spells, if it spells one. */
+const parsedArguments = (text: string | undefined): unknown => {
+  if (text === undefined || text.trim() === "") {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isOk(parsed) &&
+    typeof parsed.value === "object" &&
+    parsed.value !== null
+    ? parsed.value
+    : undefined;
+};
 
 async function* withOneTerminalEvent(
   chunks: AsyncIterable<StreamChunk>,
@@ -106,7 +299,13 @@ export const withProviderStreamContract = (
   adapter: AnyTextAdapter,
 ): AnyTextAdapter => {
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
-    withOneTerminalEvent(adapter.chatStream(options), options);
+    withOneTerminalEvent(
+      withDeclaredToolInput(
+        readOutputCeilingStopAsLength(adapter.chatStream(options)),
+        options,
+      ),
+      options,
+    );
   return new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {
