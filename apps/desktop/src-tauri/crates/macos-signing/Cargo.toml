@@ -1,0 +1,24 @@
+[package]
+name = "stella-desktop-macos-signing"
+version = "0.0.1"
+edition = "2024"
+description = "Safe wrappers over the raw Security.framework calls behind PDF signing"
+license = "Apache-2.0"
+publish = false
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[dependencies]
+hex = "0.4"
+sha2 = "0.11"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+security-framework = "3"
+security-framework-sys = "2.17"

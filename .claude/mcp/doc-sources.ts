@@ -397,6 +397,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-09-26T00:00:00.000Z",
+      dependency: "asn1js",
+      explanation:
+        "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
+      expiresAt: "2026-10-26T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-26T00:00:00.000Z",
+      dependency: "pkijs",
+      explanation:
+        "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
+      expiresAt: "2026-10-26T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-12T00:00:00.000Z",
       dependency: "stylelint",
       explanation:

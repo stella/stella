@@ -1,6 +1,11 @@
 import { rlsDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import {
+  createSafeDb,
+  createScopedDb,
+  createTenantlessDb,
+} from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
   brandPersistedUserId,
@@ -32,6 +37,25 @@ export const createRootSafeDb = ({
   // This helper exists only because some modules are not allowed
   // to import the RLS database handle directly.
   createSafeDb(rlsDb, workspaceIds, organizationId, userId);
+
+/**
+ * The connections a token-authenticated call runs on: the application role
+ * with no tenant settings for the SECURITY DEFINER token lookup, then scoped
+ * to the tenant that lookup names.
+ */
+export type TokenScopedDatabase = {
+  scoped: (scope: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    workspaceIds: SafeId<"workspace">[];
+  }) => ScopedDb;
+  tenantless: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+};
+
+export const tokenScopedDatabase: TokenScopedDatabase = {
+  scoped: createRootScopedDb,
+  tenantless: async (fn) => await createTenantlessDb(rlsDb)(fn),
+};
 
 /** A queued run's tenant, branded from its job data, and the handles that act
  *  for it inside the worker. */

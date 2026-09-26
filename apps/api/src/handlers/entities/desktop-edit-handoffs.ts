@@ -260,7 +260,7 @@ export const redeemDesktopEditHandoffHandler = async ({
     return status(404, { message: "Workspace not found." });
   }
 
-  if (!access.canUseDesktopEditSession) {
+  if (!access.canWriteWorkspaceEntities) {
     return status(403, { message: "Desktop editing permission was revoked." });
   }
 

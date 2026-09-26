@@ -6453,6 +6453,17 @@ export type WebRoutes = {
                     baseTrackedChanges: Tb2b6819922;
                     targetTrackedChanges: Tb2b6819922;
                   } | {
+                    kind: "signature";
+                    baseVersionId: string;
+                    certificateSha256Hex: string;
+                    signingTime: string;
+                    level: ("B-B" | "B-T" | "B-LT");
+                    timestampAuthorityUrl: T432e07d100;
+                    warnings: Array<{
+                      code: string;
+                      message: string;
+                    }>;
+                  } | {
                     kind: "sharepoint";
                     driveId: string;
                     itemId: string;
@@ -17716,6 +17727,51 @@ export type WebRoutes = {
         };
       };
     };
+    "pdf-signing-handoffs": {
+      redeem: {
+        post: {
+          body: (null | {
+            handoffToken?: unknown;
+          });
+          params: T6d90fb7f32;
+          query: unknown;
+          headers: unknown;
+          response: {
+            200: {
+              apiBaseUrl: string;
+              documentName: string;
+              expiresAt: string;
+              sessionId: T174de477d5;
+              sessionToken: string;
+              stampPageNumber: T688f6f1190;
+              versionNumber: number;
+              workspaceName: string;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: Tc642053948;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    };
     "docx-suggestions": (Tc1a2e5b1a7 & {
       ":workspaceId": {
         entity: {
@@ -27289,6 +27345,131 @@ export type WebRoutes = {
         };
       };
     };
+    "pdf-signing-sessions": {
+      ":sessionId": {
+        certificate: {
+          post: {
+            body: (null | {
+              sessionToken?: unknown;
+              certificate?: unknown;
+              certificateChain?: unknown;
+            });
+            params: Taf17dadf76;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                digestAlgorithm: "SHA-256";
+                digestHex: string;
+                signatureAlgorithm: ("RSASSA-PKCS1-v1_5" | "ECDSA");
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: Tc642053948;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":sessionId": {
+        signature: {
+          post: {
+            body: (null | {
+              signature?: unknown;
+              sessionToken?: unknown;
+            });
+            params: Taf17dadf76;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                versionId: T116a5c37c8;
+                versionNumber: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: Tc642053948;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      ":sessionId": {
+        cancel: {
+          post: {
+            body: (null | {
+              reason?: unknown;
+              sessionToken?: unknown;
+            });
+            params: Taf17dadf76;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                status: "cancelled";
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: Tc642053948;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    };
   } & {
     entities: (Record<never, never> & {
       ":workspaceId": {
@@ -28069,6 +28250,66 @@ export type WebRoutes = {
             };
           };
         };
+        "pdf-signing-handoffs": {
+          post: {
+            body: {
+              location?: string;
+              reason?: string;
+              stamp?: {
+                direction: ("ltr" | "rtl");
+                box: {
+                  height: number;
+                  width: number;
+                  x: number;
+                  y: number;
+                };
+                timeZone: string;
+                labels: {
+                  location: string;
+                  date: string;
+                  reason: string;
+                  signedBy: string;
+                };
+                pageIndex: number;
+              };
+              entityId: T9a509045a7;
+              propertyId: T80d841ed63;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                deepLinkUrl: string;
+                expiresAt: string;
+                sessionId: T174de477d5;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
         "create-from-legal-source": {
           post: {
             body: {
@@ -28756,6 +28997,75 @@ export type WebRoutes = {
             };
           };
         };
+        "pdf-signing-sessions": {
+          ":sessionId": {
+            get: {
+              body: Record<never, never>;
+              params: Tcc26b7bc63;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: T6306311b64;
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          ":sessionId": {
+            cancel: {
+              post: {
+                body: Record<never, never>;
+                params: Tcc26b7bc63;
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: T6306311b64;
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
         zip: {
           ":entityId": {
             get: {
@@ -28858,7 +29168,7 @@ export type WebRoutes = {
                       description: T432e07d100;
                       diffWordsAdded: T688f6f1190;
                       diffWordsRemoved: T688f6f1190;
-                      sourceKind: (null | "upload" | "desktop-edit" | "collaboration" | "comparison" | "sharepoint");
+                      sourceKind: (null | "upload" | "desktop-edit" | "collaboration" | "comparison" | "signature" | "sharepoint");
                       createdAt: string;
                       author: (null | {
                         id: string;
@@ -32166,6 +32476,10 @@ type T16953276e4 = {
   text: string;
 };
 
+type T174de477d5 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "pdfSigningSession";
+};
+
 type T1754ed2395 = 1 | 2 | 3 | 4 | 5 | 6;
 
 type T18e3b024e1 = {
@@ -33523,6 +33837,14 @@ type T62aafd0a7e = {
   output?: unknown;
 } & Te4ad2efe8c;
 
+type T6306311b64 = {
+  closeReason: (null | "expired" | "user_cancelled" | "base_version_diverged" | "digest_mismatch" | "unsupported_platform" | "certificate_rejected" | "certificate_revoked" | "certified_document" | "signature_invalid" | "signing_failed" | "stamp_overflow" | "stamp_unrenderable" | "would_break_signatures");
+  expiresAt: string;
+  finalizedVersionId: T82d662a0f0;
+  finalizedVersionNumber: T688f6f1190;
+  status: ("open" | "cancelled" | "finalized" | "expired");
+};
+
 type T63c4458d83 = {
   type: "headingSection";
   story: "main";
@@ -34207,7 +34529,7 @@ type T7bba2468e2 = T2430547df2 | {
       number?: undefined | number;
       type: "paragraph";
       id: string;
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       anchorId: string;
       note?: undefined | T5b30b2c0a8;
       inlines: Array<T7522841395>;
@@ -34219,9 +34541,9 @@ type T7bba2468e2 = T2430547df2 | {
       src: string;
       id: string;
       anchorId: string;
-      alt?: undefined | string;
-      width?: undefined | number;
       height?: undefined | number;
+      width?: undefined | number;
+      alt?: undefined | string;
     } & {
       plainText?: undefined | string;
     } | {
@@ -34924,7 +35246,7 @@ type T96412b8318 = {
       id: string;
       anchorId: string;
       type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       note?: undefined | T5b30b2c0a8;
       listDepth?: undefined | 1 | 2 | 3 | 4;
       number?: undefined | number;
@@ -36097,6 +36419,10 @@ type Tae327b658e = {
   }>;
 };
 
+type Taf17dadf76 = {
+  sessionId?: string;
+};
+
 type Taf5ff5c24f = {
   text?: string;
   snippet?: string;
@@ -36772,6 +37098,11 @@ type Tcbc1d9afe8 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type Tcc26b7bc63 = {
+  workspaceId: Tb9596e18eb;
+  sessionId: T174de477d5;
+};
 
 type Tcc64a82ef6 = {
   type: "tool-call";

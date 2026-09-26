@@ -1,0 +1,320 @@
+import { Result } from "better-result";
+import { t } from "elysia";
+
+import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
+import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
+import { createAuditRecorder } from "@/api/lib/audit-log";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { loadPdfSigningBaseBytes } from "@/api/lib/files/pdf-signing/base-bytes";
+import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";
+import { completeCertificateChain } from "@/api/lib/files/pdf-signing/certificate-chain";
+import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
+import { certificateRevokedError } from "@/api/lib/files/pdf-signing/finalize";
+import { storePreparedState } from "@/api/lib/files/pdf-signing/prepared-state";
+import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
+import {
+  captureSigningDigest,
+  PdfSigningCertifiedDocumentError,
+  PdfSigningWouldBreakSignaturesError,
+  signaturePlaceholderSize,
+} from "@/api/lib/files/pdf-signing/sign-pdf";
+import { PdfSigningStampError } from "@/api/lib/files/pdf-signing/stamp";
+import { configuredTimestampAuthorities } from "@/api/lib/files/pdf-signing/timestamp-authority";
+import { findRevokedCertificates } from "@/api/lib/files/pdf-signing/validation-data";
+import {
+  permissiveBodySchema,
+  permissiveRouteSchema,
+  validatePostAuth,
+} from "@/api/lib/permissive-route-schema";
+
+import { authorizePdfSigningCredentials } from "./pdf-signing-credentials";
+
+/** DER certificates are small; the cap keeps a hostile body bounded. */
+const CERTIFICATE_BASE64_MAX_LENGTH = 16_384;
+const CERTIFICATE_CHAIN_MAX_LENGTH = 8;
+
+const certificatePayloadSchema = t.Object({
+  certificate: t.String({
+    minLength: 1,
+    maxLength: CERTIFICATE_BASE64_MAX_LENGTH,
+  }),
+  certificateChain: t.Array(
+    t.String({ minLength: 1, maxLength: CERTIFICATE_BASE64_MAX_LENGTH }),
+    { maxItems: CERTIFICATE_CHAIN_MAX_LENGTH },
+  ),
+});
+
+const decodeBase64Der = (value: string): Uint8Array | null => {
+  const bytes = Buffer.from(value, "base64");
+  // Buffer.from ignores anything it cannot decode, so a round trip is the
+  // only way to tell valid base64 from silently truncated input.
+  return bytes.length > 0 && bytes.toString("base64") === value
+    ? new Uint8Array(bytes)
+    : null;
+};
+
+/** How a stamp that cannot be drawn closes the exchange. */
+const STAMP_CLOSE_REASONS = {
+  overflow: "stamp_overflow",
+  placement: "signing_failed",
+  unrenderable: "stamp_unrenderable",
+} as const satisfies Record<
+  PdfSigningStampError["reason"],
+  PdfSigningSessionCloseReason
+>;
+
+/** Why preparing failed, as the exchange closes and the desktop reads it. */
+const prepareRefusal = (error: unknown) => {
+  if (PdfSigningCertifiedDocumentError.is(error)) {
+    return {
+      closeReason: "certified_document",
+      code: "pdf_signing_certified_document",
+      message:
+        "This PDF is certified and its certification does not allow further signatures.",
+    } as const;
+  }
+  if (PdfSigningWouldBreakSignaturesError.is(error)) {
+    return {
+      closeReason: "would_break_signatures",
+      code: "pdf_signing_would_break_signatures",
+      message: error.message,
+    } as const;
+  }
+  if (PdfSigningStampError.is(error)) {
+    return {
+      closeReason: STAMP_CLOSE_REASONS[error.reason],
+      code: `pdf_signing_stamp_${error.reason}`,
+      message: error.message,
+    } as const;
+  }
+  return {
+    closeReason: "signing_failed",
+    code: "pdf_signing_prepare_failed",
+    message: "This PDF could not be prepared for signing.",
+  } as const;
+};
+
+const certificateConflict = () =>
+  new HandlerError({
+    status: 400,
+    code: "pdf_signing_certificate_conflict",
+    message: "This session is already prepared for a different certificate.",
+  });
+
+const config = {
+  mcp: { type: "internal", reason: "session_token_exchange" },
+  body: permissiveBodySchema({
+    keys: ["sessionToken", "certificate"],
+    passthroughKeys: ["certificateChain"],
+  }),
+  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+} satisfies TokenHandlerConfig;
+
+const submitPdfSigningCertificate = createSafeTokenHandler(
+  config,
+  async function* ({ body, params, request, server }) {
+    const session = yield* Result.await(
+      authorizePdfSigningCredentials({
+        sessionId: params.sessionId,
+        sessionToken: body?.sessionToken,
+      }),
+    );
+
+    const payload = validatePostAuth(certificatePayloadSchema, body);
+    if (!payload.ok) {
+      return Result.err(
+        new HandlerError({ status: 400, message: payload.message }),
+      );
+    }
+
+    const certificate = decodeBase64Der(payload.value.certificate);
+    const chain = payload.value.certificateChain.map(decodeBase64Der);
+    if (certificate === null || chain.includes(null)) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: "pdf_signing_certificate_rejected",
+          message: "The signing certificate could not be read.",
+        }),
+      );
+    }
+
+    const recordAuditEvent = createAuditRecorder({
+      organizationId: session.organizationId,
+      workspaceId: session.workspaceId,
+      userId: session.userId,
+      request,
+      server,
+    });
+
+    const signingTime = session.signingTime ?? new Date();
+    const inspection = inspectSigningCertificate(certificate, signingTime);
+    if (inspection.status === "rejected") {
+      yield* Result.await(
+        closePdfSigningSession({
+          closeReason: "certificate_rejected",
+          recordAuditEvent,
+          safeDb: session.safeDb,
+          sessionId: session.sessionId,
+        }),
+      );
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: `pdf_signing_certificate_${inspection.reason}`,
+          message: "This certificate cannot be used to sign.",
+        }),
+      );
+    }
+
+    // A retried POST with the same certificate must answer with the digest the
+    // desktop is already signing, never a second one: the signing time is
+    // pinned on first success, so re-running phase 1 would otherwise mint a
+    // digest over different bytes.
+    if (
+      session.digestHex !== null &&
+      session.signerCertificateDer !== null &&
+      Buffer.from(session.signerCertificateDer).equals(certificate)
+    ) {
+      return Result.ok({
+        digestAlgorithm: "SHA-256" as const,
+        digestHex: session.digestHex,
+        signatureAlgorithm: inspection.signatureAlgorithm,
+      });
+    }
+    // The first preparation is final: the desktop may already be signing its
+    // digest, and a second certificate would pull it out from under it.
+    if (session.digestHex !== null) {
+      return Result.err(certificateConflict());
+    }
+
+    const { bytes: basePdf } = yield* Result.await(
+      loadPdfSigningBaseBytes({ recordAuditEvent, session }),
+    );
+
+    // The keychain builds its chain offline, so intermediates are often
+    // missing; the stored chain is the verified, completed one.
+    const { chain: signerChain } = await completeCertificateChain({
+      candidates: chain.filter((entry) => entry !== null),
+      certificate,
+    });
+
+    // Checked before the desktop asks for a PIN: a revoked certificate must
+    // never sign, and this is the earliest point its full chain is known.
+    const { revoked } = await findRevokedCertificates({
+      provider: createTrackedRevocationProvider(),
+      signerChain: [certificate, ...signerChain],
+    });
+    if (revoked.length > 0) {
+      yield* Result.await(
+        closePdfSigningSession({
+          closeReason: "certificate_revoked",
+          recordAuditEvent,
+          safeDb: session.safeDb,
+          sessionId: session.sessionId,
+        }),
+      );
+      return Result.err(certificateRevokedError());
+    }
+
+    const timestamped = configuredTimestampAuthorities().length > 0;
+    const placeholderSize = signaturePlaceholderSize({
+      certificate,
+      certificateChain: signerChain,
+      timestamped,
+    });
+    const captured = await captureSigningDigest({
+      basePdf,
+      certificate,
+      certificateChain: signerChain,
+      keyType: inspection.keyType,
+      location: session.location,
+      placeholderSize,
+      reason: session.reason,
+      reserveTimestamp: timestamped,
+      signatureAlgorithm: inspection.signatureAlgorithm,
+      signingTime,
+      stamp: session.stamp,
+    });
+    if (Result.isError(captured)) {
+      // Preparing is deterministic over the stored bytes, so a document that
+      // cannot be prepared now never will be: the exchange ends here, before
+      // the desktop asks for a PIN, rather than lingering until it expires.
+      const refusal = prepareRefusal(captured.error);
+      yield* Result.await(
+        closePdfSigningSession({
+          closeReason: refusal.closeReason,
+          recordAuditEvent,
+          safeDb: session.safeDb,
+          sessionId: session.sessionId,
+        }),
+      );
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: refusal.code,
+          message: refusal.message,
+          cause: captured.error,
+        }),
+      );
+    }
+    const { digestHex, signedAttributes } = captured.value;
+
+    const stored = yield* Result.await(
+      session.safeDb(
+        async (tx) =>
+          await storePreparedState({
+            recordAuditEvent,
+            sessionId: session.sessionId,
+            tx,
+            values: {
+              digestHex,
+              keyType: inspection.keyType,
+              placeholderSize,
+              signedAttributes,
+              signerCertificateChain: signerChain.map((der) =>
+                Buffer.from(der).toString("base64"),
+              ),
+              signerCertificateDer: certificate,
+              signingTime,
+            },
+          }),
+      ),
+    );
+    switch (stored.status) {
+      case "stored": {
+        break;
+      }
+      // A concurrent post for the same certificate prepared first; its
+      // digest is the one to sign.
+      case "already-prepared": {
+        return Result.ok({
+          digestAlgorithm: "SHA-256" as const,
+          digestHex: stored.digestHex,
+          signatureAlgorithm: inspection.signatureAlgorithm,
+        });
+      }
+      case "conflict": {
+        return Result.err(certificateConflict());
+      }
+      case "closed": {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "pdf_signing_session_not_found",
+            message: "Signing session not found.",
+          }),
+        );
+      }
+    }
+
+    return Result.ok({
+      digestAlgorithm: "SHA-256" as const,
+      digestHex,
+      signatureAlgorithm: inspection.signatureAlgorithm,
+    });
+  },
+);
+
+export default submitPdfSigningCertificate;

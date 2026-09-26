@@ -19,6 +19,7 @@ macro_rules! with_stella_commands {
       commands::respond_to_takeover => "respond_to_takeover",
       commands::takeover_dialog_respond => "takeover_dialog_respond",
       commands::self_host_connect_dialog_respond => "self_host_connect_dialog_respond",
+      commands::pdf_sign_respond => "pdf_sign_respond",
       commands::copy_diagnostics => "copy_diagnostics",
       commands::email_support => "email_support",
       commands::reveal_support_root => "reveal_support_root",

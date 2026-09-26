@@ -23,6 +23,7 @@ export * from "./schema/document-translations";
 export * from "./schema/document-reviews";
 export * from "./schema/lists-verification";
 export * from "./schema/office-evidence";
+export * from "./schema/pdf-signing";
 export * from "./schema/flows";
 export * from "./schema/mcp";
 export * from "./schema/sharepoint";

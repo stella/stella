@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -105,7 +106,7 @@ const addBatesNumbers = async (
   }
 
   return {
-    content: await pdfDocument.save(),
+    content: await savePdfForModelInput(pdfDocument),
     pageCount: pages.length,
   };
 };

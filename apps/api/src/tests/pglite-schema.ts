@@ -244,6 +244,38 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926170000_pdf_signing_sessions",
+  "migration.sql",
+);
+
+const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
+  'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install what schema push cannot say about PDF signing sessions: forced row
+ * security and the token-scope lookups the desktop's calls go through.
+ */
+export const installPglitePdfSigningTokenScopes = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    PDF_SIGNING_SESSIONS_MIGRATION_PATH,
+  ).filter((statement) =>
+    PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
   'INSERT INTO "case_law_statute_citation_count_state"',
   "CREATE FUNCTION",

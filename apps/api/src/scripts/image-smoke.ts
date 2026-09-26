@@ -14,6 +14,7 @@
  * files the runtime resolves is the contract.
  */
 
+import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import path from "node:path";
 
@@ -25,6 +26,10 @@ import { validateIco } from "@stll/business-registries/ares";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
+import {
+  loadStampFont,
+  loadStampFontLicense,
+} from "@/api/lib/files/pdf-signing/stamp-font";
 import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 import {
   RUNTIME_WORKER_FILES,
@@ -167,6 +172,18 @@ await probe("anonymize native engine", () => {
 await probe("stdnum native binding", () => {
   if (!validateIco("27082440")) {
     panic("stdnum rejected a well-formed identifier");
+  }
+});
+
+// Visible signature stamps draw with an embedded font the compiled binary
+// carries as an asset, together with its licence.
+await probe("signature stamp font", async () => {
+  const font = PDF.create().embedFont(await loadStampFont());
+  if (!font.canEncode("Čř")) {
+    panic("the stamp font cannot draw the scripts it is chosen for");
+  }
+  if ((await loadStampFontLicense()).length === 0) {
+    panic("the stamp font's licence is missing");
   }
 });
 

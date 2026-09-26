@@ -39,6 +39,7 @@ import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { documentsRoute } from "@/api/handlers/documents/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
+import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
@@ -492,8 +493,10 @@ const api = new Elysia()
   )
   // Mounted after the versioned group on purpose: a route added before it
   // deepens the type the group callback infers, which is already at
-  // TypeScript's instantiation limit for the browser's Eden client.
-  .use(feedbackRoute);
+  // TypeScript's instantiation limit for the browser's Eden client. The
+  // signing route carries the version prefix itself.
+  .use(feedbackRoute)
+  .use(pdfSigningSessionsRoute);
 
 export default api;
 

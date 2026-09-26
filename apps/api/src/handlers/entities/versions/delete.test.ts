@@ -166,11 +166,13 @@ describe("delete-version chain-of-custody guard", () => {
     const dispositionByTable = new Map([
       ["desktopEditSessions", "cancel"],
       ["folioCollabRooms", "block"],
+      ["pdfSigningSessions", "cancel"],
     ]);
     expect(sessionTables.toSorted()).toEqual(
       [...dispositionByTable.keys()].toSorted(),
     );
     expect(deleteVersionSource).toContain("update(desktopEditSessions)");
+    expect(deleteVersionSource).toContain("update(pdfSigningSessions)");
     expect(deleteVersionSource).toContain("if (collabRooms.at(0))");
   });
 
