@@ -498,7 +498,10 @@ const scanRootConnectionShapes = (
     } else if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      (reachesHandle(node.right) || buildsInFunction(node.right))
+      // The handle itself or a value built from it. A query chain rooted at
+      // the handle (`rows = await rootDb.select()…`) is an explicit use, as
+      // its declaration form is.
+      (isHandle(node.right) || buildsInFunction(node.right))
     ) {
       record(ROOT_CONNECTION_SHAPE.assignment, node.right);
     } else if (ts.isPropertyAssignment(node) && isHandle(node.initializer)) {
