@@ -163,6 +163,34 @@ describe("text that reads correctly", () => {
     ["sk", `${UDHR_ARTICLE_1.sk} VÝŠKA NÁHRADY, VÝŠKA ÚROKU.`],
   ] as const;
 
+  // Short passages with no word of the language's own non-ASCII letters to
+  // weigh against a pair: whatever they are judged on, it is not padding.
+  const SHORT = [
+    // One name, however it is punctuated, is one word.
+    ["cs", "Søren Søren, Søren."],
+    ["cs", "„Søren“ (Søren) Søren; Søren!"],
+    // Units and footnote marks attached to the word they qualify.
+    ["cs", "m² km² cm²"],
+    ["cs", "m², km³ a cm². Výměra¹ a hodnota² viz poznámka³."],
+    ["pl", "m¹ km¹ cm¹"],
+    ["sk", "20°C, 5°F a 30°C."],
+    // Two foreign names, several times: letters of another alphabet alone.
+    ["cs", "Søren Brønshøj, Søren a Brønshøj."],
+    ["pl", "Müller Dvořák Müller Dvořák"],
+  ] as const;
+
+  test.each(SHORT)("%s %s is clean", (language, text) => {
+    expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
+  });
+
+  test("a short mis-decoded passage is still reported, and never with certainty", () => {
+    // Slovak "ľ" read as windows-1252 is "¾" inside a word: that is no
+    // letter of any alphabet, so it is found without native words around it.
+    const finding = findingOf("pod¾a ¾udí, pod¾a ¾udí", "sk", "misdecoded");
+    expect(finding?.pair.actual).toBe("windows-1250");
+    expect(finding?.confidence).toBeLessThan(1);
+  });
+
   test("Latin words in a Cyrillic text are not read back into Cyrillic", () => {
     // A court's language menu, printed into every language version: each
     // language's name in its own letters, which windows-1251 read as

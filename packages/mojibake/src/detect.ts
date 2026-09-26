@@ -33,6 +33,19 @@ import {
 const MIN_FIXED_OCCURRENCES = 3;
 const MIN_FIXED_WORDS = 2;
 /**
+ * Distinct words a pair must repair when every one of them is only spelled
+ * in letters the language does not write. Letters alone are what foreign
+ * names are made of too, so a text with no garbled word needs more of them:
+ * a Czech sentence naming Søren from Brønshøj is not windows-1250 read as
+ * windows-1252.
+ */
+const MIN_FOREIGN_WORDS = 3;
+/**
+ * Occurrences of evidence against a pair assumed before any is counted, so
+ * that a handful of words agreeing never reads as certainty.
+ */
+const CONFIDENCE_PRIOR = 1;
+/**
  * How many repaired occurrences a pair needs per word it would break. A text
  * that really went through the pair has almost no word it breaks: its
  * correctly-read words are the ones its charsets agree on.
@@ -56,6 +69,13 @@ const C1_LAST = 0x9f;
 const WORD = /[^\t\n\v\f\r ]+/gu;
 const NON_ASCII = /[\u0080-\u{10FFFF}]/u;
 const LETTER = /^[\p{L}\p{M}]$/u;
+/**
+ * Marks written against the edge of a word: a unit's exponent ("m²"), a
+ * footnote reference ("poznámka³"), degrees ("20°C"). Beside a letter they
+ * are notation, not a letter a decoder misread; between two letters they
+ * are not ("by³o" is Polish "było" read as windows-1252).
+ */
+const NOTATION = /^[\u00B0\u00B2\u00B3\u00B9\u2070-\u209F]$/u;
 const LOWERCASE = /^\p{Ll}$/u;
 const UPPERCASE = /^\p{Lu}$/u;
 
@@ -82,7 +102,10 @@ export type EncodingFinding =
        */
       alternatives: DecodingPair[];
       layers: MisdecodingLayers;
-      /** Share of the evidence that agrees with the pair, 0..1. */
+      /**
+       * Share of the evidence that agrees with the pair, below 1: one
+       * disagreeing occurrence is assumed before any is counted.
+       */
       confidence: number;
       fixedOccurrences: number;
       damagedOccurrences: number;
@@ -105,10 +128,23 @@ type WordStat = { count: number; start: number };
 type WordClass =
   /** Reads as the language: every letter native, at least one non-ASCII. */
   | "native"
-  /** A letter the language does not write, a control, or a symbol inside a word. */
-  | "misfit"
+  /**
+   * No letter a writer chose: a control, a symbol between letters or
+   * against one, a capital inside a lowercase word, two scripts in one word.
+   */
+  | "garbled"
+  /** Letters the language does not write, and nothing garbled. */
+  | "foreign"
+  /** The language's letters with notation against their edge ("m²"). */
+  | "notation"
   /** Nothing either way: ASCII, digits, the language's own punctuation. */
   | "neutral";
+
+/** Word classes a pair may be the explanation of. */
+const isMisfit = (wordClass: WordClass): boolean =>
+  wordClass === "garbled" ||
+  wordClass === "foreign" ||
+  wordClass === "notation";
 
 const isLetter = (char: string): boolean => LETTER.test(char);
 
@@ -149,52 +185,66 @@ const writtenInOneScript = (word: string): boolean => {
 const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
   const chars = Array.from(word.normalize("NFC"));
   let nativeLetter = false;
+  let foreignLetter = false;
+  let notation = false;
   for (const [index, char] of chars.entries()) {
     const cp = char.codePointAt(0) ?? 0;
     if (cp < C1_FIRST) {
       continue;
     }
     if (isControlOrReplacement(cp)) {
-      return "misfit";
+      return "garbled";
     }
+    const before = chars[index - 1];
     if (isLetter(char)) {
-      if (!alphabet.native.has(cp)) {
-        return "misfit";
-      }
       // A capital inside a lowercase word ("dignitÊ") is a letter read from
       // the wrong byte, not one a writer chose.
-      const before = chars[index - 1];
       if (
         UPPERCASE.test(char) &&
         before !== undefined &&
         LOWERCASE.test(before)
       ) {
-        return "misfit";
+        return "garbled";
       }
-      nativeLetter = true;
+      if (alphabet.native.has(cp)) {
+        nativeLetter = true;
+      } else {
+        foreignLetter = true;
+      }
       continue;
     }
     if (alphabet.punctuation.has(cp)) {
       continue;
     }
-    // A symbol standing apart ("¾ podílu", "m ²") is a symbol; one welded to
-    // a letter ("pod¾a") stands where a letter was.
-    const before = chars[index - 1];
+    // A symbol standing apart ("¾ podílu", "m ²") is a symbol; one welded
+    // between letters ("pod¾a"), or against one when it is no notation
+    // ("¾udia"), stands where a letter was.
     const after = chars[index + 1];
-    if (
-      (before !== undefined && isLetter(before)) ||
-      (after !== undefined && isLetter(after))
-    ) {
-      return "misfit";
+    const letterBefore = before !== undefined && isLetter(before);
+    const letterAfter = after !== undefined && isLetter(after);
+    if (letterBefore && letterAfter) {
+      return "garbled";
+    }
+    if (letterBefore || letterAfter) {
+      if (!NOTATION.test(char)) {
+        return "garbled";
+      }
+      notation = true;
     }
   }
-  if (!nativeLetter) {
-    return "neutral";
+  // Letters of two scripts in one word: Bulgarian "Latvieрu" is Latvian
+  // "Latviešu" read through windows-1251, and both alphabets allow each of
+  // its letters.
+  if (!writtenInOneScript(word)) {
+    return "garbled";
   }
-  // Every letter is the language's, but not every letter is one script's:
-  // Bulgarian "Latvieрu" is Latvian "Latviešu" read through windows-1251,
-  // and both alphabets allow each of its letters.
-  return writtenInOneScript(word) ? "native" : "misfit";
+  if (foreignLetter) {
+    return "foreign";
+  }
+  if (notation) {
+    return "notation";
+  }
+  return nativeLetter ? "native" : "neutral";
 };
 
 type UndoneWord = { text: string; failed: boolean };
@@ -272,21 +322,42 @@ const repairWord = (
   return { status: "unrepaired" };
 };
 
+const LEADING_ASCII_NON_LETTERS = /^[\0-@[-`{-\x7f]*/u;
+const TRAILING_ASCII_NON_LETTERS = /[\0-@[-`{-\x7f]*$/u;
+
+/**
+ * Distinct words, each with its count and first offset. ASCII that is not a
+ * letter is trimmed from both edges first ("Søren," is "Søren"): every pair
+ * reads ASCII as itself, so the trim changes no word's evidence, only how
+ * often it is counted.
+ */
 const collectWords = (text: string): Map<string, WordStat> => {
   const words = new Map<string, WordStat>();
   for (const match of text.matchAll(WORD)) {
-    const [word] = match;
-    if (!NON_ASCII.test(word)) {
+    const [token] = match;
+    if (!NON_ASCII.test(token)) {
       continue;
     }
+    const leading = LEADING_ASCII_NON_LETTERS.exec(token)?.[0].length ?? 0;
+    const trailing = TRAILING_ASCII_NON_LETTERS.exec(token)?.[0].length ?? 0;
+    const word = token.slice(leading, token.length - trailing);
     const stat = words.get(word);
     if (stat === undefined) {
-      words.set(word, { count: 1, start: match.index });
+      words.set(word, { count: 1, start: match.index + leading });
     } else {
       stat.count += 1;
     }
   }
   return words;
+};
+
+/**
+ * A word by its letters alone: what makes two misfit words two words of
+ * evidence rather than one word punctuated twice („Søren“ and Søren).
+ */
+const lexeme = (word: string): string => {
+  const letters = Array.from(word).filter(isLetter).join("");
+  return letters.length === 0 ? word : letters;
 };
 
 const span = (word: string, stat: WordStat): TextSpan => ({
@@ -299,7 +370,6 @@ type PairEvidence = {
   pair: DecodingPair;
   layers: MisdecodingLayers;
   fixedOccurrences: number;
-  fixedWords: number;
   damagedOccurrences: number;
   /** Native-looking words the pair turns into other native words. */
   convertedOccurrences: number;
@@ -317,13 +387,16 @@ const pairEvidence = (
   alphabet: Alphabet,
 ): PairEvidence | null => {
   let fixedOccurrences = 0;
-  let fixedWords = 0;
+  /** Fixed occurrences of words that are more than attached notation. */
+  let lexicalOccurrences = 0;
+  const lexemes = new Set<string>();
+  let garbled = false;
   let unresolvedOccurrences = 0;
   let doubleLayered = 0;
   const samples: RepairedSpan[] = [];
   const repairs = new Map<string, string>();
   for (const { word, stat, wordClass } of words) {
-    if (wordClass !== "misfit") {
+    if (!isMisfit(wordClass)) {
       continue;
     }
     const repair = repairWord(word, { pair, alphabet, maxLayers: MAX_LAYERS });
@@ -332,7 +405,13 @@ const pairEvidence = (
       continue;
     }
     fixedOccurrences += stat.count;
-    fixedWords += 1;
+    // "m²" read back as "mž" is a repair only once other words show the
+    // pair: an exponent is what a writer puts there.
+    if (wordClass !== "notation") {
+      lexicalOccurrences += stat.count;
+      lexemes.add(lexeme(word));
+      garbled ||= wordClass === "garbled";
+    }
     repairs.set(word, repair.text);
     if (repair.layers === 2) {
       doubleLayered += stat.count;
@@ -342,8 +421,8 @@ const pairEvidence = (
     }
   }
   if (
-    fixedOccurrences < MIN_FIXED_OCCURRENCES ||
-    fixedWords < MIN_FIXED_WORDS
+    lexicalOccurrences < MIN_FIXED_OCCURRENCES ||
+    lexemes.size < (garbled ? MIN_FIXED_WORDS : MIN_FOREIGN_WORDS)
   ) {
     return null;
   }
@@ -372,7 +451,6 @@ const pairEvidence = (
     pair,
     layers: doubleLayered * 2 > fixedOccurrences ? 2 : 1,
     fixedOccurrences,
-    fixedWords,
     damagedOccurrences,
     convertedOccurrences,
     unresolvedOccurrences,
@@ -617,7 +695,7 @@ export const checkTextEncoding = (
       stat,
       wordClass: classifyWord(word, alphabet),
     }));
-    const best = classified.some(({ wordClass }) => wordClass === "misfit")
+    const best = classified.some(({ wordClass }) => isMisfit(wordClass))
       ? bestPair(classified, alphabet)
       : null;
     if (best !== null) {
@@ -633,7 +711,8 @@ export const checkTextEncoding = (
           fixedOccurrences /
           (fixedOccurrences +
             damagedOccurrences +
-            evidence.unresolvedOccurrences),
+            evidence.unresolvedOccurrences +
+            CONFIDENCE_PRIOR),
         fixedOccurrences,
         damagedOccurrences,
         samples,

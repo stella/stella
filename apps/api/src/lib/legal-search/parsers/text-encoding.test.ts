@@ -20,8 +20,9 @@ describe("a stored text read through the wrong charset", () => {
       encodingKinds: "misdecoded",
       encodingPair: "windows-1250>windows-1252",
       encodingLayers: 1,
-      encodingConfidence: 1,
-      encodingSamples: `pod¾a@${String(PUBLISHED.indexOf("pod¾a"))}→podľa; èl.@${String(PUBLISHED.indexOf("èl."))}→čl.; ¾udského@${String(PUBLISHED.indexOf("¾udského"))}→ľudského`,
+      // Eight agreeing occurrences against the one assumed disagreeing.
+      encodingConfidence: 8 / 9,
+      encodingSamples: `pod¾a@${String(PUBLISHED.indexOf("pod¾a"))}→podľa; èl@${String(PUBLISHED.indexOf("èl."))}→čl; ¾udského@${String(PUBLISHED.indexOf("¾udského"))}→ľudského`,
     });
   });
 

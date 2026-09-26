@@ -10,11 +10,12 @@
  *   restored exactly;
  * - text that was never mis-decoded is never flagged.
  *
- * And a detection floor: when mis-decoding turns at least two distinct words,
- * three times in all, into ones the language does not write (a letter
- * outside its CLDR main exemplars, or a control character), the text is
- * reported and repaired. Less is what one foreign name looks like, and is
- * below what the detector claims to find.
+ * And a detection floor: when mis-decoding turns at least three distinct
+ * words (told apart by their letters, not their punctuation) into ones the
+ * language does not write (a letter outside its CLDR main exemplars, or a
+ * control character), the text is reported and repaired. Less is what two
+ * foreign names look like, and is below what the detector claims to find
+ * from letters alone; garbled words need fewer (`detect.test.ts`).
  */
 
 import { describe, expect, test } from "bun:test";
@@ -69,7 +70,11 @@ const brokenWords = (
       );
     });
     if (foreign) {
-      broken.add(word);
+      broken.add(
+        Array.from(word)
+          .filter((char) => /[\p{L}\p{M}]/u.test(char))
+          .join(""),
+      );
       occurrences += 1;
     }
   }
@@ -117,7 +122,7 @@ const assertRoundTrip = ({
     }
   }
   const broken = brokenWords(original, misread, language);
-  if (broken.distinct >= 2 && broken.occurrences >= 3) {
+  if (broken.distinct >= 3) {
     expect(finding?.kind).toBe("misdecoded");
   }
 };
@@ -157,7 +162,7 @@ describe("real sentences", () => {
       for (const pair of common) {
         const misread = misdecode(document(language), pair) ?? "";
         expect(misread).not.toBe(document(language));
-        if (brokenWords(document(language), misread, language).distinct < 2) {
+        if (brokenWords(document(language), misread, language).distinct < 3) {
           // Slovenian: one word outside ASCII, below the floor.
           continue;
         }
@@ -235,7 +240,7 @@ describe("generated text", () => {
     );
   });
 
-  test("text in the language's own letters, symbols standing apart and one foreign name is clean", () => {
+  test("text in the language's own letters, symbols apart or attached as notation, and two foreign names however punctuated is clean", () => {
     const symbols = [
       "¾",
       "½",
@@ -252,6 +257,8 @@ describe("generated text", () => {
       "«",
       "»",
     ];
+    /** Written against a word's edge: exponents, footnote marks, degrees. */
+    const notation = ["¹", "²", "³", "°", "⁴", "⁵"];
     const foreign = [
       "Søren",
       "Straße",
@@ -261,6 +268,15 @@ describe("generated text", () => {
       "Œuvre",
       "Kőrösi",
     ];
+    /** How a name is set in running text. */
+    const punctuated = [
+      (name: string) => name,
+      (name: string) => `${name},`,
+      (name: string) => `${name}.`,
+      (name: string) => `(${name})`,
+      (name: string) => `„${name}“`,
+      (name: string) => `«${name}»`,
+    ];
     fc.assert(
       fc.property(
         fc.constantFrom(...LANGUAGES).chain((language) =>
@@ -268,16 +284,24 @@ describe("generated text", () => {
             language: fc.constant(language),
             text: exemplarText(language),
             symbols: fc.array(fc.constantFrom(...symbols), { maxLength: 6 }),
-            name: fc.constantFrom(...foreign),
-            repeats: fc.integer({ min: 0, max: 5 }),
+            marks: fc.array(fc.constantFrom(...notation), { maxLength: 6 }),
+            names: fc.uniqueArray(fc.constantFrom(...foreign), {
+              maxLength: 2,
+            }),
+            settings: fc.array(fc.constantFrom(...punctuated), {
+              maxLength: 6,
+            }),
           }),
         ),
-        ({ language, text, symbols: standalone, name, repeats }) => {
-          const document = [
-            text,
-            ...standalone,
-            ...Array.from({ length: repeats }, () => name),
-          ].join(" ");
+        ({ language, text, symbols: standalone, marks, names, settings }) => {
+          const noted = text.split(" ").map((word, index) => {
+            const mark = marks[index];
+            return mark === undefined ? word : `${word}${mark}`;
+          });
+          const mentions = names.flatMap((name) =>
+            settings.map((setting) => setting(name)),
+          );
+          const document = [...noted, ...standalone, ...mentions].join(" ");
           expect(checkTextEncoding(document, language)).toEqual({
             status: "clean",
           });
