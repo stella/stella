@@ -28,7 +28,7 @@ import {
   citationRowsOf,
   planDecisionCitations,
 } from "@/api/handlers/case-law/ingestion/pipeline/citations";
-import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { compileRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -46,7 +46,7 @@ const VectorFile = v.object({
         v.object({
           id: v.string(),
           pattern: v.string(),
-          polarity: v.string(),
+          polarity: v.picklist(POLARITIES),
           confidence: v.number(),
         }),
       ),

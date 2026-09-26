@@ -684,7 +684,7 @@ const expectOneOutcome = async (
   });
 
   const fromHolders = outcomeOf(stated);
-  expect(
+  expect<Outcome>(
     classified === undefined
       ? PENDING
       : {
@@ -835,7 +835,7 @@ test("the matrix declares every rule and every outcome", () => {
       }
     }),
   );
-  expect([...declared].toSorted()).toEqual(
+  expect<string[]>([...declared].toSorted()).toEqual(
     [
       ...CITATION_RESOLUTION_RULES,
       CITATION_RESOLUTION_STATUS.AMBIGUOUS,

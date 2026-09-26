@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import {
@@ -127,7 +128,7 @@ const readingOf = (
   };
 };
 
-const page = (start: string, end?: string) => ({
+const page = (start: string, end?: string): InlineCitationPinPart => ({
   kind: "page",
   start,
   ...(end === undefined ? {} : { end }),
@@ -419,7 +420,7 @@ describe("scopes", () => {
         documentAst: documentOf(blocks),
         citationScopes,
       });
-      expect(
+      expect<string | null>(
         Result.isError(result) &&
           result.error instanceof CitationScopesRejectedError
           ? result.error.defect
@@ -804,9 +805,16 @@ describe("pins", () => {
     expect(pinOf("347 U.S. 483, 495, 496, 497, 498.")?.parts).toHaveLength(4);
     expect(pinOf("347 U.S. 483, 1, 2, 3, 4, 5, 6, 7, 8.")).toEqual({
       raw: "1, 2, 3, 4, 5, 6, 7, 8",
-      parts: ["1", "2", "3", "4", "5", "6", "7", "8"].map((start) =>
-        page(start),
-      ),
+      parts: [
+        page("1"),
+        page("2"),
+        page("3"),
+        page("4"),
+        page("5"),
+        page("6"),
+        page("7"),
+        page("8"),
+      ],
       reporter: { type: "reporter-citation", value: "347 U.S. 483" },
     });
   });

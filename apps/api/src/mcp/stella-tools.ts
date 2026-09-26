@@ -112,6 +112,7 @@ import {
   defaultSearchDecisionsHandler,
   isReadCaseLawDecisionSuccess,
   isSearchCaseLawSuccess,
+  type ReadCaseLawDecisionSuccess,
   type SearchCaseLawSuccess,
 } from "@/api/mcp/public-law-handlers";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
@@ -2187,7 +2188,7 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
 const nonDocketReference = ({
   caseNumberType,
   identifiers,
-}: Pick<GatedDecisionRead, "caseNumberType" | "identifiers">) =>
+}: Pick<ReadCaseLawDecisionSuccess, "caseNumberType" | "identifiers">) =>
   caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
     ? {}
     : { caseNumberType, identifiers };

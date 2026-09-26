@@ -317,6 +317,14 @@ const TREATISE_RE = new RegExp(YEAR_PARENTHETICAL, "gu");
 
 type Produce = (match: RegExpExecArray) => Token | null;
 
+/** One run's scan: its text, the budget it charges and what it has found. */
+type ScanContext = {
+  readonly text: string;
+  readonly budget: CitationWorkBudget;
+  readonly identityKey: ReporterIdentityKey;
+  readonly candidates: Token[];
+};
+
 /**
  * Collects every token `re` produces, charging the budget per match; false
  * as soon as the budget is exhausted, before anything more is collected.

@@ -266,7 +266,7 @@ const occurrencesIn = ({
       occurrence.end > start,
   );
 
-const identifiedAs = (value: string) => ({
+const identifiedAs = (value: string): InlineCitationTarget => ({
   status: "identified",
   identifiers: [{ type: "reporter-citation", value }],
 });

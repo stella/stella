@@ -414,7 +414,8 @@ const resolveVolume = (
 ): Resolution => {
   const filed = token.editions.map(
     (edition) =>
-      registry.volumes.get(volumeKey(token.volume, edition)) ?? new Set(),
+      registry.volumes.get(volumeKey(token.volume, edition)) ??
+      new Set<number>(),
   );
   if (name === null) {
     return settleOn(candidatesIn(context, filed, 2), missing(registry));
