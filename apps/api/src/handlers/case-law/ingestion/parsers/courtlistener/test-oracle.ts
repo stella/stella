@@ -176,6 +176,8 @@ const HTML_BLOCKS = new Set([
   "dl",
   "dt",
   "footer",
+  // CourtListener uses <h> for block headings, including adjacent siblings.
+  "h",
   "h1",
   "h2",
   "h3",
