@@ -8,7 +8,7 @@
  * the id. Its decisions store both, and the name must be the directory's
  * canonical name for the id.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import {
   resolveWritableUsCourt,
@@ -27,6 +27,25 @@ const COURT_DIRECTORY_RESOLVER = {
   CourtDirectoryJurisdiction,
   (courtId: string) => UsWritableCourtResolution
 >;
+
+/**
+ * The courts a USA row stored before court ids existed may be given an id
+ * for: the only court the earlier write contract admitted, by its exact
+ * canonical name. A row naming anything else is never assigned one.
+ */
+const LEGACY_TRUSTED_USA_COURT_IDS = ["scotus"] as const;
+
+/** Each trusted legacy court with the exact name its rows were stored under. */
+export const legacyTrustedUsaCourts = (): readonly {
+  courtId: string;
+  name: string;
+}[] =>
+  LEGACY_TRUSTED_USA_COURT_IDS.map((courtId) => {
+    const resolution = resolveWritableUsCourt(courtId);
+    return resolution.type === "writable"
+      ? { courtId, name: resolution.court.canonicalName }
+      : panic(`Trusted legacy court is not writable: ${courtId}`);
+  });
 
 const isCourtDirectoryJurisdiction = (
   country: string,
