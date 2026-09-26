@@ -1,11 +1,12 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- One index group of a corpus generation bound to the group contract its
--- physical index is created under (corpus-index-group-contract.ts). Only a
--- group whose contract is not the generation manifest's own is enrolled; every
--- other group keeps the attestation its generation already has, and no
--- existing generation row changes.
+-- One index group of a corpus generation bound to the contract its physical
+-- index is created under (corpus-index-group-contract.ts), for a group whose
+-- index the manifest cannot vouch for: one under a group contract of its own,
+-- or one under the manifest's contract declared after the generation was
+-- created ('base'). Groups a generation was created with keep the attestation
+-- it already has, and no existing generation row changes.
 --
 -- The binding columns are written once: the ingestion role may insert a row
 -- and may move only its readiness (`provisioning_status`, `attested_at`,
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS "corpus_index_group_enrollments" (
   CONSTRAINT "corpus_index_group_enrollments_family_values"
     CHECK ("family" IN ('case_law','legislation')),
   CONSTRAINT "corpus_index_group_enrollments_contract_values"
-    CHECK ("contract_version" IN ('court_partition_v1')),
+    CHECK ("contract_version" IN ('base','court_partition_v1')),
   CONSTRAINT "corpus_index_group_enrollments_status_values"
     CHECK ("provisioning_status" IN ('pending','attested')),
   CONSTRAINT "corpus_index_group_enrollments_digest_shape"

@@ -136,7 +136,7 @@ test("a group under its manifest's contract is never enrolled and never waits", 
   const cze = { manifest: MANIFEST, indexGroup: "cs_sk" } as const;
   await expect(
     inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, cze)),
-  ).rejects.toThrow("under its manifest's contract");
+  ).rejects.toThrow("not one the registry records");
   expect(
     await inTx(
       async (tx) =>
@@ -179,14 +179,14 @@ test("a scoped read of a group refuses until it is attested; other reads never w
     cursorTarget: null,
   });
 
-  // A global read before attestation names every base group and never the
-  // unattested index, which may exist and hold documents already.
+  // A global read before attestation names the created base groups exactly,
+  // never the unattested index, which may exist and hold documents already.
   const unattestedGlobal = await target(undefined);
   expect(unattestedGlobal.contract).toBeNull();
   expect(unattestedGlobal.route.indexId).toBe(
-    "case_law_v7_aut*,case_law_v7_cs_sk*,case_law_v7_eu*,case_law_v7_hun*,case_law_v7_pol*",
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_pol",
   );
-  expect(unattestedGlobal.cursorTarget).toBeNull();
+  expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
   await expect(target("USA")).rejects.toBeInstanceOf(HandlerError);
@@ -215,8 +215,28 @@ test("a scoped read of a group refuses until it is attested; other reads never w
     .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
   expect(await target(undefined)).toMatchObject({
     route: unattestedGlobal.route,
-    cursorTarget: null,
+    cursorTarget: unattestedGlobal.cursorTarget,
   });
+
+  // A group declared after the generation was built is reached globally only
+  // once its index is attested against the manifest it was created under;
+  // its scoped reads never wait on that.
+  const hun = { manifest: MANIFEST, indexGroup: "hun" } as const;
+  expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
+  await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
+  expect((await target(undefined)).route).toEqual(unattestedGlobal.route);
+  await inTx(
+    async (tx) =>
+      await attestCorpusIndexGroupEnrollmentTx(tx, {
+        ...hun,
+        effectiveDigest: corpusIndexManifestDigest(MANIFEST),
+      }),
+  );
+  const withHun = await target(undefined);
+  expect(withHun.route.indexId).toBe(
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun,case_law_v7_pol",
+  );
+  expect(withHun.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
 });
 
 test("an attestation withdrawn after reservation stops the append at start, and the work waits for the next one", async () => {

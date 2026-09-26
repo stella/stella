@@ -60,6 +60,16 @@ export type CorpusIndexGroupContractVersion =
   (typeof CORPUS_INDEX_GROUP_CONTRACT_VERSIONS)[number];
 
 /**
+ * The contracts a group enrollment row may record: a group contract, or
+ * `base` for a group under its manifest's contract that was declared after
+ * the generation was created and is enrolled once its index exists.
+ */
+export const CORPUS_INDEX_ENROLLMENT_CONTRACTS = [
+  "base",
+  ...CORPUS_INDEX_GROUP_CONTRACT_VERSIONS,
+] as const;
+
+/**
  * The contract each case-law index group is created under. Total, so a new
  * group answers explicitly: `base` keeps the manifest's configuration exactly,
  * which is what every group that existed before a group contract did.
