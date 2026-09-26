@@ -96,7 +96,7 @@ const rawAssistantContinuationMessageSchema = t.Object(
   { additionalProperties: true },
 );
 
-export const userContextSchema = t.Object({
+const userContextSchema = t.Object({
   userName: t.String(),
   locale: t.String(),
   timezone: t.String(),

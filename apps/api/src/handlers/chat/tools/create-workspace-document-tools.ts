@@ -44,10 +44,6 @@ const createWorkspaceDocumentInputSchema = v.strictObject({
   ),
 });
 
-export type CreateWorkspaceDocumentInput = v.InferOutput<
-  typeof createWorkspaceDocumentInputSchema
->;
-
 // Mirrors the shape `buildCreatedDocumentToolOutput` returns (fileName +
 // ref-mediated mention fields) — the same output the client-executed
 // `create-document` tool and the `create-from-legal-source` REST endpoint

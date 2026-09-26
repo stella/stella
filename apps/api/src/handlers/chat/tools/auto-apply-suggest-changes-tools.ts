@@ -66,7 +66,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  * a "set your name" modal inline, then retries the same tool call, instead
  * of just reporting a generic error to the model.
  */
-export const SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE = "author_name_required";
+const SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE = "author_name_required";
 
 const operationIdSchema = v.strictObject({ id: v.string() });
 

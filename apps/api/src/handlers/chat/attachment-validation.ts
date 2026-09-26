@@ -166,7 +166,7 @@ export const validateStoredFileRefs = ({
   return Result.ok();
 };
 
-export const getUserFileIdFromPart = (
+const getUserFileIdFromPart = (
   part: ChatPart,
 ): Result<SafeId<"userFile">, HandlerError<400>> => {
   if (!isChatAttachmentPart(part)) {

@@ -34,7 +34,7 @@ export type ExecuteToolFunction<
   outputSchema: TOutputSchema;
 };
 
-export type ExecuteToolFunctionExecuteProps = {
+type ExecuteToolFunctionExecuteProps = {
   input: unknown;
   signal: AbortSignal;
 };
@@ -60,7 +60,7 @@ export type ExecuteToolHandler<
   unknown
 >;
 
-export type ExecuteToolHandlerProps = {
+type ExecuteToolHandlerProps = {
   signal: AbortSignal;
 };
 

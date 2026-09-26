@@ -75,7 +75,7 @@ export type ChatDataScopeExpansion = {
   newWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export type ChatDataScopeReplacement = {
+type ChatDataScopeReplacement = {
   newDataWorkspaceIds: readonly SafeId<"workspace">[];
   observedDataWorkspaceIds: readonly SafeId<"workspace">[];
 };

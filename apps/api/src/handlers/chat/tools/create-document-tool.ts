@@ -109,13 +109,6 @@ const createDocumentToolOutputSchema = v.union([
   }),
 ]);
 
-export type CreateDocumentToolInput = v.InferOutput<
-  typeof createDocumentToolInputSchema
->;
-export type CreateDocumentToolOutput = v.InferOutput<
-  typeof createDocumentToolOutputSchema
->;
-
 export const createCreateDocumentTool = () =>
   toolDefinition({
     name: CREATE_DOCUMENT_TOOL_NAME,

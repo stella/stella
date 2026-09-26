@@ -28,7 +28,6 @@ import type {
   AssertTrue,
   HandlerOutputsMatchByName,
   McpToolHandler,
-  TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 
 import type {
@@ -100,11 +99,6 @@ const isProjectableRegistryReadToolName = (
   toolName: RegistryReadToolName,
 ): toolName is ProjectableRegistryReadToolName =>
   READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
-
-export type RegistryReadToolDataByName = TypedHandlerDataByName<
-  typeof REGISTRY_READ_TOOL_HANDLERS,
-  ProjectableRegistryReadToolName
->;
 
 type RegistryReadProjectionDataByName = ProjectionDataByName<
   typeof READ_TOOL_REF_FIELD_MAP,

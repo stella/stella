@@ -62,7 +62,7 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
  * separate query) so resolving a message page never costs more than the
  * lookup that would have run anyway.
  */
-export type ThreadMetadata = {
+type ThreadMetadata = {
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
   contextMatterIds: SafeId<"workspace">[];

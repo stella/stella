@@ -19,13 +19,13 @@ import { transpileSandboxSource } from "@/api/handlers/chat/tools/execute/sandbo
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
 import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 
-export type SandboxFunction = {
+type SandboxFunction = {
   execute: (props: SandboxFunctionExecuteProps) => Promise<unknown>;
 };
 
 export type SandboxFunctionRegistry = Record<string, SandboxFunction>;
 
-export type SandboxFunctionExecuteProps = {
+type SandboxFunctionExecuteProps = {
   input: unknown;
   signal: AbortSignal;
 };
@@ -82,7 +82,7 @@ export type RunSandboxInput = {
   limits?: Partial<SandboxLimits>;
 };
 
-export type RunSandboxSuccess = {
+type RunSandboxSuccess = {
   value: unknown;
   hostCalls: number;
   durationMs: number;
@@ -121,7 +121,7 @@ const sandboxHostWorkInFlight = new Set<Promise<void>>();
  * ceiling, so a genuinely stranded host promise fails the drain fast with a
  * diagnostic instead of silently 15s-timing-out every subsequent test.
  */
-export const SANDBOX_ADMISSION_IDLE_TIMEOUT_MS = 10_000;
+const SANDBOX_ADMISSION_IDLE_TIMEOUT_MS = 10_000;
 
 type SandboxAdmissionSnapshot = {
   activeSandboxCount: number;

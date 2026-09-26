@@ -368,7 +368,7 @@ export type ChatUntrustedPromptSuffix = v.InferOutput<
   typeof chatUntrustedPromptSuffixSchema
 >;
 
-export type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
+type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 
 export type ChatPromptParts = {
   cacheStablePrefix: ChatCacheStablePrefix;

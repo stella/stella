@@ -5,7 +5,7 @@ type AnonymizationMessage = {
   metadata?: { anonRestorations?: unknown } | undefined;
 };
 
-export const messagesCarryAnonymizationRestorations = (
+const messagesCarryAnonymizationRestorations = (
   messages: readonly AnonymizationMessage[],
 ): boolean =>
   messages.some((message) => message.metadata?.anonRestorations !== undefined);

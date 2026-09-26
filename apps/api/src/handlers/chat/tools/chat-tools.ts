@@ -1,8 +1,6 @@
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
-  type ApprovalRequiredBuiltInChatToolName,
   type BrowserClientCapability,
-  type BuiltInChatToolPolicyKindByName,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -94,7 +92,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
-export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
+const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
 /**
  * Combine deploy/BYOK provider availability with the org's native-tool
@@ -585,19 +583,6 @@ true satisfies Exclude<
 > extends never
   ? true
   : never;
-
-/** Every built-in chat tool's policy kind, keyed by tool name. Single source
- * of truth consumers (e.g. the web client) derive their own tool-name unions
- * from, instead of hand-mirroring this classification. */
-export type { BuiltInChatToolPolicyKindByName };
-
-/**
- * Built-in tool names whose policy kind requires approval, derived from
- * {@link BuiltInChatToolPolicyKindByName} and {@link NeedsApprovalPolicyKind}
- * rather than hand-listed, so a reclassified tool moves in or out of this
- * union automatically.
- */
-export type { ApprovalRequiredBuiltInChatToolName };
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {

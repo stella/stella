@@ -12,7 +12,7 @@ import type { ChatTitleSource } from "@/api/db/schema";
 export const aiTitlingMayReplace = (source: ChatTitleSource): boolean =>
   source === CHAT_TITLE_SOURCE.DEFAULT;
 
-export const isPlaceholderThreadTitle = (title: string) =>
+const isPlaceholderThreadTitle = (title: string) =>
   title === CHAT_THREAD_PLACEHOLDER_TITLE;
 
 type ShouldRefreshEmptyThreadTitleProps = {

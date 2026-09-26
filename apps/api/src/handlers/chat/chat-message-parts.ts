@@ -89,7 +89,7 @@ export type LegacyAiSdkFilePart = {
   url: string;
 };
 
-export type LegacyAiSdkTextPart = {
+type LegacyAiSdkTextPart = {
   text: string;
   type: "text";
 };
@@ -186,20 +186,16 @@ export const createChatAttachmentPart = ({
   };
 };
 
-export const isLegacyAiSdkTextPart = (
-  part: unknown,
-): part is LegacyAiSdkTextPart =>
+const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
   isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
 
-export const isLegacyAiSdkFilePart = (
-  part: unknown,
-): part is LegacyAiSdkFilePart =>
+const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
   isRecord(part) &&
   part["type"] === "file" &&
   typeof part["mediaType"] === "string" &&
   typeof part["url"] === "string";
 
-export const legacyAiSdkTextPartToTanStack = (
+const legacyAiSdkTextPartToTanStack = (
   part: LegacyAiSdkTextPart,
 ): Extract<ChatTanStackPart, { type: "text" }> => ({
   type: "text",
@@ -217,7 +213,7 @@ export const legacyAiSdkFilePartToTanStack = (
     url: part.url,
   });
 
-export const normalizeLegacyMessagePartsToTanStack = (
+const normalizeLegacyMessagePartsToTanStack = (
   parts: readonly unknown[],
 ): NormalizedLegacyMessageParts => {
   const normalized: ChatPart[] = [];
@@ -596,30 +592,6 @@ const CHAT_PART_POLICY = {
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
-export const toProviderVisibleMessage = (
-  message: ChatMessage,
-): ChatMessage | null => {
-  if (
-    message.metadata?.turnOutcome?.type === "cancelled" ||
-    message.metadata?.turnOutcome?.type === "failed" ||
-    message.metadata?.turnOutcome?.type === "interrupted"
-  ) {
-    return null;
-  }
-  const parts: ChatPart[] = [];
-  for (const part of message.parts) {
-    if (isProviderVisibleChatPart(part)) {
-      parts.push(part);
-    }
-  }
-  if (parts.length === 0) {
-    return null;
-  }
-  return parts.length === message.parts.length
-    ? message
-    : { ...message, parts };
-};
-
 /**
  * Whether a client-executed tool call (ask-user, or any tool without a server
  * `execute`) still awaits its client resolution. A server-executed call never
@@ -870,19 +842,6 @@ export const getResumedUserInteraction = ({
     }
   }
   return unchangedInteraction;
-};
-
-export const toProviderVisibleMessages = (
-  messages: readonly ChatMessage[],
-): ChatMessage[] => {
-  const visible: ChatMessage[] = [];
-  for (const message of messages) {
-    const next = toProviderVisibleMessage(message);
-    if (next) {
-      visible.push(next);
-    }
-  }
-  return visible;
 };
 
 export const getUserFileIdFromAttachmentPart = (

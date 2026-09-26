@@ -520,13 +520,6 @@ export type TypedMcpToolHandler<TData> = (options: {
 type TypedHandlerData<THandler> =
   THandler extends McpToolHandler<infer TData> ? TData : never;
 
-export type TypedHandlerDataByName<
-  THandlers,
-  TNames extends keyof THandlers,
-> = {
-  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
-};
-
 type IsAny<TValue> = 0 extends 1 & TValue ? true : false;
 
 type IsNever<TValue> = [TValue] extends [never] ? true : false;
