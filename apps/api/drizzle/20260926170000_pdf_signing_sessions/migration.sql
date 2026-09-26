@@ -107,6 +107,25 @@ CREATE UNIQUE INDEX "pdf_signing_sessions_open_uidx"
 ALTER TABLE "pdf_signing_sessions"
   ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 
+-- Forced, so the owner login is held to policies too. It gets only what its
+-- token-authenticated paths need: reading a session by its token, spending
+-- an open handoff on redemption, and removing a deleted account's sessions.
+ALTER TABLE "pdf_signing_sessions"
+  FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+
+CREATE POLICY "owner_select" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR SELECT TO current_user
+  USING (true);--> statement-breakpoint
+
+CREATE POLICY "owner_redeem_update" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR UPDATE TO current_user
+  USING ("status" = 'open' AND "handoff_consumed_at" IS NULL)
+  WITH CHECK ("status" = 'open');--> statement-breakpoint
+
+CREATE POLICY "owner_delete" ON "pdf_signing_sessions"
+  AS PERMISSIVE FOR DELETE TO current_user
+  USING (true);--> statement-breakpoint
+
 CREATE POLICY "workspace_select" ON "pdf_signing_sessions"
   AS PERMISSIVE FOR SELECT TO "stella"
   USING (workspace_id = ANY((SELECT current_setting(
