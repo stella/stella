@@ -190,7 +190,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
         }),
       );
     }
-    const { digestHex } = captured.value;
+    const { digestHex, signedAttributes } = captured.value;
 
     yield* Result.await(
       session.safeDb(async (tx) => {
@@ -203,6 +203,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
             digestHex,
             keyType: inspection.keyType,
             placeholderSize,
+            signedAttributes: Buffer.from(signedAttributes),
             signerCertificateChain: signerChain.map((der) =>
               Buffer.from(der).toString("base64"),
             ),

@@ -21,6 +21,7 @@ export type PdfSigningCloseReason =
   | "certificate_rejected"
   | "certified_document"
   | "digest_mismatch"
+  | "signature_invalid"
   | "signing_failed"
   | "unsupported_platform"
   | "user_cancelled";

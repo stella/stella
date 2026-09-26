@@ -5104,6 +5104,7 @@ type Messages = {
         "cancelledDigestDescription": "The signature did not match the prepared document. Try signing again.";
         "cancelledFailedDescription": "The signature could not be added to this PDF.";
         "cancelledPlatformDescription": "Signing with a certificate from the system keychain works on macOS for now.";
+        "cancelledSignatureDescription": "The signature from stella desktop did not match the selected certificate. Try signing again.";
         "cancelledTitle": "Signing cancelled";
         "cancelledUserDescription": "Signing was cancelled in stella desktop.";
         "encryptedDescription": "This PDF is password-protected. Remove the protection before signing.";
