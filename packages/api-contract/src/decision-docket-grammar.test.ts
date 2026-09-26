@@ -235,6 +235,27 @@ describe("declared decision docket grammars", () => {
     expect(canonicalDecisionIdentifierKey("21-123")).toBe("21");
   });
 
+  test("a United States docket is read only under its own scope", () => {
+    for (const {
+      canonical,
+      variants,
+    } of DECISION_DOCKET_GRAMMAR_FIXTURES.USA) {
+      for (const docket of [canonical, ...variants]) {
+        expect([docket, parseDecisionDocket(docket)]).toEqual([docket, null]);
+        expect(
+          parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.USA })
+            ?.jurisdiction,
+        ).toBe("USA");
+      }
+    }
+    for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
+      expect([text, parseDecisionDocket(text)]).toEqual([text, null]);
+    }
+    expect(decisionDocketGrammarForJurisdiction("usa")).toBe(
+      DECISION_DOCKET_GRAMMARS.USA,
+    );
+  });
+
   test("a bare number or prose is not a United States docket", () => {
     for (const text of [
       "1",

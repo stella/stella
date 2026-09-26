@@ -49,13 +49,25 @@ export const parseDecisionQuery = (
 /**
  * The identity of a docket or ECLI as publishers vary it: case, spacing and
  * dash style are theirs, not the docket's, and the sheet number names a page
- * of the file rather than the decision.
+ * of the file rather than the decision. Read through the scope's grammar when
+ * there is one, and through the unscoped grammars otherwise.
  */
-const decisionIdentifierComparisonKey = (value: string): string => {
-  const docket = parseDecisionDocket(value);
+const decisionIdentifierComparisonKey = (
+  value: string,
+  grammar: DecisionDocketGrammar | null | undefined,
+): string => {
+  const docket = parseDecisionDocket(value, { grammar });
   return docket === null
     ? canonicalDecisionIdentifierKey(value)
     : canonicalDecisionDocket(docket);
+};
+
+type ExactDecisionMatchOptions = {
+  /**
+   * The scope the entry was read under, the same one `parseDecisionQuery`
+   * took. Omitted, identifiers compare the way an unscoped entry parses.
+   */
+  readonly grammar?: DecisionDocketGrammar | null | undefined;
 };
 
 type DecisionHitIdentity = {
@@ -75,15 +87,15 @@ type DecisionHitIdentity = {
 export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
   identifier: string,
   hits: readonly THit[],
+  { grammar }: ExactDecisionMatchOptions = {},
 ): THit[] => {
-  const wanted = decisionIdentifierComparisonKey(identifier);
+  const keyOf = (value: string): string =>
+    decisionIdentifierComparisonKey(value, grammar);
+  const wanted = keyOf(identifier);
   return hits.filter(
     (hit) =>
-      decisionIdentifierComparisonKey(hit.caseNumber) === wanted ||
-      (hit.ecli !== null &&
-        decisionIdentifierComparisonKey(hit.ecli) === wanted) ||
-      hit.identifiers?.some(
-        ({ value }) => decisionIdentifierComparisonKey(value) === wanted,
-      ) === true,
+      keyOf(hit.caseNumber) === wanted ||
+      (hit.ecli !== null && keyOf(hit.ecli) === wanted) ||
+      hit.identifiers?.some(({ value }) => keyOf(value) === wanted) === true,
   );
 };

@@ -191,11 +191,12 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     ...RANK.supreme,
   },
   // United States. One enrolled court, stored under its directory name
-  // (`us-courts.ts`); it is the apex of its hierarchy.
+  // (`us-courts.ts`) and ranked at the tier that directory declares for it.
+  // No court of this jurisdiction holds the constitutional rank.
   {
     country: "USA",
     courtPattern: "^supreme court of the united states$",
-    ...RANK.constitutional,
+    ...RANK.supreme,
   },
 ];
 

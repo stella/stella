@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
-import { US_COURT_NAMES } from "@stll/api-contract/us-courts";
+import { US_COURTS } from "@stll/api-contract/us-courts";
 
 import {
   COURT_WEIGHT_SEED,
@@ -11,6 +11,7 @@ import {
   courtWeightSeedSql,
   seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
+import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,
@@ -32,10 +33,10 @@ const migrationPath = (directory: string) =>
 const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA"]);
 
 /**
- * Jurisdictions whose apex court is also their supreme court, so one rank
- * answers for both.
+ * Jurisdictions whose enrolled courts include no constitutional court, so the
+ * seed declares no constitutional rank for them.
  */
-const SINGLE_APEX_JURISDICTIONS: ReadonlySet<string> = new Set(["USA"]);
+const WITHOUT_A_CONSTITUTIONAL_COURT: ReadonlySet<string> = new Set(["USA"]);
 
 describe("court weight seed", () => {
   test("each seed migration is the rendering of its part of the declaration", async () => {
@@ -81,10 +82,12 @@ describe("court weight seed", () => {
     ]);
     for (const [country, entries] of map) {
       const labels = entries.map((entry) => entry.tierLabel);
-      expect(labels, country).toContain("constitutional");
-      if (!SINGLE_APEX_JURISDICTIONS.has(country)) {
-        expect(labels, country).toContain("supreme");
+      if (WITHOUT_A_CONSTITUTIONAL_COURT.has(country)) {
+        expect(labels, country).not.toContain("constitutional");
+      } else {
+        expect(labels, country).toContain("constitutional");
       }
+      expect(labels, country).toContain("supreme");
       expect(entries.map((entry) => entry.tier)).toEqual(
         entries.map((entry) => entry.tier).toSorted((a, b) => b - a),
       );
@@ -132,7 +135,7 @@ describe("court weight seed", () => {
       ["HUN", "Debreceni Járásbíróság", "district"],
       ["EU", "Court of Justice", "constitutional"],
       ["EU", "General Court", "supreme"],
-      ["USA", "Supreme Court of the United States", "constitutional"],
+      ["USA", "Supreme Court of the United States", "supreme"],
     ];
     for (const [country, court, label] of stored) {
       const entry = seededCourtWeightEntries(country).find((candidate) =>
@@ -238,14 +241,24 @@ describe("court weight seed", () => {
     }
   });
 
-  test("the United States ranks each enrolled court once, and nothing else", () => {
+  test("the United States ranks each enrolled court once, at its directory tier", () => {
     // Its decisions carry the directory's canonical court names, so the rank
-    // is anchored to that spelling rather than to words other courts share.
-    for (const court of US_COURT_NAMES) {
+    // is anchored to that spelling rather than to words other courts share,
+    // and both the seeded label and the tier a reader is shown are the one
+    // the directory declares.
+    for (const court of US_COURTS) {
       const matched = seededCourtWeightEntries("USA").filter((entry) =>
-        entry.pattern.test(court),
+        entry.pattern.test(court.name),
       );
-      expect([court, matched.length]).toEqual([court, 1]);
+      expect(
+        matched.map((entry) => ({
+          court: court.name,
+          displayed: courtTierLabel(entry.tier),
+          seeded: entry.tierLabel,
+        })),
+      ).toEqual([
+        { court: court.name, displayed: court.tier, seeded: court.tier },
+      ]);
     }
     for (const court of [
       "Supreme Court of California",

@@ -170,11 +170,18 @@ describe("the hits that are the named decision", () => {
     ).toEqual([hit("G 1/2099")]);
   });
 
-  test("a United States docket number is identity, not a sheet", () => {
+  test("under its own scope a United States docket number is identity, not a sheet", () => {
+    const usa = { grammar: DECISION_DOCKET_GRAMMARS.USA };
     const hits = [hit("21-123"), hit("21-456")];
-    expect(exactDecisionMatches("21-123", hits)).toEqual([hit("21-123")]);
-    expect(exactDecisionMatches("No. 21-456", hits)).toEqual([hit("21-456")]);
-    expect(exactDecisionMatches("21-789", hits)).toEqual([]);
+    expect(exactDecisionMatches("21-123", hits, usa)).toEqual([hit("21-123")]);
+    expect(exactDecisionMatches("No. 21-456", hits, usa)).toEqual([
+      hit("21-456"),
+    ]);
+    expect(exactDecisionMatches("21-789", hits, usa)).toEqual([]);
+    expect(exactDecisionMatches("10-12", [hit("10-34")], usa)).toEqual([]);
+    expect(
+      exactDecisionMatches("No. 5", [hit("No. 5"), hit("No. 6")], usa),
+    ).toEqual([hit("No. 5")]);
     expect(
       parseDecisionQuery("No. 21-123", {
         grammar: DECISION_DOCKET_GRAMMARS.USA,
@@ -183,6 +190,18 @@ describe("the hits that are the named decision", () => {
     expect(
       parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
     ).toEqual({ type: "text", text: "2079" });
+  });
+
+  test("unscoped, those forms read and compare as they did before any scope declared them", () => {
+    for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
+      expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+    }
+    // `no.5` against `5`: the generic key keeps the two apart.
+    expect(exactDecisionMatches("No. 5", [hit("5")])).toEqual([]);
+    // The generic key reads a trailing number as a sheet, so both are `10`.
+    expect(exactDecisionMatches("10-12", [hit("10-34")])).toEqual([
+      hit("10-34"),
+    ]);
   });
 
   test("a Polish division split across tokens keeps the same identity", () => {
