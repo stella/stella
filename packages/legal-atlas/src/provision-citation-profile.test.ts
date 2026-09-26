@@ -16,10 +16,7 @@ type TableEntry =
 const PROFILES = [
   { name: "Czech", profile: CZ_PROFILE },
   { name: "Slovak", profile: SK_PROFILE },
-] as const satisfies readonly {
-  name: string;
-  profile: JurisdictionProfile;
-}[];
+];
 
 const entriesOf = (profile: JurisdictionProfile): TableEntry[] => [
   ...profile.aliases.map((spec) => ({ kind: "alias" as const, spec })),
