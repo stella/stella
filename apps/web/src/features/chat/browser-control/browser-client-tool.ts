@@ -10,14 +10,19 @@ import {
 import { beginBrowserCommand } from "./browser-approval-mode";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
+import { createTurnStopper } from "./browser-turn";
 
 type BrowserClientToolOptions = {
-  /** The chat turn now running; the extension budgets commands per turn. */
-  currentTurnId: () => string;
+  /**
+   * The chat turn a tool call belongs to, or the latest turn without one;
+   * null before the thread has a user message. The extension budgets
+   * commands per turn, and Stop ends a turn.
+   */
+  turnIdFor: (toolCallId?: string) => string | null;
 };
 
 export const createBrowserClientTool = ({
-  currentTurnId,
+  turnIdFor,
 }: BrowserClientToolOptions) => {
   // The outcome is tracked per web tab, not per chat runtime: every chat in
   // this tab drives the same controlled Chrome tab.
@@ -25,7 +30,7 @@ export const createBrowserClientTool = ({
     executeBrowserExtensionCommand,
     beginBrowserCommand,
   );
-  let stop = new AbortController();
+  const stopper = createTurnStopper();
 
   const tool = toolDefinition({
     name: BROWSER_CONTROL_TOOL_NAME,
@@ -38,20 +43,26 @@ export const createBrowserClientTool = ({
     if (toolCallId === undefined) {
       return panic("Browser client tool execution omitted its tool-call id");
     }
+    const turnId =
+      turnIdFor(toolCallId) ??
+      panic("A browser command ran in a thread without a user message");
     return await executions.executeOnce(toolCallId, input, {
-      signal: stop.signal,
-      turnId: currentTurnId(),
+      signal: stopper.signalFor(turnId),
+      turnId,
     });
   });
 
   return {
     /**
-     * Stops this chat's browser commands: the extension is told to stop, a
-     * running command ends at once, and nothing still queued runs.
+     * Stops the latest turn's browser commands: the extension is told to
+     * stop, a running command ends at once, and no command of that turn runs
+     * afterwards, even one already approved.
      */
     cancel(): void {
-      stop.abort();
-      stop = new AbortController();
+      const turnId = turnIdFor();
+      if (turnId !== null) {
+        stopper.stop(turnId);
+      }
     },
     tool,
   };

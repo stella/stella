@@ -29,6 +29,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -428,15 +429,11 @@ export const createChatRuntime = ({
     },
   } satisfies ConnectConnectionAdapter;
 
-  // A turn starts with a user message, a regeneration or a route hand-off;
-  // tool results and approvals continue it. The extension budgets browser
-  // commands per turn.
-  let browserTurnId = crypto.randomUUID();
-  const startBrowserTurn = (): void => {
-    browserTurnId = crypto.randomUUID();
-  };
+  // The extension budgets browser commands per chat turn, named by its
+  // persisted user message, so a runtime rebuilt mid-turn charges the same
+  // turn.
   const browserTool = createBrowserClientTool({
-    currentTurnId: () => browserTurnId,
+    turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
@@ -596,7 +593,6 @@ export const createChatRuntime = ({
       throw captureRuntimeError(new ChatMessageStartError(message.id));
     }
     startTurn();
-    startBrowserTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
@@ -824,7 +820,6 @@ export const createChatRuntime = ({
     getSnapshot: () => snapshot,
     reload: async (options) => {
       startTurn();
-      startBrowserTurn();
       await withBody(
         {
           body: {
