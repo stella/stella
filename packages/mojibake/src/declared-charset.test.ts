@@ -62,6 +62,32 @@ describe("bytes read as the charset they declare", () => {
     ).toEqual({ text: SENTENCE, charset: "utf-8", source: "bom" });
   });
 
+  test("an HTTP charset of UTF-16 needs no byte-order mark", () => {
+    for (const [label, encode] of [
+      ["utf-16le", (text: string) => Buffer.from(text, "utf16le")],
+      ["utf-16be", (text: string) => Buffer.from(text, "utf16le").swap16()],
+      ["utf-16", (text: string) => Buffer.from(text, "utf16le")],
+    ] as const) {
+      const html = `<p>${SENTENCE}</p>`;
+      expect(
+        decodeDeclared(encode(html), {
+          contentType: `text/html; charset=${label}`,
+        }),
+      ).toEqual({
+        text: html,
+        charset: label === "utf-16be" ? "utf-16be" : "utf-16le",
+        source: "http",
+      });
+    }
+  });
+
+  test("a document that declares UTF-16 in ASCII bytes reads as UTF-8", () => {
+    const html = `<meta charset="utf-16"><p>${SENTENCE}</p>`;
+    expect(
+      decodeDeclared(new TextEncoder().encode(html), { contentType: null }),
+    ).toEqual({ text: html, charset: "utf-8", source: "document" });
+  });
+
   test("nothing declared, or a label the platform does not know, reads as UTF-8", () => {
     const bytes = new TextEncoder().encode(`<p>${SENTENCE}</p>`);
     expect(

@@ -90,10 +90,15 @@ export const decodeDeclared = (
     ["document", documentLabel(bytes)],
   ];
   for (const [source, label] of candidates) {
-    const decoder = label === null ? null : decoderFor(label);
+    const declared = label === null ? null : decoderFor(label);
     // A document that declares UTF-16 in ASCII bytes is not UTF-16; WHATWG
-    // reads such a declaration as UTF-8, and so does this.
-    if (decoder !== null && !decoder.encoding.startsWith("utf-16")) {
+    // reads such a declaration as UTF-8, and so does this. The transport's
+    // charset is not written in the bytes, so UTF-16 there is what it says.
+    const decoder =
+      source === "document" && declared?.encoding.startsWith("utf-16") === true
+        ? new LabelledTextDecoder("utf-8")
+        : declared;
+    if (decoder !== null) {
       return { text: decoder.decode(bytes), charset: decoder.encoding, source };
     }
   }
