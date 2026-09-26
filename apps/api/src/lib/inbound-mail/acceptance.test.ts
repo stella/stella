@@ -12,6 +12,7 @@ import type { MailAuthentication } from "@/api/lib/inbound-mail/authentication";
 
 const auth = {
   source: "provider",
+  evidence: "identifiers",
   fromDomain: "example.com",
   spf: { result: "pass", domain: "example.com", alignment: "relaxed" },
   dkim: [],
