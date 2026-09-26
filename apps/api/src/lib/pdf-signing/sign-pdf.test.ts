@@ -8,6 +8,8 @@ import {
   captureSigningDigest,
   PdfSigningCertifiedDocumentError,
   PdfSigningDigestMismatchError,
+  PdfSigningPlaceholderTooSmallError,
+  signaturePlaceholderSize,
 } from "@/api/lib/pdf-signing/sign-pdf";
 import { buildCertifiedPdf } from "@/api/tests/helpers/certified-pdf";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
@@ -55,6 +57,10 @@ const buildBasePdf = async () => {
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
+const digestOf = async (
+  invocation: Parameters<typeof captureSigningDigest>[0],
+) => (await captureSigningDigest(invocation)).digestHex;
+
 const buildInvocation = async () => {
   const { der, privateKey } = await createSelfSignedCertificate({
     notBefore: new Date(SIGNING_TIME.getTime() - 3_600_000),
@@ -67,7 +73,13 @@ const buildInvocation = async () => {
       certificateChain: [],
       keyType: "RSA" as const,
       location: null,
+      placeholderSize: signaturePlaceholderSize({
+        certificate: der,
+        certificateChain: [],
+        timestamped: true,
+      }),
       reason: null,
+      reserveTimestamp: true,
       signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
       signingTime: SIGNING_TIME,
     },
@@ -79,7 +91,7 @@ describe("two-phase PDF signing", () => {
   test("publishes a digest the desktop can sign and then accepts that signature", async () => {
     const { invocation, privateKey } = await buildInvocation();
 
-    const digestHex = await captureSigningDigest(invocation);
+    const digestHex = await digestOf(invocation);
     expect(digestHex).toMatch(/^[0-9a-f]{64}$/u);
 
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
@@ -108,7 +120,7 @@ describe("two-phase PDF signing", () => {
 
   test("the signature the desktop produced verifies against its certificate", async () => {
     const { invocation, privateKey } = await buildInvocation();
-    const digestHex = await captureSigningDigest(invocation);
+    const digestHex = await digestOf(invocation);
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
 
     const recovered = crypto.publicDecrypt(
@@ -138,12 +150,12 @@ describe("two-phase PDF signing", () => {
   test("the digest depends only on the inputs both phases replay", async () => {
     const { invocation } = await buildInvocation();
 
-    const digestHex = await captureSigningDigest(invocation);
-    expect(await captureSigningDigest(invocation)).toBe(digestHex);
+    const digestHex = await digestOf(invocation);
+    expect(await digestOf(invocation)).toBe(digestHex);
 
     // The signing time is a signed attribute, so it must be persisted in
     // phase 1 rather than re-read from the clock in phase 2.
-    const laterTime = await captureSigningDigest({
+    const laterTime = await digestOf({
       ...invocation,
       signingTime: new Date(SIGNING_TIME.getTime() + 60_000),
     });
@@ -151,7 +163,7 @@ describe("two-phase PDF signing", () => {
 
     // The reason lands in the signature dictionary, which the hashed range
     // covers, so it changes what has to be signed too.
-    const withReason = await captureSigningDigest({
+    const withReason = await digestOf({
       ...invocation,
       reason: "Approved",
     });
@@ -160,7 +172,7 @@ describe("two-phase PDF signing", () => {
 
   test("refuses to embed a signature prepared for different bytes", async () => {
     const { invocation, privateKey } = await buildInvocation();
-    const digestHex = await captureSigningDigest(invocation);
+    const digestHex = await digestOf(invocation);
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
 
     const otherDigestHex = new Bun.CryptoHasher("sha256")
@@ -181,7 +193,7 @@ describe("two-phase PDF signing", () => {
   test("refuses before any digest exists when a certification forbids changes", async () => {
     const { invocation } = await buildInvocation();
 
-    const locked = await captureSigningDigest({
+    const locked = await digestOf({
       ...invocation,
       basePdf: await buildCertifiedPdf({ permission: 1 }),
     }).catch((error: unknown) => error);
@@ -191,7 +203,7 @@ describe("two-phase PDF signing", () => {
     // approval signature, so those certifications still prepare a digest.
     for (const permission of [2, 3]) {
       expect(
-        await captureSigningDigest({
+        await digestOf({
           ...invocation,
           basePdf: await buildCertifiedPdf({ permission }),
         }),
@@ -201,7 +213,7 @@ describe("two-phase PDF signing", () => {
 
   test("takes trusted time from the next authority when one fails", async () => {
     const { invocation, privateKey } = await buildInvocation();
-    const digestHex = await captureSigningDigest(invocation);
+    const digestHex = await digestOf(invocation);
     const signature = await signDigestLikeAKeychain(privateKey, digestHex);
     const working = await createTestTimestampAuthority();
 
@@ -272,7 +284,7 @@ describe("two-phase PDF signing", () => {
           ? [issuing.der, root.der]
           : [issuing.der],
       };
-      const digestHex = await captureSigningDigest(invocation);
+      const digestHex = await digestOf(invocation);
       const signature = await signDigestLikeAKeychain(
         leaf.privateKey,
         digestHex,
@@ -344,6 +356,67 @@ describe("two-phase PDF signing", () => {
       expect(applied.level).toBe("B-T");
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
+    });
+  });
+
+  describe("the signature placeholder", () => {
+    test("grows with the certificates and the timestamp it must hold", async () => {
+      const { invocation } = await buildInvocation();
+      const bare = signaturePlaceholderSize({
+        certificate: invocation.certificate,
+        certificateChain: [],
+        timestamped: false,
+      });
+      const timestamped = signaturePlaceholderSize({
+        certificate: invocation.certificate,
+        certificateChain: [],
+        timestamped: true,
+      });
+      const longChain = signaturePlaceholderSize({
+        certificate: invocation.certificate,
+        certificateChain: Array.from({ length: 6 }, () => new Uint8Array(8000)),
+        timestamped: true,
+      });
+
+      expect(bare).toBeGreaterThanOrEqual(16_384);
+      expect(timestamped).toBeGreaterThanOrEqual(32_768);
+      expect(longChain).toBeGreaterThan(6 * 8000 + 16_384);
+    });
+
+    test("an undersized placeholder is refused in phase 1, before anything is signed", async () => {
+      const { invocation } = await buildInvocation();
+
+      const refused = await captureSigningDigest({
+        ...invocation,
+        placeholderSize: 2048,
+      }).catch((error: unknown) => error);
+
+      expect(refused).toBeInstanceOf(PdfSigningPlaceholderTooSmallError);
+    });
+
+    test("the timestamp reserve is checked in phase 1 too", async () => {
+      const { invocation } = await buildInvocation();
+      // Room for the signature alone: enough without a timestamp coming,
+      // too little once one has to fit beside it.
+      const withoutTimestamp = signaturePlaceholderSize({
+        certificate: invocation.certificate,
+        certificateChain: [],
+        timestamped: false,
+      });
+
+      expect(
+        await digestOf({
+          ...invocation,
+          placeholderSize: withoutTimestamp,
+          reserveTimestamp: false,
+        }),
+      ).toMatch(/^[0-9a-f]{64}$/u);
+      const refused = await captureSigningDigest({
+        ...invocation,
+        placeholderSize: withoutTimestamp,
+        reserveTimestamp: true,
+      }).catch((error: unknown) => error);
+      expect(refused).toBeInstanceOf(PdfSigningPlaceholderTooSmallError);
     });
   });
 });

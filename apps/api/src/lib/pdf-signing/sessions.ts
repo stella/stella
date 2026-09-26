@@ -164,6 +164,7 @@ export type AuthorizedPdfSigningSession = {
   keyType: PdfSigningKeyType | null;
   location: string | null;
   organizationId: SafeId<"organization">;
+  placeholderSize: number | null;
   propertyId: SafeId<"property">;
   reason: string | null;
   safeDb: SafeDb;
@@ -214,6 +215,7 @@ export const authorizePdfSigningSession = async (
       location: pdfSigningSessions.location,
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
+      placeholderSize: pdfSigningSessions.placeholderSize,
       propertyId: pdfSigningSessions.propertyId,
       reason: pdfSigningSessions.reason,
       sessionStatus: pdfSigningSessions.status,
@@ -278,6 +280,7 @@ export const authorizePdfSigningSession = async (
       keyType: session.keyType,
       location: session.location,
       organizationId: session.organizationId,
+      placeholderSize: session.placeholderSize,
       propertyId: session.propertyId,
       reason: session.reason,
       safeDb: createRootSafeDb({

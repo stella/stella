@@ -124,10 +124,17 @@ const submitPdfSigningSignature = createSafeTokenHandler(
       );
     }
 
-    const { digestHex, keyType, signerCertificateDer, signingTime } = session;
+    const {
+      digestHex,
+      keyType,
+      placeholderSize,
+      signerCertificateDer,
+      signingTime,
+    } = session;
     if (
       digestHex === null ||
       keyType === null ||
+      placeholderSize === null ||
       signerCertificateDer === null ||
       signingTime === null
     ) {
@@ -170,6 +177,7 @@ const submitPdfSigningSignature = createSafeTokenHandler(
           expectedDigestHex: digestHex,
           keyType,
           location: session.location,
+          placeholderSize,
           reason: session.reason,
           signature,
           signatureAlgorithm: keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",

@@ -8,20 +8,24 @@
  * twice over the same base bytes:
  *
  *   phase 1 - a signer that records the data LibPDF asks it to sign and
- *             aborts, so nothing is written and no timestamp is fetched;
+ *             answers with a stand-in signature as large as the real one
+ *             plus its timestamp can get, so an undersized placeholder is
+ *             found here, before the desktop asks for a PIN; nothing is
+ *             stored and no timestamp is fetched;
  *   phase 2 - a signer that re-derives the digest, refuses to continue if it
  *             differs from the one phase 1 published, and returns the
  *             desktop's signature.
  *
- * Both phases must be handed the SAME options object: signing time, PAdES
- * level, subFilter, reason and location all feed the incremental save whose
+ * Both phases must be handed the SAME options object: signing time,
+ * placeholder size, subFilter, reason and location all feed the incremental
+ * save whose
  * hash becomes a signed attribute, so any drift between the phases would make
  * the desktop's signature cover bytes the document does not contain. The
  * signing time is therefore persisted in phase 1 and replayed in phase 2,
  * never re-read from the clock.
  */
 
-import { PDF } from "@libpdf/core";
+import { PDF, PlaceholderError } from "@libpdf/core";
 import type { DigestAlgorithm, Signer, TimestampAuthority } from "@libpdf/core";
 import { TaggedError } from "better-result";
 
@@ -73,10 +77,60 @@ export class PdfSigningCertifiedDocumentError extends TaggedError(
   "PdfSigningCertifiedDocumentError",
 )<{ message: string }> {}
 
-/** Phase 1's abort. Private to this module: it is control flow, not a fault. */
-class SignedAttributesCapturedError extends TaggedError(
-  "SignedAttributesCapturedError",
-)<{ message: string }> {}
+/**
+ * The CMS would not fit the reserved `/Contents`. Raised in phase 1, where
+ * the stand-in signature is at least as large as anything phase 2 embeds.
+ */
+export class PdfSigningPlaceholderTooSmallError extends TaggedError(
+  "PdfSigningPlaceholderTooSmallError",
+)<{ message: string; availableBytes: number; requiredBytes: number }> {}
+
+/**
+ * Bytes reserved in `/Contents` for everything that is not a certificate:
+ * the signed attributes, SignerInfo and CMS framing.
+ */
+const CMS_OVERHEAD_BYTES = 4096;
+/** An RSA-8192 signature; every EC and smaller RSA signature is shorter. */
+const SIGNATURE_VALUE_MAX_BYTES = 1024;
+/**
+ * A timestamp token is an unsigned attribute of the CMS, so it shares
+ * `/Contents`. Tokens carry the authority's certificate and often its chain;
+ * this covers the large ones seen from qualified authorities.
+ */
+const TIMESTAMP_TOKEN_RESERVE_BYTES = 16_384;
+const PLACEHOLDER_FLOOR_BYTES = 16_384;
+const TIMESTAMPED_PLACEHOLDER_FLOOR_BYTES = 32_768;
+const PLACEHOLDER_GRANULARITY_BYTES = 1024;
+
+/**
+ * The `/Contents` reservation for this signer: its certificates, the largest
+ * signature value, the CMS framing and, when a timestamp is coming, room for
+ * the token. The size feeds the hashed byte range, so it is computed once in
+ * phase 1 and replayed from the session in phase 2.
+ */
+export const signaturePlaceholderSize = ({
+  certificate,
+  certificateChain,
+  timestamped,
+}: {
+  certificate: Uint8Array;
+  certificateChain: readonly Uint8Array[];
+  timestamped: boolean;
+}): number => {
+  const needed =
+    certificate.byteLength +
+    certificateChain.reduce((total, entry) => total + entry.byteLength, 0) +
+    SIGNATURE_VALUE_MAX_BYTES +
+    CMS_OVERHEAD_BYTES +
+    (timestamped ? TIMESTAMP_TOKEN_RESERVE_BYTES : 0);
+  const rounded =
+    Math.ceil(needed / PLACEHOLDER_GRANULARITY_BYTES) *
+    PLACEHOLDER_GRANULARITY_BYTES;
+  return Math.max(
+    rounded,
+    timestamped ? TIMESTAMPED_PLACEHOLDER_FLOOR_BYTES : PLACEHOLDER_FLOOR_BYTES,
+  );
+};
 
 type SigningIdentity = {
   certificate: Uint8Array;
@@ -88,6 +142,8 @@ type SigningIdentity = {
 type SigningInvocation = SigningIdentity & {
   basePdf: Uint8Array;
   location: string | null;
+  /** `/Contents` reservation in bytes; see {@link signaturePlaceholderSize}. */
+  placeholderSize: number;
   reason: string | null;
   signingTime: Date;
 };
@@ -119,7 +175,7 @@ type TrustOptions = {
  * phase 2 reproduces phase 1 byte for byte.
  */
 const buildSignOptions = (
-  { location, reason, signingTime }: SigningInvocation,
+  { location, placeholderSize, reason, signingTime }: SigningInvocation,
   signer: Signer,
   trust: TrustOptions,
 ) =>
@@ -127,32 +183,47 @@ const buildSignOptions = (
     signer,
     subFilter: "ETSI.CAdES.detached",
     digestAlgorithm: DIGEST_ALGORITHM,
+    estimatedSize: placeholderSize,
     signingTime,
     ...trust,
     ...(reason !== null && { reason }),
     ...(location !== null && { location }),
   }) as const;
 
+export type CapturedSigningDigest = {
+  /** SHA-256 of `signedAttributes`: what the desktop's keychain signs. */
+  digestHex: string;
+  /** The DER-encoded CMS signed attributes the signature covers. */
+  signedAttributes: Uint8Array;
+};
+
 /**
- * Phase 1: the SHA-256 of the CMS signed attributes, which is what the
- * desktop's keychain key signs.
+ * Phase 1: the CMS signed attributes and their SHA-256, which is what the
+ * desktop's keychain key signs. `reserveTimestamp` sizes the stand-in
+ * signature for a phase 2 that will add a timestamp token.
  */
 export const captureSigningDigest = async (
-  invocation: SigningInvocation,
-): Promise<string> => {
-  const captured: string[] = [];
+  invocation: SigningInvocation & { reserveTimestamp: boolean },
+): Promise<CapturedSigningDigest> => {
+  const captured: CapturedSigningDigest[] = [];
+  const standIn = new Uint8Array(
+    SIGNATURE_VALUE_MAX_BYTES +
+      (invocation.reserveTimestamp ? TIMESTAMP_TOKEN_RESERVE_BYTES : 0),
+  );
   const signer: Signer = {
     certificate: invocation.certificate,
     certificateChain: invocation.certificateChain,
     keyType: invocation.keyType,
     signatureAlgorithm: invocation.signatureAlgorithm,
     sign: async (data) => {
-      captured.push(await signedAttributesDigestHex(data));
-      // LibPDF has no "prepare only" mode; aborting from inside the signer is
-      // the documented seam, and it stops before the timestamp request.
-      throw new SignedAttributesCapturedError({
-        message: "Signed attributes captured.",
+      captured.push({
+        digestHex: await signedAttributesDigestHex(data),
+        signedAttributes: new Uint8Array(data),
       });
+      // LibPDF has no "prepare only" mode. Answering with a stand-in lets it
+      // assemble the whole CMS and try to fit it into the placeholder, which
+      // is the one check that must not wait for the desktop's signature.
+      return standIn;
     },
   };
 
@@ -170,12 +241,17 @@ export const captureSigningDigest = async (
       try {
         await pdf.sign(buildSignOptions(invocation, signer, {}));
       } catch (error) {
-        if (!SignedAttributesCapturedError.is(error)) {
-          throw new PdfSigningError({
-            message: "Preparing the PDF signature failed.",
-            cause: error,
+        if (error instanceof PlaceholderError) {
+          throw new PdfSigningPlaceholderTooSmallError({
+            message: "The signature would not fit the space reserved for it.",
+            availableBytes: error.availableSize,
+            requiredBytes: error.requiredSize,
           });
         }
+        throw new PdfSigningError({
+          message: "Preparing the PDF signature failed.",
+          cause: error,
+        });
       }
     },
     {
@@ -184,13 +260,13 @@ export const captureSigningDigest = async (
     },
   );
 
-  const digestHex = captured.at(0);
-  if (digestHex === undefined) {
+  const digest = captured.at(0);
+  if (digest === undefined) {
     throw new PdfSigningError({
       message: "LibPDF produced no signed attributes to sign.",
     });
   }
-  return digestHex;
+  return digest;
 };
 
 type ApplySignatureInvocation = SigningInvocation & {

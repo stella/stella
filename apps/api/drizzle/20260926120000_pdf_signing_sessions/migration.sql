@@ -29,6 +29,7 @@ CREATE TABLE "pdf_signing_sessions" (
   "signer_certificate_chain" jsonb,
   "signing_time" timestamptz,
   "digest_hex" varchar(64),
+  "placeholder_size" integer,
   "key_type" text,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
