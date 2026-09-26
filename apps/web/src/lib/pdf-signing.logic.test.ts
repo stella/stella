@@ -4,6 +4,7 @@ import {
   decidePdfSigningPoll,
   parsePdfSigningDeadline,
   PDF_SIGNING_POLL_INTERVAL_MS,
+  pdfSigningFinalizedQueryKeys,
   pdfSigningStartErrorCode,
   type PdfSigningSessionSnapshot,
 } from "@/lib/pdf-signing.logic";
@@ -177,5 +178,31 @@ describe("pdf signing start failures", () => {
   test("leaves every other failure to the generic message", () => {
     expect(pdfSigningStartErrorCode("internal_server_error")).toBeNull();
     expect(pdfSigningStartErrorCode(undefined)).toBeNull();
+  });
+});
+
+describe("refreshing after a signature lands", () => {
+  test("refreshes the entity the viewer reads its current file from", async () => {
+    const { QueryClient } = await import("@tanstack/react-query");
+    const { entitiesKeys } =
+      await import("@/lib/workspaces/queries/entities.logic");
+    const { entityVersionsKeys } =
+      await import("@/lib/workspaces/queries/entity-versions");
+    const queryClient = new QueryClient();
+    const target = { entityId: "entity-1", workspaceId: "workspace-1" };
+    const detail = entitiesKeys.detail(target.workspaceId, target.entityId);
+    const versions = entityVersionsKeys.all(target);
+    const unrelated = entitiesKeys.detail(target.workspaceId, "entity-2");
+    for (const queryKey of [detail, versions, unrelated]) {
+      queryClient.setQueryData(queryKey, { cached: true });
+    }
+
+    for (const queryKey of pdfSigningFinalizedQueryKeys(target)) {
+      await queryClient.invalidateQueries({ queryKey });
+    }
+
+    expect(queryClient.getQueryState(detail)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(versions)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
   });
 });
