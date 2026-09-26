@@ -7,6 +7,7 @@ import {
   Outlet,
   useMatch,
 } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { CopyIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -18,6 +19,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   correspondenceAddressOptions,
@@ -71,6 +73,7 @@ function CorrespondencePage() {
 
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const canUpdate = usePermissions({ workspace: ["update"] });
   const { data, isError, isPending, refetch } = useQuery(
     correspondenceAddressOptions(workspaceId),
@@ -84,11 +87,12 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       return;
     }
     const copied = await copyToClipboard(address);
-    if (copied) {
-      stellaToast.add({ title: t("common.copied"), type: "success" });
+    if (Result.isError(copied)) {
+      analytics.captureError(copied.error);
+      stellaToast.add({ title: t("common.error"), type: "error" });
       return;
     }
-    stellaToast.add({ title: t("common.error"), type: "error" });
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   let addressStatus = (
@@ -154,7 +158,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
               revoke.isPending ||
               isPending ||
               isError ||
-              data?.status === "unconfigured"
+              data.status === "unconfigured"
             }
             onClick={() => rotate.mutate({ workspaceId })}
             size="sm"

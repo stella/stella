@@ -124,11 +124,12 @@ const listAllowedSenders = createSafeRootHandler(
     const workspaceIdsBySender = new Map<
       SafeId<"correspondenceAllowedSender">,
       SafeId<"workspace">[]
-    >();
+    >(page.items.map(({ id }) => [id, []]));
     for (const row of result.matterRows) {
-      const workspaceIds = workspaceIdsBySender.get(row.allowedSenderId) ?? [];
+      const workspaceIds =
+        workspaceIdsBySender.get(row.allowedSenderId) ??
+        panic("Matter scope has no sender on this page");
       workspaceIds.push(row.workspaceId);
-      workspaceIdsBySender.set(row.allowedSenderId, workspaceIds);
     }
     return Result.ok({
       ...page,
@@ -139,7 +140,9 @@ const listAllowedSenders = createSafeRootHandler(
         approvedBy: row.approvedBy,
         approvedAt: row.approvedAt,
         revokedAt: row.revokedAt,
-        matterIds: workspaceIdsBySender.get(row.id) ?? [],
+        matterIds:
+          workspaceIdsBySender.get(row.id) ??
+          panic("Sender page has no initialized matter scope"),
         active: row.revokedAt === null,
       })),
     });

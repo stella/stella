@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -144,19 +145,19 @@ function CorrespondenceDetailPage() {
             )}
             {record.sentAt && (
               <DetailField label={t("correspondence.sentAt")}>
-                {format.dateTime(new Date(record.sentAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                {format.dateTime(
+                  new Date(record.sentAt),
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
               </DetailField>
             )}
           </section>
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
             <DetailField label={t("correspondence.receivedAt")}>
-              {format.dateTime(new Date(record.receivedAt), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              {format.dateTime(
+                new Date(record.receivedAt),
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )}
             </DetailField>
             <DetailField label={t("common.assignee")}>
               {canUpdate ? (
@@ -190,7 +191,7 @@ function CorrespondenceDetailPage() {
                       .filter((member) => member.user)
                       .map((member) => (
                         <SelectItem key={member.userId} value={member.userId}>
-                          {member.user.name ?? member.user.email}
+                          {member.user.name}
                         </SelectItem>
                       ))}
                   </SelectPopup>
