@@ -135,7 +135,15 @@ export const walkInlines = (
 
       const anchor = options.pageAnchor?.(child);
       if (anchor !== undefined) {
+        // A page label can own the only separator between its neighbours.
+        // Preserve its boundary whitespace, but never split a word it bisects.
+        const printed = $(child).text();
+        const leading = printed.match(/^\s+/u)?.at(0) ?? "";
+        const trailing =
+          printed.slice(leading.length).match(/\s+$/u)?.at(0) ?? "";
+        appendTextInline(inlines, leading, anonymized);
         inlines.push(anchor);
+        appendTextInline(inlines, trailing, anonymized);
         return;
       }
 

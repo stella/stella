@@ -111,6 +111,17 @@ describe("walkInlines", () => {
     expect(inlinesToPlainText(walk(html))).toBe("Shrin*114ers and");
   });
 
+  test("page markers retain their boundary whitespace without separating split words", () => {
+    for (const before of ["", " ", "\n", "\u00a0"]) {
+      for (const after of ["", " ", "\n", "\u00a0"]) {
+        const inlines = walk(`left<span>${before}*2${after}</span>right`, {
+          pageAnchor: () => ({ type: "page-anchor", label: "2" }),
+        });
+        expect(inlinesToPlainText(inlines)).toBe(`left${before}${after}right`);
+      }
+    }
+  });
+
   test("non-anonymized and anonymized text do not merge together", () => {
     const inlines = walk("plain<span class='anon-block'>secret</span>");
     expect(inlines).toEqual([

@@ -184,6 +184,11 @@ test("real 4809723 table and preceding paragraph share note five's scope", () =>
     "utf8",
   );
   const text = compose(html, "4591777");
+  expect(
+    text.blocks.some((block) =>
+      block.plainText.includes("1957); United States v. Bruswitz"),
+    ),
+  ).toBe(true);
   const table = text.blocks.find(
     (block) =>
       block.type === "table" &&
