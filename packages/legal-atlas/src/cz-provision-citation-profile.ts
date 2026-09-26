@@ -33,6 +33,25 @@ const RECODIFICATION = "2014-01-01";
 /** The day 134/2016 Sb. replaced 137/2006 Sb. */
 const PUBLIC_PROCUREMENT_RECODIFICATION = "2016-10-01";
 
+/** The day 40/2009 Sb. replaced 140/1961 Sb. */
+const CRIMINAL_CODE_RECODIFICATION = "2010-01-01";
+
+/**
+ * The European Convention on Human Rights in every case a sentence puts it
+ * in, with and without its closing `a základních svobod`. Bare `Úmluva` is
+ * left out: a decision cites more than one convention by that word.
+ */
+const HUMAN_RIGHTS_CONVENTION = [
+  "Úmluva",
+  "Úmluvy",
+  "Úmluvě",
+  "Úmluvou",
+  "Úmluvu",
+].flatMap((noun) => [
+  `${noun} o ochraně lidských práv a základních svobod`,
+  `${noun} o ochraně lidských práv`,
+]);
+
 /**
  * A short title `zákon o …` in every case a citing sentence puts it in, plus
  * the `zák. o …` shorthand. Listing the forms by hand is how one of them goes
@@ -140,18 +159,38 @@ export const CZ_PROFILE = {
       spellings: ["ObchZ", "obch. zák.", "obch.zák.", "obch. zák"],
       identifier: sb(513, 1991),
     },
+    // Court convention, whatever the citing date: `tr. zák.` is the 1961
+    // criminal code and `tr. zákoník` the 2009 one. A decision that defines
+    // `tr. zák.` otherwise overrides this in its own text.
     {
-      spellings: [
-        "TZ",
-        "tr. zák.",
-        "tr. zákoník",
-        "tr. zákoníku",
-        "tr. zákoníkem",
-      ],
-      identifier: sb(40, 2009),
+      spellings: ["tr. zák.", "tr. zákon", "tr. zákona", "tr. zákonem"],
+      identifier: sb(140, 1961),
     },
     {
-      spellings: ["TŘ", "tr. ř.", "tr.ř.", "tr. ř"],
+      spellings: ["tr. zákoník", "tr. zákoníku", "tr. zákoníkem"],
+      identifier: sb(40, 2009),
+    },
+    // `TZ` has no convention between the two codes; the citing date decides.
+    {
+      spellings: ["TZ"],
+      identifier: sb(140, 1961),
+      citedUntil: CRIMINAL_CODE_RECODIFICATION,
+    },
+    {
+      spellings: ["TZ"],
+      identifier: sb(40, 2009),
+      citedFrom: CRIMINAL_CODE_RECODIFICATION,
+    },
+    {
+      spellings: [
+        "TŘ",
+        "tr. ř.",
+        "tr.ř.",
+        "tr. ř",
+        "tr. řád",
+        "tr. řádu",
+        "tr. řádem",
+      ],
       identifier: sb(141, 1961),
     },
     {
@@ -174,6 +213,21 @@ export const CZ_PROFILE = {
     {
       spellings: ["LZPS", "Listina", "Listiny", "Listině", "Listinou"],
       identifier: sb(2, 1993),
+    },
+    // Capitalised only: lowercase `ústavy` are institutions, not the
+    // constitution.
+    {
+      spellings: [
+        "Ústava",
+        "Ústavy",
+        "Ústavě",
+        "Ústavou",
+        "Ústava ČR",
+        "Ústavy ČR",
+        "Ústavě ČR",
+        "Ústavou ČR",
+      ],
+      identifier: sb(1, 1993),
     },
     { spellings: ["AT"], identifier: sb(177, 1996) },
     { spellings: ["ZDP"], identifier: sb(586, 1992) },
@@ -244,6 +298,104 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(40, 2009),
     },
+    // The 1961 code's name; the 2009 one is a `zákoník`, never a `zákon`.
+    {
+      spellings: [
+        "trestní zákon",
+        "trestního zákona",
+        "trestním zákoně",
+        "trestnímu zákonu",
+        "trestním zákonem",
+      ],
+      identifier: sb(140, 1961),
+    },
+    {
+      spellings: HUMAN_RIGHTS_CONVENTION,
+      identifier: sb(209, 1992),
+    },
+    {
+      spellings: [
+        "stavební zákon",
+        "stavebního zákona",
+        "stavebním zákoně",
+        "stavebnímu zákonu",
+        "stavebním zákonem",
+      ],
+      identifier: sb(50, 1976),
+      citedUntil: "2007-01-01",
+    },
+    {
+      spellings: [
+        "stavební zákon",
+        "stavebního zákona",
+        "stavebním zákoně",
+        "stavebnímu zákonu",
+        "stavebním zákonem",
+      ],
+      identifier: sb(183, 2006),
+      citedFrom: "2007-01-01",
+      citedUntil: "2024-01-01",
+    },
+    {
+      spellings: [
+        "stavební zákon",
+        "stavebního zákona",
+        "stavebním zákoně",
+        "stavebnímu zákonu",
+        "stavebním zákonem",
+      ],
+      identifier: sb(283, 2021),
+      citedFrom: "2024-01-01",
+    },
+    {
+      spellings: [
+        "katastrální zákon",
+        "katastrálního zákona",
+        "katastrálním zákoně",
+        "katastrálnímu zákonu",
+        "katastrálním zákonem",
+      ],
+      identifier: sb(344, 1992),
+      citedUntil: "2014-01-01",
+    },
+    {
+      spellings: [
+        "katastrální zákon",
+        "katastrálního zákona",
+        "katastrálním zákoně",
+        "katastrálnímu zákonu",
+        "katastrálním zákonem",
+      ],
+      identifier: sb(256, 2013),
+      citedFrom: "2014-01-01",
+    },
+    {
+      spellings: actTitleForms("o veřejných zakázkách"),
+      identifier: sb(40, 2004),
+      citedUntil: "2006-07-01",
+    },
+    // Open-ended: 134/2016 Sb. is titled `o zadávání veřejných zakázek`, so
+    // after it this name still means 137/2006 Sb. for the tenders it governs.
+    {
+      spellings: actTitleForms("o veřejných zakázkách"),
+      identifier: sb(137, 2006),
+      citedFrom: "2006-07-01",
+    },
+    {
+      spellings: actTitleForms("o správě daní a poplatků"),
+      identifier: sb(337, 1992),
+    },
+    { spellings: actTitleForms("o státní službě"), identifier: sb(234, 2014) },
+    {
+      spellings: [
+        ...actTitleForms(
+          "o majetkovém vyrovnání s církvemi a náboženskými společnostmi",
+        ),
+        ...actTitleForms("o majetkovém vyrovnání"),
+      ],
+      identifier: sb(428, 2012),
+    },
+    { spellings: actTitleForms("o rodině"), identifier: sb(94, 1963) },
     {
       spellings: ["zákoník práce", "zákoníku práce", "zákoníkem práce"],
       identifier: sb(262, 2006),
