@@ -1169,6 +1169,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
@@ -3468,6 +3469,7 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+        "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
     },
     {
