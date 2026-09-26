@@ -91,7 +91,7 @@
       "apps/api/src/lib/desktop-edit-handoffs.ts": 1,
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
       "apps/api/src/lib/dev-seed-session-store.ts": 1,
-      "apps/api/src/lib/document-processing-request.ts": 1,
+      "apps/api/src/lib/entity-versions/manual-ocr-request-run.ts": 1,
       "apps/api/src/lib/extraction-runs/request-run-store.ts": 1,
       "apps/api/src/lib/flows/flow-run-completion-notice.ts": 1,
       "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
@@ -122,13 +122,12 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 14,
+    "count": 13,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
       "apps/api/src/lib/case-law/local-case-law-config.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
-      "apps/api/src/lib/document-processing-request.ts": 1,
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/folio-collab-service-room.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
