@@ -180,11 +180,12 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   });
 
   // A global read before attestation names the created base groups exactly,
-  // never the unattested index, which may exist and hold documents already.
+  // bridges HUN (declared later, not enrolled) through its own pattern, and
+  // never names the unattested USA index, which may already hold documents.
   const unattestedGlobal = await target(undefined);
   expect(unattestedGlobal.contract).toBeNull();
   expect(unattestedGlobal.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun*,case_law_v7_pol",
   );
   expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
@@ -218,13 +219,18 @@ test("a scoped read of a group refuses until it is attested; other reads never w
     cursorTarget: unattestedGlobal.cursorTarget,
   });
 
-  // A group declared after the generation was built is reached globally only
-  // once its index is attested against the manifest it was created under;
-  // its scoped reads never wait on that.
+  // A group declared after the generation was built: bridged until it has an
+  // enrollment row, then reached by exact id only while attested. Its scoped
+  // reads never wait on any of that.
   const hun = { manifest: MANIFEST, indexGroup: "hun" } as const;
   expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
-  expect((await target(undefined)).route).toEqual(unattestedGlobal.route);
+  const hunPending = await target(undefined);
+  expect(hunPending.route.indexId).toBe(
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_pol",
+  );
+  expect(hunPending.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
+  expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
   await inTx(
     async (tx) =>
       await attestCorpusIndexGroupEnrollmentTx(tx, {
