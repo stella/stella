@@ -18,7 +18,11 @@ import type {
   FailureLedgerWrite,
   IngestionFailureRow,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
-import { partitionWithinBatchBounds } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import {
+  admitPageDecisions,
+  CASE_LAW_INGESTION_BATCH_LIMITS,
+  DECISION_ADMISSION,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
@@ -386,9 +390,15 @@ export const runIngestionPipeline = async ({
   };
 
   /**
-   * Apply a page's decisions in bounded batches, each settled before the
-   * next starts. Every batch carries the page's one observation; the first
+   * Apply a page's decisions in admitted parts, each settled before the
+   * next starts. Every part carries the page's one observation; the first
    * that stops ends the page with its halt reason, and the cursor holds.
+   *
+   * The crawl reads a part's stop and its ledger write, not each record's
+   * settlement: a record the ledger holds is stepped over, whether it was
+   * rejected or met a transient database condition, and the reconciliation
+   * lists it again. An unsettled payload holds the cursor through the page's
+   * write-failure count.
    */
   const applyPageDecisions = async ({
     decisions,
@@ -397,10 +407,21 @@ export const runIngestionPipeline = async ({
     decisions: SyncPage["decisions"];
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
-    for (const batch of partitionWithinBatchBounds(decisions)) {
-      // db-await-in-loop: one bounded batch at a time, each settled before the next, ordered per observation
+    for (const batch of admitPageDecisions(decisions)) {
+      if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
+        // A page's records are applied whatever their size; one over the
+        // byte bound goes alone, and is reported.
+        logger.warn("case_law.ingestion.oversized_record", {
+          adapterKey: adapter.key,
+          caseNumber: batch.decisions[0].caseNumber,
+          cursor: cursor ?? "",
+          encodedBytes: batch.encodedBytes,
+          limitBytes: CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes,
+        });
+      }
+      // db-await-in-loop: one admitted part at a time, each settled before the next, ordered per observation
       const applied = await applyDecisionBatch({
-        decisions: batch,
+        batch,
         sourceId: source.id,
         scopedDb,
         observation,
@@ -511,6 +532,27 @@ export const runIngestionPipeline = async ({
     return await flushIngestionFailures(failures);
   };
 
+  /** Apply a page's decisions, then place its supplements. */
+  const applyPage = async ({
+    page,
+    observation,
+  }: {
+    page: SyncPage;
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    const halted = await applyPageDecisions({
+      decisions: page.decisions,
+      observation,
+    });
+    // After the page's packs are flushed, so a judgment written on this page
+    // is settled before its supplement writes it again, and before the
+    // cursor moves, so a supplement that could not be placed holds it.
+    return await placePageSupplements({
+      supplements: page.supplements,
+      halted,
+    });
+  };
+
   while (pagesProcessed < maxPages) {
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
@@ -538,19 +580,10 @@ export const runIngestionPipeline = async ({
     const skippedBefore = skipped;
     const s3FailuresBefore = s3UploadFailures;
     try {
-      // db-await-in-loop: one bounded application pass per page, before its supplements and the cursor advance
-      haltReason = await applyPageDecisions({
-        decisions: page.decisions,
+      // db-await-in-loop: one application pass per page, its decisions and then its supplements, before the cursor moves
+      haltReason = await applyPage({
+        page,
         observation: { order: observationOrder, observedAt },
-      });
-
-      // After the page's packs are flushed, so a judgment written on this
-      // page is settled before its supplement writes it again, and before the
-      // cursor moves, so a supplement that could not be placed holds it.
-      // db-await-in-loop: one placement pass per page, after the page's pack is flushed and before the cursor moves
-      haltReason = await placePageSupplements({
-        supplements: page.supplements,
-        halted: haltReason,
       });
 
       const pageInserted = inserted - insertedBefore;

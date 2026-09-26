@@ -937,7 +937,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 116,
+    "count": 115,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -949,7 +949,7 @@
       "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/listing-census.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 6,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 1,

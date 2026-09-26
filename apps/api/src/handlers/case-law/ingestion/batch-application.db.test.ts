@@ -9,6 +9,9 @@ import {
 } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -26,12 +29,21 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { applyCaseLawIngestionBatch } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
+  admitPageDecisions,
   CASE_LAW_BATCH_BOUNDS_REASON,
   CASE_LAW_BATCH_FAILURE,
   CASE_LAW_INGESTION_BATCH_LIMITS,
+  DECISION_ADMISSION,
+  encodedIngestionResultBytes,
   prepareCaseLawIngestionBatch,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import type { BoundedCaseLawIngestionBatch } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
+  processResultForCorpusOutcome,
+} from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -128,8 +140,8 @@ const records = (count: number): IngestionResult[] =>
   Array.from({ length: count }, (_, n) => record(n + 1));
 
 /** A record the ingestion boundary refuses: its identity cannot be stored. */
-const rejectedRecord = (): IngestionResult => ({
-  ...record(99),
+const rejectedRecord = (n = 99): IngestionResult => ({
+  ...record(n),
   sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
 });
 
@@ -201,41 +213,52 @@ const loseLease = async (sourceId: SafeId<"caseLawSource">): Promise<void> => {
     .where(eq(caseLawSources.id, sourceId));
 };
 
+/** The tables a test makes unwritable. */
+const SERIALIZATION_FAULT_TABLES = {
+  ledger: "case_law_ingestion_failures",
+  decisions: "case_law_decisions",
+} as const;
+
 /**
- * Fail every failure-ledger insert the way a serialization conflict does,
- * for the duration of `run`.
+ * Fail every insert into `table` the way a serialization conflict does, for
+ * the duration of `run`.
  */
-const withUnwritableLedger = async <T>(run: () => Promise<T>): Promise<T> => {
+const withSerializationFault = async <T>(
+  table: keyof typeof SERIALIZATION_FAULT_TABLES,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const name = SERIALIZATION_FAULT_TABLES[table];
   await db.execute(
     sql.raw(`
-      CREATE FUNCTION batch_application_reject_ledger() RETURNS trigger
+      CREATE FUNCTION batch_application_serialization_fault() RETURNS trigger
       LANGUAGE plpgsql AS $$
       BEGIN
-        RAISE EXCEPTION 'ledger unavailable' USING ERRCODE = '40001';
+        RAISE EXCEPTION 'could not serialize access' USING ERRCODE = '40001';
       END
       $$
     `),
   );
   await db.execute(
     sql.raw(`
-      CREATE TRIGGER batch_application_reject_ledger
-        BEFORE INSERT ON case_law_ingestion_failures
-        FOR EACH ROW EXECUTE FUNCTION batch_application_reject_ledger()
+      CREATE TRIGGER batch_application_serialization_fault
+        BEFORE INSERT ON ${name}
+        FOR EACH ROW EXECUTE FUNCTION batch_application_serialization_fault()
     `),
   );
   try {
     return await run();
   } finally {
     await db.execute(
-      sql.raw(
-        "DROP TRIGGER batch_application_reject_ledger ON case_law_ingestion_failures",
-      ),
+      sql.raw(`DROP TRIGGER batch_application_serialization_fault ON ${name}`),
     );
     await db.execute(
-      sql.raw("DROP FUNCTION batch_application_reject_ledger()"),
+      sql.raw("DROP FUNCTION batch_application_serialization_fault()"),
     );
   }
 };
+
+const withUnwritableLedger = async <T>(run: () => Promise<T>): Promise<T> =>
+  await withSerializationFault("ledger", run);
 
 type Applied =
   | { type: "certified"; applied: number | null }
@@ -299,25 +322,47 @@ const crawlCaller: Caller = {
   },
 };
 
+type ApplyPreparedOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  batch: BoundedCaseLawIngestionBatch;
+  corpus: CaseLawCorpusDependencies;
+};
+
+const applyPrepared = async ({
+  sourceId,
+  batch,
+  corpus,
+}: ApplyPreparedOptions) => {
+  const sourceLease = await leaseFor(sourceId);
+  const applied = await applyCaseLawIngestionBatch({
+    batch,
+    sourceLease,
+    scopedDb,
+    signal: new AbortController().signal,
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus,
+  });
+  await sourceLease.release();
+  return applied;
+};
+
+const prepared = (
+  decisions: readonly IngestionResult[],
+): BoundedCaseLawIngestionBatch => {
+  const batch = prepareCaseLawIngestionBatch({ decisions });
+  return Result.isOk(batch) ? batch.value : panic(batch.error.message);
+};
+
 /** Certified by the receipt. */
 const directCaller: Caller = {
   name: "records applied directly",
   source: recordSource,
   apply: async ({ sourceId, decisions, corpus }) => {
-    const sourceLease = await leaseFor(sourceId);
-    const prepared = prepareCaseLawIngestionBatch({ decisions });
-    if (Result.isError(prepared)) {
-      return panic(prepared.error.message);
-    }
-    const applied = await applyCaseLawIngestionBatch({
-      batch: prepared.value,
-      sourceLease,
-      scopedDb,
-      signal: new AbortController().signal,
-      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    const applied = await applyPrepared({
+      sourceId,
+      batch: prepared(decisions),
       corpus,
     });
-    await sourceLease.release();
     return Result.isOk(applied)
       ? { type: "certified", applied: applied.value.applied }
       : { type: "held", detail: applied.error.reason };
@@ -496,7 +541,82 @@ describe("the batch bounds", () => {
     // One pack per bounded batch: the page did not travel as one.
     expect(landed).toHaveLength(2);
     expect(await decisionRows(sourceId)).toEqual(settledRows(count));
+    // Both parts were written under the page's one observation.
+    const observations = await db
+      .selectDistinct({ order: caseLawDecisions.sourceObservationOrder })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId));
+    expect(observations).toHaveLength(1);
   }, 120_000);
+
+  test("a page is admitted in parts, and a record over the byte bound is a part of its own", () => {
+    const oversized = {
+      ...record(2),
+      fulltext: "a".repeat(CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes + 1),
+    };
+
+    const parts = admitPageDecisions([record(1), oversized, record(3)]);
+
+    expect(
+      parts.map(({ admission, decisions }) => ({
+        admission,
+        caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
+      })),
+    ).toEqual([
+      {
+        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+        caseNumbers: ["4 As 1/2008"],
+      },
+      {
+        admission: DECISION_ADMISSION.OVERSIZED_RECORD,
+        caseNumbers: ["4 As 2/2008"],
+      },
+      {
+        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+        caseNumbers: ["4 As 3/2008"],
+      },
+    ]);
+    // The same contract refuses it for a prepared batch.
+    const refused = prepareCaseLawIngestionBatch({ decisions: [oversized] });
+    expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
+    );
+  });
+
+  test("a binary payload weighs its byte length, as a Buffer or a Uint8Array", () => {
+    fc.assert(
+      fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
+        const asBuffer = Buffer.from(bytes);
+        // The fixture reaches the fault: a Buffer serializes as a JSON array.
+        expect(JSON.stringify(asBuffer)).toStartWith('{"type":"Buffer"');
+        const measured = (payload: Uint8Array) =>
+          encodedIngestionResultBytes({
+            ...record(1),
+            sourceRawBytes: payload,
+            sourceRawObjects: {
+              "document-file": {
+                bytes: payload,
+                contentType: "application/pdf",
+              },
+            },
+          });
+        expect(measured(asBuffer)).toBe(measured(bytes));
+        expect(measured(bytes)).toBe(
+          measured(new Uint8Array()) + 2 * bytes.length,
+        );
+      }),
+      propertyConfig(),
+    );
+
+    const payload = Buffer.alloc(8 * 1024 * 1024, 255);
+    expect(
+      Result.isOk(
+        prepareCaseLawIngestionBatch({
+          decisions: [{ ...record(1), sourceRawBytes: payload }],
+        }),
+      ),
+    ).toBe(true);
+  });
 
   test("a prepared batch refuses what it cannot carry before any write", () => {
     const { records: maxRecords, encodedBytes } =
@@ -506,9 +626,9 @@ describe("the batch bounds", () => {
       fulltext: "a".repeat(bytes),
     });
     const refusal = (decisions: readonly IngestionResult[]) => {
-      const prepared = prepareCaseLawIngestionBatch({ decisions });
-      return Result.isError(prepared)
-        ? { reason: prepared.error.reason, index: prepared.error.index }
+      const admitted = prepareCaseLawIngestionBatch({ decisions });
+      return Result.isError(admitted)
+        ? { reason: admitted.error.reason, index: admitted.error.index }
         : null;
     };
 
@@ -531,5 +651,119 @@ describe("the batch bounds", () => {
       index: null,
     });
     expect(refusal(records(maxRecords))).toBeNull();
+  });
+
+  test("records changed after preparation are measured again before any write", async () => {
+    const sourceId = await recordSource();
+    const decision = record(1);
+    const batch = prepared([decision]);
+
+    decision.fulltext = "a".repeat(
+      CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes + 1,
+    );
+    const applied = await applyPrepared({
+      sourceId,
+      batch,
+      corpus: landingTransfer().corpus,
+    });
+
+    expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+      CASE_LAW_BATCH_FAILURE.OUT_OF_BOUNDS,
+    );
+    expect(await decisionRows(sourceId)).toEqual([]);
+  });
+});
+
+describe("why a batch is not certified", () => {
+  test("a streak of rejections whose ledger rows are not written names the ledger", async () => {
+    const decisions = Array.from({ length: 10 }, (_, n) =>
+      rejectedRecord(90 + n),
+    );
+    const { corpus } = landingTransfer();
+
+    const recordsSourceId = await recordSource();
+    const applied = await withUnwritableLedger(
+      async () =>
+        await applyPrepared({
+          sourceId: recordsSourceId,
+          batch: prepared(decisions),
+          corpus,
+        }),
+    );
+    if (Result.isOk(applied)) {
+      return panic("expected no receipt");
+    }
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_WRITE);
+    expect(new Set(applied.error.records.map(({ reason }) => reason))).toEqual(
+      new Set([CASE_LAW_BATCH_FAILURE.FAILURE_WRITE]),
+    );
+    expect(await ledgerRows(recordsSourceId)).toEqual([]);
+
+    // The crawl keeps its own precedence: the streak names the halt.
+    const crawlSourceId = await crawlSource();
+    const held = await withUnwritableLedger(
+      async () =>
+        await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }),
+    );
+    expect(held).toEqual({
+      type: "held",
+      detail: expect.stringMatching(/^10 consecutive failures;/u),
+    });
+    expect(await sourceCursor(crawlSourceId)).toBeNull();
+  });
+
+  test("a transient failure writing a valid record is retryable, never a rejection", async () => {
+    const { corpus } = landingTransfer();
+    const decisions = [record(1), record(2)];
+
+    const recordsSourceId = await recordSource();
+    const applied = await withSerializationFault(
+      "decisions",
+      async () =>
+        await applyPrepared({
+          sourceId: recordsSourceId,
+          batch: prepared(decisions),
+          corpus,
+        }),
+    );
+    if (Result.isOk(applied)) {
+      return panic("expected no receipt");
+    }
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.TRANSIENT);
+    expect(applied.error.records.map(({ reason }) => reason)).toEqual([
+      CASE_LAW_BATCH_FAILURE.TRANSIENT,
+      CASE_LAW_BATCH_FAILURE.TRANSIENT,
+    ]);
+
+    const replayed = await applyPrepared({
+      sourceId: recordsSourceId,
+      batch: prepared(decisions),
+      corpus,
+    });
+    expect(Result.isOk(replayed) ? replayed.value.applied : null).toBe(2);
+    expect(await decisionRows(recordsSourceId)).toEqual(settledRows(2));
+
+    // The crawl's policy is unchanged: the ledger holds both, and the page
+    // is stepped over.
+    const crawlSourceId = await crawlSource();
+    const crawled = await withSerializationFault(
+      "decisions",
+      async () =>
+        await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }),
+    );
+    expect(crawled.type).toBe("certified");
+    expect(await ledgerRows(crawlSourceId)).toHaveLength(2);
+  });
+
+  test("a queued payload the pack did not answer for has not settled", () => {
+    const settlement = processResultForCorpusOutcome(undefined, {
+      decisionId: createSafeId<"caseLawDecision">(),
+    });
+
+    expect(settlement).toEqual({
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: true,
+      reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+    });
   });
 });
