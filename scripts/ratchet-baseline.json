@@ -414,7 +414,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 947,
+    "count": 899,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -550,7 +550,6 @@
       "apps/api/src/lib/search/process-extraction.ts": 1,
       "apps/api/src/lib/security-canary.ts": 2,
       "apps/api/src/lib/selfhost-auth.ts": 4,
-      "apps/api/src/lib/skills/skill-package.ts": 48,
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/style-set-editor.ts": 1,
       "apps/api/src/lib/subprocess.ts": 1,
@@ -727,7 +726,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 371,
+    "count": 363,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -821,7 +820,6 @@
       "apps/api/src/lib/search/index-chat.ts": 1,
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/signals/scout.ts": 1,
-      "apps/api/src/lib/skills/skill-package.ts": 8,
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/subprocess.ts": 2,
       "apps/api/src/lib/template-clause-links.ts": 1,
