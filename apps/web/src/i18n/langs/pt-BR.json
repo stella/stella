@@ -5120,6 +5120,7 @@
         "placementHint": "Arraste o carimbo para movê-lo ou arraste o canto dele para redimensioná-lo. Com o carimbo selecionado, as setas o movem e Shift com uma seta o redimensiona.",
         "placementInvisible": "Assinatura invisível",
         "placementInvisibleDescription": "A assinatura fica gravada no arquivo, sem marca em nenhuma página.",
+        "placementPageLabel": "Página do carimbo",
         "placementPageOption": "Página {page, number} de {count, number}",
         "placementPreview": "Prévia da página {page, number}",
         "placementPreviewFailed": "Não foi possível carregar a prévia da página.",

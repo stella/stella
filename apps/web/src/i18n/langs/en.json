@@ -5120,6 +5120,7 @@
         "placementHint": "Drag the stamp to move it, or drag its corner to resize it. With the stamp selected, arrow keys move it and Shift with an arrow key resizes it.",
         "placementInvisible": "Invisible signature",
         "placementInvisibleDescription": "The signature is stored in the file without a mark on any page.",
+        "placementPageLabel": "Stamp page",
         "placementPageOption": "Page {page, number} of {count, number}",
         "placementPreview": "Preview of page {page, number}",
         "placementPreviewFailed": "The page preview could not be loaded.",

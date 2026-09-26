@@ -5120,6 +5120,7 @@
         "placementHint": "Potiahnutím pečiatku presuniete, potiahnutím jej rohu zmeníte jej veľkosť. Keď je pečiatka vybraná, šípky ju posúvajú a Shift so šípkou mení jej veľkosť.",
         "placementInvisible": "Neviditeľný podpis",
         "placementInvisibleDescription": "Podpis sa uloží do súboru bez značky na ktorejkoľvek stránke.",
+        "placementPageLabel": "Strana pečiatky",
         "placementPageOption": "Stránka {page, number} z {count, number}",
         "placementPreview": "Náhľad stránky {page, number}",
         "placementPreviewFailed": "Náhľad stránky sa nepodarilo načítať.",

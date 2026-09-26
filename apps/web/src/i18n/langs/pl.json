@@ -5120,6 +5120,7 @@
         "placementHint": "Przeciągnij pieczęć, aby ją przesunąć, albo jej róg, aby zmienić rozmiar. Gdy pieczęć jest zaznaczona, strzałki ją przesuwają, a Shift ze strzałką zmienia jej rozmiar.",
         "placementInvisible": "Niewidoczny podpis",
         "placementInvisibleDescription": "Podpis zostanie zapisany w pliku bez znaku na żadnej stronie.",
+        "placementPageLabel": "Strona pieczęci",
         "placementPageOption": "Strona {page, number} z {count, number}",
         "placementPreview": "Podgląd strony {page, number}",
         "placementPreviewFailed": "Nie udało się wczytać podglądu strony.",

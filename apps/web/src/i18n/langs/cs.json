@@ -5120,6 +5120,7 @@
         "placementHint": "Přetažením razítko přesunete, přetažením jeho rohu změníte jeho velikost. Když je razítko vybrané, šipky ho posouvají a Shift se šipkou mění jeho velikost.",
         "placementInvisible": "Neviditelný podpis",
         "placementInvisibleDescription": "Podpis se uloží do souboru bez značky na kterékoli stránce.",
+        "placementPageLabel": "Stránka razítka",
         "placementPageOption": "Stránka {page, number} z {count, number}",
         "placementPreview": "Náhled stránky {page, number}",
         "placementPreviewFailed": "Náhled stránky se nepodařilo načíst.",

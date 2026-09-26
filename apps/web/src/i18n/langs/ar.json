@@ -5120,6 +5120,7 @@
         "placementHint": "اسحب الختم لنقله، أو اسحب زاويته لتغيير حجمه. عند تحديد الختم، تنقله مفاتيح الأسهم، ويغيّر Shift مع مفتاح سهم حجمه.",
         "placementInvisible": "توقيع غير مرئي",
         "placementInvisibleDescription": "يُحفظ التوقيع في الملف دون أي علامة على الصفحات.",
+        "placementPageLabel": "صفحة الختم",
         "placementPageOption": "الصفحة {page, number} من {count, number}",
         "placementPreview": "معاينة الصفحة {page, number}",
         "placementPreviewFailed": "تعذّر تحميل معاينة الصفحة.",

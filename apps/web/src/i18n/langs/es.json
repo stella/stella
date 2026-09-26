@@ -5120,6 +5120,7 @@
         "placementHint": "Arrastra el sello para moverlo o arrastra su esquina para cambiar su tamaño. Con el sello seleccionado, las flechas lo mueven y Mayús con una flecha cambia su tamaño.",
         "placementInvisible": "Firma invisible",
         "placementInvisibleDescription": "La firma se guarda en el archivo sin ninguna marca en las páginas.",
+        "placementPageLabel": "Página del sello",
         "placementPageOption": "Página {page, number} de {count, number}",
         "placementPreview": "Vista previa de la página {page, number}",
         "placementPreviewFailed": "No se pudo cargar la vista previa de la página.",

@@ -5120,6 +5120,7 @@
         "placementHint": "Faites glisser le cachet pour le déplacer, ou son coin pour le redimensionner. Lorsque le cachet est sélectionné, les flèches le déplacent et Maj avec une flèche le redimensionne.",
         "placementInvisible": "Signature invisible",
         "placementInvisibleDescription": "La signature est enregistrée dans le fichier sans aucune marque sur les pages.",
+        "placementPageLabel": "Page du cachet",
         "placementPageOption": "Page {page, number} sur {count, number}",
         "placementPreview": "Aperçu de la page {page, number}",
         "placementPreviewFailed": "L’aperçu de la page n’a pas pu être chargé.",

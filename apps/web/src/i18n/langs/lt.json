@@ -5120,6 +5120,7 @@
         "placementHint": "Vilkite spaudą, kad jį perkeltumėte, arba jo kampą, kad pakeistumėte dydį. Kai spaudas pažymėtas, rodyklių klavišai jį perkelia, o Shift su rodyklės klavišu keičia jo dydį.",
         "placementInvisible": "Nematomas parašas",
         "placementInvisibleDescription": "Parašas įrašomas į failą be jokios žymos puslapiuose.",
+        "placementPageLabel": "Spaudo puslapis",
         "placementPageOption": "{page, number} psl. iš {count, number}",
         "placementPreview": "{page, number} psl. peržiūra",
         "placementPreviewFailed": "Nepavyko įkelti puslapio peržiūros.",

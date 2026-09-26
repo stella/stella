@@ -5120,6 +5120,7 @@
         "placementHint": "Velciet zīmogu, lai to pārvietotu, vai tā stūri, lai mainītu izmēru. Kad zīmogs ir atlasīts, bulttaustiņi to pārvieto, bet Shift ar bulttaustiņu maina tā izmēru.",
         "placementInvisible": "Neredzams paraksts",
         "placementInvisibleDescription": "Paraksts tiek saglabāts failā bez atzīmes nevienā lapā.",
+        "placementPageLabel": "Zīmoga lappuse",
         "placementPageOption": "{page, number}. lapa no {count, number}",
         "placementPreview": "{page, number}. lapas priekšskatījums",
         "placementPreviewFailed": "Neizdevās ielādēt lapas priekšskatījumu.",

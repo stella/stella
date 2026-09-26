@@ -5120,6 +5120,7 @@
         "placementHint": "Ziehen Sie den Stempel, um ihn zu verschieben, oder ziehen Sie an seiner Ecke, um die Größe zu ändern. Ist der Stempel ausgewählt, verschieben ihn die Pfeiltasten; mit Umschalt und einer Pfeiltaste ändern Sie seine Größe.",
         "placementInvisible": "Unsichtbare Signatur",
         "placementInvisibleDescription": "Die Signatur wird in der Datei gespeichert, ohne Markierung auf einer Seite.",
+        "placementPageLabel": "Seite des Stempels",
         "placementPageOption": "Seite {page, number} von {count, number}",
         "placementPreview": "Vorschau von Seite {page, number}",
         "placementPreviewFailed": "Die Seitenvorschau konnte nicht geladen werden.",

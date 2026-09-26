@@ -5120,6 +5120,7 @@
         "placementHint": "Húzd a bélyegzőt az áthelyezéshez, vagy a sarkát az átméretezéshez. Ha a bélyegző ki van jelölve, a nyílbillentyűk mozgatják, a Shift és egy nyílbillentyű pedig átméretezi.",
         "placementInvisible": "Láthatatlan aláírás",
         "placementInvisibleDescription": "Az aláírás jelölés nélkül kerül a fájlba, egyik oldalon sem látszik.",
+        "placementPageLabel": "A bélyegző oldala",
         "placementPageOption": "{page, number}. oldal / {count, number}",
         "placementPreview": "{page, number}. oldal előnézete",
         "placementPreviewFailed": "Az oldal előnézetét nem sikerült betölteni.",

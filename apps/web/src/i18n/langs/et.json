@@ -5120,6 +5120,7 @@
         "placementHint": "Lohista templit selle liigutamiseks või selle nurka suuruse muutmiseks. Kui tempel on valitud, liigutavad nooleklahvid seda ja Shift koos nooleklahviga muudab selle suurust.",
         "placementInvisible": "Nähtamatu allkiri",
         "placementInvisibleDescription": "Allkiri salvestatakse faili ilma ühelegi leheküljele märki lisamata.",
+        "placementPageLabel": "Templi lehekülg",
         "placementPageOption": "Lehekülg {page, number}/{count, number}",
         "placementPreview": "Lehekülje {page, number} eelvaade",
         "placementPreviewFailed": "Lehekülje eelvaadet ei õnnestunud laadida.",
