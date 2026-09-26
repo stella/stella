@@ -372,7 +372,7 @@ const closeAbandonedClient = async ({
   }
 };
 
-export const loadMcpConnectorTools = async ({
+const loadMcpConnectorTools = async ({
   client,
   row,
 }: {

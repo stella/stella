@@ -16,7 +16,7 @@ export const TITLE_FINISH_POLICY =
 
 export type TitleContextMessage = Pick<ChatMessage, "parts" | "role">;
 
-export const extractTitleContext = (message: TitleContextMessage): string =>
+const extractTitleContext = (message: TitleContextMessage): string =>
   message.parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join(" ")

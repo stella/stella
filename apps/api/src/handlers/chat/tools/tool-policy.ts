@@ -2,7 +2,6 @@ import {
   CHAT_TOOL_POLICY_KIND,
   CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
   type ChatToolPolicyKind,
-  type NeedsApprovalPolicyKind,
 } from "@stll/api-contract";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -10,7 +9,7 @@ import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 
 export { CHAT_TOOL_POLICY_KIND };
-export type { ChatToolPolicyKind, NeedsApprovalPolicyKind };
+export type { ChatToolPolicyKind };
 
 export type ChatToolPolicy = {
   kind: ChatToolPolicyKind;

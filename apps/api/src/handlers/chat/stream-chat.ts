@@ -745,7 +745,7 @@ const projectServerToolsForProvider = ({
  * finally gets. Returning the branded type keeps an unwrapped source from
  * reaching `chat({ mcp: { clients } })`.
  */
-export const guardedMcpClients = ({
+const guardedMcpClients = ({
   boundary,
   provider,
   source,

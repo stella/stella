@@ -26,7 +26,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 // first and reveals the rest behind a toggle.
 const MAX_SUGGESTIONS = 4;
 
-export const SUGGESTIONS_SYSTEM_PROMPT = `You write a list of suggested follow-up prompts for someone in a legal workspace chat.
+const SUGGESTIONS_SYSTEM_PROMPT = `You write a list of suggested follow-up prompts for someone in a legal workspace chat.
 Based on the conversation transcript, suggest up to ${MAX_SUGGESTIONS} short, natural, and distinct follow-up questions or next steps that the user might want to send next.
 
 Each suggestion is inserted verbatim into the USER'S message composer and sent to the AI. Write strictly from the user's perspective, addressed to the AI. Never write a question that the AI would ask the user, such as "Do you want to add substitution authority?", "Would you like me to...?", "Chceš doplnit...?", or "Přejete si...?". Rewrite those as user requests, such as "Add substitution authority." or "Please generate the document as a PDF." If missing information is the natural next topic, phrase it as the user asking the AI what to provide, for example "What information do you need from me?".

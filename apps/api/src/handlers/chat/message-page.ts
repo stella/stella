@@ -41,7 +41,7 @@ export type ClientMessage = {
  * derived client-side from the user-file id, so only the DB-sourced
  * placeholder needs to travel with the message.
  */
-export const attachPlaceholders = (
+const attachPlaceholders = (
   parts: ChatPart[],
   placeholderById: Map<string, string>,
 ): ChatPart[] =>

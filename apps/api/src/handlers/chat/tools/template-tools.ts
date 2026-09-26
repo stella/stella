@@ -268,7 +268,7 @@ type CreateTemplateAuthoringToolsArgs = {
   dependencies?: TemplateAuthoringToolDependencies | undefined;
 };
 
-export type TemplateAuthoringToolDependencies = {
+type TemplateAuthoringToolDependencies = {
   suggestTemplateFields: typeof suggestTemplateFields;
 };
 

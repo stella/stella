@@ -105,7 +105,7 @@ export const createTanStackTerminalHooks = (
  * chosen here. Consumers may pass content events through, but they may not
  * maintain independent partial terminal-event allowlists.
  */
-export const TANSTACK_STREAM_EVENT_LIFECYCLE = {
+const TANSTACK_STREAM_EVENT_LIFECYCLE = {
   CUSTOM: "content",
   MESSAGES_SNAPSHOT: "content",
   REASONING_ENCRYPTED_VALUE: "content",

@@ -75,11 +75,6 @@ import type {
 
 const CHAT_ATTACHMENT_DELETE_TIMEOUT_MS = 10_000;
 
-export type UserFileThreadAccess = {
-  threadId: SafeId<"chatThread">;
-  userId: SafeId<"user">;
-};
-
 type UploadMessageFilesProps = {
   dependencies?: UploadUserFileDependencies;
   message: PersistableChatMessage;
@@ -1060,26 +1055,6 @@ export const uploadUserFile = async ({
       }),
     );
   });
-
-type NormalizeUserFilePartProps = {
-  fileId: SafeId<"userFile">;
-  fileName: string;
-  mimeType: string;
-  part: ChatAttachmentPart;
-};
-
-export const normalizeUserFilePart = ({
-  fileId,
-  fileName,
-  mimeType,
-  part: _part,
-}: NormalizeUserFilePartProps) => ({
-  ...createChatAttachmentPart({
-    filename: fileName,
-    mimeType,
-    url: toUserFileUrl(fileId),
-  }),
-});
 
 type ParseMessageFileDataUrlProps = {
   part: ChatAttachmentPart;

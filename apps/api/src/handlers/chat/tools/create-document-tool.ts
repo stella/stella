@@ -109,9 +109,6 @@ const createDocumentToolOutputSchema = v.union([
   }),
 ]);
 
-export type CreateDocumentToolInput = v.InferOutput<
-  typeof createDocumentToolInputSchema
->;
 export type CreateDocumentToolOutput = v.InferOutput<
   typeof createDocumentToolOutputSchema
 >;

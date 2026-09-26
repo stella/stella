@@ -36,14 +36,14 @@ export const CHAT_TURN_CANCELLATION_REASONS = [
   "superseded",
   "user-stop",
 ] as const;
-export type ChatTurnCancellationReason =
+type ChatTurnCancellationReason =
   (typeof CHAT_TURN_CANCELLATION_REASONS)[number];
 
 export const CHAT_TURN_INTERRUPTION_REASONS = [
   "client-disconnected",
   "timeout",
 ] as const;
-export type ChatTurnInterruptionReason =
+type ChatTurnInterruptionReason =
   (typeof CHAT_TURN_INTERRUPTION_REASONS)[number];
 
 export type ChatTurnState =
