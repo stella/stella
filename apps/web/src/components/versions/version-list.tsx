@@ -202,11 +202,7 @@ export const VersionRow = ({
   if (onActivate) {
     headerElement = (
       <button
-        className={cn(
-          headerClassName,
-          "transition-colors",
-          !isSelected && "hover:bg-muted/50",
-        )}
+        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
         type="button"
         onClick={onActivate}
         onContextMenu={onContextMenu}

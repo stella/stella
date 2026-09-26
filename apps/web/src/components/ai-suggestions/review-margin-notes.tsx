@@ -332,7 +332,7 @@ const MarginNoteBody = ({
 }) => (
   <button
     className={cn(
-      "hover:bg-muted/70 focus-visible:ring-ring flex min-h-11 w-full flex-col justify-center gap-0.5 border-s-2 px-2.5 py-1.5 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none",
+      "hover:bg-muted/70 focus-visible:ring-ring flex min-h-11 w-full flex-col justify-center gap-0.5 border-s-2 px-2.5 py-1.5 text-start focus-visible:ring-2 focus-visible:outline-none",
       note.accent ? "border-destructive" : "border-border",
     )}
     onClick={() => onOpen(note.id)}
@@ -407,7 +407,7 @@ const EdgePill = ({
       <button
         // The pill stays small; its target does not. The pseudo-element
         // widens the hit area without moving the pill or its neighbours.
-        className="bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring text-2xs pointer-events-auto relative flex items-center gap-1 rounded-full border px-2 py-1 tabular-nums shadow-xs backdrop-blur transition-colors before:absolute before:-inset-2.5 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring text-2xs pointer-events-auto relative flex items-center gap-1 rounded-full border px-2 py-1 tabular-nums shadow-xs backdrop-blur before:absolute before:-inset-2.5 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
         onClick={() => onScrollTo(nearest)}
         type="button"
       >

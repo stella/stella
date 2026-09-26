@@ -593,7 +593,7 @@ const TaskDetailPanelContent = ({
             />
           ) : (
             <button
-              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold transition-colors"
+              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold"
               onClick={startEditingName}
               type="button"
             >

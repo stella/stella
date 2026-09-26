@@ -51,7 +51,7 @@ export const AiHeadnotes = ({ analysis, onAnchorClick }: AiHeadnotesProps) => {
             <div className="reader-chrome flex flex-wrap gap-1 pt-2">
               {holding.anchors.map((anchor) => (
                 <button
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted text-3xs rounded px-1.5 py-1 transition-colors"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted text-3xs rounded px-1.5 py-1"
                   key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}
                   onClick={() => {
                     onAnchorClick(anchor.startAnchorId);

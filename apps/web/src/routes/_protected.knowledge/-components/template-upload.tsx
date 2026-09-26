@@ -143,7 +143,7 @@ export const TemplateUpload = ({
     <div className="flex flex-1 items-center justify-center p-8">
       <div
         className={cn(
-          "flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200",
+          "flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10",
           isDragOver
             ? "border-foreground/30 bg-accent/50 shadow-primary/20 shadow-lg"
             : "border-border shadow-none",

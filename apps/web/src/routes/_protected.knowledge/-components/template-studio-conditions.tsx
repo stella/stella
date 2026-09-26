@@ -564,7 +564,7 @@ const ConditionFieldEditor = ({
           <Label className="text-sm">
             {t("templates.studio.conditionAiInstructionsLabel")}
           </Label>
-          <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 transition-shadow focus-within:ring-[3px]">
+          <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 focus-within:ring-[3px]">
             <AIPromptInput
               mentionExtension={fieldMention}
               onChange={(value) =>

@@ -175,7 +175,7 @@ export const TemplatePrefillPanel = ({
           {file === null ? (
             <button
               className={cn(
-                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
                 dragOver && "border-ring text-foreground",
               )}
               onClick={() => {

@@ -146,7 +146,7 @@ export const ThreadsSheet = ({
         <SheetTrigger
           render={
             <button
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase outline-none focus-visible:ring-2"
               type="button"
             />
           }
@@ -382,7 +382,7 @@ const ThreadRow = ({
   return (
     <div
       className={cn(
-        "group flex items-center gap-1 rounded-lg transition-colors",
+        "group flex items-center gap-1 rounded-lg",
         activeThreadRef?.threadId === threadRef.threadId
           ? "bg-muted"
           : "hover:bg-muted",

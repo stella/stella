@@ -395,7 +395,7 @@ const SuggestedReviveTab = () => {
         <button
           aria-label={label}
           className={cn(
-            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center transition-colors",
+            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center",
             TOOLBAR_ROW_HEIGHT,
           )}
           onClick={reviveSuggestedTab}

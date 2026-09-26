@@ -108,10 +108,10 @@ export const ChatWebSearchToggle = ({
       aria-pressed={enabled}
       // Quiet status-row control: muted at rest, borderless, only the
       // usual ghost hover surface. The enabled state speaks through
-      // the info-tinted icon, not a filled chip. `transition-colors`
+      // the info-tinted icon, not a filled chip. ``
       // eases the on/off tint so the optimistic flip reads as a smooth
       // turn-on rather than a blip.
-      className="text-muted-foreground hover:text-foreground transition-colors"
+      className="text-muted-foreground hover:text-foreground"
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
       onClick={() => {
@@ -125,7 +125,6 @@ export const ChatWebSearchToggle = ({
     >
       <GlobeIcon
         className={cn(
-          "transition-colors",
           size === "icon-xs" ? "size-3.5" : "size-4",
           enabled && "text-info",
         )}

@@ -769,8 +769,8 @@ const TemplateRow = ({
         <div
           className={cn(
             density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors",
+              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
+              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
           )}
           draggable
           onDragStart={handleDragStart}
@@ -1138,7 +1138,7 @@ const TemplateTagsDialogBody = ({
           <div className="flex flex-wrap gap-1">
             {matchingSuggestions.map((tag) => (
               <button
-                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium"
                 key={tag}
                 onClick={() => addTag(tag)}
                 type="button"

@@ -75,7 +75,7 @@ export const TimeEntryRow = ({
     <>
       <div
         className={cn(
-          "group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
+          "group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2",
           isActive && "border-success/30 bg-success/8",
           selected && "border-primary/30 bg-primary/5",
         )}

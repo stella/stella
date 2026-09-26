@@ -52,7 +52,7 @@ export const OnboardingLayout = ({
               render={
                 <button
                   aria-label={t("common.goBack")}
-                  className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md transition-colors"
+                  className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md"
                   onClick={onBack}
                   style={{ insetInlineStart: "-12px" }}
                   type="button"

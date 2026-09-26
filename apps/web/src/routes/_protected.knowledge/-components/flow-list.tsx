@@ -155,7 +155,7 @@ const FlowExampleCard = ({
 
   return (
     <button
-      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start transition-colors"
+      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start"
       onClick={onSelect}
       type="button"
     >

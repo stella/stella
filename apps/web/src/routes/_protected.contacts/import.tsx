@@ -467,7 +467,7 @@ const UploadStep = ({
       <button
         aria-busy={isInspecting}
         className={cn(
-          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center focus-visible:ring-2 focus-visible:outline-none",
           isDropTarget &&
             "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
           isInspecting && "cursor-progress",

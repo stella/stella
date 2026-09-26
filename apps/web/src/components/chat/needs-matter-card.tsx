@@ -351,7 +351,7 @@ const MatterPickerSection = ({
       <div className="border-border/50 space-y-2 border-t px-3 py-3">
         <p className="text-xs">{t("chat.createDocument.pickMatterPrompt")}</p>
 
-        <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background flex items-center gap-1.5 rounded-md border px-1.5 transition-shadow focus-within:ring-2">
+        <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
           <SearchIcon
             aria-hidden="true"
             className="text-muted-foreground size-3.5 shrink-0"
@@ -398,7 +398,7 @@ const MatterPickerSection = ({
                 return (
                   <button
                     className={cn(
-                      "flex w-full items-center gap-2 px-2 py-1.5 text-start text-xs transition-colors",
+                      "flex w-full items-center gap-2 px-2 py-1.5 text-start text-xs",
                       isSelected
                         ? "bg-foreground text-background"
                         : "hover:bg-muted",
@@ -510,7 +510,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
       {canOpen ? (
         <button
           className={cn(
-            "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start transition-colors",
+            "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start",
           )}
           onClick={() => {
             detached(onOpen(matterOutput), "needs-matter-card.open");

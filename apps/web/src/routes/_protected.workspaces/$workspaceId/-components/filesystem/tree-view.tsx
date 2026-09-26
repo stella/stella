@@ -951,7 +951,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs transition-colors",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -1190,7 +1190,7 @@ const ColumnHeaderCell = ({
     >
       <button
         className={cn(
-          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5 transition-colors",
+          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
           align === "end" ? "justify-end text-end" : "justify-start text-start",
           isActive && "text-foreground",
         )}
@@ -1205,7 +1205,7 @@ const ColumnHeaderCell = ({
         className="absolute -end-2 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none"
         onPointerDown={handleResizePointerDown}
       >
-        <div className="bg-border/0 group-hover/column:bg-border/60 hover:bg-primary/60 mx-auto h-full w-px transition-colors" />
+        <div className="bg-border/0 group-hover/column:bg-border/60 hover:bg-primary/60 mx-auto h-full w-px" />
       </div>
       {onHide && (
         <Menu
@@ -1699,7 +1699,7 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm transition-colors duration-150",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );

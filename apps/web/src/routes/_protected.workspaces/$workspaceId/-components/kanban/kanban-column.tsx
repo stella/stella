@@ -254,7 +254,7 @@ export const KanbanColumn = ({
   return (
     <div
       className={cn(
-        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-[opacity,background-color,outline-color]",
+        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-opacity",
         !colorBg && "bg-muted/50",
         isColumnActive && !color && "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",

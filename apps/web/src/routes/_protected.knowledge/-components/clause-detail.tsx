@@ -1788,7 +1788,7 @@ const VersionRow = ({
       <button
         className={cn(
           "flex flex-1 items-center justify-between",
-          "px-2 py-3 text-sm transition-colors",
+          "px-2 py-3 text-sm",
           "hover:bg-muted/50 rounded",
           isSelected && "bg-muted",
         )}

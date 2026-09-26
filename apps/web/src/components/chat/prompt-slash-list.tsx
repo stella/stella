@@ -179,7 +179,7 @@ export const PromptSlashList = ({
                 return (
                   <button
                     className={cn(
-                      "block w-full rounded-sm px-2 py-1.5 text-start transition-colors",
+                      "block w-full rounded-sm px-2 py-1.5 text-start",
                       active
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-accent/50",

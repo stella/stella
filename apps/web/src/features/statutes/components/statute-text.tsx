@@ -302,7 +302,7 @@ const ProvisionDetailsAction = ({
   return (
     <button
       aria-label={t("statutes.provisionDetailsFor", { provision })}
-      className="reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
+      className="reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
       onClick={onOpen}
       type="button"
     >

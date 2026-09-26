@@ -170,7 +170,7 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
         <button
           className={cn(
             "bg-muted/72 hover:bg-muted text-muted-foreground hover:text-foreground",
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors",
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
           )}
           key={chip.key}
           onClick={chip.clear}

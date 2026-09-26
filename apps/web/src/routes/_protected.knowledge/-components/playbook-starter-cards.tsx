@@ -81,7 +81,7 @@ export const PlaybookStarterCards = ({
         return (
           <li key={starter.starterId}>
             <button
-              className="border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
+              className="border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
               disabled={create.isPending}
               onClick={() => create.mutate(starter.starterId)}
               type="button"

@@ -105,7 +105,7 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
             <InputOTP
               autoFocus
               containerClassName={cn(
-                "rounded-md transition-shadow",
+                "rounded-md",
                 isTotpPulsing && "ring-primary ring-2",
               )}
               maxLength={TOTP_LENGTH}

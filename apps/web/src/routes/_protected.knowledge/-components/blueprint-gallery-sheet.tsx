@@ -182,7 +182,7 @@ const BlueprintGallerySheetBody = ({
           const text = cardText(card.id);
           return (
             <button
-              className="border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start transition-colors disabled:opacity-60"
+              className="border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start disabled:opacity-60"
               disabled={create.isPending}
               key={card.id}
               onClick={() => create.mutate(card.id)}
@@ -213,7 +213,7 @@ const BlueprintGallerySheetBody = ({
         {/* The blank scaffold is a blueprint too — no form, the user lands
             straight in the editor and fills the skill in there. */}
         <button
-          className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm transition-colors disabled:opacity-60"
+          className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm disabled:opacity-60"
           disabled={create.isPending}
           onClick={() => create.mutate("blank")}
           type="button"

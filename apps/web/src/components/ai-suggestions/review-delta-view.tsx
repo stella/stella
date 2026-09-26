@@ -122,7 +122,7 @@ export const PassagesDisclosure = ({
       <button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs transition-colors"
+        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >

@@ -379,7 +379,7 @@ export const CatalogueBrowser = ({
                   <>
                     <button
                       aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                       onClick={() => setJurisdictionFilter(new Set())}
                       type="button"
                     >
@@ -419,7 +419,7 @@ export const CatalogueBrowser = ({
                     return (
                       <button
                         aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                         key={code}
                         onClick={() =>
                           setJurisdictionFilter((prev) => {

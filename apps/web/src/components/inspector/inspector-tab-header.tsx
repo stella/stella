@@ -179,7 +179,7 @@ export const MatterOriginLink = ({
   onClick,
 }: MatterOriginLinkProps) => (
   <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5 transition-colors"
+    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5"
     onClick={onClick}
     type="button"
   >

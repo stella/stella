@@ -388,7 +388,6 @@ export const ChatThreadCard = ({
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
         "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
         "hover:bg-popover focus-within:bg-popover",
-        "transition-[background-color,border-color] duration-200 ease-out",
         "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
         "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
       )}
@@ -758,7 +757,7 @@ export const PromptBar = (props: PromptBarProps) => {
             >
               <Button
                 aria-keyshortcuts="Tab"
-                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium transition-[background-color] duration-150"
+                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium"
                 onClick={() => submitPreset(preset)}
                 size="sm"
                 type="button"
@@ -1059,7 +1058,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         onFocus(suggestion.id);
       }}
       className={cn(
-        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2 transition-colors",
+        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2",
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >

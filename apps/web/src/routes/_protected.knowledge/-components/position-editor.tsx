@@ -319,7 +319,7 @@ export const PositionEditor = ({
   return (
     <li
       className={cn(
-        "bg-card overflow-hidden rounded-lg border shadow-xs transition-shadow",
+        "bg-card overflow-hidden rounded-lg border shadow-xs",
         !position.enabled && "opacity-60",
         isDropTarget && "ring-primary ring-2",
       )}
