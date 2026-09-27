@@ -1096,16 +1096,21 @@ export const withClaimedChatTurnExecution = async <T>({
  */
 export const renewChatTurnExecutionLease = async ({
   execution,
+  runId,
   safeDb,
 }: {
   execution: ChatTurnExecution;
+  runId?: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnExecutionStanding, SafeDbError>> =>
   await safeDb(async (tx) => {
     // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
     const renewed = await tx
       .update(chatTurns)
-      .set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry() })
+      .set({
+        leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+        ...(runId === undefined ? {} : { runId }),
+      })
       .where(ownedByExecution(execution))
       .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
     return standingOf(renewed.at(0));
@@ -1134,14 +1139,10 @@ export const startChatTurnRun = async ({
   runId: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnRunStart, SafeDbError>> => {
-  const started = await safeDb(async (tx) => {
-    // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
-    const rows = await tx
-      .update(chatTurns)
-      .set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry(), runId })
-      .where(ownedByExecution(execution))
-      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-    return standingOf(rows.at(0));
+  const started = await renewChatTurnExecutionLease({
+    execution,
+    runId,
+    safeDb,
   });
   if (
     Result.isError(started) &&

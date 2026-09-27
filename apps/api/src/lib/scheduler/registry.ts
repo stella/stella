@@ -31,10 +31,7 @@ import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
-import {
-  REAP_OWNERLESS_CHAT_TURNS_TASK,
-  reapOwnerlessChatTurns,
-} from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import {
   BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
   backfillCorpusIndexJobDetail,
@@ -157,7 +154,6 @@ const SCHEDULER_TASKS = {
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
-  [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
   [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
@@ -166,15 +162,24 @@ const SCHEDULER_TASKS = {
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
 } as const satisfies Record<string, SchedulerTask>;
 
-export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
+const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+  ...SCHEDULER_TASKS,
+  [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+});
+
+export type RegisteredSchedulerTaskName = keyof ReturnType<
+  typeof schedulerTasks
+>;
 
 /**
  * Every task name this build can execute, as data: job registration retires
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(SCHEDULER_TASKS),
+  Object.keys(schedulerTasks(noopTask)),
 );
 
-export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
-  new Map<string, SchedulerTask>(Object.entries(SCHEDULER_TASKS));
+export const createSchedulerTaskRegistry = (
+  reapOwnerlessChatTurns: SchedulerTask,
+): SchedulerTaskRegistry =>
+  new Map(Object.entries(schedulerTasks(reapOwnerlessChatTurns)));

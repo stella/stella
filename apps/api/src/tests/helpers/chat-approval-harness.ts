@@ -12,6 +12,7 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
@@ -27,7 +28,7 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { reapOwnerlessChatTurns } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   findLiveViewViolations,
@@ -1054,7 +1055,7 @@ export const createApprovalHarness = ({
     },
     /** Runs the scheduler's reaper once, as its minute tick does. */
     reapOwnerlessTurns: async () => {
-      await reapOwnerlessChatTurns(
+      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
         asTestRaw<SchedulerTaskContext>({
           db: testDb,
           logger: { info: () => undefined },
