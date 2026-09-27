@@ -264,6 +264,9 @@ describe("derived-file regeneration boundary", () => {
       "apps/api/",
       "packages/",
       "apps/web/src/generated/",
+      String.raw`apps/web/package\.json$`,
+      String.raw`\.oxfmtrc\.json$`,
+      String.raw`scripts/(ownership|design-tokens-doc)\.ts$`,
       String.raw`bun\.lock$`,
     ]) {
       expect(job).toContain(input);

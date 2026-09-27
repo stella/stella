@@ -146,7 +146,8 @@ jobs:
       run: ${{ steps.scope.outputs.run }}
     steps:
       # The generators read apps/api, the workspace packages whose types reach
-      # the API, the dependency graph and their own outputs; a pull request
+      # the API, the web manifest, the formatter config, the dependency graph,
+      # their own sources and their own outputs; a pull request
       # touching none of them cannot drift. The files API lists at most 3000
       # files, so a list that long regenerates rather than guessing.
       - name: Match generator inputs
@@ -159,7 +160,7 @@ jobs:
         run: |
           set -euo pipefail
           files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
-          inputs='^(apps/api/|packages/|apps/web/src/generated/|scripts/ownership\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
+          inputs='^(apps/api/|packages/|apps/web/src/generated/|apps/web/package\.json$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
           if [[ "$(wc -l <<<"$files")" -ge 3000 ]] || grep -qE "$inputs" <<<"$files"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
