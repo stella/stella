@@ -219,14 +219,12 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     userId: ids.userA1,
     workspaceId: null,
   });
-  const storeBinding = async (tx: Pick<Transaction, "insert">) => {
-    await tx.insert(chatThreadNames).values({
-      kind: CHAT_THREAD_NAME_KIND.refBinding,
-      name: binding.ref,
-      target: binding,
-      threadId,
-    });
-  };
+  const bindingRow = {
+    kind: CHAT_THREAD_NAME_KIND.refBinding,
+    name: binding.ref,
+    target: binding,
+    threadId,
+  } as const;
   if (
     bindingStore === BINDING_STORE.thread ||
     bindingStore === BINDING_STORE.late
@@ -239,13 +237,13 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     });
   }
   if (bindingStore === BINDING_STORE.thread) {
-    await storeBinding(testDb);
+    await testDb.insert(chatThreadNames).values(bindingRow);
   }
   beforeAcceptance =
     bindingStore === BINDING_STORE.late
       ? async (tx) => {
           beforeAcceptance = undefined;
-          await storeBinding(tx);
+          await tx.insert(chatThreadNames).values(bindingRow);
         }
       : undefined;
 
