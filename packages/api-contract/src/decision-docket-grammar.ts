@@ -556,6 +556,63 @@ const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
   },
 };
 
+/**
+ * The docket numbers the Supreme Court of the United States assigns, each with
+ * the key its form compares under.
+ *
+ * - `21-123`: the term year, then the case's number in that term's docket.
+ * - `20A87`: an application, numbered per term.
+ * - `22O141`: an original-jurisdiction case, in the electronic form.
+ * - `No. 8, Orig.`: the same, as the Court prints it.
+ * - `No. 1`: a number with no term, as older dockets were written. The `No.`
+ *   is required here, because a bare number is not a docket.
+ *
+ * A leading `No.` is optional on the other forms and never part of the key.
+ * Every digit is: `21-123` and `21-456` are two cases, so the sheet-number
+ * strip the other grammars apply to a trailing `-digits` never runs here.
+ */
+type UnitedStatesDocketParts = {
+  /** The two-digit term year, or empty for a form that carries none. */
+  readonly term: string;
+  readonly number: string;
+};
+
+const USA_DOCKET_FORMS = [
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})-(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}-${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})a(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}a${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}o${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => `${number} orig`,
+  },
+  {
+    pattern: /^no\.? ?(?<number>\d{1,5})$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => number,
+  },
+] as const;
+
+const USA_DOCKET_PATTERNS = USA_DOCKET_FORMS.map(({ pattern }) => pattern);
+
+const canonicalUnitedStatesDocketKey = (formatted: string): string => {
+  for (const { key, pattern } of USA_DOCKET_FORMS) {
+    const groups = pattern.exec(formatted)?.groups;
+    const number = groups?.["number"];
+    if (number !== undefined) {
+      return key({ number, term: groups?.["term"] ?? "" }).toLowerCase();
+    }
+  }
+  return panic("Accepted United States docket matches no declared form");
+};
+
 const canonicalSlovakDocketKey = (formatted: string): string => {
   const groups = SVK_DOCKET_RE.exec(formatted)?.groups;
   const senate = groups?.["senate"];
@@ -644,6 +701,11 @@ export const DECISION_DOCKET_GRAMMARS = {
     patterns: POL_DOCKET_PATTERNS,
   }),
   SVK: slovakDocketGrammar,
+  USA: createDecisionDocketGrammar({
+    canonicalize: canonicalUnitedStatesDocketKey,
+    jurisdiction: "USA",
+    patterns: USA_DOCKET_PATTERNS,
+  }),
 } as const satisfies {
   readonly [
     TJurisdiction in CaseLawJurisdiction
@@ -656,6 +718,20 @@ export type DecisionDocketGrammar =
 
 const DECISION_DOCKET_GRAMMAR_LIST: readonly DecisionDocketGrammar[] =
   Object.values(DECISION_DOCKET_GRAMMARS);
+
+/**
+ * Jurisdictions whose grammar is read only under their own scope. Their forms
+ * are short digit runs (`10-12`, `No. 5`) that also occur in text that is not
+ * a docket, so an entry is read as one only where the scope says which
+ * jurisdiction it comes from; an unscoped entry never reaches them.
+ */
+const SCOPED_ONLY_DOCKET_JURISDICTIONS: ReadonlySet<DecisionDocketJurisdiction> =
+  new Set<DecisionDocketJurisdiction>(["USA"]);
+
+const UNSCOPED_DECISION_DOCKET_GRAMMARS: readonly DecisionDocketGrammar[] =
+  DECISION_DOCKET_GRAMMAR_LIST.filter(
+    (grammar) => !SCOPED_ONLY_DOCKET_JURISDICTIONS.has(grammar.jurisdiction),
+  );
 
 /** Resolve a declared grammar without treating an unknown scope as unscoped. */
 export const decisionDocketGrammarForJurisdiction = (
@@ -673,7 +749,10 @@ type ParseDecisionDocketOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
 };
 
-/** Parse against one jurisdiction, or every declared grammar when unscoped. */
+/**
+ * Parse against one jurisdiction, or, when unscoped, every declared grammar
+ * that is not read only under its own scope.
+ */
 export const parseDecisionDocket = (
   raw: string,
   { grammar }: ParseDecisionDocketOptions = {},
@@ -684,7 +763,7 @@ export const parseDecisionDocket = (
   if (grammar !== undefined) {
     return grammar.parse(raw);
   }
-  for (const candidate of DECISION_DOCKET_GRAMMAR_LIST) {
+  for (const candidate of UNSCOPED_DECISION_DOCKET_GRAMMARS) {
     const docket = candidate.parse(raw);
     if (docket !== null) {
       return docket;
