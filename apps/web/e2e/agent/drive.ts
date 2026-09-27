@@ -69,6 +69,14 @@ const LOADING_PLACEHOLDER = 'main [data-slot="skeleton"]';
 // in a screenshot is explained.
 const blockedRequests = new Set<string>();
 
+// Unsaved input never reaches the database, so the seal cannot see a typed
+// value; any text entered into a page taints every later capture of that
+// browser context. The page flag covers the current document, the binding
+// carries the taint across navigations.
+const TEXT_ENTRY_BINDING = "__stellaAgentTextEntered";
+const TEXT_ENTRY_EVENTS = ["input", "paste", "drop"];
+const textEnteredContexts = new WeakSet<BrowserContext>();
+
 type Session = {
   browser: Browser;
   newContext: () => Promise<BrowserContext>;
@@ -101,6 +109,27 @@ const openSession = async (options: DriveOptions): Promise<Session> => {
         blockedRequests.add(new URL(route.request().url()).origin);
         await route.abort("blockedbyclient");
       });
+      await context.exposeBinding(TEXT_ENTRY_BINDING, () => {
+        textEnteredContexts.add(context);
+      });
+      await context.addInitScript(
+        ({ binding, events }) => {
+          for (const type of events) {
+            window.addEventListener(
+              type,
+              () => {
+                Reflect.set(window, `${binding}Flag`, true);
+                const notify: unknown = Reflect.get(window, binding);
+                if (typeof notify === "function") {
+                  notify();
+                }
+              },
+              { capture: true },
+            );
+          }
+        },
+        { binding: TEXT_ENTRY_BINDING, events: TEXT_ENTRY_EVENTS },
+      );
       return context;
     },
   };
@@ -120,12 +149,19 @@ const capture = async ({
   screenshotPath,
 }: CaptureOptions) => {
   const image = await page.screenshot({ fullPage, path: screenshotPath });
+  const textEntered =
+    textEnteredContexts.has(page.context()) ||
+    (await page.evaluate(
+      (flag) => Reflect.get(window, flag) === true,
+      `${TEXT_ENTRY_BINDING}Flag`,
+    ));
   await appendFile(
     CAPTURE_LOG,
     `${JSON.stringify({
       label,
       path: screenshotPath,
       sha256: createHash("sha256").update(image).digest("hex"),
+      textEntered,
       url: page.url(),
     })}\n`,
   );

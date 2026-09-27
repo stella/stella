@@ -6,11 +6,19 @@
  *
  * The seal is a per-table fingerprint of every row, taken right after the
  * seed. Tables that change merely because the app is used (sessions, audit
- * events, queues) are ignored; everything else must match.
+ * events, queues) are ignored; everything else must match. The dev runner
+ * seals only a database that was fresh or still matched its seal before the
+ * seed ran, so rows entered earlier can never become part of the baseline.
+ *
+ * `check` prints one of:
+ *   {"status":"fresh"}      no user exists yet, so nothing was entered
+ *   {"status":"pristine"}   every table matches the seal
+ *   {"status":"modified","tables":[...]}
+ *   {"status":"unsealed"}   no seal file
  *
  * Usage:
  *   bun scripts/seed-seal.ts write <seal.json>
- *   bun scripts/seed-seal.ts check <seal.json>   prints {"status": ...}
+ *   bun scripts/seed-seal.ts check <seal.json>
  */
 
 import { panic } from "better-result";
@@ -78,6 +86,15 @@ if (!isMode(mode) || sealPath === undefined) {
   process.exit(2);
 }
 
+// Every account-bound row needs a user, so a database without one has
+// received no content from anyone.
+const isFresh = async () => {
+  const [row] = await openMaintenanceDb({ readOnly: true }).execute<{
+    fresh: boolean;
+  }>(sql`SELECT NOT EXISTS (SELECT 1 FROM "user") AS fresh`);
+  return row?.fresh === true;
+};
+
 const digests = await readTableDigests();
 switch (mode) {
   case "write": {
@@ -85,6 +102,10 @@ switch (mode) {
     break;
   }
   case "check": {
+    if (await isFresh()) {
+      console.log(JSON.stringify({ status: "fresh" }));
+      break;
+    }
     if (!existsSync(sealPath)) {
       console.log(JSON.stringify({ status: "unsealed" }));
       break;

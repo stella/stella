@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -16,6 +17,7 @@ import path from "node:path";
 
 import { Temporal } from "@stll/time";
 
+import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
@@ -1835,6 +1837,17 @@ const buildSeedStep = (options: BuildApiEnvOptions) =>
     label: "Seeding local fixtures",
   });
 
+const buildSealCheckStep = (options: BuildApiEnvOptions) =>
+  buildApiScriptStep({
+    ...options,
+    args: [
+      "scripts/seed-seal.ts",
+      "check",
+      devStatePath(options.rootDir, SEAL_FILE),
+    ],
+    label: "Checking the seal",
+  });
+
 // Fingerprints every table once the seed and the servers' own start-up writes
 // are done; see apps/api/scripts/seed-seal.ts.
 const buildSealStep = (options: BuildApiEnvOptions) =>
@@ -2476,6 +2489,19 @@ const main = async () => {
     // The seed needs only the migrated database, so it runs while the
     // servers boot rather than after them.
     const seeds = parsedArgs.seed && modeIncludesApi(mode);
+    const stackEnv = {
+      infraOffset,
+      infraPorts,
+      ports,
+      rootDir: gitContext.currentRoot,
+    };
+    // Decided before the seed writes anything: only a fresh database, or one
+    // still matching its seal, may be sealed again afterwards.
+    const sealTrusted =
+      seeds &&
+      isSealTrusted(
+        parseSealStatus(runCommandText(buildSealCheckStep(stackEnv))),
+      );
     if (seeds) {
       backgroundSteps.push(
         startBackgroundStep(
@@ -2498,14 +2524,12 @@ const main = async () => {
     for (const step of backgroundSteps) {
       await finishBackgroundStep(step);
     }
-    if (seeds) {
-      runStep(
-        buildSealStep({
-          infraOffset,
-          infraPorts,
-          ports,
-          rootDir: gitContext.currentRoot,
-        }),
+    if (sealTrusted) {
+      runStep(buildSealStep(stackEnv));
+    } else if (seeds) {
+      rmSync(devStatePath(gitContext.currentRoot, SEAL_FILE), { force: true });
+      console.warn(
+        "This database held content that did not come from the seed, so it is not sealed and its screenshots cannot be attached to pull requests. `bun run agent:reset` recreates it from the seed.",
       );
     }
 

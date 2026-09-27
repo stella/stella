@@ -8,14 +8,24 @@ import { panic } from "better-result";
 import path from "node:path";
 
 export type SealStatus =
+  | { status: "fresh" }
   | { status: "pristine" }
   | { status: "modified"; tables: string[] }
   | { status: "unsealed" };
+
+// A seal may be (re)written only over a database that is fresh or still
+// matches its previous seal; anything else would absorb earlier content into
+// the baseline.
+export const isSealTrusted = (seal: SealStatus | null) =>
+  seal?.status === "fresh" || seal?.status === "pristine";
 
 export type CaptureRecord = {
   label: string;
   path: string;
   sha256: string;
+  // Text was typed, pasted or dropped into the page before this capture.
+  // Unsaved input never reaches the database, so the seal cannot see it.
+  textEntered: boolean;
   url: string;
 };
 
@@ -39,6 +49,7 @@ export const parseSealStatus = (output: string): SealStatus | null => {
     return null;
   }
   switch (parsed["status"]) {
+    case "fresh":
     case "pristine":
     case "unsealed": {
       return { status: parsed["status"] };
@@ -59,6 +70,7 @@ const isCaptureRecord = (value: unknown): value is CaptureRecord =>
   typeof value["label"] === "string" &&
   typeof value["path"] === "string" &&
   typeof value["sha256"] === "string" &&
+  typeof value["textEntered"] === "boolean" &&
   typeof value["url"] === "string";
 
 export const parseCaptureLog = (text: string): CaptureRecord[] =>
@@ -78,8 +90,11 @@ const describeSeal = (seal: SealStatus) => {
     case "pristine": {
       return null;
     }
+    case "fresh": {
+      return "the stack has not been seeded";
+    }
     case "unsealed": {
-      return "the stack has no seal; restart it with `bun run agent:up`";
+      return "the stack has no seal (it held non-seeded content when it started); run `bun run agent:reset`";
     }
     case "modified": {
       return `the stack holds content created after the seed (${seal.tables.join(", ")}); run \`bun run agent:reset\` and capture again`;
@@ -107,6 +122,13 @@ export const decideAttachable = ({
 }: DecideAttachableOptions): Pick<ManifestEntry, "attachable" | "reason"> => {
   if (!LOCAL_HOSTNAMES.has(new URL(record.url).hostname)) {
     return { attachable: false, reason: `captured at ${record.url}` };
+  }
+  if (record.textEntered) {
+    return {
+      attachable: false,
+      reason:
+        "text was entered on the page before it; capture states reachable by clicking only",
+    };
   }
   const reason = describeSeal(before) ?? describeSeal(after);
   return reason === null

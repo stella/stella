@@ -102,6 +102,9 @@ the stack held nothing but seeded content: after seeding, the runner
 fingerprints every table, and `agent:drive` checks the fingerprint before and
 after each run. Anything created since (an upload, a new matter, a typed name,
 a chat message) makes that run's captures unattachable, and the driver says so.
+So does typing, pasting or dropping anything into the page in a `run` script,
+even unsaved. A stack restarted while it held such content is not resealed
+until `bun run agent:reset`.
 
 - Take "before" shots before editing an existing screen.
 - To show a change that needed new content, verify it for yourself, then run

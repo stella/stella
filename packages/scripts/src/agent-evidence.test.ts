@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   decideAttachable,
   ghSupportsAttach,
+  isSealTrusted,
   parseCaptureLog,
   parseSealStatus,
   verifyAttachment,
@@ -16,6 +17,7 @@ const record = (url = "http://localhost:3269/workspaces") => ({
   label: "matter",
   path: SHOT,
   sha256: "abc",
+  textEntered: false,
   url,
 });
 
@@ -74,6 +76,26 @@ describe("decideAttachable", () => {
       expect(decision.attachable).toBe(false);
       expect(decision.reason).toContain("public.entities");
     }
+  });
+
+  test("refuses a capture taken after text was entered", () => {
+    const decision = decideAttachable({
+      after: pristine,
+      before: pristine,
+      record: { ...record(), textEntered: true },
+    });
+    expect(decision.attachable).toBe(false);
+    expect(decision.reason).toContain("text was entered");
+  });
+
+  test("refuses a stack that was never seeded", () => {
+    expect(
+      decideAttachable({
+        after: { status: "fresh" },
+        before: { status: "fresh" },
+        record: record(),
+      }).attachable,
+    ).toBe(false);
   });
 
   test("refuses an unsealed stack and a non-local page", () => {
@@ -153,5 +175,17 @@ describe("ghSupportsAttach", () => {
     ["not gh", false],
   ])("%s -> %s", (output, expected) => {
     expect(ghSupportsAttach(output)).toBe(expected);
+  });
+});
+
+describe("isSealTrusted", () => {
+  test("trusts only a fresh database or one still matching its seal", () => {
+    expect(isSealTrusted({ status: "fresh" })).toBe(true);
+    expect(isSealTrusted({ status: "pristine" })).toBe(true);
+    expect(isSealTrusted({ status: "unsealed" })).toBe(false);
+    expect(
+      isSealTrusted({ status: "modified", tables: ["public.entities"] }),
+    ).toBe(false);
+    expect(isSealTrusted(null)).toBe(false);
   });
 });
