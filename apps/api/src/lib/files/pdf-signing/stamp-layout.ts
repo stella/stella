@@ -95,7 +95,6 @@ const logicalRuns = (
   visualPositions: readonly number[],
 ): LogicalRun[] => {
   const runs: LogicalRun[] = [];
-  let current: LogicalRun | null = null;
   for (const [index, character] of characters.entries()) {
     if (BIDI_CONTROL.test(character)) {
       continue;
@@ -109,13 +108,13 @@ const logicalRuns = (
         `No stamp font has U+${(character.codePointAt(0) ?? 0).toString(16)}`,
       );
     }
-    if (current?.face === face && current.level === level) {
-      current.text += character;
-      current.visualPosition = Math.min(current.visualPosition, visualPosition);
+    const last = runs.at(-1);
+    if (last?.face === face && last.level === level) {
+      last.text += character;
+      last.visualPosition = Math.min(last.visualPosition, visualPosition);
       continue;
     }
-    current = { face, level, text: character, visualPosition };
-    runs.push(current);
+    runs.push({ face, level, text: character, visualPosition });
   }
   return runs;
 };
