@@ -557,6 +557,11 @@ const CHAT_PART_POLICY = {
     invalidHandling: "panic",
     providerVisibility: "model",
   },
+  subagent: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
   text: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
@@ -968,6 +973,9 @@ const CHAT_PART_PERSISTENCE = {
   document: "persist",
   image: "persist",
   "structured-output": "persist",
+  // Stella runs subagents through its own tool, not TanStack's
+  // `chat({ subagents })`, so the engine never builds this part.
+  subagent: "drop",
   text: "persist",
   thinking: "persist",
   "tool-call": "persist",
@@ -1025,6 +1033,7 @@ const CHAT_PART_VALIDATORS = {
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
+  subagent: () => false,
   text: (part) => typeof part["content"] === "string",
   thinking: (part) => typeof part["content"] === "string",
   "tool-call": (part) =>
@@ -1165,6 +1174,8 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
         value: source.value,
         ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
       };
+    case "file":
+      return panic("A validated media part has no provider file source");
     default: {
       source satisfies never;
       return panic(`Unhandled source: ${String(source)}`);
@@ -1217,6 +1228,8 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "subagent":
+      return panic("A subagent part is never persisted");
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);

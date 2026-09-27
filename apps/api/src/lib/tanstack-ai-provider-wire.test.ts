@@ -6,10 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
-import type {
-  ChatOracleId,
-  OracleViolation,
-} from "@/api/tests/helpers/chat-oracles";
+import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
   cassetteFor,
   cassetteKey,
@@ -29,6 +26,11 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import {
+  UNMET,
+  UNMET_SIZE,
+  violatedOracles,
+} from "@/api/tests/helpers/provider-wire-unmet";
 
 // Every provider adapter against the provider wire corpus
 // (`src/tests/fixtures/provider-wire`): the real adapter, its real SDK and
@@ -38,35 +40,7 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 
 const cassettes = loadProviderWireCassettes();
 
-const {
-  providerWireFinish: finish,
-  providerWireToolInput: toolInput,
-  providerWireUsage: usage,
-} = CHAT_ORACLE;
-
-/** Why an unmet run is on the ledger: `upstream design` where the adapter
- *  behaves as its maintainers chose (we follow upstream, and our boundary
- *  cannot tell), `upstream gap` where upstream drops what we need. */
-type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
-
-/**
- * Runs that do not meet the contract yet, with the oracles they fail at.
- * The ledger only shrinks: each entry must still fail at exactly its
- * oracles, an entry whose run now meets the contract fails until it is
- * removed, and its size is pinned to UNMET_SIZE, which only goes down.
- */
-const UNMET: Readonly<Record<string, UnmetEntry>> = {
-  "anthropic/length": { oracles: [usage], reason: "upstream gap" },
-  "anthropic/refusal": { oracles: [finish], reason: "upstream design" },
-  "bedrock/early-eof": { oracles: [finish], reason: "upstream design" },
-  "mistral/early-eof": { oracles: [finish], reason: "upstream design" },
-  "mistral/malformed-chunk": { oracles: [finish], reason: "upstream design" },
-  "openai/length": { oracles: [usage], reason: "upstream gap" },
-  "openrouter/early-eof": { oracles: [finish], reason: "upstream design" },
-};
-
-/** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 7;
+const { providerWireToolInput: toolInput } = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
@@ -110,9 +84,7 @@ const expectContract = (
   if (violations.length === 0) {
     panic(`${key} meets the contract now: remove it from UNMET`);
   }
-  expect(
-    [...new Set(violations.map(({ oracle }) => oracle))].toSorted(),
-  ).toEqual(unmet.oracles.toSorted());
+  expect(violatedOracles(violations)).toEqual(unmet.oracles.toSorted());
 };
 
 const checkCassette = async (cassette: ProviderWireCassette) => {

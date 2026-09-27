@@ -24,6 +24,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
+import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -220,6 +221,7 @@ type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
+type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type BrowserControlTools = ReturnType<typeof createBrowserControlTool>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
@@ -260,6 +262,7 @@ type BuiltInChatTools = OrgTools &
   SkillTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
+  CounterpartyCheckTools &
   BoeTools &
   BrowserControlTools &
   InfosoudTools &
@@ -695,6 +698,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const businessRegistryTools = createBusinessRegistryTools({
     enabledHandlers: businessRegistryHandlers,
   });
+  // Findings name natural persons with birth dates and identifiers, which the
+  // anonymization boundary cannot redact, so anonymized chat never sees them.
+  const counterpartyCheckTools =
+    thirdPartyBoundary.type === "raw" ? createCounterpartyCheckTools() : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
@@ -1025,6 +1032,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,
+      ...counterpartyCheckTools,
       ...boeTools,
       ...browserControlTools,
       ...infosoudTools,

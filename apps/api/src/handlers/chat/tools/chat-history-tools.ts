@@ -10,6 +10,7 @@ import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction"
 import { pastChatScopeSql } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type {
   ChatMessage,
   ChatMessageRole,
@@ -208,10 +209,12 @@ export const createChatHistoryTools = ({
     }).server(async ({ query, limit }) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: "Chat history search query must not be empty.",
-        });
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "invalid-input",
+            message: "Chat history search query must not be empty.",
+          }),
+        );
       }
 
       const tsQuery = buildSearchTsQuery(normalizedQuery);
@@ -237,11 +240,13 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Failed to search chat history.",
-          cause: result.error,
-        });
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to search chat history.",
+            cause: result.error,
+          }),
+        );
       }
 
       return {
@@ -330,11 +335,13 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Failed to expand chat history.",
-          cause: result.error,
-        });
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to expand chat history.",
+            cause: result.error,
+          }),
+        );
       }
 
       const target = result.value.at(0);

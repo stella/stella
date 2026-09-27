@@ -491,6 +491,7 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.providerScriptsConsumed,
   CHAT_ORACLE.wireResultsStored,
   CHAT_ORACLE.wireSnapshotIdentity,
+  CHAT_ORACLE.wireSnapshotServed,
 ]);
 
 /**

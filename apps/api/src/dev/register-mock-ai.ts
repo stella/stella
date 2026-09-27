@@ -1,9 +1,9 @@
 import { EventType } from "@tanstack/ai";
 import type {
+  AdapterYieldChunk,
   AnyTextAdapter,
   ContentPart,
   ModelMessage,
-  StreamChunk,
   TextPart,
   TokenUsage,
 } from "@tanstack/ai";
@@ -171,7 +171,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
 
     if (createDocumentPhase === "call") {
       yield {
@@ -180,14 +180,14 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         role: "assistant",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_START,
         toolCallId: "mock-create-document-call",
         toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
         parentMessageId: messageId,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_ARGS,
         toolCallId: "mock-create-document-call",
@@ -197,12 +197,12 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         }),
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_END,
         toolCallId: "mock-create-document-call",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
@@ -211,7 +211,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         timestamp,
         finishReason: "tool_calls",
         usage: mockUsage,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       return;
     }
 
@@ -229,7 +229,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
         timestamp,
         finishReason: "stop",
         usage: mockUsage,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       return;
     }
 
@@ -239,7 +239,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       role: "assistant",
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
 
     if (slowStream) {
       for (const delta of SLOW_STREAM_CHUNKS) {
@@ -249,7 +249,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
           delta,
           model,
           timestamp,
-        } satisfies StreamChunk;
+        } satisfies AdapterYieldChunk;
         await Bun.sleep(SLOW_STREAM_CHUNK_DELAY_MS);
       }
     } else {
@@ -262,7 +262,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
             : MOCK_REPLY,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     }
 
     yield {
@@ -270,7 +270,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       messageId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -279,7 +279,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
       finishReason: "stop",
       usage: mockUsage,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: async ({ outputSchema }) => {
     await Promise.resolve();

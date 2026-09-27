@@ -106,7 +106,6 @@ import {
 } from "@/api/handlers/chat/history-window";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
-import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
 import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
@@ -998,11 +997,11 @@ const acceptIncomingTurn = async ({
   });
 
 type LoadStoredHistoryOptions = {
+  /** Every stored message the run was handed except the one it continues. */
+  historyIds: readonly SafeId<"chatMessage">[];
   /** The messages accepting the turn rewrote. */
   rewrittenOnAcceptance: readonly SafeId<"chatMessage">[];
   safeDb: SafeDb;
-  /** The ids of `RunHistory.storedForms`. */
-  storedFormIds: readonly string[];
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 };
@@ -1010,37 +1009,32 @@ type LoadStoredHistoryOptions = {
 /** What the client is shown of a run's history as stored, read the way the
  *  thread's page serves it. */
 const loadStoredHistory = async ({
+  historyIds,
   rewrittenOnAcceptance,
   safeDb,
-  storedFormIds,
   threadId,
   userId,
 }: LoadStoredHistoryOptions): Promise<Result<StoredHistory, SafeDbError>> => {
-  const messageIds = [
-    ...new Set([
-      ...rewrittenOnAcceptance,
-      ...storedFormIds.map(brandPersistedChatMessageId),
-    ]),
-  ];
-  if (messageIds.length === 0) {
-    return Result.ok({ rewrittenOnAcceptance: [], storedForms: new Map() });
+  const loadServed = async (messageIds: readonly SafeId<"chatMessage">[]) =>
+    await loadClientMessages({ messageIds, safeDb, threadId, userId });
+  const rewritten = await loadServed(rewrittenOnAcceptance);
+  if (Result.isError(rewritten)) {
+    return Result.err(rewritten.error);
   }
-  const loaded = await loadClientMessages({
-    messageIds,
-    safeDb,
-    threadId,
-    userId,
-  });
-  if (Result.isError(loaded)) {
-    return Result.err(loaded.error);
-  }
-  const byId = new Map(loaded.value.map((message) => [message.id, message]));
-  const served = (id: string): ClientMessage =>
-    byId.get(brandPersistedChatMessageId(id)) ??
+  if (rewritten.value.length !== rewrittenOnAcceptance.length) {
     panic("A stored message the run was handed is gone");
+  }
   return Result.ok({
-    rewrittenOnAcceptance: rewrittenOnAcceptance.map(served),
-    storedForms: new Map(storedFormIds.map((id) => [id, served(id)])),
+    loadServed: async () => {
+      const served = await loadServed(historyIds);
+      if (Result.isError(served)) {
+        return Result.err(served.error);
+      }
+      return Result.ok(
+        new Map(served.value.map((message) => [message.id, message])),
+      );
+    },
+    rewrittenOnAcceptance: rewritten.value,
   });
 };
 
@@ -1992,12 +1986,12 @@ export const createSendMessage = (
           );
         }
 
-        const runHistory = settleHistoryForRun({
+        const engineHistory = settleHistoryForRun({
           messages: latestMessagePlan.messages,
           resumedMessageId: owningAssistantMessage?.id,
         });
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: runHistory.engine,
+          messages: engineHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,
@@ -2278,9 +2272,13 @@ export const createSendMessage = (
           return Result.err(requestedSkillsPrompt.error);
         }
         const storedHistory = await loadStoredHistory({
+          historyIds: latestMessagePlan.messages.flatMap(({ id }) =>
+            id === owningAssistantMessage?.id
+              ? []
+              : [brandPersistedChatMessageId(id)],
+          ),
           rewrittenOnAcceptance,
           safeDb,
-          storedFormIds: [...runHistory.storedForms.keys()],
           threadId: body.threadId,
           userId: user.id,
         });

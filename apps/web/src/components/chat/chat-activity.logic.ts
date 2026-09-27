@@ -20,6 +20,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   boe_search_legislation: "research",
   borme_get_summary: "research",
   business_registry_lookup: "research",
+  counterparty_check: "research",
   review_folder_consistency: "research",
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",

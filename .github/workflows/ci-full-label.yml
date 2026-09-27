@@ -14,6 +14,18 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] reads event fields only, never checks out or executes PR code
     types: [labeled]
 
+# Only a newer `ci:full` label event on the same pull request supersedes a
+# rerun; the step re-reads the live head either way. Any other label skips the
+# job, so it gets a group of its own and cannot cancel a rerun in flight.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      (github.event.label.name == 'ci:full'
+        && format('pr-{0}', github.event.pull_request.number))
+      || format('run-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
