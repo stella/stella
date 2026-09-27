@@ -90,6 +90,7 @@ import {
   prepareUnknownForThirdParty,
   reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
+import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   ChatAnonRestoration,
@@ -1412,6 +1413,12 @@ const createChatRuntimeMiddleware = ({
       });
       if (guardedCompaction !== undefined) {
         patch.messages = guardedCompaction;
+      }
+      const sortedToolJson = sortToolJsonKeys(
+        patch.messages ?? config.messages,
+      );
+      if (sortedToolJson !== undefined) {
+        patch.messages = sortedToolJson;
       }
 
       return Object.keys(patch).length === 0 ? undefined : patch;
