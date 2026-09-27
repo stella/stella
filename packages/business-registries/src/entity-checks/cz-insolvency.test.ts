@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import type { EntityCheckSubject } from "./result.js";
+import type {
+  EntityCheckSubject,
+  EntityCheckUnavailableReason,
+} from "./result.js";
 import { runEntityCheck } from "./run.js";
 import type { RunEntityCheckOptions } from "./run.js";
 
@@ -240,7 +243,7 @@ describe("Czech insolvency check never reports clear without an explicit empty a
   const failures: readonly {
     name: string;
     reply: () => Promise<Reply | Error>;
-    reason: string;
+    reason: EntityCheckUnavailableReason;
     detail?: string | null;
   }[] = [
     {
