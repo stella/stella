@@ -768,9 +768,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // The named decision first, when the entry named one; the same docket at
   // several courts stays several rows the reader chooses between.
   const exact =
-    intent.type === "identifier"
-      ? exactDecisionMatches(intent.value, decisions)
-      : [];
+    intent.type === "identifier" ? exactDecisionMatches(intent, decisions) : [];
   const exactIds = new Set(exact.map((decision) => decision.id));
   const ordered =
     exact.length === 0
