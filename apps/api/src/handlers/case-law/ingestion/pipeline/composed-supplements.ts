@@ -114,12 +114,14 @@ export const absorbComposedSupplementRows = async ({
         });
         return [sourceDocumentId];
       }
+      // Not a failure: a later observation already wrote the standalone row,
+      // so this older absorption leaves it alone.
       if (absorbed.value.type === "superseded") {
         logger.warn(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
           judgmentId,
           sourceDocumentId,
-          "error.detail": "a later observation wrote the standalone row",
+          outcome: "superseded",
         });
         return [sourceDocumentId];
       }
