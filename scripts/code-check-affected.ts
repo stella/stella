@@ -1,14 +1,16 @@
 #!/usr/bin/env bun
 
-// Fast local code-quality gate.
+// Code-quality gate, full or affected.
 //
-// Pre-push and pull-request CI use this wrapper to ask Turbo for changed
-// workspaces plus reverse dependants. Known global inputs widen only the check
-// family they can affect, preserving independent lint and typecheck cache hits.
-// Root scripts sit outside workspace tasks, so changed root sources are linted
-// directly and root TypeScript projects run through a cacheable Turbo root task.
-// Inconsistent affected-workspace output still fails safe to the monolithic
-// repository check.
+// `--all` plans the same checks over every tracked file, so the full
+// repository check and the affected check are one pass list at two scopes.
+// Pre-push and pull-request CI use the affected scope, which asks Turbo for
+// changed workspaces plus reverse dependants. Known global inputs widen only
+// the check family they can affect, preserving independent lint and typecheck
+// cache hits. Root scripts sit outside workspace tasks, so changed root
+// sources are linted directly and root TypeScript projects run through a
+// cacheable Turbo root task. Inconsistent affected-workspace output still
+// fails safe to the full check.
 
 import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -143,6 +145,7 @@ const ROOT_CHECKS = {
   pluginRegistry: "plugin-registry",
   repoTypecheck: "repo-typecheck",
   rootScriptLint: "root-script-lint",
+  ruleDecisions: "rule-decisions",
 } as const;
 type RootCheck = (typeof ROOT_CHECKS)[keyof typeof ROOT_CHECKS];
 const ROOT_CHECK_ORDER: readonly RootCheck[] = [
@@ -150,6 +153,7 @@ const ROOT_CHECK_ORDER: readonly RootCheck[] = [
   ROOT_CHECKS.assets,
   ROOT_CHECKS.css,
   ROOT_CHECKS.pluginRegistry,
+  ROOT_CHECKS.ruleDecisions,
   ROOT_CHECKS.pluginFixtures,
   ROOT_CHECKS.rootScriptLint,
   ROOT_CHECKS.repoTypecheck,
@@ -282,6 +286,9 @@ export const planCheck = ({
   const rootCheckSet = new Set<RootCheck>([
     ROOT_CHECKS.env,
     ROOT_CHECKS.assets,
+    // Compares the installed Oxlint's built-in rules with the config, so a
+    // dependency bump can fail it; it takes under a second.
+    ROOT_CHECKS.ruleDecisions,
     ROOT_CHECKS.repoTypecheck,
   ]);
   for (const changedPath of changedPaths) {
@@ -325,19 +332,26 @@ export const planCheck = ({
   };
 };
 
+type CheckScope = { type: "all" } | { type: "affected"; base: string };
+
 type Options = {
-  base: string;
+  scope: CheckScope;
   dryRun: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
-  let base = DEFAULT_BASE;
+  let base: string | null = null;
+  let all = false;
   let dryRun = false;
 
   const argv = args.values();
   for (const argument of argv) {
     if (argument === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (argument === "--all") {
+      all = true;
       continue;
     }
     if (argument === "--base") {
@@ -351,7 +365,15 @@ const parseArgs = (args: readonly string[]): Options => {
     panic(`Unknown argument: ${argument}`);
   }
 
-  return { base, dryRun };
+  if (all && base !== null) {
+    panic("--all checks every tracked file and takes no --base");
+  }
+  return {
+    scope: all
+      ? { type: "all" }
+      : { type: "affected", base: base ?? DEFAULT_BASE },
+    dryRun,
+  };
 };
 
 const run = (
@@ -391,6 +413,9 @@ const workspacePaths = (): Set<string> => {
   }
   return workspaces;
 };
+
+const trackedPaths = (): string[] =>
+  run(["git", "ls-files", "-z"], { capture: true }).split("\0").filter(Boolean);
 
 const changedPaths = (base: string): { mergeBase: string; paths: string[] } => {
   const mergeBase = run(["git", "merge-base", base, "HEAD"], {
@@ -508,6 +533,9 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
   if (rootChecks.has(ROOT_CHECKS.pluginRegistry)) {
     commands.push(["bun", "scripts/check-oxlint-plugin-registry.ts"]);
   }
+  if (rootChecks.has(ROOT_CHECKS.ruleDecisions)) {
+    commands.push(["bun", "scripts/check-oxlint-rule-decisions.ts"]);
+  }
   if (rootChecks.has(ROOT_CHECKS.pluginFixtures)) {
     commands.push(["bash", "scripts/lint-oxlint-fixtures.sh"]);
   }
@@ -523,6 +551,7 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
       "oxlint.config.ts",
       "--report-unused-disable-directives-severity=error",
       "--type-aware",
+      "--type-check",
       ...plan.rootLintPaths,
     ]);
   }
@@ -551,12 +580,82 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
   return commands;
 };
 
+type FullCheckOptions = {
+  files: readonly string[];
+  workspacePaths: ReadonlySet<string>;
+};
+
+/**
+ * The full check is the affected planner with every tracked file changed and
+ * every workspace affected, so a pass added to either scope reaches both.
+ * Any other outcome means a check the planner can schedule is unreachable
+ * from the repository's own files.
+ */
+export const planFullCheck = ({
+  files,
+  workspacePaths: workspaces,
+}: FullCheckOptions): ScopedCheckPlan => {
+  const plan = planCheck({
+    changedPaths: files,
+    presentChangedPaths: files,
+    affectedWorkspacePaths: [...workspaces],
+    workspacePaths: workspaces,
+  });
+  if (plan.type === "fallback") {
+    panic(`full code-check planned a fallback for ${plan.changedPath}`);
+  }
+  if (plan.lint.type !== "all" || plan.typecheck.type !== "all") {
+    panic("full code-check must lint and typecheck every workspace");
+  }
+  const missing = ROOT_CHECK_ORDER.filter(
+    (rootCheck) => !plan.rootChecks.includes(rootCheck),
+  );
+  if (missing.length > 0) {
+    panic(`full code-check skips root checks: ${missing.join(", ")}`);
+  }
+  return plan;
+};
+
+const presentPaths = (paths: readonly string[]): string[] =>
+  paths.filter((file) => existsSync(path.join(REPO_ROOT, file)));
+
+type ScopeCheck = { plan: CheckPlan; presentChangedPaths: string[] };
+
+const planScope = (scope: CheckScope): ScopeCheck => {
+  switch (scope.type) {
+    case "all": {
+      const tracked = presentPaths(trackedPaths());
+      return {
+        plan: planFullCheck({
+          files: tracked,
+          workspacePaths: workspacePaths(),
+        }),
+        presentChangedPaths: tracked,
+      };
+    }
+    case "affected": {
+      const changed = changedPaths(scope.base);
+      const presentChangedPaths = presentPaths(changed.paths);
+      return {
+        plan: planCheck({
+          changedPaths: changed.paths,
+          presentChangedPaths,
+          affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
+          workspacePaths: workspacePaths(),
+        }),
+        presentChangedPaths,
+      };
+    }
+    default: {
+      scope satisfies never;
+      return panic("unknown code-check scope");
+    }
+  }
+};
+
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
-  const changed = changedPaths(options.base);
-  const presentChangedPaths = changed.paths.filter((changedPath) =>
-    existsSync(path.join(REPO_ROOT, changedPath)),
-  );
+  const { plan, presentChangedPaths } = planScope(options.scope);
   const resultBoundaryCommand = resultBoundaryLintCommand(presentChangedPaths);
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
@@ -566,12 +665,6 @@ const main = () => {
       run(resultBoundaryCommand);
     }
   }
-  const plan = planCheck({
-    changedPaths: changed.paths,
-    presentChangedPaths,
-    affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
-    workspacePaths: workspacePaths(),
-  });
 
   if (plan.type === "fallback") {
     process.stdout.write(
