@@ -79,11 +79,15 @@ export const ENTITY_CHECK_UNAVAILABLE_REASONS = [
   "source-error",
 ] as const;
 
-type EntityCheckUnavailableReason =
+export type EntityCheckUnavailableReason =
   (typeof ENTITY_CHECK_UNAVAILABLE_REASONS)[number];
 
 export const ENTITY_CHECK_NOT_COVERED_REASONS = [
   "subject-type-not-supported",
+  // A tax ID derived from a company ID matched no record. Only a legal
+  // person's tax ID is derived from its company ID, so the subject may hold a
+  // different tax ID; the check needs that ID rather than reporting absence.
+  "tax-id-required",
 ] as const;
 
 type EntityCheckNotCoveredReason =

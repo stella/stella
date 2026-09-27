@@ -2324,7 +2324,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       "records), not-registered (the source holds no record, e.g. not a VAT " +
       "payer; not a clearance), unavailable (the source did not answer: the " +
       "subject is NOT cleared; retry later or say the check could not run), " +
-      "or not-covered (the source cannot screen this subject type). Person " +
+      "or not-covered (the source cannot screen this subject type, or needs " +
+      "the tax ID because one derived from the company ID was not on file). " +
+      "Person " +
       "matches rely on name and birth date: compare the record before " +
       "relying on one.",
     inputSchema: checkCounterpartyArgsSchema,

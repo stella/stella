@@ -542,10 +542,29 @@ describe("Czech VAT reliability check", () => {
     stubFetch([{ body }]);
     const result = await check({
       kind: "cz-vat-reliability",
-      subject: { type: "company-id", value: "12345679" },
+      subject: { type: "tax-id", value: "CZ12345679" },
     });
     expect(result).toMatchObject({
       status: "not-registered",
+      subject: { value: "CZ12345679", derivedFrom: null },
+    });
+  });
+
+  test("asks for the DIČ when one derived from an IČO is not on file", async () => {
+    // A sole trader's DIČ is not CZ + IČO, so a miss says nothing about them.
+    const body = (await fixture("adis-not-found.xml")).replace(
+      'dic="9999999999"',
+      'dic="12345679"',
+    );
+    stubFetch([{ body }]);
+    const result = await check({
+      kind: "cz-vat-reliability",
+      subject: { type: "company-id", value: "12345679" },
+    });
+    expect(result).toMatchObject({
+      status: "not-covered",
+      reason: "tax-id-required",
+      supportedSubjectTypes: ["tax-id"],
       subject: { value: "CZ12345679", derivedFrom: { value: "12345679" } },
     });
   });

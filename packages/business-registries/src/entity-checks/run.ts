@@ -319,6 +319,16 @@ const settle = async <TKind extends EntityCheckKind, TFinding, TRecord>({
       } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
     }
     case "not-registered": {
+      if (checked.type === "tax-id" && checked.derivedFrom !== null) {
+        return Result.ok({
+          status: "not-covered",
+          kind,
+          source,
+          subject: checked,
+          reason: "tax-id-required",
+          supportedSubjectTypes: ["tax-id"],
+        } satisfies EntityCheckOutcome<TKind, TFinding, TRecord>);
+      }
       return Result.ok({
         status: "not-registered",
         kind,

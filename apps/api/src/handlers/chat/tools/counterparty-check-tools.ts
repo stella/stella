@@ -24,7 +24,8 @@ const TOOL_DESCRIPTION =
   "register holds no record, e.g. not a VAT payer; not a clearance), " +
   "unavailable (the register did not answer: the subject is NOT cleared; " +
   "say the check could not run), or not-covered (the register cannot " +
-  "screen this subject type). Person matches rely on name and birth date: " +
+  "screen this subject type, or needs the tax ID because one derived from " +
+  "the company ID was not on file). Person matches rely on name and birth date: " +
   "compare the record before relying on one.";
 
 type CreateCounterpartyCheckToolsArgs = {
