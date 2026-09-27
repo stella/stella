@@ -28,7 +28,11 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
+import {
+  flagInteger,
+  readApplyFlag,
+  rejectUnknownFlags,
+} from "@/api/scripts/repair-flags";
 import {
   ENSURE_DECISION_COURT_ID_COLUMN_SQL,
   decisionCourtIdColumnExists,
@@ -46,6 +50,8 @@ const USAGE = `Usage: bun run src/scripts/repair-legacy-usa-court-ids.ts [option
   --dry-run      Report only, the default; contradicts --apply.
   --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).`;
 
+// A mistyped bound must stop the run, not fall back to the default limit.
+rejectUnknownFlags({ known: ["limit"], usage: USAGE });
 const apply = readApplyFlag(USAGE);
 const { rootDb } = apply
   ? await enterCaseLawMaintenanceLane()
