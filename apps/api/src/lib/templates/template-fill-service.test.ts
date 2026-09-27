@@ -9,6 +9,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -519,7 +520,12 @@ describe("fillStoredTemplateDocx use recording", () => {
       organizationId: toSafeId<"organization">("org_other"),
     });
 
-    expect(result).toEqual({ error: "Template not found." });
+    expect(result).toMatchObject({ error: "Template not found." });
+    if (!("storedTemplateError" in result)) {
+      panic("Expected a structured stored-template error");
+    }
+    expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
+    expect(result.storedTemplateError?.status).toBe(404);
     expect(updates).toBe(0);
   });
 });
