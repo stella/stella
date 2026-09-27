@@ -622,6 +622,62 @@ describe("source-rejected batch records", () => {
     ]);
   });
 
+  test("records that name their identity keep one ledger row across replays", async () => {
+    const sourceId = await recordSource();
+    const rejection = { ...sourceRejection(9), recordIdentity: "import:e1:1" };
+    const failing = {
+      type: "decision" as const,
+      decision: rejectedRecord(91),
+      recordIdentity: "import:e1:2",
+    };
+    const settled = {
+      type: "decision" as const,
+      decision: record(3),
+      recordIdentity: "import:e1:0",
+    };
+    const whole = prepareCaseLawIngestionBatch({
+      records: [settled, rejection, failing],
+    });
+    // The same failing record again, alone, as a caller replays it.
+    const alone = prepareCaseLawIngestionBatch({ records: [failing] });
+    if (Result.isError(whole) || Result.isError(alone)) {
+      throw new TypeError("fixture batch refused");
+    }
+    const { corpus } = landingTransfer();
+    for (const batch of [whole.value, whole.value, alone.value]) {
+      const applied = await applyPrepared({ sourceId, batch, corpus });
+      expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+        CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+      );
+    }
+    const ledger = await db
+      .select({
+        recordIdentity: caseLawIngestionFailures.recordIdentity,
+        cursor: caseLawIngestionFailures.cursor,
+      })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      .orderBy(asc(caseLawIngestionFailures.recordIdentity));
+    expect(ledger).toEqual([
+      {
+        recordIdentity: "import:e1:1",
+        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
+      },
+      { recordIdentity: "import:e1:2", cursor: null },
+    ]);
+    expect(await decisionRows(sourceId)).toHaveLength(1);
+
+    // The identity is bounded like the column that stores it.
+    for (const recordIdentity of ["", "x".repeat(257)]) {
+      const refused = prepareCaseLawIngestionBatch({
+        records: [{ ...settled, recordIdentity }],
+      });
+      expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+        CASE_LAW_BATCH_BOUNDS_REASON.INVALID_RECORD,
+      );
+    }
+  });
+
   test("unwritten failures outrank rejected records, with no decision identity", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({

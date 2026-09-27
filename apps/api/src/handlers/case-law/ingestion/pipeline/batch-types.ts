@@ -11,11 +11,21 @@ export type RejectedCaseLawIngestionRecord = {
   primaryLabel?: string;
   reason: string;
   message: string;
+  /** See `CaseLawIngestionBatchRecord`. */
+  recordIdentity?: string;
 };
 
+/**
+ * A record of one batch. `recordIdentity`, where the caller names one, is
+ * the record's stable identity for the failure ledger: a record that fails
+ * again under the same identity keeps its one ledger row.
+ */
 export type CaseLawIngestionBatchRecord =
-  | { type: "decision"; decision: IngestionResult }
+  | { type: "decision"; decision: IngestionResult; recordIdentity?: string }
   | RejectedCaseLawIngestionRecord;
+
+/** Column bound of `case_law_ingestion_failures.record_identity`. */
+export const RECORD_IDENTITY_MAX_LENGTH = 256;
 
 /**
  * What one applied batch may carry. The byte bound measures the records as
@@ -39,9 +49,16 @@ export const CASE_LAW_BATCH_BOUNDS_REASON = {
 const validRejectedText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+const isValidRecordIdentity = (value: unknown): boolean =>
+  value === undefined ||
+  (validRejectedText(value) &&
+    value.length <= RECORD_IDENTITY_MAX_LENGTH &&
+    !value.includes("\u0000"));
+
 const isValidRejectedRecord = (
   record: RejectedCaseLawIngestionRecord,
 ): boolean =>
+  isValidRecordIdentity(record.recordIdentity) &&
   validRejectedText(record.recordKey) &&
   validRejectedText(record.recordHash) &&
   validRejectedText(record.language) &&
@@ -326,6 +343,13 @@ export const prepareCaseLawIngestionBatch = ({
   const batchRecords: CaseLawIngestionBatchRecord[] = [];
   for (const [index, record] of inputBatchRecords.entries()) {
     if (record.type === "decision") {
+      if (!isValidRecordIdentity(record.recordIdentity)) {
+        return boundsError(
+          CASE_LAW_BATCH_BOUNDS_REASON.INVALID_RECORD,
+          `Record ${index} has an invalid record identity`,
+          index,
+        );
+      }
       batchRecords.push(record);
       continue;
     }
@@ -346,6 +370,9 @@ export const prepareCaseLawIngestionBatch = ({
         : { primaryLabel: record.primaryLabel }),
       reason: record.reason,
       message: record.message,
+      ...(record.recordIdentity === undefined
+        ? {}
+        : { recordIdentity: record.recordIdentity }),
     });
   }
   const parts = admitParts(batchRecords);

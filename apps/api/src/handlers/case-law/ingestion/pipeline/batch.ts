@@ -130,9 +130,17 @@ const logIngestionFailures = async (
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   await scopedDb((tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    return tx
+    const insert = tx
       .insert(caseLawIngestionFailures)
       .values(failures.map(storableIngestionFailure));
+    // A row that names its record's identity lands once: a replay of the
+    // same record keeps the row already there. Rows without one insert as
+    // they always have.
+    return failures.some(
+      ({ recordIdentity }) => typeof recordIdentity === "string",
+    )
+      ? insert.onConflictDoNothing()
+      : insert;
   });
 };
 
@@ -288,6 +296,7 @@ type RejectDecisionOptions = {
   tally: BatchTally;
   error: unknown;
   input: IngestionResult;
+  recordIdentity: string | undefined;
   sourceId: SafeId<"caseLawSource">;
   context: BatchLogContext;
 };
@@ -302,6 +311,7 @@ const rejectDecision = ({
   tally,
   error,
   input,
+  recordIdentity,
   sourceId,
   context: { adapterKey, cursor },
 }: RejectDecisionOptions): DecisionBatchHalt | null => {
@@ -343,6 +353,7 @@ const rejectDecision = ({
     errorType: tag.slice(0, 128),
     errorMessage: message.slice(0, 2048),
     cursor,
+    ...(recordIdentity === undefined ? {} : { recordIdentity }),
   });
   tally.skipped++;
   tally.settlements.push({
@@ -380,6 +391,9 @@ const rejectSourceRecord = ({
     errorType: record.reason,
     errorMessage: record.message,
     cursor: `${record.recordKey}:${record.recordHash}`,
+    ...(record.recordIdentity === undefined
+      ? {}
+      : { recordIdentity: record.recordIdentity }),
   });
   tally.skipped++;
   tally.settlements.push({
@@ -553,7 +567,7 @@ export const applyDecisionBatch = async ({
         }
         continue;
       }
-      const { decision: input } = record;
+      const { decision: input, recordIdentity } = record;
       const processed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
@@ -575,6 +589,7 @@ export const applyDecisionBatch = async ({
             tally,
             error: processed.error,
             input,
+            recordIdentity,
             sourceId,
             context,
           })
