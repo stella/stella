@@ -1330,7 +1330,9 @@ const handleFillTemplateTool: McpToolHandler<
     return errorResult(filled.usageRejection.message);
   }
   if ("error" in filled) {
-    return errorResult(filled.error);
+    return filled.storedTemplateError === undefined
+      ? errorResult(filled.error)
+      : storedTemplateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
@@ -1785,7 +1787,9 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
   if ("error" in filled) {
     await releaseClaim();
-    return errorResult(filled.error);
+    return filled.storedTemplateError === undefined
+      ? errorResult(filled.error)
+      : storedTemplateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     await releaseClaim();
@@ -2404,7 +2408,9 @@ const describeTemplateForAgent = async ({
     scopedDb: context.scopedDb,
   });
   if ("error" in described) {
-    return errorResult(described.error);
+    return described.storedTemplateError === undefined
+      ? errorResult(described.error)
+      : storedTemplateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
   type DescribedTemplatePayload = AssertNoExtraFields<

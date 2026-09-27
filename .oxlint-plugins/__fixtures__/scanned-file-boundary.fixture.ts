@@ -27,6 +27,9 @@ import {
   // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
   storedObject,
 } from "@/api/lib/file-scan/stored-object";
+// A namespace import also exposes the restricted row reader.
+// oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary
+import * as stored from "@/api/lib/file-scan/stored-object";
 
 declare class ScannedFile {
   private constructor();
@@ -78,6 +81,11 @@ const _otherKey = stagingKey as OtherKey;
 // expect-clean: scanned-file-boundary/scanned-file-boundary
 const _scannedBytes = scanned.bytes;
 
+const _namespacedStoredObject = stored.storedObject({
+  key: stagingKey,
+  scanState: "scanned",
+});
+
 export const __scannedFileBoundaryFixture = {
   parseDocx,
   derivedScannedFile,
@@ -89,6 +97,7 @@ export const __scannedFileBoundaryFixture = {
   fileKeySchema,
   mintScannedFile,
   storedObject,
+  _namespacedStoredObject,
   readStoredObject,
   _forgedFile,
   _forgedKey,

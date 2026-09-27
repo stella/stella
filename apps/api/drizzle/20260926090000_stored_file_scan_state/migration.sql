@@ -33,15 +33,3 @@ ALTER TABLE "template_versions"
 ALTER TABLE "style_sets"
   ADD CONSTRAINT "style_sets_scan_state_check"
   CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
---> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid -- added NOT VALID above; the validating scan reads the templates table, bounded by the per-organization template limit
-ALTER TABLE "templates" VALIDATE CONSTRAINT "templates_scan_state_check";
---> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid -- added NOT VALID above; the validating scan reads template versions, bounded by the per-template version limit
-ALTER TABLE "template_versions" VALIDATE CONSTRAINT "template_versions_scan_state_check";
---> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid -- added NOT VALID above; the validating scan reads the style sets table, bounded by the per-organization style set limit
-ALTER TABLE "style_sets" VALIDATE CONSTRAINT "style_sets_scan_state_check";

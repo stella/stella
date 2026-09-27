@@ -83,6 +83,14 @@ const FOLIO_OWNERS = [
 const isApiTestFile = (filename: string): boolean =>
   filename.endsWith(".test.ts") || filename.includes("apps/api/src/tests/");
 
+const isRuntimeNamespaceImport = (
+  specifier: unknown,
+  importKind: unknown,
+): boolean =>
+  isAstNode(specifier) &&
+  specifier.type === "ImportNamespaceSpecifier" &&
+  importKind !== "type";
+
 // Minting exports and the modules allowed to import them (path fragments). The
 // mint lives apart from the scanner so stored-file readers do not bundle it.
 const RESTRICTED_IMPORTS = new Map([
@@ -327,6 +335,13 @@ export default eslintCompatPlugin({
               return;
             }
             for (const specifier of node.specifiers) {
+              if (isRuntimeNamespaceImport(specifier, node.importKind)) {
+                context.report({
+                  node: specifier,
+                  messageId: restricted.messageId,
+                });
+                continue;
+              }
               if (getImportedName(specifier) === restricted.name) {
                 context.report({
                   node: specifier,

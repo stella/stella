@@ -192,18 +192,25 @@ export const loadStoredTemplateSource = async ({
   });
 };
 
-/** A failed stored-template load as the `{ error }` the text results carry. */
+type TemplateServiceError = {
+  error: string;
+  /** The stored-file failure for callers that expose a structured error. */
+  storedTemplateError?: HandlerError<404 | 422 | 500 | 503>;
+};
+
+/** A failed stored-template load with its status and issue details intact. */
 const storedTemplateLoadError = (
   error: HandlerError<404 | 422 | 500 | 503>,
-): { error: string } => {
+): TemplateServiceError => {
   if (error.status === 404) {
-    return { error: "Template not found." };
+    return { error: "Template not found.", storedTemplateError: error };
   }
   return {
     error:
       error.hint === undefined
         ? error.message
         : `${error.message} ${error.hint}`,
+    storedTemplateError: error,
   };
 };
 
@@ -340,7 +347,7 @@ export type DescribeTemplateResult =
        *  either way. */
       warnings: TemplateWarning[];
     }
-  | { error: string };
+  | TemplateServiceError;
 
 /** Marker warnings from discovery, plus the ones only the configured fields
  *  can reveal (a `condition` on a path the document also prints, a lookup
@@ -845,7 +852,7 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
   ...options
 }: FillServiceOptions<TRejection>): Promise<
   | FilledDocx
-  | { error: string }
+  | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
@@ -871,7 +878,7 @@ export type FillTemplateResult =
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
     }
-  | { error: string }
+  | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] };
 
 /**
@@ -892,7 +899,7 @@ export type FillTemplateWithDocxResult =
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
     }
-  | { error: string };
+  | TemplateServiceError;
 
 type FilledTemplateWithText = Exclude<
   FillTemplateWithDocxResult,

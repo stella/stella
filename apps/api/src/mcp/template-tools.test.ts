@@ -895,6 +895,30 @@ describe("MCP template tools", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
+  test("list_templates (detail) keeps stored-file validation issues", async () => {
+    describeStoredTemplateMock.mockResolvedValue({
+      error: "Stored template failed validation.",
+      storedTemplateError: new HandlerError({
+        status: 422,
+        message: "Stored template failed validation.",
+        hint: "Upload a clean template.",
+        issues: [{ path: "file", message: "Unsafe content" }],
+      }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID },
+      context: createContext(),
+      toolName: "list_templates",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      hint: "Upload a clean template.",
+      issues: [{ path: "file", message: "Unsafe content" }],
+    });
+  });
+
   test("fill_template returns a complete rendered document plus the DOCX as base64 under output=docx", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
@@ -1635,6 +1659,29 @@ describe("MCP template tools", () => {
     ]);
   });
 
+  test("fill_template keeps a stored-file scanner outage retryable", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      error: "Scanner unavailable.",
+      storedTemplateError: new HandlerError({
+        status: 503,
+        message: "Scanner unavailable.",
+        hint: "Retry the request.",
+      }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "internal_error",
+      hint: "Retry the request.",
+      retryable: true,
+    });
+  });
+
   test("save_filled_template creates a document without returning base64", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       conditionDecisions: [],
@@ -1745,6 +1792,35 @@ describe("MCP template tools", () => {
       }),
     );
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template preserves stored-file scan rejection details", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      error: "Stored template failed validation.",
+      storedTemplateError: new HandlerError({
+        status: 422,
+        message: "Stored template failed validation.",
+        issues: [{ path: "file", message: "Unsafe content" }],
+      }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: WORKSPACE_ID,
+        idempotency_key: "scan-rejected-template",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [{ path: "file", message: "Unsafe content" }],
+    });
     expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
