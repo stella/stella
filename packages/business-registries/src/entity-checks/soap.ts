@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
+import { SyntaxValidator } from "fast-xml-validator";
 
 import { isRecord } from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
@@ -79,6 +80,12 @@ const buildEnvelope = ({
   return `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"${declarations}><soapenv:Header/><soapenv:Body>${body}</soapenv:Body></soapenv:Envelope>`;
 };
 
+// The parser accepts truncated or mismatched markup and returns what it read,
+// so a cut-off answer must be refused before parsing. The validator throws on
+// the first error.
+const isWellFormedXml = (text: string): boolean =>
+  Result.try(() => SyntaxValidator.validate(text)).isOk();
+
 type SoapResponse = { status: number; contentType: string; text: string };
 
 const readSoapBody = (
@@ -96,10 +103,7 @@ const readSoapBody = (
   }
   // SOAP forbids document type declarations; refusing them also keeps
   // entity expansion out of the parser.
-  if (
-    DOCUMENT_TYPE_DECLARATION.test(text) ||
-    XMLValidator.validate(text) !== true
-  ) {
+  if (DOCUMENT_TYPE_DECLARATION.test(text) || !isWellFormedXml(text)) {
     return unavailable({
       reason: "malformed-response",
       message: "The source returned a response that is not well-formed XML",

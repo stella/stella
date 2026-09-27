@@ -257,6 +257,14 @@ describe("Czech insolvency check never reports clear without an explicit empty a
       reason: "outage-page",
     },
     {
+      name: "a found answer cut off mid-record",
+      reply: async () => {
+        const found = await fixture("isir-company-found.xml");
+        return { body: found.slice(0, found.indexOf("</data>")) };
+      },
+      reason: "malformed-response",
+    },
+    {
       name: "a SOAP fault",
       reply: async () => ({
         body: await fixture("isir-soap-fault.xml"),
