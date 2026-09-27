@@ -1,4 +1,4 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -208,7 +208,7 @@ export const loadChatMessagePage = async ({
 
 /**
  * The thread's messages `messageIds` names, as its page serves them, in
- * thread order.
+ * thread order. Naming none reads nothing.
  */
 export const loadClientMessages = async ({
   messageIds,
@@ -219,8 +219,11 @@ export const loadClientMessages = async ({
   messageIds: readonly SafeId<"chatMessage">[];
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
-}): Promise<Result<ClientMessage[], SafeDbError>> =>
-  await withScopedTx(handle, async (tx) => {
+}): Promise<Result<ClientMessage[], SafeDbError>> => {
+  if (messageIds.length === 0) {
+    return Result.ok([]);
+  }
+  return await withScopedTx(handle, async (tx) => {
     const rows = await tx
       .select({
         id: chatMessages.id,
@@ -239,6 +242,7 @@ export const loadClientMessages = async ({
       .limit(messageIds.length);
     return await projectPageRowsOnTx({ rows, tx, userId });
   });
+};
 
 type ChatMessagePageRow = {
   content: PersistedChatMessageContent;
