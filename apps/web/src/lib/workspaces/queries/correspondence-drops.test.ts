@@ -41,7 +41,7 @@ test("rejected-delivery pagination sends the server cursor, limits every request
   );
   const queryClient = new QueryClient();
   const options = correspondenceDropsOptions("matter-a");
-  const result = await queryClient.fetchInfiniteQuery({ ...options, pages: 3 });
+  const result = await queryClient.infiniteQuery({ ...options, pages: 3 });
   expect(calls).toHaveLength(2);
   expect(calls.at(0)?.pathname).toBe(
     "/v1/workspaces/matter-a/correspondence/drops",
