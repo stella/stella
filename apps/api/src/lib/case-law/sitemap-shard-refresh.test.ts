@@ -17,7 +17,6 @@ import type {
 import {
   refreshCaseLawSitemapShards,
   sitemapBucketCountsQuery,
-  sitemapYearRange,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
@@ -167,8 +166,10 @@ test(
 test(
   "a refresh lists each published, redistributable month of a public country once",
   async () => {
+    // Three unsplit months, and the split month in its 64 buckets (with this
+    // many decisions, every bucket holds some).
     expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
-      type: "refreshed",
+      shards: 3 + 64,
     });
 
     const shards = await listedShards();
@@ -245,24 +246,23 @@ const planLines = (explained: unknown): string[] => {
 };
 
 test(
-  "a year's count reads the decisions index alone, never the decision rows",
+  "the refresh count reads the decisions index alone, never the decision rows",
   async () => {
-    const { sql: text, params } = sitemapBucketCountsQuery(
-      refreshDb,
-      "CZE",
-      // One year out of a country's many, as the refresh reads it.
-      sitemapYearRange(2020),
-    ).toSQL();
+    const { sql: text, params } = sitemapBucketCountsQuery(refreshDb).toSQL();
 
     // Vacuumed so the visibility map is set, as it is for most of a settled
     // corpus; the plan then shows whether the index can answer on its own.
     await client.query("VACUUM ANALYZE case_law_decisions");
     const plan = await client.transaction(async (tx) => {
-      // A scan of the whole seeded table can still win on cost; the guard is
-      // about the path the planner is offered, which is what a corpus of
-      // millions of decisions runs.
+      // The seeded table is small enough that reading it whole, or through a
+      // narrower index plus the heap, can still win on cost. Scans are off
+      // and every page is priced the same, so the plan is chosen by pages
+      // touched, as it is on a corpus of millions: the covering index alone
+      // wins only if it can answer the count without the decision rows.
       await tx.query("SET LOCAL enable_seqscan = off");
       await tx.query("SET LOCAL enable_bitmapscan = off");
+      await tx.query("SET LOCAL seq_page_cost = 1000");
+      await tx.query("SET LOCAL random_page_cost = 1000");
       return planLines(
         await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
       ).join("\n");

@@ -25,6 +25,9 @@ export const SITEMAP_ALL_BUCKET = "all";
 // requested `bucket` stays bound. `groupableSql` enforces the inlining at
 // construction, and the refresh test executes the grouped read against
 // Postgres.
+export const decisionYearSql = groupableSql(
+  sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${sql.raw(`'${SITEMAP_UNDATED_YEAR}'`)})`,
+);
 export const decisionMonthSql = groupableSql(
   sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'MM'), ${sql.raw(`'${SITEMAP_UNDATED_MONTH}'`)})`,
 );

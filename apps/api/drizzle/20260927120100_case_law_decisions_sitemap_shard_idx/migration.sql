@@ -1,8 +1,8 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- The refresh's access path: one country's published decisions of one year,
--- counted per month and bucket with their newest update. Partial on the
+-- The sitemap refresh's access path: the public countries' published
+-- decisions, counted per month and bucket with their newest update. Partial on the
 -- publication gate, whose text matches `storedObservationHasDetail` exactly so
 -- the planner proves the read's predicate implies it, and carrying every
 -- column the count reads so it is an index-only scan rather than a heap and

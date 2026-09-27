@@ -721,8 +721,8 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_arrivals_idx")
       .on(t.sourceId, t.createdAt)
       .where(storedObservationHasDetail(t.metadata)),
-    // The sitemap shard refresh: one country's published decisions of one
-    // year, counted per month and bucket with their newest `updated_at`.
+    // The sitemap shard refresh: the public countries' published decisions,
+    // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
     // carrying the source (for the redistribution join), `updated_at` and `id`
     // (for the bucket) so the count is read off the index rather than the
