@@ -48,11 +48,16 @@ const downloadOrigins = (download: DownloadSource): string[] =>
     .map(webOrigin)
     .filter((origin) => origin !== null);
 
+/** A download another extension started through the downloads API. */
+const isOtherExtensionDownload = (download: DownloadSource): boolean =>
+  download.byExtensionId !== undefined &&
+  download.byExtensionId !== chrome.runtime.id;
+
 export const downloadOwner = (
   download: DownloadSource,
   origins: DownloadOrigins,
 ): DownloadOwner => {
-  if (download.byExtensionId !== undefined) {
+  if (isOtherExtensionDownload(download)) {
     return "user";
   }
   const sources = downloadOrigins(download);
@@ -267,6 +272,10 @@ const keepFinishedDownload = async (downloadId: number): Promise<void> => {
 const runJudgement = async (
   download: chrome.downloads.DownloadItem,
 ): Promise<void> => {
+  // Another extension's download is the user's, whatever its origin.
+  if (isOtherExtensionDownload(download)) {
+    return;
+  }
   // A download with no web origin can be traced to nobody. It is stopped in
   // this same task, before the frame lookups below give it time to finish.
   if (

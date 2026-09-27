@@ -39,6 +39,10 @@ describe("download owner", () => {
   });
 
   test("a download traced only to the user's tabs is the user's", () => {
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: { runtime: { id: "stella-extension" } },
+    });
     expect(
       downloadOwner(
         download(
@@ -60,12 +64,22 @@ describe("download owner", () => {
   });
 
   test("a download no open frame accounts for is unknown", () => {
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: { runtime: { id: "stella-extension" } },
+    });
     for (const url of [
       "data:text/plain;base64,AAAA",
       "blob:null/1c2d",
       "blob:https://gone.example.com/9e8f",
     ]) {
       expect(downloadOwner(download(url), origins)).toBe("unknown");
+      expect(
+        downloadOwner(
+          { ...download(url), byExtensionId: "stella-extension" },
+          origins,
+        ),
+      ).toBe("unknown");
     }
   });
 });
@@ -133,6 +147,7 @@ const installFakeChrome = ({
         search: async ({ id }: { id: number }) => [{ id, state }],
       },
       i18n: { getMessage: (name: string) => name },
+      runtime: { id: "stella-extension" },
       storage: {
         session: {
           get: async (key: string) => ({ [key]: session[key] }),
@@ -275,6 +290,39 @@ describe("a download of uncertain origin", () => {
         state === "complete" ? "badge:1" : `cancel:${id}`,
       );
     }
+  });
+
+  test("another extension's download without a web origin goes through", async () => {
+    const { events, releaseFrames } = installFakeChrome();
+    await loadDownloadScope();
+    releaseFrames();
+    for (const [url, id] of [
+      ["data:text/plain;base64,AAAA", 70],
+      ["blob:null/1c2d", 71],
+    ] as const) {
+      await judgeDownload({
+        ...savedByControlledPage(id),
+        byExtensionId: "other-extension",
+        finalUrl: url,
+        url,
+      });
+    }
+
+    expect(events).toEqual([]);
+  });
+
+  test("an origin-less download under stella's own id is still stopped", async () => {
+    const { events, releaseFrames } = installFakeChrome();
+    await loadDownloadScope();
+    releaseFrames();
+    await judgeDownload({
+      ...savedByControlledPage(72),
+      byExtensionId: "stella-extension",
+      finalUrl: "data:text/plain;base64,AAAA",
+      url: "data:text/plain;base64,AAAA",
+    });
+
+    expect(events.at(0)).toBe("cancel:72");
   });
 
   test("the user's own download from their own site goes through", async () => {
