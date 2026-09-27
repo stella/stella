@@ -1,8 +1,7 @@
 {
   "format": 1,
   "provider": "mistral",
-  "scenario": "early-eof",
-  "variant": "error-finish",
+  "scenario": "unusable-stop",
   "source": "synthetic",
   "basis": "Mistral chat completions streaming reference: data-only chat.completion.chunk SSE events, usage on the finishing chunk, then data: [DONE]",
   "model": "mistral-medium-latest",

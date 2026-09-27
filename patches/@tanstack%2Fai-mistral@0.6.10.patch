@@ -5,16 +5,16 @@
    RUN_ERROR forwards them as rawEvent, as the SDK-based adapters do since
    TanStack/ai#985. The rethrow after RUN_ERROR is upstream's (tested) and
    stays. Upstream PR to be opened; remove when released.
-3. finish_reason model_length reads as length, and finish_reason error ends
-   the run in a RUN_ERROR (code incomplete-stream, as TanStack/ai#1494 names
-   a cut-off stream) instead of a finished answer. Upstream PR to be opened;
-   remove when released.
+3. The terminal event carries the choice's finish_reason as
+   metadata.providerStopReason (null when the stream ended without one), so the
+   service decides every finish reason (model_length and error included) from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts). Remove
+   when upstream exposes the raw reason.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359908fa86b 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -4,6 +4,7 @@ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../uti
+@@ -4,6 +4,7 @@
  import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
  import { isFileSource, unsupportedFileSourceError } from "@tanstack/ai";
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
@@ -22,7 +22,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  import { undoNullWidening } from "@tanstack/ai-utils";
  //#region src/adapters/text.ts
  /** Cast an event object to StreamChunk. Adapters construct events with string
-@@ -49,7 +50,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -49,7 +50,7 @@
  			hasEmittedRunStarted: false
  		};
  		try {
@@ -31,7 +31,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  			yield* this.processMistralStreamChunks(stream, options, aguiState);
  		} catch (error) {
  			const err = error;
-@@ -63,6 +64,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -63,6 +64,7 @@
  					timestamp
  				});
  			}
@@ -39,7 +39,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  			yield asChunk({
  				type: "RUN_ERROR",
  				runId: aguiState.runId,
-@@ -70,6 +72,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -70,6 +72,7 @@
  				timestamp,
  				message: err.message || "Unknown error",
  				code: err.code,
@@ -47,7 +47,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  				error: {
  					message: err.message || "Unknown error",
  					code: err.code
-@@ -95,7 +98,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -95,7 +98,7 @@
  					strict
  				}
  			}
@@ -56,42 +56,27 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
  		let parsed;
-@@ -257,7 +260,24 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -311,7 +314,8 @@
+ 							completionTokens: usage.completion_tokens || 0,
+ 							totalTokens: usage.total_tokens || 0
+ 						} : void 0,
+-						finishReason: computedFinishReason
++						finishReason: computedFinishReason,
++						metadata: { providerStopReason: finishReason }
  					});
  				}
- 				const finishReason = choice.finish_reason;
--				if (finishReason) {
-+				// An `error` finish means the model failed before it finished: the
-+				// run ends in a RUN_ERROR, not a RUN_FINISHED.
-+				if (finishReason === "error" && !hasEmittedRunFinished) {
-+					hasEmittedRunFinished = true;
-+					yield asChunk({
-+						type: "RUN_ERROR",
-+						runId: aguiState.runId,
-+						model: chunkModel,
-+						timestamp,
-+						message: "The model stopped with an error before it finished.",
-+						code: "incomplete-stream",
-+						error: {
-+							message: "The model stopped with an error before it finished.",
-+							code: "incomplete-stream"
-+						}
-+					});
-+				}
-+				if (finishReason && finishReason !== "error") {
- 					if (finishReason === "tool_calls" || toolCallsInProgress.size > 0) for (const [, toolCall] of toolCallsInProgress) {
- 						if (!toolCall.started || !toolCall.id || !toolCall.name || toolCall.ended) continue;
- 						const parsedInput = parseToolCallInput(toolCall, normalizeToolInput);
-@@ -273,7 +293,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
- 							input: parsedInput
- 						});
- 					}
--					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" ? "length" : "stop";
-+					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" || finishReason === "model_length" ? "length" : "stop";
- 					if (reasoningMessageId !== null && !hasClosedReasoning) {
- 						hasClosedReasoning = true;
- 						yield asChunk({
-@@ -415,7 +435,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 			}
+@@ -361,7 +365,8 @@
+ 					model: lastChunkModel,
+ 					timestamp,
+ 					usage: void 0,
+-					finishReason: hasEmittedToolCall ? "tool_calls" : "stop"
++					finishReason: hasEmittedToolCall ? "tool_calls" : "stop",
++					metadata: { providerStopReason: null }
+ 				});
+ 			}
+ 		} catch (error) {
+@@ -415,7 +420,7 @@
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -100,7 +85,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -427,11 +447,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -427,11 +432,19 @@
  		const response = await fetch(url, {
  			method: "POST",
  			headers,

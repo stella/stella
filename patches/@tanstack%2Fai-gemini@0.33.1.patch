@@ -1,30 +1,15 @@
-SAFETY-family finish reasons and a blocked prompt (promptFeedback with no
-candidate) finish as content_filter instead of stop or no terminal event.
-Upstream PR to be opened; remove when released.
+1. A blocked prompt (promptFeedback with no candidate) finishes as
+   content_filter instead of ending with no terminal event. Upstream PR to be
+   opened; remove when released.
+2. The terminal event carries the candidate's finishReason as
+   metadata.providerStopReason, so the service decides every finish reason
+   from the SDK's FinishReason enum (apps/api/src/lib/chat/provider-stop-reasons.ts).
+   Remove when upstream exposes the raw reason.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index d666a56cdf0202b946fad5317770b36763773c77..80bd65bb07c165a640e3d9781b7b42f926ffca36 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -7,6 +7,17 @@ import { FinishReason } from "@google/genai";
- import { EventType, fileReferenceFor, isFileSource, normalizeSystemPrompts } from "@tanstack/ai";
- import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
- import { BaseTextAdapter } from "@tanstack/ai/adapters";
-+/** Finish reasons that mean the provider blocked or filtered the response. */
-+var CONTENT_FILTER_FINISH_REASONS = new Set([
-+	FinishReason.SAFETY,
-+	FinishReason.RECITATION,
-+	FinishReason.BLOCKLIST,
-+	FinishReason.PROHIBITED_CONTENT,
-+	FinishReason.SPII,
-+	FinishReason.IMAGE_SAFETY,
-+	FinishReason.IMAGE_PROHIBITED_CONTENT,
-+	FinishReason.IMAGE_RECITATION
-+]);
- //#region src/adapters/text.ts
- /**
- * Fallback MIME types for URL-sourced media parts that don't specify one.
-@@ -360,6 +371,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -360,6 +360,20 @@
  					parentRunId: options.parentRunId
  				};
  			}
@@ -45,12 +30,13 @@ index d666a56cdf0202b946fad5317770b36763773c77..80bd65bb07c165a640e3d9781b7b42f9
  			if (chunk.candidates?.[0]?.content?.parts) {
  				const parts = chunk.candidates[0].content.parts;
  				for (const part of parts) {
-@@ -580,7 +605,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
- 					threadId,
+@@ -581,7 +595,8 @@
  					model,
  					timestamp: Date.now(),
--					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",
-+					finishReason: toolCallMap.size > 0 ? "tool_calls" : CONTENT_FILTER_FINISH_REASONS.has(finishReason) ? "content_filter" : "stop",
- 					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
+ 					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",
+-					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
++					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) },
++					metadata: { providerStopReason: finishReason }
  				};
  			}
+ 		}

@@ -1,0 +1,19 @@
+The terminal event carries the choice's finishReason as
+metadata.providerStopReason (null when the stream ended without one), so the
+service decides every finish reason from the SDK's union
+(apps/api/src/lib/chat/provider-stop-reasons.ts) instead of reading an
+unhandled one as "stop". Remove when upstream exposes the raw reason.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -760,7 +760,8 @@
+ 						...finalUsage,
+ 						...extractUsageCost(lastUsage)
+ 					} },
+-					finishReason
++					finishReason,
++					metadata: { providerStopReason: pendingFinishReason ?? null }
+ 				};
+ 			}
+ 		} catch (error) {

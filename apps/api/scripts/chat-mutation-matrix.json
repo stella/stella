@@ -561,6 +561,62 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "gemini-malformed-call-fails",
+      "fix": "#PR",
+      "behaviour": "A Gemini response that ends on a tool call the model could not form fails the run instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  MALFORMED_FUNCTION_CALL: \"failed\",",
+      "replace": "  MALFORMED_FUNCTION_CALL: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract google unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "anthropic-pause-turn-unfinished",
+      "fix": "#PR",
+      "behaviour": "An Anthropic turn the provider paused mid-way reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  pause_turn: \"unfinished\",",
+      "replace": "  pause_turn: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "no-stop-reason-unfinished",
+      "fix": "#PR",
+      "behaviour": "A stream that ends without the provider stating why it stopped reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    return \"unfinished\";",
+      "replace": "    return \"ended\";",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract bedrock early-eof"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "split-multibyte-character-decoded",
+      "fix": "#PR",
+      "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/adapters/text.js",
+      "search": "buffer += decoder.decode(value, { stream: true });",
+      "replace": "buffer += decoder.decode(value);",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "reads a stream cut anywhere as it reads it whole mistral text"
+      },
+      "oracle": "chat.provider-wire.split"
     }
   ]
 }

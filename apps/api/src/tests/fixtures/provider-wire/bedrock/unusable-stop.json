@@ -1,0 +1,111 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "unusable-stop",
+  "source": "synthetic",
+  "basis": "The bedrock/text recording with messageStop's stopReason set to malformed_tool_use",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW",
+                "role": "assistant"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": "The"
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": " cassette plays."
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABC"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHI"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "p": "abcdefghij",
+                "stopReason": "malformed_tool_use"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "metrics": {
+                  "latencyMs": 1260
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456",
+                "usage": {
+                  "inputTokens": 597,
+                  "outputTokens": 8,
+                  "serverToolUsage": {},
+                  "totalTokens": 605
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown"
+  }
+}

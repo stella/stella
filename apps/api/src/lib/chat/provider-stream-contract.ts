@@ -6,9 +6,11 @@ import {
 } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 
+import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { withDecidedStopReasons } from "@/api/lib/chat/provider-stop-reasons";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
@@ -303,16 +305,31 @@ async function* withOneTerminalEvent(
 /**
  * `adapter` with its chat stream held to the contract above. Every other
  * member is the adapter's own, its methods bound to it, so class state
- * (private fields included) keeps working.
+ * (private fields included) keeps working. `provider` names the table the
+ * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
+ * adapter that reports none (a mock) passes its terminal event through.
  */
 export const withProviderStreamContract = (
   adapter: AnyTextAdapter,
+  provider?: TanStackAIProvider,
 ): AnyTextAdapter => {
+  const decided = (chunks: AsyncIterable<StreamChunk>) =>
+    provider === undefined
+      ? chunks
+      : withDecidedStopReasons(chunks, {
+          provider,
+          unfinishedCode: INCOMPLETE_STREAM_CODE,
+        });
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
     withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
-          withUniqueToolCallIds(adapter.chatStream(options), options.messages),
+          decided(
+            withUniqueToolCallIds(
+              adapter.chatStream(options),
+              options.messages,
+            ),
+          ),
         ),
         options,
       ),

@@ -1,0 +1,52 @@
+1. The terminal event carries the provider's stop reason as
+   metadata.providerStopReason (null when the stream ended without one), so the
+   service decides every stop reason from the SDK's own union
+   (apps/api/src/lib/chat/provider-stop-reasons.ts) instead of reading an
+   unhandled one as "stop". Remove when upstream exposes the raw reason.
+2. The max_tokens RUN_ERROR carries the message's usage, which it dropped.
+   Upstream PR to be opened; remove when released.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -785,7 +785,8 @@
+ 						threadId,
+ 						model,
+ 						timestamp: Date.now(),
+-						finishReason: "stop"
++						finishReason: "stop",
++						metadata: { providerStopReason: null }
+ 					};
+ 				} else if (event.type === "message_delta") {
+ 					if (event.delta.stop_reason) {
+@@ -814,7 +815,8 @@
+ 									model,
+ 									timestamp: Date.now(),
+ 									finishReason: "tool_calls",
+-									usage: buildAnthropicUsage(event.usage)
++									usage: buildAnthropicUsage(event.usage),
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							case "max_tokens":
+@@ -835,7 +837,9 @@
+ 									error: {
+ 										message: "The response was cut off because the maximum token limit was reached.",
+ 										code: "max_tokens"
+-									}
++									},
++									usage: buildAnthropicUsage(event.usage),
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							default: yield {
+@@ -845,7 +849,8 @@
+ 								model,
+ 								timestamp: Date.now(),
+ 								finishReason: "stop",
+-								usage: buildAnthropicUsage(event.usage)
++								usage: buildAnthropicUsage(event.usage),
++								metadata: { providerStopReason: event.delta.stop_reason }
+ 							};
+ 						}
+ 					}

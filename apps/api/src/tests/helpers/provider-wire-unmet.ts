@@ -4,7 +4,7 @@ import type {
   OracleViolation,
 } from "@/api/tests/helpers/chat-oracles";
 
-const { providerWireFinish: finish, providerWireUsage: usage } = CHAT_ORACLE;
+const { providerWireFinish: finish } = CHAT_ORACLE;
 
 /** Why an unmet run is on the ledger: `upstream design` where the adapter
  *  behaves as its maintainers chose (we follow upstream, and our boundary
@@ -19,17 +19,11 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
  * recorder keeps a recording whose run fails at exactly its entry's oracles.
  */
 export const UNMET: Readonly<Record<string, UnmetEntry>> = {
-  "anthropic/length": { oracles: [usage], reason: "upstream gap" },
-  "anthropic/refusal": { oracles: [finish], reason: "upstream design" },
-  "bedrock/early-eof": { oracles: [finish], reason: "upstream design" },
-  "mistral/early-eof": { oracles: [finish], reason: "upstream design" },
   "mistral/malformed-chunk": { oracles: [finish], reason: "upstream design" },
-  "openai/length": { oracles: [usage], reason: "upstream gap" },
-  "openrouter/early-eof": { oracles: [finish], reason: "upstream design" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-export const UNMET_SIZE = 7;
+export const UNMET_SIZE = 1;
 
 /** The distinct oracles `violations` fail at, sorted. */
 export const violatedOracles = (
