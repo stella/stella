@@ -564,7 +564,7 @@
     },
     {
       "id": "prompt-prefix-system-stable",
-      "fix": "maintenance",
+      "fix": "#4007",
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
@@ -578,7 +578,7 @@
     },
     {
       "id": "prompt-prefix-tools-stable-on-the-wire",
-      "fix": "maintenance",
+      "fix": "#4007",
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
@@ -592,7 +592,7 @@
     },
     {
       "id": "tool-json-keys-sorted",
-      "fix": "maintenance",
+      "fix": "#4007",
       "behaviour": "A tool call's arguments and a tool result reach the model with their JSON keys in one order, so the call and result rebuilt from the stored thread on its next request repeat them byte for byte.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
