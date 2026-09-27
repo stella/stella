@@ -1,0 +1,34 @@
+1. stop_reason refusal finishes as content_filter; it read as stop.
+2. The max_tokens RUN_ERROR carries the message_delta usage, so a reply cut
+   off at the output ceiling still reports what it spent.
+Upstream PR to be opened; remove when released.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index f8f43dfe1a313bce8e3d8144081952c84534f822..6cf4dcfc4903773f6fed68e12928acbc8337aedb 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -832,12 +832,24 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 									timestamp: Date.now(),
+ 									message: "The response was cut off because the maximum token limit was reached.",
+ 									code: "max_tokens",
++									usage: buildAnthropicUsage(event.usage),
+ 									error: {
+ 										message: "The response was cut off because the maximum token limit was reached.",
+ 										code: "max_tokens"
+ 									}
+ 								};
+ 								break;
++							case "refusal":
++								yield {
++									type: EventType.RUN_FINISHED,
++									runId,
++									threadId,
++									model,
++									timestamp: Date.now(),
++									finishReason: "content_filter",
++									usage: buildAnthropicUsage(event.usage)
++								};
++								break;
+ 							default: yield {
+ 								type: EventType.RUN_FINISHED,
+ 								runId,

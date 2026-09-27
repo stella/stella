@@ -269,7 +269,8 @@
     "@tanstack/ai-gemini@0.33.1": "patches/@tanstack%2Fai-gemini@0.33.1.patch",
     "@tanstack/ai-mistral@0.6.10": "patches/@tanstack%2Fai-mistral@0.6.10.patch",
     "@tanstack/ai-mcp@0.4.6": "patches/@tanstack%2Fai-mcp@0.4.6.patch",
-    "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch"
+    "@tanstack/ai-openrouter@0.19.20": "patches/@tanstack%2Fai-openrouter@0.19.20.patch",
+    "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch"
   },
   "trustedDependencies": [
     "lefthook"
