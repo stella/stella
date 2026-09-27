@@ -171,7 +171,7 @@ export const createInboundMailPersistence =
               }
               return await createInboundMailStore({
                 database,
-                fileCandidate: (): Promise<never> =>
+                fileCandidate: () =>
                   panic("Rejected attachment reached filing"),
               })({
                 ...options,
