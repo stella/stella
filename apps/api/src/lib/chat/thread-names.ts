@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreadNames } from "@/api/db/schema";
@@ -212,6 +212,78 @@ export const readChatThreadNames = async ({
   return read;
 };
 
+/** What a binding names, independent of its spelling and key order. */
+const refTargetKey = (binding: ChatRefBinding): string => {
+  switch (binding.kind) {
+    case "contact":
+      return JSON.stringify([binding.kind, binding.contact.id]);
+    case "entity":
+      return JSON.stringify([
+        binding.kind,
+        binding.workspace.id,
+        binding.entity.id,
+      ]);
+    case "matter":
+      return JSON.stringify([binding.kind, binding.workspace.id]);
+    case "property":
+      return JSON.stringify([binding.kind, binding.property.id]);
+    case "source":
+      return JSON.stringify([binding.kind, binding.href]);
+    default:
+      binding satisfies never;
+      return panic("Unhandled chat ref binding");
+  }
+};
+
+/**
+ * Spellings among `bindings` the ledger already holds for another target,
+ * or as retired. A request only mints past every held spelling, so any
+ * such spelling is a defect in how the request read the ledger.
+ */
+const findConflictingRefBindings = async ({
+  bindings,
+  threadId,
+  tx,
+}: {
+  bindings: readonly ChatRefBinding[];
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<string[]> => {
+  if (bindings.length === 0) {
+    return [];
+  }
+  const held = await tx
+    .select({
+      kind: chatThreadNames.kind,
+      name: chatThreadNames.name,
+      target: chatThreadNames.target,
+    })
+    .from(chatThreadNames)
+    .where(
+      and(
+        eq(chatThreadNames.threadId, threadId),
+        inArray(chatThreadNames.kind, [
+          CHAT_THREAD_NAME_KIND.refBinding,
+          CHAT_THREAD_NAME_KIND.retiredRef,
+        ]),
+        inArray(
+          chatThreadNames.name,
+          bindings.map(({ ref }) => ref),
+        ),
+      ),
+    );
+  const targetByRef = new Map(
+    bindings.map((binding) => [binding.ref, refTargetKey(binding)]),
+  );
+  return held.flatMap(({ kind, name, target }) =>
+    kind === CHAT_THREAD_NAME_KIND.refBinding &&
+    isChatRefBinding(target) &&
+    refTargetKey(target) === targetByRef.get(name)
+      ? []
+      : [name],
+  );
+};
+
 type ChatThreadNameRow = {
   kind: ChatThreadNameKind;
   name: string;
@@ -272,6 +344,19 @@ export const recordChatThreadNamesOnTx = async ({
   ];
   if (rows.length === 0) {
     return;
+  }
+  const conflicting = await findConflictingRefBindings({
+    bindings: added.refBindings,
+    threadId,
+    tx,
+  });
+  if (conflicting.length > 0) {
+    // Storing the message would show the model a spelling that already
+    // names something else in this thread; fail the write instead.
+    reportLedgerDefect("A chat ref spelling was bound to a second target", {
+      conflictingCount: String(conflicting.length),
+    });
+    return panic("A chat ref spelling was bound to a second target");
   }
   // audit: skip — derived bookkeeping of the audited message write in the
   // same transaction; it records the names those messages show.

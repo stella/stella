@@ -211,6 +211,10 @@ import {
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
+import {
+  type ChatThreadNamesRead,
+  readChatThreadNames,
+} from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -1453,6 +1457,28 @@ const SEND_MESSAGE_DEPENDENCIES: SendMessageDependencies = {
   uploadMessageFiles: uploadMessageFilesWithRollback,
 };
 
+/**
+ * The thread's names, read by a request that owns the thread's turn; a read
+ * that fails fails the turn.
+ */
+const readOwnedTurnThreadNames = async ({
+  lifecycle,
+  safeDb,
+  threadId,
+}: {
+  lifecycle: ChatSendLifecycle;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}): Promise<Result<ChatThreadNamesRead, SafeDbError>> => {
+  const read = await safeDb(
+    async (tx) => await readChatThreadNames({ threadId, tx }),
+  );
+  if (Result.isError(read)) {
+    await lifecycle.failCurrentTurn("persistence", true);
+  }
+  return read;
+};
+
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
 ) =>
@@ -1697,10 +1723,9 @@ export const createSendMessage = (
           workspaceId,
         }),
       );
-      // Refs live as long as the thread, not the request: an interactive
-      // answer is a new request, and every ref its history shows the model
-      // must keep its target.
-      const refRegistry = dependencies.createRefRegistry(
+      // Validation only builds tool schemas and never shows the model a ref;
+      // the registry that does is built once this request owns the turn.
+      const validationRefRegistry = createChatRefRegistry(
         validationThreadState.threadNames.refBindings,
         validationThreadState.threadNames.retiredRefs,
       );
@@ -1795,7 +1820,7 @@ export const createSendMessage = (
               editApplyMode,
               externalMcpToolsLoader,
               orgAIConfig,
-              refRegistry,
+              refRegistry: validationRefRegistry,
               toolDefectMemo,
               usageLane,
               validationActiveSkillContext,
@@ -1847,6 +1872,23 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+
+        // Refs live as long as the thread, not the request: an interactive
+        // answer is a new request, and every ref its history shows the model
+        // must keep its target. Read now that this request owns the turn:
+        // a request that settled while this one prepared has stored its
+        // names, and none can settle until this one does.
+        const threadNames = yield* Result.await(
+          readOwnedTurnThreadNames({
+            lifecycle,
+            safeDb,
+            threadId: body.threadId,
+          }),
+        );
+        const refRegistry = dependencies.createRefRegistry(
+          threadNames.refBindings,
+          threadNames.retiredRefs,
+        );
 
         // The incoming message is durable now, so a disconnect must not run the
         // pre-persistence rollback (which would delete files referenced by that
@@ -2277,7 +2319,7 @@ export const createSendMessage = (
                             resolvedResponseMessage.parts,
                           ),
                         },
-                        read: validationThreadState.threadNames,
+                        read: threadNames,
                       },
                       dataScopeExpansion: {
                         newWorkspaceIds: resolved.workspaceIds,

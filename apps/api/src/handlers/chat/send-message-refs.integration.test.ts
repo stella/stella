@@ -9,6 +9,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreadNames, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -40,6 +41,7 @@ import {
   type ChatRefContext,
 } from "@/api/lib/chat/ref-token";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
+import { recordChatThreadNamesOnTx } from "@/api/lib/chat/thread-names";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -71,6 +73,12 @@ const loadExternalMcpToolsForTest = async () => {
 /** The ref registry each request built, newest last. */
 const builtRegistries: ChatRefRegistry[] = [];
 
+/**
+ * Runs while a request prepares, before it accepts its turn: where another
+ * request of the thread can settle and store names.
+ */
+let beforeAcceptance: ((tx: Transaction) => Promise<void>) | undefined;
+
 const sendMessage = createSendMessage({
   createRefRegistry: (bindings, retired) => {
     const registry = createChatRefRegistry(bindings, retired);
@@ -79,10 +87,12 @@ const sendMessage = createSendMessage({
   },
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,
-  loadWebSearchProviders: async () => ({
-    urlFetcher: null,
-    webSearchProvider: null,
-  }),
+  loadWebSearchProviders: async (tx) => {
+    // In the request's own transaction: the test database has one
+    // connection.
+    await beforeAcceptance?.(asTestRaw<Transaction>(tx));
+    return { urlFetcher: null, webSearchProvider: null };
+  },
   rollbackSideEffects: rollbackUnpersistedChatSideEffects,
   streamResponse: asTestRaw(streamChatMock),
   uploadMessageFiles: uploadMessageFilesWithRollback,
@@ -171,10 +181,14 @@ const BINDING_STORE = {
    *  later message bound the spelling to entity A. What the model read
    *  first is unknown, so the spelling names nothing. */
   mixed: "mixed",
+  /** On the thread, stored by another request that settles while this one
+   *  prepares, after it began but before it accepts its turn: entity A. */
+  late: "late",
 } as const;
 
 /** Whether `ent_1` still names entity A for the next request. */
 const KEEPS_ENT_1 = {
+  late: true,
   legacy: false,
   message: true,
   mixed: false,
@@ -205,22 +219,35 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     userId: ids.userA1,
     workspaceId: null,
   });
-  if (bindingStore === BINDING_STORE.thread) {
-    await testDb.insert(chatThreadNames).values([
-      {
-        kind: CHAT_THREAD_NAME_KIND.ledgerStart,
-        name: "",
-        target: null,
-        threadId,
-      },
-      {
-        kind: CHAT_THREAD_NAME_KIND.refBinding,
-        name: binding.ref,
-        target: binding,
-        threadId,
-      },
-    ]);
+  const storeBinding = async (tx: Pick<Transaction, "insert">) => {
+    await tx.insert(chatThreadNames).values({
+      kind: CHAT_THREAD_NAME_KIND.refBinding,
+      name: binding.ref,
+      target: binding,
+      threadId,
+    });
+  };
+  if (
+    bindingStore === BINDING_STORE.thread ||
+    bindingStore === BINDING_STORE.late
+  ) {
+    await testDb.insert(chatThreadNames).values({
+      kind: CHAT_THREAD_NAME_KIND.ledgerStart,
+      name: "",
+      target: null,
+      threadId,
+    });
   }
+  if (bindingStore === BINDING_STORE.thread) {
+    await storeBinding(testDb);
+  }
+  beforeAcceptance =
+    bindingStore === BINDING_STORE.late
+      ? async (tx) => {
+          beforeAcceptance = undefined;
+          await storeBinding(tx);
+        }
+      : undefined;
 
   const mentionHref = toChatResourceHref({
     type: RESOURCE_TYPE.ENTITY,
@@ -460,4 +487,42 @@ describe("chat refs across an interactive answer", () => {
       }
     },
   );
+
+  test("storing a held spelling for another target fails the write", async () => {
+    const { threadId } = await seedAwaitingTurn(BINDING_STORE.thread);
+    const bindingTo = (entityId: SafeId<"entity">) =>
+      ({
+        kind: "entity",
+        ref: "ent_1",
+        entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+        workspace: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: ids.wsA1 }),
+      }) satisfies ChatRefBinding;
+    const record = async (binding: ChatRefBinding) =>
+      await Result.tryPromise({
+        try: async () =>
+          await safeDb(
+            async (tx) =>
+              await recordChatThreadNamesOnTx({
+                added: { refBindings: [binding], toolCallIds: [] },
+                read: {
+                  refBindings: [],
+                  retiredRefs: [],
+                  source: "ledger",
+                  toolCallIds: [],
+                },
+                threadId,
+                tx,
+              }),
+          ),
+        catch: (error: unknown) => error,
+      });
+
+    // The same target again is what the ledger already holds.
+    const same = await record(bindingTo(ids.entityA1));
+    expect(Result.isOk(same) && Result.isOk(same.value)).toBe(true);
+    const other = await record(bindingTo(ids.entityA2));
+    // The failure surfaces as a thrown panic or as the transaction's error.
+    const failure = Result.isError(other) ? other.error : other.value;
+    expect(Bun.inspect(failure)).toContain("bound to a second target");
+  });
 });
