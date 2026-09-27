@@ -48,6 +48,11 @@ const PROVISION_EXTRACTION_SCOPE_STATUSES = ["active", "retired"] as const;
 
 const PROVISION_SCOPE_TRANSITION_ACTIONS = ["activate", "retire"] as const;
 
+const PROVISION_REPAIR_CURSOR_NAMES = [
+  "scope-bootstrap",
+  "state-seed",
+] as const;
+
 /** Fresh ingestion outranks repairs, which outrank bulk backfills. */
 const PROVISION_EXTRACTION_LANES = ["fresh", "repair", "backfill"] as const;
 
@@ -152,6 +157,44 @@ export const caseLawProvisionScopeTransitions = p.pgTable(
       sql`${t.action} IN (${sqlValues(PROVISION_SCOPE_TRANSITION_ACTIONS)})`,
     ),
     ...globalCaseLawPolicies(),
+    ownerAccessPolicy(),
+  ],
+);
+
+/** Cursor for each one-time decision-id walk; the enqueue trigger covers later writes. */
+export const caseLawProvisionRepairCursors = p.pgTable.withRLS(
+  "case_law_provision_repair_cursors",
+  {
+    name: p.text({ enum: PROVISION_REPAIR_CURSOR_NAMES }).primaryKey(),
+    cursorDecisionId: safeUuid<"caseLawDecision">("cursor_decision_id"),
+    completedAt: timestamptz("completed_at"),
+  },
+  (t) => [
+    p.check(
+      "case_law_provision_repair_cursors_name_values",
+      sql`${t.name} IN (${sqlValues(PROVISION_REPAIR_CURSOR_NAMES)})`,
+    ),
+    ownerAccessPolicy(),
+  ],
+);
+
+/**
+ * The highest provision extraction admission revision a deployment has
+ * applied to the scopes. A trigger refuses a decrease and a delete.
+ */
+export const caseLawProvisionAdmission = p.pgTable.withRLS(
+  "case_law_provision_admission",
+  {
+    key: p.text().primaryKey(),
+    revision: p.integer().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check("case_law_provision_admission_key", sql`${t.key} = 'global'`),
+    p.check(
+      "case_law_provision_admission_revision_positive",
+      sql`${t.revision} > 0`,
+    ),
     ownerAccessPolicy(),
   ],
 );

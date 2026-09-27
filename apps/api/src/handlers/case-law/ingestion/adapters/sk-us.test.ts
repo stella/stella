@@ -758,6 +758,72 @@ describe("sk-us listSlicePage", () => {
   });
 });
 
+describe("sk-us getTotalCount", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeAll(() => {
+    setSystemTime(new Date("2026-09-25T09:30:00.000Z"));
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("reads the court's own count over the crawl's whole date span", async () => {
+    const bodies: SearchBody[] = [];
+    mockFetch({
+      search: [
+        { type: "page", documents: [PLENARY_OPINION], numFound: 53_605 },
+      ],
+      onSearch: (body) => {
+        bodies.push(body);
+      },
+    });
+
+    const count = await skUsAdapter.getTotalCount(AbortSignal.timeout(5000));
+
+    expect(count).toEqual({ type: "count", total: 53_605 });
+    expect(bodies).toHaveLength(1);
+    const [body] = bodies;
+    expect(body?.pageSize).toBe(1);
+    expect(body?.docType).toBe("USSR_DECISION_MK");
+    expect(body === undefined ? null : dateRangeOf(body)).toEqual({
+      FROM: `${SK_US_FIRST_SLICE}-01`,
+      TO: "2026-12-31",
+    });
+  });
+
+  test("a 204 is a failed probe, not an empty court", async () => {
+    mockFetch({ search: [{ type: "status", status: 204 }] });
+
+    expect(await skUsAdapter.getTotalCount(AbortSignal.timeout(5000))).toEqual({
+      type: "probe-failed",
+      errorTag: "unreadable-payload",
+    });
+  });
+
+  test("a zero count is not recorded as the court's size", async () => {
+    mockFetch({ search: [{ type: "page", documents: [], numFound: 0 }] });
+
+    expect(await skUsAdapter.getTotalCount(AbortSignal.timeout(5000))).toEqual({
+      type: "probe-failed",
+      errorTag: "unreadable-payload",
+    });
+  });
+
+  test("a refused request is a failed probe rather than a throw", async () => {
+    mockFetch({ search: [{ type: "status", status: 503 }] });
+
+    const count = await skUsAdapter.getTotalCount(AbortSignal.timeout(5000));
+
+    expect(count.type).toBe("probe-failed");
+  });
+});
+
 describe("sk-us buildDecision", () => {
   const originalFetch = globalThis.fetch;
 

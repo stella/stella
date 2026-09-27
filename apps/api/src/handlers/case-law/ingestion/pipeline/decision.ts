@@ -61,6 +61,7 @@ type SettleRowWriteStatusOptions = {
   sourceId: SafeId<"caseLawSource">;
   decisionId: SafeId<"caseLawDecision">;
   composedSupplements: StoredSupplement[];
+  observationOrder: bigint;
   writeStatus: DecisionRowWriteStatus;
 };
 
@@ -73,6 +74,7 @@ const settleRowWriteStatus = async ({
   sourceId,
   decisionId,
   composedSupplements,
+  observationOrder,
   writeStatus,
 }: SettleRowWriteStatusOptions): Promise<AttemptStep | null> => {
   switch (writeStatus) {
@@ -84,6 +86,7 @@ const settleRowWriteStatus = async ({
         sourceId,
         judgmentId: decisionId,
         supplements: composedSupplements,
+        observationOrder,
       });
       if (absorbed.type === "incomplete") {
         logger.warn(SUPPLEMENT_ABSORB_FAILED, {
@@ -257,6 +260,7 @@ const runDecisionAttempt = async ({
     sourceId,
     decisionId,
     composedSupplements,
+    observationOrder,
     writeStatus: rowWrite.value,
   });
   if (settled !== null) {

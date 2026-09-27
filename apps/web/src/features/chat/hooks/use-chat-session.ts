@@ -301,6 +301,7 @@ export const useChatSession = ({
     error: runtimeError,
     sessionGenerating,
     status,
+    stop: stopState,
     turnAbandoned,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
@@ -521,6 +522,7 @@ export const useChatSession = ({
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
+  const leave = chat.leave;
   const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
@@ -1319,8 +1321,9 @@ export const useChatSession = ({
         messages,
         requestActive: isChatClientRequestActive(status),
         sessionGenerating,
+        stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status],
+    [error, messages, sessionGenerating, status, stopState.status],
   );
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
@@ -1344,6 +1347,21 @@ export const useChatSession = ({
     lastHandledErrorRef.current = runtimeError;
     notifyError(runtimeError);
   }, [notifyError, runtimeError]);
+
+  // A Stop the server refused leaves the turn running and Stop available;
+  // say so once per refusal.
+  const lastStopFailureRef = useRef<Error | undefined>(undefined);
+  useExternalSyncEffect(() => {
+    if (stopState.status !== "failed") {
+      return;
+    }
+    if (lastStopFailureRef.current === stopState.error) {
+      return;
+    }
+    lastStopFailureRef.current = stopState.error;
+    getAnalytics().captureError(stopState.error);
+    stellaToast.add({ title: t("chat.stopFailed"), type: "error" });
+  }, [stopState, t]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });
@@ -1458,6 +1476,7 @@ export const useChatSession = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,

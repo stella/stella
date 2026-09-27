@@ -95,6 +95,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability                            | Access             | Scope                 | Feature | Reachable via                                                                                                                                                                                                          |
 | ------------------------------------- | ------------------ | --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contacts.business-registries.check`  | read               | stella:read           | —       | curated tool `check_counterparty`                                                                                                                                                                                      |
 | `contacts.business-registries.lookup` | read               | stella:read           | —       | curated tool `lookup_business_registry`                                                                                                                                                                                |
 | `contacts.create`                     | write              | stella:contacts_write | —       | curated tool `save_contact`                                                                                                                                                                                            |
 | `contacts.delete`                     | write, destructive | stella:contacts_write | —       | curated tool `delete_contact`                                                                                                                                                                                          |
@@ -602,11 +603,11 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui         | 9     |
 | provider_secret        | 24    |
 | public_indexing        | 7     |
-| realtime_stream        | 3     |
+| realtime_stream        | 4     |
 | search_ui              | 15    |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 171
+Total: 172

@@ -85,6 +85,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CORPUS_STORAGE_MODE",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
   "DATABASE_POOL_MAX_LIFETIME_S",
+  "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
   "DB_HOST",
@@ -254,6 +255,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Idle database connection lifetime in seconds; zero disables retirement.",
   DATABASE_POOL_MAX_LIFETIME_S:
     "Maximum database connection lifetime in seconds; zero disables retirement.",
+  DATABASE_STATEMENT_TIMEOUT_MS:
+    "Statement timeout in milliseconds set on each root and RLS pool connection; zero keeps the server default.",
   DATABASE_RLS_POOL_MAX:
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
@@ -655,6 +658,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "DEV",
   "DB_BACKFILL_TRANSACTION_TIMEOUT_MS",
   "DB_ROOT_QUERY_TIMEOUT_MS",
+  "DB_STATEMENT_TIMEOUT_MS",
   "DB_TRANSACTION_TIMEOUT_MS",
   "DISABLED_ADAPTERS",
   "HOME",

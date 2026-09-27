@@ -18,10 +18,20 @@
 
 import { Result } from "better-result";
 
+import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import {
   containsModelRoleControlTokens,
   stripPromptUnsafeChars,
 } from "@/api/lib/prompt-safety";
+
+/**
+ * Who wrote a memory. A model writes chat refs (`ent_3`) that name a target
+ * only within one thread, so its text must first become durable
+ * (`ChatRefRegistry.toDurableRefText`); a person types plain text.
+ */
+export type MemoryContentSource =
+  | { origin: "model"; text: ChatDurableRefText }
+  | { origin: "person"; text: string };
 
 export const MEMORY_CONTENT_REJECTION = {
   // Carried a structural model-control token (ChatML / Llama role markers).
@@ -47,10 +57,10 @@ export type MemoryContentRejection =
  *
  * Returns the cleaned, trimmed content on success.
  */
-export const sanitizeMemoryContent = (
-  raw: string,
-): Result<string, MemoryContentRejection> => {
-  const stripped = stripPromptUnsafeChars(raw);
+export const sanitizeMemoryContent = ({
+  text,
+}: MemoryContentSource): Result<string, MemoryContentRejection> => {
+  const stripped = stripPromptUnsafeChars(text);
 
   if (containsModelRoleControlTokens(stripped)) {
     return Result.err(MEMORY_CONTENT_REJECTION.modelControlTokens);
@@ -63,3 +73,9 @@ export const sanitizeMemoryContent = (
 
   return Result.ok(collapsed);
 };
+
+/** {@link sanitizeMemoryContent} for text a person typed. */
+export const sanitizePersonMemoryContent = (
+  text: string,
+): Result<string, MemoryContentRejection> =>
+  sanitizeMemoryContent({ origin: "person", text });

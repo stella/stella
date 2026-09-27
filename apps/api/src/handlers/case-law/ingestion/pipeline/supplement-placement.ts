@@ -498,6 +498,7 @@ export const absorbSupplementIntoJudgment = async (
     sourceId,
     supplement,
     sourceDocumentId,
+    nextObservationOrder,
     absorb,
   }: SupplementPlacement,
   judgmentId: SafeId<"caseLawDecision">,
@@ -508,6 +509,7 @@ export const absorbSupplementIntoJudgment = async (
     sourceId,
     judgmentId,
     supplements: [{ kind: supplement.kind, sourceDocumentId }],
+    observationOrder: await nextObservationOrder(),
     absorb,
   });
   switch (outcome.type) {

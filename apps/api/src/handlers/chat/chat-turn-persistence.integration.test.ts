@@ -29,6 +29,7 @@ import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -38,6 +39,12 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+/** A turn that adds no names to a thread whose ledger has not started. */
+const NO_THREAD_NAMES = {
+  added: { refBindings: [], toolCallIds: [] },
+  read: EMPTY_CHAT_THREAD_NAMES_READ,
+};
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -347,6 +354,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),
         execution,
         outcome: { error: "unknown", type: "failed" },
@@ -449,6 +457,7 @@ describe("durable chat turn persistence", () => {
 
     const result = await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,
@@ -536,6 +545,7 @@ describe("durable chat turn persistence", () => {
 
     const result = await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,
@@ -646,7 +656,7 @@ describe("durable chat turn persistence", () => {
         });
       }),
     );
-    expect(settled).toBe(true);
+    expect(settled).toBe("settled");
 
     const duplicateSettlement = unwrap(
       await safeDb(
@@ -659,7 +669,7 @@ describe("durable chat turn persistence", () => {
           }),
       ),
     );
-    expect(duplicateSettlement).toBe(false);
+    expect(duplicateSettlement).toBe("not-owned");
 
     const turn = await testDb.query.chatTurns.findFirst({
       where: { id: { eq: acceptance.id } },
@@ -1272,7 +1282,7 @@ describe("durable chat turn persistence", () => {
     );
     expect(
       unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
-    ).toBe(false);
+    ).toBe("lost");
   });
 
   test("serializes an awaiting continuation with a competing user send", async () => {
@@ -1609,7 +1619,7 @@ describe("durable chat turn persistence", () => {
     const beforeRenewal = Date.now();
     expect(
       unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
-    ).toBe(true);
+    ).toBe("owned");
 
     const turn = await testDb.query.chatTurns.findFirst({
       where: { id: { eq: execution.id } },
@@ -1913,6 +1923,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     try {
       const result = await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),
         execution,
         outcome: { type: "completed" },

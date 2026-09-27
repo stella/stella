@@ -194,11 +194,11 @@
     {
       "id": "rendered-stop-settles-running-calls",
       "fix": "#1077",
-      "behaviour": "Stop settles a tool call still running, so nothing on the page stays busy.",
+      "behaviour": "Stop reloads the thread from what the server stored, so a tool call the stopped turn left running does not keep the page busy.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "    const sanitized = sanitizeRunningToolCalls(messages, \"cancel\");\n    client.setMessagesManually(sanitized);\n    setSnapshot({ messages: sanitized });",
-      "replace": "    setSnapshot({ messages });",
+      "search": "      setSnapshot({ turnAbandoned: true });\n      reloadThread();",
+      "replace": "      setSnapshot({ turnAbandoned: true });",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "stop-mid-stream shows what the server stored, live and in a second tab"
@@ -469,9 +469,9 @@
       "fix": "#3885",
       "behaviour": "A snapshot carries each message the engine was handed differently in its stored form, so a result only the engine saw never reaches the client.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  presentStoredHistory({\n    history: storedHistory,",
-      "replace": "  presentStoredHistory({\n    history: { ...storedHistory, storedForms: new Map() },",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "message.role === \"tool\" && servedCallIds.has(message.toolCallId)",
+      "replace": "message.role === \"tool\" && false",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "resumes the new turn's own calls after a message replaced waiting ones"
@@ -491,6 +491,62 @@
         "test": "asks again for an approval whose call id an interrupted turn used"
       },
       "oracle": "chat.live.tool-parts-once"
+    },
+    {
+      "id": "refs-keep-targets-across-requests",
+      "fix": "#3935",
+      "behaviour": "Each request restores the refs the thread's names ledger holds, so a later request resolves every one to its first target and never re-mints its spelling.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "dependencies.createRefRegistry(\n          threadNames.refBindings,\n          threadNames.retiredRefs,\n        )",
+      "replace": "dependencies.createRefRegistry([], [])",
+      "scenario": {
+        "file": "src/handlers/chat/recorded-conversations.integration.test.ts",
+        "test": "the committed recording of code-mode-refs-mint-first matches the server"
+      },
+      "oracle": "chat.persisted.refs-stable"
+    },
+    {
+      "id": "stop-ends-message-with-turn",
+      "fix": "F5",
+      "behaviour": "A stop that ends a turn waiting on the user stores the same outcome on the turn and on its message.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-persistence.ts",
+      "search": "      reason: planned.state.reason,",
+      "replace": "      reason: \"superseded\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "stops a client call the page still runs"
+      },
+      "oracle": "chat.persisted.turn-outcome"
+    },
+    {
+      "id": "stop-closes-cut-off-calls",
+      "fix": "F2",
+      "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "replace": "  settleTerminalAssistantMessage(message, outcome);",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "stops an answer while it streams (before-tool-end)"
+      },
+      "oracle": "chat.persisted.pending-owned"
+    },
+    {
+      "id": "snapshot-serves-stored-history",
+      "fix": "#3957",
+      "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      served = loaded.value;",
+      "replace": "      served = new Map();",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.wire.snapshot-served"
     }
   ]
 }

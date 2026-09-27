@@ -12,6 +12,13 @@ export const CHAT_ORACLE = {
   /** Every turn a request starts reaches a settled status once the
    *  request is done. */
   persistedTurnSettles: "chat.persisted.turn-settles",
+  /** Every chat ref the stored thread shows the model names, in every later
+   *  request of the thread, the target it named when first stored; the
+   *  thread's name ledger holds every such ref and every stored tool-call
+   *  id. */
+  persistedRefsStable: "chat.persisted.refs-stable",
+  /** A settled turn's status and reason are the outcome its answer stores. */
+  persistedTurnOutcome: "chat.persisted.turn-outcome",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",
@@ -19,6 +26,9 @@ export const CHAT_ORACLE = {
    *  stored thread holds one: what only the engine was handed never reaches
    *  a client. */
   wireResultsStored: "chat.wire.results-stored",
+  /** A messages snapshot carries every message the thread's page serves,
+   *  other than one the response writes, exactly as the page serves it. */
+  wireSnapshotServed: "chat.wire.snapshot-served",
   /** (a) The live view holds each message id once. */
   liveMessageIdsUnique: "chat.live.message-ids-unique",
   /** (b) Every interaction the stored thread offers is on screen and

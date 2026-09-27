@@ -1,16 +1,17 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
-import { chatMessages } from "@/api/db/schema";
+import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -92,6 +93,9 @@ type LoadChatMessagePageArgs = SafeDbOrTx &
   Omit<LoadChatMessagePageOnTxArgs, "tx">;
 
 export type ChatMessagePage = {
+  /** The thread's turn not yet settled (accepted, running, or awaiting the
+   *  user), which the page stops; null when every turn has settled. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   messages: ClientMessage[];
   olderCursor: string | null;
   /** ISO timestamp of the newest message in this page (the last ascending
@@ -145,7 +149,21 @@ const loadChatMessagePageOnTx = async ({
 
   const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
+  const activeTurn = (
+    await tx
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
   return {
+    activeTurnId: activeTurn?.id ?? null,
     messages: await projectPageRowsOnTx({ rows: pageAscending, tx, userId }),
     olderCursor,
     lastActivityAt,
@@ -190,7 +208,7 @@ export const loadChatMessagePage = async ({
 
 /**
  * The thread's messages `messageIds` names, as its page serves them, in
- * thread order.
+ * thread order. Naming none reads nothing.
  */
 export const loadClientMessages = async ({
   messageIds,
@@ -201,8 +219,11 @@ export const loadClientMessages = async ({
   messageIds: readonly SafeId<"chatMessage">[];
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
-}): Promise<Result<ClientMessage[], SafeDbError>> =>
-  await withScopedTx(handle, async (tx) => {
+}): Promise<Result<ClientMessage[], SafeDbError>> => {
+  if (messageIds.length === 0) {
+    return Result.ok([]);
+  }
+  return await withScopedTx(handle, async (tx) => {
     const rows = await tx
       .select({
         id: chatMessages.id,
@@ -221,6 +242,7 @@ export const loadClientMessages = async ({
       .limit(messageIds.length);
     return await projectPageRowsOnTx({ rows, tx, userId });
   });
+};
 
 type ChatMessagePageRow = {
   content: PersistedChatMessageContent;

@@ -61,6 +61,7 @@ import {
   backfillOAuthClients,
   seedOAuthResources,
 } from "../scripts/better-auth-17-backfill.logic";
+import { onlineMigrationParams } from "./online-migration-connection";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -98,7 +99,7 @@ const dialect = new PgDialect();
 const bindTo = (connection: OnlineMigrationConnection) => ({
   execute: async (query: SQL): Promise<unknown> => {
     const { sql: text, params } = dialect.sqlToQuery(query);
-    return await connection.query(text, params);
+    return await connection.query(text, onlineMigrationParams(params));
   },
 });
 

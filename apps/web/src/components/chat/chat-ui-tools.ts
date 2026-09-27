@@ -219,6 +219,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  counterparty_check: "chat.tool.counterparty_check",
   "use-browser": "chat.tool.use-browser",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
@@ -330,6 +331,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   boe_get_law_structure: true,
   borme_get_summary: true,
   business_registry_lookup: true,
+  counterparty_check: true,
   infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 
@@ -855,12 +857,7 @@ export const selectUnresolvedFolioAgentDocToolCallParts = (
 // is never that message.
 const INTERRUPTED_TOOL_CALL_STATE = "error" as const;
 
-export type RunningToolCallSanitization = "cancel" | "hydrate";
-
-const toTerminalIfRunningToolPart = (
-  part: ChatPart,
-  mode: RunningToolCallSanitization,
-): ChatPart => {
+const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   if (part.type !== "tool-call" || !isRunningToolPart(part)) {
     return part;
   }
@@ -868,7 +865,6 @@ const toTerminalIfRunningToolPart = (
   // after hydration. Preserve it so the session effect can return its result
   // instead of turning a recoverable draft into an interrupted tool call.
   if (
-    mode === "hydrate" &&
     part.name === "create-document" &&
     part.state === "input-complete" &&
     isJsonObject(part.input) &&
@@ -886,17 +882,11 @@ const toTerminalIfRunningToolPart = (
  * `hasRunningToolCallInLatestAssistantMessage` / `isGenerating` — so the
  * composer leaves its stop/spinner state instead of wedging there forever.
  *
- * Applied on the two triggers that strand a tool part mid-run with no event
- * that would ever finalize it:
- *
- *  - Hydration from persistence: the server only persists finalized turns
- *    (written at stream end, not mid-stream), so any running tool-call part
- *    in server-loaded messages belongs to a turn whose stream died before
- *    finishing (API restart / deploy / crash mid tool call).
- *  - Explicit stop: TanStack AI's `stop()` aborts the live request but never
- *    rewrites message parts, so a tool part caught mid-input would keep the
- *    turn "generating" forever. The runtime's `stop` applies this right
- *    after aborting.
+ * Applied at hydration from persistence: the server only persists finalized
+ * turns (written at stream end, not mid-stream), so any running tool-call
+ * part in server-loaded messages belongs to a turn whose stream died before
+ * finishing (API restart / deploy / crash mid tool call). A stopped turn is
+ * not rewritten here: the server settles it and the page reloads it.
  *
  * `ask-user` and approval-flow parts are user-owned and excluded by
  * `isRunningToolPart`. A complete `create-document` input is resumable by the
@@ -906,15 +896,12 @@ const toTerminalIfRunningToolPart = (
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
-  mode: RunningToolCallSanitization = "hydrate",
 ): PersistedChatMessage[] =>
   messages.map((message) => {
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map((part) =>
-      toTerminalIfRunningToolPart(part, mode),
-    );
+    const parts = message.parts.map(toTerminalIfRunningToolPart);
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );

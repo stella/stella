@@ -1082,8 +1082,11 @@ const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
  * "II.ÚS/251/04", "II.ÚS 251/04", and "II. ÚS 251/04" (the dot before
  * a space is already stripped upstream) all resolve to the same key, and
  * the diacritic-dropped "III.US 364/2017" folds to the same key as
- * "III. ÚS 364/2017". Stored citationText is never touched by this --
- * only the dedup key folds the diacritic.
+ * "III. ÚS 364/2017". The court's case lists also glue the mark to the
+ * number ("II.ÚS55/98", "PL.ÚS3/2019"), and a reader types any of these in
+ * lower case; every spelling keys as the docket grammar's formatted one, which
+ * is what the identity lookup searches. Stored citationText is never touched
+ * by this -- only the dedup key folds the diacritic.
  *
  * The infix's own trailing dot is optional ("-st\.?", not "-st\."): the
  * upstream trailing-dot-strip step (below) also fires on "t." when it is
@@ -1095,7 +1098,7 @@ const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
  * sharing the same digits.
  */
 const US_CASE_RE =
-  /^(?<chamber>[IVX]{1,4}|Pl|PL)\.?\s?[ÚU]S(?<infix>-st\.?)?[\s/](?<docket>\d{1,5}\/\d{2,4})$/u;
+  /^(?<chamber>[IVX]{1,4}|PL)\.?\s?[ÚU]S(?<infix>-st\.?)?[\s/]?(?<docket>\d{1,5}\/\d{2,4})$/iu;
 
 /**
  * Matches a Polish roman-numeral-chamber case number after whitespace

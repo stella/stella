@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import businessRegistriesCheck from "@/api/handlers/contacts/business-registries/check";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries/lookup";
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete";
@@ -35,6 +36,10 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .get("/business-registries", businessRegistriesLookup.handler, {
     permissions: businessRegistriesLookup.config.permissions,
     query: businessRegistriesLookup.config.query,
+  })
+  .post("/business-registries/checks", businessRegistriesCheck.handler, {
+    body: businessRegistriesCheck.config.body,
+    permissions: businessRegistriesCheck.config.permissions,
   })
   .get("/export", exportContacts.handler, {
     permissions: exportContacts.config.permissions,

@@ -125,6 +125,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_projection_intents",
 ]);
 
+// Request transactions append names alongside chat messages and read them on
+// later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
+const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
+
 // Internal handoff tables whose scoped role needs INSERT but not table-wide
 // SELECT. Privileged workers own reads; a table may additionally grant a
 // narrowly scoped transition such as deleting an exact cleanup tombstone.
@@ -177,6 +181,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Provision extraction scopes: admission is read only through the owner-run
   // case_law_provision_extraction_in_scope, so no role reads the table.
   "case_law_provision_extraction_scopes",
+  // Backfill progress: owned by the provision state backfill job, no request read.
+  "case_law_provision_repair_cursors",
+  "case_law_provision_admission",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's
   // identity. Written only through the owner connection in
@@ -253,6 +260,15 @@ const TABLE_MUTATION_PRIVILEGES = new Set([
   "truncate",
   "update",
 ]);
+const APPEND_ONLY_FORBIDDEN_PRIVILEGES = new Set([
+  "all",
+  "delete",
+  "maintain",
+  "references",
+  "trigger",
+  "truncate",
+  "update",
+]);
 const STELLA_GRANT_GRANTEES = new Set(["public", "stella"]);
 
 const grantsRequiredPrivileges = ({
@@ -264,6 +280,13 @@ const grantsRequiredPrivileges = ({
     return (
       privileges.has("select") &&
       privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)
+    );
+  }
+  if (POST_BOOTSTRAP_APPEND_ONLY_TABLES.has(table)) {
+    return (
+      privileges.has("select") &&
+      privileges.has("insert") &&
+      privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)
     );
   }
   if (POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES.has(table)) {
@@ -488,11 +511,26 @@ const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
   );
 };
 
+const appendOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
+  if (grant.privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)) {
+    return [];
+  }
+  if (grant.type === "all_tables_in_schema") {
+    return grant.schemas.includes("public")
+      ? ["all tables in schema public"]
+      : [];
+  }
+  return grant.tables.filter((table) =>
+    POST_BOOTSTRAP_APPEND_ONLY_TABLES.has(table),
+  );
+};
+
 const collectRlsGrantState = () => {
   let rlsTables: RlsTableIntroduction[] = [];
   const droppedTables = new Set<string>();
   const explicitGrantMigrationsByTable = new Map<string, string[]>();
   const selectOnlyMutationGrants: string[] = [];
+  const appendOnlyMutationGrants: string[] = [];
   const unexpectedDynamicGrantSites: string[] = [];
 
   for (const path of migrationSqlFiles()) {
@@ -542,6 +580,9 @@ const collectRlsGrantState = () => {
       for (const target of selectOnlyMutationTargets(grant)) {
         selectOnlyMutationGrants.push(`${migration}: ${target}`);
       }
+      for (const target of appendOnlyMutationTargets(grant)) {
+        appendOnlyMutationGrants.push(`${migration}: ${target}`);
+      }
     }
   }
 
@@ -550,6 +591,7 @@ const collectRlsGrantState = () => {
     explicitGrantMigrationsByTable,
     rlsTables,
     selectOnlyMutationGrants,
+    appendOnlyMutationGrants,
     unexpectedDynamicGrantSites,
   };
 };
@@ -636,6 +678,10 @@ describe("RLS table grants", () => {
     expect(collectRlsGrantState().selectOnlyMutationGrants).toEqual([]);
   });
 
+  test("append-only tables never grant other mutations to stella", () => {
+    expect(collectRlsGrantState().appendOnlyMutationGrants).toEqual([]);
+  });
+
   test("post-bootstrap RLS tables explicitly grant stella table privileges", () => {
     const { explicitGrantMigrationsByTable, rlsTables } =
       collectRlsGrantState();
@@ -658,6 +704,7 @@ describe("RLS table grants", () => {
     expect(
       [
         ...POST_BOOTSTRAP_SELECT_ONLY_TABLES,
+        ...POST_BOOTSTRAP_APPEND_ONLY_TABLES,
         ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
         ...POST_BOOTSTRAP_DENY_STELLA_TABLES,
       ].filter((table) => droppedTables.has(table)),

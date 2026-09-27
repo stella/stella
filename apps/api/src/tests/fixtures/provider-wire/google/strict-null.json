@@ -2,8 +2,8 @@
   "format": 1,
   "provider": "google",
   "scenario": "strict-null",
-  "source": "synthetic",
-  "basis": "Gemini API streamGenerateContent?alt=sse reference: data-only SSE frames, each a GenerateContentResponse, CRLF separated",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T08:32:19.853Z",
   "model": "gemini-3.8-flash",
   "exchanges": [
     {
@@ -14,15 +14,11 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "text/event-stream",
-          "content-disposition": "attachment",
-          "vary": "Origin, X-Origin, Referer",
-          "x-content-type-options": "nosniff",
-          "server-timing": "gfet4t7; dur=412"
+          "content-type": "text/event-stream"
         },
         "body": {
           "encoding": "text",
-          "text": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"mcp__external__delete\",\"args\": {\"name\": \"draft\",\"note\": null}},\"thoughtSignature\": \"CiQBjz1rX2Nhc3NldHRlLXRob3VnaHQtc2lnbmF0dXJlLW9wYXF1ZQ==\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 79,\"candidatesTokenCount\": 25,\"totalTokenCount\": 104,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 79}]},\"modelVersion\": \"gemini-3.8-flash\",\"responseId\": \"c2FzZXR0ZS1yZXNwb25zZS0x\"}\r\n\r\n"
+          "text": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"mcp__external__delete\",\"args\":{\"note\":null,\"name\":\"draft\"},\"id\":\"call_1099047\"},\"thoughtSignature\":\"EmkKZwFpFH0TQb7t/9X8zsNyILsgOtJYAlgie4WwhCVHUYNlJ/3kjs5BNQm9WuO4AXOhN1Ia+z/ooSGuyF/k+z9hLoywKrojVVP4PNSq4OmSvJJTY+rOsgRGMfTAhz6HT8Xjy8h+g9CVhic=\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":87,\"candidatesTokenCount\":23,\"totalTokenCount\":110,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":87}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\",\"responseId\":\"[responseId]\"}\r\n\r\ndata: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0,\"safetyRatings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"probability\":\"NEGLIGIBLE\"}]}],\"usageMetadata\":{\"promptTokenCount\":87,\"candidatesTokenCount\":23,\"totalTokenCount\":110,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":87}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\",\"responseId\":\"[responseId]\"}\r\n\r\n"
         }
       }
     }
@@ -37,11 +33,6 @@
           "name": "draft"
         }
       }
-    ],
-    "usage": {
-      "promptTokens": 79,
-      "completionTokens": 25,
-      "totalTokens": 104
-    }
+    ]
   }
 }

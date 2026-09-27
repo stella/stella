@@ -17,6 +17,23 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] pinned reusable CLA workflow does not check out or execute PR code
     types: [opened, synchronize, reopened, closed]
 
+concurrency:
+  # Concurrency applies before the job's `if`, so only a newer run of the same
+  # kind for the same pull request supersedes one: pull request events, and
+  # `recheck` comments. A signing comment records a signature and any other
+  # comment skips the job, so each of those gets a group of its own and
+  # neither cancels nor is cancelled.
+  group: >-
+    ${{ github.workflow }}-${{
+      (github.event_name == 'pull_request_target'
+        && format('pr-{0}', github.event.pull_request.number))
+      || (github.event.issue.pull_request
+        && github.event.comment.body == 'recheck'
+        && format('recheck-{0}', github.event.issue.number))
+      || format('run-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
 permissions:
   actions: write
   contents: read
@@ -40,6 +57,6 @@ jobs:
       )
     uses: stella/.github/.github/workflows/cla.yml@aff5017c264acce5a2bcdf15876da08835e6de70
     with:
-      allowlist: dependabot[bot],renovate[bot],github-actions[bot],google-labs-jules[bot],stella-provenance-updater[bot],stella-release-deployer[bot],cursoragent,claude
+      allowlist: dependabot[bot],renovate[bot],github-actions[bot],google-labs-jules[bot],stella-provenance-updater[bot],stella-release-deployer[bot],autofix-ci[bot],cursoragent,claude
     secrets:
       CLA_APP_PRIVATE_KEY: ${{ secrets.CLA_APP_PRIVATE_KEY }}

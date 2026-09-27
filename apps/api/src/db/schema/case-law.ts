@@ -238,7 +238,11 @@ export const PROVISION_WORK_SOURCES = [
 const PROVISION_SPAN_ROLES = ["printed", "range-interior"] as const;
 
 /** What chose the cited act's version: the text itself, or the decision date. */
-const PROVISION_SELECTIONS = ["text", "date-window"] as const;
+const PROVISION_SELECTIONS = [
+  "text",
+  "date-window",
+  "misprint-correction",
+] as const;
 
 const PROVISION_TARGET_STATUSES = [
   "available",
@@ -663,6 +667,9 @@ export const caseLawDecisions = p.pgTable(
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),
+    p
+      .index("case_law_decisions_provision_scope_cursor_idx")
+      .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
     p
@@ -1801,6 +1808,7 @@ export const caseLawProvisionCitations = p.pgTable(
     nameEnd: p.integer("name_end"),
     nameText: p.varchar("name_text", { length: 256 }),
     selection: p.text("selection", { enum: PROVISION_SELECTIONS }),
+    printedWorkIdentifier: p.text("printed_work_identifier"),
     targetDocumentId: safeUuid<"legislationDocument">("target_document_id"),
     targetStatus: p.text("target_status", {
       enum: PROVISION_TARGET_STATUSES,
@@ -1891,6 +1899,10 @@ export const caseLawProvisionCitations = p.pgTable(
     p.check(
       "provision_citations_selection_values",
       sql`${t.selection} IS NULL OR ${t.selection} IN (${sql.join(PROVISION_SELECTION_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "provision_citations_misprint_correction_shape",
+      sql`CASE WHEN ${t.selection} = 'misprint-correction' THEN ${t.printedWorkIdentifier} IS NOT NULL AND ${t.printedWorkIdentifier} <> ${t.workIdentifier} ELSE ${t.printedWorkIdentifier} IS NULL END`,
     ),
     p.check(
       "provision_citations_target_status_values",

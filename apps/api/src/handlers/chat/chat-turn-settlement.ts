@@ -81,6 +81,18 @@ const OUTCOME_POLICY = {
   interrupted: "stopped",
 } as const satisfies Record<OutcomeType, OpenCallPolicy>;
 
+/**
+ * Outcomes that cut a run off mid-stream, whose message keeps the tool input
+ * streamed so far: a dropped connection, a deadline, or the user's stop.
+ */
+export const KEEPS_PARTIAL_TOOL_INPUT = {
+  "awaiting-user": false,
+  cancelled: true,
+  completed: false,
+  failed: false,
+  interrupted: true,
+} as const satisfies Record<OutcomeType, boolean>;
+
 const SETTLED_TOOL_CALL_STATE = {
   "approval-requested": false,
   "approval-responded": false,
@@ -248,24 +260,12 @@ export const settleOpenToolCallsForOutcome = ({
   );
 };
 
-/** A run's history: what the engine is handed, and what the client is shown
- *  of it. */
-export type RunHistory = {
-  engine: ChatMessage[];
-  /**
-   * Every earlier message the engine reads differently from the stored
-   * thread, by id, as stored: one settling closes with results that exist
-   * only for the engine, or one holding a denied call, which the engine
-   * replays as a result the thread never stores. The client-visible stream
-   * presents these as stored (`presentStoredHistory`).
-   */
-  storedForms: ReadonlyMap<string, ChatMessage>;
-};
-
 /**
  * The history a run hands the engine. Only the message a continuation resumes
  * may hold open calls for this run to execute or the client to answer; an
- * open call anywhere else belongs to a turn that already ended.
+ * open call anywhere else belongs to a turn that already ended. The results
+ * that close those calls exist only for the engine: the client-visible
+ * stream presents every earlier message as stored (`presentStoredHistory`).
  */
 export const settleHistoryForRun = ({
   messages,
@@ -273,9 +273,8 @@ export const settleHistoryForRun = ({
 }: {
   messages: readonly ChatMessage[];
   resumedMessageId: string | undefined;
-}): RunHistory => {
-  const storedForms = new Map<string, ChatMessage>();
-  const engine = messages.map((message) => {
+}): ChatMessage[] =>
+  messages.map((message) => {
     if (message.role !== "assistant" || message.id === resumedMessageId) {
       return message;
     }
@@ -288,13 +287,8 @@ export const settleHistoryForRun = ({
     const settled =
       parts.length !== message.parts.length ||
       parts.some((part, index) => part !== message.parts[index]);
-    if (settled || message.parts.some(isDeniedCall)) {
-      storedForms.set(message.id, message);
-    }
     return settled ? { ...message, parts } : message;
   });
-  return { engine, storedForms };
-};
 
 export type DroppedParts = {
   droppedToolCallIds: string[];
