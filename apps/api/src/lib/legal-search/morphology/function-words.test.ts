@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
-import { CORPUS_MORPHOLOGY_LANGUAGES } from "@/api/lib/legal-search/morphology/corpus-language";
+import {
+  CORPUS_MORPHOLOGY_LANGUAGES,
+  corpusMorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/corpus-language";
 import {
   FUNCTION_WORD_LANGUAGES,
   FUNCTION_WORDS,
@@ -116,6 +119,16 @@ describe("function word lists", () => {
     for (const language of FUNCTION_WORD_LANGUAGES) {
       expect(FUNCTION_WORDS[language].size).toBeGreaterThan(0);
     }
+    // A language two sources contribute is listed once.
+    expect(new Set(FUNCTION_WORD_LANGUAGES).size).toBe(
+      FUNCTION_WORD_LANGUAGES.length,
+    );
+  });
+
+  test("a jurisdiction written in English stems and drops words under it", () => {
+    expect(corpusMorphologyLanguage("USA")).toBe("en");
+    expect(CORPUS_MORPHOLOGY_LANGUAGES).toContain("en");
+    expect(functionWordsFor("en")?.has("the")).toBe(true);
   });
 
   test("every entry is already its own comparison key", () => {

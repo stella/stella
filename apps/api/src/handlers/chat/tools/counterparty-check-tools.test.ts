@@ -41,7 +41,7 @@ describe("counterparty_check chat tool", () => {
     const execute = executeWith(async () => Result.ok(UNAVAILABLE));
     const result = await execute({
       check: "cz-insolvency",
-      subject: { type: "company-id", companyId: "45274649" },
+      subject: { type: "company-id", company_id: "45274649" },
     });
     expect(result).toEqual(UNAVAILABLE);
   });
@@ -56,9 +56,9 @@ describe("counterparty_check chat tool", () => {
       check: "cz-insolvency",
       subject: {
         type: "person",
-        firstName: "Jan",
-        lastName: "Novák",
-        birthDate: "1980-03-15",
+        first_name: "Jan",
+        last_name: "Novák",
+        birth_date: "1980-03-15",
       },
     });
     expect(received?.subject).toEqual({
@@ -79,7 +79,7 @@ describe("counterparty_check chat tool", () => {
     );
     const failure = await execute({
       check: "cz-insolvency",
-      subject: { type: "company-id", companyId: "26863155" },
+      subject: { type: "company-id", company_id: "26863155" },
     }).then(
       () => panic("Expected the tool to fail"),
       (error: unknown) => error,
