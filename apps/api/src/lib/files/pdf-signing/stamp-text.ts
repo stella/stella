@@ -21,12 +21,14 @@ import type {
 } from "@/api/lib/files/pdf-signing/stamp-font";
 
 /**
- * Scripts that need shaping the chain has no face for. Matched by Unicode
- * script property, so a new character in one of them is covered without a
- * list of code points.
+ * Scripts that need shaping the chain has no face for, matched by Unicode
+ * script property so a new character in one of them is covered without a
+ * list of code points; and ideographic variation selectors, which pick a
+ * specific glyph of a name the faces cannot select (they carry no
+ * variation-sequence mapping), so the stamp would draw a different glyph.
  */
 const REFUSED =
-  /[\p{Script=Adlam}\p{Script=Bengali}\p{Script=Gujarati}\p{Script=Gurmukhi}\p{Script=Kannada}\p{Script=Khmer}\p{Script=Lao}\p{Script=Malayalam}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Myanmar}\p{Script=Nko}\p{Script=Oriya}\p{Script=Samaritan}\p{Script=Sinhala}\p{Script=Syriac}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Thaana}\p{Script=Tibetan}]/u;
+  /[\u{E0100}-\u{E01EF}\p{Script=Adlam}\p{Script=Bengali}\p{Script=Gujarati}\p{Script=Gurmukhi}\p{Script=Kannada}\p{Script=Khmer}\p{Script=Lao}\p{Script=Malayalam}\p{Script=Mandaic}\p{Script=Mongolian}\p{Script=Myanmar}\p{Script=Nko}\p{Script=Oriya}\p{Script=Samaritan}\p{Script=Sinhala}\p{Script=Syriac}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Thaana}\p{Script=Tibetan}]/u;
 
 /**
  * Explicit bidirectional embeddings, overrides and isolates. The stamp

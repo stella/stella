@@ -48,6 +48,8 @@ describe("the stamp fonts", () => {
     ]) {
       expect(check.canDraw(sample)).toBe(true);
     }
+    // An ideographic variation sequence names a glyph the faces cannot select.
+    expect(check.canDraw("\u845B\u{E0100}")).toBe(false);
     const licenses = await loadStampFontLicenses();
     expect(licenses.join("\n")).toContain("Bitstream Vera");
     expect(licenses.join("\n")).toContain("SIL Open Font License");
