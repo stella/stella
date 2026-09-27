@@ -28,6 +28,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   findLiveViewViolations,
+  findUnservedSnapshotMessages,
   findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -424,6 +425,10 @@ export const createApprovalHarness = ({
           chunks,
           stored: await reloadView(threadId),
         }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: (await readPage(threadId)).messages,
+        }),
         ...(await findPersistedViolations(threadId)),
       ],
     } as const;
@@ -564,6 +569,10 @@ export const createApprovalHarness = ({
       ...findUnstoredWireResults({
         chunks,
         stored: await reloadView(raw.threadId),
+      }),
+      ...findUnservedSnapshotMessages({
+        chunks,
+        served: (await readPage(raw.threadId)).messages,
       }),
       ...(await findPersistedViolations(raw.threadId)),
     );

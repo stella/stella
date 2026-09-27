@@ -244,6 +244,56 @@ export const findUnstoredWireResults = ({
   );
 };
 
+/**
+ * `chat.wire.snapshot-served`: every message a messages snapshot carries that
+ * the thread's page serves, other than a message the response writes, is the
+ * message as the page serves it, field for field. A client replaces its
+ * messages with a snapshot, so a field the snapshot drops or changes (a
+ * timestamp, the metadata, an attachment's placeholder) is gone from the page
+ * until it reloads. AG-UI's required `content` is the one field a snapshot
+ * adds. `served` is the page once the response is done, as JSON.
+ */
+export const findUnservedSnapshotMessages = ({
+  chunks,
+  served,
+}: {
+  chunks: readonly StreamChunk[];
+  served: readonly unknown[];
+}): OracleViolation[] => {
+  const written = new Set(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.TEXT_MESSAGE_START ? [chunk.messageId] : [],
+    ),
+  );
+  const servedById = new Map(
+    served.flatMap((message): [unknown, unknown][] =>
+      typeof message === "object" && message !== null
+        ? [[Reflect.get(message, "id"), message]]
+        : [],
+    ),
+  );
+  return violationsOf(
+    CHAT_ORACLE.wireSnapshotServed,
+    chunks.flatMap((chunk, index) => {
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        return [];
+      }
+      return chunk.messages.flatMap((message) => {
+        const page = servedById.get(message.id);
+        if (page === undefined || written.has(message.id)) {
+          return [];
+        }
+        const snapshot = Object.fromEntries(
+          Object.entries(message).filter(([key]) => key !== "content"),
+        );
+        return jsonValue(snapshot) === jsonValue(page)
+          ? []
+          : [{ chunk: index, id: message.id, page, snapshot }];
+      });
+    }),
+  );
+};
+
 /** An interrupt the page received with its latest response. */
 export type DeliveredInterrupt = {
   interruptId: string;

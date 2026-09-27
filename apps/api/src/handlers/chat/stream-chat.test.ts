@@ -102,8 +102,8 @@ import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
+  loadServed: async () => await Promise.resolve(new Map()),
   rewrittenOnAcceptance: [],
-  storedForms: new Map(),
 };
 
 const collectChunks = async (
@@ -4438,7 +4438,7 @@ describe("a superseded client-tool call in the engine's history", () => {
       settleHistoryForRun({
         messages: supersededHistory,
         resumedMessageId: undefined,
-      }).engine,
+      }),
     );
 
     expect(finish?.outcome).toEqual({ type: "completed" });

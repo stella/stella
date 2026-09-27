@@ -519,6 +519,20 @@
         "test": "stops an answer while it streams (before-tool-end)"
       },
       "oracle": "chat.persisted.pending-owned"
+    },
+    {
+      "id": "snapshot-serves-stored-history",
+      "fix": "#3957",
+      "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "    served ??= await loadServed();",
+      "replace": "    served ??= new Map();",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.wire.snapshot-served"
     }
   ]
 }
