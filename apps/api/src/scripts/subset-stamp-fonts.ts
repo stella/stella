@@ -33,11 +33,13 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 const SOURCE_COMMIT = "23e54b51ddffbc7713c583748e3bd86f62b1fa4a";
 const SOURCE_BASE = `https://raw.githubusercontent.com/google/fonts/${SOURCE_COMMIT}/ofl`;
 
+/** Noto Sans SC and KR ship the same licence text, so they share one file. */
 const SOURCES = {
   sc: {
     font: "notosanssc/NotoSansSC%5Bwght%5D.ttf",
     fontSha256:
       "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+    licenseOutput: "NotoSansCJK-LICENSE.txt",
     license: "notosanssc/OFL.txt",
     licenseSha256:
       "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
@@ -46,6 +48,7 @@ const SOURCES = {
     font: "notosanskr/NotoSansKR%5Bwght%5D.ttf",
     fontSha256:
       "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
+    licenseOutput: "NotoSansCJK-LICENSE.txt",
     license: "notosanskr/OFL.txt",
     licenseSha256:
       "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
@@ -54,6 +57,7 @@ const SOURCES = {
     font: "notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf",
     fontSha256:
       "14ec4af41f27482216d1c2229f417ff9b1425e1babb014e57d1d40d03229853e",
+    licenseOutput: "NotoSansDevanagari-LICENSE.txt",
     license: "notosansdevanagari/OFL.txt",
     licenseSha256:
       "a216f6f8d85c7228093e0ee5e258d9d377e6671f68acb4db1930b29583d0f331",
@@ -62,6 +66,7 @@ const SOURCES = {
     font: "notosansthai/NotoSansThai%5Bwdth,wght%5D.ttf",
     fontSha256:
       "5a1c559bb539583c8a1fd99d1c5b9491e5e14478c9cd2bd0970d5c3096cc9ef8",
+    licenseOutput: "NotoSansThai-LICENSE.txt",
     license: "notosansthai/OFL.txt",
     licenseSha256:
       "2e98fd23a52d253db8612cd5942c8f2ff4111b21d2367050fdca91d8ccc374a0",
@@ -106,7 +111,7 @@ const download = async (relative: string, sha256: string) => {
  * runtime's own tables: the set of characters that set's users write.
  */
 const legacySet = (
-  label: string,
+  label: ConstructorParameters<typeof TextDecoder>[0],
   lead: readonly [number, number],
   trail: readonly [number, number],
 ) => {
@@ -205,14 +210,6 @@ const targets = (workDir: string): readonly Target[] => [
   },
 ];
 
-/** Noto Sans SC and KR share one licence text. */
-const LICENSE_OUTPUT = {
-  sc: "NotoSansCJK-LICENSE.txt",
-  kr: "NotoSansCJK-LICENSE.txt",
-  devanagari: "NotoSansDevanagari-LICENSE.txt",
-  thai: "NotoSansThai-LICENSE.txt",
-} as const satisfies Record<SourceKey, string>;
-
 const workDir = await mkdtemp(path.join(tmpdir(), "stamp-fonts-"));
 try {
   await Bun.write(
@@ -229,10 +226,7 @@ try {
       download(source.license, source.licenseSha256),
     ]);
     await Bun.write(path.join(workDir, `${key}.ttf`), font);
-    await Bun.write(
-      path.join(FONTS_DIR, LICENSE_OUTPUT[key as SourceKey]),
-      license,
-    );
+    await Bun.write(path.join(FONTS_DIR, source.licenseOutput), license);
   }
   for (const target of targets(workDir)) {
     const outputPath = path.join(FONTS_DIR, target.output);
