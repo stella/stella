@@ -28,6 +28,7 @@ import {
 import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
+  withInputNotes,
 } from "@/api/mcp/input-normalization";
 import {
   getStaticMcpToolDefinition,
@@ -330,6 +331,7 @@ export const handleMcpToolCall = async ({
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: staticTool.access,
     exactProperties: ["confirm", "validate_only"],
     schema: staticTool.inputSchema,
     value: args,
@@ -343,6 +345,7 @@ export const handleMcpToolCall = async ({
     );
   }
   const normalizedArgs = normalized.value;
+  const inputNotes = normalized.notes;
 
   // Resolve confirmation from the registry's canonical behavior.
   // Capability-catalog and upstream tools defer the final decision to their
@@ -410,7 +413,10 @@ export const handleMcpToolCall = async ({
               ?.loadAnonymizationGazetteerEntriesByWorkspace,
         },
       );
-      return serializeForSurface(finalized, outputContract);
+      return withInputNotes(
+        serializeForSurface(finalized, outputContract),
+        inputNotes,
+      );
     },
     catch: (error) => error,
   });

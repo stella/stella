@@ -96,7 +96,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max matters to return (list mode)"
+          "description": "Max matters to return (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -136,7 +140,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
-          "description": "Max results to return"
+          "description": "Max results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -181,7 +189,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
-          "description": "Merged-page size, split evenly across the queries (at least one hit each)"
+          "description": "Merged-page size, split evenly across the queries (at least one hit each). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -193,7 +205,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Filter by court name"
+          "description": "Filter by court name. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "country": {
           "type": "string",
@@ -212,13 +227,19 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "Filter by language code"
+          "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "decision_type": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Filter by decision type"
+          "description": "Filter by decision type. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "source_id": {
           "type": "string",
@@ -229,13 +250,21 @@
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         },
         "date_to": {
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
         },
         "sort": {
           "enum": ["relevance", "newest"],
@@ -403,7 +432,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 50,
-          "description": "Citations per page; defaults to 20, at most 50."
+          "description": "Citations per page; defaults to 20, at most 50. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -784,37 +817,58 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Filter by document type"
+          "description": "Filter by document type. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "status": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter by publication status"
+          "description": "Filter by publication status. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "language": {
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "Filter by language code"
+          "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "date_from": {
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "Filter statutes effective from this ISO date (YYYY-MM-DD)"
+          "description": "Filter statutes effective from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         },
         "date_to": {
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "Filter statutes effective up to this ISO date (YYYY-MM-DD)"
+          "description": "Filter statutes effective up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max results to return; defaults to 10."
+          "description": "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -850,7 +904,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+          "description": "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+          "x-stella-agent-input": {
+            "kind": "eli"
+          }
         },
         "language": {
           "type": "string",
@@ -901,7 +958,11 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 512,
-                "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+                "description": "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+                "x-stella-agent-input": {
+                  "kind": "eli",
+                  "invalidValueDisposition": "handler-owned"
+                }
               },
               "anchor": {
                 "type": "string",
@@ -955,7 +1016,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+          "description": "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+          "x-stella-agent-input": {
+            "kind": "eli"
+          }
         },
         "anchor": {
           "type": "string",
@@ -973,7 +1037,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
-          "description": "Versions per page; defaults to 5, at most 20."
+          "description": "Versions per page; defaults to 5, at most 20. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -1703,7 +1771,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max entities to return"
+          "description": "Max entities to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -2290,7 +2362,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max properties to return"
+          "description": "Max properties to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -2581,7 +2657,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Maximum contacts to return"
+          "description": "Maximum contacts to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         }
       }
     },
@@ -2894,13 +2974,21 @@
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)"
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         },
         "date_to": {
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)"
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
         },
         "status": {
           "type": "string",
@@ -2912,7 +3000,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max tasks to return (default 50)"
+          "description": "Max tasks to return (default 50). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -3168,7 +3260,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 200,
-          "description": "Max clauses to return"
+          "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -3406,7 +3502,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max playbooks to return"
+          "description": "Max playbooks to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -3763,7 +3863,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max rows to read (a mark over several paragraphs is several rows)."
+          "description": "Max rows to read (a mark over several paragraphs is several rows). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -4063,13 +4167,21 @@
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)"
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "start"
+          }
         },
         "date_to": {
           "type": "string",
           "format": "date",
           "maxLength": 10,
-          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)"
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+          "x-stella-agent-input": {
+            "kind": "date",
+            "bound": "end"
+          }
         },
         "status": {
           "enum": ["draft", "approved", "billed", "written_off"],
@@ -4080,7 +4192,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max entries to return"
+          "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -4304,7 +4420,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max invoices to return"
+          "description": "Max invoices to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -4398,7 +4518,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return"
+          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -4486,7 +4610,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 200,
-          "description": "Max entries to return"
+          "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
@@ -4846,8 +4974,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Maximum capabilities to return.",
-          "default": 25
+          "description": "Maximum capabilities to return. Use a JSON number; a value outside the range is clamped to it.",
+          "default": 25,
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         }
       }
     },

@@ -174,6 +174,7 @@ export const runRegistryReadTool = async ({
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: staticDefinition.access,
     schema: staticDefinition.inputSchema,
     value: dehydrated.value.args,
   });

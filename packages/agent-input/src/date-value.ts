@@ -13,10 +13,17 @@ import { parsePlainDate, Temporal } from "@stll/time";
  * ambiguous spelling is asked about with both readings named rather than
  * guessed from a default. Same for a two-digit year (`02-03-26`), which is
  * ambiguous in the day/month order as well as the century.
+ *
+ * A range bound (`date_from`, `date_to`) reads more, because which end it is
+ * decides what a partial date means: `2020` as a start is 1 January and as an
+ * end is 31 December, and `0001-01-01` or `9999-12-31` is the model saying the
+ * range is open on that side. A single date is never read that way, since
+ * nothing tells a lone `2020` which day of the year it is.
  */
 
-import type { Normalized } from "./normalized";
-import { askForFix, readValueAs } from "./normalized";
+import { isAbsentPlaceholder } from "./absent";
+import type { Normalized, NormalizedOptional } from "./normalized";
+import { askForFix, readAsAbsent, readValueAs } from "./normalized";
 
 const DATE_VALUE_EXPECTED = "a calendar date";
 export const DATE_VALUE_HINT =
@@ -30,7 +37,13 @@ export type DateValueOptions = {
    *  rendered in Portuguese accepts `1 de outubro de 2026` — the structure
    *  that locale renders, not only its month names. */
   locales?: readonly string[] | undefined;
+  /** Which end of a range the date is. A bound reads a bare year or month as
+   *  that end's first or last day, and asks when both ends arrive in one
+   *  field. */
+  bound?: DateBound | undefined;
 };
+
+export type DateBound = "start" | "end";
 
 /** Day-first with dots is one convention wherever it is written, so it needs
  *  no disambiguation: `1.10.2026`, `01. 10. 2026`, `1. 10. 2026.` */
@@ -320,8 +333,8 @@ const ambiguousAsk = ({
   });
 };
 
-/** Read a calendar date an agent spelled its own way, as ISO YYYY-MM-DD. */
-export const normalizeDateValue = (
+/** One whole calendar date, the reading every field shares. */
+const readCalendarDate = (
   input: unknown,
   options?: DateValueOptions,
 ): Normalized<string> => {
@@ -373,4 +386,147 @@ export const normalizeDateValue = (
     return iso === null ? invalidAsk(input) : readValueAs(input, iso);
   }
   return ambiguousAsk({ input, first, second, year });
+};
+
+const YEAR_ONLY_RE = /^(?<year>\d{4})$/u;
+/** `2020-05`, `2020/5`: the four-digit head fixes which part is the year. */
+const YEAR_MONTH_RE = /^(?<year>\d{4})[-/](?<month>\d{1,2})$/u;
+/** `05/2020`, `5/2020`, `05.2020`: the four-digit tail fixes it the same way. */
+const MONTH_YEAR_RE = /^(?<month>\d{1,2})[-/.]\s*(?<year>\d{4})$/u;
+
+/**
+ * A bare year or month as the first or last day it covers. Only a bound reads
+ * these: as a start, `2020` means from the first day of 2020, and as an end,
+ * through its last, which is what a model filtering "decisions from 2020"
+ * means by it.
+ */
+const readPartialDate = (trimmed: string, bound: DateBound): string | null => {
+  const yearOnly = YEAR_ONLY_RE.exec(trimmed)?.groups;
+  if (yearOnly !== undefined) {
+    const year = Number(yearOnly["year"]);
+    return bound === "start" ? isoDate(year, 1, 1) : isoDate(year, 12, 31);
+  }
+  const groups = (YEAR_MONTH_RE.exec(trimmed) ?? MONTH_YEAR_RE.exec(trimmed))
+    ?.groups;
+  if (groups === undefined) {
+    return null;
+  }
+  const year = Number(groups["year"]);
+  const month = Number(groups["month"]);
+  const first = isoDate(year, month, 1);
+  if (first === null || bound === "start") {
+    return first;
+  }
+  return isoDate(year, month, Temporal.PlainDate.from(first).daysInMonth);
+};
+
+/** How a model writes both ends of a range in one string. The unspaced dash
+ *  and the slash split only where both halves are dates on their own, so a
+ *  single `2020-05` or `5/2020` never reads as two. */
+const RANGE_SEPARATORS = [
+  /\.\./u,
+  /\s*[–—]\s*/u,
+  /\s+to\s+/iu,
+  /\s+-\s+/u,
+  /\//u,
+  /-/u,
+] as const;
+
+/** One bound read on its own: a whole date, else a partial one. */
+const readBoundHalf = (
+  half: string,
+  bound: DateBound,
+  options: DateValueOptions | undefined,
+): string | null => {
+  const whole = readCalendarDate(half, options);
+  return whole.ok ? whole.value : readPartialDate(half, bound);
+};
+
+/** Both ends of a range, when the string is one written into a single bound. */
+const readRange = (
+  trimmed: string,
+  options: DateValueOptions | undefined,
+): { start: string; end: string } | null => {
+  for (const separator of RANGE_SEPARATORS) {
+    const halves = trimmed.split(separator).map((half) => half.trim());
+    const [left, right] = halves;
+    if (halves.length !== 2 || left === undefined || right === undefined) {
+      continue;
+    }
+    const start = readBoundHalf(left, "start", options);
+    const end = readBoundHalf(right, "end", options);
+    if (start !== null && end !== null) {
+      return { start, end };
+    }
+  }
+  return null;
+};
+
+const rangeAsk = (input: unknown, range: { start: string; end: string }) =>
+  askForFix({
+    input,
+    expected: "a single date",
+    hint:
+      "This is one bound of a range: send the start and the end as two " +
+      "separate date properties (for example date_from " +
+      `"${range.start}" and date_to "${range.end}").`,
+  });
+
+/** Read a calendar date an agent spelled its own way, as ISO YYYY-MM-DD. With
+ *  a `bound`, a bare year or month reads as that end's day, and a whole range
+ *  in the one field asks for its two halves. */
+export const normalizeDateValue = (
+  input: unknown,
+  options?: DateValueOptions,
+): Normalized<string> => {
+  const bound = options?.bound;
+  if (bound === undefined || typeof input !== "string") {
+    return readCalendarDate(input, options);
+  }
+  const trimmed = input.trim();
+  // The range goes first: an ISO datetime's clock part is read away, which
+  // would take `2020-01-01 to 2020-12-31` for its first half alone.
+  const range = readRange(trimmed, options);
+  if (range !== null) {
+    return rangeAsk(input, range);
+  }
+  const whole = readCalendarDate(input, options);
+  if (whole.ok) {
+    return whole;
+  }
+  const partial = readPartialDate(trimmed, bound);
+  return partial === null ? whole : readValueAs(input, partial);
+};
+
+/** Years no range filter means literally: `0001-01-01` and `9999-12-31` are
+ *  how a database and a model spell "no limit on this side". Year 1000 is kept,
+ *  since a medieval charter is a real bound in a legal corpus. */
+const OPEN_BOUND_YEAR_BELOW = 1000;
+const OPEN_BOUND_YEAR_FROM = 9000;
+
+export type DateBoundOptions = {
+  bound: DateBound;
+  locales?: readonly string[] | undefined;
+};
+
+/**
+ * Read one end of a date range. A placeholder or an open-ended sentinel date
+ * is no bound at all, so the caller drops the property rather than filtering
+ * to the year 1 or 9999.
+ */
+export const normalizeDateBound = (
+  input: unknown,
+  options: DateBoundOptions,
+): NormalizedOptional<string> => {
+  if (isAbsentPlaceholder(input)) {
+    return readAsAbsent(input);
+  }
+  const result = normalizeDateValue(input, options);
+  if (!result.ok) {
+    return result;
+  }
+  const year = Temporal.PlainDate.from(result.value).year;
+  return year < OPEN_BOUND_YEAR_BELOW || year >= OPEN_BOUND_YEAR_FROM
+    ? readAsAbsent(input, "an open bound")
+    : result;
 };
