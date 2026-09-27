@@ -128,6 +128,13 @@ type ChatHistoryExpansionRow = {
   threadWorkspaceId: SafeId<"workspace"> | null;
 };
 
+// TanStack expects a rejected promise to preserve a tool's tagged failure.
+async function rejectChatTool(error: ChatToolError): Promise<never> {
+  return await new Promise<never>((_resolve, reject) => {
+    reject(error);
+  });
+}
+
 export const createChatHistoryTools = ({
   excludedMessageIds = [],
   organizationId,
@@ -157,10 +164,12 @@ export const createChatHistoryTools = ({
     }).server(async ({ query, limit }) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
-        throw new ChatToolError({
-          kind: "invalid-input",
-          message: "Chat history search query must not be empty.",
-        });
+        return rejectChatTool(
+          new ChatToolError({
+            kind: "invalid-input",
+            message: "Chat history search query must not be empty.",
+          }),
+        );
       }
 
       const tsQuery = buildSearchTsQuery(normalizedQuery);
@@ -186,11 +195,13 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Failed to search chat history.",
-          cause: result.error,
-        });
+        return rejectChatTool(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to search chat history.",
+            cause: result.error,
+          }),
+        );
       }
 
       return {
@@ -278,11 +289,13 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "Failed to expand chat history.",
-          cause: result.error,
-        });
+        return rejectChatTool(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to expand chat history.",
+            cause: result.error,
+          }),
+        );
       }
 
       const target = result.value.at(0);
