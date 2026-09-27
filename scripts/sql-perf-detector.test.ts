@@ -123,6 +123,49 @@ test.each([
   expect(result.commentErrors).toHaveLength(1);
 });
 
+test("a reason above a multi-line SQL template covers the hit inside it", () => {
+  // The flagged line is SQL text, where no TypeScript comment can go.
+  const aboveStatement = [
+    "// sql-perf-allow: index name_trgm_idx",
+    "const rows = await tx.execute(sql`",
+    "  SELECT id",
+    "  FROM contacts",
+    "  WHERE name ILIKE '%x%'",
+    "`);",
+  ].join("\n");
+  const aboveTemplate = [
+    "const rows = await tx.execute(",
+    "  // sql-perf-allow: bounded by one workspace, LIMIT 50",
+    "  sql`",
+    "    SELECT id FROM contacts",
+    "    WHERE name ILIKE '%x%'",
+    "  `,",
+    ");",
+  ].join("\n");
+  for (const source of [aboveStatement, aboveTemplate]) {
+    expect(analyzeSqlPerf(source, "apps/api/src/example.ts")).toEqual({
+      hits: [],
+      commentErrors: [],
+    });
+  }
+});
+
+test("a reason two lines above the statement does not reach it", () => {
+  const source = [
+    "// sql-perf-allow: index name_trgm_idx",
+    "",
+    "const rows = await tx.execute(sql`",
+    "  WHERE name ILIKE '%x%'",
+    "`);",
+  ].join("\n");
+  const { hits, commentErrors } = analyzeSqlPerf(
+    source,
+    "apps/api/src/example.ts",
+  );
+  expect(hits.map((hit) => hit.kind)).toEqual(["leading-wildcard"]);
+  expect(commentErrors.map((error) => error.line)).toEqual([1]);
+});
+
 test("a marker in a string cannot suppress a hit", () => {
   const result = analyzeSqlPerf(
     "const note = '// sql-perf-allow: index fake_idx';\nconst hit = sql`name LIKE '%x%'`;",

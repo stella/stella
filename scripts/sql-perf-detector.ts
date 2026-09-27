@@ -12,6 +12,13 @@ export type SqlPerfHit = {
   kind: "leading-wildcard" | "s3-key-like" | "group-by-expression";
   line: number;
   column: number;
+  /**
+   * Lines where a TypeScript comment can sit for this hit: its own line, the
+   * start of the SQL template or call holding it, and the start of the
+   * statement around that. A hit inside a multi-line template has no
+   * TypeScript line of its own.
+   */
+  anchorLines: number[];
 };
 
 export type SqlPerfCommentError = { line: number; message: string };
@@ -252,6 +259,24 @@ export const listSqlPerfAllowComments = (source: string, filename: string) => {
   return allowCommentsOf(source, file);
 };
 
+/** The statement (or class member) a node sits in, where a comment can go. */
+const statementOf = (node: ts.Node): ts.Node => {
+  let current = node;
+  while (
+    current.parent !== undefined &&
+    !ts.isBlock(current.parent) &&
+    !ts.isSourceFile(current.parent) &&
+    !ts.isModuleBlock(current.parent) &&
+    !ts.isCaseClause(current.parent) &&
+    !ts.isDefaultClause(current.parent) &&
+    !ts.isClassLike(current.parent) &&
+    !ts.isObjectLiteralExpression(current.parent)
+  ) {
+    current = current.parent;
+  }
+  return current;
+};
+
 export const analyzeSqlPerf = (source: string, filename: string) => {
   const file = ts.createSourceFile(
     filename,
@@ -263,14 +288,22 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
   const bindings = constBindings(file);
   const rawHits: SqlPerfHit[] = [];
   const seen = new Set<string>();
-  const add = (kind: SqlPerfHit["kind"], offset: number) => {
+  const add = (kind: SqlPerfHit["kind"], offset: number, holder: ts.Node) => {
     const place = location(file, offset);
     const key = `${kind}:${place.line}:${place.column}`;
     if (seen.has(key)) {
       return;
     }
     seen.add(key);
-    rawHits.push({ kind, ...place });
+    rawHits.push({
+      kind,
+      ...place,
+      anchorLines: [
+        place.line,
+        location(file, holder.getStart(file)).line,
+        location(file, statementOf(holder).getStart(file)).line,
+      ],
+    });
   };
 
   const inspectSql = (node: ts.TaggedTemplateExpression) => {
@@ -290,7 +323,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
         lhsExpression === undefined ? lhs : lhsExpression.getText(file);
       const offset = offsets[index] ?? node.getStart(file);
       if (S3_KEY.test(lhsText)) {
-        add("s3-key-like", offset);
+        add("s3-key-like", offset, node);
       }
 
       const literal = /^\s*\(?\s*['"]\s*[%_]/u.test(after);
@@ -301,7 +334,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
         literal ||
         (expression !== undefined && startsWithWildcard(expression, bindings))
       ) {
-        add("leading-wildcard", offset);
+        add("leading-wildcard", offset, node);
       }
     }
     const group = /\bGROUP\s+BY\b/giu;
@@ -329,7 +362,11 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
             groupExpression(expression, bindings, file))
         ) {
           const cursor = match.index + match[0].length + item.start;
-          add("group-by-expression", offsets[cursor] ?? node.getStart(file));
+          add(
+            "group-by-expression",
+            offsets[cursor] ?? node.getStart(file),
+            node,
+          );
         }
       }
     }
@@ -344,10 +381,10 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
         const column = node.arguments[0];
         const pattern = node.arguments[1];
         if (column !== undefined && S3_KEY.test(column.getText(file))) {
-          add("s3-key-like", node.getStart(file));
+          add("s3-key-like", node.getStart(file), node);
         }
         if (pattern !== undefined && startsWithWildcard(pattern, bindings)) {
-          add("leading-wildcard", node.getStart(file));
+          add("leading-wildcard", node.getStart(file), node);
         }
       }
       if (isGroupByCall(node)) {
@@ -355,7 +392,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
         if (containsCorpus(receiver)) {
           for (const argument of node.arguments) {
             if (groupExpression(argument, bindings, file)) {
-              add("group-by-expression", argument.getStart(file));
+              add("group-by-expression", argument.getStart(file), node);
             }
           }
         }
@@ -373,8 +410,9 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
   const hits = rawHits.filter((hit) => {
     const comment = comments.find(
       (entry) =>
-        (entry.line === hit.line || entry.line === hit.line - 1) &&
-        REASON.test(entry.reason),
+        hit.anchorLines.some(
+          (line) => entry.line === line || entry.line === line - 1,
+        ) && REASON.test(entry.reason),
     );
     if (comment === undefined) {
       return true;
