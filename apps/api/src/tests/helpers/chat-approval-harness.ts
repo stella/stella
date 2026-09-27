@@ -27,6 +27,8 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { reapOwnerlessChatTurns } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   findLiveViewViolations,
   findUnstoredWireResults,
@@ -138,6 +140,7 @@ const MAX_BARRIER_POLLS = 2000;
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedRunIdentity,
   CHAT_ORACLE.persistedTurnOutcome,
   CHAT_ORACLE.persistedTurnSettles,
   CHAT_ORACLE.runOutlivesRequest,
@@ -301,9 +304,11 @@ export const createApprovalHarness = ({
   /**
    * `chat.run.outlives-request`: reads of the request after its response,
    * and a turn cut short although its response was read to its end without a
-   * Stop, which only the request's end could have done.
+   * Stop, which only the request's end could have done; and
+   * `chat.persisted.run-identity`: the turn the response names holds the run
+   * id its request posted.
    */
-  const findRequestDependence = async ({
+  const findRunViolations = async ({
     ctx,
     ended,
     turnId,
@@ -314,25 +319,38 @@ export const createApprovalHarness = ({
   }): Promise<OracleViolation[]> => {
     const reads = requestOf(ctx).readsAfterResponse();
     const turn =
-      ended === "complete" && turnId !== null
-        ? await testDb.query.chatTurns.findFirst({
+      turnId === null
+        ? undefined
+        : await testDb.query.chatTurns.findFirst({
             columns: {
               cancellationReason: true,
               interruptionReason: true,
+              runId: true,
               status: true,
             },
             where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
-          })
+          });
+    const reason =
+      ended === "complete"
+        ? (turn?.interruptionReason ?? turn?.cancellationReason)
         : undefined;
-    const reason = turn?.interruptionReason ?? turn?.cancellationReason;
-    return violationsOf(CHAT_ORACLE.runOutlivesRequest, [
-      ...reads.map((read) => ({ readAfterResponse: read })),
-      ...(reason !== undefined &&
-      reason !== null &&
-      CUT_SHORT_REASONS.has(reason)
-        ? [{ cutShortAfterCompleteResponse: { reason, turnId } }]
-        : []),
-    ]);
+    const { runId } = bodyByContext.get(ctx) ?? panic("Unknown send context");
+    return [
+      ...violationsOf(CHAT_ORACLE.runOutlivesRequest, [
+        ...reads.map((read) => ({ readAfterResponse: read })),
+        ...(reason !== undefined &&
+        reason !== null &&
+        CUT_SHORT_REASONS.has(reason)
+          ? [{ cutShortAfterCompleteResponse: { reason, turnId } }]
+          : []),
+      ]),
+      ...violationsOf(
+        CHAT_ORACLE.persistedRunIdentity,
+        turn !== undefined && turn.runId !== runId
+          ? [{ expectedRunId: runId, storedRunId: turn.runId, turnId }]
+          : [],
+      ),
+    ];
   };
 
   /** A request built by hand rather than by a web client. */
@@ -499,7 +517,7 @@ export const createApprovalHarness = ({
       violations: [
         ...settledUnread,
         ...unsettled,
-        ...(await findRequestDependence({
+        ...(await findRunViolations({
           ctx,
           ended: "complete",
           turnId: result.headers.get(CHAT_TURN_ID_HEADER),
@@ -650,7 +668,7 @@ export const createApprovalHarness = ({
     });
     clientFindings.push(
       ...(await awaitSettledTurns(raw.threadId)),
-      ...(await findRequestDependence({ ctx, ended, turnId })),
+      ...(await findRunViolations({ ctx, ended, turnId })),
       ...findWireIdentityViolations(chunks),
       ...findUnstoredWireResults({
         chunks,
@@ -1033,6 +1051,16 @@ export const createApprovalHarness = ({
      */
     crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
       crashingThreads.add(threadId);
+    },
+    /** Runs the scheduler's reaper once, as its minute tick does. */
+    reapOwnerlessTurns: async () => {
+      await reapOwnerlessChatTurns(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          logger: { info: () => undefined },
+          signal: new AbortController().signal,
+        }),
+      );
     },
     /** Restores the model seam and `fetch`; call once the test is done. */
     close: () => {

@@ -519,6 +519,34 @@
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
       },
       "oracle": "chat.run.outlives-request"
+    },
+    {
+      "id": "run-binds-its-id",
+      "fix": "turn ownership",
+      "behaviour": "A run binds the run id its request posted to its turn when it starts.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-persistence.ts",
+      "search": ".set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry(), runId })",
+      "replace": ".set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry() })",
+      "scenario": {
+        "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
+        "test": "runs an approved call to completion after its request is torn down, with nobody reading"
+      },
+      "oracle": "chat.persisted.run-identity"
+    },
+    {
+      "id": "reaper-settles-dead-owner",
+      "fix": "turn ownership",
+      "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
+      "status": "active",
+      "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
+      "search": "async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),",
+      "replace": "async () => await Promise.resolve(),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "settles a dead owner's turn without waiting for the next message"
+      },
+      "oracle": "chat.persisted.turn-settles"
     }
   ]
 }

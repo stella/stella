@@ -32,6 +32,10 @@ import {
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import {
+  REAP_OWNERLESS_CHAT_TURNS_TASK,
+  reapOwnerlessChatTurns,
+} from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import {
   BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
@@ -153,6 +157,7 @@ const SCHEDULER_TASKS = {
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
+  [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
   [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,

@@ -1883,6 +1883,56 @@ describe("a conversation's live view", () => {
   );
 
   test(
+    "settles a dead owner's turn without waiting for the next message",
+    async () => {
+      const { real } = await openConversation();
+      const { harness, threadId } = real;
+      try {
+        harness.script(threadId, [
+          {
+            type: "step",
+            toolCalls: [
+              {
+                arguments: approvalToolArguments("NDA"),
+                toolCallId: "call-nda",
+                toolName: APPROVAL_TOOL_NAME,
+              },
+            ],
+          },
+        ]);
+        await real.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
+        harness.script(threadId, [{ type: "stall" }]);
+        harness.crashDuringNextRequest(threadId);
+        await real.client.approve("call-nda", true);
+        real.client.dispose();
+        // The fixture must reach the fault: the call ran before the process
+        // died, and the turn it ran in is still running.
+        expect(harness.executions).toEqual(["NDA"]);
+
+        await harness.reapOwnerlessTurns();
+
+        real.client = await harness.openWebClient(threadId);
+        await harness.expectSoundWebClient({ client: real.client, threadId });
+        expect(
+          await testDb.query.chatTurns.findMany({
+            columns: { interruptionReason: true, status: true },
+            where: {
+              status: { eq: "interrupted" },
+              threadId: { eq: threadId },
+            },
+          }),
+        ).toEqual([
+          { interruptionReason: "owner-lost", status: "interrupted" },
+        ]);
+        expect(harness.executions).toEqual(["NDA"]);
+      } finally {
+        closeConversation({ real });
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
     "asks again for an approval whose call id an interrupted turn used",
     async () => {
       // Some providers number tool calls per response, so a later turn can

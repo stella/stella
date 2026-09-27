@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/chat/chat-message-persistence";
 import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  CHAT_TURN_RUN_LEASE_MS,
   canAcceptChatTurnOnTx,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -1255,7 +1256,7 @@ describe("durable chat turn persistence", () => {
         {
           executionId: null,
           id: acceptance.id,
-          interruptionReason: "timeout",
+          interruptionReason: "owner-lost",
           leaseExpiresAt: null,
           settledAt: expect.any(Date),
           status: "interrupted",
@@ -1561,7 +1562,7 @@ describe("durable chat turn persistence", () => {
     });
   });
 
-  test("renews a claimed execution past the full provider timeout", async () => {
+  test("renews a claimed execution by the run's heartbeat lease", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
       organizationId: ids.orgA,
@@ -1615,7 +1616,13 @@ describe("durable chat turn persistence", () => {
       where: { id: { eq: execution.id } },
       columns: { leaseExpiresAt: true },
     });
-    expect(turn?.leaseExpiresAt?.getTime()).toBeGreaterThanOrEqual(
+    const leaseExpiresAt = turn?.leaseExpiresAt?.getTime() ?? 0;
+    expect(leaseExpiresAt).toBeGreaterThanOrEqual(
+      beforeRenewal + CHAT_TURN_RUN_LEASE_MS,
+    );
+    // A heartbeat lease, not the claim's: an owner that stops renewing is
+    // found well before the provider timeout.
+    expect(leaseExpiresAt).toBeLessThan(
       beforeRenewal + CHAT_METERED_PROVIDER_TIMEOUT_MS,
     );
   });

@@ -13,6 +13,11 @@ type ShutdownApiServicesOptions = {
   closeDatabaseLoginProbe: (() => Promise<void>) | undefined;
   drainScheduler: Promise<void> | undefined;
   onHttpStopError: (error: unknown) => void;
+  /**
+   * Ends the chat turns this process produces, each storing what it has, so
+   * none waits out its lease; their responses then end too.
+   */
+  relinquishChatTurnRuns: () => Promise<void>;
   stopHttp: () => Promise<void>;
   stopScheduler: () => void;
   stopSse: () => void;
@@ -24,6 +29,7 @@ export const shutdownApiServices = async ({
   closeDatabaseLoginProbe,
   drainScheduler,
   onHttpStopError,
+  relinquishChatTurnRuns,
   stopHttp,
   stopScheduler,
   stopSse,
@@ -35,10 +41,12 @@ export const shutdownApiServices = async ({
   });
   stopSse();
   stopScheduler();
+  const chatTurnRunsRelinquished = relinquishChatTurnRuns();
 
   return await Promise.race([
     Promise.allSettled([
       httpStopped,
+      chatTurnRunsRelinquished,
       drainScheduler,
       closeBackgroundWorkers(),
       closeDatabaseLoginProbe?.(),

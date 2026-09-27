@@ -6,7 +6,10 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
-import { readChatTurnExecutionStanding } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  readChatTurnExecutionStanding,
+  renewChatTurnExecutionLease,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { PersistableChatMessage } from "@/api/handlers/chat/types";
@@ -21,16 +24,36 @@ import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 // A turn's run: the part of a turn that starts at provider dispatch and ends
 // with the turn's stored outcome. The request that claimed the turn hands it
 // over once, and from then on the run is the turn's only owner. Nothing it
-// holds belongs to that request: it keeps its own clock, learns of a stop
-// through this process or its heartbeat, and stores its outcome exactly once,
-// whether or not anyone still reads its response.
+// holds belongs to that request: it keeps its own clock, holds its lease by a
+// heartbeat, learns of a stop through this process or that heartbeat, and
+// stores its outcome exactly once, whether or not anyone still reads its
+// response.
+
+type ChatTurnRunHeartbeat = {
+  /**
+   * How often the run looks at its turn row: the latency bound of a stop
+   * recorded on another instance. A stop reaching this instance aborts at
+   * once.
+   */
+  intervalMs: number;
+  /** Every how many beats the run renews its lease instead of only reading. */
+  renewEvery: number;
+};
 
 /**
- * How often a producing run looks at its turn row: the latency bound of a
- * stop recorded on another instance. A stop reaching this instance aborts at
- * once.
+ * Renewing every 20 s keeps the lease (`CHAT_TURN_RUN_LEASE_MS`, 60 s) alive
+ * across two failed renewals before a live owner could lose it.
  */
-const CHAT_TURN_HEARTBEAT_MS = 5000;
+const CHAT_TURN_RUN_HEARTBEAT = {
+  intervalMs: 5000,
+  renewEvery: 4,
+} as const satisfies ChatTurnRunHeartbeat;
+
+/**
+ * The abort reason of a run that no longer owns its turn: its lease was lost,
+ * or its process is shutting down. It ends the turn as `owner-lost`.
+ */
+export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
 
 const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
@@ -66,7 +89,7 @@ type ChatTurnRunOptions = {
   /** The run's own deadline. It takes no signal, so nothing tied to the
    *  claiming request can end it. */
   deadlineMs: number;
-  heartbeatMs?: number | undefined;
+  heartbeat?: ChatTurnRunHeartbeat | undefined;
   owner: ChatTurnRunOwner;
 };
 
@@ -182,32 +205,65 @@ export class ChatTurnRun {
   }
 
   /**
+   * End the run because its process is going away: it stores what it has as
+   * `owner-lost` and resolves once that is stored.
+   */
+  relinquish(): Promise<undefined> {
+    this.abort(CHAT_TURN_OWNER_LOST_REASON);
+    return this.settled;
+  }
+
+  /**
    * Upstream's explicit-cancel reason, not a `DOMException`: the run then
    * reads as the user's cancel, never as a closed connection.
    */
   private abortForStop(): void {
+    this.abort(RUN_CANCEL_REASON);
+  }
+
+  private abort(reason: string): void {
     const { abortController } = this.control;
     if (!abortController.signal.aborted) {
-      abortController.abort(RUN_CANCEL_REASON);
+      abortController.abort(reason);
     }
   }
 
-  /** Look at the turn row on an interval until the run is cut short. */
+  /**
+   * Look at the turn row on an interval until the run is cut short, renewing
+   * the lease every few beats. A run that finds its turn no longer its own
+   * stops producing: another owner, or the reaper, settles it.
+   */
   private startHeartbeat(): () => void {
-    const { owner } = this.options;
+    const { heartbeat = CHAT_TURN_RUN_HEARTBEAT, owner } = this.options;
+    let beats = 0;
     const beat = async () => {
-      const standing = await readChatTurnExecutionStanding({
+      beats += 1;
+      const lookup = {
         execution: owner.execution,
         safeDb: owner.safeDb,
-      });
-      // A failed read is transient: the lease still holds, and the next beat
-      // asks again.
+      };
+      const standing =
+        beats % heartbeat.renewEvery === 0
+          ? await renewChatTurnExecutionLease(lookup)
+          : await readChatTurnExecutionStanding(lookup);
+      // A failed read or renewal is transient: the lease still holds, and the
+      // next beat asks again.
       if (Result.isError(standing)) {
         observeFailure(standing.error, { sink: HEARTBEAT_FAILED_SINK });
         return;
       }
-      if (standing.value === "stop-requested") {
-        this.abortForStop();
+      switch (standing.value) {
+        case "owned":
+          return;
+        case "stop-requested":
+          this.abortForStop();
+          return;
+        case "lost":
+          this.abort(CHAT_TURN_OWNER_LOST_REASON);
+          return;
+        default:
+          standing.value satisfies never;
+          panic(`Unhandled standing: ${String(standing.value)}`);
       }
     };
     let beating = false;
@@ -222,7 +278,7 @@ export class ChatTurnRun {
         }),
         "chat-turn-run.heartbeat",
       );
-    }, this.options.heartbeatMs ?? CHAT_TURN_HEARTBEAT_MS);
+    }, heartbeat.intervalMs);
     interval.unref();
     const stop = () => {
       clearInterval(interval);
@@ -250,3 +306,12 @@ export class ChatTurnRun {
 export const stopLocalChatTurnRun = (
   executionId: string,
 ): Promise<undefined> | null => producingRuns.get(executionId)?.stop() ?? null;
+
+/**
+ * End every run this process produces as `owner-lost`, for a shutdown: each
+ * stores what it has, so none waits out its lease. Resolves once all are
+ * stored.
+ */
+export const relinquishChatTurnRuns = async (): Promise<void> => {
+  await Promise.all([...producingRuns.values()].map((run) => run.relinquish()));
+};

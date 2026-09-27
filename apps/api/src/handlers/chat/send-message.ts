@@ -79,7 +79,7 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
-  renewChatTurnExecutionLease,
+  startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
@@ -596,10 +596,9 @@ class ChatSendLifecycle {
 
 /**
  * The send's last step before its run starts. A closed connection ends the
- * turn here, the last time the send asks its request anything. The lease is
- * renewed immediately before provider dispatch: connector discovery and prompt
- * assembly can take meaningful time, so the renewal, not the earlier claim,
- * makes the owner cover the entire provider timeout. A stop recorded during
+ * turn here, the last time the send asks its request anything. Then the run
+ * `runId` starts: bound to the turn, with its lease starting now, whatever
+ * connector discovery and prompt assembly took. A stop recorded during
  * preflight ends the turn here, before any provider call. Every refusal leaves
  * the turn settled.
  */
@@ -607,11 +606,13 @@ const prepareDispatch = async ({
   execution,
   isClientConnectionAborted,
   lifecycle,
+  runId,
   safeDb,
 }: {
   execution: ChatTurnExecution;
   isClientConnectionAborted: () => boolean;
   lifecycle: ChatSendLifecycle;
+  runId: string;
   safeDb: SafeDb;
 }): Promise<Result<void, HandlerError<400 | 409 | 500>>> => {
   if (isClientConnectionAborted()) {
@@ -623,8 +624,9 @@ const prepareDispatch = async ({
       }),
     );
   }
-  const leaseRenewal = await renewChatTurnExecutionLease({
+  const leaseRenewal = await startChatTurnRun({
     execution,
+    runId,
     safeDb,
   });
   if (Result.isError(leaseRenewal)) {
@@ -666,6 +668,14 @@ const prepareDispatch = async ({
         new HandlerError({
           status: 409,
           message: "Chat turn lost its durable execution owner",
+        }),
+      );
+    case "run-taken":
+      await lifecycle.failCurrentTurn("internal", false);
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "The run id already names another chat turn",
         }),
       );
     default:
@@ -2282,6 +2292,7 @@ export const createSendMessage = (
             execution: turnExecution,
             isClientConnectionAborted,
             lifecycle,
+            runId: body.runId,
             safeDb,
           }),
         );

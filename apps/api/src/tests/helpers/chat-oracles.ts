@@ -14,6 +14,8 @@ export const CHAT_ORACLE = {
   persistedTurnSettles: "chat.persisted.turn-settles",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn that streamed holds the id of the run its request started. */
+  persistedRunIdentity: "chat.persisted.run-identity",
   /** A turn's run does not depend on the request that started it: once the
    *  handler hands its response back, nothing reads the request, and its end
    *  cuts no turn short whose response is read to the end. */

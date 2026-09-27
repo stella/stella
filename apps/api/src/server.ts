@@ -27,6 +27,7 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import {
   clauseCategoriesRoute,
@@ -641,6 +642,7 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
+      relinquishChatTurnRuns,
       stopHttp: async () => {
         await api.stop();
       },

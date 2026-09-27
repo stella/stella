@@ -375,6 +375,11 @@ export const chatTurns = p.pgTable(
     settledAt: timestamptz("settled_at"),
     /** The first stop request; the execution owner settles on it. */
     cancelRequestedAt: timestamptz("cancel_requested_at"),
+    /**
+     * The client-minted id of the turn's latest run, bound when the run
+     * starts and kept once the turn settles. Unique in the organization.
+     */
+    runId: p.text("run_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -533,6 +538,10 @@ export const chatTurns = p.pgTable(
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
+    p
+      .uniqueIndex("chat_turns_org_run_id_uidx")
+      .on(table.organizationId, table.runId)
+      .where(sql`${table.runId} IS NOT NULL`),
     p
       .index("chat_turns_org_active_lease_idx")
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)

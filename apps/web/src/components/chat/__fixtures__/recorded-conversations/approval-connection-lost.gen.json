@@ -1557,7 +1557,7 @@
                   "refEncoding": "persisted-resource-refs-v2",
                   "turnOutcome": {
                     "type": "interrupted",
-                    "reason": "timeout"
+                    "reason": "owner-lost"
                   }
                 },
                 "role": "assistant",
