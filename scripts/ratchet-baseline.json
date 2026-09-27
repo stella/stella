@@ -414,6 +414,8 @@
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 3,
+      "apps/api/src/lib/legal-search/decision-language-identity.ts": 2,
+      "apps/api/src/lib/legal-search/decision-primary-reference.ts": 1,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 2,
