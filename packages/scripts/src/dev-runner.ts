@@ -21,8 +21,10 @@ import {
   DEFAULT_PORTS,
   MAX_PORT_OFFSET,
   type DevMode,
+  type InfraOffsetSetting,
   readDevRunnerConfig,
 } from "./dev-runner-config";
+import { removeDevRuntime, writeDevRuntime } from "./dev-runtime";
 
 const ENV_FILE_SPECS = [
   {
@@ -51,7 +53,7 @@ const SHARED_DOCKER_HEALTHY_SERVICES = [
 const SHARED_DOCKER_COMPLETED_SERVICES = ["rustfs-setup"] as const;
 const DOCKER_PROJECT_WORKTREE_HASH_LENGTH = 12;
 const STELLA_DOCKER_PROJECT_PATTERN =
-  /^stella-dev(?:-\d+(?:-[a-f0-9]{12})?)?$/u;
+  /^stella-dev(?:-(?<offset>\d+)(?:-(?<worktreeHash>[a-f0-9]{12}))?)?$/u;
 const LEGACY_OBJECT_STORE_SERVICE = "minio";
 const RUSTFS_S3_DEV_ACCESS_KEY = "stella-rustfs-dev";
 const RUSTFS_S3_DEV_SECRET_KEY = "stella-rustfs-dev-secret";
@@ -252,6 +254,12 @@ const legacyDockerProjectName = (infraOffset: number) =>
     ? SHARED_DOCKER_PROJECT_BASE
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
+const worktreeProjectHash = (worktreePath: string) =>
+  createHash("sha256")
+    .update(worktreePath)
+    .digest("hex")
+    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+
 export const dockerProjectName = ({
   infraOffset,
   isWorktree,
@@ -265,11 +273,100 @@ export const dockerProjectName = ({
     return legacyDockerProjectName(infraOffset);
   }
 
-  const worktreeHash = createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
-  return `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}-${worktreeHash}`;
+  return `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}-${worktreeProjectHash(worktreePath)}`;
+};
+
+type StellaDockerProject = {
+  offset: number;
+  worktreeHash: string | undefined;
+};
+
+export const parseStellaDockerProject = (
+  name: string,
+): StellaDockerProject | undefined => {
+  const match = STELLA_DOCKER_PROJECT_PATTERN.exec(name);
+  if (!match) {
+    return undefined;
+  }
+  const offset = match.groups?.["offset"];
+  return {
+    offset: offset === undefined ? 0 : Number.parseInt(offset, 10),
+    worktreeHash: match.groups?.["worktreeHash"],
+  };
+};
+
+// Automatic infrastructure offsets sit on one grid. No difference between two
+// default infrastructure ports is a multiple of the stride (see the invariant
+// test), so two grid offsets never publish the same host port. The grid stays
+// above the application port ranges and below the macOS ephemeral range.
+export const AUTO_INFRA_OFFSET_GRID = {
+  base: 10_000,
+  slots: 2000,
+  stride: 10,
+} as const;
+
+type ResolveAutoInfraOffsetOptions = {
+  isPortFree: (port: number) => Promise<boolean>;
+  // Compose project names seen on this Docker engine, from containers and
+  // volumes alike: a stopped stack keeps its volumes and so its offset.
+  knownProjects: readonly string[];
+  reservedPorts: readonly number[];
+  worktreePath: string;
+};
+
+export const resolveAutoInfraOffset = async ({
+  isPortFree,
+  knownProjects,
+  reservedPorts,
+  worktreePath,
+}: ResolveAutoInfraOffsetOptions): Promise<ResolvedOffset> => {
+  const ownHash = worktreeProjectHash(worktreePath);
+  const projects = knownProjects.flatMap((name) => {
+    const project = parseStellaDockerProject(name);
+    return project ? [project] : [];
+  });
+
+  // The worktree's own project is its recorded assignment: reusing it keeps
+  // the database this checkout already migrated and seeded.
+  const ownOffset = projects
+    .filter((project) => project.worktreeHash === ownHash)
+    .map((project) => project.offset)
+    .toSorted((left, right) => left - right)
+    .at(0);
+  if (ownOffset !== undefined) {
+    return { offset: ownOffset, source: "this worktree's Docker project" };
+  }
+
+  const occupied = new Set(reservedPorts);
+  for (const project of projects) {
+    for (const port of sharedInfraPortList(
+      infraPortsForOffset(project.offset),
+    )) {
+      occupied.add(port);
+    }
+  }
+
+  const { base, slots, stride } = AUTO_INFRA_OFFSET_GRID;
+  const firstSlot = hashSeed(worktreePath) % slots;
+  for (let attempt = 0; attempt < slots; attempt++) {
+    const offset = base + ((firstSlot + attempt) % slots) * stride;
+    const ports = sharedInfraPortList(infraPortsForOffset(offset));
+    if (ports.some((port) => occupied.has(port))) {
+      continue;
+    }
+    const free = await Promise.all(ports.map(isPortFree));
+    if (free.every(Boolean)) {
+      return {
+        offset,
+        source:
+          attempt === 0
+            ? "hashed worktree path"
+            : "hashed worktree path; adjusted for free ports",
+      };
+    }
+  }
+
+  return panic("No automatic infrastructure offset has free ports");
 };
 
 export const portsForOffset = (offset: number): DevPorts => ({
@@ -1123,6 +1220,10 @@ export const ensureWorktreeEnvLinks = ({
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
 const webUrlForPort = (port: number) => `http://localhost:${String(port)}`;
+// The origin the browser, the CLI and Better Auth use; `apiUrlForPort` is the
+// runner's own IPv4 probe address.
+const publicApiUrlForPort = (port: number) =>
+  `http://localhost:${String(port)}`;
 const desktopBridgeUrlForPort = (port: number) =>
   `http://127.0.0.1:${String(port)}`;
 const desktopViewUrlForPort = (port: number) =>
@@ -1141,7 +1242,7 @@ export const createApiEnv = ({
 }) => ({
   ...baseEnv,
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
-  BETTER_AUTH_URL: `http://localhost:${String(ports.api)}`,
+  BETTER_AUTH_URL: publicApiUrlForPort(ports.api),
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
   STELLA_API_PORT: String(ports.api),
@@ -1164,7 +1265,7 @@ export const createWebEnv = ({
   ...baseEnv,
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
-  VITE_API_URL: `http://localhost:${String(ports.api)}`,
+  VITE_API_URL: publicApiUrlForPort(ports.api),
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
 });
 
@@ -1356,6 +1457,7 @@ const runCommandText = ({
 
 const runStep = (step: Step) => {
   console.log(`==> ${step.label}...`);
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
     env: resolveEnv(step.env),
@@ -1366,6 +1468,8 @@ const runStep = (step: Step) => {
   if (!result.success) {
     panic(`${step.label} failed with exit code ${String(result.exitCode)}.`);
   }
+  const seconds = (Temporal.Now.instant().epochMilliseconds - startedAt) / 1000;
+  console.log(`    ${step.label} took ${seconds.toFixed(1)} s`);
 };
 
 const validateApiHealth = (response: Response, bodyText: string) => {
@@ -1579,6 +1683,33 @@ const spawnPersistentStep = (step: Step): RunningStep => {
   };
 };
 
+type BackgroundStep = RunningStep & { startedAt: number };
+
+const startBackgroundStep = (step: Step): BackgroundStep => {
+  console.log(`==> ${step.label}...`);
+  return {
+    ...step,
+    child: Bun.spawn(step.cmd, {
+      cwd: step.cwd,
+      env: resolveEnv(step.env),
+      stderr: "inherit",
+      stdin: "ignore",
+      stdout: "inherit",
+    }),
+    startedAt: Temporal.Now.instant().epochMilliseconds,
+  };
+};
+
+const finishBackgroundStep = async (step: BackgroundStep) => {
+  const exitCode = await step.child.exited;
+  if (exitCode !== 0) {
+    panic(`${step.label} failed with exit code ${String(exitCode)}.`);
+  }
+  const seconds =
+    (Temporal.Now.instant().epochMilliseconds - step.startedAt) / 1000;
+  console.log(`    ${step.label} took ${seconds.toFixed(1)} s`);
+};
+
 const createGitContext = (cwd: string): GitContext => {
   const currentRoot = runCommandText({
     cmd: [resolveCommandPath("git"), "rev-parse", "--show-toplevel"],
@@ -1636,28 +1767,50 @@ export const buildPreparationSteps = ({
   }
 
   if (!skipDbPush && modeIncludesApi(mode)) {
-    const apiBaseEnv = stripAppEnvKeys({
-      baseEnv: process.env,
-      envFilePath: path.resolve(rootDir, "apps/api/.env"),
-    });
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: path.resolve(rootDir, "apps/api"),
-      env: {
-        ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/api/.env"))),
-        ...createApiEnv({
-          baseEnv: apiBaseEnv,
-          infraOffset,
-          infraPorts,
-          ports,
-        }),
-      },
+      env: buildApiEnv({ infraOffset, infraPorts, ports, rootDir }),
       label: "Applying database migrations",
     });
   }
 
   return steps;
 };
+
+type BuildApiEnvOptions = {
+  infraOffset: number;
+  infraPorts: InfraPorts;
+  ports: DevPorts;
+  rootDir: string;
+};
+
+const buildApiEnv = ({
+  infraOffset,
+  infraPorts,
+  ports,
+  rootDir,
+}: BuildApiEnvOptions) => {
+  const envFilePath = path.resolve(rootDir, "apps/api/.env");
+  return {
+    ...expandEnvMap(loadEnvFile(envFilePath)),
+    ...createApiEnv({
+      baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),
+      infraOffset,
+      infraPorts,
+      ports,
+    }),
+  };
+};
+
+// Runs once the API is ready: the test user, its session and Playwright
+// storage state, then the fixture matters, contacts and documents.
+const buildSeedStep = (options: BuildApiEnvOptions): Step => ({
+  cmd: [resolveCommandPath("bun"), "run", "db:seed-local"],
+  cwd: path.resolve(options.rootDir, "apps/api"),
+  env: buildApiEnv(options),
+  label: "Seeding local fixtures",
+});
 
 export const buildPersistentSteps = ({
   infraOffset,
@@ -1672,10 +1825,6 @@ export const buildPersistentSteps = ({
   ports: DevPorts;
   rootDir: string;
 }): PersistentSteps => {
-  const apiBaseEnv = stripAppEnvKeys({
-    baseEnv: process.env,
-    envFilePath: path.resolve(rootDir, "apps/api/.env"),
-  });
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/web/.env"),
@@ -1684,15 +1833,7 @@ export const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = {
-    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/api/.env"))),
-    ...createApiEnv({
-      baseEnv: apiBaseEnv,
-      infraOffset,
-      infraPorts,
-      ports,
-    }),
-  };
+  const apiEnv = buildApiEnv({ infraOffset, infraPorts, ports, rootDir });
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
@@ -1875,6 +2016,7 @@ const openBrowser = (url: string) => {
 const printSummary = ({
   browserWillOpen,
   infraOffset,
+  infraOffsetSource,
   infraPorts,
   preparedEnvFiles,
   mode,
@@ -1885,6 +2027,7 @@ const printSummary = ({
 }: {
   browserWillOpen: boolean;
   infraOffset: number;
+  infraOffsetSource: string;
   infraPorts: InfraPorts;
   preparedEnvFiles: number;
   mode: DevMode;
@@ -1898,8 +2041,10 @@ const printSummary = ({
   console.log(`  mode: ${mode}`);
   console.log(`  root: ${rootDir}`);
   console.log(`  offset: ${String(offset)} (${offsetSource})`);
-  if (infraOffset > 0) {
-    console.log(`  infra offset: ${String(infraOffset)}`);
+  if (modeIncludesApi(mode)) {
+    console.log(
+      `  infra offset: ${String(infraOffset)} (${infraOffsetSource})`,
+    );
   }
   console.log(`  env files prepared: ${String(preparedEnvFiles)}`);
   if (modeIncludesWeb(mode)) {
@@ -1927,6 +2072,7 @@ const printSummary = ({
 const printDryRun = ({
   browserWillOpen,
   infraOffset,
+  infraOffsetSource,
   infraPorts,
   preparedEnvFiles,
   mode,
@@ -1939,6 +2085,7 @@ const printDryRun = ({
 }: {
   browserWillOpen: boolean;
   infraOffset: number;
+  infraOffsetSource: string;
   infraPorts: InfraPorts;
   preparedEnvFiles: number;
   mode: DevMode;
@@ -1952,6 +2099,7 @@ const printDryRun = ({
   printSummary({
     browserWillOpen,
     infraOffset,
+    infraOffsetSource,
     infraPorts,
     preparedEnvFiles,
     mode,
@@ -1973,6 +2121,58 @@ const printDryRun = ({
   }
 };
 
+const readKnownDockerProjects = (rootDir: string) => [
+  ...readDockerComposeProjectOwnershipOutput(rootDir)
+    .split("\n")
+    .map((line) => line.split("\t").at(0) ?? ""),
+  ...runCommandText({
+    cmd: [
+      resolveCommandPath("docker"),
+      "volume",
+      "ls",
+      "--format",
+      '{{.Label "com.docker.compose.project"}}',
+    ],
+    cwd: rootDir,
+  }).split("\n"),
+];
+
+type ResolveInfraOffsetOptions = {
+  gitContext: GitContext;
+  mode: DevMode;
+  ports: DevPorts;
+  setting: InfraOffsetSetting;
+};
+
+const resolveInfraOffset = async ({
+  gitContext,
+  mode,
+  ports,
+  setting,
+}: ResolveInfraOffsetOptions): Promise<ResolvedOffset> => {
+  switch (setting.type) {
+    case "fixed": {
+      return { offset: setting.offset, source: "configured" };
+    }
+    case "auto": {
+      // Web-only modes start no containers, and the root checkout owns the
+      // default ports.
+      if (!modeIncludesApi(mode) || !gitContext.isWorktree) {
+        return { offset: 0, source: "default ports" };
+      }
+      return await resolveAutoInfraOffset({
+        isPortFree: async (port) => await checkPortAvailabilityOnHosts(port),
+        knownProjects: readKnownDockerProjects(gitContext.mainRoot),
+        reservedPorts: requiredPortsForMode(mode, ports),
+        worktreePath: gitContext.canonicalRoot,
+      });
+    }
+    default: {
+      return setting satisfies never;
+    }
+  }
+};
+
 const main = async () => {
   const config = readDevRunnerConfig();
   if (Result.isError(config)) {
@@ -1986,7 +2186,31 @@ const main = async () => {
     mainRoot: gitContext.mainRoot,
   });
 
-  const { devInstance, infraOffset, mode, portOffset } = parsedArgs;
+  const { devInstance, mode, portOffset } = parsedArgs;
+  // Offsets resolve before any process or container starts, so a signal
+  // during resolution has nothing to clean up.
+  const initialOffset = resolveOffset({
+    devInstance,
+    isWorktree: gitContext.isWorktree,
+    portOffset,
+    worktreePath: gitContext.canonicalRoot,
+  });
+  const resolvedOffset = await findFirstAvailableOffset({
+    mode,
+    startOffset: initialOffset.offset,
+  });
+  const ports = portsForOffset(resolvedOffset);
+  const offsetSource =
+    resolvedOffset === initialOffset.offset
+      ? initialOffset.source
+      : `${initialOffset.source}; adjusted for free ports`;
+  const resolvedInfraOffset = await resolveInfraOffset({
+    gitContext,
+    mode,
+    ports,
+    setting: parsedArgs.infraOffset,
+  });
+  const infraOffset = resolvedInfraOffset.offset;
   const infraPorts = infraPortsForOffset(infraOffset);
   const dockerProject = dockerProjectName({
     infraOffset,
@@ -1996,6 +2220,9 @@ const main = async () => {
   const composeFile = path.resolve(gitContext.mainRoot, "docker-compose.yml");
   const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
   const children: RunningStep[] = [];
+  // One-shot steps running beside the servers; kept apart from `children`,
+  // whose first exit means a server died.
+  const backgroundSteps: BackgroundStep[] = [];
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
@@ -2005,8 +2232,11 @@ const main = async () => {
     }
 
     isShuttingDown = true;
+    removeDevRuntime(gitContext.currentRoot, process.pid);
     cleanupPromise = (async () => {
-      const forcedChildren = await stopChildren({ children });
+      const forcedChildren = await stopChildren({
+        children: [...children, ...backgroundSteps],
+      });
       if (forcedChildren.length > 0) {
         console.warn(
           `Forced ${forcedChildren.join(", ")} to exit after the graceful shutdown deadline.`,
@@ -2052,21 +2282,6 @@ const main = async () => {
     });
   }
 
-  const initialOffset = resolveOffset({
-    devInstance,
-    isWorktree: gitContext.isWorktree,
-    portOffset,
-    worktreePath: gitContext.canonicalRoot,
-  });
-  const resolvedOffset = await findFirstAvailableOffset({
-    mode,
-    startOffset: initialOffset.offset,
-  });
-  const ports = portsForOffset(resolvedOffset);
-  const offsetSource =
-    resolvedOffset === initialOffset.offset
-      ? initialOffset.source
-      : `${initialOffset.source}; adjusted for free ports`;
   const preparationSteps = buildPreparationSteps({
     infraOffset,
     infraPorts,
@@ -2096,6 +2311,7 @@ const main = async () => {
     printDryRun({
       browserWillOpen,
       infraOffset,
+      infraOffsetSource: resolvedInfraOffset.source,
       infraPorts,
       preparedEnvFiles,
       mode,
@@ -2190,11 +2406,42 @@ const main = async () => {
       }
     }
 
+    // The seed needs only the migrated database, so it runs while the
+    // servers boot rather than after them.
+    const seeds = parsedArgs.seed && modeIncludesApi(mode);
+    if (seeds) {
+      backgroundSteps.push(
+        startBackgroundStep(
+          buildSeedStep({
+            infraOffset,
+            infraPorts,
+            ports,
+            rootDir: gitContext.currentRoot,
+          }),
+        ),
+      );
+    }
+
     const primaryChildren = startSteps(persistentSteps.primary);
     await waitForReadinessChecks(primaryChildren, readinessChecks.primary);
 
     const secondaryChildren = startSteps(persistentSteps.secondary);
     await waitForReadinessChecks(secondaryChildren, readinessChecks.secondary);
+
+    for (const step of backgroundSteps) {
+      await finishBackgroundStep(step);
+    }
+
+    writeDevRuntime(gitContext.currentRoot, {
+      apiUrl: modeIncludesApi(mode) ? publicApiUrlForPort(ports.api) : null,
+      dockerProject: modeIncludesApi(mode) ? dockerProject : null,
+      infraOffset,
+      mode,
+      pid: process.pid,
+      seeded: seeds,
+      startedAt: Temporal.Now.instant().toString(),
+      webUrl: modeIncludesWeb(mode) ? webUrlForPort(ports.web) : null,
+    });
 
     if (browserWillOpen && !openBrowser(webUrlForPort(ports.web))) {
       console.warn(
@@ -2205,6 +2452,7 @@ const main = async () => {
     printSummary({
       browserWillOpen,
       infraOffset,
+      infraOffsetSource: resolvedInfraOffset.source,
       infraPorts,
       preparedEnvFiles,
       mode,

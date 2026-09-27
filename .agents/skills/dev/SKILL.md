@@ -1,97 +1,93 @@
 ---
 name: dev
-description: 'Launch the local dev environment using the project''s dev-runner. The runner handles env symlinks, migrations, port allocation, and readiness checks; worktree infrastructure needs an independently owned offset.'
+description: "Start, drive and measure the local stack. `bun run agent:up` gives a checkout its own seeded, signed-in stack in one blocking command; `agent:cli` and `agent:drive` exercise it and write evidence (screenshots, browser errors, failed API calls, timings)."
 ---
 
-# Dev Server
+# Local Stack
 
-Launch the local dev environment using the project's `dev-runner`
-(`packages/scripts/src/dev-runner.ts`). The runner handles env
-symlinks, Docker services, migrations, port allocation, and health
-checks.
+Use this whenever a change needs to be seen working, not just type-checked:
+a UI change, an API behaviour, a performance claim.
 
-## Instructions
+## 1. Start
 
-1. **Resolve application ports** (dry run):
+```bash
+bun run agent:up
+```
 
-   Run the dev-runner in dry-run mode to learn which ports it will
-   use. The runner hashes the canonical worktree path into a port
-   offset, so multiple worktrees can run simultaneously and
-   switching branches inside one worktree keeps its ports.
+It blocks until the stack is ready and prints the web and API URLs. The
+first start takes about half a minute (Docker services, migrations, and the
+fixture seed while the servers boot; each step logs how long it took);
+later runs reuse the running stack instantly. Interrupting `up` stops the runner it started,
+and a retry joins a runner that is still starting. The runner is
+`packages/scripts/src/dev-runner.ts` started detached with `--seed`:
 
-   ```bash
-   bun run dev --dry-run --skip-install --no-browser
-   ```
+- Worktrees get their own ports and Docker project automatically
+  (`--infra-offset auto`, the default). The root checkout keeps the
+  default ports. Never reset or repair a database another checkout owns.
+- The seed signs in `test@stella.dev`, owner of the fixture firm, with
+  matters, contacts and documents; the same data every time.
+- A machine API key for that owner is minted through `/v1/api-keys`.
+- State lives in `.stella-dev/` (gitignored): `runtime.json`,
+  `runner.log`, `agent.env`, evidence and saved measurements.
 
-   If this exits before the runner starts with a missing-package or
-   module-resolution error, run `bun ci` once and retry the exact same
-   dry-run command. Do not treat other failures as bootstrap errors or retry
-   them this way.
+`bun run agent:status` prints the live URLs; `bun run agent:down` stops the
+stack (volumes and data survive). Leave it running while you iterate; the API
+and web servers reload on save.
 
-   Parse the numeric `offset:` and the `web:` and `api:` URLs. This
-   offset covers application ports only; do not copy it into
-   `--infra-offset` without the independent ownership check below.
+If `up` fails, read the tail it prints and `.stella-dev/runner.log`; fix the
+cause and rerun. Do not start a second runner by hand in the same checkout.
 
-2. **Resolve infrastructure ownership**:
+## 2. Drive the API
 
-   Offset `0` belongs to the root checkout and its shared Docker
-   project. A non-root worktree needs a stable non-zero offset whose
-   Compose project and volumes belong to that worktree.
+```bash
+bun run agent:cli -- matter list --json
+bun run agent:cli -- document list --matter-id <id>
+```
 
-   Reuse a previously recorded assignment for the same canonical
-   worktree path. For a new assignment, select from the full valid
-   infrastructure range, reserve the candidate with a race-safe
-   lock, and validate all five shifted ports (Postgres, Valkey,
-   RustFS API, RustFS console, and Gotenberg). Reject the candidate if
-   any of those ports intersects the dry-run web or API ports, or if
-   any container or Docker volume already uses the corresponding
-   `stella-dev-<offset>` project unless its Compose working-directory
-   label matches this worktree. Probe another candidate on any
-   ownership or port collision.
+`agent:cli` runs the `stella` CLI from this checkout against the stack with
+the minted key, so it sees the MCP registry of the code on disk. It is also
+the quickest way to find ids: a matter opens at `/workspaces/<matter id>`.
 
-   The runner hashes application offsets into only 400 buckets and
-   checks application ports separately. That hash is not an
-   infrastructure ownership mechanism, and adjacent infrastructure
-   offsets can overlap because RustFS uses consecutive ports.
+## 3. Drive the web app
 
-3. **Start the dev runner**:
+```bash
+bun run agent:drive -- snap /workspaces /chat/new
+bun run agent:drive -- run path/to/flow.ts
+```
 
-   Launch the full runner in the background. It manages Docker
-   services, env symlinks, `db:push`, process lifecycle, and
-   readiness polling internally.
+`snap` opens each path signed in, waits until `main` is visible, loading
+placeholders are gone and the API is quiet, then screenshots it. `run`
+imports a script that default-exports
+`async ({ page, snap, webUrl, apiUrl }) => {}` (a Playwright `page`) for flows
+that need clicks or typing. `snap("label", { waitFor: "<selector>" })`
+records a step after the same readiness checks; name the element that
+proves the step rendered, since `main` alone can be a loading screen.
 
-   ```bash
-   bun run dev --no-browser --infra-offset <resolved-offset>
-   ```
+Each command prints a Markdown report and exits 1 when the page showed a
+problem: a browser error, a 5xx API response, a sign-in redirect, the route
+error boundary, content that never finished loading, or API calls still
+running after 20 s. Look at the
+screenshots; a clean report with the wrong content is still wrong.
 
-   Run this in the background. The runner exits if any child
-   process dies, so a single background command covers everything.
-   Keep dependency installation enabled on the first run. Add
-   `--skip-install` only when this worktree is already bootstrapped
-   and its dependencies have not changed.
+## 4. Measure
 
-4. **Handle cold-start setup safely**:
+```bash
+bun run agent:drive -- measure /workspaces --save before
+# change the code; the dev servers reload
+bun run agent:drive -- measure /workspaces --compare before
+```
 
-   The first isolated run creates Docker volumes and applies every
-   migration, so it can take longer. Never reset or repair the
-   shared database to resolve migration drift. In a non-root
-   worktree, confirm the command uses its owned non-zero
-   `--infra-offset`; in the root checkout, keep offset `0`.
+Reports the median of several samples after a warm-up: settle time,
+DOMContentLoaded, largest contentful paint, API request count, waterfall
+depth, DB queries and API payload. Timing deltas inside the sample spread are
+marked as noise; do not claim them, and repeat a pair before claiming one
+outside the spread. Request, query and payload counts are page totals, so a
+repeated call shows up. It is a dev build, so compare runs with
+each other, never with production numbers. Committed CI budgets stay with
+the route-smoke suite (`/conventions-perf`).
 
-   If the runner completes infrastructure and migrations but exits
-   only because its application-readiness deadline elapsed, rerun
-   the same command once. The expensive setup is cached. If the
-   second run fails, inspect its logs and report the blocker.
+## 5. Report evidence
 
-5. **Use the runner's readiness result**:
-
-   Capture the live runner output and read the final summary for the
-   exact web and API URLs. Infrastructure startup or another process
-   can make the runner move away from the dry-run application offset,
-   so never poll or report the preliminary URLs from step 1. The
-   runner prints its final summary only after its bounded internal
-   readiness checks pass; do not duplicate those checks or open a
-   browser to verify them again.
-
-6. **Report** the resolved URLs and status to the user. Leave the
-   runner active until the user asks to stop it.
+When handing work back, say what you ran and what it showed: the command,
+the report's findings, and the screenshot or measurement paths. A before and
+after pair is the evidence for a performance claim.

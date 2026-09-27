@@ -24,13 +24,22 @@ export const MAX_PORT_OFFSET =
 
 export type DevRunnerEnvironment = Readonly<Record<string, string | undefined>>;
 
+const AUTO_INFRA_OFFSET = "auto";
+
+// `auto` lets the runner pick (and later reuse) a worktree-owned offset; a
+// number pins it. Unset means `auto`, which resolves to 0 in the root checkout.
+export type InfraOffsetSetting =
+  | { type: "auto" }
+  | { type: "fixed"; offset: number };
+
 export type DevRunnerConfig = {
   devInstance: string | undefined;
   dryRun: boolean;
-  infraOffset: number;
+  infraOffset: InfraOffsetSetting;
   mode: DevMode;
   noBrowser: boolean;
   portOffset: number | undefined;
+  seed: boolean;
   skipDbPush: boolean;
   skipInstall: boolean;
 };
@@ -138,6 +147,7 @@ const parseCliArgs = (
   let skipDbPush = false;
   let dryRun = false;
   let noBrowser = false;
+  let seed = false;
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
@@ -162,6 +172,10 @@ const parseCliArgs = (
     }
     if (arg === "--no-browser") {
       noBrowser = true;
+      continue;
+    }
+    if (arg === "--seed") {
+      seed = true;
       continue;
     }
 
@@ -197,9 +211,24 @@ const parseCliArgs = (
     mode,
     noBrowser,
     portOffset,
+    seed,
     skipDbPush,
     skipInstall,
   });
+};
+
+const parseInfraOffset = (
+  value: string | undefined,
+  source: string,
+): Result<InfraOffsetSetting, DevRunnerConfigError> => {
+  if (value === undefined || value === AUTO_INFRA_OFFSET) {
+    return Result.ok({ type: "auto" });
+  }
+  const offset = parseInteger(value, source, MAX_INFRA_OFFSET);
+  if (Result.isError(offset)) {
+    return Result.err(offset.error);
+  }
+  return Result.ok({ type: "fixed", offset: offset.value });
 };
 
 export const parseDevRunnerConfig = ({
@@ -225,10 +254,9 @@ export const parseDevRunnerConfig = ({
   if (Result.isError(portOffset)) {
     return portOffset;
   }
-  const infraOffset = parseIntegerOption(
-    cliInfraOffset ?? environment["STELLA_INFRA_OFFSET"] ?? "0",
+  const infraOffset = parseInfraOffset(
+    cliInfraOffset ?? environment["STELLA_INFRA_OFFSET"],
     cliInfraOffset === undefined ? "STELLA_INFRA_OFFSET" : "--infra-offset",
-    MAX_INFRA_OFFSET,
   );
   if (Result.isError(infraOffset)) {
     return infraOffset;
@@ -246,7 +274,7 @@ export const parseDevRunnerConfig = ({
   return Result.ok({
     ...flags,
     devInstance: devInstance.value,
-    infraOffset: infraOffset.value ?? 0,
+    infraOffset: infraOffset.value,
     portOffset: portOffset.value,
   });
 };

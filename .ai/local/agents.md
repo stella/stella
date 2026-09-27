@@ -61,6 +61,10 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
+To see a change working, `bun run agent:up` starts this checkout's own
+seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
+write evidence. See the `dev` skill.
+
 Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
 
