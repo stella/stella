@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   DYNAMIC_TOOL_NAMESPACES,
@@ -20,8 +23,19 @@ import {
   getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
-import { defineMcpToolOutput } from "@/api/mcp/valibot-tool-definition";
+import type {
+  McpToolDefinition,
+  RuntimeMcpToolOutputContract,
+} from "@/api/mcp/tool-types";
+import {
+  defineMcpToolOutput,
+  deriveUncompactedMcpOutputSchema,
+} from "@/api/mcp/valibot-tool-definition";
+import {
+  compileWireSchema,
+  createWireSchemaValidator,
+  schemaComparisonArbitrary,
+} from "@/api/tests/helpers/wire-json-schema";
 
 import {
   diffMcpSurfaceBaseline,
@@ -432,6 +446,127 @@ describe("MCP static tool-set coherence", () => {
   test("static tool names are unique across tool sets", () => {
     const names = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+/**
+ * The generator's own tests read its output through its own eyes. These read
+ * every published schema with an independent draft-07 validator: each one
+ * compiles, and each compacted output schema accepts exactly the values its
+ * uncompacted projection accepts, over values drawn from both schemas and
+ * near misses of them.
+ */
+describe("MCP wire schemas under an independent validator", () => {
+  const validator = createWireSchemaValidator();
+
+  // Two sources that compact to one published schema are distinct inputs to
+  // the equivalence check, so a contract is keyed by both projections.
+  const contractKey = (
+    contract: Pick<
+      RuntimeMcpToolOutputContract,
+      "outputSchema" | "outputSchemaSource"
+    >,
+  ): string =>
+    JSON.stringify([
+      contract.outputSchema,
+      deriveUncompactedMcpOutputSchema(contract.outputSchemaSource),
+    ]);
+
+  const outputContracts = () => {
+    const contracts = new Map<
+      string,
+      Pick<
+        RuntimeMcpToolOutputContract,
+        "outputSchema" | "outputSchemaSource"
+      > & {
+        tool: string;
+      }
+    >();
+    for (const mode of MCP_MODES) {
+      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
+        const contract = getStaticMcpToolOutputContract(tool.name, mode);
+        if (contract !== undefined) {
+          contracts.set(contractKey(contract), {
+            tool: `${mode}/${tool.name}`,
+            ...contract,
+          });
+        }
+      }
+    }
+    for (const [family, policy] of Object.entries(
+      DYNAMIC_TOOL_FAMILY_POLICIES,
+    )) {
+      if (policy.owner === "stella") {
+        contracts.set(contractKey(policy.output), {
+          tool: `family/${family}`,
+          ...policy.output,
+        });
+      }
+    }
+    return [...contracts.values()];
+  };
+
+  test.each([...MCP_MODES])(
+    "every %s input and output schema compiles",
+    (mode) => {
+      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
+        expect(
+          () => compileWireSchema(validator, tool.inputSchema),
+          `${tool.name} inputSchema`,
+        ).not.toThrow();
+        if (tool.outputSchema !== undefined) {
+          const { outputSchema } = tool;
+          expect(
+            () => compileWireSchema(validator, outputSchema),
+            `${tool.name} outputSchema`,
+          ).not.toThrow();
+        }
+      }
+    },
+  );
+
+  test("every output schema accepts exactly what its uncompacted projection accepts", () => {
+    let compacted = 0;
+    for (const {
+      tool,
+      outputSchema,
+      outputSchemaSource,
+    } of outputContracts()) {
+      const uncompacted = deriveUncompactedMcpOutputSchema(outputSchemaSource);
+      if (JSON.stringify(uncompacted) === JSON.stringify(outputSchema)) {
+        continue;
+      }
+      compacted += 1;
+      expect(
+        JSON.stringify(outputSchema).length,
+        `${tool} compacted output schema`,
+      ).toBeLessThan(JSON.stringify(uncompacted).length);
+
+      const acceptsCompacted = compileWireSchema(validator, outputSchema);
+      const acceptsUncompacted = compileWireSchema(validator, uncompacted);
+      let accepted = 0;
+      let rejected = 0;
+      fc.assert(
+        fc.property(
+          schemaComparisonArbitrary([uncompacted, outputSchema]),
+          (value) => {
+            const expected = acceptsUncompacted(value);
+            // fast-check reports the value that disagreed.
+            expect(acceptsCompacted(value), tool).toBe(expected);
+            if (expected) {
+              accepted += 1;
+            } else {
+              rejected += 1;
+            }
+          },
+        ),
+        propertyConfig({ numRuns: 200 }),
+      );
+      // Both verdicts must occur, or the comparison proved nothing.
+      expect(accepted, `${tool} accepted no drawn value`).toBeGreaterThan(0);
+      expect(rejected, `${tool} rejected no drawn value`).toBeGreaterThan(0);
+    }
+    expect(compacted).toBeGreaterThan(0);
   });
 });
 

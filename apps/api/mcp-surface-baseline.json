@@ -7,11 +7,11 @@
         "title": 1166,
         "description": 27834,
         "inputSchema": 73908,
-        "outputSchema": 55085,
+        "outputSchema": 51056,
         "annotations": 7155,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 172314,
+      "payloadUtf8Bytes": 168285,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -22,7 +22,7 @@
       },
       "largestOutputSchema": {
         "tool": "read_document",
-        "chars": 3434
+        "chars": 2976
       }
     },
     "documents": {
@@ -32,11 +32,11 @@
         "title": 255,
         "description": 5636,
         "inputSchema": 14432,
-        "outputSchema": 8840,
+        "outputSchema": 8151,
         "annotations": 1502,
         "instructions": 888
       },
-      "payloadUtf8Bytes": 32258,
+      "payloadUtf8Bytes": 31569,
       "largestDescription": {
         "tool": "compare_documents",
         "chars": 770
@@ -47,7 +47,7 @@
       },
       "largestOutputSchema": {
         "tool": "read_document",
-        "chars": 3434
+        "chars": 2976
       }
     },
     "anonymized": {
@@ -57,11 +57,11 @@
         "title": 496,
         "description": 13136,
         "inputSchema": 22201,
-        "outputSchema": 33799,
+        "outputSchema": 30563,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 75359,
+      "payloadUtf8Bytes": 72123,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
@@ -72,7 +72,7 @@
       },
       "largestOutputSchema": {
         "tool": "read_document",
-        "chars": 3434
+        "chars": 2976
       }
     },
     "law": {
@@ -82,11 +82,11 @@
         "title": 176,
         "description": 6018,
         "inputSchema": 10039,
-        "outputSchema": 9831,
+        "outputSchema": 8593,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 28042,
+      "payloadUtf8Bytes": 26804,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
@@ -97,7 +97,7 @@
       },
       "largestOutputSchema": {
         "tool": "search_case_law",
-        "chars": 2417
+        "chars": 2180
       }
     }
   }

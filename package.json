@@ -218,6 +218,8 @@
     "@typescript-eslint/utils": "8.70.0",
     "bun-types": "1.4.2",
     "@vitejs/plugin-react": "^6.1.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "better-auth": "1.7.5",
     "better-result": "3.0.1",
     "cldr-misc-full": "48.2.0",
