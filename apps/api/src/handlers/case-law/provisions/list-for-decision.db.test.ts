@@ -236,7 +236,7 @@ test("pre-grant reader serves legacy links and picks up status grants without a 
       publishedProjectionDigest: null,
     });
     if (!("items" in fallback) || fallback.nextCursor === null) {
-      return panic("expected a pre-grant cursor page");
+      panic("expected a pre-grant cursor page");
     }
     await setStatusGrants("grant");
     expect(await page(id, fallback.nextCursor)).toMatchObject({
@@ -265,7 +265,8 @@ test("status precedence uses the decision, scope, and current payload before pub
   const outOfScopeWithheld = await decision({ language: "sk", redacted: true });
   const withheld = await decision({ redacted: true });
   const unavailable = await decision({
-    contentHash: EMPTY_CORPUS_CONTENT_HASHES.at(0),
+    contentHash:
+      EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? panic("Missing empty corpus hash"),
   });
   const nullHashEnvelope = await decision({ contentHash: null });
   const unplaceable = await decision();
@@ -454,7 +455,7 @@ test("cursor binds to the full bigint generation and orders span then anchor", a
     status: { type: "current" },
   });
   if (!("items" in first) || first.nextCursor === null) {
-    return panic("expected first cursor page");
+    panic("expected first cursor page");
   }
   expect(first.nextCursor).toBe(
     encodePaginationCursor(["9007199254740993", 10, "b"]),

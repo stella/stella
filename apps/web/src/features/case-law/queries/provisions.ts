@@ -1,15 +1,16 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import { Result } from "better-result";
 
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
-import { APIError } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const PROVISIONS_PAGE_SIZE = 50;
+const DECISION_PROVISIONS_ACTION = "listPublicDecisionProvisions";
+/** A cursor minted before the decision's provisions were regenerated. */
+const GENERATION_CONFLICT_STATUS = 409;
 /** The endpoint's own maximum page. */
 const PROVISIONS_LINKING_PAGE_SIZE = 100;
 /**
@@ -69,7 +70,7 @@ const fetchDecisionProvisionsPage = async ({
       fetch: { signal },
     });
 
-  return unwrapPublicLawEden(response, "listPublicDecisionProvisions");
+  return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
 };
 
 type DecisionProvisionsPage = Awaited<
@@ -81,32 +82,29 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   infiniteQueryOptions({
     queryKey: decisionProvisionKeys.forDecision(decisionId),
     queryFn: async ({ client, pageParam, signal }) => {
-      const page = await Result.tryPromise({
-        try: async () =>
-          await fetchDecisionProvisionsPage({
-            cursor: pageParam,
-            decisionId,
+      // Read here rather than through fetchDecisionProvisionsPage: a conflict
+      // is classified from the response before it is unwrapped.
+      const response = await api.case
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+        .provisions.get({
+          query: {
             limit: PROVISIONS_PAGE_SIZE,
-            signal,
-          }),
-        catch: (cause: unknown) => cause,
-      });
-      if (Result.isError(page)) {
-        if (
-          pageParam !== null &&
-          APIError.is(page.error) &&
-          page.error.status === 409
-        ) {
-          // Reset cancels this fetch and starts the active observer again with
-          // no old pages. Clearing data alone would not change its captured pages.
-          await client.resetQueries({
-            queryKey: decisionProvisionKeys.forDecision(decisionId),
-            exact: true,
-          });
-        }
-        throw page.error;
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+      if (
+        pageParam !== null &&
+        response.error?.status === GENERATION_CONFLICT_STATUS
+      ) {
+        // Reset cancels this fetch and starts the active observer again with
+        // no old pages. Clearing data alone would not change its captured pages.
+        await client.resetQueries({
+          queryKey: decisionProvisionKeys.forDecision(decisionId),
+          exact: true,
+        });
       }
-      return page.value;
+      return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
