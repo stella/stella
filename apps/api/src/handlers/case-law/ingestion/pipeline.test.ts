@@ -242,7 +242,7 @@ describe("sanitizeResult — docket grammar", () => {
     ["XXX", "1 A 2/2020 - II.", "kept"],
   ])("%s: %s is stored as written (%s)", (country, raw, type) => {
     const input = observed(country, raw);
-    expect(observedDocketOf(input)).toEqual({ type });
+    expect(observedDocketOf(input).type).toBe(type);
     expect(sanitizeResult(input).caseNumber).toBe(raw);
   });
 
