@@ -67,7 +67,7 @@ const deliveryMetadataSchema = v.strictObject({
   }),
 });
 
-export class InboundIngestError extends TaggedError("InboundIngestError")<{
+class InboundIngestError extends TaggedError("InboundIngestError")<{
   message: string;
   reason:
     | "invalid-envelope"

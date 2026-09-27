@@ -319,13 +319,6 @@ export const parseProviderAuthentication = ({
   return Result.ok(auth);
 };
 
-export const createProviderMailVerifier =
-  (metadata: Omit<ProviderAuthOptions, "fromAddress">): MailVerifier =>
-  async ({ fromAddress }) =>
-    await Promise.resolve(
-      parseProviderAuthentication({ ...metadata, fromAddress }),
-    );
-
 type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
 
 type MailDnsBackend = {

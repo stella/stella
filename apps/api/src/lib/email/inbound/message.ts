@@ -25,7 +25,7 @@ export type InboundAttachment = {
   bytes: Uint8Array;
 };
 
-export type NormalizedInboundMessage = {
+type NormalizedInboundMessage = {
   from: string | null;
   to: string[];
   cc: string[];

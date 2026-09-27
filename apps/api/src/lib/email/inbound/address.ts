@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 const TOKEN_BYTES = 32;
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
-export class InboundAddressError extends TaggedError("InboundAddressError")<{
+class InboundAddressError extends TaggedError("InboundAddressError")<{
   message: string;
 }> {}
 
