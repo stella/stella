@@ -499,9 +499,10 @@ const apiPortableSafeIdBrandingImport = {
 // The model factory builds every provider text adapter and holds its stream
 // to the provider stream contract (one terminal event, last; a cut-off stream
 // is a run error). An adapter built anywhere else skips that contract, so the
-// adapter packages' runtime entry points belong to the factory; type-only
-// imports stay allowed.
+// runtime entry points of the adapter packages, and of the adapter subclass
+// the factory builds, belong to the factory; type-only imports stay allowed.
 export const API_PROVIDER_ADAPTER_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
   "@tanstack/ai-anthropic",
   "@tanstack/ai-anthropic/byok",
   "@tanstack/ai-anthropic/vertex",
