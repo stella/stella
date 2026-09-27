@@ -2,8 +2,8 @@
   "format": 1,
   "provider": "openrouter",
   "scenario": "length",
-  "source": "synthetic",
-  "basis": "OpenRouter Chat Completions streaming reference: data-only SSE chat.completion.chunk events with comment keep-alives, a final usage chunk and [DONE]",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T08:32:36.324Z",
   "model": "openai/gpt-6-sol",
   "exchanges": [
     {
@@ -14,23 +14,17 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "text/event-stream; charset=utf-8"
+          "content-type": "text/event-stream"
         },
         "body": {
           "encoding": "text",
-          "text": ": OPENROUTER PROCESSING\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"One, two,\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" three, four,\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" five, six\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"length\",\"native_finish_reason\":\"max_output_tokens\"}]}\n\ndata: {\"id\":\"gen-1790107367-cAsSeTtEpLaYs0000000\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"service_tier\":\"default\",\"usage\":{\"prompt_tokens\":22,\"completion_tokens\":16,\"total_tokens\":38,\"cost\":0.0001875,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0,\"audio_tokens\":0,\"video_tokens\":0},\"cost_details\":{\"upstream_inference_cost\":null,\"upstream_inference_prompt_cost\":0.0000275,\"upstream_inference_completions_cost\":0.00016},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"image_tokens\":0,\"audio_tokens\":0}},\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"length\",\"native_finish_reason\":\"max_output_tokens\"}]}\n\ndata: [DONE]\n\n"
+          "text": ": OPENROUTER PROCESSING\n\n: OPENROUTER PROCESSING\n\n: OPENROUTER PROCESSING\n\ndata: {\"id\":\"[id]\",\"object\":\"chat.completion.chunk\",\"created\":1790497954,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\",\"reasoning\":null,\"reasoning_details\":[{\"type\":\"reasoning.encrypted\",\"data\":\"gAAAAABquNSjAE8b55EaPyxQv_3g4zr455Z5WcKJWCm1aRegxdSMxioZaiFviAQdHCgFgSVrgbc-D34rHdTJ4QRt2jSJxOvUxYRFMnHnyqfWuEtnet5uh9KwUFihYj9cxxlQDoF32UpTKCnJK1U_SlZ5DqUnRspTUBsH_Su87GUYrzO_Lc-M8Cwtz8M6PBTJEW6KKtn1CC7qoTcAeAXRMuwB9iNbmemyfn5-L1o1qP3uppJl3RIWtCKoJyqlX-vQAgAH3IaHPpEltH46700OKYJUJW92ofelkm2fodFef0xNcjlEee5ZbDhKcFzhuxiS4qJnIcHWkZd4KoxCtrJQyTlWvAsjzLnwBtv_kxzg3FBuwFcB6DdzNsD5s8wtupUp5uIkW0Su3avWyCVxT47xdtX94btmGERgPudUPz95iQloixazN1wuY2jL69A7n71yn3bZRLcyqdEmAMPonqeWDoY4pvRRZWtcRli17y7A3M2-OEEYfRURst7J70cXmJqn_9zxT3zJV4v1dhiVvSJAy-OxU0ZWIxDtzJzOjqRm9xG3F7eaPXr4IQWWTW4VFn7Yq5HRhbj8zU3F7nZ0LoVvXvdmwB4ZweUlj6DlrVy_q1aT3YMsWZZqvfCRM_knfov_SuRFH0vhLyUO554HxMpeIutyP8jGPXsif7hoAkn7fgnEiVk7fqWP1VH4_AO6B9CnZ_zbUjlo9L0ouvCOtQp-VfRw8snqkdbBH457otwZhn4Jr1QkQUbw7Zox9VWjMpLnMCZoU5ycu4rQXq4OkcijF6Tah_pFSM4XS_E_V7zSePV7QoIohtE-nywrYh74GcOs7z8G2RIIhdUJaWB_f5QzjdC2wDJUkMPRAZ7Wn0YNlZqHaopBwTfhnJRdAnbBKqKbC-ExK5DtzoYwi5VAbh_4jnPv7NzmiexJYOdWQ_0t1OBhA3V-ZjRiAXMIhrmPzoOTpCfl-hTtRQvDdlrzCXSAF_C7Q_avhnqt9iOlCIIUxoV0NYwAyW0LGjFg3FUOEBgpITyxCZYS8T9ked6l2qGkLZTztn_6S_PypFMtDbqyf4iHq8x2-3W3yf_-BYB4t1z6WFsTKKiYwBp_w2j7uVWHVyurQ51956g0wU3jGuFd8CSLpRw2P86rIdSz9jLBT-YK_e3d4wLy1GYIqtb6J2IzGVYJHPiuJn9cdFofuNfJL7QFbAWd_oD5H_HXpLslfcPwbXooCN66WF94K226lMxf4Oeih-dDA94qCcZ35wynSJArRfkmzMhUbk1E5We55hwepOj4yK0KMWRjxTxzkoZhj0ZkBXa9VjVqBK8wjlbDyZyzLvcf6_BQxpALJuBMM2eIDC9Jep11hltJ9UwS0ds9-QgYGepOsooo8FtQ2GTuUYDRU4wdPKrElixJhndsrTqxyyoJvq39zQ1zAHsZQHFkQ5oimFxSQgyCkMU8xpyAr1hHPuNoRttOA3Y=.eyJlbmRwb2ludF9zbHVnIjoib3BlbmFpL2dwdC02LXNvbC0yMDI2MDkyMnxvcGVuYWkifQ\",\"format\":\"openai-responses-v1\",\"id\":\"[id]\",\"index\":0}]},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"[id]\",\"object\":\"chat.completion.chunk\",\"created\":1790497954,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\",\"reasoning\":null},\"finish_reason\":\"length\",\"native_finish_reason\":\"max_output_tokens\"}]}\n\ndata: {\"id\":\"[id]\",\"object\":\"chat.completion.chunk\",\"created\":1790497954,\"model\":\"openai/gpt-6-sol\",\"provider\":\"OpenAI\",\"service_tier\":\"default\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"length\",\"native_finish_reason\":\"max_output_tokens\"}],\"usage\":{\"prompt_tokens\":72,\"completion_tokens\":16,\"total_tokens\":88,\"cost\":0.000304,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0,\"audio_tokens\":0,\"video_tokens\":0},\"cost_details\":{\"upstream_inference_cost\":0.000304,\"upstream_inference_prompt_cost\":0.000144,\"upstream_inference_completions_cost\":0.00016},\"completion_tokens_details\":{\"reasoning_tokens\":16,\"image_tokens\":0,\"audio_tokens\":0}}}\n\ndata: [DONE]\n\n"
         }
       }
     }
   ],
   "expect": {
     "outcome": "finished",
-    "finishReason": "length",
-    "text": "One, two, three, four, five, six",
-    "usage": {
-      "promptTokens": 22,
-      "completionTokens": 16,
-      "totalTokens": 38
-    }
+    "finishReason": "length"
   }
 }

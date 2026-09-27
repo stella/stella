@@ -61,6 +61,21 @@ describe("provider cassette recording redaction", () => {
     });
   });
 
+  test("replaces the ids of the account the key belongs to", () => {
+    expect(
+      sanitizeJson(
+        { error: { code: 400 }, user_id: "user_2Ab3Cd4Ef5Gh6" },
+        SECRET,
+      ),
+    ).toEqual({ error: { code: 400 }, user_id: "[user_id]" });
+    expect(
+      sanitizeTextBody(
+        ": account user_2Ab3Cd4Ef5Gh6 org-9Zy8Xw7Vu6\n\n",
+        SECRET,
+      ),
+    ).toBe(": account [id] [id]\n\n");
+  });
+
   test("redacts fields that echo request content", () => {
     expect(
       sanitizeJson(

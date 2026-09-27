@@ -7,6 +7,7 @@
 //
 //   RECORD_OPENAI_API_KEY=... bun run record:provider-cassettes
 //   bun run record:provider-cassettes --provider anthropic,google --scenario text
+//   bun run record:provider-cassettes --provider mistral --pause-ms 5000
 //
 // A provider is recorded only when its recording key is set:
 // RECORD_OPENAI_API_KEY, RECORD_ANTHROPIC_API_KEY, RECORD_GOOGLE_API_KEY,
@@ -14,7 +15,8 @@
 // (a Bedrock API key, us-east-1). They are separate from the app's own keys,
 // so no configured key is ever used by accident. Scenarios no live request
 // can produce on demand (rate limits, outages, corrupted or cut-off streams)
-// stay synthetic.
+// stay synthetic. `--pause-ms` waits between requests, for a key whose
+// rate limit a full pass would hit.
 //
 // Nothing but the synthetic prompts is sent. Request bodies and request
 // headers are never stored; response headers are kept only when an SDK reads
@@ -32,6 +34,7 @@ import { env } from "@/api/env";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
+  cassetteKey,
   cassettePath,
   PROVIDER_WIRE_PROVIDERS,
   PROVIDER_WIRE_SCENARIOS,
@@ -56,6 +59,7 @@ import {
   decodeAwsEventStream,
   installProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
+import { matchesUnmetEntry } from "@/api/tests/helpers/provider-wire-unmet";
 
 /** Each provider's recording key and the variable it is read from. */
 const recordingKey = (
@@ -120,14 +124,20 @@ const KEPT_RESPONSE_HEADERS = [
 const MAX_REQUESTS_PER_SCENARIO = 4;
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
-/** Identifier keys whose values are replaced, at any depth. */
+/** Identifier keys whose values are replaced, at any depth: response and
+ *  request ids, and the ids of the account the key belongs to. */
 const IDENTIFIER_KEYS = new Set([
+  "account_id",
   "id",
+  "organization_id",
+  "project_id",
   "requestId",
   "request_id",
   "responseId",
   "response_id",
   "system_fingerprint",
+  "userId",
+  "user_id",
 ]);
 /** Keys whose string values could echo request content. */
 const ECHO_KEYS = new Set([
@@ -177,9 +187,10 @@ export const refuseSecret = (text: string, secret: string): void => {
   }
 };
 
-/** Response and request identifiers as providers spell them in free text. */
+/** Response, request and account identifiers as providers spell them in
+ *  free text. */
 const IDENTIFIER_TOKEN =
-  /\b(?:chatcmpl|gen|msg|req|resp|response)[-_](?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,}\b/gu;
+  /\b(?:chatcmpl|gen|msg|org|proj|req|resp|response|user)[-_](?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,}\b/gu;
 
 const parseJson = (text: string): { value: unknown } | undefined => {
   try {
@@ -518,7 +529,12 @@ const main = async (): Promise<number> => {
   const scenarios = (listArgument("--scenario") ?? recordable).filter(
     (name): name is ProviderWireScenario => recordable.includes(name),
   );
+  const pauseMs = Number(listArgument("--pause-ms")?.at(0) ?? "0");
+  if (!Number.isSafeInteger(pauseMs) || pauseMs < 0) {
+    return panic("--pause-ms takes a whole number of milliseconds");
+  }
   let failures = 0;
+  let requested = false;
   for (const provider of providers) {
     const { name: keyName, value: secret } = recordingKey(provider);
     if (secret === "") {
@@ -527,39 +543,48 @@ const main = async (): Promise<number> => {
     }
     for (const scenario of scenarios) {
       const label = `${provider}/${scenario}`;
+      if (requested) {
+        await Bun.sleep(pauseMs);
+      }
+      requested = true;
       try {
         const cassette = await recordOne({ provider, scenario, secret });
         const replay = installProviderWireReplay();
         let violations: ReturnType<typeof findWireContractViolations>;
+        let accepted: boolean;
         try {
           const { findings, run } = await replayWireScenario({
             cassette,
             replay,
           });
-          violations = [
-            ...findWireContractViolations({
-              cassette,
-              replay: findings,
-              run,
-            }),
-            ...scenarioShapeProblems(scenario, run.chunks),
-          ];
+          const contract = findWireContractViolations({
+            cassette,
+            replay: findings,
+            run,
+          });
+          const shape = scenarioShapeProblems(scenario, run.chunks);
+          violations = [...contract, ...shape];
+          // A run on the unmet ledger fails at exactly its entry's oracles,
+          // as the replay test requires of the corpus entry.
+          accepted =
+            shape.length === 0 &&
+            (contract.length === 0 ||
+              matchesUnmetEntry(cassetteKey(cassette), contract));
         } finally {
           replay.restore();
         }
         // A recording the contract rejects stays beside the corpus, outside
         // it, for review; the entry it would replace is left as it is.
         const corpusFile = cassettePath(provider, scenario);
-        const file =
-          violations.length === 0 ? corpusFile : `${corpusFile}.rejected`;
+        const file = accepted ? corpusFile : `${corpusFile}.rejected`;
         mkdirSync(path.dirname(file), { recursive: true });
         writeFileSync(file, `${JSON.stringify(cassette, null, 2)}\n`);
-        if (violations.length > 0) {
+        if (!accepted) {
           failures += 1;
         }
         console.log(
-          violations.length === 0
-            ? `${label}: recorded, contract holds`
+          accepted
+            ? `${label}: recorded, contract holds${violations.length === 0 ? "" : " up to its unmet entry"}`
             : `${label}: written to ${path.basename(file)}, contract violations ${JSON.stringify(violations)}`,
         );
       } catch {
