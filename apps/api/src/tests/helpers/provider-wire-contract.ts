@@ -70,8 +70,8 @@ const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECT
 export const SCENARIO_PROMPTS = {
   text: TEXT_PROMPT,
   "text-terminal-only": TEXT_PROMPT,
-  "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with name "draft". Do not write any text.`,
-  "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo". Do not write any text.`,
+  "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with only name "draft", leaving note out. Do not write any text.`,
+  "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo", neither with a note. Do not write any text.`,
   "strict-null": `Call the ${WIRE_TOOL_NAME} tool once with name "draft" and note set to JSON null. Do not write any text.`,
   length: "Count from 1 to 500 in words, separated by commas.",
   refusal: TEXT_PROMPT,

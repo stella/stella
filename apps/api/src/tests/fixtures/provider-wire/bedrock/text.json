@@ -2,8 +2,8 @@
   "format": 1,
   "provider": "bedrock",
   "scenario": "text",
-  "source": "synthetic",
-  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T18:04:44.570Z",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {
@@ -14,8 +14,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/vnd.amazon.eventstream",
-          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+          "content-type": "application/vnd.amazon.eventstream"
         },
         "body": {
           "encoding": "aws-eventstream",
@@ -27,8 +26,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "role": "assistant",
-                "p": "abcdefg"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW",
+                "role": "assistant"
               }
             },
             {
@@ -42,7 +41,7 @@
                 "delta": {
                   "text": "The"
                 },
-                "p": "abcdefghijklmn"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
               }
             },
             {
@@ -54,23 +53,9 @@
               "payload": {
                 "contentBlockIndex": 0,
                 "delta": {
-                  "text": " cassette"
+                  "text": " cassette plays."
                 },
-                "p": "abcdefghijklmnopqrstu"
-              }
-            },
-            {
-              "headers": {
-                ":event-type": "contentBlockDelta",
-                ":content-type": "application/json",
-                ":message-type": "event"
-              },
-              "payload": {
-                "contentBlockIndex": 0,
-                "delta": {
-                  "text": " plays."
-                },
-                "p": "abcdefghijklmnopqrstuvwxyzAB"
+                "p": "abcdefghijklmnopqrstuvwxyzABC"
               }
             },
             {
@@ -91,8 +76,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "stopReason": "end_turn",
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
+                "p": "abcdefghij",
+                "stopReason": "end_turn"
               }
             },
             {
@@ -102,15 +87,16 @@
                 ":message-type": "event"
               },
               "payload": {
-                "usage": {
-                  "inputTokens": 612,
-                  "outputTokens": 8,
-                  "totalTokens": 620
-                },
                 "metrics": {
-                  "latencyMs": 734
+                  "latencyMs": 1260
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456",
+                "usage": {
+                  "inputTokens": 597,
+                  "outputTokens": 8,
+                  "serverToolUsage": {},
+                  "totalTokens": 605
+                }
               }
             }
           ]
@@ -121,11 +107,6 @@
   "expect": {
     "outcome": "finished",
     "finishReason": "stop",
-    "text": "The cassette plays.",
-    "usage": {
-      "promptTokens": 612,
-      "completionTokens": 8,
-      "totalTokens": 620
-    }
+    "text": "The cassette plays."
   }
 }

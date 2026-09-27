@@ -2,8 +2,8 @@
   "format": 1,
   "provider": "bedrock",
   "scenario": "parallel-tool-calls",
-  "source": "synthetic",
-  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T18:04:11.674Z",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {
@@ -14,8 +14,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/vnd.amazon.eventstream",
-          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+          "content-type": "application/vnd.amazon.eventstream"
         },
         "body": {
           "encoding": "aws-eventstream",
@@ -27,8 +26,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "role": "assistant",
-                "p": "abcdef"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEF",
+                "role": "assistant"
               }
             },
             {
@@ -39,13 +38,14 @@
               },
               "payload": {
                 "contentBlockIndex": 0,
+                "p": "abcdefghij",
                 "start": {
                   "toolUse": {
-                    "toolUseId": "tooluse_R8wLk2nQS0eYp4vM7cJd1B",
-                    "name": "mcp__external__delete"
+                    "name": "mcp__external__delete",
+                    "toolUseId": "tooluse_3kEnr4DaTQVqnbFHJ4gV8W",
+                    "type": "tool_use"
                   }
-                },
-                "p": "abcdefghijklm"
+                }
               }
             },
             {
@@ -61,7 +61,7 @@
                     "input": ""
                   }
                 },
-                "p": "abcdefghijklmnopqrst"
+                "p": "abcdef"
               }
             },
             {
@@ -74,10 +74,10 @@
                 "contentBlockIndex": 0,
                 "delta": {
                   "toolUse": {
-                    "input": "{\"name\": "
+                    "input": "{\"n"
                   }
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzA"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
               }
             },
             {
@@ -90,10 +90,26 @@
                 "contentBlockIndex": 0,
                 "delta": {
                   "toolUse": {
-                    "input": "\"draft\"}"
+                    "input": "ame\": \"draf"
                   }
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGH"
+                "p": "abc"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "t\"}"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRS"
               }
             },
             {
@@ -104,7 +120,7 @@
               },
               "payload": {
                 "contentBlockIndex": 0,
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO"
+                "p": "abcdefg"
               }
             },
             {
@@ -115,13 +131,14 @@
               },
               "payload": {
                 "contentBlockIndex": 1,
+                "p": "abcdefghi",
                 "start": {
                   "toolUse": {
-                    "toolUseId": "tooluse_Hm5tZ1xWQyO9fA3sLb6kPc",
-                    "name": "mcp__external__delete"
+                    "name": "mcp__external__delete",
+                    "toolUseId": "tooluse_vQMUDYtdpAVfrAGm2YutlI",
+                    "type": "tool_use"
                   }
-                },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV"
+                }
               }
             },
             {
@@ -135,6 +152,38 @@
                 "delta": {
                   "toolUse": {
                     "input": ""
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyz"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "delta": {
+                  "toolUse": {
+                    "input": "{\"n"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 1,
+                "delta": {
+                  "toolUse": {
+                    "input": "am"
                   }
                 },
                 "p": "ab"
@@ -150,10 +199,10 @@
                 "contentBlockIndex": 1,
                 "delta": {
                   "toolUse": {
-                    "input": "{\"na"
+                    "input": "e\": \"me"
                   }
                 },
-                "p": "abcdefghi"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQR"
               }
             },
             {
@@ -166,10 +215,10 @@
                 "contentBlockIndex": 1,
                 "delta": {
                   "toolUse": {
-                    "input": "me\": \"memo\"}"
+                    "input": "mo\"}"
                   }
                 },
-                "p": "abcdefghijklmnop"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
               }
             },
             {
@@ -180,7 +229,7 @@
               },
               "payload": {
                 "contentBlockIndex": 1,
-                "p": "abcdefghijklmnopqrstuvw"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJK"
               }
             },
             {
@@ -190,8 +239,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "stopReason": "tool_use",
-                "p": "abcdefghijklmnopqrstuvwxyzABCD"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX",
+                "stopReason": "tool_use"
               }
             },
             {
@@ -201,15 +250,16 @@
                 ":message-type": "event"
               },
               "payload": {
-                "usage": {
-                  "inputTokens": 668,
-                  "outputTokens": 98,
-                  "totalTokens": 766
-                },
                 "metrics": {
-                  "latencyMs": 1702
+                  "latencyMs": 1758
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJK"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTU",
+                "usage": {
+                  "inputTokens": 624,
+                  "outputTokens": 95,
+                  "serverToolUsage": {},
+                  "totalTokens": 719
+                }
               }
             }
           ]
@@ -233,11 +283,6 @@
           "name": "memo"
         }
       }
-    ],
-    "usage": {
-      "promptTokens": 668,
-      "completionTokens": 98,
-      "totalTokens": 766
-    }
+    ]
   }
 }
