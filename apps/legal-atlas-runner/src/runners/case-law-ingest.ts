@@ -1377,6 +1377,12 @@ export const runCaseLawIngest = async (
             `unavailable=${summary.unavailable} ` +
             `claimed=${summary.claimed} ` +
             `superseded=${summary.superseded} ` +
+            `deferred=${summary.deferred} ` +
+            `parked=${summary.parked} ` +
+            `publisherStatus=${summary.failures["publisher-status"]} ` +
+            `network=${summary.failures.network} ` +
+            `unparseable=${summary.failures.unparseable} ` +
+            `lastFailure=${summary.lastFailureDetail ?? "none"} ` +
             `failed=${summary.failed} ` +
             `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)}`,
         );

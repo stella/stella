@@ -20,6 +20,7 @@
 
 import type {
   DecisionDocumentOutcome,
+  DocumentFetchFailure,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
@@ -35,6 +36,16 @@ type OutcomeCounts = Record<DocumentOutcomeStatus, number>;
 export type SkDocumentDrainSummary = OutcomeCounts & {
   /** Documents taken from the queue during the window. */
   attempted: number;
+  /**
+   * Why the `deferred` and `parked` documents failed, per class. Total
+   * over the failure union for the same reason as the outcome tallies.
+   */
+  failures: Record<DocumentFetchFailure, number>;
+  /**
+   * The most recent per-document failure's tag (a status or an error
+   * code), so a failure class has a concrete cause beside it.
+   */
+  lastFailureDetail: string | undefined;
   /**
    * Iterations that threw, whether the throw came from the fetch or
    * from the queue read that never reached a document. That is why this
@@ -53,9 +64,17 @@ export type SkDocumentDrainSummary = OutcomeCounts & {
 const emptySummary = (): SkDocumentDrainSummary => ({
   attempted: 0,
   claimed: 0,
+  deferred: 0,
   failed: 0,
+  failures: {
+    "publisher-status": 0,
+    network: 0,
+    unparseable: 0,
+  } satisfies Record<DocumentFetchFailure, number>,
   filled: 0,
   lastError: undefined,
+  lastFailureDetail: undefined,
+  parked: 0,
   superseded: 0,
   unavailable: 0,
 });
@@ -120,18 +139,20 @@ export type SkDocumentDrainOptions = {
  * pacing policy:
  *
  * - a fetch is followed by `fetchDelayMs`, whatever it returned. An
- *   unavailable document and a superseded store each consumed a
- *   download, and a document another worker held cost a database round
- *   trip; none of them earns a faster next fetch.
+ *   unavailable document, a superseded store and a document that failed
+ *   each consumed a download, and a document another worker held cost a
+ *   database round trip; none of them earns a faster next fetch, and a
+ *   failed one earns no slower one either.
  * - an empty queue doubles its sleep towards the idle ceiling, so a
  *   drained backlog stops asking the database every half second. Any
  *   document found resets it.
- * - a throw doubles its delay towards the failure ceiling. This covers
- *   both shapes with one mechanism: a document the source keeps
- *   refusing, and a database that is unreachable for everything. Errors
- *   never break the loop — a transient failure leaves the decision
- *   pending and it comes back, an unparseable one is marked by the unit
- *   itself and does not.
+ * - a throw doubles its delay towards the failure ceiling. The unit
+ *   throws only for what affects every document: an unreachable
+ *   database, or the publisher asking the walk to slow down. A document
+ *   the source keeps refusing is an outcome, bounded by its own cooldown
+ *   in the queue; backing the whole walk off for it would let a few such
+ *   documents at the head of the queue hold everything behind them.
+ *   Errors never break the loop.
  */
 export const runSkDocumentDrain = async ({
   fetchDocument,
@@ -169,6 +190,10 @@ export const runSkDocumentDrain = async ({
         summary.attempted += 1;
         const outcome = await fetchDocument(queued.decision);
         summary[outcome.status] += 1;
+        if (outcome.status === "deferred" || outcome.status === "parked") {
+          summary.failures[outcome.failure] += 1;
+          summary.lastFailureDetail = outcome.detail;
+        }
       }
 
       consecutiveFailures = 0;

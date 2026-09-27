@@ -55,6 +55,7 @@ import {
   isDocumentAst,
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
@@ -132,42 +133,133 @@ export type FetchPdfBytesOptions = {
 };
 
 /**
- * The decision's document, or `undefined` where the publisher states there is
- * none to fetch.
+ * Why one decision's attempt produced no document while the queue as a
+ * whole is fine. Each is that decision's own failure: it is retried behind
+ * the decision's own cooldown and never slows the walk down for the rest.
+ */
+const DOCUMENT_FETCH_FAILURES = [
+  /** The publisher answered with a status other than "not found" or "slow down". */
+  "publisher-status",
+  /** The connection failed, redirected, or timed out for this document. */
+  "network",
+  /** The download arrived and the parser could not read it. */
+  "unparseable",
+] as const;
+
+export type DocumentFetchFailure = (typeof DOCUMENT_FETCH_FAILURES)[number];
+
+export const DOCUMENT_FETCH_FAILURE = {
+  PUBLISHER_STATUS: DOCUMENT_FETCH_FAILURES[0],
+  NETWORK: DOCUMENT_FETCH_FAILURES[1],
+  UNPARSEABLE: DOCUMENT_FETCH_FAILURES[2],
+} as const satisfies Record<string, DocumentFetchFailure>;
+
+/** What one download produced. */
+export type PdfFetchResult =
+  | { type: "document"; bytes: Uint8Array }
+  /** The publisher states there is nothing to fetch. */
+  | { type: "absent" }
+  | {
+      type: "failed";
+      failure: Exclude<DocumentFetchFailure, "unparseable">;
+      /** A short tag for telemetry: the status or the error's code. */
+      detail: string;
+    };
+
+const HTTP_TOO_MANY_REQUESTS = 429;
+
+/**
+ * Whether a thrown fetch error belongs to this one download.
+ *
+ * Bun reports a failed connection, a reset mid-body and a redirect refused by
+ * `redirect: "error"` as a `TypeError` carrying a string `code`; a download
+ * that ran out of time aborts with a `TimeoutError`. Anything else (the
+ * publisher gate's own store failing, a programming error) is not the
+ * document's fault and is left to throw.
+ */
+const perDocumentNetworkDetail = (error: unknown): string | undefined => {
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return error.name;
+  }
+  if (
+    error instanceof TypeError &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return `${error.name}:${error.code}`;
+  }
+  return undefined;
+};
+
+const networkFailure = (error: unknown): PdfFetchResult => {
+  const detail = perDocumentNetworkDetail(error);
+  if (detail === undefined) {
+    throw error;
+  }
+  return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
+};
+
+/**
+ * Download one decision's document.
+ *
+ * Only a publisher asking the walk to slow down throws, because that is the
+ * one answer about every document at once: the caller backs off. A 5xx, a
+ * refused status or a broken connection is this document's failure and comes
+ * back as `failed`, so the decision waits out its own cooldown while the walk
+ * moves on to the next one.
  */
 export const fetchPdfBytes = async ({
   documentUrl,
   fetchDocument,
   signal,
-}: FetchPdfBytesOptions): Promise<Uint8Array | undefined> => {
+}: FetchPdfBytesOptions): Promise<PdfFetchResult> => {
   const target = restrictSkCourtDocumentUrl(documentUrl);
   if (target === null) {
     // Persisted legacy rows can predate the provider boundary. Returning the
     // terminal unavailable outcome lets the caller drain them from the queue;
     // retrying cannot make an off-origin URL become trusted.
-    return undefined;
+    return { type: "absent" };
   }
 
-  const response = await fetchDocument(target, { signal });
-  if (response === undefined) {
-    return undefined;
+  const fetched = await Result.tryPromise({
+    try: async () => await fetchDocument(target, { signal }),
+    catch: (error) => error,
+  });
+  if (Result.isError(fetched)) {
+    return networkFailure(fetched.error);
   }
-  if (response.ok) {
-    return new Uint8Array(await response.arrayBuffer());
+  const response = fetched.value;
+  if (response === undefined) {
+    return { type: "absent" };
+  }
+  const { ok, status } = response;
+  if (ok) {
+    const body = await Result.tryPromise({
+      try: async () => await response.arrayBuffer(),
+      catch: (error) => error,
+    });
+    return Result.isError(body)
+      ? networkFailure(body.error)
+      : { type: "document", bytes: new Uint8Array(body.value) };
   }
   // Only a response that says the document does not exist proves
-  // unavailability. Anything else (5xx, 429, auth hiccups) is transient:
-  // throw, so the row keeps a NULL fulltext and stays in the queue for a
-  // later attempt instead of being marked unavailable forever.
-  if (response.status === 404 || response.status === 410) {
-    return undefined;
+  // unavailability.
+  if (status === 404 || status === 410) {
+    return { type: "absent" };
   }
-  throw new AdapterFetchError({
-    message: `Document fetch returned ${response.status}`,
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    cursor: null,
-    httpStatus: response.status,
-  });
+  if (status === HTTP_TOO_MANY_REQUESTS) {
+    throw new AdapterFetchError({
+      message: `Document fetch returned ${status}`,
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      cursor: null,
+      httpStatus: status,
+    });
+  }
+  return {
+    type: "failed",
+    failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+    detail: `http-${status}`,
+  };
 };
 
 export type BackfilledDocument = {
@@ -245,24 +337,46 @@ const PENDING_DOCUMENT_COLUMNS = {
 };
 
 /**
- * How long the queue leaves a decision alone after an attempt.
+ * Attempts after which a decision leaves the walk altogether.
  *
- * Failures here are usually the source's, not this decision's: a court
- * site that answers 403 for one document answers it for the next forty
- * too. Without a cooldown the head of the queue would be re-attempted
- * every run and nothing behind it would ever be reached. Far longer
- * than the claim's own TTL, which only guards one fetch in flight; a
- * reader who opens the decision again is not held by this, because the
- * read-through claims directly.
+ * A document the source never serves would otherwise come back after
+ * every cooldown for as long as the corpus exists, and each return is a
+ * download. A parked decision keeps its NULL text, so it stays countable
+ * and `requeueParkedDocuments` puts it back when the cause is fixed. A
+ * reader who opens it still fetches it directly.
  */
-const FETCH_COOLDOWN_HOURS = 6;
+export const MAX_DOCUMENT_FETCH_ATTEMPTS = 8;
+
+/**
+ * How long the queue leaves a decision alone after its first attempt.
+ * Each further attempt doubles it, up to `FETCH_COOLDOWN_MAX_DOUBLINGS`
+ * doublings, so a document that keeps failing costs fewer downloads the
+ * longer it fails, and reaches the parking threshold in weeks rather
+ * than days.
+ *
+ * The cooldown is per decision and is the whole retry delay: a failure
+ * never slows the walk for the decisions behind it. Far longer than the
+ * claim's own TTL, which only guards one fetch in flight; a reader who
+ * opens the decision again is not held by this, because the read-through
+ * claims directly.
+ */
+const FETCH_COOLDOWN_BASE_HOURS = 6;
+const FETCH_COOLDOWN_MAX_DOUBLINGS = 4;
+
+/** The decision's current cooldown, from its attempt count. */
+const fetchCooldown = sql`make_interval(hours => ${FETCH_COOLDOWN_BASE_HOURS}::int * power(2, least(greatest(${caseLawDecisions.documentFetchAttempts} - 1, 0), ${FETCH_COOLDOWN_MAX_DOUBLINGS}::int))::int)`;
 
 const outsideFetchCooldown = or(
   isNull(caseLawDecisions.documentFetchAttemptedAt),
   lt(
     caseLawDecisions.documentFetchAttemptedAt,
-    sql`now() - ${`${FETCH_COOLDOWN_HOURS} hours`}::interval`,
+    sql`now() - ${fetchCooldown}::interval`,
   ),
+);
+
+const belowParkingThreshold = lt(
+  caseLawDecisions.documentFetchAttempts,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
 );
 
 /**
@@ -325,14 +439,24 @@ export const requestedDocumentPredicate = and(
   lt(caseLawDecisions.documentFetchAttempts, MAX_PRIORITY_FETCH_ATTEMPTS),
 );
 
-/** Everything else: never asked for, or asked for and out of retries. */
+/**
+ * Everything else: never asked for, or asked for and out of retries,
+ * and not yet parked.
+ */
 export const remainingDocumentPredicate = and(
   pendingDocumentPredicate,
   outsideFetchCooldown,
+  belowParkingThreshold,
   or(
     isNull(caseLawDecisions.documentFetchRequestedAt),
     gte(caseLawDecisions.documentFetchAttempts, MAX_PRIORITY_FETCH_ATTEMPTS),
   ),
+);
+
+/** Pending, and out of the walk until an operator requeues it. */
+export const parkedDocumentPredicate = and(
+  pendingDocumentPredicate,
+  gte(caseLawDecisions.documentFetchAttempts, MAX_DOCUMENT_FETCH_ATTEMPTS),
 );
 
 /** Oldest request first, so a reader waits for one drain at most. */
@@ -871,7 +995,12 @@ const CLAIM_TTL_SECONDS = 120;
  * parsed from what the source used to say.
  */
 export type DocumentFetchClaim =
-  | { status: "claimed"; sourceHash: string | null }
+  | {
+      status: "claimed";
+      sourceHash: string | null;
+      /** Attempts counted so far, this one included. */
+      attempts: number;
+    }
   | { status: "held" };
 
 export const claimDocumentFetch = async (
@@ -907,7 +1036,8 @@ export const claimDocumentFetch = async (
           OR document_fetch_attempted_at
              < now() - ${`${CLAIM_TTL_SECONDS} seconds`}::interval
         )
-      RETURNING source_hash AS "sourceHash"
+      RETURNING source_hash AS "sourceHash",
+                document_fetch_attempts AS "attempts"
     `);
 
     const claimedRow: unknown = Array.isArray(claimed)
@@ -918,9 +1048,14 @@ export const claimDocumentFetch = async (
     }
 
     const sourceHash = claimedRow["sourceHash"];
+    const attempts = claimedRow["attempts"];
+    if (typeof attempts !== "number") {
+      return panic("document_fetch_attempts is a NOT NULL integer");
+    }
     return {
       status: "claimed",
       sourceHash: typeof sourceHash === "string" ? sourceHash : null,
+      attempts,
     };
   });
 
@@ -976,16 +1111,118 @@ export const markDocumentUnavailable = async (
 };
 
 /**
+ * Take a decision out of the walk now rather than after its remaining
+ * attempts. For a download the parser cannot read: fetching the same bytes
+ * again would cost the publisher a request per cooldown and read no better,
+ * while a parser fix is exactly what `requeueParkedDocuments` is for.
+ *
+ * Parking is fetch bookkeeping, not a change to the decision, so
+ * `updated_at` is held where it is: the public reads key their freshness
+ * off it.
+ */
+export const parkDocumentFetch = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+): Promise<void> => {
+  await scopedDb(async (tx) => {
+    // audit: skip — public case-law document fetch bookkeeping; no user action
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
+        updatedAt: sql`${caseLawDecisions.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.redactedAt),
+          isNull(caseLawDecisions.fulltext),
+        ),
+      );
+  });
+};
+
+/** Parked decisions of the deferred-document source. */
+export const countParkedDocuments = async (
+  scopedDb: ScopedDb,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<number> => {
+  const [row] = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ parked: sql<number>`count(*)::int` })
+        .from(caseLawDecisions)
+        .where(
+          and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate),
+        ),
+  );
+  return row?.parked ?? 0;
+};
+
+export type RequeueParkedDocumentsOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  /** Decisions requeued by this call at most. */
+  limit: number;
+};
+
+/**
+ * Put up to `limit` parked decisions back into the walk.
+ *
+ * The attempt count is what parks a decision, so resetting it is the whole
+ * requeue; the last attempt's timestamp stays, so a requeued decision still
+ * waits out one base cooldown rather than arriving at the head of the queue
+ * in a burst. Returns how many were requeued, so a caller loops until zero.
+ * Like parking, it leaves `updated_at` alone.
+ */
+export const requeueParkedDocuments = async ({
+  limit,
+  scopedDb,
+  sourceId,
+}: RequeueParkedDocumentsOptions): Promise<number> =>
+  await scopedDb(async (tx) => {
+    const parked = tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate),
+      )
+      .orderBy(asc(caseLawDecisions.id))
+      .limit(limit);
+    // audit: skip — operator requeue of public case-law fetch bookkeeping; no user action
+    const requeued = await tx
+      .update(caseLawDecisions)
+      .set({
+        documentFetchAttempts: 0,
+        updatedAt: sql`${caseLawDecisions.updatedAt}`,
+      })
+      .where(inArray(caseLawDecisions.id, parked))
+      .returning({ id: caseLawDecisions.id });
+    return requeued.length;
+  });
+
+/**
  * Outcomes of one document fetch: the document, a decision the source
- * has nothing readable for, or a decision another worker is already
- * fetching.
+ * has nothing readable for, a decision another worker is already
+ * fetching, or this decision's own failure.
+ *
+ * A failure that is the decision's own comes back as an outcome rather
+ * than a throw, because the caller's only answer to a throw is to slow
+ * down, and one document the source keeps refusing must not slow the
+ * walk for every document behind it. What still throws is what affects
+ * every document at once: the database, and the publisher asking the
+ * walk to slow down.
  */
 export type DecisionDocumentOutcome =
   | { status: "filled"; document: BackfilledDocument }
   | { status: "unavailable" }
   | { status: "claimed" }
   /** The source moved mid-fetch; the queue's next pass fetches the current version. */
-  | { status: "superseded" };
+  | { status: "superseded" }
+  /** This decision failed; it comes back after its own cooldown. */
+  | { status: "deferred"; failure: DocumentFetchFailure; detail: string }
+  /** This decision failed and has left the walk until it is requeued. */
+  | { status: "parked"; failure: DocumentFetchFailure; detail: string };
 
 /**
  * Wall-clock budget for the whole unit. The download has its own
@@ -1005,6 +1242,37 @@ export type FetchDecisionDocumentOptions = {
   signal: AbortSignal;
 };
 
+type ParseFetchedDocumentOptions = {
+  decision: PendingDocument;
+  bytes: Uint8Array;
+  scopedDb: ScopedDb;
+};
+
+type ParseFetchedDocumentResult =
+  | { type: "parsed"; document: BackfilledDocument | undefined }
+  | { type: "parked"; detail: string };
+
+/**
+ * Parse a download, or park the decision when the parser throws. A throw
+ * here is about these bytes, not about the walk, so it is recorded on the
+ * decision and reported as its outcome instead of escaping.
+ */
+const parseFetchedDocument = async ({
+  bytes,
+  decision,
+  scopedDb,
+}: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
+  const parsed = await Result.tryPromise({
+    try: async () => await parsePendingDocument(decision, bytes),
+    catch: (error) => error,
+  });
+  if (Result.isOk(parsed)) {
+    return { type: "parsed", document: parsed.value };
+  }
+  await parkDocumentFetch(decision.id, scopedDb);
+  return { type: "parked", detail: errorTag(parsed.error) };
+};
+
 const runDecisionDocumentFetch = async ({
   decision,
   fetchDocument,
@@ -1016,17 +1284,34 @@ const runDecisionDocumentFetch = async ({
     return { status: "claimed" };
   }
 
-  const pdfBytes = decision.documentUrl
+  const fetched: PdfFetchResult = decision.documentUrl
     ? await fetchPdfBytes({
         documentUrl: decision.documentUrl,
         fetchDocument,
         signal,
       })
-    : undefined;
-  const document = pdfBytes
-    ? await parsePendingDocument(decision, pdfBytes)
-    : undefined;
+    : { type: "absent" };
 
+  if (fetched.type === "failed") {
+    const { failure, detail } = fetched;
+    return claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
+      ? { status: "parked", failure, detail }
+      : { status: "deferred", failure, detail };
+  }
+
+  const parsed: ParseFetchedDocumentResult =
+    fetched.type === "document"
+      ? await parseFetchedDocument({ bytes: fetched.bytes, decision, scopedDb })
+      : { type: "parsed", document: undefined };
+  if (parsed.type === "parked") {
+    return {
+      status: "parked",
+      failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
+      detail: parsed.detail,
+    };
+  }
+
+  const { document } = parsed;
   if (!document) {
     await markDocumentUnavailable(decision.id, scopedDb);
     return { status: "unavailable" };
@@ -1052,8 +1337,9 @@ const runDecisionDocumentFetch = async ({
  * to it: the claim counts the attempt first, the parse either produces
  * the document or marks it unavailable, and the store is conditional on
  * the row still being empty. Running it twice therefore converges. A
- * transient failure throws and leaves `fulltext` NULL, which keeps the
- * decision in the queue for a later attempt.
+ * failure of this decision alone leaves `fulltext` NULL and returns
+ * `deferred`, or `parked` once its attempts run out; only a failure that
+ * affects every decision throws.
  */
 export const fetchDecisionDocument = async (
   options: FetchDecisionDocumentOptions,
