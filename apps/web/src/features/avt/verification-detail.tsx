@@ -16,6 +16,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { verificationRunOptions } from "@/features/avt/queries";
+import { RunHistoryPicker } from "@/features/avt/run-history-picker";
 import type { VerificationRun } from "@/features/avt/types";
 import { RUN_ERROR_KEYS } from "@/features/avt/types";
 import { useStartVerification } from "@/features/avt/use-start-verification";
@@ -68,6 +69,14 @@ export const VerificationDetail = ({
           >
             {documentName}
           </h2>
+        )}
+        {run !== undefined && (
+          <RunHistoryPicker
+            listId={listId}
+            onOpenRun={onOpenRun}
+            run={run}
+            workspaceId={workspaceId}
+          />
         )}
       </div>
       {isPending && <Skeleton className="h-40 w-full" />}

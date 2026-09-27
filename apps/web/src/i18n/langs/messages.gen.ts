@@ -277,6 +277,10 @@ type Messages = {
       };
       "evidencePinned": "Checked against {count, plural, one {# fact} other {# facts}} as they stood on {checkedAt}. Later edits to the list do not change this verification.";
       "failedTitle": "Verification failed";
+      "history": {
+        "label": "Verification history";
+        "loadFailed": "Earlier verifications of this document could not be loaded.";
+      };
       "inProgress": "Checking the document's claims against the list's facts…";
       "loadFailed": "This verification could not be loaded.";
       "noClaims": "No claims were found in this document.";

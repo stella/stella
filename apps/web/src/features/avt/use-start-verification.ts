@@ -87,9 +87,14 @@ export const useStartVerification = ({
       if (response.error.status === RUN_ALREADY_ACTIVE_STATUS) {
         // Another tab (or a reload that raced this click) already started a
         // run for this document: open that one.
-        await queryClient.invalidateQueries({
-          queryKey: avtKeys.latestAll(workspaceId),
-        });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: avtKeys.latestAll(workspaceId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: avtKeys.historyAll(workspaceId),
+          }),
+        ]);
         const latest = await Result.tryPromise(
           async () =>
             await queryClient.query(
@@ -118,9 +123,14 @@ export const useStartVerification = ({
       return;
     }
 
-    await queryClient.invalidateQueries({
-      queryKey: avtKeys.latestAll(workspaceId),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: avtKeys.latestAll(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: avtKeys.historyAll(workspaceId),
+      }),
+    ]);
     onStarted(response.data.runId);
   };
 
