@@ -60,7 +60,9 @@ export type IngestionResult = {
   /**
    * Every identifier the publisher states for this decision. The pipeline
    * always adds `caseNumber` and `ecli`, so adapters may omit this until they
-   * expose neutral or reporter citations.
+   * expose neutral or reporter citations. Other spellings of the ECLI that
+   * name this decision belong here too: identifiers are derived again on every
+   * write, so a declared spelling keeps resolving to the decision.
    */
   identifiers?: DecisionIdentifiers | undefined;
   /**

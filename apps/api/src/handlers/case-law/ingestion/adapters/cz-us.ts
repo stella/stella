@@ -2,8 +2,14 @@ import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { classifyFailure } from "@stll/errors";
-import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_MAX_COUNT,
+  DECISION_IDENTIFIER_TYPES,
+} from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifier,
+  DecisionIdentifiers,
+} from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
@@ -327,6 +333,30 @@ const buildEcli = (
 
 /** A NALUS ECLI printed without its trailing counter segment. */
 const UNCOUNTED_ECLI = /^ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2}$/iu;
+
+/** A NALUS ECLI ending in the first counter of its file. */
+const FIRST_COUNTED_ECLI = /^(ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2})\.1$/iu;
+
+/**
+ * The other spelling of a decision's ECLI. The first decision of a file is
+ * written both with its counter and without it, by the court and by those
+ * citing it; declaring the other spelling as an identifier lets either one
+ * resolve to the decision. A later counter has no bare spelling.
+ */
+export const czUsEcliSpellings = (
+  ecli: string | undefined,
+): DecisionIdentifier[] => {
+  if (ecli === undefined) {
+    return [];
+  }
+  const bare = FIRST_COUNTED_ECLI.exec(ecli)?.[1];
+  if (bare !== undefined) {
+    return [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: bare }];
+  }
+  return UNCOUNTED_ECLI.test(ecli)
+    ? [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: `${ecli}.1` }]
+    : [];
+};
 
 /**
  * The counted ECLI earlier releases built for a record NALUS now lists
@@ -786,19 +816,26 @@ const detailMetadata = (
  * two cells and the document page's combined field alike; the case number
  * and the ECLI keep their two places within the identifier limit.
  */
-const parallelCitationIdentifiers = ({
+const decisionIdentifiers = ({
   detail,
   parallelQuotation,
+  ecli,
 }: {
   detail: NalusDetailFields | null;
   parallelQuotation: string | undefined;
+  ecli: string | undefined;
 }): DecisionIdentifiers | undefined => {
-  const [first, ...rest] = czechConstitutionalIdentifiersFromParallelCitations([
-    ...(parallelQuotation === undefined ? [] : [parallelQuotation]),
-    ...(detail === null
-      ? []
-      : [...detail.parallelCitationLaws, ...detail.parallelCitationReports]),
-  ]).slice(0, DECISION_IDENTIFIER_MAX_COUNT - 2);
+  const spellings = czUsEcliSpellings(ecli);
+  // The docket and the ECLI are added by the pipeline.
+  const [first, ...rest] = [
+    ...czechConstitutionalIdentifiersFromParallelCitations([
+      ...(parallelQuotation === undefined ? [] : [parallelQuotation]),
+      ...(detail === null
+        ? []
+        : [...detail.parallelCitationLaws, ...detail.parallelCitationReports]),
+    ]).slice(0, DECISION_IDENTIFIER_MAX_COUNT - 2 - spellings.length),
+    ...spellings,
+  ];
   return first === undefined ? undefined : [first, ...rest];
 };
 
@@ -1079,7 +1116,7 @@ const parseDecisionPage = ({
     // rapporteur cell the court has blanked states that the decision has no
     // judge on it, and dropping the field would leave the stored rows alone.
     ...(judges === undefined ? {} : { judges }),
-    identifiers: parallelCitationIdentifiers({ detail, parallelQuotation }),
+    identifiers: decisionIdentifiers({ detail, parallelQuotation, ecli }),
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: checkedDecisionMetadata({
       caseNumber: parsed.caseNumber,
