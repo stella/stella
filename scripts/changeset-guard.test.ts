@@ -144,14 +144,28 @@ const gatedWorkspaces = (): string[] =>
     ),
   ].toSorted();
 
-/** The `changeset:` job block of the workflow, without the jobs that follow. */
+const CHANGESET_GATE_FIRST_STEP = "Load release policy";
+const CHANGESET_GATE_LAST_STEP =
+  "Changeset present for published package changes";
+
+/** The changeset gate's steps in the ci-checks job, first through last. */
 const changesetJob = (): string => {
   const lines = readFile(WORKFLOW_FILE).split("\n");
-  const start = lines.indexOf("  changeset:");
+  const job = lines.indexOf("  ci-checks:");
+  expect(job).toBeGreaterThanOrEqual(0);
+  const jobLines = lines.slice(job + 1);
+  const jobEnd = jobLines.findIndex((line) => /^ {2}\S/u.test(line));
+  const steps = jobLines.slice(0, jobEnd === -1 ? jobLines.length : jobEnd);
+  const start = steps.indexOf(`      - name: ${CHANGESET_GATE_FIRST_STEP}`);
+  const last = steps.indexOf(`      - name: ${CHANGESET_GATE_LAST_STEP}`);
   expect(start).toBeGreaterThanOrEqual(0);
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => /^ {2}\S/u.test(line));
-  return rest.slice(0, end === -1 ? rest.length : end).join("\n");
+  expect(last).toBeGreaterThan(start);
+  const afterLast = steps
+    .slice(last + 1)
+    .findIndex((line) => line.startsWith("      - name: "));
+  return steps
+    .slice(start, afterLast === -1 ? steps.length : last + 1 + afterLast)
+    .join("\n");
 };
 
 describe("changeset gate decision", () => {
@@ -574,7 +588,7 @@ const compareVersions = (
 };
 
 describe("workflow and pre-push read the same policy", () => {
-  test("the workflow job feeds every list from the policy file", () => {
+  test("the workflow gate feeds every list from the policy file", () => {
     const job = changesetJob();
     expect(job).toContain(POLICY_FILE);
     for (const key of ["releasePaths", "generatedPaths", "packageFiles"]) {
@@ -599,7 +613,7 @@ describe("workflow and pre-push read the same policy", () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
-  test("the workflow job inlines no pathspecs of its own", () => {
+  test("the workflow gate inlines no pathspecs of its own", () => {
     // A second copy of the list in the workflow is exactly the drift this
     // guard exists to prevent: CI would gate paths pre-push does not.
     expect(changesetJob()).not.toMatch(/^\s+(?:apps|packages)\//mu);
@@ -608,6 +622,22 @@ describe("workflow and pre-push read the same policy", () => {
   test("CI runs the same package relevance check without replacing the shared presence gate", () => {
     expect(changesetJob()).toContain(
       'bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only',
+    );
+  });
+
+  test("every changeset gate step runs on pull requests, before any install", () => {
+    const gate = changesetJob();
+    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
+    expect(stepCount).toBeGreaterThan(0);
+    expect(
+      gate.match(/^ {8}if: github\.event_name == 'pull_request'$/gmu),
+    ).toHaveLength(stepCount);
+    const workflow = readFile(WORKFLOW_FILE);
+    const job = workflow.indexOf("\n  ci-checks:\n");
+    const gateStart = workflow.indexOf(gate, job);
+    expect(gateStart).toBeGreaterThan(job);
+    expect(gateStart).toBeLessThan(
+      workflow.indexOf("      - name: Install dependencies\n", job),
     );
   });
 

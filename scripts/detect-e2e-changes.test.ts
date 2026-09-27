@@ -276,13 +276,30 @@ describe("detect-e2e-changes", () => {
     expect(landing).not.toContain("Start docker stack");
     expect(landing).not.toContain("Start API server");
 
-    const aggregate = workflowJob("e2e");
+    // ci-result reads the browser suites directly, without an aggregating hop.
+    expect(workflow).not.toContain("\n  e2e:\n");
+    const result = workflowJob("ci-result");
     for (const requiredJob of [
       "e2e-production-shard",
       "e2e-vite-canary",
       "e2e-landing",
     ]) {
-      expect(aggregate).toContain(requiredJob);
+      expect(result).toContain(`        ${requiredJob},\n`);
+    }
+
+    // The route network baseline has a leg of its own, and the Playwright
+    // shards skip it there.
+    expect(production).toContain("shard: [1, 2, network-baseline]");
+    expect(workflowStep(production, "Check route network baseline")).toContain(
+      "matrix.shard == 'network-baseline'",
+    );
+    for (const stepName of [
+      "Run Playwright shard",
+      "Run route-smoke Playwright shard",
+    ]) {
+      expect(workflowStep(production, stepName), stepName).toContain(
+        "matrix.shard != 'network-baseline'",
+      );
     }
   });
 
