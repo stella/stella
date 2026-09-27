@@ -55,6 +55,7 @@ describe("API service shutdown", () => {
 
   test("bounds shutdown when HTTP and worker draining never settle", async () => {
     const never = Promise.withResolvers<undefined>().promise;
+    const neverRunEnd = Promise.withResolvers<"stored" | "unstored">().promise;
 
     const outcome = observeWithinDeadline(
       shutdownApiServices({
@@ -62,7 +63,7 @@ describe("API service shutdown", () => {
         closeDatabaseLoginProbe: async () => await never,
         drainScheduler: never,
         onHttpStopError: () => undefined,
-        relinquishChatTurnRuns: async () => await never,
+        relinquishChatTurnRuns: async () => await neverRunEnd,
         stopHttp: async () => await never,
         stopScheduler: () => undefined,
         stopSse: () => undefined,

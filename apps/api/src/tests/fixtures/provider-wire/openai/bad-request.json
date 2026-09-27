@@ -2,8 +2,8 @@
   "format": 1,
   "provider": "openai",
   "scenario": "bad-request",
-  "source": "synthetic",
-  "basis": "OpenAI Responses API streaming reference: typed response.* server-sent events, strict function tools; error object shape",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T09:00:43.997Z",
   "model": "stella-cassette-no-such-model",
   "exchanges": [
     {

@@ -1,5 +1,4 @@
 import type { UIMessage } from "@tanstack/ai-client";
-import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
@@ -1402,58 +1401,6 @@ const leaveARunningClientCall = async () => {
   });
 };
 
-/** The command a step performs, through any second tab it is taken in. */
-const innermost = (
-  command: fc.AsyncCommand<Model, Real>,
-): fc.AsyncCommand<Model, Real> =>
-  command instanceof OnSecondTab ? innermost(command.step) : command;
-
-type OpenGap = {
-  /** The steps the page-action property leaves out while this is open. */
-  condition: string;
-  excludes: (command: fc.AsyncCommand<Model, Real>) => boolean;
-  /** Fails while this is open. */
-  reproduce: () => Promise<void>;
-};
-
-/**
- * Open findings, by id: each one's excluded steps and its failing case. The
- * ledger only shrinks: every case must still fail, an entry whose case
- * passes fails until it is removed, and its size is pinned to
- * OPEN_GAPS_SIZE, which only goes down.
- */
-const OPEN_GAPS = {
-  F2: {
-    condition: "StopMidStream",
-    excludes: (command) => command instanceof StopMidStream,
-    reproduce: async () => {
-      await stopWhileStreaming("after-tool-end");
-      await stopWhileStreaming("before-tool-end");
-    },
-  },
-} as const satisfies Record<string, OpenGap>;
-
-/** The ledger's size. Lower it with every entry removed; never raise it. */
-const OPEN_GAPS_SIZE = 1;
-
-/** A step the page-action property takes unless an open finding excludes
- *  it. */
-class OutsideOpenGaps implements fc.AsyncCommand<Model, Real> {
-  readonly command: fc.AsyncCommand<Model, Real>;
-  constructor(command: fc.AsyncCommand<Model, Real>) {
-    this.command = command;
-  }
-  check = (model: Readonly<Model>) =>
-    this.command.check(model) &&
-    !Object.values(OPEN_GAPS).some(({ excludes }) =>
-      excludes(innermost(this.command)),
-    );
-  run = async (model: Model, real: Real) => {
-    await this.command.run(model, real);
-  };
-  toString = () => String(this.command);
-}
-
 const STEP: StepShape = {
   calls: [],
   cutOff: false,
@@ -2075,18 +2022,10 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test(
-    "stops an answer while it streams (after-tool-end)",
-    async () => {
-      await stopWhileStreaming("after-tool-end");
-    },
-    propertyTestTimeout(30_000),
-  );
-
-  test.failing(
-    "stops an answer while it streams (before-tool-end)",
-    async () => {
-      await stopWhileStreaming("before-tool-end");
+  test.each(["after-tool-end", "before-tool-end"] as const)(
+    "stops an answer while it streams (%s)",
+    async (quietAt) => {
+      await stopWhileStreaming(quietAt);
     },
     propertyTestTimeout(30_000),
   );
@@ -2109,32 +2048,6 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.each(Object.keys(OPEN_GAPS))(
-    "open finding %s still fails its case",
-    async (id) => {
-      const gap = Object.entries(OPEN_GAPS).find(([key]) => key === id)?.[1];
-      const outcome = await (gap ?? expect.unreachable(`No open finding ${id}`))
-        .reproduce()
-        .then(
-          () => "passes",
-          () => "fails",
-        );
-      if (outcome === "passes") {
-        panic(`${id} passes now: remove it from OPEN_GAPS`);
-      }
-    },
-    propertyTestTimeout(30_000),
-  );
-
-  test("the open findings only shrink, and each names its condition", () => {
-    expect(Object.keys(OPEN_GAPS)).toHaveLength(OPEN_GAPS_SIZE);
-    expect(
-      Object.entries(OPEN_GAPS)
-        .filter(([, { condition }]) => condition.trim() === "")
-        .map(([id]) => id),
-    ).toEqual([]);
-  });
-
   test("maps every action the page offers to the model's commands", async () => {
     const web = await loadWebChat();
     expect(Object.keys(ACTION_COVERAGE).toSorted()).toEqual(
@@ -2146,12 +2059,9 @@ describe("a conversation's live view", () => {
     "matches a reload and the ledger after every action the page offers",
     async () => {
       await runConversations(
-        fc.commands(
-          pageActionCommandsOf(runsOf(mixedCallsArb)).map((arbitrary) =>
-            arbitrary.map((command) => new OutsideOpenGaps(command)),
-          ),
-          { maxCommands: 6 },
-        ),
+        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+          maxCommands: 6,
+        }),
       );
     },
     propertyTestTimeout(240_000),

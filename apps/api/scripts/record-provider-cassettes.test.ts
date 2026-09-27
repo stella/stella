@@ -61,6 +61,27 @@ describe("provider cassette recording redaction", () => {
     });
   });
 
+  test("replaces the ids of the account the key belongs to", () => {
+    expect(
+      sanitizeJson(
+        { error: { code: 400 }, user_id: "user_2Ab3Cd4Ef5Gh6" },
+        SECRET,
+      ),
+    ).toEqual({ error: { code: 400 }, user_id: "[user_id]" });
+    expect(
+      sanitizeJson(
+        { error: { message: "Project `proj_2Ab3Cd4Ef5Gh6` has no access" } },
+        SECRET,
+      ),
+    ).toEqual({ error: { message: "Project `[id]` has no access" } });
+    expect(
+      sanitizeTextBody(
+        ": account user_2Ab3Cd4Ef5Gh6 org-9Zy8Xw7Vu6\n\n",
+        SECRET,
+      ),
+    ).toBe(": account [id] [id]\n\n");
+  });
+
   test("redacts fields that echo request content", () => {
     expect(
       sanitizeJson(
@@ -68,6 +89,22 @@ describe("provider cassette recording redaction", () => {
         SECRET,
       ),
     ).toEqual({ instructions: "[redacted]", model: "m", user: "[redacted]" });
+  });
+
+  test("omits live billing and account routing metadata from usage", () => {
+    const usage = {
+      prompt_tokens: 12,
+      completion_tokens: 3,
+      cost: 0.001,
+      cost_details: { upstream_inference_cost: 0.0008 },
+      is_byok: true,
+    };
+    expect(sanitizeJson({ usage }, SECRET)).toEqual({
+      usage: { prompt_tokens: 12, completion_tokens: 3 },
+    });
+    expect(
+      sanitizeTextBody(`data: ${JSON.stringify({ usage })}\n\n`, SECRET),
+    ).toBe('data: {"usage":{"prompt_tokens":12,"completion_tokens":3}}\n\n');
   });
 
   test("refuses a response that contains the key", () => {
@@ -179,6 +216,9 @@ const recordAndReplay = async (
     scenario,
     source: "recorded",
   });
+  if (scenario === "text") {
+    expect(recorded.expect).toEqual(source.expect);
+  }
   // The same request and status; the body with its identifiers replaced.
   const [recordedExchange] = recorded.exchanges;
   const [sourceExchange] = source.exchanges;

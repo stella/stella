@@ -198,6 +198,11 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   if (optional.length > 0) {
     lines.push(`  - optional: ${optional.join(", ")}`);
   }
+  // Fields without a flag (nested objects, unions) still reach the tool, so a
+  // command that also takes flags names them rather than hiding them.
+  if (spec.inputOnly.length > 0) {
+    lines.push(`  - via \`--input\` only: ${spec.inputOnly.join(", ")}`);
+  }
   return lines.join("\n");
 };
 
