@@ -76,7 +76,7 @@ export const isSignedPdf = ({ pdf, source }: PdfSource): boolean =>
   pdf.getForm()?.properties.hasSignatures === true ||
   rawBytesCarrySignature(source);
 
-export type PdfRewriteBlocker = "encrypted" | "signed";
+type PdfRewriteBlocker = "encrypted" | "signed";
 
 /** Why `pdf` must not be rewritten, or null when a full save is safe. */
 export const findPdfRewriteBlocker = ({

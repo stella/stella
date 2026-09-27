@@ -75,11 +75,7 @@ const fingerprint = (der: Uint8Array) =>
   new Bun.CryptoHasher("sha256").update(der).digest("hex");
 
 /** Whether data dated `thisUpdate`..`nextUpdate` is current at `now`. */
-export const isCurrent = (
-  thisUpdate: Date,
-  nextUpdate: Date | undefined,
-  now: Date,
-) =>
+const isCurrent = (thisUpdate: Date, nextUpdate: Date | undefined, now: Date) =>
   thisUpdate.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
   (nextUpdate === undefined
     ? thisUpdate.getTime() >= now.getTime() - MAX_UNDATED_AGE_MS

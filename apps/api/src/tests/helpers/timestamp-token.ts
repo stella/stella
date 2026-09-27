@@ -20,7 +20,7 @@ const ID_SIGNED_DATA = "1.2.840.113549.1.7.2";
 const ID_SHA256 = "2.16.840.1.101.3.4.2.1";
 const ID_CONTENT_TYPE = "1.2.840.113549.1.9.3";
 const ID_MESSAGE_DIGEST = "1.2.840.113549.1.9.4";
-export const TIME_STAMPING_USAGE = "1.3.6.1.5.5.7.3.8";
+const TIME_STAMPING_USAGE = "1.3.6.1.5.5.7.3.8";
 /** An arbitrary policy arc; verifiers only need one to be present. */
 const TEST_POLICY_OID = "1.3.6.1.4.1.99999.1";
 

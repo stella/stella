@@ -15,7 +15,7 @@ const C1_END = 0x9f;
  * accent) whole: only the control ranges are rewritten, everything else is
  * copied through untouched.
  */
-export const stripControlCharacters = (value: string) => {
+const stripControlCharacters = (value: string) => {
   const segmenter = new Intl.Segmenter();
   let sanitized = "";
   for (const { segment } of segmenter.segment(value)) {
