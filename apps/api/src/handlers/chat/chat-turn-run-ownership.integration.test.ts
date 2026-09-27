@@ -249,6 +249,47 @@ describe("a producing run", () => {
     await response.body?.cancel();
   });
 
+  test("is not cut short by its own settlement", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      deadlineMs: 60_000,
+      heartbeat: { intervalMs: 1, renewEvery: 1 },
+      owner: {
+        execution,
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      },
+    });
+    const output = async function* (): AsyncGenerator<StreamChunk> {
+      await run.settle(async () => {
+        unwrap(
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                assistantMessageId: null,
+                execution,
+                outcome: { reason: "client-disconnected", type: "interrupted" },
+                tx,
+              }),
+          ),
+        );
+        // The turn is no longer running while the settlement finishes: a
+        // beat now would read it as lost.
+        await Bun.sleep(30);
+      });
+      yield* [];
+    };
+    const response = run.produce(output());
+    await response.text();
+
+    expect(run.control.abortController.signal.aborted).toBe(false);
+  });
+
   test("stores what it has as owner-lost when its process shuts down", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const { response, stored } = produceUntilCut({

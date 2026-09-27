@@ -150,6 +150,9 @@ export class ChatTurnRun {
     if (this.state.status !== "producing") {
       return panic(`A chat turn run cannot settle once ${this.state.status}`);
     }
+    // Settling ends the run's hold on the turn: from here a beat would find
+    // the turn no longer running and cut the response's last chunks.
+    this.state.stopHeartbeat();
     try {
       await persist();
     } finally {
@@ -236,6 +239,7 @@ export class ChatTurnRun {
   private startHeartbeat(): () => void {
     const { heartbeat = CHAT_TURN_RUN_HEARTBEAT, owner } = this.options;
     let beats = 0;
+    let stopped = false;
     const beat = async () => {
       beats += 1;
       const lookup = {
@@ -246,6 +250,11 @@ export class ChatTurnRun {
         beats % heartbeat.renewEvery === 0
           ? await renewChatTurnExecutionLease(lookup)
           : await readChatTurnExecutionStanding(lookup);
+      // A beat that lands after the heartbeat stopped reports a turn the run
+      // is settling or has settled itself.
+      if (stopped) {
+        return;
+      }
       // A failed read or renewal is transient: the lease still holds, and the
       // next beat asks again.
       if (Result.isError(standing)) {
@@ -281,6 +290,7 @@ export class ChatTurnRun {
     }, heartbeat.intervalMs);
     interval.unref();
     const stop = () => {
+      stopped = true;
       clearInterval(interval);
     };
     this.control.abortController.signal.addEventListener("abort", stop, {
