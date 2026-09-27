@@ -311,6 +311,8 @@ type StoredIdentifierRow = {
   type: string;
   value: string;
   normalizedValue: string;
+  /** A declared alias: kept, and not something the derivation must match. */
+  declared?: boolean;
 };
 
 const readStoredIdentifierRows = (result: unknown): StoredIdentifierRow[] =>
@@ -326,6 +328,7 @@ const readStoredIdentifierRows = (result: unknown): StoredIdentifierRow[] =>
             type: row["type"],
             value: row["value"],
             normalizedValue: row["normalizedValue"],
+            declared: row["declared"] === true,
           },
         ]
       : [],
@@ -432,6 +435,9 @@ const projectDecisionPage = async (
     deleted AS (
       DELETE FROM case_law_decision_identifiers stored USING page
       WHERE stored.decision_id = page.decision_id
+        -- A declared alias is not derived from the decision, so no
+        -- derivation removes it.
+        AND stored.declared_at IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM expected
           WHERE expected.decision_id = stored.decision_id
@@ -625,7 +631,8 @@ const decisionMismatchCount = async (
   const stored = readStoredIdentifierRows(
     await tx.execute(sql`
     SELECT decision_id::text AS "decisionId", type, value,
-           normalized_value AS "normalizedValue"
+           normalized_value AS "normalizedValue",
+           declared_at IS NOT NULL AS "declared"
     FROM case_law_decision_identifiers
     WHERE decision_id = ANY (ARRAY[${ids}]::uuid[])
   `),
@@ -645,7 +652,22 @@ const decisionMismatchCount = async (
         }),
       ),
     );
-    const actual = new Set(storedByDecision.get(row.id)?.map(identifierKey));
+    const derivedKeys = new Set(
+      identifiers.map(
+        (identifier) =>
+          `${identifier.type}\u0000${normalizeDecisionIdentifier(identifier)}`,
+      ),
+    );
+    const actual = new Set(
+      storedByDecision
+        .get(row.id)
+        ?.filter(
+          ({ declared, type, normalizedValue }) =>
+            declared !== true ||
+            derivedKeys.has(`${type}\u0000${normalizedValue}`),
+        )
+        .map(identifierKey),
+    );
     return (
       expected.size !== actual.size ||
       [...expected].some((identifier) => !actual.has(identifier))

@@ -19,7 +19,6 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czUsAdapter,
-  czUsEcliSpellings,
   parseNalusDetail,
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
@@ -1387,25 +1386,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]?.identifiers).toEqual([
       { type: "reporter-citation", value: "234/2002 Sb." },
       { type: "reporter-citation", value: "N 53/26 SbNU 73" },
-      { type: "ecli", value: "ECLI:CZ:US:2002:Pl.US.18.01" },
     ]);
-  });
-
-  test("declares the other spelling of a first-counter ECLI and none for a later counter", () => {
-    expect(czUsEcliSpellings("ECLI:CZ:US:2007:Pl.US.38.06.1")).toEqual([
-      { type: "ecli", value: "ECLI:CZ:US:2007:Pl.US.38.06" },
-    ]);
-    expect(czUsEcliSpellings("ECLI:CZ:US:2007:Pl.US.38.06")).toEqual([
-      { type: "ecli", value: "ECLI:CZ:US:2007:Pl.US.38.06.1" },
-    ]);
-    expect(czUsEcliSpellings("ECLI:CZ:US:2007:Pl.US.38.06.2")).toEqual([]);
-    expect(czUsEcliSpellings("ECLI:CZ:US:2009:Pl.US.st.27.09.1")).toEqual([
-      { type: "ecli", value: "ECLI:CZ:US:2009:Pl.US.st.27.09" },
-    ]);
-    expect(czUsEcliSpellings("ECLI:CZ:US:2009:Pl.US.st.27.09")).toEqual([
-      { type: "ecli", value: "ECLI:CZ:US:2009:Pl.US.st.27.09.1" },
-    ]);
-    expect(czUsEcliSpellings(undefined)).toEqual([]);
   });
 
   test("rejects corrupt search cursors instead of silently restarting", async () => {
