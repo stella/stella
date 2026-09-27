@@ -5,6 +5,8 @@ import fc from "fast-check";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
 
+import { isUnknownArray } from "@/api/lib/type-guards";
+
 /**
  * An independent reading of the JSON Schemas the MCP surface publishes: Ajv's
  * draft-07 validator, the dialect the generator targets, in strict mode so an
@@ -106,7 +108,7 @@ const schemaValueArbitrary = (
     return fc.jsonValue({ maxDepth: 2 });
   }
   const values = schema["enum"];
-  if (Array.isArray(values) && values.length > 0) {
+  if (isUnknownArray(values) && values.length > 0) {
     return fc.constantFrom<unknown>(...values);
   }
   const { anyOf: alternatives, ...siblings } = schema;
@@ -236,7 +238,7 @@ const perturb = (
   if (step === undefined) {
     return replacement === REMOVE_KEY ? null : replacement;
   }
-  if (Array.isArray(value)) {
+  if (isUnknownArray(value)) {
     if (value.length === 0) {
       return replacement === REMOVE_KEY ? [] : [replacement];
     }

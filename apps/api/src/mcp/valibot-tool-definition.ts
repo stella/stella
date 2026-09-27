@@ -7,6 +7,7 @@ import {
 } from "@stll/agent-input";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
   McpToolDefinition,
   McpToolInputSchema,
@@ -381,8 +382,8 @@ const mergeLiteralAlternatives = (
 const unionOfLiterals = (left: unknown, right: unknown): unknown[] => {
   const seen = new Set<string>();
   return [
-    ...(Array.isArray(left) ? left : []),
-    ...(Array.isArray(right) ? right : []),
+    ...(isUnknownArray(left) ? left : []),
+    ...(isUnknownArray(right) ? right : []),
   ].filter((literal) => {
     const key = JSON.stringify(literal);
     if (seen.has(key)) {
