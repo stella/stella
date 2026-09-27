@@ -11,6 +11,7 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
+  TokenUsage,
   ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
@@ -566,6 +567,80 @@ const persistCutTurn = async (cause: TurnCut) => {
     { abortSignal: abortController.signal, deadlineSignal: deadline.signal },
   );
 };
+
+/** A model call that fails after the provider reported usage, having
+ *  written `text` first (none when empty). */
+const createFailingAfterUsageAdapter = ({
+  text,
+  usage,
+}: {
+  text: string;
+  usage: TokenUsage;
+}): AnyTextAdapter => ({
+  kind: "text",
+  name: "failing-after-usage",
+  model: "failing-after-usage",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ runId, threadId }) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: runId ?? "run-1",
+      threadId: threadId ?? "thread-1",
+    } satisfies StreamChunk;
+    if (text !== "") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "provider-message-1",
+        role: "assistant",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "provider-message-1",
+        delta: text,
+      } satisfies StreamChunk;
+    }
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "The provider stream ended with an error.",
+      code: "incomplete-stream",
+      usage,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+describe("a turn whose model call fails after reporting usage", () => {
+  for (const text of ["", "The cass"]) {
+    test(`stores the usage on the failed turn's message (text: ${JSON.stringify(text)})`, async () => {
+      const usage = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const { finish } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createFailingAfterUsageAdapter({ text, usage }),
+          messages: [{ role: "user", content: "Reply." }],
+          threadId: "thread-1",
+        }),
+      );
+
+      expect(finish?.outcome).toMatchObject({ type: "failed" });
+      expect(finish?.responseMessage.metadata).toMatchObject({
+        usage: chatMessageUsageFromTokenUsage(usage),
+      });
+    });
+  }
+});
 
 describe("a turn cut while the model was thinking", () => {
   test("settles as interrupted, not as a completion with no answer", async () => {

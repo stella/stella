@@ -29,6 +29,11 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "unknown",
+    "usage": {
+      "promptTokens": 24,
+      "completionTokens": 0,
+      "totalTokens": 24
+    }
   }
 }

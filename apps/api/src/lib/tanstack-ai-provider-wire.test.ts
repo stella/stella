@@ -11,6 +11,7 @@ import {
   cassetteFor,
   cassetteKey,
   findMissingCassettes,
+  findUndecidedErrorUsage,
   loadProviderWireCassettes,
   PROVIDER_WIRE_PROVIDERS,
 } from "@/api/tests/helpers/provider-wire-cassette";
@@ -113,6 +114,10 @@ const RETRY_TIMEOUT_MS = 60_000;
 describe("provider wire corpus", () => {
   test("every provider has a cassette for every scenario its protocol can produce", () => {
     expect(findMissingCassettes(cassettes)).toEqual([]);
+  });
+
+  test("every error cassette whose body reports usage decides what its run error carries", () => {
+    expect(findUndecidedErrorUsage(cassettes)).toEqual([]);
   });
 
   test("every unmet entry names a cassette in the corpus", () => {

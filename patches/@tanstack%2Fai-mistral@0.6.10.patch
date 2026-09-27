@@ -9,9 +9,15 @@
    the run in a RUN_ERROR (code incomplete-stream, as TanStack/ai#1494 names
    a cut-off stream) instead of a finished answer. Upstream PR to be opened;
    remove when released.
+4. A stream that ends without a finish_reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of finishing as stop, and a data line that is
+   not JSON fails the run instead of being skipped with a warning. Upstream
+   PR to be opened; remove when released.
+5. The RUN_ERROR for finish_reason error carries the usage on its chunk.
+   Upstream PR to be opened; remove when released.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359908fa86b 100644
+index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..f14590e1e1fb51752a81b758d94294964475963c 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -4,6 +4,7 @@ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../uti
@@ -56,7 +62,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
  		let parsed;
-@@ -257,7 +260,24 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -257,7 +260,29 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					});
  				}
  				const finishReason = choice.finish_reason;
@@ -72,6 +78,11 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
 +						timestamp,
 +						message: "The model stopped with an error before it finished.",
 +						code: "incomplete-stream",
++						...chunk.usage && { usage: {
++							promptTokens: chunk.usage.prompt_tokens || 0,
++							completionTokens: chunk.usage.completion_tokens || 0,
++							totalTokens: chunk.usage.total_tokens || 0
++						} },
 +						error: {
 +							message: "The model stopped with an error before it finished.",
 +							code: "incomplete-stream"
@@ -82,7 +93,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  					if (finishReason === "tool_calls" || toolCallsInProgress.size > 0) for (const [, toolCall] of toolCallsInProgress) {
  						if (!toolCall.started || !toolCall.id || !toolCall.name || toolCall.ended) continue;
  						const parsedInput = parseToolCallInput(toolCall, normalizeToolInput);
-@@ -273,7 +293,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -273,7 +298,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  							input: parsedInput
  						});
  					}
@@ -91,7 +102,30 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  					if (reasoningMessageId !== null && !hasClosedReasoning) {
  						hasClosedReasoning = true;
  						yield asChunk({
-@@ -415,7 +435,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -354,14 +379,18 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					});
+ 				}
+ 				hasEmittedRunFinished = true;
++				// No chunk carried a finish_reason: the stream was cut off.
+ 				yield asChunk({
+-					type: "RUN_FINISHED",
++					type: "RUN_ERROR",
+ 					runId: aguiState.runId,
+-					threadId: aguiState.threadId,
+ 					model: lastChunkModel,
+ 					timestamp,
+-					usage: void 0,
+-					finishReason: hasEmittedToolCall ? "tool_calls" : "stop"
++					message: "The provider stream ended before a finish reason.",
++					code: "incomplete-stream",
++					error: {
++						message: "The provider stream ended before a finish reason.",
++						code: "incomplete-stream"
++					}
+ 				});
+ 			}
+ 		} catch (error) {
+@@ -415,7 +444,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -100,7 +134,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -427,11 +447,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -427,11 +456,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  		const response = await fetch(url, {
  			method: "POST",
  			headers,
@@ -122,3 +156,16 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..54dedbe8a4039443b3a982b68e06f359
  		}
  		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
  		const reader = response.body.getReader();
+@@ -453,10 +490,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					try {
+ 						parsed = JSON.parse(data);
+ 					} catch (e) {
+-						if (e instanceof SyntaxError) {
+-							console.warn(`[mistral] skipped unparseable SSE chunk: ${data.slice(0, 200)}`);
+-							continue;
+-						}
++						// A chunk that does not parse lost part of the answer.
++						if (e instanceof SyntaxError) throw Object.assign(new Error("Mistral stream carried a chunk that is not JSON."), { cause: e });
+ 						throw e;
+ 					}
+ 					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {
