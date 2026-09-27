@@ -6,6 +6,7 @@ import {
   namespaceMcpToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { MCP_MODES } from "@/api/mcp/constants";
 import {
   DYNAMIC_TOOL_FAMILY_POLICIES,
   getDynamicMcpToolOutputContract,
@@ -17,414 +18,45 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolOutputContract,
-  LAW_MCP_TOOL_DEFINITIONS,
+  listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { defineMcpToolOutput } from "@/api/mcp/valibot-tool-definition";
 
+import {
+  diffMcpSurfaceBaseline,
+  formatSurfaceDrifts,
+  measureMcpSurfaces,
+  readMcpSurfaceBaseline,
+} from "../../scripts/mcp-surface-baseline";
+
 /**
  * Deterministic registry-quality suite (plan 046, goal c). Everything here is
  * a pure function of the static tool definitions: no model in the loop, no
- * network, no tokenizer. Budgets are character counts; characters approximate
- * tokens at roughly 4:1, so e.g. a 21_000-char payload is ~5k tokens.
+ * network, no tokenizer.
  *
- * The budgets are ratchets: each ceiling sits ~10-15% above the measured
- * value at the time of writing, so organic growth fits but a surface-size
- * jump (new tools, longer descriptions) fails the suite and must be a
- * deliberate, reviewed constant bump.
+ * Surface sizes (tool count and every advertised part, per audience) are held
+ * by the committed `apps/api/mcp-surface-baseline.json`, measured by
+ * `scripts/mcp-surface-baseline.ts`: a change that moves a row past its
+ * tolerance rewrites that file, and the pull request argues for the diff. The
+ * per-tool ceilings below are fixed limits, not measurements.
  */
 
-const SURFACES = [
-  { mode: "default", definitions: DEFAULT_MCP_TOOL_DEFINITIONS },
-  { mode: "anonymized", definitions: ANONYMIZED_MCP_TOOL_DEFINITIONS },
-  { mode: "law", definitions: LAW_MCP_TOOL_DEFINITIONS },
-] as const;
+// Every audience, read from the canonical registry. Each is serialized with
+// its own mode wherever a wire tool is built: output contracts resolve per
+// audience, so a default-mode serialization measures another audience's
+// schemas.
+const SURFACES = MCP_MODES.map((mode) => ({
+  mode,
+  definitions: listStaticMcpToolDefinitions(mode),
+}));
 
-type SurfaceMode = (typeof SURFACES)[number]["mode"];
-
-// Ceilings pinned to the measured counts after the tool-surface consolidation
-// (plan 047): default 40 tools, anonymized 21 tools. The consolidation
-// recovered five slots (40 -> 45); this ratchet makes every subsequent surface
-// increase an explicit, reviewed decision rather than allowing silent growth.
-// sits at the tighter measured 40 so unreviewed growth fails first. Any tool
-// added to either surface must bump the matching ceiling deliberately.
-// default bumped 40 -> 41 for the `prepare_feedback` tool (agent-drafted
-// bug/feature/docs reports). It is excluded from the anonymized surface, so
-// the anonymized ceiling is unchanged.
-// default bumped 41 -> 44 for the three capability meta-tools (plan 049 phase 2:
-// list_capabilities, describe_capability, invoke_capability). All three are
-// excluded from the anonymized surface (two read-only meta-reads that expose a
-// dynamic tenant payload, one write), so the anonymized ceiling is unchanged.
-// default bumped 44 -> 45 for internal contact-directory discovery; the tool
-// reuses the HTTP capability's query and remains excluded from anonymized mode.
-// default bumped 45 -> 46 for save_filled_template: the one compound
-// server-side persistence tool that removes raw PUT/base64 transport from agent
-// workflows while keeping fill_template least-privileged. Further additions
-// should recover a slot through consolidation before expanding this ceiling.
-// default bumped 46 -> 47 for upload_document_version, the canonical
-// host-file/MCP-App entry point backed by the existing version-upload pipeline.
-// default bumped 47 -> 48 to split the host-file data tool from its portable
-// picker launcher; UI metadata is static, so a combined tool rendered the
-// picker even after a host-provided file had already uploaded successfully.
-// default bumped 48 -> 49 for delete_task: tasks were the one workspace entity
-// deletable over HTTP but not through MCP (delete_document refuses them by
-// kind), so agents and the CLI had no way to remove one. Write-only, so the
-// anonymized ceiling is unchanged.
-// default bumped 49 -> 50 when save_template split into create_template and
-// configure_template_fields: creating a template from a DOCX and configuring
-// its fields are separate intents with separate permissions, and one tool
-// advertising both branches made every property conditional on the other.
-// Write-only, so the anonymized ceiling is unchanged.
-// default bumped 50 -> 51 and anonymized 21 -> 22 for read_case_law_citations:
-// the citation graph with each citing court's treatment and the paragraph the
-// citation sits in. read_case_law_decision could not absorb it without
-// becoming a tool whose meaning depends on which optional arguments are
-// present, and the orientation eval showed a model reaching for the decision
-// read and never finding the treatment.
-// default bumped 51 -> 55 and anonymized 22 -> 26 for the four legislation
-// corpus tools: corpus legislation search, point-in-time statute read, batch
-// provision read, and provision history. They are four intents, not one tool
-// with a mode argument: a search answers "which act", a read answers "what did
-// it say on this date", the batch read answers "these provisions" without a
-// call per provision, and the history answers "what changed". All four are
-// public-corpus `passthrough`, so both surfaces carry them. The BOE rename
-// (search_legislation -> search_boe_legislation) is count-neutral.
-// law is pinned at its exact measured 7. That audience exists because host
-// guidance puts a workable budget at 25-30 tools per agent while the default
-// surface lists 55, so a growing law list defeats its own purpose: an eighth
-// tool is argued for here, not absorbed.
-// default 55 -> 56, anonymized 26 -> 27 and law 7 -> 8 for lookup_case_law:
-// resolving a case reference to a decision is a different intent from
-// searching for one, and search_case_law could not absorb it without becoming
-// a tool whose meaning depends on which argument is present. It answers from
-// the identity columns, so its failure modes (no such docket, a docket used at
-// two courts) are not a ranking's.
-// law 8 -> 10 for the OpenAI-compatible `search`/`fetch` pair. Argued for, not
-// absorbed: a client that can only drive those two names (an OpenAI-compatible
-// connector outside developer mode) could not reach the corpus at all, and the
-// eight named tools are unreachable to it however short the list is. The
-// default and anonymized counts are unchanged, because that audience already
-// carried the pair.
-// default 56 -> 57 and anonymized 27 -> 28 for preview_template_conditions.
-// Argued for, not absorbed: fill_template settles an AI-decided condition and
-// writes the document in one call, so asking what a set of values would decide
-// cannot be a mode of it without the fill becoming a tool whose meaning depends
-// on which argument is present. It also runs only the decision model, which is
-// a different cost and a different failure set from a fill. law does not carry
-// templates.
-// default 57 -> 58 for save_playbook. Argued for, not absorbed: playbooks were
-// readable and runnable from the curated list but writable only through
-// invoke_capability, which in-app chat does not project, so no chat could
-// author one. It cannot be a mode of save_clause (a different object with a
-// different permission) or of run_playbook (a write to the definition versus a
-// review over a matter). Write-only, so the anonymized ceiling is unchanged.
-// default 58 -> 59 for compare_documents. Argued for, not absorbed: producing
-// a redline was reachable only as a capability, so an agent asked to compare
-// two versions had to discover it through list_capabilities first. It is not a
-// mode of save_document or upload_document_version: it reads two stored
-// versions, runs the DOCX comparison, and may write a derived version, which
-// is a different cost and a different failure set from either. The anonymized
-// count is unchanged; a write never appears there.
-// default 59 -> 60 for prepare_file_comparison. Argued for, not absorbed: an
-// agent handed two .docx files that are not in stella has no way to get bytes
-// to the server, and compare_documents cannot take them inline because a DOCX
-// does not fit a tool call. Reserving the upload is a separate call because the
-// client PUTs between the two, and folding it into compare_documents would make
-// that tool's meaning depend on whether files were attached. The anonymized
-// count is unchanged; a write never appears there.
-// open_file_comparison and prepare_file_comparison_from_links are separate
-// tools, not modes of prepare_file_comparison: a chat host gives the model no
-// way to PUT bytes, so the panel moves them from the user's browser and the
-// links tool moves them server-side, each with its own failure set. Writes,
-// so the anonymized count is unchanged.
-// default 62 -> 63 for submit_feedback. Argued for, not absorbed: the draft
-// step must stay read-only and send nothing, because showing the human the
-// sanitized text before it leaves the workspace is the whole control. One tool
-// doing both would put the model, alone, in charge of that decision. Write-only
-// and excluded from the anonymized surface, so that ceiling is unchanged; law
-// carries no feedback tool.
-// default 63 -> 67 and anonymized 28 -> 29 for the reader-annotation tools:
-// list, create, update and delete a highlight or comment on a decision or a
-// statute. Separate tools, one intent each: create places a mark from an
-// anchor and a quote and reports per-passage issues, update names one change,
-// delete is destructive and confirmed. Only the list is a read, so only it
-// reaches the anonymized surface.
-const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 67,
-  anonymized: 29,
-  law: 10,
-};
-
-// Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured after plan 047: default 45_339 chars (~11.3k tokens),
-// anonymized 19_472 chars (~4.9k tokens). Ceilings sit ~10-15% above so organic
-// growth fits but a surface-size jump must be a deliberate constant bump.
-// default bumped 51_000 -> 54_000 for the three capability meta-tools (plan 049
-// phase 2): measured 51_580 chars. The anonymized surface is unchanged (all
-// three are excluded from it).
-// default bumped 54_000 -> 61_000 after contact discovery and template
-// persistence brought the measured payload to 55_283 chars.
-// default bumped 61_000 -> 70_000 after the template authoring tool began advertising the
-// canonical strict field-configuration contract instead of a loose object
-// approximation: measured 63_213 chars. The new ceiling retains roughly 10%
-// review headroom without weakening the provider-visible schema.
-// anonymized bumped 22_000 -> 23_403, exactly the measured growth from deriving
-// every advertised schema from its runtime validator: +609 chars of
-// `additionalProperties`, +682 of `minLength`/`format` bounds the handlers
-// already enforced, +112 of explicit empty `required` lists. Stripping those
-// three keyword classes reproduces the previous payload byte for byte, so no
-// description, enum or property grew; the default surface still fits its
-// ceiling unchanged.
-// anonymized bumped 23_403 -> 23_557 when the scoping input was renamed and an
-// alias clause was added per field; the alias is gone, so the payload sits
-// below that again and the ceiling keeps the headroom.
-// default bumped 70_000 -> 70_100 for delete_task plus the uuid format on
-// entity ids and the task status/priority enums: measured 70_059 chars.
-// default bumped 70_100 -> 70_200 when the template authoring tool gained the
-// host file reference (the same four-property object upload_document_version
-// advertises): measured 70_171 chars, and the tool description shrank to pay
-// part of it back.
-// default bumped 70_200 -> 71_000 when save_template split into
-// create_template and configure_template_fields: two tool entries replace
-// one, and each carries only the properties its own intent uses.
-// Folding the six mutually exclusive derived-source keys into one `source`
-// union then paid part of that back: the union's structure costs more than
-// the flat keys did, but its per-branch prose belongs in the field-reference
-// resource rather than in a schema every client downloads on connect, and
-// the two tool descriptions lost the sentences the references already carry.
-// Measured with both changes in: 70_849 chars.
-// default bumped 71_000 -> 72_000 when create_template became an upsert:
-// `template_id` plus the rules that say what it means with and without a
-// document. Measured 71_254 chars, after list_templates gave back the fill
-// semantics its own description was repeating from fill_template.
-// Explicit destructive/read-only hints on every tool add only their required
-// wire metadata: measured 72_683 default and 23_758 anonymized. Pin the exact
-// new sizes so this submission fix does not create unrelated growth headroom.
-// Shared agent-input metadata and generated guidance, plus explicit date
-// formats on the case-law range, measure 72_962 default and 23_790 anonymized.
-// Pin those exact sizes so future schema growth remains reviewable.
-// read_case_law_citations and the case-law search filters it sits beside
-// (`sort`, plus the hit fields and facet semantics the search description now
-// states) measure 118_752 default and 54_752 anonymized: the citation
-// passage says whether it was cut and which mention of the cited case it
-// carries, and the search sort names the identifier lookup that ignores it.
-// The citation tool's own description paid part of that back. Pin those exact
-// sizes so the next schema growth stays reviewable.
-// The four legislation corpus tools measure 130_210 default and 66_210
-// anonymized, from 118_768 and 54_768 without them (the BOE rename accounts
-// for the difference from the 118_752 pinned above). The cost is the ELI,
-// anchor and as_of prose each tool repeats, and the batch read's nested
-// `items[]` object; the alternative was one legislation tool whose meaning
-// depended on which optional arguments were present. Pin those exact sizes so
-// the next schema growth stays reviewable.
-// default 130_300 -> 130_800 and anonymized 66_300 -> 66_800 (measured
-// 130_753 and 66_753) for two contract facts the batch provision read owes a
-// model: that a subdivision anchor is accepted, and that an entry is
-// validated on its own so a malformed one comes back with its own status
-// instead of sinking the call.
-// law is pinned exactly: what a client downloads on connect is the property
-// this audience sells, so growth here is the thing being ratcheted, not an
-// incidental cost. It carries the same four legislation schemas, so the two
-// facts above account for its size too.
-// Every surface drops 66 chars when search_legislation stops cross-referencing
-// search_boe_legislation: the corpus is jurisdiction-agnostic, and the law
-// audience does not carry the connector at all, so following that sentence
-// there answered unknown_tool. Measured 130_687, 66_687 and 22_001; the two
-// wider ceilings keep the same 47-char margin they were set with, and law
-// stays pinned exactly.
-// The case-law batch cutover (search takes `queries[]`, the decision read
-// takes `decision_ids[]`, and the case-law `country` input names the admitted
-// codes) then measures 130_130 default, 66_130 anonymized and 21_444 law, down
-// from 130_687, 66_687 and 22_001: the array inputs cost less than the prose
-// the two descriptions gave back. Tightened to the new measurement, since a
-// ratchet only moves down without a reviewed reason.
-// Saying what the merged cursor does and does not carry costs 188 of those
-// characters back: that its deduplication is within the page, and that a
-// caller paging keys on `decisionId`. Neither is inferable from the shape, and
-// a client that assumed otherwise would drop results silently. Measured
-// 130_318 default, 66_318 anonymized and 21_632 law.
-// lookup_case_law then measures 132_709 default, 68_709 anonymized and 24_023
-// law, up 2_391 on every surface: its own input schema, its description, and
-// an output schema whose four branches each say what the caller does next. The
-// fourth keeps a reference whose read failed from taking the batch down with
-// it.
-// Naming that fourth status in the description measures 24_053 law, up 30
-// after trimming the same description elsewhere: a caller reading
-// `lookup_failed` as an unknown status would retry the whole batch instead of
-// the one reference whose read did not complete. The wider surfaces absorb it
-// in their existing headroom.
-// Binding the four country inputs to the lenient country reader costs the
-// rest: each carries the `x-stella-agent-input` marker dispatch reads, plus one
-// sentence saying an alpha-3 or alpha-2 code or the country's name is accepted.
-// Both are what a model needs to spell the value at all: capped at three
-// characters, `country` answered a Czech request for Czech case law with
-// `not_found`, and the model answered from memory instead of from the corpus.
-// The marker also carries the admitted codes and the tool name so a rejection
-// names the call to change rather than only the field that was wrong.
-// Measured 133_357 default, 69_168 anonymized and 24_482 law.
-// Reporting what a search required then measures 134_215 default, 69_996
-// anonymized and 25_198 law, on top of the country reader above: search_case_law
-// gains a `strict` input and the sentence saying function words are not
-// required terms, and the descriptions of its filters and of
-// read_case_law_citations were trimmed to pay part of it back. A model that
-// cannot see which words were required reads an empty page as an empty corpus.
-// The corpus reaching the OpenAI-compatible pair then measures 135_038
-// default, 70_857 anonymized and 28_194 law. The wider surfaces pay for the id
-// vocabulary both descriptions state and for the `fetch` id pattern that
-// replaces a bare uuid format; law pays for the pair itself, which is what the
-// audience gained. A vocabulary a model cannot see is a vocabulary it guesses,
-// and a guessed id is a not_found the model reads as an empty corpus.
-// list_tasks listing across matters then measures 135_328 default and 71_147
-// anonymized: matter_id turns optional and the tool gains the `assignee`
-// filter, and the description has to say that omitting the matter widens the
-// list, or a model keeps asking which matter to look in.
-// Reporting condition decisions adds preview_template_conditions plus the
-// sentence fill_template needs about `decisions`. An agent reading a filled
-// template's paragraphs cannot tell a block excluded by a decision from one the
-// document never carried, so what was decided has to be said rather than
-// inferred. Law is unchanged; it carries no template tool.
-// save_playbook then measures 145_426 default, up 7_308 from 138_118: its
-// entry is 7_307 chars, of which the input schema is 5_559. The stored
-// `positionSchema` serializes to 32_190, so the tool advertises its own
-// snake_case position input instead: no rule or entry ids, no derived ask, no
-// deterministic check and no reference standard (all server-owned or
-// editor-only), a flat ladder (which also keeps the schema under the CLI's
-// depth cap), one-line field descriptions, and the authoring grammar left to
-// the skill rather than repeated per field. Pinned exactly. Anonymized and law
-// do not carry the tool.
-// compare_documents adds 4_712 (measured on its own from 138_119 to 142_831):
-// 2_712 of that is its input schema, whose `source` union states each
-// selection's own version ids rather than a set of optional ones a model could
-// fill contradictorily, and whose description says what each tracked-changes
-// disposition compares. prepare_file_comparison and the `uploads` source add
-// 3_853 more: about 2_100 is the new tool (two file descriptors, each stating
-// the size limit and what the checksum is of, plus a description that spells
-// out the PUT and the call after it), and the rest is compare_documents' third
-// source variant and the third output_mode its description distinguishes.
-// Measured 154_051 default. Anonymized and law are unchanged: both tools are
-// writes, so neither surface carries them.
-// open_file_comparison (no input, a short description) and
-// prepare_file_comparison_from_links (two link descriptors) sit under the
-// default ceiling with the usual headroom; writes, so the other surfaces are
-// unchanged.
-// submit_feedback then measures 163_346 default. Its schema repeats the
-// sanitized fixed-point payload and adds the explicit human confirmation
-// gate. The anonymized and law surfaces carry no feedback tools and are
-// unchanged.
-// The `mixed` citation treatment then measures 163_352 default, up 6: the
-// closed polarity vocabulary gains a member in read_case_law_citations'
-// output schema, and its description was shortened to pay for most of it.
-// A value the column can hold has to be a value the schema admits, so this
-// is not compressible; the anonymized and law surfaces keep their headroom.
-// The feedback approval token then measures 163_588 default: submit_feedback
-// takes the approval_token prepare_feedback signs over the report, so the
-// report the human approved and the one that is sent cannot diverge. Both
-// descriptions were shortened to pay for part of it; feedback tools are not on
-// the anonymized or law surfaces.
-// The four reader-annotation tools then measure 172_122 default and 75_306
-// anonymized (the list alone reaches the anonymized surface). Most of it is
-// create's input: the discriminated mark and the anchored passages the server
-// places the mark by.
-// Projecting the last six hand-written input schemas from their validators
-// then adds 161 default: the projection states bounds and defaults the
-// validators already enforced (`minLength`, the cursor's `maxLength`,
-// `access`/`limit` defaults) plus Valibot's empty `required`.
-const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 172_400,
-  anonymized: 75_400,
-  law: 28_250,
-};
-
-// default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
-// adds to each passage (`truncated`, and the closed `mention` set): a model
-// reading an excerpt as the whole paragraph, or a passage as the mention the
-// treatment was classified from, is reading something the data does not say.
-// Measured 42_212. The anonymized surface does not carry this tool.
-// default bumped 42_300 -> 46_400 and anonymized 28_000 -> 32_000 for the
-// four legislation corpus schemas: measured 46_280 default (42_212 without
-// them) and 31_916 anonymized (27_848 without them). Their largest, 1_416 for
-// read_statute, is well under the per-tool ceiling; it declares the outline
-// entries, the version window and the withheld-text field, each of which says
-// something the data would otherwise be read as promising.
-// default 46_400 -> 46_600 and anonymized 32_000 -> 32_300 (measured 46_525
-// and 32_161) for the two branches the provision reads gained: an `invalid`
-// entry carrying its own `issues[]`, and a history item discriminated on the
-// same status vocabulary so a version whose source bars derived AI use
-// answers `text_withheld` rather than its wording. law carries the same
-// schemas and is pinned exactly.
-// The case-law batch cutover then measures 44_960 default, 30_596 anonymized
-// and 7_733 law, down from 46_525, 32_161 and 9_298: the decision read
-// declares its decision once inside an `items[]` variant whose absence
-// branches are three fields each, and search_case_law adds only
-// `matchedQueries`. Tightened to the new measurement.
-// lookup_case_law then measures 45_807 default, 31_443 anonymized and 8_580
-// law, up 847: the identity fields are declared once and shared between the
-// `found` entry and an `ambiguous` entry's candidates, so the two remaining
-// branches cost a message, a hint, and the `lookup_failed` entry that keeps a
-// failed reference from taking the batch down with it.
-// search_case_law's `searches[]` then measures 46_098 default, 31_734
-// anonymized and 8_871 law, up 291: one entry per phrasing carrying the query
-// as sent, the `queryUsed` the engine answered, and that phrasing's warnings.
-// Per phrasing rather than per call because each is interpreted on its own,
-// and a caller that cannot tell which phrasing was widened cannot act on it.
-// The compat `fetch` metadata then measures 46_223 default, 31_859 anonymized
-// and 9_981 law. It is a discriminated union on `kind` rather than one object:
-// only a matter document belongs to a workspace, so a strict object with an
-// optional `workspaceId` would let a corpus read answer with a tenant field.
-// Law also gains the pair's two schemas, its `fetch` union carrying the two
-// corpus branches alone.
-// list_tasks rows then name their matter (`matterId`, `matterName`,
-// `matterReference`): a list spanning matters is unreadable when a row cannot
-// say which matter it is in. Condition decisions add one decided/undecided
-// variant, shared by preview_template_conditions and fill_template, plus the
-// `{% if %}` block list's `kind` variant. A decided `false` and a condition
-// nothing could settle exclude the same paragraph, so they cannot share one
-// shape. Adding `decided_by` provenance for supplied values measures 48_033
-// default and 32_831 anonymized after merging the structurally identical user
-// and generative branches; without it, an agent cannot tell an override from a
-// model answer.
-// save_playbook's output then measures 48_916 default, up 883: the `updatedAt`
-// the next save passes back, each written position's `sourceId` with whether
-// it was added or changed, and the per-entry `issues[]` that lets one refused
-// position come back with its fix while the rest of the call is saved.
-// compare_documents adds 988: one result per target, discriminated on
-// `status`, carrying the change counts, the saved version and its links. The
-// changes themselves are deliberately not in it, since that list grows with the
-// document and is the document rather than a report on it. The staged-upload
-// path adds 1_321: three result variants naming upload ids rather than version
-// ids, because echoing an upload id back as `baseVersionId` would invite a call
-// that cannot resolve, plus prepare_file_comparison's own output, which is two
-// signed PUTs and the next call spelled out. Measured 51_274 default.
-// Anonymized and law are unchanged.
-// prepare_file_comparison_from_links echoes the same next call plus the two
-// derived names and sizes; open_file_comparison returns nothing. Writes, so
-// the other surfaces are unchanged.
-// submit_feedback adds the receipt, per-channel delivery outcomes and the
-// no-channel warning: measured 53_449 default. The anonymized and law surfaces
-// are unchanged.
-// The `mixed` citation treatment adds 8 to read_case_law_citations' polarity
-// enum: measured 53_457 default. A closed vocabulary that omits a value the
-// column holds would have the tool answer outside its own schema, so the
-// member is not optional and the ceiling moves rather than the enum. The
-// anonymized and law surfaces carry the same schema inside their headroom.
-// prepare_feedback returns the approval_token submit_feedback requires:
-// measured 53_509 default. The anonymized and law surfaces are unchanged.
-// The reader-annotation tools add the listed marks with their passages, the
-// created mark's stored passages, and two receipts: measured 55_085 default and
-// 33_799 anonymized, where the list is the only one of them.
-const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 55_150,
-  anonymized: 33_850,
-  law: 10_050,
-};
-
-// Largest measured schema is read_document at 3_434 chars. A single tool must
-// not consume an unreviewed multi-thousand-token block of every tools/list.
+// A single tool must not consume an unreviewed multi-thousand-token block of
+// every tools/list. The largest measured schema is in the surface baseline.
 const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
 
-// Longest description measured after plan 047: the template authoring tool at
-// 724 chars (~180 tokens), 807 after it documented the file transport. Ceiling
-// keeps a little headroom above that.
+// An editorial limit on one description; the largest measured one is in the
+// surface baseline.
 const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.
@@ -440,6 +72,24 @@ const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 const TOOL_TITLE_MAX_CHARS = 40;
 const TOOL_TITLE_PATTERN = /^[A-Z].*[^.\s]$/u;
 
+describe("MCP tool-surface baseline", () => {
+  const baseline = readMcpSurfaceBaseline();
+
+  test("every audience has exactly one baseline row", () => {
+    expect(Object.keys(baseline.surfaces).toSorted()).toEqual(
+      [...MCP_MODES].toSorted(),
+    );
+  });
+
+  test("every audience matches its committed baseline within tolerance", async () => {
+    const current = await measureMcpSurfaces();
+    const drifts = diffMcpSurfaceBaseline(current, baseline);
+    expect(
+      drifts.length === 0 ? "" : formatSurfaceDrifts(drifts, current),
+    ).toBe("");
+  });
+});
+
 describe.each([...SURFACES])(
   "MCP registry quality ($mode surface)",
   ({ mode, definitions }) => {
@@ -450,28 +100,14 @@ describe.each([...SURFACES])(
       expect(serializeToolSurface(definitions)).toMatchSnapshot();
     });
 
-    test("tool count stays under the ceiling", () => {
-      expect(definitions.length).toBeLessThanOrEqual(TOOL_COUNT_CEILING[mode]);
-    });
-
-    test("serialized tools/list payload stays under the character budget", () => {
-      const payloadChars = JSON.stringify(toMcpTools(definitions)).length;
-      expect(payloadChars).toBeLessThanOrEqual(
-        TOOLS_LIST_PAYLOAD_CHAR_CEILING[mode],
-      );
-    });
-
-    test("output schemas stay within total and per-tool budgets", () => {
-      let total = 0;
-      for (const tool of toMcpTools(definitions)) {
+    test("every output schema fits the per-tool budget", () => {
+      for (const tool of toMcpTools(definitions, mode)) {
         const chars = JSON.stringify(tool.outputSchema).length;
-        total += chars;
         expect(
           chars,
           `Tool ${tool.name} output schema is ${chars} chars`,
         ).toBeLessThanOrEqual(OUTPUT_SCHEMA_CHAR_CEILING);
       }
-      expect(total).toBeLessThanOrEqual(OUTPUT_SCHEMA_TOTAL_CHAR_CEILING[mode]);
     });
 
     test("every tool description fits the per-tool character budget", () => {
@@ -778,17 +414,20 @@ describe("MCP static tool-set coherence", () => {
     }
   });
 
-  test("every static wire tool advertises its executable output contract", () => {
-    const tools = toMcpTools(DEFAULT_MCP_TOOL_DEFINITIONS);
-    for (const tool of tools) {
-      const contract = getStaticMcpToolOutputContract(tool.name);
-      expect(
-        contract,
-        `Missing output contract for ${tool.name}`,
-      ).toBeDefined();
-      expect(tool.outputSchema).toEqual(contract?.outputSchema);
-    }
-  });
+  test.each([...MCP_MODES])(
+    "every %s wire tool advertises its executable output contract",
+    (mode) => {
+      const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);
+      for (const tool of tools) {
+        const contract = getStaticMcpToolOutputContract(tool.name, mode);
+        expect(
+          contract,
+          `Missing output contract for ${tool.name}`,
+        ).toBeDefined();
+        expect(tool.outputSchema).toEqual(contract?.outputSchema);
+      }
+    },
+  );
 
   test("static tool names are unique across tool sets", () => {
     const names = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name);

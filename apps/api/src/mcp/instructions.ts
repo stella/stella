@@ -16,19 +16,11 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  * Kept terse and factual (no marketing). Hard budgets guard against drift and
  * token bloat and are asserted in `instructions.test.ts`.
  */
-// default bumped 1600 -> 1700 (measured 1670) for the legislation-workflow
-// pointer: the corpus has the same discover-the-order problem templates do,
-// and an agent that never calls resources/list starts at search_legislation
-// without knowing a point-in-time read exists.
+// Hard caps per audience. The measured lengths are rows of
+// `apps/api/mcp-surface-baseline.json`, where a change shows as a number diff.
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
-// anonymized bumped 900 -> 1050 and documents 900 -> 1000 for the casing rule
-// below, which every surface must state because it holds for every surface.
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
-// law bumped 1100 -> 1300 (measured 1257) for the OpenAI-compatible pair: a
-// client that drives only `search` and `fetch` reads the connect text as its
-// whole contract, so the id vocabulary it must echo back is stated here beside
-// the named tools rather than left to the two tool descriptions.
 export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
 
 /**

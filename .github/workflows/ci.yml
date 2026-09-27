@@ -1078,6 +1078,14 @@ jobs:
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
 
+      - name: MCP surface baseline self-test
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # registry-quality.test.ts holds every MCP audience to
+        # apps/api/mcp-surface-baseline.json. This proves the comparison it
+        # uses still reports growth, shrinkage, a changed tool count and a
+        # missing audience, so a broken guard cannot pass silently.
+        run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
+
       - name: Knip production dependency checks
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Static gate paired with the image boot smokes (api-image-smoke,
