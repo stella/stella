@@ -169,13 +169,24 @@ export const SK_PROFILE = {
       ],
       ...CRIMINAL_PROCEDURE_SUCCESSION,
     }),
-    {
+    // 40/1964 Zb. replaced the 1950 code on 1 April 1964.
+    ...succession({
       spellings: [
         "Občiansky zákonník",
         "Občianskeho zákonníka",
         "Občianskom zákonníku",
       ],
-      identifier: zb(40, 1964),
+      older: zb(141, 1950),
+      newer: zb(40, 1964),
+      on: "1964-04-01",
+    }),
+    {
+      spellings: [
+        "Stredný občiansky zákonník",
+        "Stredného občianskeho zákonníka",
+        "Strednom občianskom zákonníku",
+      ],
+      identifier: zb(141, 1950),
     },
     {
       spellings: [

@@ -14,6 +14,7 @@
 
 import { succession } from "./provision-citation-profile";
 import type {
+  ActTitleSpec,
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
@@ -47,8 +48,56 @@ const VAT_RECODIFICATION = "2004-05-01";
 /** The day 40/2009 Sb. replaced 140/1961 Sb. */
 const CRIMINAL_CODE_RECODIFICATION = "2010-01-01";
 
+/** The day 280/2009 Sb. replaced 337/1992 Sb. */
+const TAX_PROCEDURE_RECODIFICATION = "2011-01-01";
+
+/** The day 64/1956 Sb. replaced the 1950 criminal procedure code. */
+const CRIMINAL_PROCEDURE_1957 = "1957-01-01";
+
+/** The day 140/1961 and 141/1961 Sb. replaced the criminal codes before them. */
+const CRIMINAL_CODES_1962 = "1962-01-01";
+
+/** The day 40/1964 and 99/1963 Sb. replaced the 1950 civil codes. */
+const CIVIL_CODES_1964 = "1964-04-01";
+
+/** The day 100/1960 Sb. replaced the 1948 constitution. */
+const CONSTITUTION_1960 = "1960-07-11";
+
+/** The day 1/1993 Sb. took effect. */
+const CONSTITUTION_1993 = "1993-01-01";
+
 // Each succession is stated once and shared by the alias and title entries
 // that name it, so the two tables cannot drift apart.
+const CRIMINAL_CODE_SUCCESSION = {
+  older: sb(86, 1950),
+  newer: sb(140, 1961),
+  on: CRIMINAL_CODES_1962,
+};
+
+const TAX_PROCEDURE_SUCCESSION = {
+  older: sb(337, 1992),
+  newer: sb(280, 2009),
+  on: TAX_PROCEDURE_RECODIFICATION,
+};
+
+/** Three criminal procedure codes in turn: 1950, 1956 and 1961. */
+const criminalProcedureCodes = (
+  spellings: readonly string[],
+): readonly ActTitleSpec[] => [
+  {
+    spellings,
+    identifier: sb(87, 1950),
+    citedUntil: CRIMINAL_PROCEDURE_1957,
+  },
+  {
+    spellings,
+    identifier: sb(64, 1956),
+    citedFrom: CRIMINAL_PROCEDURE_1957,
+    citedUntil: CRIMINAL_CODES_1962,
+  },
+  { spellings, identifier: sb(141, 1961), citedFrom: CRIMINAL_CODES_1962 },
+];
+
 const LABOUR_CODE_SUCCESSION = {
   older: sb(65, 1965),
   newer: sb(262, 2006),
@@ -192,22 +241,25 @@ export const CZ_PROFILE = {
       newer: sb(89, 2012),
       on: RECODIFICATION,
     }),
-    {
-      spellings: ["OZ64", "obč. zák.", "obč.zák.", "obč. zák"],
-      identifier: sb(40, 1964),
-    },
+    { spellings: ["OZ64"], identifier: sb(40, 1964) },
+    ...succession({
+      spellings: ["obč. zák.", "obč.zák.", "obč. zák"],
+      older: sb(141, 1950),
+      newer: sb(40, 1964),
+      on: CIVIL_CODES_1964,
+    }),
     {
       spellings: ["ObchZ", "obch. zák.", "obch.zák.", "obch. zák"],
       identifier: sb(513, 1991),
     },
-    // Court convention, whatever the citing date: `tr. zák.` is the 1961
-    // criminal code and `tr. zákoník` the 2009 one. A reader that applies a
+    // Court convention: `tr. zák.` is the 1961 criminal code, or the 1950 one
+    // before it, and `tr. zákoník` the 2009 one. A reader that applies a
     // decision's own `dále jen` definitions lets one of `tr. zák.` take
     // precedence; the statute reader's fallback grammar reads no definitions.
-    {
+    ...succession({
       spellings: ["tr. zák.", "tr. zákon", "tr. zákona", "tr. zákonem"],
-      identifier: sb(140, 1961),
-    },
+      ...CRIMINAL_CODE_SUCCESSION,
+    }),
     {
       spellings: ["tr. zákoník", "tr. zákoníku", "tr. zákoníkem"],
       identifier: sb(40, 2009),
@@ -223,18 +275,15 @@ export const CZ_PROFILE = {
       identifier: sb(40, 2009),
       citedFrom: CRIMINAL_CODE_RECODIFICATION,
     },
-    {
-      spellings: [
-        "TŘ",
-        "tr. ř.",
-        "tr.ř.",
-        "tr. ř",
-        "tr. řád",
-        "tr. řádu",
-        "tr. řádem",
-      ],
-      identifier: sb(141, 1961),
-    },
+    ...criminalProcedureCodes([
+      "TŘ",
+      "tr. ř.",
+      "tr.ř.",
+      "tr. ř",
+      "tr. řád",
+      "tr. řádu",
+      "tr. řádem",
+    ]),
     ...succession({
       spellings: ["ZP", "zák. práce", "zákoník práce"],
       ...LABOUR_CODE_SUCCESSION,
@@ -244,7 +293,9 @@ export const CZ_PROFILE = {
       ...ADMINISTRATIVE_PROCEDURE_SUCCESSION,
     }),
     { spellings: ["SŘS", "s. ř. s.", "s.ř.s."], identifier: sb(150, 2002) },
-    { spellings: ["DŘ", "d. ř."], identifier: sb(280, 2009) },
+    // Courts called 337/1992 Sb. the tax procedure code before 280/2009 Sb.
+    // took that title.
+    ...succession({ spellings: ["DŘ", "d. ř."], ...TAX_PROCEDURE_SUCCESSION }),
     {
       spellings: ["EŘ", "ex. řád", "exek. řád", "ex. ř."],
       identifier: sb(120, 2001),
@@ -258,7 +309,20 @@ export const CZ_PROFILE = {
       unit: "article",
     },
     // Capitalised only: lowercase `ústavy` are institutions, not the
-    // constitution.
+    // constitution. Bare, it is the constitution in force on the citing day;
+    // the 1948 one numbers its provisions by section after its first articles.
+    {
+      spellings: ["Ústava", "Ústavy", "Ústavě", "Ústavou"],
+      identifier: sb(150, 1948),
+      citedUntil: CONSTITUTION_1960,
+    },
+    {
+      spellings: ["Ústava", "Ústavy", "Ústavě", "Ústavou"],
+      identifier: sb(100, 1960),
+      unit: "article",
+      citedFrom: CONSTITUTION_1960,
+      citedUntil: CONSTITUTION_1993,
+    },
     {
       spellings: [
         "Ústava",
@@ -271,6 +335,11 @@ export const CZ_PROFILE = {
         "Ústavou ČR",
       ],
       identifier: sb(1, 1993),
+      unit: "article",
+    },
+    {
+      spellings: ["Ústava ČSSR", "Ústavy ČSSR", "Ústavě ČSSR", "Ústavou ČSSR"],
+      identifier: sb(100, 1960),
       unit: "article",
     },
     { spellings: ["AT"], identifier: sb(177, 1996) },
@@ -309,7 +378,7 @@ export const CZ_PROFILE = {
   ],
 
   titles: [
-    {
+    ...succession({
       spellings: [
         "občanský soudní řád",
         "občanského soudního řádu",
@@ -317,7 +386,20 @@ export const CZ_PROFILE = {
         "občanskému soudnímu řádu",
         "občanským soudním řádem",
       ],
-      identifier: sb(99, 1963),
+      older: sb(142, 1950),
+      newer: sb(99, 1963),
+      on: CIVIL_CODES_1964,
+    }),
+    {
+      spellings: [
+        "občanský zákoník",
+        "občanského zákoníku",
+        "občanském zákoníku",
+        "občanskému zákoníku",
+        "občanským zákoníkem",
+      ],
+      identifier: sb(141, 1950),
+      citedUntil: CIVIL_CODES_1964,
     },
     {
       spellings: [
@@ -328,6 +410,7 @@ export const CZ_PROFILE = {
         "občanským zákoníkem",
       ],
       identifier: sb(40, 1964),
+      citedFrom: CIVIL_CODES_1964,
       citedUntil: RECODIFICATION,
     },
     {
@@ -345,16 +428,13 @@ export const CZ_PROFILE = {
       spellings: actTitleForms("o Ústavním soudu"),
       identifier: sb(182, 1993),
     },
-    {
-      spellings: [
-        "trestní řád",
-        "trestního řádu",
-        "trestním řádu",
-        "trestnímu řádu",
-        "trestním řádem",
-      ],
-      identifier: sb(141, 1961),
-    },
+    ...criminalProcedureCodes([
+      "trestní řád",
+      "trestního řádu",
+      "trestním řádu",
+      "trestnímu řádu",
+      "trestním řádem",
+    ]),
     {
       spellings: [
         "trestní zákoník",
@@ -365,8 +445,9 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(40, 2009),
     },
-    // The 1961 code's name; the 2009 one is a `zákoník`, never a `zákon`.
-    {
+    // The 1950 and 1961 codes' name; the 2009 one is a `zákoník`, never a
+    // `zákon`.
+    ...succession({
       spellings: [
         "trestní zákon",
         "trestního zákona",
@@ -374,8 +455,8 @@ export const CZ_PROFILE = {
         "trestnímu zákonu",
         "trestním zákonem",
       ],
-      identifier: sb(140, 1961),
-    },
+      ...CRIMINAL_CODE_SUCCESSION,
+    }),
     {
       spellings: HUMAN_RIGHTS_CONVENTION,
       identifier: sb(209, 1992),
@@ -452,7 +533,10 @@ export const CZ_PROFILE = {
     {
       spellings: actTitleForms("o správě daní a poplatků"),
       identifier: sb(337, 1992),
+      // Read from 1 January 1993, when it took effect.
+      citedFrom: "1993-01-01",
     },
+    { spellings: actTitleForms("o právu rodinném"), identifier: sb(265, 1949) },
     { spellings: actTitleForms("o státní službě"), identifier: sb(234, 2014) },
     {
       spellings: [
@@ -495,6 +579,19 @@ export const CZ_PROFILE = {
         "soudním řádem správním",
       ],
       identifier: sb(150, 2002),
+    },
+    // 20/1955 Sb. bore the name until 91/1960 Sb., titled `o správním
+    // řízení`, replaced it on 1 July 1960.
+    {
+      spellings: [
+        "správní řád",
+        "správního řádu",
+        "správním řádu",
+        "správnímu řádu",
+        "správním řádem",
+      ],
+      identifier: sb(20, 1955),
+      citedUntil: "1960-07-01",
     },
     ...succession({
       spellings: [
@@ -581,7 +678,7 @@ export const CZ_PROFILE = {
       identifier: sb(134, 2016),
       citedFrom: PUBLIC_PROCUREMENT_RECODIFICATION,
     },
-    {
+    ...succession({
       spellings: [
         "daňový řád",
         "daňového řádu",
@@ -589,8 +686,8 @@ export const CZ_PROFILE = {
         "daňovému řádu",
         "daňovým řádem",
       ],
-      identifier: sb(280, 2009),
-    },
+      ...TAX_PROCEDURE_SUCCESSION,
+    }),
     {
       spellings: [
         "Ústava České republiky",
@@ -598,6 +695,29 @@ export const CZ_PROFILE = {
         "Ústavě České republiky",
       ],
       identifier: sb(1, 1993),
+      unit: "article",
+    },
+    {
+      spellings: [
+        "Ústava 9. května",
+        "Ústavy 9. května",
+        "Ústavě 9. května",
+        "Ústavou 9. května",
+        "Ústava Československé republiky",
+        "Ústavy Československé republiky",
+        "Ústavě Československé republiky",
+        "Ústavou Československé republiky",
+      ],
+      identifier: sb(150, 1948),
+    },
+    {
+      spellings: [
+        "Ústava Československé socialistické republiky",
+        "Ústavy Československé socialistické republiky",
+        "Ústavě Československé socialistické republiky",
+        "Ústavou Československé socialistické republiky",
+      ],
+      identifier: sb(100, 1960),
       unit: "article",
     },
     {
