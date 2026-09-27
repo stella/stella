@@ -106,6 +106,7 @@ requires (request it at `stella auth login --scopes`).
 | clause       | `stella clause delete`                          | knowledge_write             | destructive (needs `--yes` off a TTY)   |
 | clause       | `stella clause list`                            | read                        | paginated                               |
 | clause       | `stella clause save`                            | knowledge_write             |                                         |
+| contact      | `stella contact check-counterparty`             | read                        |                                         |
 | contact      | `stella contact delete`                         | matters_write               | destructive (needs `--yes` off a TTY)   |
 | contact      | `stella contact list`                           | read                        | paginated                               |
 | contact      | `stella contact lookup-registry`                | read                        |                                         |
@@ -168,6 +169,7 @@ are omitted here.
   - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
   - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
   - optional: --visibility (private|shared)
+  - via `--input` only: mark, passages
 - `stella annotation delete`
   - `--annotation-id` — The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
 - `stella annotation list`
@@ -175,6 +177,7 @@ are omitted here.
   - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
 - `stella annotation update`
   - `--annotation-id` — The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
+  - via `--input` only: change
 - `stella audit-log list`
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
@@ -182,6 +185,7 @@ are omitted here.
 - `stella capability invoke`
   - `--capability` — Capability id to invoke, as returned by list_capabilities. (string)
   - optional: --validate-only
+  - via `--input` only: input
 - `stella capability list`
   - optional: --domain, --access (all|read|write)
 - `stella case-law citations`
@@ -202,6 +206,10 @@ are omitted here.
   - optional: --clause-id, --version-id, --category-id, --query, --include-categories
 - `stella clause save`
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
+  - via `--input` only: body, metadata
+- `stella contact check-counterparty`
+  - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency)
+  - via `--input` only: subject
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
@@ -219,6 +227,7 @@ are omitted here.
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--output-mode` — preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
   - optional: --mode (strict|best-effort), --granularity (word|character)
+  - via `--input` only: source
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
   - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
@@ -238,6 +247,7 @@ are omitted here.
 - `stella document field set`
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
+  - via `--input` only: content
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -302,6 +312,7 @@ are omitted here.
   - `--playbook-id` — Playbook id to run (string)
 - `stella playbook save`
   - optional: --playbook-id, --expected-updated-at, --name, --description, --scope.document-type-key, --scope.perspective (buyer|seller|neutral), --remove-source-ids
+  - via `--input` only: positions
 - `stella rate resolve`
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
@@ -316,26 +327,31 @@ are omitted here.
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
+  - via `--input` only: fields
 - `stella template create`
   - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name, --file <path>
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)
+  - via `--input` only: values
 - `stella template list`
   - optional: --template-id
 - `stella template preview-conditions`
   - `--template-id` — Template whose AI-decided conditions to ask about, as returned by list_templates (string)
+  - via `--input` only: values
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - optional: --parent-id, --name, --completion-mode (require_complete|allow_partial)
+  - via `--input` only: values
 - `stella template save-filled new-version`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - `--entity-id` — Existing document entity id; required only for create_version (string)
   - optional: --name, --completion-mode (require_complete|allow_partial)
+  - via `--input` only: values
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
@@ -368,7 +384,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 351
+Beyond the curated commands above, the CLI generates 352
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

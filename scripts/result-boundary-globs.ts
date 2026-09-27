@@ -172,6 +172,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack AI reads a chat tool's failure only from the error its server
+  // function throws; tools keep `Result`s and raise through this one module.
+  "apps/api/src/handlers/chat/tools/tool-failure.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.

@@ -100,4 +100,14 @@ describe("generateCliSkill (TanStack Intent)", () => {
     // Compat shims are excluded from the tree.
     expect(skill).not.toContain("`stella fetch`");
   });
+
+  test("names the input-only fields of a command that also takes flags", () => {
+    const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
+    const block = skill.slice(
+      skill.indexOf("- `stella contact check-counterparty`"),
+      skill.indexOf("- `stella contact delete`"),
+    );
+    expect(block).toContain("`--check`");
+    expect(block).toContain("  - via `--input` only: subject");
+  });
 });
