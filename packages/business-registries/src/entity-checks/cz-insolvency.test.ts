@@ -239,13 +239,15 @@ describe("Czech insolvency check", () => {
   });
 });
 
+type FailureCase = {
+  name: string;
+  reply: () => Promise<Reply | Error>;
+  reason: EntityCheckUnavailableReason;
+  detail?: string | null;
+};
+
 describe("Czech insolvency check never reports clear without an explicit empty answer", () => {
-  const failures: readonly {
-    name: string;
-    reply: () => Promise<Reply | Error>;
-    reason: EntityCheckUnavailableReason;
-    detail?: string | null;
-  }[] = [
+  const failures: readonly FailureCase[] = [
     {
       name: "the outage page served with HTTP 200",
       reply: async () => ({
@@ -284,7 +286,7 @@ describe("Czech insolvency check never reports clear without an explicit empty a
       reason: "source-error",
       detail: "WS1",
     },
-    ...["WS3", "WS4", "SQL1", "SERVER1", "WS9"].map((code) => ({
+    ...["WS3", "WS4", "SQL1", "SERVER1", "WS9"].map((code): FailureCase => ({
       name: `error code ${code}`,
       reply: async () => ({ body: errorCodeBody(code) }),
       reason: "source-error",
