@@ -43,6 +43,7 @@ import {
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -436,6 +437,29 @@ describe("reasons published apart from their ruling", () => {
     });
     expect(await citationsOf(absorbed.id)).toEqual([]);
     expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+  });
+
+  test("an absorption older than the standalone row's last observation leaves it alone", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const before = await decisionBy(fixture.sourceId, "339001");
+    const standaloneOrder = await observationOrderOf(before.id);
+
+    const outcome = await absorbStandaloneSupplementRow({
+      scopedDb,
+      sourceId: fixture.sourceId,
+      kind: "reasons",
+      sourceDocumentId: "339001",
+      judgmentId: createSafeId<"caseLawDecision">(),
+      observationOrder: standaloneOrder,
+    });
+
+    expect(outcome).toEqual(
+      Result.ok({ type: "superseded", decisionId: before.id }),
+    );
+    expect(await decisionBy(fixture.sourceId, "339001")).toEqual(before);
+    expect(await observationOrderOf(before.id)).toBe(standaloneOrder);
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339001"]);
   });
 
   test("ingesting the same reasons or the same ruling again is a fixed point", async () => {
