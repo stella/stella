@@ -40,6 +40,35 @@ const createSafeDbCapture = () => {
 };
 
 describe("chat history tools", () => {
+  test("preserves the tagged failure for an empty search query", async () => {
+    const { safeDb } = createSafeDbCapture();
+    const tools = createChatHistoryTools({
+      refRegistry: createChatRefRegistry(),
+      organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
+      safeDb,
+      threadId,
+      userId,
+    });
+    const searchTool = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
+
+    const attempt = await Result.tryPromise(
+      async () =>
+        await searchTool.execute?.(
+          { limit: 3, query: "  " },
+          asTestRaw<Parameters<NonNullable<typeof searchTool.execute>>[1]>({}),
+        ),
+    );
+
+    expect(Result.isError(attempt)).toBe(true);
+    if (Result.isError(attempt)) {
+      expect(attempt.error.cause).toMatchObject({
+        _tag: "ChatToolError",
+        kind: "invalid-input",
+      });
+    }
+  });
+
   test("exclude replay-truncated messages from history search", async () => {
     const { queries, safeDb } = createSafeDbCapture();
     const tools = createChatHistoryTools({

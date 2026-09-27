@@ -28,7 +28,7 @@
     "generate": "bun scripts/generate-blueprints-manifest.ts",
     "test": "bun scripts/generate-blueprints-manifest.ts --check && bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/skills",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/skills",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/skills",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
