@@ -38,6 +38,7 @@ describe("citation probe coverage", () => {
   test("a missing docket/year slash stays visible as a residual", () => {
     const covered = citationCoverage(extractedTexts(TEXT));
     expect(covered("sp. zn. 8 C/18 2008")).toBe(false);
+    expect(covered("sp. zn. 8 C/18 2008 sp. zn. 8 C 18/2008")).toBe(false);
   });
 
   test("covers every extracted spelling of a court-prefixed docket", () => {
