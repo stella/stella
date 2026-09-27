@@ -294,7 +294,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 881,
+    "count": 876,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -321,7 +321,6 @@
       "apps/api/src/handlers/chat/chat-message-persistence.ts": 2,
       "apps/api/src/handlers/chat/chat-sandbox-plan.ts": 2,
       "apps/api/src/handlers/chat/compaction.ts": 2,
-      "apps/api/src/handlers/chat/send-message.ts": 5,
       "apps/api/src/handlers/chat/stream-chat.ts": 3,
       "apps/api/src/handlers/chat/subagent-runner.ts": 2,
       "apps/api/src/handlers/chat/third-party-boundary.ts": 4,
@@ -1068,7 +1067,7 @@
     }
   },
   "lint-suppression-directives": {
-    "count": 290,
+    "count": 293,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1136,6 +1135,8 @@
       "apps/api/src/lib/file-scan/scanner.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 1,
       "apps/api/src/lib/files/email-to-html.ts": 1,
+      "apps/api/src/lib/files/pdf-signing/finalize-attempts.ts": 1,
+      "apps/api/src/lib/files/pdf-signing/sessions.ts": 1,
       "apps/api/src/lib/flows/automated-run-cap.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 2,
@@ -1265,6 +1266,7 @@
       "packages/ui/src/components/select.tsx": 1,
       "packages/ui/src/lib/slot.tsx": 1,
       "packages/workspace-ui/src/conditions/builder.tsx": 2,
+      "scripts/sql-perf-detector.ts": 1,
       "scripts/sync-railway-template-source.ts": 1
     }
   },
@@ -1327,7 +1329,7 @@
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 536,
+    "count": 537,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1377,7 +1379,7 @@
       "apps/api/src/handlers/chat/memory-context.ts": 1,
       "apps/api/src/handlers/chat/send-message-compaction.ts": 3,
       "apps/api/src/handlers/chat/send-message-side-effects.ts": 1,
-      "apps/api/src/handlers/chat/send-message.ts": 3,
+      "apps/api/src/handlers/chat/send-message.ts": 4,
       "apps/api/src/handlers/chat/stream-chat.ts": 6,
       "apps/api/src/handlers/chat/thread-recap.ts": 1,
       "apps/api/src/handlers/chat/tool-read-scope.ts": 1,
