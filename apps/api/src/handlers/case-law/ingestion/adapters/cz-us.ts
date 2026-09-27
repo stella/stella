@@ -334,8 +334,12 @@ const buildEcli = (
 /** A NALUS ECLI printed without its trailing counter segment. */
 const UNCOUNTED_ECLI = /^ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2}$/iu;
 
-/** A NALUS ECLI ending in the first counter of its file. */
-const FIRST_COUNTED_ECLI = /^(ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2})\.1$/iu;
+/**
+ * A NALUS ECLI with or without the first counter of its file: a senate or
+ * plenary docket, or a plenary opinion (`…:Pl.US.st.27.09.1`).
+ */
+const FIRST_COUNTER_ECLI =
+  /^(ECLI:CZ:US:\d{4}:[^.:]+\.US\.(?:st\.)?\d+\.\d{2})(\.1)?$/iu;
 
 /**
  * The other spelling of a decision's ECLI. The first decision of a file is
@@ -346,16 +350,17 @@ const FIRST_COUNTED_ECLI = /^(ECLI:CZ:US:\d{4}:[^.:]+\.US\.\d+\.\d{2})\.1$/iu;
 export const czUsEcliSpellings = (
   ecli: string | undefined,
 ): DecisionIdentifier[] => {
-  if (ecli === undefined) {
+  const match = ecli === undefined ? null : FIRST_COUNTER_ECLI.exec(ecli);
+  const bare = match?.[1];
+  if (bare === undefined) {
     return [];
   }
-  const bare = FIRST_COUNTED_ECLI.exec(ecli)?.[1];
-  if (bare !== undefined) {
-    return [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: bare }];
-  }
-  return UNCOUNTED_ECLI.test(ecli)
-    ? [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: `${ecli}.1` }]
-    : [];
+  return [
+    {
+      type: DECISION_IDENTIFIER_TYPES.ECLI,
+      value: match?.[2] === undefined ? `${bare}.1` : bare,
+    },
+  ];
 };
 
 /**

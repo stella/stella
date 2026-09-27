@@ -1399,6 +1399,12 @@ describe("czUsAdapter.fetchPage", () => {
       { type: "ecli", value: "ECLI:CZ:US:2007:Pl.US.38.06.1" },
     ]);
     expect(czUsEcliSpellings("ECLI:CZ:US:2007:Pl.US.38.06.2")).toEqual([]);
+    expect(czUsEcliSpellings("ECLI:CZ:US:2009:Pl.US.st.27.09.1")).toEqual([
+      { type: "ecli", value: "ECLI:CZ:US:2009:Pl.US.st.27.09" },
+    ]);
+    expect(czUsEcliSpellings("ECLI:CZ:US:2009:Pl.US.st.27.09")).toEqual([
+      { type: "ecli", value: "ECLI:CZ:US:2009:Pl.US.st.27.09.1" },
+    ]);
     expect(czUsEcliSpellings(undefined)).toEqual([]);
   });
 
