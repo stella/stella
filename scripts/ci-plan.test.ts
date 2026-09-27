@@ -26,6 +26,7 @@ const runSelector = (
   files: readonly string[],
   outputs: readonly string[],
   suiteDepth = "fast",
+  e2eLandingRequired = "false",
 ) => {
   const process = Bun.spawnSync({
     cmd: [
@@ -33,12 +34,17 @@ const runSelector = (
       "-e",
       "-c",
       `changed_files=("$@"); e2e_core_required=false
+e2e_landing_required="$E2E_LANDING_REQUIRED"
 ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "", SUITE_DEPTH: suiteDepth },
+    env: {
+      E2E_LANDING_REQUIRED: e2eLandingRequired,
+      PATH: Bun.env["PATH"] ?? "",
+      SUITE_DEPTH: suiteDepth,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -148,6 +154,62 @@ test("paths outside the API image do not schedule its smoke", () => {
   }
   // Ordinary API source is covered by the API image alone.
   expect(imageSmokePlan(["apps/api/src/server.ts"])).toEqual(["true", "false"]);
+});
+
+const generatedOutputGuardPlan = (
+  files: readonly string[],
+  suiteDepth = "fast",
+) =>
+  runSelector(
+    files,
+    ["web_api_types_required", "published_exports_required"],
+    suiteDepth,
+  );
+
+test("the generated-output guards run when their inputs change", () => {
+  for (const file of [
+    "packages/ui/src/button.tsx",
+    "patches/some-package@1.0.0.patch",
+    "bun.lock",
+    "bunfig.toml",
+    "package.json",
+    ".github/workflows/ci.yml",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "true"]);
+  }
+  for (const file of [
+    "apps/api/src/server.ts",
+    "apps/api/tsconfig.json",
+    "apps/web/package.json",
+    "apps/web/src/generated/api-routes.gen.ts",
+    "types/wasm.d.ts",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "false"]);
+  }
+  for (const file of [
+    "scripts/check-published-exports.ts",
+    "scripts/prepare-publish.ts",
+    "scripts/publish-manifest.ts",
+    "scripts/published-export-guards.ts",
+    ".npmrc",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "true"]);
+  }
+});
+
+test("the generated-output guards skip unrelated pull requests but never full depth", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/landing/src/pages/index.astro",
+    "scripts/typecheck-baseline.json",
+    "docs/changelog/x.md",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "false"]);
+    expect(generatedOutputGuardPlan([file], "full"), file).toEqual([
+      "true",
+      "true",
+    ]);
+  }
 });
 
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
@@ -291,10 +353,28 @@ const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
 );
 const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
+// Jobs that only collect diagnostics after a gated job failed. ci-result does
+// not wait for them: the failure they report already fails the run.
+const REPORT_ONLY_JOBS = ["e2e-report"];
+
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
-    new Set(Object.keys(ciJobs).filter((job) => job !== "ci-result")),
+    new Set(
+      Object.keys(ciJobs).filter(
+        (job) => job !== "ci-result" && !REPORT_ONLY_JOBS.includes(job),
+      ),
+    ),
   );
+  for (const job of REPORT_ONLY_JOBS) {
+    const failedOn = [
+      ...jobIf(ciJobs[job]).matchAll(/needs\.([\w-]+)\.result == 'failure'/gu),
+    ].map((match) => match[1] ?? "");
+    expect(failedOn.length, job).toBeGreaterThan(0);
+    for (const gated of failedOn) {
+      expect(resultJob.needs, `${job} runs on ${gated}`).toContain(gated);
+    }
+    expect(jobIf(ciJobs[job]), job).not.toContain("always()");
+  }
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   fc.assert(
     fc.property(
@@ -370,46 +450,70 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
   }
 });
 
-test("only an unlabelled pull request skips heavy suites or passes a superseded run", () => {
+// A pull request plans `fast` unless labelled `ci:full`; a manual run plans
+// the depth it was dispatched with. Both can be superseded by a newer run.
+const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("only a pull request or a manual run skips heavy suites or passes a superseded run", () => {
   expect(heavyJobs.length).toBeGreaterThan(0);
   const skippedHeavy = Object.fromEntries(
     heavyJobs.map((job) => [job, "skipped"]),
   );
-  expect(
-    evaluateResult({ event: EVENT.pullRequest, results: skippedHeavy }),
-  ).toBe(0);
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-tests": "cancelled" },
-    }),
-  ).toBe(0);
-  // A timed-out sibling reads as cancelled; the failure still stands.
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-tests": "cancelled", "code-quality": "failure" },
-    }),
-  ).toBe(1);
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-plan": "cancelled" },
-    }),
-  ).toBe(0);
-  for (const event of FULL_DEPTH_EVENTS) {
-    expect(evaluateResult({ event, results: {} }), event).toBe(0);
-    expect(evaluateResult({ event, results: skippedHeavy }), event).toBe(1);
+  const fast = SUITE_DEPTH.fast;
+  for (const event of FAST_DEPTH_EVENTS) {
     expect(
-      evaluateResult({ event, results: { "ci-plan": "cancelled" } }),
+      evaluateResult({ event, results: skippedHeavy, suiteDepth: fast }),
+      event,
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-tests": "cancelled" },
+        suiteDepth: fast,
+      }),
+      event,
+    ).toBe(0);
+    // A timed-out sibling reads as cancelled; the failure still stands.
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-tests": "cancelled", "code-quality": "failure" },
+        suiteDepth: fast,
+      }),
       event,
     ).toBe(1);
-    for (const suiteDepth of [SUITE_DEPTH.fast, ""] as const) {
-      expect(
-        evaluateResult({ event, results: {}, suiteDepth }),
-        `${event} at depth '${suiteDepth}'`,
-      ).toBe(1);
-    }
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-plan": "cancelled" },
+        suiteDepth: fast,
+      }),
+      event,
+    ).toBe(0);
+    expect(
+      evaluateResult({ event, results: {}, suiteDepth: "" }),
+      `${event} at no depth`,
+    ).toBe(1);
+  }
+  // A manual full run holds the heavy suites to the merge queue's bar.
+  expect(
+    evaluateResult({
+      event: EVENT.workflowDispatch,
+      results: skippedHeavy,
+      suiteDepth: SUITE_DEPTH.full,
+    }),
+  ).toBe(1);
+  const event = EVENT.mergeGroup;
+  expect(evaluateResult({ event, results: {} })).toBe(0);
+  expect(evaluateResult({ event, results: skippedHeavy })).toBe(1);
+  expect(evaluateResult({ event, results: { "ci-plan": "cancelled" } })).toBe(
+    1,
+  );
+  for (const suiteDepth of [SUITE_DEPTH.fast, ""] as const) {
+    expect(
+      evaluateResult({ event, results: {}, suiteDepth }),
+      `${event} at depth '${suiteDepth}'`,
+    ).toBe(1);
   }
 });
 
@@ -475,6 +579,110 @@ const jobSteps = (job: unknown) =>
     }),
     job,
   ).steps;
+
+const resolveDepth = (eventName: string, dispatchDepth: string) => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Resolve suite depth",
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-depth-"));
+  const output = nodePath.join(directory, "output");
+  writeFileSync(output, "");
+  try {
+    const run = Bun.spawnSync({
+      cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
+      env: {
+        DISPATCH_DEPTH: dispatchDepth,
+        EVENT_NAME: eventName,
+        GITHUB_OUTPUT: output,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    return run.exitCode === 0 ? readFileSync(output, "utf-8").trim() : "error";
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+test("a manual run supersedes only an older manual run on the same branch", () => {
+  const concurrency = v.parse(
+    v.object({
+      concurrency: v.object({
+        group: v.string(),
+        "cancel-in-progress": v.boolean(),
+      }),
+    }),
+    Bun.YAML.parse(workflow),
+  ).concurrency;
+  expect(concurrency["cancel-in-progress"]).toBe(true);
+  expect(concurrency.group).toBe(
+    [
+      "$",
+      "{{ github.event_name == 'workflow_dispatch'",
+      " && format('ci-dispatch-{0}', github.ref)",
+      " || format('{0}-{1}', github.workflow, github.ref) }}",
+    ].join(""),
+  );
+});
+
+test("a manual run plans the depth it was dispatched with, the merge queue always full", () => {
+  expect(resolveDepth(EVENT.workflowDispatch, "fast")).toBe("suite_depth=fast");
+  expect(resolveDepth(EVENT.workflowDispatch, "full")).toBe("suite_depth=full");
+  expect(resolveDepth(EVENT.workflowDispatch, "")).toBe("error");
+  expect(resolveDepth(EVENT.workflowDispatch, "fast; full")).toBe("error");
+  for (const dispatchDepth of ["", "fast"]) {
+    expect(resolveDepth(EVENT.mergeGroup, dispatchDepth)).toBe(
+      "suite_depth=full",
+    );
+  }
+  expect(resolveDepth("push", "")).toBe("error");
+});
+
+test("the landing site is built once when its browser checks are planned", () => {
+  const landingBuild = (suiteDepth: string, e2eLandingRequired: string) =>
+    runSelector(
+      ["apps/landing/src/pages/index.astro"],
+      ["landing_build_required"],
+      suiteDepth,
+      e2eLandingRequired,
+    ).at(0);
+  // e2e-landing runs only at full depth, and builds the site itself there.
+  expect(landingBuild("full", "true")).toBe("false");
+  expect(landingBuild("full", "false")).toBe("true");
+  expect(landingBuild("fast", "true")).toBe("true");
+  expect(landingBuild("fast", "false")).toBe("true");
+  expect(ciJobs["e2e-landing"]).toBeDefined();
+  expect(jobSteps(ciJobs["e2e-landing"]).map(({ run }) => run)).toContain(
+    jobSteps(ciJobs["landing-build"]).find(
+      ({ name }) => name === "Build landing",
+    )?.run,
+  );
+  expect(jobIf(ciJobs["e2e-landing"])).toContain(FULL_DEPTH_PREDICATE);
+});
+
+test("ci-checks gates each generated-output guard on its planned scope", () => {
+  const steps = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), if: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-checks"],
+  ).steps;
+  for (const [name, scope] of [
+    ["Web API types drift guard", "web_api_types_required"],
+    ["Published export map guard", "published_exports_required"],
+  ] as const) {
+    const condition = steps.find((step) => step.name === name)?.if ?? "";
+    expect(condition, name).toContain(
+      `needs.ci-plan.outputs.${scope} == 'true'`,
+    );
+    expect(condition, name).toContain(
+      "needs.ci-plan.outputs.package_checks_required == 'true'",
+    );
+  }
+});
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>

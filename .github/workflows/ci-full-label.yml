@@ -14,6 +14,18 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] reads event fields only, never checks out or executes PR code
     types: [labeled]
 
+# Only a newer `ci:full` label event on the same pull request supersedes a
+# rerun; the step re-reads the live head either way. Any other label skips the
+# job, so it gets a group of its own and cannot cancel a rerun in flight.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      (github.event.label.name == 'ci:full'
+        && format('pr-{0}', github.event.pull_request.number))
+      || format('run-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -23,6 +35,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: write
+      pull-requests: read
     steps:
       - name: Re-run CI Checks on the pull request head
         env:
@@ -31,6 +44,11 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
+          live_head="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)"
+          if [[ "$live_head" != "$HEAD_SHA" ]]; then
+            echo "The pull request head changed since this label event; leaving its CI run alone."
+            exit 0
+          fi
           read -r run_id status < <(
             gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=1" \
               --jq '.workflow_runs[0] | "\(.id) \(.status)"'
@@ -46,6 +64,11 @@ jobs:
             until [[ "$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)" == "completed" ]]; do
               sleep 10
             done
+          fi
+          live_head="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)"
+          if [[ "$live_head" != "$HEAD_SHA" ]]; then
+            echo "The pull request head changed while waiting; leaving the superseded run alone."
+            exit 0
           fi
           gh run rerun "$run_id" --repo "$REPO"
           echo "Re-running CI Checks run $run_id for #$PR_NUMBER at full depth."

@@ -78,3 +78,21 @@ test("native AG-UI interrupt completion remains a waiting lifecycle", () => {
     }),
   ).toBe("completed");
 });
+
+test("a run finish with no outcome completes and a cancelled one is cut short", () => {
+  expect(
+    tanStackStreamEventLifecycle({
+      type: EventType.RUN_FINISHED,
+      runId: "run-A",
+      threadId: "thread-A",
+    }),
+  ).toBe("completed");
+  expect(
+    tanStackStreamEventLifecycle({
+      type: EventType.RUN_FINISHED,
+      runId: "run-A",
+      threadId: "thread-A",
+      outcome: { type: "cancelled" },
+    }),
+  ).toBe("cancelled");
+});

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
+import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
@@ -151,6 +152,7 @@ export type McpRequestContext = {
     getSearchReader?: typeof getSearchReader;
     describeStoredTemplate?: typeof describeStoredTemplate;
     executeRegistryLookup?: typeof executeRegistryLookup;
+    runEntityCheck?: typeof runEntityCheck;
     searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;
     getLawTextBlock?: typeof getLawTextBlock;
     withTimeout?: typeof withTimeout;

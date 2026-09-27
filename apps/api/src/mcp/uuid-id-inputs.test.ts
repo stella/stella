@@ -35,6 +35,9 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   // already shape-checked by their own regexes (e.g. `BOE-A-1889-4763`).
   "search_boe_legislation.law_id": "external statute corpus identifier",
   "search_boe_legislation.block_id": "external statute text-block identifier",
+  // A national business ID sent to a public register, never to SQL; its
+  // checksum is validated before the request.
+  "check_counterparty.subject.company_id": "national business identifier",
   // A host-assigned reference from the MCP client's file payload, used only
   // as a display-name fallback.
   "upload_document_version.file.file_id": "host-assigned client file reference",
