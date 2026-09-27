@@ -3473,9 +3473,10 @@ export type WebRoutes = {
             body: {
               firstName?: string;
               lastName?: string;
+              taxId?: string;
               birthDate?: string;
               companyId?: string;
-              check: "cz-insolvency";
+              check: Tbae26827e8;
               subjectType: Tb1a0b480e2;
             };
             params: T6d90fb7f32;
@@ -3486,22 +3487,27 @@ export type WebRoutes = {
                 status: "clear";
                 checkedAt: string;
                 sourceDataAsOf: T432e07d100;
+                record: null;
               }) | (Td418646462 & {
                 status: "found";
                 checkedAt: string;
                 sourceDataAsOf: T432e07d100;
                 findings: [Tae3e80d4df, ...Tae3e80d4df[]];
                 totalMatches: number;
-              }) | (Td418646462 & {
-                status: "unavailable";
+                record: null;
+              }) | (Td418646462 & Td1c0c1b0e3) | (Td418646462 & Teb8023e02b) | (Td418646462 & T079c62d0d0) | (Td760bdd295 & {
+                status: "clear";
                 checkedAt: string;
-                reason: ("timeout" | "network" | "http-error" | "outage-page" | "soap-fault" | "malformed-response" | "source-error");
-                detail: T432e07d100;
-              }) | (Td418646462 & {
-                status: "not-covered";
-                reason: "subject-type-not-supported";
-                supportedSubjectTypes: Array<Tb1a0b480e2>;
-              }));
+                sourceDataAsOf: T432e07d100;
+                record: T379e05dc19;
+              }) | (Td760bdd295 & {
+                status: "found";
+                checkedAt: string;
+                sourceDataAsOf: T432e07d100;
+                findings: [T89e9f77d63, ...T89e9f77d63[]];
+                totalMatches: number;
+                record: T379e05dc19;
+              }) | (Td760bdd295 & Td1c0c1b0e3) | (Td760bdd295 & Teb8023e02b) | (Td760bdd295 & T079c62d0d0));
               400: Tc642053948;
               401: Tc642053948;
               402: Tc642053948;
@@ -3578,7 +3584,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "tax_id" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
+                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
                 }>;
                 readonly defaultType: Te287bedd42;
                 readonly delimiter: ("comma" | "semicolon" | "tab" | "labeled");
@@ -32250,6 +32256,12 @@ type T06fc334600 = {
 
 type T070172c9cc = "organization" | "matters";
 
+type T079c62d0d0 = {
+  status: "not-covered";
+  reason: ("subject-type-not-supported" | "tax-id-required");
+  supportedSubjectTypes: Array<Tb1a0b480e2>;
+};
+
 type T07b4b7cdd8 = {
   workspaceId: string;
 };
@@ -32684,7 +32696,7 @@ type T196b4403fb = {
 
 type T19d71e5be4 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "tax_id" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
+  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
   rowNumber: number;
 };
 
@@ -33315,6 +33327,18 @@ type T370ca7e6a2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "correspondence";
 };
 
+type T379e05dc19 = {
+  subjectType: ("vat-payer" | "identified-person" | "vat-group" | "unreliable-person");
+  name: T432e07d100;
+  address: T432e07d100;
+  taxOfficeCode: T432e07d100;
+  publishedAccounts: Array<{
+    account: string;
+    publishedOn: string;
+    withdrawnOn: T432e07d100;
+  }>;
+};
+
 type T37bd525dcb = {
   readonly value: T9ab85afc3e;
   readonly issues?: undefined;
@@ -33379,7 +33403,7 @@ type T3cedcce572 = {
 };
 
 type T3d16f860ff = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -33394,6 +33418,7 @@ type T3d16f860ff = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };
@@ -34084,7 +34109,7 @@ type T594988174f = string & valibot_Brand<"SafeId"> & {
 };
 
 type T596c558ecb = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -34099,6 +34124,7 @@ type T596c558ecb = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };
@@ -34106,7 +34132,7 @@ type T596c558ecb = {
 } | {
   code: Tb4bdb2e8b2;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -34283,7 +34309,7 @@ type T5dfc05d566 = {
 type T5e1768906f = {
   code: Tb4bdb2e8b2;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -34555,15 +34581,18 @@ type T66d8615e4f = {
 };
 
 type T66e35ccd51 = {
-  check: "cz-insolvency";
+  check: Tbae26827e8;
   subject: {
     type: "company-id";
-    companyId: string;
+    company_id: string;
+  } | {
+    type: "tax-id";
+    tax_id: string;
   } | {
     type: "person";
-    firstName: string;
-    lastName: string;
-    birthDate: string;
+    first_name: string;
+    last_name: string;
+    birth_date: string;
   };
 };
 
@@ -34649,7 +34678,7 @@ type T6b1f4ceae0 = {
   "x-amz-tagging"?: string;
 };
 
-type T6b2d0b9da2 = "none" | "api-key" | "account";
+type T6b2d0b9da2 = "none" | "account" | "api-key";
 
 type T6b73348afa = null | T9a509045a7;
 
@@ -35508,6 +35537,23 @@ type T82d2fa2fc8 = string & valibot_Brand<"SafeId"> & {
 
 type T82d662a0f0 = null | T116a5c37c8;
 
+type T83255fc5c5 = {
+  type: "company-id";
+  value: string;
+} | {
+  type: "person";
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+} | {
+  type: "tax-id";
+  value: string;
+  derivedFrom: (null | {
+    type: "company-id";
+    value: string;
+  });
+};
+
 type T83293cdac9 = "portrait" | "landscape";
 
 type T8330927857 = {
@@ -35555,15 +35601,18 @@ type T83dd62c4c4 = {
 };
 
 type T846b0784de = {
-  check: "cz-insolvency";
+  check: Tbae26827e8;
   subject: {
     type: "company-id";
-    companyId: string;
+    company_id: string;
+  } | {
+    type: "tax-id";
+    tax_id: string;
   } | {
     type: "person";
-    firstName: string;
-    lastName: string;
-    birthDate: string;
+    first_name: string;
+    last_name: string;
+    birth_date: string;
   };
 };
 
@@ -35731,7 +35780,7 @@ type T888302d360 = {
 type T888e660ed8 = "task" | "deadline";
 
 type T88f3735ffa = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK");
+  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
   health: Ta8b78a42c5;
   stored: {
     decisions: number;
@@ -35764,6 +35813,11 @@ type T88f3735ffa = {
     };
     addedLastWeek: T688f6f1190;
   }>;
+};
+
+type T89e9f77d63 = {
+  type: ("unreliable-person" | "unreliable-vat-payer");
+  publishedOn: T432e07d100;
 };
 
 type T8a1ba6ec3d = {
@@ -37182,7 +37236,7 @@ type Tb183ddee4b = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Tb1a0b480e2 = "person" | "company-id";
+type Tb1a0b480e2 = "person" | "company-id" | "tax-id";
 
 type Tb1fcbf5ca4 = {
   items: Array<Te3ba023acf>;
@@ -37216,7 +37270,7 @@ type Tb368e5ae56 = {
 
 type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
 
-type Tb4bdb2e8b2 = "disconnected" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-closed" | "timed-out" | "unsupported-page";
+type Tb4bdb2e8b2 = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
 type Tb5b50d2995 = {
   workspaceId: string;
@@ -37304,6 +37358,8 @@ type Tba9914ae60 = {
     (options: T2b4af5b5ce): T8ff44a5c87;
   };
 };
+
+type Tbae26827e8 = "cz-insolvency" | "cz-vat-reliability";
 
 type Tbb6e0c457f = "none" | "bearer" | "oauth2";
 
@@ -37751,6 +37807,12 @@ type Td16c97f5eb = {
   question: string;
 };
 
+type Td1c0c1b0e3 = {
+  status: "not-registered";
+  checkedAt: string;
+  sourceDataAsOf: T432e07d100;
+};
+
 type Td2058d493f = {
   readonly value: Tb985d60808;
   readonly issues?: undefined;
@@ -37787,20 +37849,8 @@ type Td3493e7d84 = {
 
 type Td418646462 = {
   kind: "cz-insolvency";
-  source: {
-    name: string;
-    authority: string;
-    url: string;
-  };
-  subject: {
-    type: "company-id";
-    value: string;
-  } | {
-    type: "person";
-    firstName: string;
-    lastName: string;
-    birthDate: string;
-  };
+  source: Tfdc3d38b65;
+  subject: T83255fc5c5;
 };
 
 type Td4552d8c2b = {
@@ -37857,6 +37907,12 @@ type Td758891541 = {
   state: Tf85ca6744e;
   output?: T97154a1463;
 } & Te4ad2efe8c;
+
+type Td760bdd295 = {
+  kind: "cz-vat-reliability";
+  source: Tfdc3d38b65;
+  subject: T83255fc5c5;
+};
 
 type Td787ffea34 = {
   readonly value: T665ac097fb;
@@ -38477,6 +38533,13 @@ type Teb6688001f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "invoice";
 };
 
+type Teb8023e02b = {
+  status: "unavailable";
+  checkedAt: string;
+  reason: ("timeout" | "network" | "http-error" | "outage-page" | "soap-fault" | "malformed-response" | "source-error");
+  detail: T432e07d100;
+};
+
 type Teb831cdd61 = {
   type: "tool-call";
   id: string;
@@ -38822,6 +38885,12 @@ type Tfd818c98a8 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type Tfdc3d38b65 = {
+  name: string;
+  authority: string;
+  url: string;
+};
 
 type Tfde6260a4e = {
   entityId: string;
