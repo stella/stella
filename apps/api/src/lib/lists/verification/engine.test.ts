@@ -282,6 +282,59 @@ describe("gradeClaims", () => {
     }
   });
 
+  test("sets aside an uncheckable claim while leaving an uncovered fact checkable", async () => {
+    answers.push({
+      grades: [
+        {
+          claimId: "C1",
+          verdict: "notverifiable",
+          score: null,
+          refs: [{ factId: "F1", rel: "record" }],
+          conflict: null,
+        },
+        {
+          claimId: "C2",
+          verdict: "nocover",
+          score: null,
+          refs: [],
+          conflict: null,
+        },
+      ],
+    });
+    const result = await gradeClaims({
+      claims: [
+        {
+          key: "opinion",
+          text: "The arrangement was proper",
+          context: "The arrangement was proper.",
+        },
+        {
+          key: "fact",
+          text: "The payment was approved",
+          context: "The payment was approved.",
+        },
+      ],
+      facts: [fact(FACT_A, "An unrelated meeting took place")],
+      deps,
+    });
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(outcome?.type).toBe("graded");
+    if (outcome?.type === "graded") {
+      expect(outcome.grades.get("opinion")).toEqual({
+        state: "notverifiable",
+        score: null,
+        recordConflict: null,
+        refs: [],
+      });
+      expect(outcome.grades.get("fact")).toEqual({
+        state: "nocover",
+        score: null,
+        recordConflict: null,
+        refs: [],
+      });
+    }
+  });
+
   test("a record conflict names two different facts and a verdict under each", async () => {
     answers.push({
       grades: [

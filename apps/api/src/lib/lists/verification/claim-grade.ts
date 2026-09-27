@@ -38,6 +38,7 @@ const CONCURRENCY = 3;
 const GRADED_VERDICTS = [
   ...SCORED_CLAIM_STATES,
   "nocover",
+  "notverifiable",
   "recordconflict",
 ] as const;
 
@@ -78,11 +79,12 @@ const CLAIM_CONTEXT_MAX = 1500;
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
 
 For each claim choose a verdict:
-- supported: the facts confirm it.
-- tension: the facts partly fit but sit uneasily with it (a different date, amount or emphasis).
-- contradicted: the facts refute it.
-- nocover: no fact bears on it. This is a normal answer, not a failure; never stretch a fact to avoid it.
-- recordconflict: two facts disagree with each other on the exact point the claim rests on, so the verdict depends on which record governs.
+- notverifiable: the claim is an opinion, hypothetical, or private expectation that evidence cannot test. Decide this from the claim itself, even when no fact bears on it.
+- nocover: the claim is checkable, but no supplied fact bears on it. Do not stretch a fact to avoid this answer.
+- supported: the facts confirm the claim.
+- tension: relevant facts leave material doubt or only partly fit; neither clearly establishes the opposite. A qualified interpretation or a broader claim than the facts establish can create tension.
+- contradicted: a fact establishes the opposite of the claim on the same point, without a material qualification that leaves both readings open.
+- recordconflict: two supplied facts give incompatible values for the same event and point the claim makes, and choosing which governs would change the verdict. Different events or stages are not a record conflict.
 
 score is how strongly the facts support the claim, 0 to 100, for supported, tension and contradicted only; null otherwise. refs lists the facts the verdict rests on by factId, with rel supports, conflicts, or record (relevant context that neither supports nor conflicts). supported, tension and contradicted must cite at least one fact.
 
@@ -146,6 +148,14 @@ const normalizeGrade = (
         score: null,
         recordConflict: null,
         refs: refs.filter((ref) => ref.rel === "record"),
+      });
+    }
+    case "notverifiable": {
+      return Result.ok({
+        state: raw.verdict,
+        score: null,
+        recordConflict: null,
+        refs: [],
       });
     }
     case "recordconflict": {
