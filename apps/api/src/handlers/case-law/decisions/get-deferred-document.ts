@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
 import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
@@ -76,7 +77,15 @@ const reparsedForDev = async (
   });
   return documentAst === null
     ? decision
-    : { ...decision, documentAst, documentPending: false, fulltext: null };
+    : {
+        ...decision,
+        ...(await transientDecisionAstProjection({
+          resolvedAst: documentAst,
+          wireAst: documentAst,
+        })),
+        documentPending: false,
+        fulltext: null,
+      };
 };
 
 /**
@@ -143,7 +152,10 @@ const hydrate = async (
     ...decision,
     // Same omission the read applies to a stored AST: a document fetched
     // on demand must not answer with a fatter payload than a cached one.
-    documentAst: omitDerivablePlainText(document.documentAst),
+    ...(await transientDecisionAstProjection({
+      resolvedAst: document.documentAst,
+      wireAst: omitDerivablePlainText(document.documentAst),
+    })),
     documentPending: false,
     // Mirrors the read: text is the fallback for a decision without a
     // usable AST, and a parsed document always has one.

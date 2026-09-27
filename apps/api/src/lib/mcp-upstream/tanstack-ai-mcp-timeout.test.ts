@@ -70,7 +70,11 @@ test("a tool-specific timeout reaches the MCP SDK protocol request", async () =>
 
   expect(await tool.execute({})).toBe("completed");
   expect(callTool.mock.calls).toEqual([
-    [{ arguments: {}, name: "slow_tool" }, undefined, { timeout: 5 * 60_000 }],
+    [
+      { arguments: {}, name: "slow_tool" },
+      expect.anything(),
+      { timeout: 5 * 60_000 },
+    ],
   ]);
   callTool.mockRestore();
   await client.close();

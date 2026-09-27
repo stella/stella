@@ -16,7 +16,8 @@ import {
   type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import { MORPHOLOGY_VERSION } from "@/api/lib/legal-search/morphology/stem";
+import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
   documentId: string;
@@ -154,15 +155,18 @@ export const deriveCorpusIndexProjectionDescriptor = (
 
   const indexId = corpusIndexIdFromManifest(manifest, input.jurisdiction);
   // The manifest digest pins the stem *fields*; the algorithms filling them
-  // live outside it, so a new language or a Snowball upgrade would otherwise
-  // leave already-projected documents holding stems the read path no longer
-  // asks for. A generation that writes stem fields folds the stemmer set in
-  // and re-projects when it moves; one that writes none keeps the
-  // fingerprints it already has.
+  // live outside it, so a stemmer change would otherwise leave
+  // already-projected documents holding stems the read path no longer asks
+  // for. A generation that writes stem fields folds in the key of the
+  // document's own language, the one the builder stems it under, so a change
+  // to one language re-projects that language's documents alone; one that
+  // writes none keeps the fingerprints it already has.
   const morphology =
     corpusIndexStemFields(manifest) === null
       ? {}
-      : { morphology: MORPHOLOGY_VERSION };
+      : {
+          morphology: morphologyKey(documentMorphologyLanguage(input.language)),
+        };
   const common = {
     contract: "corpus-index-projection-v1",
     manifestDigest: corpusIndexManifestDigest(manifest),

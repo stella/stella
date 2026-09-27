@@ -85,6 +85,34 @@ const COMPARISONS_BY_ADAPTER = new Map<AdapterKey, ReadonlySet<string>>(
   ]),
 );
 
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/** Whole values publishers print in a text cell to mean "nothing here". */
+const FILLER_TOKENS: ReadonlySet<string> = new Set([
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "x",
+]);
+
+/**
+ * Whether a trimmed value is filler rather than prose, whatever the source:
+ * nothing but punctuation or symbols, a stock filler token, or one character
+ * repeated. Letters and digits of every script count as prose.
+ */
+const isFillerText = (text: string): boolean => {
+  if (!LETTER_OR_DIGIT.test(text)) {
+    return true;
+  }
+  const compact = text.replaceAll(/\s+/gu, "").toLowerCase();
+  if (FILLER_TOKENS.has(compact)) {
+    return true;
+  }
+  const [first, ...rest] = compact;
+  return rest.length > 0 && rest.every((character) => character === first);
+};
+
 export const sourceTextField = (
   adapter: AdapterKey,
   raw: string | null | undefined,
@@ -94,8 +122,9 @@ export const sourceTextField = (
     return absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   }
   if (
+    isFillerText(text) ||
     COMPARISONS_BY_ADAPTER.get(adapter)?.has(absentTextComparison(text)) ===
-    true
+      true
   ) {
     return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
   }

@@ -87,13 +87,16 @@ const LENGTH_SCENARIO_MAX_TOKENS = 16;
 /** A model id no provider serves, for the rejected request. */
 export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
-/** The chat model a provider's corpus is recorded with. */
+/** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
   BYOK_DEFAULT_MODELS[provider].chat;
 
-/** A second model of the provider's, for side calls such as thread titles. */
-export const wireSideModel = (provider: ProviderWireProvider): string => {
-  const chat = wireChatModel(provider);
+/** A model of the provider's other than `chat`, for side calls such as
+ *  thread titles. */
+export const wireSideModel = (
+  provider: ProviderWireProvider,
+  chat: string,
+): string => {
   const options: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return options.find((model) => model !== chat) ?? chat;
 };

@@ -11,6 +11,18 @@ on:
     - cron: "30 14 * * 4"
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes its scan. Pushes to main,
+# scheduled scans and manual runs each get a group of their own, so they
+# always finish.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      (github.event_name == 'pull_request'
+        && format('pr-{0}', github.event.pull_request.number))
+      || format('run-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

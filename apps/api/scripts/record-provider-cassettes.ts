@@ -8,6 +8,7 @@
 //   RECORD_OPENAI_API_KEY=... bun run record:provider-cassettes
 //   bun run record:provider-cassettes --provider anthropic,google --scenario text
 //   bun run record:provider-cassettes --provider mistral --pause-ms 5000
+//   bun run record:provider-cassettes --provider openai --model gpt-6-luna
 //
 // A provider is recorded only when its recording key is set:
 // RECORD_OPENAI_API_KEY, RECORD_ANTHROPIC_API_KEY, RECORD_GOOGLE_API_KEY,
@@ -16,11 +17,15 @@
 // so no configured key is ever used by accident. Scenarios no live request
 // can produce on demand (rate limits, outages, corrupted or cut-off streams)
 // stay synthetic. `--pause-ms` waits between requests, for a key whose
-// rate limit a full pass would hit.
+// rate limit a full pass would hit. `--model` records with another of the
+// provider's catalog models than its chat default. `tool-call` and `text`
+// are always recorded together: the replay tests play them as one
+// conversation, on one model.
 //
 // Nothing but the synthetic prompts is sent. Request bodies and request
 // headers are never stored; response headers are kept only when an SDK reads
-// them; response and request identifiers are replaced; a response that
+// them; response and request identifiers are replaced, one placeholder per
+// value; a response that
 // contains the key fails the recording. Review the diff before committing.
 
 import { EventType } from "@tanstack/ai";
@@ -29,6 +34,8 @@ import { panic, Result } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -130,6 +137,7 @@ export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const IDENTIFIER_KEYS = new Set([
   "account_id",
   "id",
+  "item_id",
   "organization_id",
   "project_id",
   "requestId",
@@ -156,15 +164,48 @@ const TOOL_CALL_ID = /^(?:call|toolu|tooluse|fc)_/u;
 const ACCOUNT_TOKEN =
   /\b(?:org|proj|user)[-_](?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,}\b/gu;
 
-export const sanitizeJson = (value: unknown, secret: string): unknown => {
+/** Refuses anything to be stored that carries the recording key. */
+export const refuseSecret = (text: string, secret: string): void => {
+  if (secret !== "" && text.includes(secret)) {
+    panic("A provider response contains the recording key");
+  }
+};
+
+/**
+ * What one recording redacts: the key it refuses to store, and every
+ * identifier it has replaced so far. One real value always gets the same
+ * placeholder, whichever key or event carries it, so the references a
+ * response makes to its own items still match.
+ */
+export type Redaction = {
+  identifiers: Map<string, string>;
+  secret: string;
+};
+
+export const newRedaction = (secret: string): Redaction => ({
+  identifiers: new Map(),
+  secret,
+});
+
+const placeholderFor = (redaction: Redaction, value: string): string => {
+  const known = redaction.identifiers.get(value);
+  if (known !== undefined) {
+    return known;
+  }
+  const placeholder = `[id_${String(redaction.identifiers.size + 1)}]`;
+  redaction.identifiers.set(value, placeholder);
+  return placeholder;
+};
+
+export const sanitizeJson = (value: unknown, redaction: Redaction): unknown => {
   if (Array.isArray(value)) {
-    return value.map((child) => sanitizeJson(child, secret));
+    return value.map((child) => sanitizeJson(child, redaction));
   }
   if (typeof value === "string") {
-    if (secret !== "" && value.includes(secret)) {
-      return panic("A provider response contains the recording key");
-    }
-    return value.replaceAll(ACCOUNT_TOKEN, "[id]");
+    refuseSecret(value, redaction.secret);
+    return value.replaceAll(ACCOUNT_TOKEN, (token) =>
+      placeholderFor(redaction, token),
+    );
   }
   if (value === null || typeof value !== "object") {
     return value;
@@ -179,22 +220,15 @@ export const sanitizeJson = (value: unknown, secret: string): unknown => {
         typeof child === "string" &&
         !TOOL_CALL_ID.test(child)
       ) {
-        return [[key, `[${key}]`]];
+        refuseSecret(child, redaction.secret);
+        return [[key, placeholderFor(redaction, child)]];
       }
       if (ECHO_KEYS.has(key) && typeof child === "string") {
         return [[key, "[redacted]"]];
       }
-      return [[key, sanitizeJson(child, secret)]];
+      return [[key, sanitizeJson(child, redaction)]];
     }),
   );
-};
-
-/** An SSE or JSON body with every JSON payload sanitized, framing kept. */
-/** Refuses anything to be stored that carries the recording key. */
-export const refuseSecret = (text: string, secret: string): void => {
-  if (secret !== "" && text.includes(secret)) {
-    panic("A provider response contains the recording key");
-  }
 };
 
 /** Response, request and account identifiers as providers spell them in
@@ -214,36 +248,41 @@ const parseJson = (text: string): { value: unknown } | undefined => {
  * Text that is not JSON (a cut payload, a plain-text error) keeps its
  * bytes, with any identifier token replaced.
  */
-const sanitizeFreeText = (text: string, secret: string): string => {
-  refuseSecret(text, secret);
-  return text.replaceAll(IDENTIFIER_TOKEN, "[id]");
+const sanitizeFreeText = (text: string, redaction: Redaction): string => {
+  refuseSecret(text, redaction.secret);
+  return text.replaceAll(IDENTIFIER_TOKEN, (token) =>
+    placeholderFor(redaction, token),
+  );
 };
 
 /** One JSON document, or free text when it is not one. */
-const sanitizeDocument = (text: string, secret: string): string => {
-  refuseSecret(text, secret);
+const sanitizeDocument = (text: string, redaction: Redaction): string => {
+  refuseSecret(text, redaction.secret);
   const parsed = parseJson(text);
   return parsed === undefined
-    ? sanitizeFreeText(text, secret)
-    : JSON.stringify(sanitizeJson(parsed.value, secret));
+    ? sanitizeFreeText(text, redaction)
+    : JSON.stringify(sanitizeJson(parsed.value, redaction));
 };
 
 /** An SSE or JSON body with every payload sanitized, framing kept. */
-export const sanitizeTextBody = (text: string, secret: string): string => {
-  refuseSecret(text, secret);
+export const sanitizeTextBody = (
+  text: string,
+  redaction: Redaction,
+): string => {
+  refuseSecret(text, redaction.secret);
   if (parseJson(text) !== undefined) {
-    return sanitizeDocument(text, secret);
+    return sanitizeDocument(text, redaction);
   }
   return text
     .split(/(\r?\n)/u)
     .map((line) => {
       if (!line.startsWith("data:")) {
-        return sanitizeFreeText(line, secret);
+        return sanitizeFreeText(line, redaction);
       }
       const data = line.slice("data:".length).trimStart();
       return data === "[DONE]"
         ? line
-        : `data: ${sanitizeDocument(data, secret)}`;
+        : `data: ${sanitizeDocument(data, redaction)}`;
     })
     .join("");
 };
@@ -254,12 +293,12 @@ export const sanitizeTextBody = (text: string, secret: string): string => {
  */
 export const sanitizeEventPayload = (
   payload: string | Record<string, unknown>,
-  secret: string,
+  redaction: Redaction,
 ): string | Record<string, unknown> => {
   if (typeof payload === "string") {
-    return sanitizeDocument(payload, secret);
+    return sanitizeDocument(payload, redaction);
   }
-  const sanitized = sanitizeJson(payload, secret);
+  const sanitized = sanitizeJson(payload, redaction);
   return typeof sanitized === "object" &&
     sanitized !== null &&
     !Array.isArray(sanitized)
@@ -322,6 +361,7 @@ const installRecorder = ({
   const upstream = globalThis.fetch;
   const origins = new Set<string>(ORIGINS[provider]);
   const exchanges: ProviderWireExchange[] = [];
+  const redaction = newRedaction(secret);
   /** The first refusal: the SDK sees only a failed fetch, the recording
    *  fails with the reason. */
   const refusal: { error: unknown } = { error: undefined };
@@ -354,13 +394,13 @@ const installRecorder = ({
             refuseSecret(JSON.stringify(message.headers), secret);
             return {
               headers: message.headers,
-              payload: sanitizeEventPayload(message.payload, secret),
+              payload: sanitizeEventPayload(message.payload, redaction),
             };
           }),
         }
       : {
           encoding: "text",
-          text: sanitizeTextBody(new TextDecoder().decode(bytes), secret),
+          text: sanitizeTextBody(new TextDecoder().decode(bytes), redaction),
         };
     exchanges.push({
       request: { method: "POST", path: cassetteRequestPath(url) },
@@ -490,17 +530,49 @@ const listArgument = (name: string): string[] | undefined => {
   return value?.split(",").filter((entry) => entry !== "");
 };
 
+/** `--model`, which must be one of the provider's catalog models. */
+export const offeredModel = (
+  provider: ProviderWireProvider,
+  model: string,
+): string => {
+  const options: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+  return options.includes(model)
+    ? model
+    : panic(`--model ${model} is not one of ${provider}'s models`);
+};
+
+/** The model a scenario is recorded with: the rejected request always names
+ *  a model no provider serves. */
+const recordingModel = ({
+  chatModel,
+  provider,
+  scenario,
+}: {
+  chatModel: string | undefined;
+  provider: ProviderWireProvider;
+  scenario: ProviderWireScenario;
+}): string => {
+  if (scenario === "bad-request") {
+    return UNKNOWN_MODEL_ID;
+  }
+  return chatModel === undefined
+    ? wireChatModel(provider)
+    : offeredModel(provider, chatModel);
+};
+
 export const recordOne = async ({
+  chatModel,
   provider,
   scenario,
   secret,
 }: {
+  /** Records with this model rather than the provider's chat default. */
+  chatModel?: string | undefined;
   provider: ProviderWireProvider;
   scenario: ProviderWireScenario;
   secret: string;
 }): Promise<ProviderWireCassette> => {
-  const model =
-    scenario === "bad-request" ? UNKNOWN_MODEL_ID : wireChatModel(provider);
+  const model = recordingModel({ chatModel, provider, scenario });
   const recorder = installRecorder({ provider, secret });
   try {
     await runWireScenario({ apiKey: secret, model, provider, scenario });
@@ -526,6 +598,34 @@ export const recordOne = async ({
   });
 };
 
+const RECORDABLE_SCENARIOS = Object.entries(PROVIDER_WIRE_SCENARIOS)
+  .filter(([, scenario]) => scenario.recordable)
+  .map(([name]) => name);
+
+/** Scenarios the replay tests play as one conversation, on one model: a tool
+ *  call and the text answer that continues it. They are recorded together. */
+const RECORDED_TOGETHER: readonly (readonly ProviderWireScenario[])[] = [
+  ["text", "tool-call"],
+];
+
+/** The recordable scenarios among `requested`, with every scenario recorded
+ *  together with one of them, in corpus order. */
+export const scenariosToRecord = (
+  requested: readonly string[],
+): ProviderWireScenario[] => {
+  const included = new Set(requested);
+  for (const group of RECORDED_TOGETHER) {
+    if (group.some((scenario) => included.has(scenario))) {
+      for (const scenario of group) {
+        included.add(scenario);
+      }
+    }
+  }
+  return RECORDABLE_SCENARIOS.filter((name): name is ProviderWireScenario =>
+    included.has(name),
+  );
+};
+
 const main = async (): Promise<number> => {
   env.USE_MOCK_AI = false;
   const providers = (
@@ -533,15 +633,18 @@ const main = async (): Promise<number> => {
   ).filter((name): name is ProviderWireProvider =>
     (PROVIDER_WIRE_PROVIDERS as readonly string[]).includes(name),
   );
-  const recordable: readonly string[] = Object.entries(PROVIDER_WIRE_SCENARIOS)
-    .filter(([, scenario]) => scenario.recordable)
-    .map(([name]) => name);
-  const scenarios = (listArgument("--scenario") ?? recordable).filter(
-    (name): name is ProviderWireScenario => recordable.includes(name),
+  const scenarios = scenariosToRecord(
+    listArgument("--scenario") ?? RECORDABLE_SCENARIOS,
   );
   const pauseMs = Number(listArgument("--pause-ms")?.at(0) ?? "0");
   if (!Number.isSafeInteger(pauseMs) || pauseMs < 0) {
     return panic("--pause-ms takes a whole number of milliseconds");
+  }
+  const chatModel = listArgument("--model")?.at(0);
+  if (chatModel !== undefined) {
+    for (const provider of providers) {
+      offeredModel(provider, chatModel);
+    }
   }
   let failures = 0;
   let requested = false;
@@ -558,7 +661,12 @@ const main = async (): Promise<number> => {
       }
       requested = true;
       try {
-        const cassette = await recordOne({ provider, scenario, secret });
+        const cassette = await recordOne({
+          chatModel,
+          provider,
+          scenario,
+          secret,
+        });
         const replay = installProviderWireReplay();
         let violations: ReturnType<typeof findWireContractViolations>;
         let accepted: boolean;

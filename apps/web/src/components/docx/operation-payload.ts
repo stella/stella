@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
   parseFolioDocumentOperationBatch,
@@ -8,13 +10,14 @@ import type { FolioAIEditOperation } from "@stll/folio-react";
 export const parsePersistedDocxOperation = (
   payload: unknown,
 ): FolioAIEditOperation | null => {
-  try {
-    const parsed = parseFolioDocumentOperationBatch({
+  const parsed = Result.try(() =>
+    parseFolioDocumentOperationBatch({
       version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
       operations: [payload],
-    });
-    return parsed.operations.at(0) ?? null;
-  } catch {
+    }),
+  );
+  if (Result.isError(parsed)) {
     return null;
   }
+  return parsed.value.operations.at(0) ?? null;
 };

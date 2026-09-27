@@ -18,6 +18,8 @@ import type {
 } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { runFinishedOutcomeOf } from "@/api/lib/chat/tanstack-chat-runtime";
+
 /**
  * Full middleware-surface canary. This intentionally covers nonterminal hooks
  * too: any upstream middleware addition/removal forces an explicit Stella
@@ -43,6 +45,7 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   optionalRequires: "configuration",
   provides: "configuration",
   requires: "configuration",
+  routedSubagentPersistence: "configuration",
   sandbox: "nonterminal",
   setup: "nonterminal",
 } as const satisfies Record<
@@ -106,10 +109,14 @@ export const createTanStackTerminalHooks = (
  * maintain independent partial terminal-event allowlists.
  */
 const TANSTACK_STREAM_EVENT_LIFECYCLE = {
+  ACTIVITY_DELTA: "content",
+  ACTIVITY_SNAPSHOT: "content",
   CUSTOM: "content",
   MESSAGES_SNAPSHOT: "content",
+  RAW: "content",
   REASONING_ENCRYPTED_VALUE: "content",
   REASONING_END: "content",
+  REASONING_MESSAGE_CHUNK: "content",
   REASONING_MESSAGE_CONTENT: "content",
   REASONING_MESSAGE_END: "content",
   REASONING_MESSAGE_START: "content",
@@ -121,10 +128,16 @@ const TANSTACK_STREAM_EVENT_LIFECYCLE = {
   STATE_SNAPSHOT: "content",
   STEP_FINISHED: "content",
   STEP_STARTED: "content",
+  // A child run's end; the parent run still ends with its own terminal event.
+  SUBAGENT_ERROR: "content",
+  SUBAGENT_FINISHED: "content",
+  SUBAGENT_STARTED: "content",
+  TEXT_MESSAGE_CHUNK: "content",
   TEXT_MESSAGE_CONTENT: "content",
   TEXT_MESSAGE_END: "content",
   TEXT_MESSAGE_START: "content",
   TOOL_CALL_ARGS: "content",
+  TOOL_CALL_CHUNK: "content",
   TOOL_CALL_END: "content",
   TOOL_CALL_RESULT: "content",
   TOOL_CALL_START: "content",
@@ -135,9 +148,9 @@ const TANSTACK_STREAM_EVENT_LIFECYCLE = {
 
 export const tanStackStreamEventLifecycle = (
   chunk: StreamChunk,
-): "completed" | "content" | "failed" | "started" | "waiting" => {
+): "cancelled" | "completed" | "content" | "failed" | "started" | "waiting" => {
   if (chunk.type === EventType.RUN_FINISHED) {
-    return chunk.outcome?.type === "interrupt" ? "waiting" : "completed";
+    return runFinishedOutcomeOf(chunk);
   }
   return TANSTACK_STREAM_EVENT_LIFECYCLE[chunk.type];
 };
