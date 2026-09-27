@@ -302,9 +302,9 @@ instead. Passing does not certify `ci-result`: a pull request runs the core
 checks, the web and landing builds, and the path-scoped image smokes (the API
 image on arm64 only), while browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
-run only in the merge queue; label a pull request `ci:full` to run them before
-a merge that bypasses the queue. Confirm `ci-result` succeeds on the
-current PR head before merging.
+run only in the merge queue, so merge through it (`gh pr merge --auto
+--squash`). Confirm `ci-result` succeeds on the current PR head, with
+`ci-checks` run rather than skipped, before queueing.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a

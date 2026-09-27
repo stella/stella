@@ -81,15 +81,10 @@ jobs:
         env:
           DISPATCH_DEPTH: ${{ inputs.depth }}
           EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
         run: |
-          # Full on merge_group, and on a pull request labelled `ci:full`,
-          # which a merge that bypasses the queue needs. The labels are read
-          # live rather than from the event payload, so re-running a pull
-          # request run after the label is added (what ci-full-label.yml
-          # does) plans full depth. A manual run takes its `depth` input.
+          # Full on merge_group only: the heavy suites check the tree that
+          # will land, once, in the merge queue. A pull request plans fast.
+          # A manual run takes its `depth` input.
           case "$EVENT_NAME" in
             merge_group)
               echo "suite_depth=full" >> "$GITHUB_OUTPUT"
@@ -104,18 +99,14 @@ jobs:
               exit 0
               ;;
             pull_request)
+              echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
+              exit 0
               ;;
             *)
               echo "::error::No suite depth for event '$EVENT_NAME'."
               exit 1
               ;;
           esac
-          labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
-          if grep -Fxq 'ci:full' <<< "$labels"; then
-            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
-          else
-            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Check if PR is trusted
         id: check
@@ -418,7 +409,7 @@ jobs:
             api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
           fi
 
-          # Full depth (the merge queue, a `ci:full` pull request) runs the
+          # Full depth (the merge queue, a manual full run) runs the
           # slow generated-output guards whatever the diff touched.
           if [[ "$SUITE_DEPTH" == "full" ]]; then
             published_exports_required=true

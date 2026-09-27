@@ -435,11 +435,7 @@ test("a full-depth run fails every planned job that did not succeed", () => {
     fc.property(
       fc.constantFrom(...gatedJobs),
       fc.constantFrom("skipped", "cancelled", "failure"),
-      fc.constantFrom(
-        ...FULL_DEPTH_EVENTS,
-        // A `ci:full` pull request.
-        EVENT.pullRequest,
-      ),
+      fc.constantFrom(...FULL_DEPTH_EVENTS),
       (job, result, event) => {
         expect(
           evaluateResult({
@@ -475,8 +471,8 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
   }
 });
 
-// A pull request plans `fast` unless labelled `ci:full`; a manual run plans
-// the depth it was dispatched with. Both can be superseded by a newer run.
+// A pull request always plans `fast`; a manual run plans the depth it was
+// dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
 test("only a pull request or a manual run skips heavy suites or passes a superseded run", () => {
@@ -704,7 +700,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   );
 });
 
-test("a manual run plans the depth it was dispatched with, the merge queue always full", () => {
+test("a manual run plans the depth it was dispatched with, the merge queue always full, a pull request always fast", () => {
   expect(resolveDepth(EVENT.workflowDispatch, "fast")).toBe("suite_depth=fast");
   expect(resolveDepth(EVENT.workflowDispatch, "full")).toBe("suite_depth=full");
   expect(resolveDepth(EVENT.workflowDispatch, "")).toBe("error");
@@ -712,6 +708,13 @@ test("a manual run plans the depth it was dispatched with, the merge queue alway
   for (const dispatchDepth of ["", "fast"]) {
     expect(resolveDepth(EVENT.mergeGroup, dispatchDepth)).toBe(
       "suite_depth=full",
+    );
+  }
+  // The heavy suites run once, in the merge queue; no label or input turns
+  // them on for a pull request.
+  for (const dispatchDepth of ["", "full"]) {
+    expect(resolveDepth(EVENT.pullRequest, dispatchDepth)).toBe(
+      "suite_depth=fast",
     );
   }
   expect(resolveDepth("push", "")).toBe("error");
