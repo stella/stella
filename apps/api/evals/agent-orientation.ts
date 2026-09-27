@@ -1640,6 +1640,14 @@ const runModelTurn = async ({
         tools,
       }),
     onChunk: (chunk) => {
+      // The engine expands neither shorthand, so text or a call carried
+      // only here would be missed rather than scored.
+      if (
+        chunk.type === EventType.TEXT_MESSAGE_CHUNK ||
+        chunk.type === EventType.TOOL_CALL_CHUNK
+      ) {
+        panic(`Unexpected ${chunk.type} in an engine stream`);
+      }
       // Exhaustive over ChatStream's real chunk union (`AGUIEvent`) instead
       // of an if-chain: a renamed or newly added chunk type fails
       // typechecking at the `satisfies never` default instead of being
@@ -1708,12 +1716,6 @@ const runModelTurn = async ({
         case EventType.SUBAGENT_FINISHED:
         case EventType.SUBAGENT_ERROR: {
           break;
-        }
-        // The engine expands neither shorthand, so text or a call carried
-        // only here would be missed rather than scored.
-        case EventType.TEXT_MESSAGE_CHUNK:
-        case EventType.TOOL_CALL_CHUNK: {
-          return panic(`Unexpected ${chunk.type} in an engine stream`);
         }
         default: {
           chunk satisfies never;
