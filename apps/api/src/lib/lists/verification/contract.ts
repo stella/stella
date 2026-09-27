@@ -139,6 +139,8 @@ export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "running",
 ] as const satisfies readonly VerificationRunStatus[];
 
+export const VERIFICATION_PIPELINE_VERSION = 2;
+
 export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;
   sourceEntityVersionId: SafeId<"entityVersion">;
@@ -215,6 +217,8 @@ export const VERIFICATION_LIMITS = {
   CLAIM_TEXT_MAX: 4000,
   /** The engine writes at most this many claims for one document. */
   CLAIMS_PER_RUN_MAX: 2000,
+  /** Persisted text blocks one run may contain; ordinal fits a smallint. */
+  BLOCKS_PER_RUN_MAX: 32767,
   /** Reviewer actions one claim may accumulate; bounds a run's review read. */
   REVIEW_EVENTS_PER_CLAIM_MAX: 200,
   /** Facts one run is checked against; every grading call carries them all. */

@@ -36,7 +36,10 @@ import {
   gradedClaimType,
 } from "@/api/lib/lists/verification/claim-grade";
 import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
-import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
+import {
+  VERIFICATION_LIMITS,
+  VERIFICATION_RUN_ACTIVE_STATUSES,
+} from "@/api/lib/lists/verification/contract";
 import type {
   VerificationEvidence,
   VerificationRunErrorCode,
@@ -44,6 +47,7 @@ import type {
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import { completeVerificationRun } from "@/api/lib/lists/verification/run-persistence";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -396,6 +400,9 @@ const executeRun = async (
   if (document.type === "no-text") {
     return "no_text";
   }
+  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+    return "extraction_failed";
+  }
 
   const config = await Result.tryPromise({
     try: async () => {
@@ -481,30 +488,13 @@ const executeRun = async (
 
   const rows = claimRows(actor, claims, graded.value.grades);
   await actor.scopedDb(async (tx) => {
-    // Complete first, guarded on `running`: a run the janitor already failed
-    // must not gain claims afterwards.
-    // audit: skip — lifecycle bookkeeping on a run audited at creation.
-    const completed = await tx
-      .update(legalListVerificationRuns)
-      .set({ status: "completed", finishedAt: new Date() })
-      .where(
-        and(
-          eq(legalListVerificationRuns.id, actor.runId),
-          eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
-          eq(legalListVerificationRuns.status, "running"),
-        ),
-      )
-      .returning({ id: legalListVerificationRuns.id });
-    if (completed.length === 0 || rows.length === 0) {
-      return;
-    }
-    // audit: skip — engine output of a run audited at creation.
-    await tx
-      .insert(legalListClaims)
-      .values(rows)
-      .onConflictDoNothing({
-        target: [legalListClaims.runId, legalListClaims.position],
-      });
+    await completeVerificationRun({
+      tx,
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+      blocks: document.blocks,
+      claims: rows,
+    });
   });
   return null;
 };

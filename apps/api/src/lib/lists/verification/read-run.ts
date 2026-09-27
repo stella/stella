@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   legalListClaimReviewEvents,
   legalListClaims,
+  legalListVerificationBlocks,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -185,6 +186,23 @@ export const readVerificationRun = async ({
     )
     .orderBy(asc(legalListClaims.position))
     .limit(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
+  const blocks = await tx
+    .select({
+      ordinal: legalListVerificationBlocks.ordinal,
+      blockId: legalListVerificationBlocks.blockId,
+      kind: legalListVerificationBlocks.kind,
+      pageNumber: legalListVerificationBlocks.pageNumber,
+      text: legalListVerificationBlocks.text,
+    })
+    .from(legalListVerificationBlocks)
+    .where(
+      and(
+        eq(legalListVerificationBlocks.workspaceId, workspaceId),
+        eq(legalListVerificationBlocks.runId, runId),
+      ),
+    )
+    .orderBy(asc(legalListVerificationBlocks.ordinal))
+    .limit(VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX);
   const reviews = await readClaimReviews({ tx, workspaceId, runId });
   const reviewOf = (claimId: SafeId<"legalListClaim">) => {
     const record = reviews.get(claimId);
@@ -205,6 +223,7 @@ export const readVerificationRun = async ({
     createdAt: run.createdAt.toISOString(),
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
+    blocks,
     claims: claims.map((claim) => ({
       id: claim.id,
       position: claim.position,
