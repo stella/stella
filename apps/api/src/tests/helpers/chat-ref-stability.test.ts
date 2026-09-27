@@ -9,8 +9,8 @@ import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import { createRefStabilityLedger } from "@/api/tests/helpers/chat-ref-stability";
 
 const THREAD_ID = "thread-1";
-/** The thread state of a thread that stored `ent_1`. */
-const SHOWN: ReadonlySet<string> = new Set(["ent_1"]);
+/** The name ledger of a thread that stored `ent_1`. */
+const SHOWN = { refs: new Set(["ent_1"]), toolCallIds: new Set<string>() };
 const WORKSPACE_ID = brandPersistedWorkspaceId(
   "01a0df7d-c93a-7105-99f9-c66cf1b14d01",
 );
@@ -34,9 +34,9 @@ const firstRequest = () => {
   const registry = ledger.track(THREAD_ID, createChatRefRegistry());
   const ref = registry.toEntityRef(DOCUMENT_A);
   const stored = storedResult(`Listed ${ref}`);
-  expect(
-    ledger.check({ stored, threadId: THREAD_ID, threadRefs: SHOWN }),
-  ).toEqual([]);
+  expect(ledger.check({ stored, threadId: THREAD_ID, ledger: SHOWN })).toEqual(
+    [],
+  );
   return { ledger, ref, registry, stored };
 };
 
@@ -46,7 +46,7 @@ describe("chat.persisted.refs-stable", () => {
     ledger.track(THREAD_ID, createChatRefRegistry());
 
     expect(
-      ledger.check({ stored, threadId: THREAD_ID, threadRefs: SHOWN }),
+      ledger.check({ stored, threadId: THREAD_ID, ledger: SHOWN }),
     ).toMatchObject([
       { detail: { later: null, ref }, oracle: CHAT_ORACLE.persistedRefsStable },
     ]);
@@ -58,7 +58,7 @@ describe("chat.persisted.refs-stable", () => {
     expect(next.toEntityRef(DOCUMENT_B)).toBe(ref);
 
     expect(
-      ledger.check({ stored, threadId: THREAD_ID, threadRefs: SHOWN }),
+      ledger.check({ stored, threadId: THREAD_ID, ledger: SHOWN }),
     ).toMatchObject([
       {
         detail: {
@@ -82,7 +82,7 @@ describe("chat.persisted.refs-stable", () => {
     next.toEntityRef(DOCUMENT_B);
 
     expect(
-      ledger.check({ stored, threadId: THREAD_ID, threadRefs: SHOWN }),
+      ledger.check({ stored, threadId: THREAD_ID, ledger: SHOWN }),
     ).toEqual([]);
   });
 
@@ -91,22 +91,39 @@ describe("chat.persisted.refs-stable", () => {
     ledger.track(THREAD_ID, createChatRefRegistry());
     const typed = storedResult("the user typed ent_7");
     expect(
-      ledger.check({ stored: typed, threadId: THREAD_ID, threadRefs: SHOWN }),
+      ledger.check({ stored: typed, threadId: THREAD_ID, ledger: SHOWN }),
     ).toEqual([]);
     ledger.track(THREAD_ID, createChatRefRegistry());
 
     expect(
-      ledger.check({ stored: typed, threadId: THREAD_ID, threadRefs: SHOWN }),
+      ledger.check({ stored: typed, threadId: THREAD_ID, ledger: SHOWN }),
     ).toEqual([]);
   });
 
-  test("a stored ref the thread's ref state lacks breaks it", () => {
+  test("a stored ref or tool-call id the name ledger lacks breaks it", () => {
     const ledger = createRefStabilityLedger();
     const registry = ledger.track(THREAD_ID, createChatRefRegistry());
-    const stored = storedResult(`Listed ${registry.toEntityRef(DOCUMENT_A)}`);
+    const stored = [
+      {
+        parts: [
+          {
+            id: "call-1",
+            output: `Listed ${registry.toEntityRef(DOCUMENT_A)}`,
+            type: "tool-call",
+          },
+        ],
+      },
+    ];
 
     expect(
-      ledger.check({ stored, threadId: THREAD_ID, threadRefs: new Set() }),
-    ).toMatchObject([{ detail: { missingFromThreadState: "ent_1" } }]);
+      ledger.check({
+        ledger: { refs: new Set(), toolCallIds: new Set() },
+        stored,
+        threadId: THREAD_ID,
+      }),
+    ).toMatchObject([
+      { detail: { missingFromLedger: "ent_1" } },
+      { detail: { missingToolCallIdFromLedger: "call-1" } },
+    ]);
   });
 });

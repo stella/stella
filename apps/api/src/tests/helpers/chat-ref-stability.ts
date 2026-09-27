@@ -10,6 +10,7 @@ import {
   CHAT_SOURCE_REF_PREFIX,
   type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
+import { isRecord } from "@/api/lib/type-guards";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 
@@ -102,6 +103,20 @@ const storedRefTokens = (messages: readonly StoredMessage[]): Set<string> =>
     ),
   );
 
+/** The tool-call ids the stored thread holds. */
+const storedToolCallIds = (messages: readonly StoredMessage[]): string[] =>
+  messages.flatMap(({ parts }) =>
+    Array.isArray(parts)
+      ? parts.flatMap((part: unknown) =>
+          isRecord(part) &&
+          part["type"] === "tool-call" &&
+          typeof part["id"] === "string"
+            ? [part["id"]]
+            : [],
+        )
+      : [],
+  );
+
 type ThreadLedger = {
   /** Every violation found on the thread so far. */
   findings: OracleViolation[];
@@ -138,18 +153,18 @@ export const createRefStabilityLedger = () => {
      * must name its first target in each registry built since the last
      * check, and refs first stored now are learned from the newest one. A
      * token that registry does not resolve (text a user typed) is not a
-     * minted ref and is not tracked. Every tracked ref must also be in the
-     * thread's stored ref state (`threadRefs`), which later requests restore.
-     * Returns the new violations.
+     * minted ref and is not tracked. Every tracked ref, and every tool-call
+     * id the stored thread holds, must also be in the thread's name ledger
+     * (`ledger`), which later requests read. Returns the new violations.
      */
     check: ({
+      ledger: nameLedger,
       stored,
       threadId,
-      threadRefs,
     }: {
+      ledger: { refs: ReadonlySet<string>; toolCallIds: ReadonlySet<string> };
       stored: readonly StoredMessage[];
       threadId: string;
-      threadRefs: ReadonlySet<string>;
     }): OracleViolation[] => {
       const ledger = ledgerOf(threadId);
       const registries = ledger.pending.splice(0);
@@ -172,8 +187,11 @@ export const createRefStabilityLedger = () => {
       const findings = violationsOf(CHAT_ORACLE.persistedRefsStable, [
         ...moved,
         ...[...ledger.shown.keys()]
-          .filter((ref) => !threadRefs.has(ref))
-          .map((ref) => ({ missingFromThreadState: ref })),
+          .filter((ref) => !nameLedger.refs.has(ref))
+          .map((ref) => ({ missingFromLedger: ref })),
+        ...storedToolCallIds(stored)
+          .filter((id) => !nameLedger.toolCallIds.has(id))
+          .map((id) => ({ missingToolCallIdFromLedger: id })),
       ]);
       ledger.findings.push(...findings);
       return findings;

@@ -95,8 +95,8 @@ type ChatRefContextFields = {
 /**
  * Version 1 predates ref bindings and stays readable for messages persisted
  * before them. Their raw refs cannot be restored, so a thread retires their
- * spellings (`ChatThreadRefState.retired`). Remove once the
- * `chat-ref-state` retired-spellings telemetry stops reporting.
+ * spellings (`retired-ref` names). Remove once the `chat-thread-names`
+ * retired-refs telemetry stops reporting.
  */
 export type ChatRefContext =
   | (ChatRefContextFields & { version: 1 })
@@ -107,7 +107,7 @@ const isResourceRefOfType = <TType extends ResourceRef["type"]>(
   type: TType,
 ): value is ResourceRef<TType> => isResourceRef(value) && value.type === type;
 
-const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
+export const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
   if (!isRecord(value) || typeof value["ref"] !== "string") {
     return false;
   }
@@ -131,85 +131,6 @@ const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
     default:
       return false;
   }
-};
-
-/**
- * Every ref a thread's stored messages showed the model, kept on the thread
- * so each request restores them with one row read. It only grows: a ref
- * keeps its spelling for the thread's life, even once the message that
- * showed it is deleted, so no later mint can reuse the spelling.
- */
-export type ChatThreadRefState = {
-  bindings: ChatRefBinding[];
-  /**
-   * Spellings a message stored before bindings existed showed the model,
-   * whose targets are unknown. They resolve to nothing and are never minted
-   * again, so a ref from that history fails loudly instead of naming
-   * another target.
-   */
-  retired: string[];
-  version: 1;
-};
-
-export const EMPTY_CHAT_THREAD_REF_STATE: ChatThreadRefState = {
-  bindings: [],
-  retired: [],
-  version: 1,
-};
-
-export const isChatThreadRefState = (
-  value: unknown,
-): value is ChatThreadRefState =>
-  isRecord(value) &&
-  value["version"] === 1 &&
-  Array.isArray(value["bindings"]) &&
-  value["bindings"].every(isChatRefBinding) &&
-  Array.isArray(value["retired"]) &&
-  value["retired"].every((ref) => typeof ref === "string");
-
-/** One binding's identity: its spelling and its target, in a fixed order
- *  (stored JSON keeps no key order). */
-const chatRefBindingKey = (binding: ChatRefBinding): string => {
-  switch (binding.kind) {
-    case "contact":
-      return JSON.stringify([binding.ref, binding.contact.id]);
-    case "entity":
-      return JSON.stringify([
-        binding.ref,
-        binding.workspace.id,
-        binding.entity.id,
-      ]);
-    case "matter":
-      return JSON.stringify([binding.ref, binding.workspace.id]);
-    case "property":
-      return JSON.stringify([binding.ref, binding.property.id]);
-    case "source":
-      return JSON.stringify([binding.ref, binding.href]);
-    default:
-      binding satisfies never;
-      return panic("Unhandled chat ref binding");
-  }
-};
-
-/** `state` with `bindings` it does not hold yet. */
-export const addChatThreadRefBindings = (
-  state: ChatThreadRefState,
-  bindings: readonly ChatRefBinding[],
-): ChatThreadRefState => {
-  const held = new Set(state.bindings.map(chatRefBindingKey));
-  const added: ChatRefBinding[] = [];
-  for (const binding of bindings) {
-    const key = chatRefBindingKey(binding);
-    if (!held.has(key)) {
-      held.add(key);
-      added.push(binding);
-    }
-  }
-  return {
-    bindings: [...state.bindings, ...added],
-    retired: state.retired,
-    version: state.version,
-  };
 };
 
 /** Bindings a stored context carries; version 1 predates them. */

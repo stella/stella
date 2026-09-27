@@ -7,10 +7,11 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import { readChatThreadNames } from "@/api/handlers/chat/chat-thread-names";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
@@ -26,7 +27,6 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { isChatThreadRefState } from "@/api/lib/chat/ref-token";
 import {
   findLiveViewViolations,
   findUnstoredWireResults,
@@ -379,19 +379,21 @@ export const createApprovalHarness = ({
   const findUnstableRefs = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> => {
-    const [thread] = await testDb
-      .select({ refState: chatThreads.refState })
-      .from(chatThreads)
-      .where(eq(chatThreads.id, threadId));
-    const refState = thread?.refState ?? null;
+    // As the next request reads them: under the thread owner's row scope.
+    const names = await safeDb(
+      async (tx) => await readChatThreadNames({ threadId, tx }),
+    );
+    if (Result.isError(names)) {
+      return panic("The thread's names failed to load", names.error);
+    }
+    const held = names.value.source === "ledger" ? names.value : null;
     return refLedger.check({
+      ledger: {
+        refs: new Set(held?.refBindings.map(({ ref }) => ref)),
+        toolCallIds: new Set(held?.toolCallIds),
+      },
       stored: await readThreadMessages(threadId),
       threadId,
-      threadRefs: new Set(
-        isChatThreadRefState(refState)
-          ? refState.bindings.map(({ ref }) => ref)
-          : [],
-      ),
     });
   };
 

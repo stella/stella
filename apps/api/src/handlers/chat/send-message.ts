@@ -74,6 +74,7 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { toolCallIdsOf } from "@/api/handlers/chat/chat-thread-names";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -203,7 +204,6 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
   type ChatEntityRefContext,
-  addChatThreadRefBindings,
   type ChatRefBinding,
   type ChatRefContext,
   type ChatRefInputState,
@@ -1699,8 +1699,8 @@ export const createSendMessage = (
       // answer is a new request, and every ref its history shows the model
       // must keep its target.
       const refRegistry = dependencies.createRefRegistry(
-        validationThreadState.refState.bindings,
-        validationThreadState.refState.retired,
+        validationThreadState.threadNames.refBindings,
+        validationThreadState.threadNames.retiredRefs,
       );
       const activeDraftContext = yield* Result.await(
         validateActiveDraftContext({
@@ -2268,10 +2268,15 @@ export const createSendMessage = (
                     //
                     const persistResult = await finalizeAssistantTurn({
                       acceptedSendMode: body.sendMode,
-                      threadRefState: addChatThreadRefBindings(
-                        validationThreadState.refState,
-                        resolved.refBindings,
-                      ),
+                      threadNames: {
+                        added: {
+                          refBindings: resolved.refBindings,
+                          toolCallIds: toolCallIdsOf(
+                            resolvedResponseMessage.parts,
+                          ),
+                        },
+                        read: validationThreadState.threadNames,
+                      },
                       dataScopeExpansion: {
                         newWorkspaceIds: resolved.workspaceIds,
                       },

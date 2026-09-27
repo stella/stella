@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreadNames, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
@@ -38,8 +38,8 @@ import {
   CHAT_REF_ENCODING,
   type ChatRefBinding,
   type ChatRefContext,
-  type ChatThreadRefState,
 } from "@/api/lib/chat/ref-token";
+import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -192,15 +192,23 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     title: "Ref continuation test",
     userId: ids.userA1,
     workspaceId: null,
-    refState:
-      bindingStore === BINDING_STORE.thread
-        ? ({
-            bindings: [binding],
-            retired: [],
-            version: 1,
-          } satisfies ChatThreadRefState)
-        : null,
   });
+  if (bindingStore === BINDING_STORE.thread) {
+    await testDb.insert(chatThreadNames).values([
+      {
+        kind: CHAT_THREAD_NAME_KIND.ledgerStart,
+        name: "",
+        target: null,
+        threadId,
+      },
+      {
+        kind: CHAT_THREAD_NAME_KIND.refBinding,
+        name: binding.ref,
+        target: binding,
+        threadId,
+      },
+    ]);
+  }
 
   const mentionHref = toChatResourceHref({
     type: RESOURCE_TYPE.ENTITY,
