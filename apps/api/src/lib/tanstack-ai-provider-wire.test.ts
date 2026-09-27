@@ -38,11 +38,7 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 
 const cassettes = loadProviderWireCassettes();
 
-const {
-  providerWireFinish: finish,
-  providerWireToolInput: toolInput,
-  providerWireUsage: usage,
-} = CHAT_ORACLE;
+const { providerWireToolInput: toolInput } = CHAT_ORACLE;
 
 /** Why an unmet run is on the ledger: `upstream design` where the adapter
  *  behaves as its maintainers chose (we follow upstream, and our boundary
@@ -55,14 +51,10 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
  * oracles, an entry whose run now meets the contract fails until it is
  * removed, and its size is pinned to UNMET_SIZE, which only goes down.
  */
-const UNMET: Readonly<Record<string, UnmetEntry>> = {
-  "anthropic/length": { oracles: [usage], reason: "upstream gap" },
-  "anthropic/refusal": { oracles: [finish], reason: "upstream design" },
-  "openai/length": { oracles: [usage], reason: "upstream gap" },
-};
+const UNMET: Readonly<Record<string, UnmetEntry>> = {};
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-const UNMET_SIZE = 3;
+const UNMET_SIZE = 0;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
