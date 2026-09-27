@@ -5,12 +5,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { analyzeSqlPerf } from "./sql-perf-detector";
+import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
 
 export const SQL_PERF_BASELINE_PATH = ".oxlint-plugins/sql-perf-baseline.json";
-const SOURCE_GLOBS = [
-  "apps/api/src/**/*.{ts,tsx}",
-  "packages/**/*.{ts,tsx}",
-] as const;
+const SOURCE_GLOBS = SQL_PERF_LINT_FILES;
 
 export type SqlPerfCounts = Record<string, number>;
 
@@ -20,15 +18,6 @@ export type BaselineIssue = {
   actual: number | null;
   kind: "increase" | "decrease" | "stale" | "absent";
 };
-
-export const isSqlPerfSource = (file: string): boolean =>
-  (file.startsWith("apps/api/src/") || file.startsWith("packages/")) &&
-  /\.tsx?$/u.test(file) &&
-  !/\.(?:test|spec)\.[^.]+$/u.test(file) &&
-  !/(?:^|\/)(?:__tests__|tests|fixtures|fixture|migrations|migration|drizzle)(?:\/|$)/u.test(
-    file,
-  ) &&
-  !file.startsWith("apps/api/src/db/schema/");
 
 export const countSqlPerfHits = (source: string, filename: string): number => {
   const result = analyzeSqlPerf(source, filename);

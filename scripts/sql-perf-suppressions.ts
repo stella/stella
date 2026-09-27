@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { isSqlPerfSource } from "./sql-perf-baseline.ts";
 import { listSqlPerfAllowComments } from "./sql-perf-detector.ts";
+import { isSqlPerfSource } from "./sql-perf-scope.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const base = process.env["BASE_SHA"];

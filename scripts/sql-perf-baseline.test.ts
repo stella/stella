@@ -4,10 +4,14 @@ import {
   compareAgainstMergeBase,
   compareSqlPerfCounts,
   countSqlPerfHits,
-  isSqlPerfSource,
   lowerSqlPerfBaseline,
   parseSqlPerfCounts,
 } from "./sql-perf-baseline";
+import {
+  isSqlPerfSource,
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./sql-perf-scope";
 
 describe("SQL performance baseline source scope", () => {
   test.each([
@@ -19,9 +23,33 @@ describe("SQL performance baseline source scope", () => {
     ["apps/api/src/db/schema/query.ts", false],
     ["apps/api/drizzle/20260901_migration.ts", false],
     ["packages/legal/src/fixtures/query.ts", false],
+    ["packages/legal/src/__fixtures__/query.ts", false],
+    ["apps/api/src/tests/helpers/query.ts", false],
     ["scripts/query.ts", false],
   ])("%s is in scope: %s", (file, expected) => {
     expect(isSqlPerfSource(file)).toBe(expected);
+  });
+
+  test("the baseline scope is the lint override's scope", () => {
+    const inLint = (file: string) =>
+      SQL_PERF_LINT_FILES.some((glob) => new Bun.Glob(glob).match(file)) &&
+      !SQL_PERF_LINT_EXCLUDES.some((glob) => new Bun.Glob(glob).match(file));
+    for (const file of [
+      "apps/api/src/handlers/query.ts",
+      "apps/api/src/lib/search/index-global.ts",
+      "packages/legal/src/query.tsx",
+      "packages/legal/src/query.test.ts",
+      "packages/legal/src/query.spec.tsx",
+      "apps/api/src/handlers/__tests__/query.ts",
+      "apps/api/src/tests/helpers/query.ts",
+      "packages/legal/src/__fixtures__/query.ts",
+      "packages/legal/src/fixtures/query.ts",
+      "apps/api/src/db/schema/case-law.ts",
+      "packages/db/drizzle/query.ts",
+      "apps/web/src/query.ts",
+    ]) {
+      expect(isSqlPerfSource(file), file).toBe(inLint(file));
+    }
   });
 
   test("counts detector hits and refuses malformed or unused suppressions", () => {

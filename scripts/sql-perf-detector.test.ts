@@ -123,6 +123,31 @@ test.each([
   expect(result.commentErrors).toHaveLength(1);
 });
 
+test("standard CAST in a corpus GROUP BY is an expression", () => {
+  expect(
+    kinds(
+      "sql`SELECT count(*) FROM case_law_decisions GROUP BY CAST(ecli AS text)`",
+    ),
+  ).toEqual(["group-by-expression"]);
+});
+
+test("a const resolves in its own scope, not by name across the file", () => {
+  const source = [
+    "const first = () => {",
+    "  const pattern = `%${term}%`;",
+    "  return sql`name ILIKE ${pattern}`;",
+    "};",
+    "const second = () => {",
+    "  const pattern = `${term}%`;",
+    "  return sql`name ILIKE ${pattern}`;",
+    "};",
+  ].join("\n");
+  const { hits } = analyzeSqlPerf(source, "apps/api/src/example.ts");
+  expect(hits.map(({ kind, line }) => ({ kind, line }))).toEqual([
+    { kind: "leading-wildcard", line: 3 },
+  ]);
+});
+
 test("a reason above a multi-line SQL template covers the hit inside it", () => {
   // The flagged line is SQL text, where no TypeScript comment can go.
   const aboveStatement = [

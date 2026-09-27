@@ -27,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -3289,16 +3293,9 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/api/src/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
-      excludeFiles: [
-        "**/*.{test,spec}.{ts,tsx}",
-        "**/__tests__/**",
-        "**/tests/**",
-        "**/__fixtures__/**",
-        "**/fixtures/**",
-        "**/drizzle/**",
-        "apps/api/src/db/schema/**",
-      ],
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
       rules: { "sql-perf/sql-perf": "error" },
     },
     {

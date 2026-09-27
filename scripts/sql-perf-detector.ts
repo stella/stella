@@ -27,7 +27,7 @@ const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
   /\b(?:case_law_decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|caseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;
 const GROUP_EXPRESSION =
-  /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower)\s*\(|::\s*text\b|->>/iu;
+  /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast)\s*\(|::\s*text\b|->>/iu;
 const GROUP_NON_COLUMNS =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast|text|year|month|day|from|for|as|null|true|false|now|current_date|current_timestamp)\b/giu;
 const SQL_STRING = /'(?:''|[^'])*'/gu;
@@ -107,8 +107,20 @@ const sqlParts = (
   return { sql, offsets, expressions };
 };
 
-const constBindings = (file: ts.SourceFile): Map<string, ts.Expression> => {
-  const bindings = new Map<string, ts.Expression>();
+const holdsStatements = (node: ts.Node): boolean =>
+  ts.isBlock(node) ||
+  ts.isSourceFile(node) ||
+  ts.isModuleBlock(node) ||
+  ts.isCaseClause(node) ||
+  ts.isDefaultClause(node) ||
+  ts.isClassLike(node) ||
+  ts.isObjectLiteralExpression(node);
+
+type ConstBinding = { scope: ts.Node; initializer: ts.Expression };
+type ConstBindings = Map<string, ConstBinding[]>;
+
+const constBindings = (file: ts.SourceFile): ConstBindings => {
+  const bindings: ConstBindings = new Map();
   const visit = (node: ts.Node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -118,7 +130,15 @@ const constBindings = (file: ts.SourceFile): Map<string, ts.Expression> => {
       // oxlint-disable-next-line eslint/no-bitwise -- TypeScript encodes declaration kind in flags
       (node.parent.flags & ts.NodeFlags.Const) !== 0
     ) {
-      bindings.set(node.name.text, node.initializer);
+      let scope: ts.Node = node.parent;
+      while (!holdsStatements(scope)) {
+        scope = scope.parent;
+      }
+      const binding = { scope, initializer: node.initializer };
+      bindings.set(node.name.text, [
+        ...(bindings.get(node.name.text) ?? []),
+        binding,
+      ]);
     }
     ts.forEachChild(node, visit);
   };
@@ -126,15 +146,38 @@ const constBindings = (file: ts.SourceFile): Map<string, ts.Expression> => {
   return bindings;
 };
 
+/**
+ * The `const` a name refers to where it is used: the declaration in the
+ * innermost scope that contains the use, as the language resolves it.
+ */
+const bindingAt = (
+  identifier: ts.Identifier,
+  bindings: ConstBindings,
+): ts.Expression | undefined => {
+  let innermost: ConstBinding | undefined;
+  for (const binding of bindings.get(identifier.text) ?? []) {
+    const { scope } = binding;
+    const contains = scope.pos <= identifier.pos && identifier.end <= scope.end;
+    if (
+      contains &&
+      (innermost === undefined ||
+        scope.end - scope.pos < innermost.scope.end - innermost.scope.pos)
+    ) {
+      innermost = binding;
+    }
+  }
+  return innermost?.initializer;
+};
+
 const resolve = (
   expression: ts.Expression,
-  bindings: Map<string, ts.Expression>,
+  bindings: ConstBindings,
   depth = 0,
 ): ts.Expression => {
   if (depth > 4 || !ts.isIdentifier(expression)) {
     return expression;
   }
-  const initializer = bindings.get(expression.text);
+  const initializer = bindingAt(expression, bindings);
   return initializer === undefined
     ? expression
     : resolve(initializer, bindings, depth + 1);
@@ -142,7 +185,7 @@ const resolve = (
 
 const startsWithWildcard = (
   expression: ts.Expression,
-  bindings: Map<string, ts.Expression>,
+  bindings: ConstBindings,
 ): boolean => {
   const value = resolve(expression, bindings);
   if (ts.isStringLiteral(value)) {
@@ -164,7 +207,7 @@ const containsCorpus = (text: string): boolean => CORPUS.test(text);
 
 const sqlExpressionText = (
   expression: ts.Expression,
-  bindings: Map<string, ts.Expression>,
+  bindings: ConstBindings,
   file: ts.SourceFile,
 ): string => {
   const value = resolve(expression, bindings);
@@ -175,7 +218,7 @@ const sqlExpressionText = (
 
 const groupExpression = (
   expression: ts.Expression,
-  bindings: Map<string, ts.Expression>,
+  bindings: ConstBindings,
   file: ts.SourceFile,
 ): boolean =>
   isGroupExpressionText(sqlExpressionText(expression, bindings, file));
@@ -285,16 +328,7 @@ const leadingOperand = (text: string): string => {
 /** The statement (or class member) a node sits in, where a comment can go. */
 const statementOf = (node: ts.Node): ts.Node => {
   let current = node;
-  while (
-    current.parent !== undefined &&
-    !ts.isBlock(current.parent) &&
-    !ts.isSourceFile(current.parent) &&
-    !ts.isModuleBlock(current.parent) &&
-    !ts.isCaseClause(current.parent) &&
-    !ts.isDefaultClause(current.parent) &&
-    !ts.isClassLike(current.parent) &&
-    !ts.isObjectLiteralExpression(current.parent)
-  ) {
+  while (!ts.isSourceFile(current) && !holdsStatements(current.parent)) {
     current = current.parent;
   }
   return current;
