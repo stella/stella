@@ -168,7 +168,7 @@ if (!databaseUrl || !runPostgresTests) {
           publishedProjectionDigest: null,
         });
         if (!("items" in first) || first.nextCursor === null) {
-          return panic("expected a cursor page");
+          panic("expected a cursor page");
         }
         await owner`INSERT INTO case_law_provision_extraction_revisions_registry
           (revision, jurisdiction, engine_input_digest, profile_digest, projection_revision)
