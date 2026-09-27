@@ -505,6 +505,20 @@
         "test": "stops a client call the page still runs"
       },
       "oracle": "chat.persisted.turn-outcome"
+    },
+    {
+      "id": "run-independent-of-request",
+      "fix": "turn runner",
+      "behaviour": "A turn's run does not end when the request that started it ends: only its deadline, a stop, or its response closing cut it short.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "const run = lifecycle.startRun(externalMcpTools);",
+      "replace": "const run = lifecycle.startRun(externalMcpTools); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
+      "scenario": {
+        "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
+        "test": "runs an approved call to completion after its request is torn down, with nobody reading"
+      },
+      "oracle": "chat.run.outlives-request"
     }
   ]
 }
