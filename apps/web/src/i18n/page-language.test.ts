@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveDocumentLanguage } from "@/lib/document-language";
+import { resolveDocumentLanguage } from "@/i18n/page-language";
 
 describe("page language", () => {
   test("a Czech document marks the page Czech under an English interface", () => {

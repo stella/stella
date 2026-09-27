@@ -20,15 +20,15 @@ import {
 } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
-import type { AnalyticsValue } from "@/lib/analytics/provider";
-import "@/fonts.css";
-import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
-import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
-} from "@/lib/document-language";
+} from "@/i18n/page-language";
+import "@/fonts.css";
+import type { AnalyticsValue } from "@/lib/analytics/provider";
+import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
+import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import "@/styles/app.css";
 
