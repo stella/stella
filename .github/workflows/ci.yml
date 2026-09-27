@@ -1886,11 +1886,14 @@ jobs:
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6379
         run: bun --filter @stll/collab test src/server.test.ts
 
-  # These suites use Postgres behavior that PGlite cannot reproduce (partial
-  # indexes, advisory locks, roles, and policies). The runner derives its file
-  # set from the gate each suite declares; PR and nightly coverage therefore
-  # share one source of truth instead of mirrored YAML manifests.
-  postgres-suites:
+  # API suites that need real services, at full depth only. The Postgres
+  # suites use behavior PGlite cannot reproduce (partial indexes, advisory
+  # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
+  # workers. Each runner derives its file set from the gate the suites declare,
+  # so PR and nightly coverage share one source of truth instead of mirrored
+  # YAML manifests. Both services start with the job and one install serves
+  # both runners.
+  service-suites:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1915,6 +1918,15 @@ jobs:
           --health-cmd "pg_isready -U stella_owner -d stella"
           --health-interval 5s
           --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
           --health-retries 10
 
     steps:
@@ -1943,47 +1955,10 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
-  # API suites that drive real BullMQ queues and workers against Valkey. The
-  # runner discovers every suite that declares the Valkey gate. Like the
-  # Postgres suites, they run at full depth only.
-  valkey-suites:
-    needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.package_checks_required == 'true'
-      && (needs.ci-plan.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-
-    services:
-      valkey:
-        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
+      # Independent of the Postgres verdict: a failure there should not hide
+      # this runner's result.
       - name: Run Valkey-gated API suites
+        if: ${{ !cancelled() }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
@@ -3286,8 +3261,7 @@ jobs:
         ci-tests,
         collab-redis,
         code-quality,
-        postgres-suites,
-        valkey-suites,
+        service-suites,
         release-typecheck,
         typecheck-baseline,
         web-build,
@@ -3344,11 +3318,10 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
-            "postgres-suites": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
+            "service-suites": "package_checks_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "typecheck-baseline": "package_checks_required",
-            "valkey-suites": "package_checks_required",
             "web-build": "web_build_required",
             "web-image-smoke": "web_image_smoke_required",
             "windows-scripts": "windows_scripts_required"
