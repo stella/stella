@@ -179,6 +179,27 @@ export const caseLawProvisionRepairCursors = p.pgTable.withRLS(
 );
 
 /**
+ * The highest provision extraction admission revision a deployment has
+ * applied to the scopes. A trigger refuses a decrease and a delete.
+ */
+export const caseLawProvisionAdmission = p.pgTable.withRLS(
+  "case_law_provision_admission",
+  {
+    key: p.text().primaryKey(),
+    revision: p.integer().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check("case_law_provision_admission_key", sql`${t.key} = 'global'`),
+    p.check(
+      "case_law_provision_admission_revision_positive",
+      sql`${t.revision} > 0`,
+    ),
+    ownerAccessPolicy(),
+  ],
+);
+
+/**
  * What one extraction revision means for one jurisdiction. Immutable: a
  * trigger refuses UPDATE and DELETE, so a revision number can never be
  * reused for different semantics.

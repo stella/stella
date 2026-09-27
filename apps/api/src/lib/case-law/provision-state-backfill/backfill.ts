@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 
-import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+import {
+  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_REVISION,
+} from "@stll/legal-atlas/provision-extraction-admission";
 import { Temporal } from "@stll/time";
 
 import { isRecord } from "@/api/lib/type-guards";
@@ -37,12 +40,15 @@ const compareScopeKeys = (a: ScopeKey, b: ScopeKey): number => {
   return 0;
 };
 
-export const PROVISION_CITATION_SCOPE_KEYS: readonly ScopeKey[] =
-  Object.entries(PROVISION_CITATION_PROFILES)
-    .flatMap(([country, profile]) =>
-      profile.languages.map((language) => ({ country, language })),
-    )
-    .toSorted(compareScopeKeys);
+/** The scopes this build admits, and the admission revision they belong to. */
+type Admission = { revision: number; scopes: readonly ScopeKey[] };
+
+const CURRENT_ADMISSION: Admission = {
+  revision: PROVISION_EXTRACTION_ADMISSION_REVISION,
+  scopes: Object.values(PROVISION_EXTRACTION_ADMISSION)
+    .map(({ jurisdiction, language }) => ({ country: jurisdiction, language }))
+    .toSorted(compareScopeKeys),
+};
 
 const readString = (row: unknown, key: string): string => {
   const value = isRecord(row) ? row[key] : undefined;
@@ -205,31 +211,51 @@ const transitionScope = async (
   connection: ProvisionBackfillSession,
   { country, language }: ScopeKey,
   action: "activate" | "retire",
-): Promise<ProvisionBackfillUnit> =>
-  await inTransaction(connection, async () => {
-    const status = action === "activate" ? "active" : "retired";
-    const row = (
-      await connection.query(
-        `INSERT INTO case_law_provision_extraction_scopes AS scope
+): Promise<void> => {
+  const status = action === "activate" ? "active" : "retired";
+  const row = (
+    await connection.query(
+      `INSERT INTO case_law_provision_extraction_scopes AS scope
            (country, language, status, generation)
          VALUES ($1, $2, $3, 1)
          ON CONFLICT (country, language) DO UPDATE
            SET status = EXCLUDED.status, generation = scope.generation + 1
            WHERE scope.status IS DISTINCT FROM EXCLUDED.status
          RETURNING generation::text AS generation`,
-        [country, language, status],
-      )
-    ).at(0);
-    if (row === undefined) {
-      return;
-    }
-    await connection.execute(
-      `INSERT INTO case_law_provision_scope_transitions
-         (country, language, generation, action)
-       VALUES ($1, $2, $3::bigint, $4)`,
-      [country, language, readString(row, "generation"), action],
-    );
-  });
+      [country, language, status],
+    )
+  ).at(0);
+  if (row === undefined) {
+    return;
+  }
+  await connection.execute(
+    `INSERT INTO case_law_provision_scope_transitions
+       (country, language, generation, action)
+     VALUES ($1, $2, $3::bigint, $4)`,
+    [country, language, readString(row, "generation"), action],
+  );
+};
+
+/** The admission revision the scopes were last reconciled to, if any. */
+const readAppliedAdmission = async (
+  connection: ProvisionBackfillSession,
+  lock: "none" | "forUpdate",
+): Promise<number | null> => {
+  const row = (
+    await connection.query(
+      `SELECT revision FROM case_law_provision_admission WHERE key = 'global'${
+        lock === "forUpdate" ? " FOR UPDATE" : ""
+      }`,
+    )
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const revision = isRecord(row) ? row["revision"] : undefined;
+  return typeof revision === "number"
+    ? revision
+    : panic("Provision admission revision has an invalid shape");
+};
 
 const readActiveScopes = async (
   connection: ProvisionBackfillSession,
@@ -244,37 +270,68 @@ const readActiveScopes = async (
   }));
 };
 
-const scopeSeedStep: ProvisionBackfillStep = {
+/**
+ * Reconciles the scopes to one build's admission. The admission row is
+ * locked first (before any scope row) in every unit: a build first records
+ * its revision, then applies one transition per unit, and a build whose
+ * revision is below the recorded one changes nothing, so an older replica
+ * cannot retire a scope a newer release admitted.
+ */
+const scopeSeedStep = (admission: Admission): ProvisionBackfillStep => ({
   name: "scope-seed",
   budget: PROVISION_BACKFILL_BUDGET.PAGE,
   readCompletion: async (connection) => {
+    if (
+      (await readAppliedAdmission(connection, "none")) !== admission.revision
+    ) {
+      return {
+        reason: "provision scopes are not reconciled to this admission",
+        type: "incomplete",
+      };
+    }
     const actual = new Set((await readActiveScopes(connection)).map(keyOf));
-    const expected = new Set(PROVISION_CITATION_SCOPE_KEYS.map(keyOf));
+    const expected = new Set(admission.scopes.map(keyOf));
     return actual.size === expected.size &&
       [...actual].every((key) => expected.has(key))
       ? { type: "complete" }
       : {
-          reason: "active provision scopes differ from profiles",
+          reason: "active provision scopes differ from the admission",
           type: "incomplete",
         };
   },
-  advance: async (connection) => {
-    // One transition per unit: retirements first, then activations.
-    const active = await readActiveScopes(connection);
-    const activeKeys = new Set(active.map(keyOf));
-    const desired = new Set(PROVISION_CITATION_SCOPE_KEYS.map(keyOf));
-    const retiring = active.find((scope) => !desired.has(keyOf(scope)));
-    if (retiring !== undefined) {
-      return await transitionScope(connection, retiring, "retire");
-    }
-    const activating = PROVISION_CITATION_SCOPE_KEYS.find(
-      (scope) => !activeKeys.has(keyOf(scope)),
-    );
-    return activating === undefined
-      ? Result.ok(undefined)
-      : await transitionScope(connection, activating, "activate");
-  },
-};
+  advance: async (connection) =>
+    await inTransaction(connection, async () => {
+      const applied = await readAppliedAdmission(connection, "forUpdate");
+      if (applied !== null && applied > admission.revision) {
+        return;
+      }
+      if (applied === null || applied < admission.revision) {
+        await connection.execute(
+          `INSERT INTO case_law_provision_admission AS admission (key, revision)
+           VALUES ('global', $1)
+           ON CONFLICT (key) DO UPDATE
+             SET revision = greatest(admission.revision, EXCLUDED.revision)`,
+          [admission.revision],
+        );
+        return;
+      }
+      // Retirements first, then activations.
+      const active = await readActiveScopes(connection);
+      const activeKeys = new Set(active.map(keyOf));
+      const desired = new Set(admission.scopes.map(keyOf));
+      const retiring = active.find((scope) => !desired.has(keyOf(scope)));
+      if (retiring !== undefined) {
+        await transitionScope(connection, retiring, "retire");
+        return;
+      }
+      const activating = admission.scopes.find(
+        (scope) => !activeKeys.has(keyOf(scope)),
+      );
+      if (activating !== undefined) {
+        await transitionScope(connection, activating, "activate");
+      }
+    }),
+});
 
 const scopeTransitionsStep: ProvisionBackfillStep = {
   name: "scope-transitions",
@@ -318,27 +375,42 @@ const scopeTransitionsStep: ProvisionBackfillStep = {
  * profiles' scopes are activated, activation jobs drain before the full
  * seeding walk, and the provision-row CHECKs validate last.
  */
-export const PROVISION_STATE_BACKFILL_STEPS: readonly ProvisionBackfillStep[] =
-  [
-    cursorStep("scope-bootstrap"),
-    scopeSeedStep,
-    scopeTransitionsStep,
-    cursorStep("state-seed"),
-    PROVISION_CITATION_CHECK_STEP,
-  ];
+const backfillSteps = (
+  admission: Admission,
+): readonly ProvisionBackfillStep[] => [
+  cursorStep("scope-bootstrap"),
+  scopeSeedStep(admission),
+  scopeTransitionsStep,
+  cursorStep("state-seed"),
+  PROVISION_CITATION_CHECK_STEP,
+];
+
+export const PROVISION_STATE_BACKFILL_STEPS = backfillSteps(CURRENT_ADMISSION);
 
 type ProvisionStateBackfillOptions = {
   connection: ProvisionBackfillSession;
   /** Epoch milliseconds after which no further unit starts. */
   deadline: number;
+  /** Checked before every unit; an aborted run starts nothing more. */
+  signal: AbortSignal;
   now?: () => number;
+  /** The build's admission; a test stands in an older or newer build. */
+  admission?: Admission;
 };
 
 type ProvisionStateBackfillOutcome =
   | { type: "complete" }
-  | { type: "progress"; step: string };
+  | { type: "progress"; step: string }
+  | { type: "aborted"; step: string }
+  | { type: "superseded"; appliedRevision: number };
 
-type BackfillRun = Required<ProvisionStateBackfillOptions>;
+type BackfillRun = {
+  connection: ProvisionBackfillSession;
+  deadline: number;
+  signal: AbortSignal;
+  now: () => number;
+  steps: readonly ProvisionBackfillStep[];
+};
 
 /**
  * The run from step `index` on. Sequential by construction: a unit starts
@@ -352,12 +424,15 @@ const runFrom = async (
 ): Promise<
   Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
 > => {
-  const step = PROVISION_STATE_BACKFILL_STEPS.at(index);
+  const step = run.steps.at(index);
   if (step === undefined) {
     return Result.ok({ type: "complete" });
   }
   if ((await step.readCompletion(run.connection)).type === "complete") {
     return await runFrom(run, index + 1, worked);
+  }
+  if (run.signal.aborted) {
+    return Result.ok({ type: "aborted", step: step.name });
   }
   const isScan = step.budget === PROVISION_BACKFILL_BUDGET.WHOLE_RUN;
   if (run.now() >= run.deadline || (isScan && worked)) {
@@ -381,7 +456,20 @@ const runFrom = async (
 export const runProvisionStateBackfill = async ({
   connection,
   deadline,
+  signal,
   now = () => Temporal.Now.instant().epochMilliseconds,
+  admission = CURRENT_ADMISSION,
 }: ProvisionStateBackfillOptions): Promise<
   Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
-> => await runFrom({ connection, deadline, now }, 0, false);
+> => {
+  // A newer release reconciles the scopes; this build does nothing at all.
+  const applied = await readAppliedAdmission(connection, "none");
+  if (applied !== null && applied > admission.revision) {
+    return Result.ok({ type: "superseded", appliedRevision: applied });
+  }
+  return await runFrom(
+    { connection, deadline, signal, now, steps: backfillSteps(admission) },
+    0,
+    false,
+  );
+};

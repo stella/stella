@@ -43,9 +43,9 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
-    "./provision-citation-profiles": {
-      "types": "./src/provision-citation-profiles.ts",
-      "import": "./src/provision-citation-profiles.ts"
+    "./provision-extraction-admission": {
+      "types": "./src/provision-extraction-admission.ts",
+      "import": "./src/provision-extraction-admission.ts"
     },
     "./runners/registry": {
       "types": "./src/runners/registry.ts",

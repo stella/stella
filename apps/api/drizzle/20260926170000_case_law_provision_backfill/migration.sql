@@ -18,6 +18,48 @@ CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provisio
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_provision_repair_cursors" FROM stella;--> statement-breakpoint
 
+-- The highest admission revision a deployment has applied to the scopes. A
+-- binary built with a lower revision leaves the scopes alone, so a replica of
+-- the previous release cannot undo a newer admission mid-rollout.
+CREATE TABLE "case_law_provision_admission" (
+  "key" text PRIMARY KEY,
+  "revision" integer NOT NULL,
+  "updated_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "case_law_provision_admission_key" CHECK ("key" = 'global'),
+  CONSTRAINT "case_law_provision_admission_revision_positive" CHECK ("revision" > 0)
+);--> statement-breakpoint
+ALTER TABLE "case_law_provision_admission" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_provision_admission" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and every privilege is revoked from stella below
+CREATE POLICY "case_law_provision_extraction_owner_access" ON "case_law_provision_admission"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "case_law_provision_admission" FROM stella;--> statement-breakpoint
+
+-- The admission revision only ever rises, and its row is never removed.
+CREATE FUNCTION "guard_case_law_provision_admission"()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'the provision admission revision is never deleted'
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  IF NEW."revision" < OLD."revision" THEN
+    RAISE EXCEPTION 'the provision admission revision never decreases (% to %)',
+      OLD."revision", NEW."revision"
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  NEW."updated_at" := now();
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+CREATE TRIGGER "case_law_provision_admission_guard"
+BEFORE UPDATE OR DELETE ON "case_law_provision_admission"
+FOR EACH ROW EXECUTE FUNCTION "guard_case_law_provision_admission"();--> statement-breakpoint
+
 -- The transition page is callable by the corpus runner. It takes decision
 -- locks before the scope lock, then lets the state writer take state locks.
 -- The cursor compare-and-swap makes simultaneous runners retry the same page.

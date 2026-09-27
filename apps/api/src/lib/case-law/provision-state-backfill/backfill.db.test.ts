@@ -3,8 +3,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
-
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -12,7 +10,6 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import {
-  PROVISION_CITATION_SCOPE_KEYS,
   PROVISION_STATE_BACKFILL_STEPS,
   runProvisionStateBackfill,
 } from "./backfill";
@@ -93,6 +90,7 @@ describe("provision state backfill", () => {
       await runProvisionStateBackfill({
         connection,
         deadline: 1,
+        signal: new AbortController().signal,
         now: () => clock++,
       })
     ).unwrap();
@@ -109,6 +107,7 @@ describe("provision state backfill", () => {
         await runProvisionStateBackfill({
           connection,
           deadline: Number.POSITIVE_INFINITY,
+          signal: new AbortController().signal,
         })
       ).unwrap();
       outcomes.push(outcome.type === "progress" ? outcome.step : "complete");
@@ -131,18 +130,6 @@ describe("provision state backfill", () => {
       await rows(`SELECT count(*)::int AS count FROM pg_constraint
         WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`),
     ).toEqual([{ count: 0 }]);
-  });
-
-  test("scope input is derived from every declared profile language", () => {
-    const expected = Object.entries(PROVISION_CITATION_PROFILES).flatMap(
-      ([country, profile]) =>
-        profile.languages.map((language) => ({ country, language })),
-    );
-    const keys = (scopes: readonly { country: string; language: string }[]) =>
-      new Set(
-        scopes.map(({ country, language }) => `${country}\u0000${language}`),
-      );
-    expect(keys(PROVISION_CITATION_SCOPE_KEYS)).toEqual(keys(expected));
   });
 
   test("bootstraps missing rows and seeds state with durable cursors", async () => {
@@ -357,5 +344,80 @@ describe("provision state backfill", () => {
       await rows(`SELECT count(*)::int AS count FROM case_law_provision_extractions
       WHERE decision_id IN ('${movedIn}', '${inserted}')`),
     ).toEqual([{ count: 2 }]);
+  });
+  test("an aborted run starts no unit after the abort", async () => {
+    await db.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
+    await insertDecision("CZE", "cs");
+    const controller = new AbortController();
+    // The first deadline check aborts; the unit it admits still commits, and
+    // nothing after it starts.
+    const outcome = (
+      await runProvisionStateBackfill({
+        connection,
+        deadline: Number.POSITIVE_INFINITY,
+        signal: controller.signal,
+        now: () => {
+          controller.abort();
+          return 0;
+        },
+      })
+    ).unwrap();
+    expect(outcome).toEqual({ type: "aborted", step: "scope-bootstrap" });
+    expect(
+      await rows(`SELECT cursor_decision_id IS NOT NULL AS advanced,
+        completed_at IS NULL AS pending
+        FROM case_law_provision_repair_cursors WHERE name = 'scope-bootstrap'`),
+    ).toEqual([{ advanced: true, pending: true }]);
+  });
+
+  /**
+   * A rolling deploy runs two builds at once. Once the newer one has applied
+   * its admission, the older one changes nothing, even though its own
+   * admission lacks the scope the newer one added.
+   */
+  test("a build older than the applied admission leaves the scopes alone", async () => {
+    const current = { country: "CZE", language: "cs" };
+    const added = { country: "ZZA", language: "zz" };
+    const run = async (revision: number, scopes: readonly (typeof current)[]) =>
+      (
+        await runProvisionStateBackfill({
+          connection,
+          deadline: Number.POSITIVE_INFINITY,
+          signal: new AbortController().signal,
+          admission: { revision, scopes },
+        })
+      ).unwrap();
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if ((await run(2, [current, added])).type === "complete") {
+        break;
+      }
+    }
+    const scopeRows = async () =>
+      await rows(`SELECT country, language, status
+        FROM case_law_provision_extraction_scopes
+        WHERE (country, language) IN (('CZE', 'cs'), ('ZZA', 'zz'))
+        ORDER BY country`);
+    const transitionCount = async () =>
+      await rows(`SELECT count(*)::int AS count
+        FROM case_law_provision_scope_transitions`);
+    expect(await scopeRows()).toEqual([
+      { country: "CZE", language: "cs", status: "active" },
+      { country: "ZZA", language: "zz", status: "active" },
+    ]);
+    const transitionsBefore = await transitionCount();
+
+    expect(await run(1, [current])).toEqual({
+      type: "superseded",
+      appliedRevision: 2,
+    });
+    expect(await scopeRows()).toEqual([
+      { country: "CZE", language: "cs", status: "active" },
+      { country: "ZZA", language: "zz", status: "active" },
+    ]);
+    expect(await transitionCount()).toEqual(transitionsBefore);
+    expect(
+      await rows(`SELECT revision FROM case_law_provision_admission`),
+    ).toEqual([{ revision: 2 }]);
   });
 });

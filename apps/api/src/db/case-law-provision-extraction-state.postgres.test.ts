@@ -511,6 +511,7 @@ if (!databaseUrl || !runPostgresTests) {
               await runProvisionStateBackfill({
                 connection: session,
                 deadline: Number.POSITIVE_INFINITY,
+                signal: new AbortController().signal,
               })
             ).unwrap();
             outcomes.push(outcome.type);
