@@ -58,6 +58,20 @@ describe.serial("request-lifetime confine-request-reads", () => {
     ).toEqual([4]);
   });
 
+  test("reports the probe handed to a function that names it only in a type", async () => {
+    expect(
+      await lint(
+        lines(
+          "const later = (options: { isClientConnectionAborted: () => boolean }) => queueMicrotask(options.isClientConnectionAborted);",
+          "export const send = ({ request }: { request: Request }) => {",
+          "  const isClientConnectionAborted = () => request.signal.aborted;",
+          "  later({ isClientConnectionAborted });",
+          "};",
+        ),
+      ),
+    ).toEqual([4]);
+  });
+
   test("reports the probe handed on from a callback that runs later", async () => {
     expect(
       await lint(

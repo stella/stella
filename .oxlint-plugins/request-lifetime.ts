@@ -30,7 +30,6 @@ import type { Context, Scope, Variable } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
-  everyNode,
   getCalleeName,
   getPropertyName,
   isAstNode,
@@ -108,6 +107,42 @@ const isCallee = (node: AstNode): boolean => {
   );
 };
 
+/**
+ * Whether a parameter pattern binds `name` as a variable: a type annotation or
+ * a destructured property's key names nothing the function can read by name.
+ */
+const bindsName = (pattern: unknown, name: string): boolean => {
+  if (!isAstNode(pattern)) {
+    return false;
+  }
+  switch (pattern.type) {
+    case "Identifier":
+      return pattern.name === name;
+    case "ObjectPattern":
+      return (
+        Array.isArray(pattern.properties) &&
+        pattern.properties.some((property) =>
+          isAstNode(property) && property.type === "Property"
+            ? bindsName(property.value, name)
+            : bindsName(property, name),
+        )
+      );
+    case "ArrayPattern":
+      return (
+        Array.isArray(pattern.elements) &&
+        pattern.elements.some((element) => bindsName(element, name))
+      );
+    case "AssignmentPattern":
+      return bindsName(pattern.left, name);
+    case "RestElement":
+      return bindsName(pattern.argument, name);
+    case "TSParameterProperty":
+      return bindsName(pattern.parameter, name);
+    default:
+      return false;
+  }
+};
+
 /** A same-file function that binds the probe among its parameters. */
 const receivesProbe = (context: Context, callee: unknown): boolean => {
   if (!isIdentifierReference(callee)) {
@@ -122,11 +157,7 @@ const receivesProbe = (context: Context, callee: unknown): boolean => {
     return false;
   }
   const params = Array.isArray(fn.params) ? fn.params : [];
-  return params.some(
-    (param) =>
-      isAstNode(param) &&
-      everyNode(param).some((node) => isIdentifier(node, PROBE)),
-  );
+  return params.some((param) => bindsName(param, PROBE));
 };
 
 /** The probe handed on under its own name to a function that receives it,
