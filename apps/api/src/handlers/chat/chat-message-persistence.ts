@@ -14,11 +14,6 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  type ChatThreadNamesAdded,
-  type ChatThreadNamesRead,
-  recordChatThreadNamesOnTx,
-} from "@/api/handlers/chat/chat-thread-names";
-import {
   canAcceptChatTurnOnTx,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -60,6 +55,11 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
+import {
+  type ChatThreadNamesAdded,
+  type ChatThreadNamesRead,
+  recordChatThreadNamesOnTx,
+} from "@/api/lib/chat/thread-names";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 

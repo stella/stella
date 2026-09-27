@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreadNames } from "@/api/db/schema";
-import type { ChatPart } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { findChatRefTokens } from "@/api/lib/chat/ref-registry";
@@ -56,10 +55,6 @@ export const EMPTY_CHAT_THREAD_NAMES_READ: ChatThreadNamesRead = {
   toolCallIds: [],
 };
 
-/** The tool-call ids `parts` hold. */
-export const toolCallIdsOf = (parts: readonly ChatPart[]): string[] =>
-  parts.flatMap((part) => (part.type === "tool-call" ? [part.id] : []));
-
 const reportLedgerDefect = (
   message: string,
   details: Record<string, string>,
@@ -75,12 +70,13 @@ const reportLedgerDefect = (
  * bound to two targets, or shown by a message stored before bindings
  * existed, is retired: it resolves to nothing instead of to a guess.
  */
-const deriveChatThreadNames = async ({
+export const deriveChatThreadNames = async ({
   threadId,
   tx,
 }: {
   threadId: SafeId<"chatThread">;
-  tx: Transaction;
+  /** Any connection that may read the thread's messages. */
+  tx: Pick<Transaction, "select">;
 }): Promise<ChatThreadNames> => {
   const refContextPath = sql`${chatMessages.content}->'metadata'->'refContext'`;
   const rows = await tx

@@ -5,11 +5,6 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
-import {
-  type ChatThreadNamesRead,
-  EMPTY_CHAT_THREAD_NAMES_READ,
-  readChatThreadNames,
-} from "@/api/handlers/chat/chat-thread-names";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
@@ -19,6 +14,11 @@ import type {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  type ChatThreadNamesRead,
+  EMPTY_CHAT_THREAD_NAMES_READ,
+  readChatThreadNames,
+} from "@/api/lib/chat/thread-names";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 

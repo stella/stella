@@ -27,6 +27,10 @@ const PART_SHOWS_REFS = {
   "none" | "text" | "tool-output"
 >;
 
+/** The tool-call ids `parts` hold. */
+export const toolCallIdsOf = (parts: readonly ChatPart[]): string[] =>
+  parts.flatMap((part) => (part.type === "tool-call" ? [part.id] : []));
+
 /**
  * Where an assistant message's parts showed the model refs. A
  * client-answered call's output (an ask-user answer, a client tool's result)

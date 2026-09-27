@@ -14,7 +14,6 @@ import {
   finalizeAssistantTurn,
   persistFailedChatTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
-import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/handlers/chat/chat-thread-names";
 import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   canAcceptChatTurnOnTx,
@@ -30,6 +29,7 @@ import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";

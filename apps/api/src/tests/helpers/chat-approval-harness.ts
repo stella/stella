@@ -11,7 +11,6 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
-import { readChatThreadNames } from "@/api/handlers/chat/chat-thread-names";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
@@ -27,6 +26,7 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import {
   findLiveViewViolations,
   findUnstoredWireResults,

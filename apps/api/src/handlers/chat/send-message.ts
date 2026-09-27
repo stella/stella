@@ -49,7 +49,10 @@ import type {
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
-import { chatRefsShownIn } from "@/api/handlers/chat/chat-refs-shown";
+import {
+  chatRefsShownIn,
+  toolCallIdsOf,
+} from "@/api/handlers/chat/chat-refs-shown";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
@@ -74,7 +77,6 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { toolCallIdsOf } from "@/api/handlers/chat/chat-thread-names";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
