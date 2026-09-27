@@ -1,6 +1,7 @@
 import { EventType, toolDefinition } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -8,6 +9,7 @@ import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { presentStoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   buildEngineChunks,
   buildEngineSnapshot,
@@ -357,7 +359,7 @@ describe("the served snapshot oracle", () => {
     for await (const chunk of presentStoredHistory({
       history: {
         loadServed: async () =>
-          await Promise.resolve(new Map([[served.id, served]])),
+          await Promise.resolve(Result.ok(new Map([[served.id, served]]))),
         rewrittenOnAcceptance: [],
       },
       source: (async function* () {
@@ -389,6 +391,28 @@ describe("the served snapshot oracle", () => {
         served: [served],
       }),
     ).toEqual([]);
+  });
+
+  test("fails the stream when stored history cannot be read", async () => {
+    const databaseError = new DatabaseError({ message: "history unavailable" });
+    const chunks = async () => {
+      const received: StreamChunk[] = [];
+      for await (const chunk of presentStoredHistory({
+        history: {
+          loadServed: async () =>
+            await Promise.resolve(Result.err(databaseError)),
+          rewrittenOnAcceptance: [],
+        },
+        source: (async function* () {
+          yield await Promise.resolve(buildEngineSnapshot([asEngineHolds]));
+        })(),
+      })) {
+        received.push(chunk);
+      }
+      return received;
+    };
+
+    await expect(chunks()).rejects.toThrow("history unavailable");
   });
 
   // Any field the page serves differently is a disagreement, not only the

@@ -1019,12 +1019,11 @@ const loadStoredHistory = async ({
     loadServed: async () => {
       const served = await loadServed(historyIds);
       if (Result.isError(served)) {
-        // The snapshot then carries the history as the engine holds it, which
-        // a reload corrects; the run itself goes on.
-        captureError(served.error, { threadId });
-        return new Map();
+        return Result.err(served.error);
       }
-      return new Map(served.value.map((message) => [message.id, message]));
+      return Result.ok(
+        new Map(served.value.map((message) => [message.id, message])),
+      );
     },
     rewrittenOnAcceptance: rewritten.value,
   });

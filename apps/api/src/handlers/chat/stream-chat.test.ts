@@ -102,7 +102,7 @@ import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
-  loadServed: async () => await Promise.resolve(new Map()),
+  loadServed: async () => await Promise.resolve(Result.ok(new Map())),
   rewrittenOnAcceptance: [],
 };
 

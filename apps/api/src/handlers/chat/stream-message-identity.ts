@@ -1,8 +1,10 @@
 import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
+import type { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type {
@@ -146,7 +148,9 @@ export type StoredHistory = {
    * id, as served. Read at the first snapshot: only a snapshot shows the
    * history, and most runs carry none.
    */
-  loadServed: () => Promise<ReadonlyMap<string, ClientMessage>>;
+  loadServed: () => Promise<
+    Result<ReadonlyMap<string, ClientMessage>, SafeDbError>
+  >;
 };
 
 /** A served message as a snapshot carries it: in UI form, which the client
@@ -226,7 +230,7 @@ export const presentStoredHistory = async function* ({
       yield chunk;
       continue;
     }
-    served ??= await loadServed();
+    served ??= (await loadServed()).unwrap();
     yield {
       ...chunk,
       messages: withServedHistory({ messages: chunk.messages, served }),
