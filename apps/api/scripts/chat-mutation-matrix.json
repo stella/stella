@@ -564,7 +564,7 @@
     },
     {
       "id": "gemini-malformed-call-fails",
-      "fix": "#PR",
+      "fix": "#4002",
       "behaviour": "A Gemini response that ends on a tool call the model could not form fails the run instead of finishing as an empty answer.",
       "status": "active",
       "file": "src/lib/chat/provider-stop-reasons.ts",
@@ -578,7 +578,7 @@
     },
     {
       "id": "anthropic-pause-turn-unfinished",
-      "fix": "#PR",
+      "fix": "#4002",
       "behaviour": "An Anthropic turn the provider paused mid-way reads as unfinished, not as a finished answer.",
       "status": "active",
       "file": "src/lib/chat/provider-stop-reasons.ts",
@@ -592,7 +592,7 @@
     },
     {
       "id": "no-stop-reason-unfinished",
-      "fix": "#PR",
+      "fix": "#4002",
       "behaviour": "A stream that ends without the provider stating why it stopped reads as unfinished, not as a finished answer.",
       "status": "active",
       "file": "src/lib/chat/provider-stop-reasons.ts",
@@ -606,7 +606,7 @@
     },
     {
       "id": "split-multibyte-character-decoded",
-      "fix": "#PR",
+      "fix": "#4002",
       "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
       "status": "active",
       "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/adapters/text.js",
