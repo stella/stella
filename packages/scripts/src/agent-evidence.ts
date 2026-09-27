@@ -10,7 +10,7 @@ import path from "node:path";
 export type SealStatus =
   | { status: "fresh" }
   | { status: "pristine" }
-  | { status: "modified"; tables: string[] }
+  | { status: "modified"; tables: readonly string[] }
   | { status: "unsealed" };
 
 // A seal may be (re)written only over a database that is fresh or still
@@ -100,7 +100,8 @@ const describeSeal = (seal: SealStatus) => {
       return `the stack holds content created after the seed (${seal.tables.join(", ")}); run \`bun run agent:reset\` and capture again`;
     }
     default: {
-      return seal satisfies never;
+      seal satisfies never;
+      return panic(`Unhandled seal: ${JSON.stringify(seal)}`);
     }
   }
 };
@@ -137,11 +138,11 @@ export const decideAttachable = ({
 };
 
 const isManifestEntry = (value: unknown): value is ManifestEntry =>
-  isCaptureRecord(value) &&
   isRecord(value) &&
   typeof value["attachable"] === "boolean" &&
   typeof value["capturedAt"] === "string" &&
-  (value["reason"] === null || typeof value["reason"] === "string");
+  (value["reason"] === null || typeof value["reason"] === "string") &&
+  isCaptureRecord(value);
 
 export const parseManifest = (text: string): ManifestEntry[] => {
   const parsed: unknown = JSON.parse(text);

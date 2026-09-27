@@ -14,7 +14,7 @@
 // seeded owner through the same HTTP route a person would use. Everything it
 // produces lives in `.stella-dev/` (gitignored) and is local-only data.
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -31,6 +31,7 @@ import path from "node:path";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
+import { Temporal } from "@stll/time";
 
 import {
   decideAttachable,
@@ -196,11 +197,11 @@ const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
   console.log(
     `Waiting for the dev runner (pid ${String(pid)}); log: ${logPath}`,
   );
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   let printedLines = 0;
   let lastProgressAt = startedAt;
   let lastHeading = "starting";
-  while (Date.now() - startedAt < UP_TIMEOUT_MS) {
+  while (Temporal.Now.instant().epochMilliseconds - startedAt < UP_TIMEOUT_MS) {
     // Relay the runner's step headings, and a heartbeat during long steps
     // (the seed is silent for a while), so a caller sees where time goes.
     const lines = readFileSync(logPath, "utf-8").split("\n");
@@ -209,15 +210,18 @@ const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
         console.log(line);
         const heading = line.slice("==> ".length);
         lastHeading = heading.endsWith("...") ? heading.slice(0, -3) : heading;
-        lastProgressAt = Date.now();
+        lastProgressAt = Temporal.Now.instant().epochMilliseconds;
       }
     }
     printedLines = Math.max(printedLines, lines.length - 1);
-    if (Date.now() - lastProgressAt >= HEARTBEAT_MS) {
+    if (
+      Temporal.Now.instant().epochMilliseconds - lastProgressAt >=
+      HEARTBEAT_MS
+    ) {
       console.log(
-        `    still ${lastHeading.toLowerCase()} (${String(Math.round((Date.now() - startedAt) / 1000))} s)`,
+        `    still ${lastHeading.toLowerCase()} (${String(Math.round((Temporal.Now.instant().epochMilliseconds - startedAt) / 1000))} s)`,
       );
-      lastProgressAt = Date.now();
+      lastProgressAt = Temporal.Now.instant().epochMilliseconds;
     }
 
     const runtime = readDevRuntime(root);
@@ -410,7 +414,7 @@ const up = async (root: string, args: readonly string[]) => {
       root,
     }));
   if (!runtime.seeded || runtime.apiUrl === null) {
-    fail(
+    return fail(
       "The running stack was started without --seed; stop it and run `bun run agent:up`",
     );
   }
@@ -441,9 +445,9 @@ const down = async (root: string) => {
   // The runner stops its children and its Docker project on SIGTERM; volumes
   // (and so the seeded database) survive for the next `up`.
   process.kill(pid, "SIGTERM");
-  const deadline = Date.now() + DOWN_TIMEOUT_MS;
+  const deadline = Temporal.Now.instant().epochMilliseconds + DOWN_TIMEOUT_MS;
   while (isProcessAlive(pid)) {
-    if (Date.now() > deadline) {
+    if (Temporal.Now.instant().epochMilliseconds > deadline) {
       fail(`Runner ${String(pid)} is still running after SIGTERM`);
     }
     await Bun.sleep(POLL_INTERVAL_MS);
@@ -470,7 +474,7 @@ const runStackScript = (
   });
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
-    env: step.env,
+    env: step.env ?? process.env,
     stderr: "pipe",
     stdout: "pipe",
   });
@@ -527,12 +531,12 @@ const drive = async (root: string, args: readonly string[]) => {
 
   const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
   rmSync(captureLog, { force: true });
-  const capturedAt = new Date().toISOString();
-  const entries = records.map((record) => ({
-    ...record,
-    ...decideAttachable({ after, before, record }),
-    capturedAt,
-  }));
+  const capturedAt = Temporal.Now.instant().toString();
+  const entries = records.map((record) =>
+    Object.assign(record, decideAttachable({ after, before, record }), {
+      capturedAt,
+    }),
+  );
   if (entries.length > 0) {
     writeFileSync(
       evidencePath(root, MANIFEST_FILE),
@@ -590,7 +594,8 @@ const attach = (root: string, args: readonly string[]) => {
         break;
       }
       default: {
-        return verdict satisfies never;
+        verdict satisfies never;
+        return panic(`Unhandled verdict: ${JSON.stringify(verdict)}`);
       }
     }
   }
@@ -700,6 +705,7 @@ const main = async () => {
     }
     default: {
       command satisfies never;
+      return panic(`Unhandled command: ${String(command)}`);
     }
   }
 };
