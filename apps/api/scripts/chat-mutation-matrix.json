@@ -522,7 +522,7 @@
     },
     {
       "id": "run-independent-of-request",
-      "fix": "turn runner",
+      "fix": "#3973",
       "behaviour": "A turn's run does not end when the request that started it ends: only its deadline, a stop, or its response closing cut it short.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
