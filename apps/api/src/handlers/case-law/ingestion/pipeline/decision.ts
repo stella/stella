@@ -223,6 +223,16 @@ const runDecisionAttempt = async ({
     incomingCarriesDocument: shape.incomingCarriesDocument,
     polarityRules,
   });
+  if ("status" in plan) {
+    await recordAbandonedRawWrite({
+      scopedDb,
+      existing,
+      rawWrites,
+      decisionId,
+      sourceId,
+    });
+    return RECONCILE_CONTENTION;
+  }
 
   const write: DecisionRowWrite = {
     ...identity,

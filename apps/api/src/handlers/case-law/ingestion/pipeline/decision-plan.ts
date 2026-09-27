@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { stableStringify } from "@stll/stable-stringify";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -44,6 +45,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
   corpusCarriesDocument,
@@ -58,6 +60,7 @@ import {
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
+import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -76,7 +79,7 @@ type PendingMirrorPayload = Awaited<
   ReturnType<typeof loadPendingMirrorPayload>
 >;
 
-const storedScopeAst = async (
+const storedScopeRow = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ) => {
@@ -85,12 +88,80 @@ const storedScopeAst = async (
       .select({
         documentAst: caseLawDecisions.documentAst,
         astS3Key: caseLawDecisions.astS3Key,
+        metadata: caseLawDecisions.metadata,
       })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, decisionId))
       .limit(1),
   );
-  return row?.astS3Key ? await readCorpusAst(row.astS3Key) : row?.documentAst;
+  return row;
+};
+
+type StoredScopeStateOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  corpus: CaseLawCorpusDependencies;
+};
+
+const storedScopeState = async ({
+  decisionId,
+  scopedDb,
+  corpus,
+}: StoredScopeStateOptions) => {
+  const row = await storedScopeRow(decisionId, scopedDb);
+  const ast = row?.astS3Key
+    ? await readCorpusAst(row.astS3Key, {
+        ...corpus.readBytes,
+        readTombstones: async (locations) =>
+          await scopedDb(
+            async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
+          ),
+      })
+    : row?.documentAst;
+  return { row, ast };
+};
+
+type VerifyStoredCitationScopesOptions = Omit<
+  StoredScopeStateOptions,
+  "decisionId"
+> & {
+  existing: ExistingDecision | undefined;
+  pendingMirrorPayload: PendingMirrorPayload | null;
+  reusedCitationScopeEnvelope: unknown;
+};
+
+const verifyStoredCitationScopes = async ({
+  existing,
+  pendingMirrorPayload,
+  reusedCitationScopeEnvelope,
+  scopedDb,
+  corpus,
+}: VerifyStoredCitationScopesOptions): Promise<boolean> => {
+  if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
+    return false;
+  }
+  const snapshot = await storedScopeState({
+    decisionId: existing.id,
+    scopedDb,
+    corpus,
+  });
+  if (
+    stableStringify(
+      snapshot.row?.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null,
+    ) !== stableStringify(reusedCitationScopeEnvelope)
+  ) {
+    return true;
+  }
+  const ast = pendingMirrorPayload?.ast ?? snapshot.ast;
+  const verified = validatedCitationScopes(snapshot.row?.metadata ?? {}, ast);
+  if (Result.isError(verified)) {
+    const latest = await storedScopeRow(existing.id, scopedDb);
+    if (stableStringify(latest) !== stableStringify(snapshot.row)) {
+      return true;
+    }
+    throw verified.error;
+  }
+  return false;
 };
 
 type ReportStoredDocumentQualityOptions = {
@@ -438,14 +509,16 @@ export const planDecisionWrite = async ({
     !incomingCarriesDocument && existing?.metadata
       ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
       : undefined;
-  if (reusedCitationScopeEnvelope !== undefined && existing) {
-    const ast =
-      pendingMirrorPayload?.ast ??
-      (await storedScopeAst(existing.id, scopedDb));
-    const verified = validatedCitationScopes(existing.metadata ?? {}, ast);
-    if (Result.isError(verified)) {
-      throw verified.error;
-    }
+  if (
+    await verifyStoredCitationScopes({
+      scopedDb,
+      corpus,
+      existing,
+      pendingMirrorPayload,
+      reusedCitationScopeEnvelope,
+    })
+  ) {
+    return RECONCILE_CONTENTION;
   }
 
   if (result.citationScopes && !hasUsableAst(result.documentAst)) {
@@ -586,4 +659,7 @@ export const planDecisionWrite = async ({
 };
 
 /** What the row write is given to write, as planned before it. */
-export type DecisionWritePlan = Awaited<ReturnType<typeof planDecisionWrite>>;
+export type DecisionWritePlan = Exclude<
+  Awaited<ReturnType<typeof planDecisionWrite>>,
+  typeof RECONCILE_CONTENTION
+>;

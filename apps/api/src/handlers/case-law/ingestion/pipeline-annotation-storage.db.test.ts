@@ -52,6 +52,15 @@ const packedCorpus = {
       return await Promise.resolve(Result.ok(undefined));
     },
   },
+  readBytes: {
+    readRange: async ({ key, offset, length }) => {
+      const pack = packs.find(({ packKey }) => packKey === key);
+      if (!pack) {
+        throw new Error(`Pack not found: ${key}`);
+      }
+      return pack.bytes.slice(offset, offset + length);
+    },
+  },
 } satisfies CaseLawCorpusDependencies;
 
 const inlineCorpus = {
@@ -213,6 +222,47 @@ const withDocumentWinner = (
     });
 };
 
+/** Publish a competing document after identity resolution, before scope reuse. */
+const withScopeReadWinner = (
+  winner: (
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ) => Promise<void>,
+): ScopedDb => {
+  let pending = true;
+  return async (callback) =>
+    await db.transaction(async (tx) => {
+      const racing = new Proxy(tx, {
+        get(object, key) {
+          const value: unknown = Reflect.get(object, key);
+          if (key === "select" && typeof value === "function") {
+            return (...args: unknown[]) => {
+              const builder: unknown = Reflect.apply(value, object, args);
+              const fields = args.at(0);
+              if (
+                !pending ||
+                typeof fields !== "object" ||
+                fields === null ||
+                !("documentAst" in fields) ||
+                !("astS3Key" in fields) ||
+                !("metadata" in fields) ||
+                typeof builder !== "object" ||
+                builder === null
+              ) {
+                return builder;
+              }
+              return runBeforeQuery(builder, async () => {
+                pending = false;
+                await winner(tx);
+              });
+            };
+          }
+          return typeof value === "function" ? value.bind(object) : value;
+        },
+      });
+      return await callback(asTestRaw(racing));
+    });
+};
+
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
@@ -303,6 +353,52 @@ test.each([
       throw reparsed.error;
     }
     expect(reparsed.value.documentAst).toEqual(documentAst);
+
+    if (corpus.mode === "canonical") {
+      const { citationScopes: _scopes, ...withoutScopes } = input(documentId);
+      const refreshed = await processDecision({
+        input: {
+          ...withoutScopes,
+          rawHash: `raw-${documentId}-refresh`,
+          fulltext: undefined,
+          documentAst: {},
+          metadata: { refreshed: true },
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-09-27T12:00:01.000Z"),
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus,
+      });
+      expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+      const after =
+        (
+          await db
+            .select({
+              metadata: caseLawDecisions.metadata,
+              documentAst: caseLawDecisions.documentAst,
+              astS3Key: caseLawDecisions.astS3Key,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, row.id))
+        ).at(0) ?? expect.unreachable();
+      expect(after.metadata).toMatchObject({
+        refreshed: true,
+        [CITATION_SCOPE_METADATA_KEY]: envelope,
+      });
+      expect(after.documentAst).toBeNull();
+      expect(after.astS3Key).toBe(row.astS3Key);
+      const retainedAst = await storedAst(
+        packs.at(-1) ?? expect.unreachable(),
+        row.id,
+      );
+      const retained = validatedCitationScopes(after.metadata, retainedAst);
+      if (Result.isError(retained)) {
+        throw retained.error;
+      }
+      expect(retained.value).toEqual(opinion);
+    }
   },
 );
 
@@ -583,4 +679,92 @@ test("a metadata refresh retries when a full document wins before the row lock",
     throw checked.error;
   }
   expect(checked.value).toEqual(opinion);
+});
+
+test("a metadata refresh retries when a document wins before the scope read", async () => {
+  const documentId = createSafeId<"caseLawDecision">();
+  const first = input(documentId);
+  await processDecision({
+    input: first,
+    observationOrder: 1n,
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-09-27T12:00:00.000Z"),
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus: inlineCorpus,
+  });
+  const stored =
+    (
+      await db
+        .select({
+          id: caseLawDecisions.id,
+          metadata: caseLawDecisions.metadata,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+    ).at(0) ?? expect.unreachable();
+  const winning = input(documentId, `${sourceText} See 410 U.S. 113.`);
+  const sanitized = sanitizeResult(winning);
+  if (!isDocumentAst(sanitized.documentAst)) {
+    throw new Error("Winner fixture must have a sanitized AST");
+  }
+  const extracted = extractDecisionCitations({
+    country: "USA",
+    sections: [],
+    documentAst: sanitized.documentAst,
+    citationScopes: opinion,
+  });
+  if (Result.isError(extracted)) {
+    throw extracted.error;
+  }
+  const winningAst = extracted.value.documentAst ?? expect.unreachable();
+  const winningEnvelope = citationScopeEnvelope(winningAst, opinion);
+  expect(winningEnvelope).not.toEqual(
+    stored.metadata[CITATION_SCOPE_METADATA_KEY],
+  );
+  let published = false;
+  const racing = withScopeReadWinner(async (tx) => {
+    published = true;
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        documentAst: winningAst,
+        fulltext: sanitized.fulltext,
+        metadata: { [CITATION_SCOPE_METADATA_KEY]: winningEnvelope },
+      })
+      .where(eq(caseLawDecisions.id, stored.id));
+  });
+  const { citationScopes: _scopes, ...withoutScopes } = first;
+  const refreshed = await processDecision({
+    input: {
+      ...withoutScopes,
+      rawHash: `${first.rawHash}-refresh`,
+      fulltext: undefined,
+      documentAst: {},
+      metadata: { refreshed: true },
+    },
+    observationOrder: 2n,
+    sourceId,
+    scopedDb: racing,
+    observedAt: new Date("2026-09-27T12:00:01.000Z"),
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus: inlineCorpus,
+  });
+  expect(published).toBe(true);
+  expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  const after =
+    (
+      await db
+        .select({
+          documentAst: caseLawDecisions.documentAst,
+          metadata: caseLawDecisions.metadata,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, stored.id))
+    ).at(0) ?? expect.unreachable();
+  expect(after.documentAst).toEqual(winningAst);
+  expect(after.metadata).toMatchObject({
+    refreshed: true,
+    [CITATION_SCOPE_METADATA_KEY]: winningEnvelope,
+  });
 });
