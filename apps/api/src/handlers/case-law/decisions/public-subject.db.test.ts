@@ -5,6 +5,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import Elysia, { t } from "elysia";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
@@ -226,6 +228,101 @@ test(
       const response = await get(path);
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ reached: openId });
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "decision reads describe the AST actually served and null missing or redacted bodies",
+  async () => {
+    const storedAst = {
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "served-ast",
+        webUrl: "https://example.test/decision",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: null,
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [
+        {
+          id: "paragraph-1",
+          anchorId: "p-1",
+          type: "paragraph",
+          inlines: [{ type: "text", text: "Served text" }],
+          plainText: "Served text",
+        },
+      ],
+    } satisfies DocumentAst;
+    const astId = createSafeId<"caseLawDecision">();
+    const bodylessId = createSafeId<"caseLawDecision">();
+    const redactedId = createSafeId<"caseLawDecision">();
+    const db = drizzle({ client });
+    await db.insert(caseLawDecisions).values([
+      {
+        caseNumber: "served-ast",
+        country: "CZE",
+        court: "Court",
+        documentAst: storedAst,
+        id: astId,
+        language: "cs",
+        sourceUrl: "https://example.test/served-ast",
+        sourceId: openSourceId,
+      },
+      {
+        caseNumber: "bodyless-ast",
+        country: "CZE",
+        court: "Court",
+        id: bodylessId,
+        language: "cs",
+        sourceUrl: "https://example.test/bodyless-ast",
+        sourceId: openSourceId,
+      },
+      {
+        caseNumber: "redacted-ast",
+        country: "CZE",
+        court: "Court",
+        id: redactedId,
+        language: "cs",
+        redactedAt: new Date("2026-01-01T00:00:00Z"),
+        sourceUrl: "https://example.test/redacted-ast",
+        sourceId: openSourceId,
+      },
+    ]);
+    const read = async (id: SafeId<"caseLawDecision">) => {
+      const result = await withRedistributableSubject(
+        caseLawDb,
+        { kind: "id", id },
+        async (subject) =>
+          await readDecisionHandler({
+            subject,
+            readCourtWeights: async () => await Promise.resolve(new Map()),
+          }),
+      );
+      if (result === null || !("documentPending" in result)) {
+        throw new Error("Expected a public decision read");
+      }
+      return result;
+    };
+
+    const served = await read(astId);
+    expect(served.documentAstSource).toBe("row");
+    expect(served.projectionDigest).toBe(await projectionDigest(storedAst));
+    expect(served.documentAst).not.toEqual(storedAst);
+
+    for (const id of [bodylessId, redactedId]) {
+      const withoutAst = await read(id);
+      expect(withoutAst.documentAstSource).toBeNull();
+      expect(withoutAst.projectionDigest).toBeNull();
     }
   },
   DB_TEST_TIMEOUT_MS,

@@ -220,11 +220,14 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   }),
   followUp: async ({ page, decisionDate }) =>
     "items" in page
-      ? await attachDecisionProvisionPreviews({
-          page,
-          decisionDate,
-          legislationDb: legislationPublicReadDb,
-        })
+      ? {
+          ...page,
+          ...(await attachDecisionProvisionPreviews({
+            page,
+            decisionDate,
+            legislationDb: legislationPublicReadDb,
+          })),
+        }
       : page,
 });
 

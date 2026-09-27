@@ -22412,15 +22412,48 @@ export type WebRoutes = {
                     spanStart: number;
                     spanEnd: number;
                     confidence: number;
+                    spanRole: (null | "printed" | "range-interior");
+                    printPieceId: T432e07d100;
+                    printStart: T688f6f1190;
+                    printEnd: T688f6f1190;
+                    printText: T432e07d100;
+                    namePieceId: T432e07d100;
+                    nameStart: T688f6f1190;
+                    nameEnd: T688f6f1190;
+                    nameText: T432e07d100;
+                    selection: (null | "text" | "date-window" | "misprint-correction");
+                    printedWorkIdentifier: T432e07d100;
+                    targetDocumentId: (null | Td90f3cb611);
+                    targetStatus: (null | "available" | "anchor_missing" | "no_version_for_date" | "work_not_held" | "unverified_target" | "incomplete_versions");
                   } & {
                     previewKey: T432e07d100;
                   }>;
                   nextCursor: T432e07d100;
                   limit: number;
-                } & {
                   previews: Array<(Tffb9800473 & {
                     key: string;
                   })>;
+                  status: {
+                    type: "pending";
+                  } | {
+                    type: "failed";
+                  } | {
+                    type: "unavailable";
+                  } | {
+                    type: "stale";
+                  } | {
+                    type: "current";
+                  } | {
+                    type: "out_of_scope";
+                  } | {
+                    type: "withheld";
+                  } | {
+                    type: "unplaceable";
+                  } | {
+                    type: "legacy";
+                  };
+                  generation: string;
+                  publishedProjectionDigest: T432e07d100;
                 });
                 400: {
                   code?: string;
@@ -22449,7 +22482,28 @@ export type WebRoutes = {
                 402: Tc642053948;
                 403: Tc642053948;
                 404: T2a67644a3a;
-                409: Tc642053948;
+                409: {
+                  code?: string;
+                  message: string;
+                  hint?: string;
+                  issues?: Array<Tddcaa6c051>;
+                  reason?: string;
+                  required?: number;
+                  available?: number;
+                  confirmation?: T79fba9c913;
+                  error?: string;
+                  claim?: T6662e6acc7;
+                  registration_id?: string;
+                  registration_type?: string;
+                  claim_url?: string;
+                  claim_token?: string;
+                  claim_token_expires?: string;
+                  post_claim_scopes?: Array<string>;
+                  requiredFields?: Array<T196b4403fb>;
+                } | {
+                  readonly type: "conflict";
+                  readonly message: "Provision links changed; restart pagination";
+                };
                 413: Tc642053948;
                 422: (Tc642053948 | {
                   type: "validation";
@@ -34362,6 +34416,8 @@ type T7bba2468e2 = T2430547df2 | {
       }>>;
     }>;
   });
+  projectionDigest: T432e07d100;
+  documentAstSource: (null | "store" | "row");
   sections: T28f55fc43c;
   sourceUrl: T432e07d100;
   sourceAttributionUrl: T432e07d100;

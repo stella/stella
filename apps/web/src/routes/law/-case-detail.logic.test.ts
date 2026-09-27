@@ -35,6 +35,8 @@ const UNPUBLISHED_DECISION = {
   decisionDate: null,
   decisionType: null,
   documentAst: null,
+  documentAstSource: null,
+  projectionDigest: null,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
