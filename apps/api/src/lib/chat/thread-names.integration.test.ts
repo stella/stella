@@ -7,7 +7,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { deriveChatThreadNames } from "@/api/lib/chat/thread-names";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -118,9 +118,10 @@ describe("a thread's names derived from its stored messages", () => {
     ]);
 
     const names = await scoped(
-      async (tx) => await deriveChatThreadNames({ threadId, tx }),
+      async (tx) => await readChatThreadNames({ threadId, tx }),
     );
 
+    expect(names.source).toBe("messages");
     expect(new Set(names.toolCallIds)).toEqual(
       new Set(["call_0", "call_1", "call_2", "call_3", "call_4"]),
     );
