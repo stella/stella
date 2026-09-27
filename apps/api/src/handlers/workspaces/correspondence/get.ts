@@ -14,6 +14,60 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type CorrespondenceRow = typeof correspondence.$inferSelect;
+
+const CORRESPONDENCE_DETAIL_COLUMNS = {
+  id: correspondence.id,
+  direction: correspondence.direction,
+  channel: correspondence.channel,
+  intake: correspondence.intake,
+  authenticatedSenderAddress: correspondence.authenticatedSenderAddress,
+  originalSignature: correspondence.originalSignature,
+  messageId: correspondence.messageId,
+  from: correspondence.from,
+  to: correspondence.to,
+  cc: correspondence.cc,
+  subject: correspondence.subject,
+  sentAt: correspondence.sentAt,
+  receivedAt: correspondence.receivedAt,
+  inReplyTo: correspondence.inReplyTo,
+  references: correspondence.references,
+  bodyText: correspondence.bodyText,
+  bodyHtml: correspondence.bodyHtml,
+  spf: correspondence.spf,
+  dkim: correspondence.dkim,
+  dmarc: correspondence.dmarc,
+  alignedIdentifier: correspondence.alignedIdentifier,
+  handlingState: correspondence.handlingState,
+  assigneeId: correspondence.assigneeId,
+  createdAt: correspondence.createdAt,
+  updatedAt: correspondence.updatedAt,
+};
+
+const UNPROJECTED_DETAIL_COLUMNS = [
+  "organizationId", // Tenant scope comes from the authorized session.
+  "workspaceId", // Matter scope comes from the authorized route.
+  "contentHash", // Internal content fingerprint for ingestion.
+  "dedupKey", // Internal replay identity.
+] as const satisfies readonly (keyof CorrespondenceRow)[];
+
+type MissingDetailColumn = UnprojectedColumns<
+  CorrespondenceRow,
+  typeof CORRESPONDENCE_DETAIL_COLUMNS,
+  (typeof UNPROJECTED_DETAIL_COLUMNS)[number]
+>;
+type UnexpectedDetailColumn = UnbackedProjectionKeys<
+  CorrespondenceRow,
+  typeof CORRESPONDENCE_DETAIL_COLUMNS,
+  (typeof UNPROJECTED_DETAIL_COLUMNS)[number]
+>;
+true satisfies MissingDetailColumn extends never ? true : never;
+true satisfies UnexpectedDetailColumn extends never ? true : never;
 
 const MAX_FILERS_PER_RECORD = 10_000;
 
@@ -37,7 +91,7 @@ const getCorrespondence = createSafeHandler(
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const [row] = await tx
-          .select()
+          .select(CORRESPONDENCE_DETAIL_COLUMNS)
           .from(correspondence)
           .where(
             and(
@@ -117,10 +171,6 @@ const getCorrespondence = createSafeHandler(
           dkim,
           dmarc,
           alignedIdentifier,
-          organizationId: _organizationId,
-          workspaceId: _workspaceId,
-          contentHash: _contentHash,
-          dedupKey: _dedupKey,
           ...record
         } = row;
         return {

@@ -17,7 +17,70 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandValidatedAllowedSenderCursorId } from "@/api/lib/safe-id-boundaries";
+
+type AllowedSenderRow = typeof correspondenceAllowedSenders.$inferSelect;
+
+const ALLOWED_SENDER_COLUMNS = {
+  id: correspondenceAllowedSenders.id,
+  address: correspondenceAllowedSenders.address,
+  scope: correspondenceAllowedSenders.scope,
+  approvedBy: correspondenceAllowedSenders.approvedBy,
+  approvedAt: correspondenceAllowedSenders.approvedAt,
+  revokedAt: correspondenceAllowedSenders.revokedAt,
+};
+
+const UNPROJECTED_ALLOWED_SENDER_COLUMNS = [
+  "organizationId", // The active organization scopes this list.
+  "kind", // The query only returns shared mailboxes.
+  "ownerUserId", // Personal sender ownership is outside the shared mailbox list.
+  "approvedByDisplay", // Historical profile snapshots are exposed only through correspondence attribution.
+] as const satisfies readonly (keyof AllowedSenderRow)[];
+
+type MissingAllowedSenderRowColumn = UnprojectedColumns<
+  AllowedSenderRow,
+  typeof ALLOWED_SENDER_COLUMNS,
+  (typeof UNPROJECTED_ALLOWED_SENDER_COLUMNS)[number]
+>;
+type UnexpectedAllowedSenderRowColumn = UnbackedProjectionKeys<
+  AllowedSenderRow,
+  typeof ALLOWED_SENDER_COLUMNS,
+  (typeof UNPROJECTED_ALLOWED_SENDER_COLUMNS)[number]
+>;
+true satisfies MissingAllowedSenderRowColumn extends never ? true : never;
+true satisfies UnexpectedAllowedSenderRowColumn extends never ? true : never;
+
+type AllowedSenderMatterRow =
+  typeof correspondenceAllowedSenderMatters.$inferSelect;
+
+const ALLOWED_SENDER_MATTER_COLUMNS = {
+  allowedSenderId: correspondenceAllowedSenderMatters.allowedSenderId,
+  workspaceId: correspondenceAllowedSenderMatters.workspaceId,
+};
+
+const UNPROJECTED_ALLOWED_SENDER_MATTER_COLUMNS = [
+  "id", // Scope memberships are exposed as matter identifiers, not association rows.
+  "organizationId", // The active organization scopes the selected relationships.
+] as const satisfies readonly (keyof AllowedSenderMatterRow)[];
+
+type MissingAllowedSenderMatterRowColumn = UnprojectedColumns<
+  AllowedSenderMatterRow,
+  typeof ALLOWED_SENDER_MATTER_COLUMNS,
+  (typeof UNPROJECTED_ALLOWED_SENDER_MATTER_COLUMNS)[number]
+>;
+type UnexpectedAllowedSenderMatterRowColumn = UnbackedProjectionKeys<
+  AllowedSenderMatterRow,
+  typeof ALLOWED_SENDER_MATTER_COLUMNS,
+  (typeof UNPROJECTED_ALLOWED_SENDER_MATTER_COLUMNS)[number]
+>;
+true satisfies MissingAllowedSenderMatterRowColumn extends never ? true : never;
+true satisfies UnexpectedAllowedSenderMatterRowColumn extends never
+  ? true
+  : never;
 
 const PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_MAX = 200;
@@ -70,14 +133,7 @@ const listAllowedSenders = createSafeRootHandler(
           conditions.push(gt(correspondenceAllowedSenders.id, cursor));
         }
         const rows = await tx
-          .select({
-            id: correspondenceAllowedSenders.id,
-            address: correspondenceAllowedSenders.address,
-            scope: correspondenceAllowedSenders.scope,
-            approvedBy: correspondenceAllowedSenders.approvedBy,
-            approvedAt: correspondenceAllowedSenders.approvedAt,
-            revokedAt: correspondenceAllowedSenders.revokedAt,
-          })
+          .select(ALLOWED_SENDER_COLUMNS)
           .from(correspondenceAllowedSenders)
           .where(and(...conditions))
           .orderBy(asc(correspondenceAllowedSenders.id))
@@ -88,11 +144,7 @@ const listAllowedSenders = createSafeRootHandler(
           senderIds.length === 0
             ? []
             : await tx
-                .select({
-                  allowedSenderId:
-                    correspondenceAllowedSenderMatters.allowedSenderId,
-                  workspaceId: correspondenceAllowedSenderMatters.workspaceId,
-                })
+                .select(ALLOWED_SENDER_MATTER_COLUMNS)
                 .from(correspondenceAllowedSenderMatters)
                 .where(
                   and(
