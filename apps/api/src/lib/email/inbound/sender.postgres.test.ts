@@ -52,6 +52,7 @@ if (!databaseUrl || !runPostgresTests) {
         const firstToken = generateInboundAddressToken();
         const secondToken = generateInboundAddressToken();
         const sender = "office@example.test";
+        const approverEmail = `approver-${Bun.randomUUIDv7()}@example.test`;
         const receivedAt = "2026-09-26T12:00:00.000Z";
         const firstAtCandidate = Promise.withResolvers<undefined>();
         const secondAtCandidate = Promise.withResolvers<undefined>();
@@ -110,7 +111,7 @@ if (!databaseUrl || !runPostgresTests) {
           await setupDb.insert(user).values({
             id: adminId,
             name: "Mailbox approver",
-            email: `approver-${Bun.randomUUIDv7()}@example.test`,
+            email: approverEmail,
             emailVerified: true,
           });
           await setupDb.insert(organization).values({
@@ -159,6 +160,11 @@ if (!databaseUrl || !runPostgresTests) {
             kind: "shared_mailbox",
             scope: "organization",
             approvedBy: adminId,
+            approvedByDisplay: {
+              status: "active",
+              name: "Mailbox approver",
+              email: approverEmail,
+            },
           });
 
           const fileCandidate = async ({

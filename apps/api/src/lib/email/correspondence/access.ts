@@ -1,7 +1,9 @@
 import { Result, panic } from "better-result";
 import { and, eq, sql, isNull } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
+import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
+
+import { member, user } from "@/api/db/auth-schema";
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
@@ -129,7 +131,31 @@ export const assertCorrespondenceAccess = async ({
           }),
         );
       }
-      break;
+      const [actor] = await tx
+        .select({ name: user.name, email: user.email })
+        .from(user)
+        .innerJoin(member, eq(member.userId, user.id))
+        .where(
+          and(
+            eq(user.id, filer.userId),
+            eq(member.organizationId, organizationId),
+            isNull(user.deletedAt),
+          ),
+        )
+        .limit(1)
+        .for("share", { of: member });
+      if (actor === undefined) {
+        return Result.err(
+          new HandlerError({ status: 403, message: "Matter access required" }),
+        );
+      }
+      // The membership lock held through filing serializes snapshot capture
+      // with account erasure, which locks memberships before scrubbing displays.
+      return Result.ok({
+        status: "active",
+        name: actor.name,
+        email: actor.email,
+      } as const satisfies CorrespondenceActorDisplay);
     }
     case "shared_mailbox": {
       const [approval] = await tx
@@ -188,5 +214,5 @@ export const assertCorrespondenceAccess = async ({
       return panic("Unhandled correspondence filer");
     }
   }
-  return Result.ok();
+  return Result.ok(null);
 };

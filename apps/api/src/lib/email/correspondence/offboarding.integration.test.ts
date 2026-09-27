@@ -673,7 +673,7 @@ describe("correspondence offboarding", () => {
     },
   );
   test.each(["schema", "migration"] as const)(
-    "only a matching delivery token permits owner address lookup (%s)",
+    "delivery token limits owner address lookup while erasure retains owner approval lookup (%s)",
     async (policySource) => {
       try {
         await testDb.transaction(async (tx) => {
@@ -739,16 +739,17 @@ describe("correspondence offboarding", () => {
                   name === "matter_inbound_addresses_owner_token_lookup",
               ),
             ).toHaveLength(1);
-            for (const table of [
-              correspondenceAllowedSenders,
-              correspondenceAllowedSenderMatters,
-            ]) {
-              expect(
-                getTableConfig(table).policies.filter(({ name }) =>
-                  name.endsWith("_owner_lookup"),
-                ),
-              ).toHaveLength(0);
-            }
+            expect(
+              getTableConfig(correspondenceAllowedSenders).policies.filter(
+                ({ name }) =>
+                  name === "correspondence_allowed_senders_owner_lookup",
+              ),
+            ).toHaveLength(1);
+            expect(
+              getTableConfig(
+                correspondenceAllowedSenderMatters,
+              ).policies.filter(({ name }) => name.endsWith("_owner_lookup")),
+            ).toHaveLength(0);
           } else {
             const coreLookups = migrationStatements.filter(
               (statement) =>
@@ -766,6 +767,9 @@ describe("correspondence offboarding", () => {
             await tx.execute(
               sql`DROP POLICY matter_inbound_addresses_owner_token_lookup ON matter_inbound_addresses`,
             );
+            await tx.execute(
+              sql`DROP POLICY correspondence_allowed_senders_owner_lookup ON correspondence_allowed_senders`,
+            );
             for (const statement of coreLookups) {
               await tx.execute(sql.raw(statement));
             }
@@ -778,13 +782,10 @@ describe("correspondence offboarding", () => {
                   'DROP POLICY "matter_inbound_addresses_owner_lookup"',
                 ) ||
                 statement.includes(
-                  'DROP POLICY "correspondence_allowed_senders_owner_lookup"',
-                ) ||
-                statement.includes(
                   'DROP POLICY "correspondence_allowed_sender_matters_owner_lookup"',
                 ),
             );
-            expect(inboundLookups).toHaveLength(4);
+            expect(inboundLookups).toHaveLength(3);
             for (const statement of inboundLookups) {
               await tx.execute(sql.raw(statement));
             }
@@ -800,6 +801,12 @@ describe("correspondence offboarding", () => {
                 inArray(matterInboundAddresses.id, [addressId, otherAddressId]),
               );
           expect(await addresses()).toEqual([]);
+          expect(
+            await tx
+              .select({ id: correspondenceAllowedSenders.id })
+              .from(correspondenceAllowedSenders)
+              .where(eq(correspondenceAllowedSenders.id, senderId)),
+          ).toEqual([{ id: senderId }]);
           await tx.execute(
             sql`SELECT set_config('app.inbound_token', ${createSafeId<"matterInboundAddress">()}, true)`,
           );
@@ -808,7 +815,7 @@ describe("correspondence offboarding", () => {
             sql`SELECT set_config('app.inbound_token', ${addressId}, true)`,
           );
           expect(await addresses()).toEqual([{ id: addressId }]);
-          for (const { table, id } of lookups.slice(1)) {
+          for (const { table, id } of lookups.slice(2)) {
             expect(
               await tx
                 .select({ id: table.id })

@@ -12,7 +12,4 @@ FOR SELECT TO PUBLIC USING (
 DROP POLICY "matter_inbound_addresses_owner_lookup" ON "matter_inbound_addresses";
 --> statement-breakpoint
 -- stella-migration-safety: reviewed drop-object - scoped ingest reads replace unrestricted owner lookup access.
-DROP POLICY "correspondence_allowed_senders_owner_lookup" ON "correspondence_allowed_senders";
---> statement-breakpoint
--- stella-migration-safety: reviewed drop-object - scoped ingest reads replace unrestricted owner lookup access.
 DROP POLICY "correspondence_allowed_sender_matters_owner_lookup" ON "correspondence_allowed_sender_matters";

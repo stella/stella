@@ -16,6 +16,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
@@ -46,6 +47,7 @@ const organizationId = mintAuthProviderId<"organization">();
 const memberId = mintAuthProviderId<"user">();
 const colleagueId = mintAuthProviderId<"user">();
 const adminId = mintAuthProviderId<"user">();
+const snapshotUserId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
 const mailboxId = createSafeId<"correspondenceAllowedSender">();
@@ -126,7 +128,7 @@ if (!databaseUrl || !runPostgresTests) {
     db = gated.db;
     gated.cleanUp(async () => {
       await db.delete(organization).where(eq(organization.id, organizationId));
-      for (const id of [memberId, colleagueId, adminId]) {
+      for (const id of [memberId, colleagueId, adminId, snapshotUserId]) {
         await db.delete(user).where(eq(user.id, id));
       }
     });
@@ -228,6 +230,11 @@ if (!databaseUrl || !runPostgresTests) {
         kind: "shared_mailbox",
         scope: "matters",
         approvedBy: adminId,
+        approvedByDisplay: {
+          status: "active",
+          name: "Admin",
+          email: "admin@example.test",
+        },
       });
       await db.insert(correspondenceAllowedSenderMatters).values({
         id: createSafeId<"correspondenceAllowedSenderMatter">(),
@@ -373,8 +380,132 @@ if (!databaseUrl || !runPostgresTests) {
         },
       ]);
       expect(await filers()).toMatchObject([
-        { filedByUserId: memberId, filedByAllowedSenderId: null },
+        {
+          filedByUserId: memberId,
+          filedByAllowedSenderId: null,
+          filedByDisplay: {
+            status: "active",
+            name: "Member",
+            email: "member@example.test",
+          },
+        },
       ]);
+    });
+
+    test("ingested actor snapshots survive profile changes and stay erased on replay", async () => {
+      const display = {
+        status: "active",
+        name: "Snapshot owner",
+        email: "snapshot@example.test",
+      } as const;
+      await db.insert(user).values({
+        id: snapshotUserId,
+        name: display.name,
+        email: display.email,
+        emailVerified: true,
+      });
+      await db.insert(member).values({
+        id: mintAuthProviderIdValue(),
+        organizationId,
+        userId: snapshotUserId,
+        role: "member",
+        createdAt: new Date(),
+      });
+      await db.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId,
+        userId: snapshotUserId,
+      });
+      const snapshotMailboxId = createSafeId<"correspondenceAllowedSender">();
+      await db.insert(correspondenceAllowedSenders).values([
+        {
+          organizationId,
+          address: "snapshot-alias@example.test",
+          kind: "verified_alias",
+          scope: "organization",
+          ownerUserId: snapshotUserId,
+        },
+        {
+          id: snapshotMailboxId,
+          organizationId,
+          address: "snapshot-office@example.test",
+          kind: "shared_mailbox",
+          scope: "organization",
+          approvedBy: snapshotUserId,
+          approvedByDisplay: display,
+        },
+      ]);
+      const source = decode(await fixture("member-cc.eml"));
+      const deliveries = [
+        display.email,
+        "snapshot-alias@example.test",
+        "snapshot-office@example.test",
+      ].map((address) =>
+        encode(source.replaceAll("member@example.test", () => address)),
+      );
+      for (const raw of deliveries) {
+        const result = await deliver(raw);
+        expect(result.isOk() && result.value).toMatchObject([
+          { status: "filed" },
+        ]);
+      }
+      const initialFilers = await filers();
+      expect(initialFilers).toHaveLength(3);
+      expect(
+        initialFilers.filter(
+          ({ filedByUserId }) => filedByUserId === snapshotUserId,
+        ),
+      ).toHaveLength(2);
+      for (const row of initialFilers) {
+        expect(row.filedByDisplay).toEqual(
+          row.filedByUserId === snapshotUserId ? display : null,
+        );
+      }
+      const approvalDisplay = async () =>
+        (
+          await db
+            .select({ display: correspondenceAllowedSenders.approvedByDisplay })
+            .from(correspondenceAllowedSenders)
+            .where(eq(correspondenceAllowedSenders.id, snapshotMailboxId))
+        ).at(0)?.display;
+      await db
+        .update(user)
+        .set({ name: "Changed profile" })
+        .where(eq(user.id, snapshotUserId));
+      for (const raw of deliveries) {
+        const replay = await deliver(raw);
+        expect(replay.isOk() && replay.value).toMatchObject([
+          { status: "duplicate" },
+        ]);
+      }
+      expect(await filers()).toEqual(initialFilers);
+      expect(await approvalDisplay()).toEqual(display);
+
+      await db.transaction(async (tx) => {
+        await reassignActiveTaskAssignmentsAndDropMemberships({
+          tx,
+          currentUserId: snapshotUserId,
+          deletionRequestId: createSafeId<"accountDeletionRequest">(),
+          reassignments: [],
+        });
+      });
+      const erasedFilers = await filers();
+      for (const row of erasedFilers) {
+        expect(row.filedByDisplay).toEqual(
+          row.filedByUserId === snapshotUserId ? { status: "deleted" } : null,
+        );
+      }
+      expect(await approvalDisplay()).toEqual({ status: "deleted" });
+      for (const [index, raw] of deliveries.entries()) {
+        const replay = await deliver(raw);
+        expect(replay.isOk() && replay.value).toMatchObject(
+          index < 2
+            ? [{ status: "dropped", reason: "unauthorized_sender" }]
+            : [{ status: "duplicate" }],
+        );
+      }
+      expect(await filers()).toEqual(erasedFilers);
+      expect(await approvalDisplay()).toEqual({ status: "deleted" });
     });
 
     test("forged From and missing DMARC create only replay-safe drops", async () => {
@@ -698,7 +829,11 @@ if (!databaseUrl || !runPostgresTests) {
         { status: "filed" },
       ]);
       expect(await filers()).toMatchObject([
-        { filedByUserId: null, filedByAllowedSenderId: mailboxId },
+        {
+          filedByUserId: null,
+          filedByAllowedSenderId: mailboxId,
+          filedByDisplay: null,
+        },
       ]);
       const denied = await deliver(raw, otherToken);
       expect(denied.isOk() && denied.value).toEqual([

@@ -86,9 +86,10 @@ const ownerWrite = async (operation: "insert" | "update" | "delete") =>
             .where(eq(matterInboundAddresses.id, addressA1))
             .returning({ id: matterInboundAddresses.id })
         ).length;
+      default:
+        operation satisfies never;
+        return panic("Unhandled owner write operation");
     }
-    operation satisfies never;
-    return panic("Unhandled owner write operation");
   });
 
 beforeAll(async () => {

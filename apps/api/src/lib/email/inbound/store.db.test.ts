@@ -307,6 +307,11 @@ if (!databaseUrl || !runPostgresTests) {
           kind: "shared_mailbox",
           scope: "matters",
           approvedBy: adminA,
+          approvedByDisplay: {
+            status: "active",
+            name: "Admin A",
+            email: "admin@example.test",
+          },
         },
         {
           id: organizationMailboxId,
@@ -315,6 +320,11 @@ if (!databaseUrl || !runPostgresTests) {
           kind: "shared_mailbox",
           scope: "organization",
           approvedBy: adminA,
+          approvedByDisplay: {
+            status: "active",
+            name: "Admin A",
+            email: "admin@example.test",
+          },
         },
         {
           id: foreignMailboxId,
@@ -323,6 +333,11 @@ if (!databaseUrl || !runPostgresTests) {
           kind: "shared_mailbox",
           scope: "organization",
           approvedBy: memberB,
+          approvedByDisplay: {
+            status: "active",
+            name: "Member B",
+            email: "member@foreign.test",
+          },
         },
         {
           id: aliasId,
