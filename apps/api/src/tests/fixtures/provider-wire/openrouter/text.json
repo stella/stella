@@ -4,6 +4,7 @@
   "scenario": "text",
   "source": "recorded",
   "recordedAt": "2026-09-26T02:55:46.423Z",
+  "prompt": "Reply with exactly this sentence and nothing else: The cassette plays.",
   "model": "openai/gpt-6-sol",
   "exchanges": [
     {

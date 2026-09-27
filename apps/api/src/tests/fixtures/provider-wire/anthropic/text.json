@@ -4,6 +4,7 @@
   "scenario": "text",
   "source": "recorded",
   "recordedAt": "2026-09-26T02:55:30.861Z",
+  "prompt": "Reply with exactly this sentence and nothing else: The cassette plays.",
   "model": "claude-opus-5-5",
   "exchanges": [
     {

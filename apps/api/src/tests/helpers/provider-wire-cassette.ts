@@ -181,6 +181,9 @@ export const providerWireCassetteSchema = v.strictObject({
   /** Where a synthetic cassette's bytes come from. */
   basis: v.optional(v.string()),
   recordedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  /** The user prompt a recording sent: the recorder stores no request body,
+   *  so this is how a recording is tied to the prompt it answers. */
+  prompt: v.optional(v.string()),
   /** The model the request named. */
   model: v.string(),
   exchanges: v.pipe(v.array(exchangeSchema), v.minLength(1)),
@@ -227,8 +230,11 @@ const cassetteProblems = (
   if (cassette.source === "synthetic" && (cassette.basis ?? "") === "") {
     problems.push(`${file}: a synthetic cassette names its basis`);
   }
-  if (cassette.source === "recorded" && cassette.recordedAt === undefined) {
-    problems.push(`${file}: a recording carries its recordedAt`);
+  if (
+    cassette.source === "recorded" &&
+    (cassette.recordedAt === undefined || cassette.prompt === undefined)
+  ) {
+    problems.push(`${file}: a recording carries its recordedAt and prompt`);
   }
   const { outcome } = PROVIDER_WIRE_SCENARIOS[cassette.scenario];
   if (outcome !== "either" && outcome !== cassette.expect.outcome) {
