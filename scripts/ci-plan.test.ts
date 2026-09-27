@@ -347,10 +347,28 @@ const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
 );
 const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
+// Jobs that only collect diagnostics after a gated job failed. ci-result does
+// not wait for them: the failure they report already fails the run.
+const REPORT_ONLY_JOBS = ["e2e-report"];
+
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
-    new Set(Object.keys(ciJobs).filter((job) => job !== "ci-result")),
+    new Set(
+      Object.keys(ciJobs).filter(
+        (job) => job !== "ci-result" && !REPORT_ONLY_JOBS.includes(job),
+      ),
+    ),
   );
+  for (const job of REPORT_ONLY_JOBS) {
+    const failedOn = [
+      ...jobIf(ciJobs[job]).matchAll(/needs\.([\w-]+)\.result == 'failure'/gu),
+    ].map((match) => match[1] ?? "");
+    expect(failedOn.length, job).toBeGreaterThan(0);
+    for (const gated of failedOn) {
+      expect(resultJob.needs, `${job} runs on ${gated}`).toContain(gated);
+    }
+    expect(jobIf(ciJobs[job]), job).not.toContain("always()");
+  }
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   fc.assert(
     fc.property(
