@@ -567,7 +567,7 @@ jobs:
       needs.ci-plan.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching code-quality/typecheck-baseline.
+    # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
       contents: read
@@ -1523,7 +1523,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -1924,7 +1924,7 @@ jobs:
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 12
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -2045,7 +2045,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 6
     permissions:
       contents: read
 
@@ -2201,7 +2201,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 8
     permissions:
       contents: read
 
@@ -2330,7 +2330,7 @@ jobs:
       && needs.web-build.result == 'success'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     permissions:
       contents: read
     strategy:
@@ -2905,7 +2905,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.ci-plan.outputs.api_image_platforms) }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 8
     permissions:
       contents: read
     steps:
