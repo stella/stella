@@ -30,17 +30,18 @@ export const useUpdateCorrespondence = () => {
       workspaceId,
       correspondenceId,
       ...body
-    }: UpdateCorrespondenceVars) => {
+    }: UpdateCorrespondenceVars): Promise<void> => {
       const endpoint = api
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId });
       switch (body.type) {
         case "set_handling":
-          return unwrapEden(
+          unwrapEden(
             await endpoint.patch({ handlingState: body.handlingState }),
           );
+          return;
         case "assign":
-          return unwrapEden(
+          unwrapEden(
             await endpoint.patch({
               assigneeId:
                 body.assigneeId === null
@@ -48,6 +49,7 @@ export const useUpdateCorrespondence = () => {
                   : toSafeId<"user">(body.assigneeId),
             }),
           );
+          return;
         default: {
           body satisfies never;
           return panic("Unhandled correspondence update command");
@@ -75,11 +77,15 @@ export const useRotateCorrespondenceAddress = () => {
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({ workspaceId }: { workspaceId: string }) => {
+    mutationFn: async ({
+      workspaceId,
+    }: {
+      workspaceId: string;
+    }): Promise<void> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.post();
-      return unwrapEden(response);
+      unwrapEden(response);
     },
     onSuccess: async (_result, { workspaceId }) => {
       await queryClient.invalidateQueries({
@@ -102,11 +108,15 @@ export const useRevokeCorrespondenceAddress = () => {
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({ workspaceId }: { workspaceId: string }) => {
+    mutationFn: async ({
+      workspaceId,
+    }: {
+      workspaceId: string;
+    }): Promise<void> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.delete();
-      return unwrapEden(response);
+      unwrapEden(response);
     },
     onSuccess: async (_result, { workspaceId }) => {
       await queryClient.invalidateQueries({
