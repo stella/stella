@@ -564,7 +564,7 @@
     },
     {
       "id": "transcript-closing-results-join-their-step",
-      "fix": "",
+      "fix": "#4006",
       "behaviour": "A result the engine history adds to close a call of an ended turn joins its step's results, so the step's calls stay in one model message and every one of them is answered right after it.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
@@ -578,7 +578,7 @@
     },
     {
       "id": "transcript-denial-answered-in-its-step",
-      "fix": "",
+      "fix": "#4006",
       "behaviour": "A denied call in a step its message goes on past is answered in that step's results, not at the end of the message.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
@@ -592,7 +592,7 @@
     },
     {
       "id": "transcript-thinking-keeps-its-step",
-      "fix": "",
+      "fix": "#4006",
       "behaviour": "A replayed message keeps each signed thinking block in place, on the step that produced it.",
       "status": "active",
       "file": "src/handlers/chat/third-party-boundary.ts",
