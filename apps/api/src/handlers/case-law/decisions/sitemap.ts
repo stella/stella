@@ -171,10 +171,10 @@ export const readSitemapDecisionAlternates = async (
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
 
 /**
- * The public sitemap index, read from the snapshot the background refresh
- * writes (`lib/case-law/sitemap-shard-refresh.ts`). Counting the corpus here would make
- * every index request scan every published decision; the snapshot holds one
- * row per listed shard.
+ * The public sitemap index, read from the snapshot the scheduled refresh
+ * writes (`lib/case-law/sitemap-shard-refresh.ts`). Counting the corpus here
+ * would make every index request scan every published decision; the snapshot
+ * holds one row per listed shard, and lists nothing until the first refresh.
  */
 export const listSitemapShardsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
@@ -203,13 +203,6 @@ export const listSitemapShardsHandler = async (
         // than served truncated.
         .limit(LIMITS.caseLawSitemapIndexEntryLimit),
   );
-
-  // No snapshot yet: the refresh has not completed since the table was created.
-  if (shards.length === 0) {
-    return status(503, {
-      message: "Case-law sitemap shards are not available yet.",
-    });
-  }
 
   if (shards.length > LIMITS.caseLawSitemapIndexEntryLimit - 1) {
     return status(500, {

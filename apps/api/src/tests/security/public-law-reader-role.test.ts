@@ -806,9 +806,8 @@ describe("public-law reader role", () => {
       languageGroupKeys: ["reader-role-census"],
     });
 
-    // The snapshot is empty here; reading it at all is what the role must allow.
     const shards = await listSitemapShardsHandler(caseLawDb);
-    expect(shards).toMatchObject({ code: 503 });
+    expect(shards).toMatchObject({ items: [] });
     await caseLawDb(async (tx) => {
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });

@@ -156,13 +156,10 @@ const listedShards = async () => {
 };
 
 test(
-  "the index reads only the snapshot, so it is unavailable until a refresh",
+  "the index reads only the snapshot, so it lists nothing until a refresh",
   async () => {
-    const listed = await listSitemapShardsHandler(caseLawDb);
-    if (!("code" in listed)) {
-      panic("Expected the index to be unavailable before a refresh.");
-    }
-    expect(listed.code).toBe(503);
+    // Published decisions are seeded; only the snapshot is empty.
+    expect(await listedShards()).toEqual([]);
   },
   DB_TEST_TIMEOUT_MS,
 );

@@ -22939,27 +22939,7 @@ export type WebRoutes = {
                 readonly message: "Case-law sitemap shard count exceeds sitemap index capacity.";
               };
               502: Tc642053948;
-              503: {
-                code?: string;
-                message: string;
-                hint?: string;
-                issues?: Array<Tddcaa6c051>;
-                reason?: string;
-                required?: number;
-                available?: number;
-                confirmation?: T79fba9c913;
-                error?: string;
-                claim?: T6662e6acc7;
-                registration_id?: string;
-                registration_type?: string;
-                claim_url?: string;
-                claim_token?: string;
-                claim_token_expires?: string;
-                post_claim_scopes?: Array<string>;
-                requiredFields?: Array<T196b4403fb>;
-              } | {
-                readonly message: "Case-law sitemap shards are not available yet.";
-              };
+              503: Tc642053948;
             };
           };
         };

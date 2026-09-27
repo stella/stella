@@ -3,7 +3,6 @@ import { initReportExportWorker } from "@/api/handlers/reports/report-export-que
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
-import { initCaseLawSitemapShardWorker } from "@/api/lib/case-law/sitemap-shard-refresh-queue";
 import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
@@ -25,7 +24,6 @@ export const initApiBackgroundWorkers = () =>
   createBullMqWorkerHost("api", { db: rootDb }, [
     initAccountDeletionCleanupWorker,
     initBilingualRunWorker,
-    initCaseLawSitemapShardWorker,
     initDocumentDeadlineScoutWorker,
     initDocumentReviewRunWorker,
     initDocumentTranslationRunWorker,
