@@ -5,12 +5,14 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  CHAT_UNAVAILABLE_REF_TEXT,
   type ChatRefRegistry,
   createChatRefRegistry,
   type EntityTarget,
 } from "@/api/lib/chat/ref-registry";
 import type { ChatRefBinding } from "@/api/lib/chat/ref-token";
 import {
+  brandPersistedContactId,
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
   brandPersistedFieldId,
@@ -262,5 +264,32 @@ describe("chat refs across the requests of a thread", () => {
     );
 
     expect(resolveEntity(next, ref)).toEqual(entityTarget(0));
+  });
+
+  test("durable text keeps no ref only this thread can read", () => {
+    const registry = createChatRefRegistry();
+    const document = registry.toEntityRef(entityTarget(0));
+    const matter = registry.toMatterRef(WORKSPACE_IDS[1]);
+    const contact = registry.toContactRef(
+      brandPersistedContactId("01a0df7d-c93a-7105-99f9-c66cf1b14d20"),
+    );
+
+    const durable = registry.toDurableRefText(
+      `See [the NDA](#stella-entity-ref=${document}), ${document} in ${matter}; ask ${contact} and ent_42`,
+    );
+
+    // No token this registry could mint survives.
+    expect(durable).not.toMatch(/\b(?:ent|mat|contact|prop|src)_[0-9]+\b/u);
+    // What a later thread can resolve becomes a canonical link to it.
+    const next = createChatRefRegistry();
+    const hydrated = next.hydrateAssistantTextRefs(durable);
+    const refs = [...hydrated.matchAll(/#stella-entity-ref=(ent_[0-9]+)/gu)];
+    expect(refs.map(([, ref]) => resolveEntity(next, ref ?? ""))).toEqual([
+      entityTarget(0),
+      entityTarget(0),
+    ]);
+    expect(hydrated).toContain("#stella-workspace-ref=");
+    // What it cannot is neutral text.
+    expect(durable.split(CHAT_UNAVAILABLE_REF_TEXT)).toHaveLength(3);
   });
 });

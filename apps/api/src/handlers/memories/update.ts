@@ -11,7 +11,7 @@ import type { FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
+import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -49,7 +49,7 @@ const updateMemory = createSafeRootHandler(
     // sanitizer the create paths use before opening the transaction.
     let sanitizedContent: string | undefined;
     if (body.content !== undefined) {
-      const sanitized = sanitizeMemoryContent(body.content);
+      const sanitized = sanitizePersonMemoryContent(body.content);
       if (Result.isError(sanitized)) {
         return Result.err(
           new HandlerError({

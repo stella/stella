@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import {
   type ChatSourceCitationTarget,
@@ -64,6 +65,26 @@ const REF_LINK_REGEXES = [
   WORKSPACE_REF_LINK_REGEX,
   SOURCE_CITATION_REF_LINK_REGEX,
 ] as const;
+
+/**
+ * Text whose chat refs are durable: every ref this thread's registry bound is
+ * a canonical link to its target, and every other ref-shaped token is
+ * neutral text. Only a registry makes it (`toDurableRefText`), so a store
+ * that outlives the thread (memory) cannot take a raw ref by accident.
+ */
+const durableRefTextSchema = v.pipe(v.string(), v.brand("ChatDurableRefText"));
+
+export type ChatDurableRefText = v.InferOutput<typeof durableRefTextSchema>;
+
+/** How a durable text shows a ref that names nothing it can keep. */
+export const CHAT_UNAVAILABLE_REF_TEXT = "(unavailable reference)";
+
+/** The label a bare ref gets once it becomes a link to its target. */
+const DURABLE_REF_LABEL = {
+  entity: "document",
+  matter: "matter",
+  source: "source",
+} as const;
 
 // Shape of a ref this registry mints: `<prefix>_<counter>`.
 const MINTED_REF_SHAPE = /^[a-z]+_[0-9]+$/u;
@@ -451,6 +472,13 @@ export type ChatRefRegistry = {
   toMatterRef: (workspaceId: SafeId<"workspace">) => string;
   toPropertyRef: (propertyId: SafeId<"property">) => string;
   toSourceCitationHref: (target: ChatSourceCitationTarget) => string;
+  /**
+   * `text` with durable refs, for a store that outlives this thread: ref
+   * links and bare refs become canonical links to their targets; a contact
+   * or property ref, which has no canonical link, and a ref this registry
+   * cannot resolve become neutral text.
+   */
+  toDurableRefText: (text: string) => ChatDurableRefText;
 };
 
 /** Every whole chat ref token in `text`. */
@@ -1005,7 +1033,35 @@ export const createChatRefRegistry = (
     return [...ids];
   };
 
+  const toDurableRefText = (text: string): ChatDurableRefText => {
+    const linked = resolveAssistantTextRefs(text);
+    const durable = linked.replaceAll(MINTED_REF_TOKEN_REGEX, (ref) => {
+      const entity = entityState.refToTarget.get(ref);
+      if (entity !== undefined) {
+        return `[${DURABLE_REF_LABEL.entity}](${toChatResourceHref(
+          toEntityResourceTarget(entity),
+        )})`;
+      }
+      const workspaceId = matterState.refToTarget.get(ref);
+      if (workspaceId !== undefined) {
+        return `[${DURABLE_REF_LABEL.matter}](${toChatResourceHref({
+          type: RESOURCE_TYPE.WORKSPACE,
+          resource: toWorkspaceResource(workspaceId),
+        })})`;
+      }
+      const source = sourceCitationState.refToTarget.get(ref);
+      if (source !== undefined) {
+        return `[${DURABLE_REF_LABEL.source}](${toChatSourceCitationHref(
+          source,
+        )})`;
+      }
+      return CHAT_UNAVAILABLE_REF_TEXT;
+    });
+    return v.parse(durableRefTextSchema, durable);
+  };
+
   return {
+    toDurableRefText,
     getObservedWorkspaceIds,
     getRegisteredWorkspaceIds,
     offerMatterRef: (workspaceId: SafeId<"workspace">) =>
