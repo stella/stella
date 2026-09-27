@@ -29,14 +29,18 @@ import {
   keptHeaders,
   MAX_RESPONSE_BYTES,
   offeredModel,
+  newRedaction,
   recordOne,
   sanitizeEventPayload,
   sanitizeJson,
   sanitizeTextBody,
+  scenariosToRecord,
   wireCarriesNull,
 } from "./record-provider-cassettes";
 
 const SECRET = "sk-recording-secret";
+/** A fresh recording's redaction. */
+const redact = () => newRedaction(SECRET);
 
 describe("provider cassette recording redaction", () => {
   test("replaces response and request ids but keeps tool call ids", () => {
@@ -52,46 +56,66 @@ describe("provider cassette recording redaction", () => {
           content: [{ id: "toolu_01", type: "tool_use" }],
           deltas: [{ item_id: "msg_1" }, { item_id: "fc_abc" }],
         },
-        SECRET,
+        redact(),
       ),
     ).toEqual({
-      id: "[id]",
-      request_id: "[request_id]",
+      id: "[id_1]",
+      request_id: "[id_2]",
       output: [
-        { id: "[id]", type: "message" },
+        { id: "[id_3]", type: "message" },
         { call_id: "call_abc", id: "fc_abc", type: "function_call" },
       ],
       content: [{ id: "toolu_01", type: "tool_use" }],
-      deltas: [{ item_id: "[item_id]" }, { item_id: "fc_abc" }],
+      deltas: [{ item_id: "[id_3]" }, { item_id: "fc_abc" }],
     });
+  });
+
+  test("gives one value one placeholder across keys and events", () => {
+    const redaction = redact();
+    const added = sanitizeTextBody(
+      'data: {"item":{"id":"msg_0123456789","type":"message"}}\n\n',
+      redaction,
+    );
+    const delta = sanitizeTextBody(
+      'data: {"item_id":"msg_0123456789","delta":"The"}\n\ndata: {"item_id":"msg_9876543210","delta":"A"}\n\n',
+      redaction,
+    );
+    expect(added).toBe('data: {"item":{"id":"[id_1]","type":"message"}}\n\n');
+    expect(delta).toBe(
+      'data: {"item_id":"[id_1]","delta":"The"}\n\ndata: {"item_id":"[id_2]","delta":"A"}\n\n',
+    );
+    // The same value in free text reads as the same placeholder too.
+    expect(sanitizeTextBody(": item msg_0123456789\n\n", redaction)).toBe(
+      ": item [id_1]\n\n",
+    );
   });
 
   test("replaces the ids of the account the key belongs to", () => {
     expect(
       sanitizeJson(
         { error: { code: 400 }, user_id: "user_2Ab3Cd4Ef5Gh6" },
-        SECRET,
+        redact(),
       ),
-    ).toEqual({ error: { code: 400 }, user_id: "[user_id]" });
+    ).toEqual({ error: { code: 400 }, user_id: "[id_1]" });
     expect(
       sanitizeJson(
         { error: { message: "Project `proj_2Ab3Cd4Ef5Gh6` has no access" } },
-        SECRET,
+        redact(),
       ),
-    ).toEqual({ error: { message: "Project `[id]` has no access" } });
+    ).toEqual({ error: { message: "Project `[id_1]` has no access" } });
     expect(
       sanitizeTextBody(
         ": account user_2Ab3Cd4Ef5Gh6 org-9Zy8Xw7Vu6\n\n",
-        SECRET,
+        redact(),
       ),
-    ).toBe(": account [id] [id]\n\n");
+    ).toBe(": account [id_1] [id_2]\n\n");
   });
 
   test("redacts fields that echo request content", () => {
     expect(
       sanitizeJson(
         { instructions: "system text", user: "someone", model: "m" },
-        SECRET,
+        redact(),
       ),
     ).toEqual({ instructions: "[redacted]", model: "m", user: "[redacted]" });
   });
@@ -104,43 +128,48 @@ describe("provider cassette recording redaction", () => {
       cost_details: { upstream_inference_cost: 0.0008 },
       is_byok: true,
     };
-    expect(sanitizeJson({ usage }, SECRET)).toEqual({
+    expect(sanitizeJson({ usage }, redact())).toEqual({
       usage: { prompt_tokens: 12, completion_tokens: 3 },
     });
     expect(
-      sanitizeTextBody(`data: ${JSON.stringify({ usage })}\n\n`, SECRET),
+      sanitizeTextBody(`data: ${JSON.stringify({ usage })}\n\n`, redact()),
     ).toBe('data: {"usage":{"prompt_tokens":12,"completion_tokens":3}}\n\n');
   });
 
   test("refuses a response that contains the key", () => {
     const refusal = "A provider response contains the recording key";
     expect(() =>
-      sanitizeTextBody(`data: {"echo":"${SECRET}"}\n\n`, SECRET),
+      sanitizeTextBody(`data: {"echo":"${SECRET}"}\n\n`, redact()),
     ).toThrow(refusal);
-    expect(() => sanitizeJson({ nested: [SECRET] }, SECRET)).toThrow(refusal);
+    expect(() => sanitizeJson({ nested: [SECRET] }, redact())).toThrow(refusal);
+    expect(() => sanitizeJson({ id: `resp_${SECRET}` }, redact())).toThrow(
+      refusal,
+    );
   });
 
   test("redacts every event stream payload shape", () => {
     const refusal = "A provider response contains the recording key";
     // Bytes that are not JSON, a JSON scalar, a JSON array and an object.
     expect(() =>
-      sanitizeEventPayload(`{"message":"bad key ${SECRET}`, SECRET),
+      sanitizeEventPayload(`{"message":"bad key ${SECRET}`, redact()),
     ).toThrow(refusal);
-    expect(() => sanitizeEventPayload(`"${SECRET}"`, SECRET)).toThrow(refusal);
+    expect(() => sanitizeEventPayload(`"${SECRET}"`, redact())).toThrow(
+      refusal,
+    );
     expect(() =>
-      sanitizeEventPayload({ nested: { value: SECRET } }, SECRET),
+      sanitizeEventPayload({ nested: { value: SECRET } }, redact()),
     ).toThrow(refusal);
     expect(
       sanitizeEventPayload(
         '{"message":"failed","requestId":"req_4c1d9e2',
-        SECRET,
+        redact(),
       ),
-    ).toBe('{"message":"failed","requestId":"[id]');
+    ).toBe('{"message":"failed","requestId":"[id_1]');
     expect(
-      sanitizeEventPayload('[{"id":"resp_0123456789","ok":true}]', SECRET),
-    ).toBe('[{"id":"[id]","ok":true}]');
-    expect(sanitizeEventPayload({ id: "msg_0123456789" }, SECRET)).toEqual({
-      id: "[id]",
+      sanitizeEventPayload('[{"id":"resp_0123456789","ok":true}]', redact()),
+    ).toBe('[{"id":"[id_1]","ok":true}]');
+    expect(sanitizeEventPayload({ id: "msg_0123456789" }, redact())).toEqual({
+      id: "[id_1]",
     });
   });
 
@@ -148,17 +177,25 @@ describe("provider cassette recording redaction", () => {
     expect(
       sanitizeTextBody(
         'data: {"id":"chatcmpl-abcdef123","delta":"The ca\n\n: request resp_0123456789\n\n',
-        SECRET,
+        redact(),
       ),
-    ).toBe('data: {"id":"[id]","delta":"The ca\n\n: request [id]\n\n');
+    ).toBe('data: {"id":"[id_1]","delta":"The ca\n\n: request [id_2]\n\n');
   });
 
   test("keeps event stream framing while sanitizing each payload", () => {
     const body =
       'event: message_start\r\ndata: {"message":{"id":"msg_9"}}\r\n\r\n: keep-alive\r\ndata: [DONE]\r\n\r\n';
-    expect(sanitizeTextBody(body, SECRET)).toBe(
-      'event: message_start\r\ndata: {"message":{"id":"[id]"}}\r\n\r\n: keep-alive\r\ndata: [DONE]\r\n\r\n',
+    expect(sanitizeTextBody(body, redact())).toBe(
+      'event: message_start\r\ndata: {"message":{"id":"[id_1]"}}\r\n\r\n: keep-alive\r\ndata: [DONE]\r\n\r\n',
     );
+  });
+
+  test("records a tool call and the text that continues it together", () => {
+    expect(scenariosToRecord(["tool-call"])).toEqual(["text", "tool-call"]);
+    expect(scenariosToRecord(["text"])).toEqual(["text", "tool-call"]);
+    expect(scenariosToRecord(["length", "rate-limit", "nonsense"])).toEqual([
+      "length",
+    ]);
   });
 
   test("keeps a strict-null recording only when the wire carries a JSON null", () => {
