@@ -247,7 +247,7 @@ const backlogQueue = ({
         (attemptedAt === undefined || now() - attemptedAt >= cooldownMs),
     );
     if (row === undefined) {
-      return await Promise.resolve(undefined);
+      return undefined;
     }
     row.attemptedAt = now();
     return await Promise.resolve({
