@@ -28148,8 +28148,6 @@ export type WebRoutes = {
                 entityId: T9a509045a7;
                 fieldId: T1c7a854487;
                 workspaceId: Teb5c753062;
-                entityRef: string;
-                matterRef: string;
                 href: (`#stella-decision=${string}` | `#stella-entity=${string}` | `#stella-workspace=${string}`);
                 mention: string;
               };
