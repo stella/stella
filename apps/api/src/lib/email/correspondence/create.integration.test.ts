@@ -46,7 +46,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const migration = readFileSync(
   new URL(
-    "../../../../drizzle/20260926190100_correspondence_core/migration.sql",
+    "../../../../drizzle/20260927210000_correspondence_core/migration.sql",
     import.meta.url,
   ),
   "utf-8",
