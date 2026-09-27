@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Splits `bun run test` arguments into the `bun test` invocations the web
  * package needs. The suite has three kinds of test file, each with its own
@@ -42,14 +44,40 @@ const normalize = (filePath: string): string =>
 const isDomTest = (filePath: string): boolean =>
   filePath.endsWith(DOM_TEST_SUFFIX);
 
-const isE2eUnitTest = (filePath: string): boolean =>
-  normalize(filePath).startsWith(`${E2E_UNIT_DIRECTORY}/`);
+const isE2eUnitTest = (filePath: string): boolean => {
+  const normalized = normalize(filePath);
+  return (
+    normalized.startsWith(`${E2E_UNIT_DIRECTORY}/`) ||
+    normalized.includes(`/${E2E_UNIT_DIRECTORY}/`)
+  );
+};
+
+/**
+ * `bun test` options whose value may follow as the next argument; that value
+ * is never a test path, even when a file or directory of the same name exists.
+ */
+const VALUE_OPTIONS = new Set([
+  "-t",
+  "--test-name-pattern",
+  "--timeout",
+  "--rerun-each",
+  "--retry",
+  "-r",
+  "--preload",
+  "--seed",
+  "--reporter",
+  "--reporter-outfile",
+  "--coverage-reporter",
+  "--coverage-dir",
+  "--path-ignore-patterns",
+  "--max-concurrency",
+]);
 
 /**
  * With no paths, the three default runs, each carrying the pass-through flags.
  * With paths, only the named files, grouped by kind; a directory expands to
- * the test files under it. An argument is a path only when it exists on disk,
- * so flag values such as `-t "<name>"` stay flags.
+ * the test files under it. An argument is a path only when it exists on disk
+ * and is not the value of an option such as `-t "<name>"`.
  */
 export const planTestRuns = ({
   argv,
@@ -58,23 +86,33 @@ export const planTestRuns = ({
 }: TestRunPlanInput): readonly TestRun[] => {
   const flags: string[] = [];
   const files: string[] = [];
-  for (const arg of argv) {
+  let namedPaths = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index] ?? panic("Argument index out of range");
     if (arg === "--") {
       continue;
     }
-    const kind = arg.startsWith("-") ? "missing" : pathKind(arg);
+    if (arg.startsWith("-")) {
+      flags.push(arg);
+      const value = argv[index + 1];
+      if (VALUE_OPTIONS.has(arg) && value !== undefined) {
+        flags.push(value);
+        index += 1;
+      }
+      continue;
+    }
+    const kind = pathKind(arg);
     if (kind === "file") {
+      namedPaths = true;
       files.push(normalize(arg));
     } else if (kind === "directory") {
+      namedPaths = true;
       files.push(...testFilesIn(arg).map(normalize));
     } else {
       flags.push(arg);
     }
   }
 
-  const namedPaths = argv.some(
-    (arg) => !arg.startsWith("-") && pathKind(arg) !== "missing",
-  );
   if (!namedPaths) {
     return DEFAULT_RUNS.map((run) => ({
       label: run.label,
@@ -90,7 +128,10 @@ export const planTestRuns = ({
   const unit = unique.filter(
     (file) => !isDomTest(file) && !isE2eUnitTest(file),
   );
-  const toPath = (file: string): string => `./${file}`;
+  // Bun reads a bare relative name as a filter, so relative paths are pinned
+  // with `./`; absolute paths already resolve.
+  const toPath = (file: string): string =>
+    file.startsWith("/") ? file : `./${file}`;
 
   return [
     {

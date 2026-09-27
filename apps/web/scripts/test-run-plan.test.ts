@@ -9,6 +9,8 @@ const ON_DISK: Readonly<Record<string, PathKind>> = {
   "src/components/editor.dom.test.tsx": "file",
   "e2e/unit/network-metrics.test.ts": "file",
   "src/features/avt": "directory",
+  scripts: "directory",
+  "/repo/apps/web/e2e/unit/deferred-cleanup.test.ts": "file",
 };
 
 const DIRECTORY_FILES: Readonly<Record<string, readonly string[]>> = {
@@ -80,6 +82,27 @@ describe("planTestRuns", () => {
         args: [
           "./src/features/avt/verdict.test.ts",
           "./src/features/avt/claim-review.logic.test.ts",
+        ],
+      },
+    ]);
+  });
+
+  test("an option's value stays with the option even when it names a directory", () => {
+    const runs = plan(["-t", "scripts"]);
+
+    expect(runs.map((run) => run.label)).toEqual(["unit", "dom", "e2e-unit"]);
+    for (const run of runs) {
+      expect(run.args.slice(-2)).toEqual(["-t", "scripts"]);
+    }
+  });
+
+  test("keeps absolute paths as given", () => {
+    expect(plan(["/repo/apps/web/e2e/unit/deferred-cleanup.test.ts"])).toEqual([
+      {
+        label: "e2e-unit",
+        args: [
+          "--parallel=2",
+          "/repo/apps/web/e2e/unit/deferred-cleanup.test.ts",
         ],
       },
     ]);
