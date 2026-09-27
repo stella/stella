@@ -94,6 +94,10 @@ export const CHAT_ORACLE = {
   providerWireError: "chat.provider-wire.error",
   /** A cancelled run ends promptly, unfinished, with no further request. */
   providerWireCancel: "chat.provider-wire.cancel",
+  /** Every request the adapter sends is the one its cassette pins: the
+   *  protocol headers, and the body with its key order, minus the prompt
+   *  text. */
+  providerWireRequestShape: "chat.provider-wire.request-shape",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

@@ -409,6 +409,20 @@
       "oracle": "chat.provider-wire.one-terminal"
     },
     {
+      "id": "openai-tool-schema-strict",
+      "fix": "maintenance",
+      "behaviour": "The OpenAI adapter offers a tool whose schema strict mode accepts as a strict tool.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/tools/function-tool.js",
+      "search": "\t\tparameters: jsonSchema,\n\t\tstrict: true",
+      "replace": "\t\tparameters: jsonSchema,\n\t\tstrict: false",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai tool-call"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
       "id": "new-message-resets-interrupts",
       "fix": "#3885",
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",

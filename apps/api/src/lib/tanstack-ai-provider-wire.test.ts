@@ -19,13 +19,17 @@ import type {
   ProviderWireProvider,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import {
+  findRequestShapeDrift,
   findWireCancelViolations,
   findWireContractViolations,
   replayWireScenario,
   wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
-import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import type {
+  ProviderWireReplay,
+  ReplayedRequest,
+} from "@/api/tests/helpers/provider-wire-replay";
 import {
   UNMET,
   UNMET_SIZE,
@@ -40,7 +44,10 @@ import {
 
 const cassettes = loadProviderWireCassettes();
 
-const { providerWireToolInput: toolInput } = CHAT_ORACLE;
+const {
+  providerWireRequestShape: requestShape,
+  providerWireToolInput: toolInput,
+} = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
 let previousMockAI: boolean;
@@ -87,12 +94,33 @@ const expectContract = (
   expect(violatedOracles(violations)).toEqual(unmet.oracles.toSorted());
 };
 
+/** Every request the adapter sent is the one its exchange pins, shown as a
+ *  diff of the two when it is not. */
+const expectPinnedRequests = (
+  cassette: ProviderWireCassette,
+  sent: readonly ReplayedRequest[],
+) => {
+  for (const drift of findRequestShapeDrift({ cassette, sent })) {
+    const where = JSON.stringify({
+      cassette: cassetteKey(cassette),
+      exchange: drift.exchange,
+      oracle: requestShape,
+    });
+    const heading = `${where}: the adapter sends another request than the cassette pins. To pin today's, run \`bun run record:provider-cassettes --update-request-shapes\` and review the diff.`;
+    expect(drift.got, heading).toBe(drift.expected);
+  }
+};
+
 const checkCassette = async (cassette: ProviderWireCassette) => {
-  const { findings, run } = await replayWireScenario({ cassette, replay });
+  const { findings, run, sent } = await replayWireScenario({
+    cassette,
+    replay,
+  });
   expectContract(
     cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
+  expectPinnedRequests(cassette, sent);
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
@@ -135,6 +163,62 @@ describe("provider wire corpus", () => {
         )
         .map(([key]) => key),
     ).toEqual([]);
+  });
+
+  test("every exchange pins the request it answers", () => {
+    expect(
+      cassettes
+        .filter(({ exchanges }) =>
+          exchanges.some(({ request }) => request.shape === undefined),
+        )
+        .map(cassetteKey),
+    ).toEqual([]);
+  });
+
+  test("a tool schema whose properties change order is a finding", async () => {
+    // A strict provider generates a tool's input in its schema's property
+    // order, so the order is part of the request.
+    const cassette = cassetteFor(cassettes, "openai", "tool-call");
+    const { sent } = await replayWireScenario({ cassette, replay });
+    expect(findRequestShapeDrift({ cassette, sent })).toEqual([]);
+    const [exchange] = cassette.exchanges;
+    const pinned = exchange?.request.shape;
+    if (exchange === undefined || pinned === undefined) {
+      panic("The tool call cassette pins no request");
+    }
+    // Every schema's properties, last first.
+    const reorder = (value: unknown, key?: string): unknown => {
+      if (Array.isArray(value)) {
+        return value.map((child) => reorder(child));
+      }
+      if (typeof value !== "object" || value === null) {
+        return value;
+      }
+      const entries = Object.entries(value).map(
+        ([childKey, child]): [string, unknown] => [
+          childKey,
+          reorder(child, childKey),
+        ],
+      );
+      return Object.fromEntries(
+        key === "properties" ? entries.toReversed() : entries,
+      );
+    };
+    const reordered = { ...pinned, body: reorder(pinned.body) };
+    // The same request, only in another order.
+    expect(reordered).toEqual(pinned);
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(pinned));
+    expect(
+      findRequestShapeDrift({
+        cassette: {
+          ...cassette,
+          exchanges: [
+            { ...exchange, request: { ...exchange.request, shape: reordered } },
+          ],
+        },
+        sent,
+      }),
+    ).toHaveLength(1);
   });
 
   test("a tool call ended twice is a finding", async () => {

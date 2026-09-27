@@ -162,7 +162,9 @@ type ServeOptions = {
 
 /** A request the replay answered or refused. */
 export type ReplayedRequest = {
+  body: string;
   exchange: number | "side" | null;
+  headers: Headers;
   model: string | null;
   path: string;
   url: string;
@@ -206,7 +208,13 @@ const readRequest = async (
       ? await new Response(init.body).text()
       : await request.clone().text();
   const signal = init?.signal ?? request.signal;
-  return { bodyText, method: init?.method ?? request.method, signal, url };
+  return {
+    bodyText,
+    headers: request.headers,
+    method: init?.method ?? request.method,
+    signal,
+    url,
+  };
 };
 
 /** Path and query as a cassette stores them: no credential parameters. */
@@ -302,13 +310,18 @@ export const installProviderWireReplay = () => {
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const { bodyText, method, signal, url } = await readRequest(input, init);
+    const { bodyText, headers, method, signal, url } = await readRequest(
+      input,
+      init,
+    );
     const path = cassetteRequestPath(url);
     const requestModel = requestModelOf(url, bodyText);
     const refuse = (reason: string): never => {
       unexpected.push(`${method} ${url.host}${path}: ${reason}`);
       requests.push({
+        body: bodyText,
         exchange: null,
+        headers,
         model: requestModel,
         path,
         url: url.toString(),
@@ -333,7 +346,9 @@ export const installProviderWireReplay = () => {
       requestModel !== model
     ) {
       requests.push({
+        body: bodyText,
         exchange: "side",
+        headers,
         model: requestModel,
         path,
         url: url.toString(),
@@ -365,7 +380,9 @@ export const installProviderWireReplay = () => {
     }
     current.entry.served += 1;
     requests.push({
+      body: bodyText,
       exchange: current.index,
+      headers,
       model: requestModel,
       path,
       url: url.toString(),
