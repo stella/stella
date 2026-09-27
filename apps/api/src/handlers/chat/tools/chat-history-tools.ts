@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   type ChatRefRegistry,
   createChatRefRegistry,
+  neutralizeChatRefTokens,
   rebindChatRefTokens,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
@@ -132,6 +133,29 @@ type ChatHistoryExpansionRow = {
   role: ChatMessageRole;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
+};
+
+/**
+ * An expanded message of another chat, with its raw refs spelled for this
+ * one. A user's message is neutral: a ref-shaped token a user typed may
+ * predate the binding its chat later gave the spelling, so only the mention
+ * links it carries (canonical, hydrated after) name anything.
+ */
+const respellForeignRefs = ({
+  foreignRefs,
+  rendered,
+  role,
+}: {
+  foreignRefs: { from: ChatRefRegistry; to: ChatRefRegistry } | null;
+  rendered: string;
+  role: ChatMessageRole;
+}): string => {
+  if (foreignRefs === null) {
+    return rendered;
+  }
+  return role === "user"
+    ? neutralizeChatRefTokens(rendered)
+    : rebindChatRefTokens({ ...foreignRefs, text: rendered });
 };
 
 /** The refs another chat of this user bound, as a registry. */
@@ -334,7 +358,13 @@ export const createChatHistoryTools = ({
       const foreignRefs =
         target === undefined || target.threadId === threadId
           ? null
-          : await readForeignChatRefs({ safeDb, threadId: target.threadId });
+          : {
+              from: await readForeignChatRefs({
+                safeDb,
+                threadId: target.threadId,
+              }),
+              to: refRegistry,
+            };
 
       return {
         targetMessageId: messageId,
@@ -349,13 +379,7 @@ export const createChatHistoryTools = ({
             // Same rationale as the search excerpt: persisted mention hrefs
             // must re-enter the model as chat refs, not raw tenant UUIDs.
             content: refRegistry.hydrateAssistantTextRefs(
-              foreignRefs === null
-                ? rendered
-                : rebindChatRefTokens({
-                    from: foreignRefs,
-                    text: rendered,
-                    to: refRegistry,
-                  }),
+              respellForeignRefs({ foreignRefs, rendered, role: row.role }),
             ),
           };
         }),

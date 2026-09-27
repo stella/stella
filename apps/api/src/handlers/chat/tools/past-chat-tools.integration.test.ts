@@ -226,6 +226,7 @@ const expandFor = async ({
 const seedCodeModeChat = async () => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+  const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId: ids.orgA,
@@ -241,6 +242,19 @@ const seedCodeModeChat = async () => {
     entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ids.entityA1 }),
     workspace: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: ids.wsA1 }),
   } satisfies ChatRefBinding;
+  // Before the chat bound `ent_1`, the user typed the spelling.
+  await testDb.insert(chatMessages).values({
+    id: userMessageId,
+    threadId,
+    userId: ids.userA1,
+    workspaceId: ids.wsA1,
+    role: "user",
+    content: toChatMessageContent({
+      data: [{ content: "Is ent_1 the latest draft?", type: "text" }],
+      version: 2,
+    }),
+    createdAt: new Date(Date.now() - 60_000),
+  });
   await testDb.insert(chatMessages).values({
     id: messageId,
     threadId,
@@ -273,7 +287,7 @@ const seedCodeModeChat = async () => {
     }),
     createdAt: new Date(),
   });
-  return { messageId, threadId };
+  return { messageId, threadId, userMessageId };
 };
 
 describe("past-chat search", () => {
@@ -373,5 +387,21 @@ describe("past-chat search", () => {
         { entityId: ids.entityA1, workspaceId: ids.wsA1 },
       ]);
     }
+  });
+
+  test("expanding another chat leaves a ref-shaped token its user typed naming nothing", async () => {
+    const codeModeChat = await seedCodeModeChat();
+    const refRegistry = createChatRefRegistry();
+
+    const expanded = await expandFor({
+      messageId: codeModeChat.userMessageId,
+      refRegistry,
+      scope: ALL_CHATS_SCOPE,
+    });
+
+    const userContent = expanded.contents.at(0) ?? "";
+    expect(expanded.messageIds?.at(0)).toBe(codeModeChat.userMessageId);
+    expect(userContent).not.toMatch(/\bent_[0-9]+\b/u);
+    expect(userContent).toContain("(unavailable reference)");
   });
 });
