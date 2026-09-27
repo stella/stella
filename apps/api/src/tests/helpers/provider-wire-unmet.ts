@@ -21,15 +21,11 @@ type UnmetEntry = { oracles: readonly ChatOracleId[]; reason: string };
 export const UNMET: Readonly<Record<string, UnmetEntry>> = {
   "anthropic/length": { oracles: [usage], reason: "upstream gap" },
   "anthropic/refusal": { oracles: [finish], reason: "upstream design" },
-  "bedrock/early-eof": { oracles: [finish], reason: "upstream design" },
-  "mistral/early-eof": { oracles: [finish], reason: "upstream design" },
-  "mistral/malformed-chunk": { oracles: [finish], reason: "upstream design" },
   "openai/length": { oracles: [usage], reason: "upstream gap" },
-  "openrouter/early-eof": { oracles: [finish], reason: "upstream design" },
 };
 
 /** The ledger's size. Lower it with every entry removed; never raise it. */
-export const UNMET_SIZE = 7;
+export const UNMET_SIZE = 3;
 
 /** The distinct oracles `violations` fail at, sorted. */
 export const violatedOracles = (
