@@ -27106,11 +27106,11 @@ export type WebRoutes = {
                     createdAt: string;
                     updatedAt: string;
                     factDetails: (null | {
+                      confidence: T81fff8a53f;
                       occurredOn: T432e07d100;
                       occurredOnPrecision: T1c70c47ed9;
                       evidenceKind: T432e07d100;
                       medium: T432e07d100;
-                      confidence: T81fff8a53f;
                       interpretationNote: T432e07d100;
                       scoring: T58d852de3d;
                     });
