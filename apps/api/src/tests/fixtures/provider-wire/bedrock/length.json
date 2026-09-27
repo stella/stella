@@ -4,6 +4,7 @@
   "scenario": "length",
   "source": "recorded",
   "recordedAt": "2026-09-27T18:02:22.581Z",
+  "prompt": "Count from 1 to 500 in words, separated by commas.",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {

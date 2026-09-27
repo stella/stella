@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import {
   cassetteFor,
+  cassetteKey,
   loadProviderWireCassettes,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import type {
@@ -15,6 +16,7 @@ import type {
 import {
   findWireContractViolations,
   replayWireScenario,
+  scenarioPrompt,
   UNKNOWN_MODEL_ID,
   wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
@@ -240,6 +242,21 @@ describe("provider cassette recording redaction", () => {
 // (the replay, which answers at the same `fetch` boundary the network would),
 // is a cassette the replay test accepts.
 const cassettes = loadProviderWireCassettes();
+
+// Replay never sees a request body, so a prompt that changed after a
+// recording would go unnoticed without this.
+test("every recording answers the prompt the recorder sends today", () => {
+  expect(
+    cassettes
+      .filter(
+        (cassette) =>
+          cassette.source === "recorded" &&
+          cassette.prompt !==
+            scenarioPrompt(cassette.provider, cassette.scenario),
+      )
+      .map(cassetteKey),
+  ).toEqual([]);
+});
 let upstream: ProviderWireReplay;
 let previousMockAI: boolean;
 

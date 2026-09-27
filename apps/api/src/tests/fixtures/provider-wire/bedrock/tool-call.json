@@ -4,6 +4,7 @@
   "scenario": "tool-call",
   "source": "recorded",
   "recordedAt": "2026-09-27T18:04:47.461Z",
+  "prompt": "Call the mcp__external__delete tool once with only name \"draft\", leaving note out. Do not write any text.",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {

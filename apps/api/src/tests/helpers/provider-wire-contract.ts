@@ -70,8 +70,8 @@ const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECT
 export const SCENARIO_PROMPTS = {
   text: TEXT_PROMPT,
   "text-terminal-only": TEXT_PROMPT,
-  "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with only name "draft", leaving note out. Do not write any text.`,
-  "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo", neither with a note. Do not write any text.`,
+  "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with name "draft". Do not write any text.`,
+  "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo". Do not write any text.`,
   "strict-null": `Call the ${WIRE_TOOL_NAME} tool once with name "draft" and note set to JSON null. Do not write any text.`,
   length: "Count from 1 to 500 in words, separated by commas.",
   refusal: TEXT_PROMPT,
@@ -81,6 +81,25 @@ export const SCENARIO_PROMPTS = {
   "malformed-chunk": TEXT_PROMPT,
   "early-eof": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
+
+/** A provider's own wording for a scenario, where the shared prompt records
+ *  something else. */
+const PROVIDER_SCENARIO_PROMPTS: Partial<
+  Record<ProviderWireProvider, Partial<Record<ProviderWireScenario, string>>>
+> = {
+  // Bedrock's Claude fills the optional note unless told to leave it out.
+  bedrock: {
+    "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with only name "draft", leaving note out. Do not write any text.`,
+    "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo", neither with a note. Do not write any text.`,
+  },
+};
+
+/** The one user message a scenario sends to `provider`. */
+export const scenarioPrompt = (
+  provider: ProviderWireProvider,
+  scenario: ProviderWireScenario,
+): string =>
+  PROVIDER_SCENARIO_PROMPTS[provider]?.[scenario] ?? SCENARIO_PROMPTS[scenario];
 
 /** The output ceiling the length scenario asks for. */
 const LENGTH_SCENARIO_MAX_TOKENS = 16;
@@ -179,7 +198,9 @@ const prepareWireRequest = ({
   });
   return {
     adapter,
-    messages: [{ role: "user" as const, content: SCENARIO_PROMPTS[scenario] }],
+    messages: [
+      { role: "user" as const, content: scenarioPrompt(provider, scenario) },
+    ],
     modelOptions,
     tools,
   };
