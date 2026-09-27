@@ -72,6 +72,21 @@ describe("list replacement guard", () => {
     ).toBe(true);
   });
 
+  test("refuses an edition older than the one in use", () => {
+    // The fixture edition is stamped 2026-09-22; a later one is in use.
+    const result = checkListReplacement({
+      previous: { ...edition(6000), publishedAt: "2026-09-25T08:00:00Z" },
+      next: withEntries(6000),
+    });
+    expect(result.isErr() && result.error.code).toBe("stale");
+    expect(
+      checkListReplacement({
+        previous: { ...edition(6000), publishedAt: "not a stamp" },
+        next: withEntries(6000),
+      }).isErr(),
+    ).toBe(true);
+  });
+
   test("refuses to replace one source's edition with another's", () => {
     const result = checkListReplacement({
       previous: { ...edition(6000), source: "un" },

@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import type { ParsedList, SanctionsSource } from "./entry";
+import { stampInstant } from "./values";
 
 /** What a caller keeps about the edition it currently screens against. */
 export type ListStats = {
@@ -28,7 +30,7 @@ const REPLACEMENT_POLICIES = {
 } as const satisfies Record<SanctionsSource, ReplacementPolicy>;
 
 export class ListReplacementError extends TaggedError("ListReplacementError")<{
-  code: "source-mismatch" | "below-minimum" | "contracted";
+  code: "source-mismatch" | "below-minimum" | "contracted" | "stale";
   message: string;
   source: SanctionsSource;
 }> {}
@@ -49,8 +51,9 @@ type CheckListReplacementInput = {
 /**
  * Decides whether a freshly parsed edition may replace the one in use. A
  * parse proves the file is well formed, not that it is complete; this refuses
- * a first edition below the source's minimum and an edition that shrank more
- * than the policy allows.
+ * a first edition below the source's minimum, an edition older than the one in
+ * use (a late or cached file would roll screening back past designations), and
+ * an edition that shrank more than the policy allows.
  */
 export const checkListReplacement = ({
   previous,
@@ -74,6 +77,19 @@ export const checkListReplacement = ({
     return fail(
       "source-mismatch",
       `a ${stats.source} edition cannot replace a ${previous.source} one`,
+    );
+  }
+  const previousAt = stampInstant(previous.publishedAt);
+  const nextAt = stampInstant(stats.publishedAt);
+  // An unreadable stamp cannot be ordered, so it is refused like an older one.
+  if (
+    previousAt === null ||
+    nextAt === null ||
+    Temporal.Instant.compare(nextAt, previousAt) < 0
+  ) {
+    return fail(
+      "stale",
+      `the edition of ${stats.publishedAt} is not newer than the edition of ${previous.publishedAt} in use`,
     );
   }
   const floor = Math.ceil(previous.entryCount * (1 - policy.maximumShrink));
