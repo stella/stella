@@ -2023,12 +2023,12 @@ jobs:
   # generic path (Eden surface, route trees, query options) lands as
   # "typecheck got slow" weeks later with no diff to point at. This re-runs
   # tsc per project with --extendedDiagnostics and fails when the
-  # deterministic size counters (Types, Instantiations) jump past a committed
-  # baseline; an improvement just prompts a re-baseline. Time/memory are
-  # printed but never gated (machine noise). A separate job, not a step in
-  # typecheck: the guard's full per-project typechecks stacked on the turbo
+  # deterministic size counters (Types, Instantiations) jump past the merge
+  # base's measurement. The committed baseline is checked nightly. Time and
+  # memory are printed but never gated (machine noise). A separate job, not a
+  # step in typecheck: the guard's full per-project typechecks stacked on the turbo
   # run would blow that job's timeout; here they run in parallel instead.
-  # Regenerate: `bun scripts/typecheck-baseline.ts --write-baseline`.
+  # Regenerate the cumulative budget: `bun scripts/typecheck-baseline.ts --write-baseline`.
   typecheck-baseline:
     needs: ci-plan
     if: >-
@@ -2063,12 +2063,27 @@ jobs:
         # that turbo's typecheck pipeline would produce must exist first.
         run: bun run typegen
 
+      - name: Measure merge base
+        run: |
+          base_dir="$RUNNER_TEMP/typecheck-base"
+          git worktree add --detach "$base_dir" "$(git merge-base origin/main HEAD)"
+          git -C "$base_dir" submodule update --init --recursive
+          (
+            cd "$base_dir"
+            bash scripts/retry.sh bun ci --ignore-scripts
+            bun run typegen
+          )
+          bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
+        env:
+          NPM_TOKEN: ""
+
       - name: Typecheck-cost baseline guard
         # The --self-test run first proves the parser and comparison logic,
         # so a broken guard cannot pass silently.
         run: |
           bun scripts/typecheck-baseline.ts --self-test
-          bun scripts/typecheck-baseline.ts --check
+          bun test scripts/typecheck-baseline.test.ts
+          bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
 
   # Vite web build. Same rationale as landing-build below: the
   # required code-quality and test checks don't exercise the

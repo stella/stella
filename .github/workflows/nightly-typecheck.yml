@@ -37,3 +37,9 @@ jobs:
         run: bun run typecheck && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"
+
+      - name: Generate types for cumulative type cost
+        run: bun run typegen
+
+      - name: Check cumulative type cost
+        run: bun scripts/typecheck-baseline.ts --check
