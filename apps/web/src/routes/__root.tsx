@@ -8,6 +8,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouterState,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 
@@ -21,6 +22,12 @@ import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import "@/fonts.css";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import {
+  pageDocumentLanguage,
+  resolveDocumentLanguage,
+} from "@/lib/document-language";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import "@/styles/app.css";
 
@@ -91,16 +98,34 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
+  const interfaceLocale = useI18nStore((s) => s.loadedLang);
+  const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
+  const documentLanguage = useRouterState({
+    select: (state) => pageDocumentLanguage(state.matches),
+  });
+  const lang = resolveDocumentLanguage({ documentLanguage, interfaceLocale });
+  const dir = getLangDir(interfaceLocale);
+
+  // Hydration keeps the attributes the server (or prepaint-init.js) put on
+  // the element, so later locale loads and navigations are written here.
+  // Until the first locale has loaded, the server markup and the prepaint
+  // guess stand.
+  useExternalSyncEffect(() => {
+    if (!hasLoadedOnce) {
+      return;
+    }
+    document.documentElement.lang = lang;
+    document.documentElement.dir = dir;
+  }, [dir, hasLoadedOnce, lang]);
 
   return (
     // prepaint-init.js mutates the html element's class, and for RTL
     // locales its lang/dir, before React hydrates the document, so the
     // attribute set never matches the server markup; suppress the
     // per-element warning rather than letting every SSR page log a
-    // recovered hydration error. lang/dir stay declared here so the
-    // server-rendered markup keeps a sane LTR default for clients that
-    // never run the script.
-    <html lang="en" dir="ltr" suppressHydrationWarning>
+    // recovered hydration error. The server renders the document's own
+    // language on pages that show one, and the interface locale otherwise.
+    <html lang={lang} dir={dir} suppressHydrationWarning>
       <head>
         <HeadContent />
 
