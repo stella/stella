@@ -26,7 +26,7 @@
 // initializer is the only place the request may be read.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { Context, Scope, Variable } from "@oxlint/plugins";
+import type { Context, ESTree, Scope, Variable } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
@@ -196,7 +196,10 @@ const isHandedOn = (
   return false;
 };
 
-const isRead = (context: Context, node: AstNode): boolean => {
+const isRead = (
+  context: Context,
+  node: ESTree.IdentifierReference,
+): boolean => {
   const scope = context.sourceCode.getScope(node);
   const reference = scope.references.find(
     (candidate) => candidate.identifier === node,
@@ -257,7 +260,7 @@ export default eslintCompatPlugin({
           MemberExpression(node) {
             if (
               !isAstNode(node) ||
-              node.computed !== false ||
+              node.computed ||
               !isIdentifier(node.property, REQUEST) ||
               insideProbeDeclaration(node)
             ) {
