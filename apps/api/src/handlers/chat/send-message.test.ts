@@ -18,6 +18,7 @@ import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -77,6 +78,7 @@ const rollbackUnpersistedChatSideEffectsMock = mock(
   ) => await realRollbackUnpersistedChatSideEffects(options),
 );
 const sendMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocumentMock,
   loadExternalMcpTools: loadExternalMcpToolsForUserMock,
   loadWebSearchProviders: loadWebSearchProvidersForOrgMock,

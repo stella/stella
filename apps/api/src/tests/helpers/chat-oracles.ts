@@ -12,6 +12,9 @@ export const CHAT_ORACLE = {
   /** Every turn a request starts reaches a settled status once the
    *  request is done. */
   persistedTurnSettles: "chat.persisted.turn-settles",
+  /** Every chat ref the stored thread shows the model names, in every later
+   *  request of the thread, the target it named when first stored. */
+  persistedRefsStable: "chat.persisted.refs-stable",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",

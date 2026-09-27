@@ -1429,6 +1429,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
@@ -1438,6 +1439,7 @@ export type SendMessageDependencies = {
 };
 
 const SEND_MESSAGE_DEPENDENCIES: SendMessageDependencies = {
+  createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocument,
   loadExternalMcpTools: loadExternalMcpToolsForUser,
   loadWebSearchProviders: loadWebSearchProvidersForOrg,
@@ -1693,7 +1695,7 @@ export const createSendMessage = (
       // Refs live as long as the thread, not the request: an interactive
       // answer is a new request, and every ref its history shows the model
       // must keep its target.
-      const refRegistry = createChatRefRegistry(
+      const refRegistry = dependencies.createRefRegistry(
         validationThreadState.refBindings,
       );
       const activeDraftContext = yield* Result.await(

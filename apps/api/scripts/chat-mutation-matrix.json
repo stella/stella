@@ -491,6 +491,20 @@
         "test": "asks again for an approval whose call id an interrupted turn used"
       },
       "oracle": "chat.live.tool-parts-once"
+    },
+    {
+      "id": "refs-keep-targets-across-requests",
+      "fix": "#3935",
+      "behaviour": "Each request restores the refs the thread's stored messages showed the model, so a later request resolves every one to its first target and never re-mints its spelling.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "dependencies.createRefRegistry(\n        validationThreadState.refBindings,\n      )",
+      "replace": "dependencies.createRefRegistry([])",
+      "scenario": {
+        "file": "src/handlers/chat/recorded-conversations.integration.test.ts",
+        "test": "the committed recording of code-mode-refs-mint-first matches the server"
+      },
+      "oracle": "chat.persisted.refs-stable"
     }
   ]
 }
