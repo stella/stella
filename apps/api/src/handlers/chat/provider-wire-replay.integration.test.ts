@@ -26,7 +26,6 @@ import type {
   ProviderWireProvider,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import {
-  wireChatModel,
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
@@ -111,15 +110,17 @@ const replayedModel = (): HarnessModel => ({
   },
 });
 
-const openThread = async (provider: ProviderWireProvider) => {
+/** A thread whose chat model is the one `cassette` was recorded with. */
+const openThread = async (cassette: ProviderWireCassette) => {
+  const { model, provider } = cassette;
   const harness = createApprovalHarness({
     ids,
     model: replayedModel(),
     organizationAIConfig: wireOrgAIConfig({
       apiKey: "cassette-replay-no-credentials",
-      chatModel: wireChatModel(provider),
+      chatModel: model,
       provider,
-      sideModel: wireSideModel(provider),
+      sideModel: wireSideModel(provider, model),
     }),
     safeDb,
     scopedDb,
@@ -153,10 +154,13 @@ const RETRY_TIMEOUT_MS = 60_000;
  * widened `null` on the wire.
  */
 const approveToolCall = async (provider: ProviderWireProvider) => {
-  const { client, harness, threadId } = await openThread(provider);
+  const toolCall = cassetteFor(cassettes, provider, "tool-call");
+  // The answer continues the same conversation, on the same model.
+  expect(textAnswer(provider).model).toBe(toolCall.model);
+  const { client, harness, threadId } = await openThread(toolCall);
   try {
     replay.answerSideCalls(textAnswer(provider).exchanges[0]);
-    replay.serve(cassetteFor(cassettes, provider, "tool-call"));
+    replay.serve(toolCall);
     await client.sendUserMessage(Bun.randomUUIDv7(), "Delete the draft");
     await harness.expectSoundWebClient({ client, threadId });
 
@@ -183,9 +187,10 @@ const approveToolCall = async (provider: ProviderWireProvider) => {
 
 /** A turn the provider rate-limits fails and settles as the page shows it. */
 const rateLimitedTurn = async (provider: ProviderWireProvider) => {
-  const { client, harness, threadId } = await openThread(provider);
+  const rateLimit = cassetteFor(cassettes, provider, "rate-limit");
+  const { client, harness, threadId } = await openThread(rateLimit);
   try {
-    replay.serve(cassetteFor(cassettes, provider, "rate-limit"));
+    replay.serve(rateLimit);
     await client.sendUserMessage(Bun.randomUUIDv7(), "Delete the draft");
     const violations = await harness.checkWebClient({
       client,

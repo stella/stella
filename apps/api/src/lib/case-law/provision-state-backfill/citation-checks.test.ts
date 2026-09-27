@@ -9,6 +9,7 @@ const CONSTRAINT_NAMES = [
   "provision_citations_target_status_values",
   "provision_citations_print_segment_shape",
   "provision_citations_name_segment_shape",
+  "provision_citations_misprint_correction_shape",
 ] as const;
 
 /** A catalog whose constraints become valid as the connection validates them. */
@@ -57,11 +58,12 @@ describe("provision citation CHECK validation", () => {
 
     (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
     (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
+    (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
     expect(
       await PROVISION_CITATION_CHECK_STEP.readCompletion(connection),
     ).toEqual({ type: "complete" });
     expect(
       statements.filter((statement) => statement.includes("VALIDATE")),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 });

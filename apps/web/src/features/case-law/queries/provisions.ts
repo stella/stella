@@ -8,6 +8,9 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const PROVISIONS_PAGE_SIZE = 50;
+const DECISION_PROVISIONS_ACTION = "listPublicDecisionProvisions";
+/** A cursor minted before the decision's provisions were regenerated. */
+const GENERATION_CONFLICT_STATUS = 409;
 /** The endpoint's own maximum page. */
 const PROVISIONS_LINKING_PAGE_SIZE = 100;
 /**
@@ -67,7 +70,7 @@ const fetchDecisionProvisionsPage = async ({
       fetch: { signal },
     });
 
-  return unwrapPublicLawEden(response, "listPublicDecisionProvisions");
+  return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
 };
 
 type DecisionProvisionsPage = Awaited<
@@ -78,13 +81,31 @@ type DecisionProvisionsPage = Awaited<
 export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   infiniteQueryOptions({
     queryKey: decisionProvisionKeys.forDecision(decisionId),
-    queryFn: async ({ pageParam, signal }) =>
-      await fetchDecisionProvisionsPage({
-        cursor: pageParam,
-        decisionId,
-        limit: PROVISIONS_PAGE_SIZE,
-        signal,
-      }),
+    queryFn: async ({ client, pageParam, signal }) => {
+      // Read here rather than through fetchDecisionProvisionsPage: a conflict
+      // is classified from the response before it is unwrapped.
+      const response = await api.case
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+        .provisions.get({
+          query: {
+            limit: PROVISIONS_PAGE_SIZE,
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+      if (
+        pageParam !== null &&
+        response.error?.status === GENERATION_CONFLICT_STATUS
+      ) {
+        // Reset cancels this fetch and starts the active observer again with
+        // no old pages. Clearing data alone would not change its captured pages.
+        await client.resetQueries({
+          queryKey: decisionProvisionKeys.forDecision(decisionId),
+          exact: true,
+        });
+      }
+      return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
+    },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

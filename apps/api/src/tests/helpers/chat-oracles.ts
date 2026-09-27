@@ -27,6 +27,9 @@ export const CHAT_ORACLE = {
    *  stored thread holds one: what only the engine was handed never reaches
    *  a client. */
   wireResultsStored: "chat.wire.results-stored",
+  /** A messages snapshot carries every message the thread's page serves,
+   *  other than one the response writes, exactly as the page serves it. */
+  wireSnapshotServed: "chat.wire.snapshot-served",
   /** (a) The live view holds each message id once. */
   liveMessageIdsUnique: "chat.live.message-ids-unique",
   /** (b) Every interaction the stored thread offers is on screen and

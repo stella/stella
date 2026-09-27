@@ -1,13 +1,15 @@
-import { QueryClient } from "@tanstack/react-query";
+import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
+  decisionProvisionsInfiniteOptions,
   statuteByCitedWork,
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
+import { APIError } from "@/lib/errors/api";
 
 const LISTINA_ELI = "https://www.e-sbirka.cz/eli/cz/sb/1993/2";
 const previousFetch = globalThis.fetch;
@@ -191,4 +193,120 @@ describe("provisions for inline linking", () => {
     ]);
     expect(cursors).toEqual([null, "next"]);
   });
+});
+
+for (const retryMode of ["default", "disabled"] as const) {
+  test(`restarts provision pagination after a generation conflict with ${retryMode} retries`, async () => {
+    const cursors: (string | null)[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
+        const cursor = url.searchParams.get("cursor");
+        cursors.push(cursor);
+        if (cursor === "old-third") {
+          return new Response(
+            JSON.stringify({ type: "conflict", message: "Generation changed" }),
+            { status: 409, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        const firstGeneration =
+          cursors.filter((value) => value === null).length === 1;
+        let anchor;
+        let nextCursor;
+        if (cursor === null && firstGeneration) {
+          anchor = "old-first";
+          nextCursor = "old-second";
+        } else if (cursor === null) {
+          anchor = "new-first";
+          nextCursor = "new-second";
+        } else if (cursor === "old-second") {
+          anchor = "old-second";
+          nextCursor = "old-third";
+        } else {
+          expect(cursor).toBe("new-second");
+          anchor = "new-second";
+          nextCursor = null;
+        }
+        return new Response(
+          JSON.stringify({
+            items: [{ anchor }],
+            limit: 50,
+            nextCursor,
+            previews: [],
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+
+    const queryClient =
+      retryMode === "default" ? new QueryClient() : newQueryClient();
+    const observer = new InfiniteQueryObserver(
+      queryClient,
+      decisionProvisionsInfiniteOptions("019ffba6-1445-7000-bd47-9268acb7ba92"),
+    );
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await observer.refetch();
+      await observer.fetchNextPage();
+      expect(
+        observer
+          .getCurrentResult()
+          .data?.pages.map((page) => page.items.at(0)?.anchor),
+      ).toEqual(["old-first", "old-second"]);
+      await observer.fetchNextPage();
+      expect(
+        observer
+          .getCurrentResult()
+          .data?.pages.map((page) => page.items.at(0)?.anchor),
+      ).toEqual(["new-first"]);
+      await observer.fetchNextPage();
+      expect(
+        observer
+          .getCurrentResult()
+          .data?.pages.map((page) => page.items.at(0)?.anchor),
+      ).toEqual(["new-first", "new-second"]);
+      expect(cursors).toEqual([
+        null,
+        "old-second",
+        "old-third",
+        null,
+        "new-second",
+      ]);
+    } finally {
+      unsubscribe();
+      queryClient.clear();
+    }
+  });
+}
+
+test("preserves the classified API error for a non-generation failure", async () => {
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response(JSON.stringify({ type: "forbidden", message: "Denied" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }),
+    { preconnect: previousFetch.preconnect },
+  );
+
+  const queryClient = newQueryClient();
+  const observer = new InfiniteQueryObserver(
+    queryClient,
+    decisionProvisionsInfiniteOptions("019ffba6-1445-7000-bd47-9268acb7ba92"),
+  );
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    const result = await observer.refetch();
+    expect(APIError.is(result.error)).toBe(true);
+    if (APIError.is(result.error)) {
+      expect(result.error.status).toBe(403);
+    }
+  } finally {
+    unsubscribe();
+    queryClient.clear();
+  }
 });

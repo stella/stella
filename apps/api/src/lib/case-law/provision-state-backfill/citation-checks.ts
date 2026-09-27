@@ -1,13 +1,13 @@
 /**
- * Validation of the five NOT VALID CHECKs added to
- * `case_law_provision_citations` by the provision extraction state migration,
+ * Validation of the NOT VALID CHECKs added to
+ * `case_law_provision_citations` by the provision extraction migrations,
  * as the last step of the provision state backfill (a scheduler job, never
  * the migrate phase). Existing rows satisfy them because the checked columns
  * were added NULL.
  *
- * Cost: each VALIDATE reads the whole table, about 65 million rows, so the
- * five cost about 326 million row visits. PostgreSQL validates each CHECK
- * with a scan of its own either way, so one statement per constraint costs
+ * Cost: each VALIDATE reads the whole table, about 65 million rows.
+ * PostgreSQL validates each CHECK with a scan of its own either way, so one
+ * statement per constraint costs
  * nothing extra and makes every commit a checkpoint: an interrupted run loses
  * at most one scan. VALIDATE CONSTRAINT takes SHARE UPDATE EXCLUSIVE, which
  * blocks neither reads nor writes; it waits only on vacuum and other DDL.
@@ -33,6 +33,7 @@ const CONSTRAINT_NAMES = [
   "provision_citations_target_status_values",
   "provision_citations_print_segment_shape",
   "provision_citations_name_segment_shape",
+  "provision_citations_misprint_correction_shape",
 ] as const;
 
 // A short wait for the lock: vacuum or DDL holding the table means trying

@@ -13,7 +13,10 @@ import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import {
+  decodeMessagePageCursor,
+  loadChatMessagePage,
+} from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import {
@@ -32,6 +35,7 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   findLiveViewViolations,
+  findUnservedSnapshotMessages,
   findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -528,6 +532,10 @@ export const createApprovalHarness = ({
           chunks,
           stored: await reloadView(threadId),
         }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: await readAllMessages(threadId),
+        }),
         ...(await findPersistedViolations(threadId)),
       ],
     } as const;
@@ -611,17 +619,34 @@ export const createApprovalHarness = ({
 
   const readPage = async (
     threadId: SafeId<"chatThread">,
+    before?: SafeId<"chatMessage">,
   ): Promise<RecordedPage> => {
     const page = await loadChatMessagePage({
       safeDb,
       threadId,
       userId: ids.userA1,
+      before,
     });
     if (Result.isError(page)) {
       return panic("The thread's message page failed to load", page.error);
     }
     // The page as the browser receives it: a JSON body.
     return asTestRaw<RecordedPage>(await Response.json(page.value).json());
+  };
+
+  const readAllMessages = async (threadId: SafeId<"chatThread">) => {
+    const messages: unknown[] = [];
+    let page = await readPage(threadId);
+    messages.push(...page.messages);
+    while (page.olderCursor !== null) {
+      const before = decodeMessagePageCursor(page.olderCursor);
+      if (before === null) {
+        return panic("The thread's message page returned an invalid cursor");
+      }
+      page = await readPage(threadId, before);
+      messages.push(...page.messages);
+    }
+    return messages;
   };
 
   type RecordEnd = (
@@ -674,6 +699,10 @@ export const createApprovalHarness = ({
       ...findUnstoredWireResults({
         chunks,
         stored: await reloadView(raw.threadId),
+      }),
+      ...findUnservedSnapshotMessages({
+        chunks,
+        served: await readAllMessages(raw.threadId),
       }),
       ...(await findPersistedViolations(raw.threadId)),
     );

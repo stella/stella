@@ -58,6 +58,9 @@ const readChatTimestamp = (value: string): Date =>
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return panic("A persisted chat message contains a subagent part");
+  }
   if (part.type !== "tool-result") {
     return part;
   }

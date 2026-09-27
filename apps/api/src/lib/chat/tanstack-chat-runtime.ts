@@ -18,6 +18,7 @@ import type {
   StreamChunk,
   StructuredOutputStream,
 } from "@tanstack/ai";
+import { panic } from "better-result";
 
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -135,6 +136,29 @@ export const finishReasonOf = (
     engineChunk.metadata?.tanstack?.finishReason ??
     null
   );
+};
+
+/**
+ * How a run ended, as its `RUN_FINISHED` outcome says; a finish without an
+ * outcome is a success. TanStack reports an aborted routed-subagent run as a
+ * `cancelled` finish, so a finish alone does not mean the run completed.
+ */
+export const runFinishedOutcomeOf = (
+  chunk: PublicRunFinishedChunk,
+): "cancelled" | "completed" | "waiting" => {
+  const outcome = chunk.outcome?.type;
+  switch (outcome) {
+    case undefined:
+    case "success":
+      return "completed";
+    case "interrupt":
+      return "waiting";
+    case "cancelled":
+      return "cancelled";
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled run outcome: ${String(outcome)}`);
+  }
 };
 
 /** Parsed tool arguments. Anthropic delivers these on `TOOL_CALL_END` only. */

@@ -469,9 +469,9 @@
       "fix": "#3885",
       "behaviour": "A snapshot carries each message the engine was handed differently in its stored form, so a result only the engine saw never reaches the client.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  presentStoredHistory({\n    history: storedHistory,",
-      "replace": "  presentStoredHistory({\n    history: { ...storedHistory, storedForms: new Map() },",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "message.role === \"tool\" && servedCallIds.has(message.toolCallId)",
+      "replace": "message.role === \"tool\" && false",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "resumes the new turn's own calls after a message replaced waiting ones"
@@ -540,8 +540,8 @@
       "behaviour": "A run binds the run id its request posted to its turn when it starts.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": ".set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry(), runId })",
-      "replace": ".set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry() })",
+      "search": "...(runId === undefined ? {} : { runId }),",
+      "replace": "...(runId === undefined ? {} : {}),",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
@@ -561,6 +561,20 @@
         "test": "settles a dead owner's turn without waiting for the next message"
       },
       "oracle": "chat.persisted.turn-settles"
+    },
+    {
+      "id": "snapshot-serves-stored-history",
+      "fix": "#3957",
+      "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      served = loaded.value;",
+      "replace": "      served = new Map();",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.wire.snapshot-served"
     }
   ]
 }

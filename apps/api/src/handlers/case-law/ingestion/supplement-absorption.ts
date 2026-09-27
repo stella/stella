@@ -43,6 +43,7 @@ import {
   reopenCitationsForKeys,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
+import { observationStillOwns } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -234,6 +235,8 @@ export type AbsorbStandaloneSupplementRowOutcome =
   | { type: "absorbed"; decisionId: SafeId<"caseLawDecision"> }
   /** A redaction is a takedown and stays exactly as it is. */
   | { type: "redacted"; decisionId: SafeId<"caseLawDecision"> }
+  /** A later observation wrote the row; that observation settles it. */
+  | { type: "superseded"; decisionId: SafeId<"caseLawDecision"> }
   /** A corpus object outlived its delete; the row keeps its document. */
   | { type: "withdraw-incomplete"; decisionId: SafeId<"caseLawDecision"> }
   /** A raw object outlived its delete; the row keeps its raw pointer. */
@@ -249,6 +252,12 @@ type AbsorbStandaloneSupplementRowOptions = {
   kind: DecisionSupplementKind;
   sourceDocumentId: string;
   judgmentId: SafeId<"caseLawDecision">;
+  /**
+   * The source observation the absorption writes as. The row's publisher
+   * hash is part of what it clears, and every write of that hash advances
+   * the row's observation order.
+   */
+  observationOrder: bigint;
   /** Test seam; production withdraws through the corpus stores. */
   withdraw?: typeof withdrawCaseLawDecisionDocument;
 };
@@ -259,6 +268,7 @@ export const absorbStandaloneSupplementRow = async ({
   kind,
   sourceDocumentId,
   judgmentId,
+  observationOrder,
   withdraw = withdrawCaseLawDecisionDocument,
 }: AbsorbStandaloneSupplementRowOptions): Promise<
   Result<AbsorbStandaloneSupplementRowOutcome, DatabaseError>
@@ -273,6 +283,7 @@ export const absorbStandaloneSupplementRow = async ({
           contentHash: caseLawDecisions.contentHash,
           citationKey: caseLawDecisions.citationKey,
           sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+          sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
         })
         .from(caseLawDecisions)
         .where(
@@ -298,6 +309,9 @@ export const absorbStandaloneSupplementRow = async ({
     row.sourceRawS3Key === null
   ) {
     return Result.ok({ type: "absorbed", decisionId: row.id });
+  }
+  if (!observationStillOwns(row, observationOrder)) {
+    return Result.ok({ type: "superseded", decisionId: row.id });
   }
 
   const withdrawn = await withdraw({
@@ -347,19 +361,25 @@ export const absorbStandaloneSupplementRow = async ({
     });
   }
 
-  await scopedDb(async (tx) => {
+  const written = await scopedDb(async (tx) => {
     // The resolver takes the graph lock before citation rows; so does this.
     await lockCitationGraph(tx);
     const locked = (
       await tx
-        .select({ citationKey: caseLawDecisions.citationKey })
+        .select({
+          citationKey: caseLawDecisions.citationKey,
+          sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
+        })
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.id, row.id))
         .for("update")
         .limit(1)
     ).at(0);
     if (locked === undefined) {
-      return;
+      return "written";
+    }
+    if (!observationStillOwns(locked, observationOrder)) {
+      return "superseded";
     }
     // audit: skip — background case-law ingestion; public case-law data
     await tx
@@ -380,6 +400,7 @@ export const absorbStandaloneSupplementRow = async ({
         // row a decision again carries the same publisher hash; without one
         // stored, the refresh check cannot skip it.
         sourceHash: null,
+        sourceObservationOrder: observationOrder,
         // Its prefix was deleted above; the payload is the judgment's now.
         sourceRawS3Key: null,
         sourceRawContentType: null,
@@ -395,6 +416,10 @@ export const absorbStandaloneSupplementRow = async ({
     if (locked.citationKey !== null) {
       await reopenCitationsForKeys(tx, [locked.citationKey]);
     }
+    return "written";
   });
+  if (written === "superseded") {
+    return Result.ok({ type: "superseded", decisionId: row.id });
+  }
   return Result.ok({ type: "absorbed", decisionId: row.id });
 };

@@ -1,15 +1,21 @@
-error-payload.js: toRunErrorRawEvent keeps the provider's HTTP status next to
-the body it forwards, forwards an AWS service exception's name, fault side
-and status (it has no body), and forwards the status alone when the error has
-no body. `code` precedence (#985) is unchanged.
-Upstream: to be raised as an issue (a status field on RUN_ERROR).
-Remove when a @tanstack/ai release carries the status on RUN_ERROR.
+1. processor.js: a tool-call part stores the canonical TOOL_CALL_END.input
+   as its arguments, including after the call is already input-complete, so
+   a strict-mode null on an optional field never reaches validation.
+2. tool-calls.js: while a step waits for approvals, a call that needs no
+   approval runs now, like a client request, so no server call ends a run
+   without its result.
+3. error-payload.js: toRunErrorRawEvent keeps the provider's HTTP status next
+   to the body it forwards, forwards an AWS service exception's name, fault
+   side and status (it has no body), and forwards the status alone when the
+   error has no body. `code` precedence (#985) is unchanged.
+Upstream: still absent in @tanstack/ai 0.61.0. Remove each hunk when a
+@tanstack/ai release does the same.
 
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
-index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b342445fbe 100644
+index a213fe273bfcbb1b1bd1b96dc67fb5bd57eb71b6..a789bf79f3832ac5aec5c23f7742a0c36799473a 100644
 --- a/dist/esm/activities/chat/stream/processor.js
 +++ b/dist/esm/activities/chat/stream/processor.js
-@@ -37,6 +37,15 @@ function interruptBatchHasGeneric(interrupts) {
+@@ -39,6 +39,15 @@ function interruptBatchHasGeneric(interrupts) {
  		return binding !== null && typeof binding === "object" && !Array.isArray(binding) && binding.kind === "generic";
  	});
  }
@@ -25,7 +31,7 @@ index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b3
  /**
  * StreamProcessor - State machine for processing AI response streams
  *
-@@ -837,19 +846,22 @@ var StreamProcessor = class StreamProcessor {
+@@ -1125,19 +1134,22 @@ var StreamProcessor = class StreamProcessor {
  		if (!msgState) return;
  		const input = chunk.input !== void 0 ? chunk.input : tanstackMetadata(chunk)?.input;
  		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
@@ -57,10 +63,10 @@ index 1339fa028d5cad2b586bc9c838b5b9f97f74204e..ac6ac06b1181ac7aae9d1e3e6fe6e9b3
  					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
  				});
 diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
-index 240c7373c037311973b4e304e59071a6b7660a56..d982a23b7ca8cf8c009f9db383c3f40e36d39b38 100644
+index be146e30a827771c31ba3fbdbe02e9da4b6fb6dc..fcb52b689aaa1cd47b106e4eeac6204246e5b0a9 100644
 --- a/dist/esm/activities/chat/tools/tool-calls.js
 +++ b/dist/esm/activities/chat/tools/tool-calls.js
-@@ -420,9 +420,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
+@@ -471,9 +471,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
  			continue;
  		}
  		if (hasPendingApprovals) {

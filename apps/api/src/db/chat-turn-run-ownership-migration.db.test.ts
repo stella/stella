@@ -54,6 +54,12 @@ const setRun = async (database: PGlite, id: string, runId: string) =>
     runId,
   ]);
 
+const rejectionOf = async (operation: Promise<unknown>): Promise<unknown> =>
+  await operation.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
 test("binds each run id to one turn per organization, accepts owner-lost, and replays", async () => {
   const database = new PGlite();
   await database.exec(PRE_MIGRATION);
@@ -69,16 +75,20 @@ test("binds each run id to one turn per organization, accepts owner-lost, and re
       [reason],
     );
   }
-  await expect(
+  const invalidReason = await rejectionOf(
     database.query(
       "UPDATE chat_turns SET interruption_reason = 'gone' WHERE id = '018f0000-0000-7000-8000-000000000001'",
     ),
-  ).rejects.toThrow(/chat_turns_interruption_reason_values_check/u);
+  );
+  expect(String(invalidReason)).toMatch(
+    /chat_turns_interruption_reason_values_check/u,
+  );
 
   await setRun(database, "018f0000-0000-7000-8000-000000000001", "run-1");
-  await expect(
+  const duplicateRun = await rejectionOf(
     setRun(database, "018f0000-0000-7000-8000-000000000002", "run-1"),
-  ).rejects.toThrow(/chat_turns_org_run_id_uidx/u);
+  );
+  expect(String(duplicateRun)).toMatch(/chat_turns_org_run_id_uidx/u);
   // Another organization may hold the same client-minted id.
   await database.query(
     "UPDATE chat_turns SET organization_id = 'org-b', run_id = 'run-1' WHERE id = '018f0000-0000-7000-8000-000000000002'",
