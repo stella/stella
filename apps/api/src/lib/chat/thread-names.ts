@@ -25,7 +25,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 // message appends the new ones (`recordChatThreadNamesOnTx`).
 
 /** Every name a thread's history holds. */
-export type ChatThreadNames = {
+type ChatThreadNames = {
   /** Chat refs shown to the model, with their targets. */
   refBindings: ChatRefBinding[];
   /** Ref spellings shown without a known target; they resolve to nothing. */
@@ -72,7 +72,7 @@ const reportLedgerDefect = (message: string): void => {
  * bound to two targets, or shown by a message stored before bindings
  * existed, is retired: it resolves to nothing instead of to a guess.
  */
-export const deriveChatThreadNames = async ({
+const deriveChatThreadNames = async ({
   threadId,
   tx,
 }: {
