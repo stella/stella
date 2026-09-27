@@ -1064,34 +1064,43 @@ const runPageOperation = async (
           ok: false,
         };
       }
-      if (
-        nameFor(target) !== action.target.name ||
-        roleFor(target) !== action.target.role ||
-        (action.target.href !== undefined &&
-          hrefFor(target) !== action.target.href) ||
-        (action.target.context !== undefined &&
-          contextFor(target) !== action.target.context)
-      ) {
-        return {
-          error: "The referenced element changed after the page snapshot.",
-          code: errorCode.staleSnapshot,
-          ok: false,
-        };
-      }
-      if (!visible(target) || concealedInTree(target)) {
-        return {
-          error: "The referenced element is no longer visible on the page.",
-          code: errorCode.staleSnapshot,
-          ok: false,
-        };
-      }
-      if (isDisabled(target)) {
-        return {
-          code: errorCode.executionFailed,
-          error:
-            "The control is disabled; the page does not accept this action.",
-          ok: false,
-        };
+      // Why the element can no longer take the action; null when it still
+      // matches the snapshot and accepts it.
+      const targetRefusal = (element: Element) => {
+        if (
+          nameFor(element) !== action.target.name ||
+          roleFor(element) !== action.target.role ||
+          (action.target.href !== undefined &&
+            hrefFor(element) !== action.target.href) ||
+          (action.target.context !== undefined &&
+            contextFor(element) !== action.target.context)
+        ) {
+          return {
+            error: "The referenced element changed after the page snapshot.",
+            code: errorCode.staleSnapshot,
+            ok: false,
+          } as const;
+        }
+        if (!visible(element) || concealedInTree(element)) {
+          return {
+            error: "The referenced element is no longer visible on the page.",
+            code: errorCode.staleSnapshot,
+            ok: false,
+          } as const;
+        }
+        if (isDisabled(element)) {
+          return {
+            code: errorCode.executionFailed,
+            error:
+              "The control is disabled; the page does not accept this action.",
+            ok: false,
+          } as const;
+        }
+        return null;
+      };
+      const refusal = targetRefusal(target);
+      if (refusal !== null) {
+        return refusal;
       }
       const sensitiveFieldRefusal = {
         code: errorCode.sensitiveField,
@@ -1598,114 +1607,230 @@ export const executeBrowserCommand = async (
   return await runBrowserCommand(controllerId, command, options, progress);
 };
 
+type ControlledTab = NonNullable<Awaited<ReturnType<typeof readControlledTab>>>;
+
+/**
+ * `dispatched` is set once a click, fill, select, key press or navigation
+ * has been handed to the page or tab; from then on a failure cannot say it
+ * did not run.
+ */
+type CommandProgress = { dispatched: boolean };
+
+type CommandRun = Pick<ExecuteBrowserCommandOptions, "budget" | "signal"> & {
+  controllerId: string;
+  progress: CommandProgress;
+};
+
+/** Whether the command still addresses the tab and page chat last saw. */
+const readCommandIdentity = async (
+  command: BrowserControlCommand,
+  controlledTab: ControlledTab | null,
+  observedTab: BrowserObservedTab | null,
+) => {
+  const tabId = controlledTab?.tab.id;
+  const isNavigation =
+    command.action === BROWSER_CONTROL_ACTION.open ||
+    command.action === BROWSER_CONTROL_ACTION.goBack;
+  return checkCommandIdentity({
+    command,
+    controlledTab:
+      controlledTab === null || tabId === undefined
+        ? null
+        : {
+            adopted: controlledTab.state.adopted,
+            tabId,
+            url: controlledTab.tab.url,
+          },
+    ...(isNavigation && controlledTab !== null && tabId !== undefined
+      ? {
+          navigation: {
+            live: await readTopDocument(tabId),
+            settled: controlledTab.state.settled,
+          },
+        }
+      : {}),
+    observedTab,
+    snapshot: controlledTab?.state.snapshot ?? null,
+  });
+};
+
+const runOpen = async (
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.open }
+  >,
+  { budget, controllerId, progress, signal }: CommandRun,
+): Promise<BrowserControlResult> => {
+  const requested = parseControllableUrl(command.url);
+  if (requested === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
+    );
+  }
+  const overBudget = await budget.charge();
+  if (overBudget !== null) {
+    return budgetExceeded(overBudget);
+  }
+  progress.dispatched = true;
+  const opened = await openControlledTab(controllerId, requested, signal);
+  if (opened.status === "cancelled") {
+    await budget.refund();
+    return cancelled();
+  }
+  if (opened.status === "unavailable") {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      "Chrome could not create a tab for this page.",
+    );
+  }
+  if (isStopped(signal)) {
+    return outcomeUnknown(STOPPED_AFTER_DISPATCH);
+  }
+  if (!opened.loaded) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.timedOut,
+      "The page did not finish loading in time.",
+    );
+  }
+  // The user approved the requested origin, not wherever it redirected.
+  // Reading the landing page needs its own approved snapshot.
+  const landed = await chrome.tabs.get(opened.tabId);
+  const landedUrl =
+    landed.url === undefined ? null : parseControllableUrl(landed.url);
+  if (landedUrl === null || landedUrl.origin !== requested.origin) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.redirected,
+      `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
+    );
+  }
+  return await readSnapshot({
+    controllerId,
+    tabId: opened.tabId,
+    textOffset: 0,
+  });
+};
+
+const runGoBack = async (
+  tabId: number,
+  state: ControlledTabState,
+  { budget, controllerId, progress, signal }: CommandRun,
+): Promise<BrowserControlResult> => {
+  const navigation = createTabNavigationObserver(tabId);
+  try {
+    const overBudget = await budget.charge();
+    if (overBudget !== null) {
+      return budgetExceeded(overBudget);
+    }
+    await forgetSnapshot(state);
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    progress.dispatched = true;
+    await navigateBack(tabId);
+    return await readOutcome(navigation, controllerId, tabId, signal);
+  } finally {
+    navigation.dispose();
+  }
+};
+
+const runElementAction = async (
+  command: BrowserControlElementCommand,
+  { state, tab, tabId }: ControlledTab & { tabId: number },
+  documentId: string | null,
+  { budget, controllerId, progress, signal }: CommandRun,
+): Promise<BrowserControlResult> => {
+  if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+      UNSUPPORTED_PAGE_MESSAGE,
+    );
+  }
+  const reference = parseElementReference(command.target.ref);
+  if (!reference || documentId === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      "The element reference is malformed.",
+    );
+  }
+  const frame = await checkActionFrame(tabId, reference.frameId, documentId);
+  if (!frame.ok) {
+    return frame.error;
+  }
+  const overBudget = await budget.charge();
+  if (overBudget !== null) {
+    return budgetExceeded(overBudget);
+  }
+  const navigation = createTabNavigationObserver(tabId);
+  try {
+    await forgetSnapshot(state);
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    progress.dispatched = true;
+    const outcome = await injectDomAction(
+      tabId,
+      documentId,
+      reference.path,
+      frame.origin,
+      command,
+    );
+    if (outcome.status === "refused") {
+      // The page refused before acting, so the snapshot still describes it
+      // and nothing was spent.
+      await writeControlledTabState(state);
+      await budget.refund();
+      return browserControlError(outcome.code, outcome.error);
+    }
+    if (outcome.status === "unobserved") {
+      return outcomeUnknown(
+        "Chrome lost the page before the action reported back.",
+      );
+    }
+    return await readOutcome(navigation, controllerId, tabId, signal);
+  } finally {
+    navigation.dispose();
+  }
+};
+
 const runBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
   { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
-  // `dispatched` is set once a click, fill, select, key press or navigation
-  // has been handed to the page or tab; from then on a failure cannot say
-  // it did not run.
-  progress: { dispatched: boolean },
+  progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
+  const run: CommandRun = { budget, controllerId, progress, signal };
   try {
     if (isStopped(signal)) {
       return cancelled();
     }
     const controlledTab = await readControlledTab(controllerId);
-    const tabId = controlledTab?.tab.id;
-    const isNavigation =
-      command.action === BROWSER_CONTROL_ACTION.open ||
-      command.action === BROWSER_CONTROL_ACTION.goBack;
-    const identity = checkCommandIdentity({
+    const identity = await readCommandIdentity(
       command,
-      controlledTab:
-        controlledTab === null || tabId === undefined
-          ? null
-          : {
-              adopted: controlledTab.state.adopted,
-              tabId,
-              url: controlledTab.tab.url,
-            },
-      ...(isNavigation && controlledTab !== null && tabId !== undefined
-        ? {
-            navigation: {
-              live: await readTopDocument(tabId),
-              settled: controlledTab.state.settled,
-            },
-          }
-        : {}),
+      controlledTab,
       observedTab,
-      snapshot: controlledTab?.state.snapshot ?? null,
-    });
+    );
     if (identity.status !== "ok") {
       return identityRefusal(identity.status);
     }
-
     if (command.action === BROWSER_CONTROL_ACTION.open) {
-      const requested = parseControllableUrl(command.url);
-      if (requested === null) {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-          "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
-        );
-      }
-      const overBudget = await budget.charge();
-      if (overBudget !== null) {
-        return budgetExceeded(overBudget);
-      }
-      progress.dispatched = true;
-      const opened = await openControlledTab(controllerId, requested, signal);
-      if (opened.status === "cancelled") {
-        await budget.refund();
-        return cancelled();
-      }
-      if (opened.status === "unavailable") {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-          "Chrome could not create a tab for this page.",
-        );
-      }
-      if (isStopped(signal)) {
-        return outcomeUnknown(STOPPED_AFTER_DISPATCH);
-      }
-      if (!opened.loaded) {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.timedOut,
-          "The page did not finish loading in time.",
-        );
-      }
-      // The user approved the requested origin, not wherever it redirected.
-      // Reading the landing page needs its own approved snapshot.
-      const landed = await chrome.tabs.get(opened.tabId);
-      const landedUrl =
-        landed.url === undefined ? null : parseControllableUrl(landed.url);
-      if (landedUrl === null || landedUrl.origin !== requested.origin) {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.redirected,
-          `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
-        );
-      }
-      return await readSnapshot({
-        controllerId,
-        tabId: opened.tabId,
-        textOffset: 0,
-      });
+      return await runOpen(command, run);
     }
-
     if (!controlledTab) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.noControlledTab,
         "Open a page with stella before using this action.",
       );
     }
+    const tabId = controlledTab.tab.id;
     if (tabId === undefined) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.tabClosed,
         "The controlled Chrome tab is no longer available.",
       );
     }
-    const { state, tab } = controlledTab;
-
     if (command.action === BROWSER_CONTROL_ACTION.snapshot) {
       return await readSnapshot({
         controllerId,
@@ -1713,83 +1838,15 @@ const runBrowserCommand = async (
         textOffset: command.textOffset ?? 0,
       });
     }
-
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
-      const navigation = createTabNavigationObserver(tabId);
-      try {
-        const overBudget = await budget.charge();
-        if (overBudget !== null) {
-          return budgetExceeded(overBudget);
-        }
-        await forgetSnapshot(state);
-        if (isStopped(signal)) {
-          await budget.refund();
-          return cancelled();
-        }
-        progress.dispatched = true;
-        await navigateBack(tabId);
-        return await readOutcome(navigation, controllerId, tabId, signal);
-      } finally {
-        navigation.dispose();
-      }
+      return await runGoBack(tabId, controlledTab.state, run);
     }
-
-    if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
-        UNSUPPORTED_PAGE_MESSAGE,
-      );
-    }
-    const reference = parseElementReference(command.target.ref);
-    if (!reference || identity.documentId === null) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-        "The element reference is malformed.",
-      );
-    }
-    const frame = await checkActionFrame(
-      tabId,
-      reference.frameId,
+    return await runElementAction(
+      command,
+      { ...controlledTab, tabId },
       identity.documentId,
+      run,
     );
-    if (!frame.ok) {
-      return frame.error;
-    }
-    const overBudget = await budget.charge();
-    if (overBudget !== null) {
-      return budgetExceeded(overBudget);
-    }
-    const navigation = createTabNavigationObserver(tabId);
-    try {
-      await forgetSnapshot(state);
-      if (isStopped(signal)) {
-        await budget.refund();
-        return cancelled();
-      }
-      progress.dispatched = true;
-      const outcome = await injectDomAction(
-        tabId,
-        identity.documentId,
-        reference.path,
-        frame.origin,
-        command,
-      );
-      if (outcome.status === "refused") {
-        // The page refused before acting, so the snapshot still describes it
-        // and nothing was spent.
-        await writeControlledTabState(state);
-        await budget.refund();
-        return browserControlError(outcome.code, outcome.error);
-      }
-      if (outcome.status === "unobserved") {
-        return outcomeUnknown(
-          "Chrome lost the page before the action reported back.",
-        );
-      }
-      return await readOutcome(navigation, controllerId, tabId, signal);
-    } finally {
-      navigation.dispose();
-    }
   } catch {
     if (progress.dispatched) {
       return outcomeUnknown(
