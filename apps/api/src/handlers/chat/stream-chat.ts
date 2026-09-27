@@ -132,6 +132,7 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -145,6 +146,10 @@ import {
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import {
+  ToolCallIdLedger,
+  toolCallIdLedgerMetadata,
+} from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -252,6 +257,11 @@ type StreamChatProps = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  /**
+   * Every tool call id the thread already holds, the turns outside `messages`
+   * included, so no call of this run reuses one.
+   */
+  threadToolCallIds: readonly string[];
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
@@ -360,6 +370,7 @@ export const streamChat = async ({
   tenantWorkspaceIds,
   thirdPartyBoundary,
   threadId,
+  threadToolCallIds,
   tools,
   externalMcpToolSource,
   userId,
@@ -528,6 +539,8 @@ export const streamChat = async ({
     },
     thirdPartyBoundary,
     threadId,
+    // One ledger for the run: every request of it, a fallback's included.
+    toolCallIds: new ToolCallIdLedger(threadToolCallIds),
     userId,
     workspaceId,
   });
@@ -913,6 +926,7 @@ type RunChatAttemptsProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -938,6 +952,7 @@ const runChatAttempts = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
@@ -968,6 +983,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1016,6 +1032,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1057,6 +1074,7 @@ type RunChatAttemptProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1084,6 +1102,7 @@ const runChatAttempt = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
@@ -1151,8 +1170,9 @@ const runChatAttempt = async function* ({
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* streamChatChunks({
-      adapter,
+      adapter: withProviderStreamContract(adapter),
       messages: preparedMessages,
+      metadata: toolCallIdLedgerMetadata(toolCallIds),
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
@@ -1184,6 +1204,7 @@ const runChatAttempt = async function* ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     messages: preparedMessages,
+    metadata: toolCallIdLedgerMetadata(toolCallIds),
     tools: projectChatToolSchemasForProvider({
       modelTools,
       provider: model.provider,
