@@ -91,3 +91,12 @@ the route-smoke suite (`/conventions-perf`).
 When handing work back, say what you ran and what it showed: the command,
 the report's findings, and the screenshot or measurement paths. A before and
 after pair is the evidence for a performance claim.
+
+In a pull request that changes what a user sees, attach the screenshots:
+reference each one in the body as `![What it shows](./path.png)` and pass
+`--attach ./path.png` to `gh pr create` or `gh pr edit`; `gh` uploads it and
+rewrites the reference. When a change alters an existing screen, take the
+"before" shots before editing it. Screenshots of the seeded stack show only
+fixture data, which is what may appear in this public repository; never
+attach anything else. If an upload fails, `gh` exits non-zero: retry the edit
+rather than leaving a broken image.
