@@ -189,7 +189,9 @@ describe("sanitizeResult — decision identifiers", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: sanitized.caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: sanitized.ecli ?? null,
+        jurisdiction: sanitized.country,
         metadata: sanitized.metadata,
       }),
     ).toEqual([
@@ -262,6 +264,15 @@ describe("sanitizeResult — docket grammar", () => {
         caseNumberIsPlaceholder: true,
       }),
     ).toEqual({ type: "kept" });
+  });
+
+  test("a primary reference other than a docket is never read against the grammar", () => {
+    const input = {
+      ...observed("USA", "347 U.S. 483."),
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    };
+    expect(observedDocketOf(input)).toEqual({ type: "kept" });
+    expect(sanitizeResult(input).caseNumber).toBe("347 U.S. 483.");
   });
 });
 

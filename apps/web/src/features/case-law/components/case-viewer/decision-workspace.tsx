@@ -57,6 +57,7 @@ type DecisionWorkspaceDecision = Pick<
   PublicCaseLawDecision,
   | keyof DecisionDocumentState
   | "caseNumber"
+  | "caseNumberType"
   | "country"
   | "court"
   | "courtAbbreviation"
@@ -149,6 +150,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const annotationTarget = {
     type: "decision",
     caseNumber: decision.caseNumber,
+    caseNumberType: decision.caseNumberType,
     country: decision.country,
     court: decision.court,
     decisionDate: decision.decisionDate,

@@ -10,6 +10,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {
   DocumentAst,
   ParagraphBlock,
@@ -55,6 +56,7 @@ const absent = {
 /** A decision as the read answers it, with no publisher text beside it. */
 const textDecision = (overrides: Partial<TextDecision> = {}): TextDecision => ({
   caseNumber: "1 As 1/2026",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   court: "Test court",
   courtAbbreviation: null,
   courtTier: "other",

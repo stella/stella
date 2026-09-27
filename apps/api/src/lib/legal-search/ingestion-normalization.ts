@@ -34,6 +34,11 @@ import {
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import { assertDecisionLanguageIdentity } from "@/api/lib/legal-search/decision-language-identity";
+import {
+  DEFAULT_PRIMARY_REFERENCE_TYPE,
+  parsePrimaryReferenceType,
+} from "@/api/lib/legal-search/decision-primary-reference";
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
@@ -118,8 +123,9 @@ export const markListingOnly = (
 /**
  * How an observed docket is stored, read against its jurisdiction's grammar.
  *
- * - `kept`: it parses as written, is a placeholder, or its jurisdiction has
- *   no grammar; stored as written.
+ * - `kept`: it parses as written, is a placeholder, is a primary reference
+ *   other than a docket, or its jurisdiction has no grammar; stored as
+ *   written.
  * - `trimmed`: a tail the grammar has no place for (`- II.`, a stray dot) is
  *   cut, and the docket is stored without it.
  * - `unkeyed`: the same tail, left in place because the observation names no
@@ -137,10 +143,18 @@ export type ObservedDocket =
 export const observedDocketOf = (
   result: Pick<
     IngestionResult,
-    "caseNumber" | "caseNumberIsPlaceholder" | "country" | "sourceDocumentId"
+    | "caseNumber"
+    | "caseNumberIsPlaceholder"
+    | "caseNumberType"
+    | "country"
+    | "sourceDocumentId"
   >,
 ): ObservedDocket => {
-  if (result.caseNumberIsPlaceholder === true) {
+  if (
+    result.caseNumberIsPlaceholder === true ||
+    (result.caseNumberType !== undefined &&
+      result.caseNumberType !== DEFAULT_PRIMARY_REFERENCE_TYPE)
+  ) {
     return { type: "kept" };
   }
   const stored = storedDecisionDocketOf(
@@ -313,6 +327,8 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     });
   }
 
+  assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
+
   const docket = observedDocketOf(result);
   return {
     ...result,
@@ -320,6 +336,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
       docket.type === "trimmed"
         ? docket.caseNumber
         : result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
     identifiers,
     sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(

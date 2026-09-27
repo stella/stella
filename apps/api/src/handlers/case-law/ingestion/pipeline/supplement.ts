@@ -29,6 +29,7 @@ import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion
 import { detachSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SupplementTargetKey } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { assertDocketKeyedSupplementAllowed } from "@/api/lib/legal-search/decision-language-identity";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
@@ -172,6 +173,7 @@ export const processSupplement = async ({
 }: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
   const { sourceDocumentId } = supplement.document;
   const document = sanitizeResult(supplement.document);
+  assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {
     sourceId,
     court: document.court,

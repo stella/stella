@@ -10,6 +10,8 @@ import {
   type SQL,
 } from "drizzle-orm";
 
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -42,6 +44,8 @@ import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
+import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
+import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -119,6 +123,8 @@ export type ReplayRowOutcome =
 export type ReplayDecisionRow = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
+  country: string;
   sourceDocumentId: string | null;
   language: string;
   court: string;
@@ -279,6 +285,8 @@ export const selectReplayPage = async ({
       .select({
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
+        caseNumberType: caseLawDecisions.caseNumberType,
+        country: caseLawDecisions.country,
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
         language: caseLawDecisions.language,
         court: caseLawDecisions.court,
@@ -691,6 +699,14 @@ const replayWouldChangeRow = async ({
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
+  // Derived from the payload like the text is, so a parser that reads the
+  // reference or its kind differently changes the row.
+  if (
+    row.caseNumber !== result.caseNumber ||
+    row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
+  ) {
+    return true;
+  }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
     existingSourceHash: row.sourceHash,
@@ -758,16 +774,13 @@ const replayRow = async ({
     });
   }
 
-  const regeneratedIdentity = {
+  const regeneratedIdentity = decisionReplayIdentity(row.country, {
     caseNumber: reparsed.result.caseNumber,
+    country: reparsed.result.country,
     language: reparsed.result.language,
     sourceDocumentId: reparsed.result.sourceDocumentId ?? null,
-  };
-  const selectedIdentity = {
-    caseNumber: row.caseNumber,
-    language: row.language,
-    sourceDocumentId: row.sourceDocumentId,
-  };
+  });
+  const selectedIdentity = decisionReplayIdentity(row.country, row);
   if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
     return {
       ...base,

@@ -30,6 +30,10 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  DECISION_PRIMARY_REFERENCE_TYPES,
+} from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -1353,6 +1357,23 @@ const searchTotalProjection = v.variant("type", [
   ),
 ]);
 
+// What `caseNumber` is, present only where it is not a docket: a reporter or
+// neutral citation.
+const caseNumberTypeProjection = v.optional(
+  v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
+);
+
+// Every reference a decision whose primary is not a docket answers to, its
+// docket included where it has one. Absent beside a docket primary.
+const decisionIdentifiersProjection = v.optional(
+  v.array(
+    v.strictObject({
+      type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
+      value: v.string(),
+    }),
+  ),
+);
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
@@ -1476,6 +1497,7 @@ const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   citationsFrom: v.array(
     v.strictObject({
       id: passthroughId(),
@@ -1507,6 +1529,7 @@ const caseLawDecisionProjection = v.strictObject({
   // UUID — never a Stella tenant id, so it is forwarded unchanged.
   documentUrl: v.nullable(publicUrl()),
   ecli: v.nullable(v.string()),
+  identifiers: decisionIdentifiersProjection,
   language: v.string(),
   metadata: unenumeratedJson(),
   textFields: v.strictObject(decisionTextFieldProjections),
@@ -1669,6 +1692,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.
           appUrl: v.nullable(v.string()),
           caseNumber: v.string(),
+          caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
           court: v.string(),
           decisionDate: v.nullable(v.string()),

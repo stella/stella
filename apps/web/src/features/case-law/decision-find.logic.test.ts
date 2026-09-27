@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { findTableRows } from "@/components/workspaces/table/table-find.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -27,6 +28,7 @@ const decision = ({
   id: string;
 }): Decision => ({
   caseNumber,
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationCount: 4,
   country: "CZ",
   court: "Nejvyšší soud",
