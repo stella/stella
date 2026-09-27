@@ -118,6 +118,7 @@ const messageView = (message: UIMessage): MessageView => {
       case "document":
       case "image":
       case "structured-output":
+      case "subagent":
       case "ui-resource":
       case "video": {
         // Attachments and rich parts round-trip as stored parts; the chat

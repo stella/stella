@@ -24,10 +24,14 @@ import { isRecord } from "@/api/lib/type-guards";
 type CallIdCarrier = "engine" | "names" | "none" | "starts" | "value";
 
 export const CALL_ID_CARRIER = {
+  ACTIVITY_DELTA: "none",
+  ACTIVITY_SNAPSHOT: "none",
   CUSTOM: "value",
   MESSAGES_SNAPSHOT: "engine",
+  RAW: "none",
   REASONING_ENCRYPTED_VALUE: "none",
   REASONING_END: "none",
+  REASONING_MESSAGE_CHUNK: "none",
   REASONING_MESSAGE_CONTENT: "none",
   REASONING_MESSAGE_END: "none",
   REASONING_MESSAGE_START: "none",
@@ -39,10 +43,17 @@ export const CALL_ID_CARRIER = {
   STATE_SNAPSHOT: "none",
   STEP_FINISHED: "none",
   STEP_STARTED: "none",
+  SUBAGENT_ERROR: "engine",
+  SUBAGENT_FINISHED: "engine",
+  SUBAGENT_STARTED: "engine",
+  TEXT_MESSAGE_CHUNK: "none",
   TEXT_MESSAGE_CONTENT: "none",
   TEXT_MESSAGE_END: "none",
   TEXT_MESSAGE_START: "none",
   TOOL_CALL_ARGS: "names",
+  // TanStack's stream processor does not read the AG-UI chunk shorthand, so
+  // a call named only here never enters the thread.
+  TOOL_CALL_CHUNK: "none",
   TOOL_CALL_END: "names",
   TOOL_CALL_RESULT: "names",
   TOOL_CALL_START: "starts",

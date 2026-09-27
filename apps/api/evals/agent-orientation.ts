@@ -1640,9 +1640,7 @@ const runModelTurn = async ({
         tools,
       }),
     onChunk: (chunk) => {
-      // Exhaustive over ChatStream's real chunk union (`AGUIEvent`, 22
-      // members — narrower than the full `EventType` enum, which also
-      // declares deprecated/unused values this stream never emits) instead
+      // Exhaustive over ChatStream's real chunk union (`AGUIEvent`) instead
       // of an if-chain: a renamed or newly added chunk type fails
       // typechecking at the `satisfies never` default instead of being
       // silently ignored, which for THIS eval would misclassify a run as
@@ -1701,8 +1699,21 @@ const runModelTurn = async ({
         case EventType.REASONING_MESSAGE_CONTENT:
         case EventType.REASONING_MESSAGE_END:
         case EventType.REASONING_ENCRYPTED_VALUE:
-        case EventType.REASONING_END: {
+        case EventType.REASONING_END:
+        case EventType.REASONING_MESSAGE_CHUNK:
+        case EventType.ACTIVITY_SNAPSHOT:
+        case EventType.ACTIVITY_DELTA:
+        case EventType.RAW:
+        case EventType.SUBAGENT_STARTED:
+        case EventType.SUBAGENT_FINISHED:
+        case EventType.SUBAGENT_ERROR: {
           break;
+        }
+        // The engine expands neither shorthand, so text or a call carried
+        // only here would be missed rather than scored.
+        case EventType.TEXT_MESSAGE_CHUNK:
+        case EventType.TOOL_CALL_CHUNK: {
+          return panic(`Unexpected ${chunk.type} in an engine stream`);
         }
         default: {
           chunk satisfies never;
