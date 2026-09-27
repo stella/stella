@@ -150,6 +150,62 @@ test("paths outside the API image do not schedule its smoke", () => {
   expect(imageSmokePlan(["apps/api/src/server.ts"])).toEqual(["true", "false"]);
 });
 
+const generatedOutputGuardPlan = (
+  files: readonly string[],
+  suiteDepth = "fast",
+) =>
+  runSelector(
+    files,
+    ["web_api_types_required", "published_exports_required"],
+    suiteDepth,
+  );
+
+test("the generated-output guards run when their inputs change", () => {
+  for (const file of [
+    "packages/ui/src/button.tsx",
+    "patches/some-package@1.0.0.patch",
+    "bun.lock",
+    "bunfig.toml",
+    "package.json",
+    ".github/workflows/ci.yml",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "true"]);
+  }
+  for (const file of [
+    "apps/api/src/server.ts",
+    "apps/api/tsconfig.json",
+    "apps/web/package.json",
+    "apps/web/src/generated/api-routes.gen.ts",
+    "types/wasm.d.ts",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "false"]);
+  }
+  for (const file of [
+    "scripts/check-published-exports.ts",
+    "scripts/prepare-publish.ts",
+    "scripts/publish-manifest.ts",
+    "scripts/published-export-guards.ts",
+    ".npmrc",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "true"]);
+  }
+});
+
+test("the generated-output guards skip unrelated pull requests but never full depth", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/landing/src/pages/index.astro",
+    "scripts/typecheck-baseline.json",
+    "docs/changelog/x.md",
+  ]) {
+    expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "false"]);
+    expect(generatedOutputGuardPlan([file], "full"), file).toEqual([
+      "true",
+      "true",
+    ]);
+  }
+});
+
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
 const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
@@ -475,6 +531,29 @@ const jobSteps = (job: unknown) =>
     }),
     job,
   ).steps;
+
+test("ci-checks gates each generated-output guard on its planned scope", () => {
+  const steps = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), if: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-checks"],
+  ).steps;
+  for (const [name, scope] of [
+    ["Web API types drift guard", "web_api_types_required"],
+    ["Published export map guard", "published_exports_required"],
+  ] as const) {
+    const condition = steps.find((step) => step.name === name)?.if ?? "";
+    expect(condition, name).toContain(
+      `needs.ci-plan.outputs.${scope} == 'true'`,
+    );
+    expect(condition, name).toContain(
+      "needs.ci-plan.outputs.package_checks_required == 'true'",
+    );
+  }
+});
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>

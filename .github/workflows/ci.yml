@@ -56,8 +56,10 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
+      web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
@@ -183,8 +185,10 @@ jobs:
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
               echo "package_checks_required=true"
+              echo "published_exports_required=true"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=true"
+              echo "web_api_types_required=true"
               echo "web_build_required=true"
               echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
@@ -212,8 +216,10 @@ jobs:
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
               echo "package_checks_required=true"
+              echo "published_exports_required=false"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=false"
+              echo "web_api_types_required=false"
               echo "web_build_required=false"
               echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
@@ -251,8 +257,10 @@ jobs:
           migration_rehearsal_required=false
           mobile_build_required=false
           model_catalog_drift_required=false
+          published_exports_required=false
           release_typecheck_required=false
           stack_redaction_browsers_required=false
+          web_api_types_required=false
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
@@ -348,6 +356,24 @@ jobs:
                 web_image_smoke_required=true
                 ;;
             esac
+            # The web API types drift guard compiles the API program from
+            # apps/api/tsconfig.json (API sources, the workspace packages
+            # they import, the root ambient types, installed type
+            # packages) and compares the printout with the committed file
+            # under apps/web/src/generated, importing by name the packages
+            # apps/web/package.json lists.
+            case "$file" in
+              apps/api/*|apps/web/package.json|apps/web/src/generated/*|packages/*|patches/*|types/*|bun.lock|bunfig.toml|package.json|.github/workflows/ci.yml)
+                web_api_types_required=true
+                ;;
+            esac
+            # The published export map guard builds, prepares and packs
+            # workspace packages with the publish scripts it imports.
+            case "$file" in
+              packages/*|patches/*|scripts/check-published-exports.ts|scripts/prepare-publish.ts|scripts/publish-manifest.ts|scripts/published-export-guards.ts|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+                published_exports_required=true
+                ;;
+            esac
           done
 
           # A pull request builds the API image for arm64, the production
@@ -356,6 +382,13 @@ jobs:
           api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
           if [[ "$SUITE_DEPTH" == "full" || "$version_changed" == "true" ]]; then
             api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
+          fi
+
+          # Full depth (the merge queue, a `ci:full` pull request) runs the
+          # slow generated-output guards whatever the diff touched.
+          if [[ "$SUITE_DEPTH" == "full" ]]; then
+            published_exports_required=true
+            web_api_types_required=true
           fi
 
           # The production e2e shards consume web-build's artifact, so any
@@ -382,8 +415,10 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
             echo "package_checks_required=$package_checks_required"
+            echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
+            echo "web_api_types_required=$web_api_types_required"
             echo "web_build_required=$web_build_required"
             echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
@@ -1022,7 +1057,9 @@ jobs:
           bun apps/api/scripts/export-capability-catalog.ts --check
 
       - name: Web API types drift guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.web_api_types_required == 'true'
         # apps/web type-checks against API types printed from the API's own
         # inference instead of compiling the API. `--check` fails when the
         # committed file is stale and asserts each printed type is identical
@@ -1232,7 +1269,9 @@ jobs:
       # subpath from the built dist, so a missing build entry or an unshipped
       # file fails here rather than after publication.
       - name: Published export map guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
         run: |
           bun scripts/check-published-exports.ts packages/auth-model
           bun scripts/check-published-exports.ts packages/ai-catalog
