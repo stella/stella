@@ -172,7 +172,7 @@ import {
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -1785,7 +1785,7 @@ export const processServerChatStream = async function* ({
           panic("Unhandled TanStack completed stream event");
         }
         if (chunk.usage) {
-          usage = tokenUsageFromRunFinishedChunk(chunk);
+          usage = tokenUsageFromTerminalChunk(chunk);
         }
         // TanStack's agent loop can emit continuation events after a model
         // run finishes, notably `approval-requested` for a gated server tool.
@@ -1812,6 +1812,9 @@ export const processServerChatStream = async function* ({
       if (lifecycle === "failed") {
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
+        }
+        if (chunk.usage) {
+          usage = tokenUsageFromTerminalChunk(chunk);
         }
         await terminalize({
           flushProcessor: true,
@@ -1988,20 +1991,22 @@ const createTerminalResponseMessage = ({
     });
   }
 
-  const persistableMessage =
-    responseMessage === null
-      ? toPersistableChatMessage({
-          id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-          parts: [],
-          role: "assistant",
-        })
-      : attachUsageMetadata({
-          message: normalizeFinalAssistantMessageId({
+  // A turn that failed before its first part still spent what the provider
+  // reported, so the usage rides on the message it writes either way.
+  const persistableMessage = attachUsageMetadata({
+    message:
+      responseMessage === null
+        ? toPersistableChatMessage({
+            id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+            parts: [],
+            role: "assistant",
+          })
+        : normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
           }),
-          usage,
-        });
+    usage,
+  });
   return attachTerminalTurnOutcome({
     message: persistableMessage,
     turnOutcome: outcome,

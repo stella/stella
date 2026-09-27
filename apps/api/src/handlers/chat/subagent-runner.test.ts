@@ -246,6 +246,24 @@ describe("a subagent run that ends without a complete answer", () => {
     });
   });
 
+  test("adds the usage a failed step reported to the steps before it", async () => {
+    const { result } = await runScriptedSubagent([
+      lookupStep,
+      {
+        code: "incomplete-stream",
+        message: "The provider stream ended with an error.",
+        type: "error",
+        usage: ANSWER_STEP_USAGE,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      outcome: "failed",
+      reason: "run-error",
+      usage: { completionTokens: 45, promptTokens: 230, totalTokens: 275 },
+    });
+  });
+
   test("reports an answer cut at the length limit as truncated, not as a result", async () => {
     const { result } = await runScriptedSubagent([
       lookupStep,

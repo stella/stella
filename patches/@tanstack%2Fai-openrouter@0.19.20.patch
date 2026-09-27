@@ -1,12 +1,14 @@
 A chat stream that ends without a finish_reason, or with finish_reason error,
 ends in a RUN_ERROR (code incomplete-stream) instead of finishing as stop or
-content_filter. Upstream PR to be opened; remove when released.
+content_filter. That RUN_ERROR, and the one the catch reports, carry the
+usage the stream reported before it failed. Upstream PR to be opened; remove
+when released.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 62d6348462ff673af7777ae5a616dd9de0081c3a..ce6454a544d4725b831a2a475359a051a6705d60 100644
+index 62d6348462ff673af7777ae5a616dd9de0081c3a..b5ae9f8eddbb41e5a05f11ddb4fffc4199b98591 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -748,7 +748,24 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -748,7 +748,29 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  						content: accumulatedReasoning
  					};
  				}
@@ -15,12 +17,17 @@ index 62d6348462ff673af7777ae5a616dd9de0081c3a..ce6454a544d4725b831a2a475359a051
 +				// is a generation that failed mid-stream: neither is a finished answer.
 +				if (pendingFinishReason === void 0 || pendingFinishReason === "error") {
 +					const message = pendingFinishReason === "error" ? "The provider stream ended with an error." : "The provider stream ended before a finish reason.";
++					const reportedUsage = buildOpenRouterUsage(lastUsage);
 +					yield {
 +						type: EventType.RUN_ERROR,
 +						model: lastModel || options.model,
 +						timestamp: Date.now(),
 +						message,
 +						code: "incomplete-stream",
++						...reportedUsage && { usage: {
++							...reportedUsage,
++							...extractUsageCost(lastUsage)
++						} },
 +						error: {
 +							message,
 +							code: "incomplete-stream"
@@ -32,3 +39,22 @@ index 62d6348462ff673af7777ae5a616dd9de0081c3a..ce6454a544d4725b831a2a475359a051
  				const finalUsage = buildOpenRouterUsage(lastUsage);
  				yield {
  					type: EventType.RUN_FINISHED,
+@@ -766,6 +788,7 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+ 		} catch (error) {
+ 			const errorPayload = toRunErrorPayload(error, `${this.name}.processStreamChunks failed`);
+ 			const rawEvent = toRunErrorRawEvent(error);
++			const reportedUsage = buildOpenRouterUsage(lastUsage);
+ 			options.logger.errors(`${this.name}.processStreamChunks fatal`, {
+ 				error: errorPayload,
+ 				source: `${this.name}.processStreamChunks`
+@@ -777,6 +800,10 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+ 				message: errorPayload.message,
+ 				...errorPayload.code !== void 0 && { code: errorPayload.code },
+ 				...rawEvent !== void 0 && { rawEvent },
++				...reportedUsage && { usage: {
++					...reportedUsage,
++					...extractUsageCost(lastUsage)
++				} },
+ 				error: {
+ 					message: errorPayload.message,
+ 					...errorPayload.code !== void 0 && { code: errorPayload.code }

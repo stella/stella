@@ -1,13 +1,45 @@
 1. stop_reason refusal finishes as content_filter; it read as stop.
 2. The max_tokens RUN_ERROR carries the message_delta usage, so a reply cut
    off at the output ceiling still reports what it spent.
+3. A stream with no stop reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of no terminal event, or a stop when
+   message_stop arrives alone, and every RUN_ERROR carries the latest
+   usage message_start or message_delta reported.
 Upstream PR to be opened; remove when released.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index f8f43dfe1a313bce8e3d8144081952c84534f822..6cf4dcfc4903773f6fed68e12928acbc8337aedb 100644
+index f8f43dfe1a313bce8e3d8144081952c84534f822..a94c358c50e7ffd3b34aee8f37a505dcfc62578e 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -832,12 +832,24 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -508,9 +508,12 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 		let hasEmittedTextMessageStart = false;
+ 		let hasEmittedRunFinished = false;
+ 		let currentBlockType = null;
++		let reportedUsage;
+ 		try {
+ 			for await (const event of stream) {
+ 				logger.provider(`provider=anthropic type=${event.type}`, { chunk: event });
++				if (event.type === "message_start" && event.message.usage) reportedUsage = event.message.usage;
++				if (event.type === "message_delta" && event.usage) reportedUsage = event.usage;
+ 				if (!hasEmittedRunStarted) {
+ 					hasEmittedRunStarted = true;
+ 					yield {
+@@ -779,14 +782,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 							timestamp: Date.now()
+ 						};
+ 					}
+-					if (!hasEmittedRunFinished) yield {
+-						type: EventType.RUN_FINISHED,
+-						runId,
+-						threadId,
+-						model,
+-						timestamp: Date.now(),
+-						finishReason: "stop"
+-					};
+ 				} else if (event.type === "message_delta") {
+ 					if (event.delta.stop_reason) {
+ 						hasEmittedRunFinished = true;
+@@ -832,12 +827,24 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  									timestamp: Date.now(),
  									message: "The response was cut off because the maximum token limit was reached.",
  									code: "max_tokens",
@@ -32,3 +64,31 @@ index f8f43dfe1a313bce8e3d8144081952c84534f822..6cf4dcfc4903773f6fed68e12928acbc
  							default: yield {
  								type: EventType.RUN_FINISHED,
  								runId,
+@@ -851,6 +858,19 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 					}
+ 				}
+ 			}
++			// No message_delta carried a stop reason: the stream was cut off.
++			if (!hasEmittedRunFinished) yield {
++				type: EventType.RUN_ERROR,
++				model,
++				timestamp: Date.now(),
++				message: "The provider stream ended before a stop reason.",
++				code: "incomplete-stream",
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
++				error: {
++					message: "The provider stream ended before a stop reason.",
++					code: "incomplete-stream"
++				}
++			};
+ 		} catch (error) {
+ 			const err = error;
+ 			const rawEvent = toRunErrorRawEvent(error);
+@@ -865,6 +885,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 				message: err.message || "Unknown error occurred",
+ 				code: err.code || String(err.status),
+ 				...rawEvent !== void 0 && { rawEvent },
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
+ 				error: {
+ 					message: err.message || "Unknown error occurred",
+ 					code: err.code || String(err.status)

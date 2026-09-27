@@ -9,7 +9,11 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
-import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
+import {
+  generateChatObject,
+  streamChatChunks,
+} from "@/api/lib/chat/tanstack-chat-runtime";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
@@ -1005,6 +1009,119 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       errorSpy.mockRestore();
       warnSpy.mockRestore();
     }
+  });
+
+  test("a model call that fails after reporting usage is metered once, and its run error keeps the usage", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+            for: async () => [{ id: workspaceId }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    });
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "chat.stream",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_failed_call",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const reported = {
+      promptTokens: 24,
+      completionTokens: 2,
+      totalTokens: 26,
+    } satisfies TokenUsage;
+    const adapter = {
+      kind: "text",
+      name: "cut-off",
+      model: "cut-off",
+      "~types": {
+        providerOptions: {},
+        inputModalities: ["text"],
+        messageMetadataByModality: {},
+        toolCapabilities: [],
+        toolCallMetadata: {},
+        systemPromptMetadata: undefined,
+      },
+      async *chatStream({ runId, threadId }) {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: runId ?? "cut-off-run",
+          threadId: threadId ?? "cut-off-thread",
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.RUN_ERROR,
+          message: "The provider stream ended with an error.",
+          code: "incomplete-stream",
+          usage: reported,
+        } satisfies StreamChunk;
+      },
+      structuredOutput: () => {
+        throw new Error("This run streams");
+      },
+    } satisfies AnyTextAdapter;
+
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of streamChatChunks({
+      adapter,
+      messages: [{ role: "user", content: "Reply." }],
+      middleware: [callbacks.middleware],
+    })) {
+      chunks.push(chunk);
+    }
+
+    const runError = chunks.find((chunk) => chunk.type === EventType.RUN_ERROR);
+    if (runError?.type !== EventType.RUN_ERROR) {
+      throw new TypeError("The run reported no run error");
+    }
+    expect(tokenUsageFromTerminalChunk(runError)).toMatchObject(reported);
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(insertedRows).toHaveLength(1);
+    // One record for the one model call: the failure, with what it reported.
+    expect(generations).toHaveLength(1);
+    expect(generations[0]?.properties).toMatchObject({
+      $ai_input_tokens: reported.promptTokens,
+      $ai_is_error: true,
+      $ai_output_tokens: reported.completionTokens,
+    });
   });
 
   test("captures one generation per model call and sums the run's usage", async () => {
