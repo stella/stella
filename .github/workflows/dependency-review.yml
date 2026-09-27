@@ -28,6 +28,12 @@ on:
   merge_group:
     types: [checks_requested]
 
+# A newer push to the same pull request supersedes its review. Each merge
+# group runs on a ref of its own, so a pull request run never cancels one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
