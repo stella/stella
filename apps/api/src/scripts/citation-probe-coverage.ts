@@ -9,11 +9,13 @@ export const coverageMatcher = (
 ): ((candidate: string) => boolean) => {
   const extractedKeys = new Set(extractedTexts.map(bareCitationKey));
   return (candidate) => {
-    if (extractedTexts.some((text) => candidate.includes(text))) {
+    if (extractedTexts.some((text) => candidate.startsWith(text))) {
       return true;
     }
-    return extractCitations([{ index: 0, text: candidate }]).some((citation) =>
-      extractedKeys.has(bareCitationKey(citation.citationText)),
+    return extractCitations([{ index: 0, text: candidate }]).some(
+      (citation) =>
+        candidate.startsWith(citation.citationText) &&
+        extractedKeys.has(bareCitationKey(citation.citationText)),
     );
   };
 };

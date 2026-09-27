@@ -40,5 +40,10 @@ describe("coverageMatcher", () => {
     expect(
       coverageMatcher(["sp. zn. 8 C/18/2008"])("sp. zn. 8 C/18 2008"),
     ).toBe(false);
+    expect(
+      coverageMatcher(["sp. zn. 8 C/18/2008"])(
+        "sp. zn. 8 C/18 2008 sp. zn. 8 C 18/2008",
+      ),
+    ).toBe(false);
   });
 });
