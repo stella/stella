@@ -616,7 +616,10 @@ const reset = async (root: string, args: readonly string[]) => {
   const runtime = await requireRuntime(root);
   if (
     runtime.dockerProject === null ||
-    !WORKTREE_PROJECT_PATTERN.test(runtime.dockerProject)
+    !WORKTREE_PROJECT_PATTERN.test(runtime.dockerProject) ||
+    // At offset 0 the stack uses the DATABASE_URL from apps/api/.env, which a
+    // worktree shares with the root checkout.
+    runtime.infraOffset === 0
   ) {
     return fail(
       "Only a worktree's own stack can be reset; this one may hold your data",

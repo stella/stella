@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -37,7 +38,11 @@ const runtimePath = (rootDir: string) => devStatePath(rootDir, RUNTIME_FILE);
 
 export const writeDevRuntime = (rootDir: string, runtime: DevRuntime) => {
   mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
-  writeFileSync(runtimePath(rootDir), `${JSON.stringify(runtime, null, 2)}\n`);
+  // Written beside and renamed into place, so a reader polling the file never
+  // sees it truncated or half written.
+  const temporaryPath = `${runtimePath(rootDir)}.${String(process.pid)}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(runtime, null, 2)}\n`);
+  renameSync(temporaryPath, runtimePath(rootDir));
 };
 
 // Only the runner that wrote the file removes it, so a runner that failed to

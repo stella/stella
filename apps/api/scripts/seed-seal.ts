@@ -23,7 +23,8 @@
 
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
@@ -98,6 +99,7 @@ const isFresh = async () => {
 const digests = await readTableDigests();
 switch (mode) {
   case "write": {
+    mkdirSync(path.dirname(sealPath), { recursive: true });
     writeFileSync(sealPath, `${JSON.stringify(digests, null, 2)}\n`);
     break;
   }

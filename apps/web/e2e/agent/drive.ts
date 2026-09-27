@@ -14,7 +14,7 @@
 import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Page, Response } from "@playwright/test";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -159,7 +159,9 @@ const capture = async ({
     CAPTURE_LOG,
     `${JSON.stringify({
       label,
-      path: screenshotPath,
+      // Real path, matching the one agent:attach resolves, so a symlinked
+      // checkout path cannot make a genuine capture look unrecorded.
+      path: realpathSync(screenshotPath),
       sha256: createHash("sha256").update(image).digest("hex"),
       textEntered,
       url: page.url(),
