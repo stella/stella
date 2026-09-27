@@ -6,8 +6,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
  * The jurisdictions the organization says it practises in, as onboarding and
  * `set_practice_jurisdictions` recorded them.
  *
- * One reader for the whole MCP surface: the onboarding hint asks for them when
- * they are missing, and the OpenAI-compatible `search` (which takes a query
+ * One reader for the whole MCP surface: the onboarding next step asks for them
+ * when they are missing, and the OpenAI-compatible `search` (which takes a query
  * and nothing else) uses them to decide which corpus countries a query is
  * about. Two readers would be two answers to "what does this firm practise".
  *

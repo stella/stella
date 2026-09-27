@@ -119,7 +119,6 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
-  InternalToolSuccess,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -1096,40 +1095,25 @@ export const STELLA_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const buildOnboardingHintText = () =>
-  `Your stella organization has not configured its practice jurisdictions ` +
-  `yet. Call \`set_practice_jurisdictions\` (input: array of ` +
-  `\`{ country_code, is_primary }\`) to enable jurisdiction-aware tools, or ` +
-  `have the user complete onboarding at ${getAppBaseUrl()}.`;
+const buildOnboardingNextStep = () =>
+  `This organization has no practice jurisdictions yet. Call ` +
+  `${SET_PRACTICE_JURISDICTIONS_TOOL} with \`jurisdictions: [{ country_code, ` +
+  `is_primary }]\` to enable jurisdiction-aware tools, or have the user ` +
+  `complete onboarding at ${getAppBaseUrl()}.`;
 
-const withOnboardingHintIfApplicable = async <TData>({
-  context,
-  isEmpty,
-  result,
-}: {
-  context: McpRequestContext;
-  isEmpty: boolean;
-  result: InternalToolSuccess<TData>;
-}): Promise<InternalToolSuccess<TData>> => {
-  if (!isEmpty) {
-    return result;
-  }
+/**
+ * The onboarding step an empty result carries as its `nextStep` while the
+ * organization has no practice jurisdictions. It is a field of the tool's own
+ * output contract, so the model sees it whichever result representation the
+ * host shows. Callers ask only for an empty result.
+ */
+const onboardingNextStep = async (
+  context: McpRequestContext,
+): Promise<{ nextStep?: string }> => {
   const jurisdictions = await loadPracticeJurisdictions(context);
-  if (jurisdictions.length > 0) {
-    return result;
-  }
-  const onboardingHint = buildOnboardingHintText();
-  const additionalText = result.mcp?.additionalText;
-  return {
-    ...result,
-    mcp: {
-      ...result.mcp,
-      additionalText:
-        additionalText === undefined
-          ? [onboardingHint]
-          : [...additionalText, onboardingHint],
-    },
-  };
+  return jurisdictions.length > 0
+    ? {}
+    : { nextStep: buildOnboardingNextStep() };
 };
 
 // The list_matters cursor is the boundary matter id alone; the query
@@ -1251,15 +1235,16 @@ const handleListMattersTool: TypedMcpToolHandler<
   }));
 
   // An empty page carries no tenant text to anonymize, so return the finished
-  // result directly (and let the onboarding hint attach). A non-empty page runs
-  // through the egress pipeline, which anonymizes each matter's name under its
-  // own workspace scope in anonymized mode. The matter id is its workspace id.
+  // result directly (with the onboarding next step, if any). A non-empty page
+  // runs through the egress pipeline, which anonymizes each matter's name under
+  // its own workspace scope in anonymized mode. The matter id is its workspace
+  // id.
   if (matters.length === 0) {
-    return await withOnboardingHintIfApplicable({
-      context,
-      isEmpty: true,
-      result: toolDataResult({ matters, nextCursor: page.nextCursor }),
-    });
+    return toolDataResult({
+      matters,
+      nextCursor: page.nextCursor,
+      ...(await onboardingNextStep(context)),
+    } satisfies v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>);
   }
 
   const payload = {
@@ -2066,7 +2051,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     };
   });
 
-  const payload = toolDataResult({
+  return toolDataResult({
     facets: single === undefined ? null : single.facets,
     searches,
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
@@ -2107,13 +2092,8 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       single === undefined
         ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
         : single.total,
+    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
-
-  return await withOnboardingHintIfApplicable({
-    context,
-    isEmpty: merged.length === 0,
-    result: payload,
-  });
 };
 
 type DecisionCursorState = {

@@ -19,6 +19,7 @@ import {
   flagKey,
   flagValueProvided,
   parseInputObject,
+  parsePayload,
   readRequestReceipt,
   requestIdLine,
   reservedFlagUsageError,
@@ -234,6 +235,23 @@ describe("buildArgsFromFlags (S3)", () => {
     if (!result.ok) {
       expect(result.message).toContain("--matter-id");
     }
+  });
+});
+
+describe("parsePayload", () => {
+  const textResult = (payload: unknown) => ({
+    content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+  });
+
+  test("unwraps an invoke_capability `result` envelope", () => {
+    const page = { items: [{ id: "a" }], nextCursor: "c1" };
+    expect(parsePayload(textResult({ result: page }))).toEqual(page);
+    expect(parsePayload(textResult({ result: [1, 2] }))).toEqual([1, 2]);
+  });
+
+  test("leaves a payload with other keys beside `result` whole", () => {
+    const payload = { result: "ok", receipt: "r1" };
+    expect(parsePayload(textResult(payload))).toEqual(payload);
   });
 });
 

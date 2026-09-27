@@ -6,6 +6,7 @@ import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
@@ -20,6 +21,7 @@ import {
   resolveWindowBounds,
   serializeToolResult,
   structuredErrorResult,
+  toolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
@@ -276,22 +278,45 @@ describe("serializeToolResult", () => {
     expect(result.structuredContent).toEqual(data);
   });
 
-  test("keeps prose text while deriving structured content from its contract", () => {
-    const data = { entityId: "doc_1" };
+  test("derives the one text block from the validated structured object", () => {
+    // Handler key order and an undeclared key differ from the contract; the
+    // text still says exactly what structuredContent says.
     const contract = defineMcpToolOutput(
-      v.strictObject({ entityId: v.string() }),
+      v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      {
-        status: "success",
-        data,
-        mcp: { primaryText: "Choose a file." },
-      },
+      toolDataResult({
+        nextStep: "Choose a file.",
+        undeclared: true,
+        entityId: "doc_1",
+      }),
       contract,
     );
 
-    expect(result.content).toEqual([{ type: "text", text: "Choose a file." }]);
-    expect(result.structuredContent).toEqual(data);
+    expect(result.structuredContent).toEqual({
+      entityId: "doc_1",
+      nextStep: "Choose a file.",
+    });
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify(result.structuredContent) },
+    ]);
+  });
+
+  test("has no prose side channel beside the result data", () => {
+    // Guidance the model needs is a field of the output contract: a host that
+    // shows structuredContent never shows extra text blocks.
+    // @ts-expect-error -- a success is its data; there is no presentation text.
+    toolDataResult({ entityId: "doc_1" }, { primaryText: "Choose a file." });
+    const smuggled: InternalToolSuccess = {
+      status: "success",
+      data: { entityId: "doc_1" },
+      // @ts-expect-error -- a success carries no `mcp` presentation options.
+      mcp: { additionalText: ["Choose a file."] },
+    };
+
+    expect(serializeToolResult(smuggled).content).toEqual([
+      { type: "text", text: JSON.stringify({ entityId: "doc_1" }) },
+    ]);
   });
 
   test("projects arbitrary handler data into a stable structured envelope", () => {
@@ -304,8 +329,10 @@ describe("serializeToolResult", () => {
       contract,
     );
 
-    expect(result.content).toEqual([{ type: "text", text: "[1,2]" }]);
     expect(result.structuredContent).toEqual({ result: [1, 2] });
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify({ result: [1, 2] }) },
+    ]);
   });
 
   test("fails closed when projected content violates the advertised schema", () => {

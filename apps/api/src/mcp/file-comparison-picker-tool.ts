@@ -31,7 +31,9 @@ export const FILE_COMPARISON_APP_RESOURCE_URI =
 
 const OPEN_FILE_COMPARISON_INPUT_SCHEMA = nullAsAbsent(v.strictObject({}));
 
-const OPEN_FILE_COMPARISON_OUTPUT_SCHEMA = v.strictObject({});
+const OPEN_FILE_COMPARISON_OUTPUT_SCHEMA = v.strictObject({
+  nextStep: v.string(),
+});
 
 export type OpenFileComparisonOutput = v.InferInput<
   typeof OPEN_FILE_COMPARISON_OUTPUT_SCHEMA
@@ -86,10 +88,11 @@ export const handleOpenFileComparisonTool: TypedMcpToolHandler<
   }
 
   return await Promise.resolve(
-    toolDataResult({} satisfies OpenFileComparisonOutput, {
-      primaryText:
-        "Choose the original and the revised .docx in the comparison panel; " +
-        "once both are uploaded, run compare_documents with the source it reports.",
-    }),
+    toolDataResult({
+      nextStep:
+        "Have the user choose the original and the revised .docx in the " +
+        `comparison panel, then call ${FILE_COMPARISON_TRANSPORT.compareToolName} ` +
+        "with the source the panel reports.",
+    } satisfies OpenFileComparisonOutput),
   );
 };

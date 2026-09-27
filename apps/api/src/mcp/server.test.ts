@@ -390,6 +390,11 @@ describe("handleMcpHttpRequest", () => {
     if (definitions.length !== 2) {
       panic("Canonical upload and picker tool definitions are missing");
     }
+    const pickerResult = {
+      entityId: "00000000-0000-4000-8000-0000000e0001",
+      workspaceId: "workspace_1",
+      nextStep: "Have the user choose a file in the upload panel.",
+    };
 
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
@@ -427,13 +432,8 @@ describe("handleMcpHttpRequest", () => {
               },
             }
           : {
-              content: [
-                { type: "text", text: "Choose a file in the upload panel." },
-              ],
-              structuredContent: {
-                entityId: "00000000-0000-4000-8000-0000000e0001",
-                workspaceId: "workspace_1",
-              },
+              content: [{ type: "text", text: JSON.stringify(pickerResult) }],
+              structuredContent: pickerResult,
             },
     );
 
@@ -500,10 +500,7 @@ describe("handleMcpHttpRequest", () => {
         },
         { timeout: 2000 },
       );
-      expect(opened.structuredContent).toEqual({
-        entityId: "00000000-0000-4000-8000-0000000e0001",
-        workspaceId: "workspace_1",
-      });
+      expect(opened.structuredContent).toEqual(pickerResult);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "documents",
       });
