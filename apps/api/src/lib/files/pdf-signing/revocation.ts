@@ -15,6 +15,7 @@
  * freshness rests on the validity window.
  */
 
+import * as asn1js from "asn1js";
 import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
@@ -24,6 +25,7 @@ import {
   accessLocations,
   carriedCertificates,
   crlDistributionPoints,
+  digestNameForOid,
   OCSP_ACCESS_METHOD,
   parseCertificate,
 } from "@/api/lib/files/pdf-signing/certificate-chain";
@@ -168,22 +170,26 @@ const ocspStatus = async (
     if (!(await signedByAuthorizedResponder(basic, issuer, now))) {
       return null;
     }
-    const engine = pkijs.getCrypto(true);
     for (const single of basic.tbsResponseData.responses) {
+      const hashAlgorithm = digestNameForOid(
+        single.certID.hashAlgorithm.algorithmId,
+      );
+      if (hashAlgorithm === null) {
+        continue;
+      }
       const certID = new pkijs.CertID();
       await certID.createForCertificate(certificate, {
-        hashAlgorithm: engine.getAlgorithmByOID(
-          single.certID.hashAlgorithm.algorithmId,
-          true,
-          "CertID.hashAlgorithm",
-        ).name,
+        hashAlgorithm,
         issuerCertificate: issuer,
       });
+      // CertStatus is a CHOICE of tagged values; its tag is the answer.
+      const certStatus: unknown = single.certStatus;
       if (
         single.certID.isEqual(certID) &&
-        isCurrent(single.thisUpdate, single.nextUpdate, now)
+        isCurrent(single.thisUpdate, single.nextUpdate, now) &&
+        certStatus instanceof asn1js.BaseBlock
       ) {
-        return single.certStatus.idBlock.tagNumber;
+        return certStatus.idBlock.tagNumber;
       }
     }
     return null;

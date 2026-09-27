@@ -50,6 +50,18 @@ const ISSUER_MAX_BYTES = 64 * 1024;
 /** Phase 1 runs while the desktop waits; issuer downloads get this long. */
 const ISSUER_FETCH_BUDGET_MS = 20_000;
 
+/** The digests a CMS signature or an OCSP CertID may name, by OID. */
+const DIGEST_NAMES: ReadonlyMap<string, string> = new Map([
+  ["1.3.14.3.2.26", "SHA-1"],
+  ["2.16.840.1.101.3.4.2.1", "SHA-256"],
+  ["2.16.840.1.101.3.4.2.2", "SHA-384"],
+  ["2.16.840.1.101.3.4.2.3", "SHA-512"],
+]);
+
+/** The WebCrypto name of a digest OID, or `null` for one not supported. */
+export const digestNameForOid = (oid: string): string | null =>
+  DIGEST_NAMES.get(oid) ?? null;
+
 /**
  * The certificates a CMS SignedData or a BasicOCSPResponse carries. Both
  * declare the set OPTIONAL (RFC 5652 5.1, RFC 6960 4.2.1), so its absence
@@ -140,7 +152,7 @@ const basicConstraints = (certificate: pkijs.Certificate) => {
     } else if (pathLenConstraint instanceof asn1js.Integer) {
       pathLength = pathLenConstraint.valueBlock.valueDec;
     }
-    return { ca: parsed.cA === true, pathLength };
+    return { ca: Boolean(parsed.cA), pathLength };
   }).unwrapOr(null);
 };
 

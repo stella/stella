@@ -24,7 +24,7 @@ import {
   PdfStream,
 } from "@libpdf/core";
 import type { PDF, PdfObject } from "@libpdf/core";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
 import { Temporal } from "@stll/time";
@@ -219,6 +219,10 @@ const toUserSpace = (
     case 270: {
       return [right - v, top - u];
     }
+    default: {
+      rotation satisfies never;
+      return panic(`Unhandled rotation: ${String(rotation)}`);
+    }
   }
 };
 
@@ -352,8 +356,8 @@ const retagSubsetFont = (pdf: PDF, fontRef: PdfRef, tag: string) => {
   const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
   const retag = (dict: PdfDict | undefined, key: string) => {
     const name = dict?.getName(key, resolve)?.value;
-    if (dict !== undefined && name !== undefined && name.includes("+")) {
-      dict.set(key, PdfName.of(`${tag}${name.slice(name.indexOf("+"))}`));
+    if (name?.includes("+") === true) {
+      dict?.set(key, PdfName.of(`${tag}${name.slice(name.indexOf("+"))}`));
     }
   };
   const type0 = pdf.getObject(fontRef);
@@ -511,7 +515,8 @@ export const addSignatureStamp = ({
   }
   const font = pdf.embedFont(fontBytes);
   const unitWidth = (text: string) =>
-    [...text].reduce(
+    // Glyph widths are per code point: the font maps code points to glyphs.
+    Array.from(text).reduce(
       (total, character) =>
         total + font.getWidth(character.codePointAt(0) ?? 0) / 1000,
       0,

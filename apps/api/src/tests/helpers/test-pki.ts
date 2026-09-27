@@ -7,6 +7,7 @@
  */
 
 import * as asn1js from "asn1js";
+import { panic } from "better-result";
 import * as pkijs from "pkijs";
 
 const COMMON_NAME_OID = "2.5.4.3";
@@ -208,7 +209,11 @@ export const createTestCrl = async (
   crl.thisUpdate = new pkijs.Time({ type: 0, value: thisUpdate });
   crl.nextUpdate = new pkijs.Time({ type: 0, value: nextUpdate });
   await crl.sign(issuer.privateKey, "SHA-256");
-  return new Uint8Array(crl.toSchema(true).toBER(false));
+  const schema: unknown = crl.toSchema(true);
+  if (!(schema instanceof asn1js.Sequence)) {
+    return panic("A CRL encodes as a SEQUENCE");
+  }
+  return new Uint8Array(schema.toBER(false));
 };
 
 const ID_PKIX_OCSP_BASIC = "1.3.6.1.5.5.7.48.1.1";

@@ -247,7 +247,7 @@ describe("finalizing a PDF signature", () => {
       );
 
     const first = await post();
-    if (!(typeof first === "object" && first !== null && "code" in first)) {
+    if (!(typeof first === "object" && "code" in first)) {
       throw new Error("Expected the transient failure to return a status");
     }
     expect(first.code).toBe(503);
@@ -295,7 +295,7 @@ describe("finalizing a PDF signature", () => {
       }),
     );
 
-    if (!(typeof result === "object" && result !== null && "code" in result)) {
+    if (!(typeof result === "object" && "code" in result)) {
       throw new Error("Expected the refusal to return a status");
     }
     expect(result.code).toBe(422);

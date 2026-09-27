@@ -10,7 +10,7 @@
 
 import { Result } from "better-result";
 
-export const settleForLibpdf = async <T, E>(
+export const settleForLibpdf = async <T, E extends Error>(
   pending: Promise<Result<T, E>>,
 ): Promise<T> => {
   const settled = await pending;

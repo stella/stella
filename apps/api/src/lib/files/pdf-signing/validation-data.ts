@@ -27,9 +27,7 @@ export type ValidationMaterial = {
 
 const isSelfSigned = (der: Uint8Array) => {
   const certificate = parseCertificate(der);
-  return (
-    certificate !== null && certificate.subject.isEqual(certificate.issuer)
-  );
+  return certificate?.subject.isEqual(certificate.issuer) === true;
 };
 
 /**

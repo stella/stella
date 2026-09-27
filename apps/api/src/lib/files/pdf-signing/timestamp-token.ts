@@ -13,7 +13,10 @@ import * as asn1js from "asn1js";
 import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
-import { carriedCertificates } from "@/api/lib/files/pdf-signing/certificate-chain";
+import {
+  carriedCertificates,
+  digestNameForOid,
+} from "@/api/lib/files/pdf-signing/certificate-chain";
 
 /** RFC 5652 id-signedData. */
 const SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
@@ -91,6 +94,19 @@ const octetStringBytes = (value: asn1js.OctetString): Uint8Array => {
 const derOf = (certificate: pkijs.Certificate) =>
   new Uint8Array(certificate.toSchema().toBER(false));
 
+/**
+ * The key id a SignerInfo names instead of an issuer and serial: the
+ * [0] SubjectKeyIdentifier, primitive or wrapped in a constructed form.
+ */
+const subjectKeyIdentifier = (sid: unknown): Buffer | null => {
+  const identifier =
+    sid instanceof asn1js.Constructed ? sid.valueBlock.value.at(0) : sid;
+  return identifier instanceof asn1js.Primitive ||
+    identifier instanceof asn1js.OctetString
+    ? Buffer.from(identifier.valueBlock.valueHexView)
+    : null;
+};
+
 /** The certificate a SignerInfo names, by issuer and serial or by key id. */
 const signerCertificateOf = async (
   signedData: pkijs.SignedData,
@@ -107,11 +123,10 @@ const signerCertificateOf = async (
       ) ?? null
     );
   }
-  const keyId = Buffer.from(
-    signerInfo.sid.idBlock.isConstructed
-      ? signerInfo.sid.valueBlock.value[0].valueBlock.valueHexView
-      : signerInfo.sid.valueBlock.valueHexView,
-  );
+  const keyId = subjectKeyIdentifier(signerInfo.sid);
+  if (keyId === null) {
+    return null;
+  }
   for (const certificate of certificates) {
     const hash = await crypto.subtle.digest(
       "SHA-1",
@@ -146,11 +161,10 @@ const verifiedSigner = async (
       return null;
     }
     const engine = pkijs.getCrypto(true);
-    const hashName = engine.getAlgorithmByOID(
-      signerInfo.digestAlgorithm.algorithmId,
-      true,
-      "SignerInfo.digestAlgorithm",
-    ).name;
+    const hashName = digestNameForOid(signerInfo.digestAlgorithm.algorithmId);
+    if (hashName === null) {
+      return null;
+    }
 
     let signedBytes = content;
     const signedAttributes = signerInfo.signedAttrs;

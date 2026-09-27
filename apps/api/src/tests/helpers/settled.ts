@@ -4,7 +4,7 @@ import { Result } from "better-result";
  * A Result-returning call's value, or its error rejected, so a test can keep
  * reading a refusal with `.catch((error) => error)`.
  */
-export const settled = async <T, E>(
+export const settled = async <T, E extends Error>(
   pending: Promise<Result<T, E>>,
 ): Promise<T> => {
   const result = await pending;

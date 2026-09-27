@@ -333,7 +333,9 @@ describe("two-phase PDF signing", () => {
       const globalFetches: string[] = [];
       globalThis.fetch = Object.assign(
         async (input: Parameters<typeof fetch>[0]) => {
-          globalFetches.push(String(input));
+          globalFetches.push(
+            input instanceof Request ? input.url : input.toString(),
+          );
           throw new Error("unexpected global fetch");
         },
         { preconnect: globalFetch.preconnect },

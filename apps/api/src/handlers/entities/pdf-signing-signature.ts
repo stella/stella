@@ -11,7 +11,7 @@
  * - 400, 401, 403, 404: the request itself was refused; nothing changed.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
@@ -231,6 +231,10 @@ const claimAttempt = async (
     }
     case "closed": {
       return Result.err(signingSessionNotFound());
+    }
+    default: {
+      claim.value satisfies never;
+      return panic(`Unhandled finalize claim: ${String(claim.value)}`);
     }
   }
 };
