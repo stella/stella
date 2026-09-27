@@ -450,46 +450,70 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
   }
 });
 
-test("only an unlabelled pull request skips heavy suites or passes a superseded run", () => {
+// A pull request plans `fast` unless labelled `ci:full`; a manual run plans
+// the depth it was dispatched with. Both can be superseded by a newer run.
+const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("only a pull request or a manual run skips heavy suites or passes a superseded run", () => {
   expect(heavyJobs.length).toBeGreaterThan(0);
   const skippedHeavy = Object.fromEntries(
     heavyJobs.map((job) => [job, "skipped"]),
   );
-  expect(
-    evaluateResult({ event: EVENT.pullRequest, results: skippedHeavy }),
-  ).toBe(0);
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-tests": "cancelled" },
-    }),
-  ).toBe(0);
-  // A timed-out sibling reads as cancelled; the failure still stands.
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-tests": "cancelled", "code-quality": "failure" },
-    }),
-  ).toBe(1);
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-plan": "cancelled" },
-    }),
-  ).toBe(0);
-  for (const event of FULL_DEPTH_EVENTS) {
-    expect(evaluateResult({ event, results: {} }), event).toBe(0);
-    expect(evaluateResult({ event, results: skippedHeavy }), event).toBe(1);
+  const fast = SUITE_DEPTH.fast;
+  for (const event of FAST_DEPTH_EVENTS) {
     expect(
-      evaluateResult({ event, results: { "ci-plan": "cancelled" } }),
+      evaluateResult({ event, results: skippedHeavy, suiteDepth: fast }),
+      event,
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-tests": "cancelled" },
+        suiteDepth: fast,
+      }),
+      event,
+    ).toBe(0);
+    // A timed-out sibling reads as cancelled; the failure still stands.
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-tests": "cancelled", "code-quality": "failure" },
+        suiteDepth: fast,
+      }),
       event,
     ).toBe(1);
-    for (const suiteDepth of [SUITE_DEPTH.fast, ""] as const) {
-      expect(
-        evaluateResult({ event, results: {}, suiteDepth }),
-        `${event} at depth '${suiteDepth}'`,
-      ).toBe(1);
-    }
+    expect(
+      evaluateResult({
+        event,
+        results: { "ci-plan": "cancelled" },
+        suiteDepth: fast,
+      }),
+      event,
+    ).toBe(0);
+    expect(
+      evaluateResult({ event, results: {}, suiteDepth: "" }),
+      `${event} at no depth`,
+    ).toBe(1);
+  }
+  // A manual full run holds the heavy suites to the merge queue's bar.
+  expect(
+    evaluateResult({
+      event: EVENT.workflowDispatch,
+      results: skippedHeavy,
+      suiteDepth: SUITE_DEPTH.full,
+    }),
+  ).toBe(1);
+  const event = EVENT.mergeGroup;
+  expect(evaluateResult({ event, results: {} })).toBe(0);
+  expect(evaluateResult({ event, results: skippedHeavy })).toBe(1);
+  expect(evaluateResult({ event, results: { "ci-plan": "cancelled" } })).toBe(
+    1,
+  );
+  for (const suiteDepth of [SUITE_DEPTH.fast, ""] as const) {
+    expect(
+      evaluateResult({ event, results: {}, suiteDepth }),
+      `${event} at depth '${suiteDepth}'`,
+    ).toBe(1);
   }
 });
 
@@ -555,6 +579,44 @@ const jobSteps = (job: unknown) =>
     }),
     job,
   ).steps;
+
+const resolveDepth = (eventName: string, dispatchDepth: string) => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Resolve suite depth",
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-depth-"));
+  const output = nodePath.join(directory, "output");
+  writeFileSync(output, "");
+  try {
+    const run = Bun.spawnSync({
+      cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
+      env: {
+        DISPATCH_DEPTH: dispatchDepth,
+        EVENT_NAME: eventName,
+        GITHUB_OUTPUT: output,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    return run.exitCode === 0 ? readFileSync(output, "utf-8").trim() : "error";
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+test("a manual run plans the depth it was dispatched with, the merge queue always full", () => {
+  expect(resolveDepth(EVENT.workflowDispatch, "fast")).toBe("suite_depth=fast");
+  expect(resolveDepth(EVENT.workflowDispatch, "full")).toBe("suite_depth=full");
+  expect(resolveDepth(EVENT.workflowDispatch, "")).toBe("error");
+  expect(resolveDepth(EVENT.workflowDispatch, "fast; full")).toBe("error");
+  for (const dispatchDepth of ["", "fast"]) {
+    expect(resolveDepth(EVENT.mergeGroup, dispatchDepth)).toBe(
+      "suite_depth=full",
+    );
+  }
+  expect(resolveDepth("push", "")).toBe("error");
+});
 
 test("the landing site is built once when its browser checks are planned", () => {
   const landingBuild = (suiteDepth: string, e2eLandingRequired: string) =>

@@ -9,9 +9,22 @@ on:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
+    inputs:
+      depth:
+        description: >-
+          Suite depth. `fast` runs the guards, lint, typecheck, unit tests
+          and builds; `full` adds the heavy suites.
+        type: choice
+        options: [fast, full]
+        default: fast
 
+# Manual runs share one group whatever their branch, so a newer dispatch
+# replaces the one in progress instead of queueing beside it for runners.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch'
+        && format('{0}-dispatch', github.workflow)
+        || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: true
 
 permissions: {}
@@ -67,20 +80,37 @@ jobs:
       - name: Resolve suite depth
         id: depth
         env:
+          DISPATCH_DEPTH: ${{ inputs.depth }}
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          # Full on merge_group and workflow_dispatch, and on a pull request
-          # labelled `ci:full`, which a merge that bypasses the queue needs.
-          # The labels are read live rather than from the event payload, so
-          # re-running a pull request run after the label is added (what
-          # ci-full-label.yml does) plans full depth.
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # Full on merge_group, and on a pull request labelled `ci:full`,
+          # which a merge that bypasses the queue needs. The labels are read
+          # live rather than from the event payload, so re-running a pull
+          # request run after the label is added (what ci-full-label.yml
+          # does) plans full depth. A manual run takes its `depth` input.
+          case "$EVENT_NAME" in
+            merge_group)
+              echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            workflow_dispatch)
+              if [[ "$DISPATCH_DEPTH" != "fast" && "$DISPATCH_DEPTH" != "full" ]]; then
+                echo "::error::Unknown suite depth '$DISPATCH_DEPTH'; choose fast or full."
+                exit 1
+              fi
+              echo "suite_depth=$DISPATCH_DEPTH" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            pull_request)
+              ;;
+            *)
+              echo "::error::No suite depth for event '$EVENT_NAME'."
+              exit 1
+              ;;
+          esac
           labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
           if grep -Fxq 'ci:full' <<< "$labels"; then
             echo "suite_depth=full" >> "$GITHUB_OUTPUT"
@@ -169,6 +199,11 @@ jobs:
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            # e2e-landing runs, and builds the landing site, at full depth only.
+            landing_build_required=true
+            if [[ "$SUITE_DEPTH" == "full" ]]; then
+              landing_build_required=false
+            fi
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
@@ -178,8 +213,7 @@ jobs:
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
-              # e2e-landing builds the landing site at full depth.
-              echo "landing_build_required=false"
+              echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
               echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
@@ -3332,9 +3366,9 @@ jobs:
             exit 0
           fi
 
-          # Only a pull request run is ever superseded by a newer run of
-          # the same ref; anywhere else a cancelled run certifies nothing.
-          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" == "pull_request" ]]; then
+          # Only a pull request or a manual run is ever superseded by a newer
+          # run; a cancelled merge group certifies nothing.
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
@@ -3368,10 +3402,10 @@ jobs:
               fi
               ;;
             fast)
-              # Only an unlabelled pull request plans `fast`: its heavy
-              # suites skip by design, and a cancelled job means a newer run
-              # of the same ref replaced this one.
-              if [[ "$EVENT" != "pull_request" ]]; then
+              # Only an unlabelled pull request or a manual run plans `fast`:
+              # its heavy suites skip by design, and a cancelled job means a
+              # newer run replaced this one.
+              if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
               fi
