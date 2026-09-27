@@ -59,6 +59,8 @@ type StateColor = {
   /** Background wash for a claim span that matches the active filter. */
   highlightClass: string;
   highlightStyle?: React.CSSProperties;
+  selectedClass: string;
+  selectedStyle?: React.CSSProperties;
 };
 
 export const STATE_COLOR: Record<ClaimState, StateColor> = {
@@ -69,6 +71,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     decorationClass: "decoration-success",
     swatchStyle: { backgroundColor: "var(--success)" },
     highlightClass: "bg-success/15",
+    selectedClass: "bg-success/30 ring-1 ring-success/70",
   },
   tension: {
     icon: AlertTriangleIcon,
@@ -77,6 +80,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     decorationClass: "decoration-warning",
     swatchStyle: { backgroundColor: "var(--warning)" },
     highlightClass: "bg-warning/15",
+    selectedClass: "bg-warning/30 ring-1 ring-warning/70",
   },
   contradicted: {
     icon: XCircleIcon,
@@ -85,6 +89,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     decorationClass: "decoration-destructive",
     swatchStyle: { backgroundColor: "var(--destructive)" },
     highlightClass: "bg-destructive/15",
+    selectedClass: "bg-destructive/30 ring-1 ring-destructive/70",
   },
   nocover: {
     icon: CircleDashedIcon,
@@ -93,7 +98,8 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     decorationClass:
       "text-muted-foreground decoration-muted-foreground decoration-dotted",
     swatchStyle: { backgroundColor: "var(--muted-foreground)" },
-    highlightClass: "bg-muted",
+    highlightClass: "bg-muted-foreground/8",
+    selectedClass: "bg-muted-foreground/20 ring-1 ring-muted-foreground/50",
   },
   recordconflict: {
     icon: SplitIcon,
@@ -105,6 +111,11 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     swatchStyle: { backgroundColor: RECORD_CONFLICT_VAR },
     highlightClass: "",
     highlightStyle: { backgroundColor: RECORD_CONFLICT_BG_VAR },
+    selectedClass: "ring-1 ring-[var(--option-purple)]",
+    selectedStyle: {
+      backgroundColor:
+        "color-mix(in srgb, var(--option-purple) 30%, transparent)",
+    },
   },
   notverifiable: {
     icon: BanIcon,
@@ -113,7 +124,8 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     decorationClass:
       "text-muted-foreground decoration-muted-foreground decoration-dotted italic",
     swatchStyle: { backgroundColor: "var(--muted-foreground)" },
-    highlightClass: "bg-muted",
+    highlightClass: "bg-muted-foreground/8",
+    selectedClass: "bg-muted-foreground/20 ring-1 ring-muted-foreground/50",
   },
 };
 

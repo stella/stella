@@ -51,6 +51,8 @@ import {
 import {
   groupClaimsIntoPassages,
   passageReadingOrder,
+  proseReadingOrder,
+  segmentProse,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -87,7 +89,9 @@ export const VerificationView = ({
   const contested = contestedFactIds(run.evidence.facts);
   const factsById = evidenceFactsById(run.evidence);
   const passages = groupClaimsIntoPassages(claims);
-  const readingOrder = passageReadingOrder(passages);
+  const prose = segmentProse(run.blocks, claims);
+  const readingOrder =
+    prose.length > 0 ? proseReadingOrder(prose) : passageReadingOrder(passages);
   const counts = countClaims(run.claims, contested);
   const routineIds = routineUnsettledClaimIds(run.claims, contested);
 
@@ -256,49 +260,94 @@ export const VerificationView = ({
           )}
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4 p-5">
-              {passages.map((passage) => (
-                <div className="space-y-1" key={passage.key}>
-                  {passage.pageNumber !== null && (
-                    <div className="text-muted-foreground text-2xs font-medium">
-                      {t("common.page", {
-                        page: format.number(passage.pageNumber),
-                      })}
+              {prose.length > 0
+                ? prose.map((block) => (
+                    <div className="space-y-1" key={block.ordinal}>
+                      {block.pageNumber !== null && (
+                        <div className="text-muted-foreground text-2xs font-medium">
+                          {t("common.page", {
+                            page: format.number(block.pageNumber),
+                          })}
+                        </div>
+                      )}
+                      <p
+                        className="font-serif text-base leading-relaxed whitespace-pre-wrap text-pretty"
+                        dir="auto"
+                      >
+                        {block.segments.map((segment, index) => {
+                          if (segment.type === "plain") {
+                            return (
+                              <React.Fragment key={index}>
+                                {segment.text}
+                              </React.Fragment>
+                            );
+                          }
+                          const claim = segment.claim;
+                          const { dim, highlight } = spanPresentation({
+                            filterActive: filter !== "all",
+                            matches: matches(claim, filter),
+                          });
+                          return (
+                            <ClaimSpan
+                              claim={claim}
+                              contested={isContested(claim, contested)}
+                              dim={dim}
+                              highlight={highlight}
+                              key={claim.id}
+                              onSelect={setSelected}
+                              selected={claim.id === selected}
+                              state={effectiveState(claim, claim.review)}
+                              text={segment.text}
+                            />
+                          );
+                        })}
+                      </p>
                     </div>
-                  )}
-                  <p
-                    className="font-serif text-base leading-relaxed"
-                    dir="auto"
-                  >
-                    {passage.claims.map((claim, index) => {
-                      const { dim, highlight } = spanPresentation({
-                        filterActive: filter !== "all",
-                        matches: matches(claim, filter),
-                      });
-                      return (
-                        <React.Fragment key={claim.id}>
-                          {index > 0 && (
-                            <span
-                              aria-hidden="true"
-                              className="text-muted-foreground"
-                            >
-                              {" … "}
-                            </span>
-                          )}
-                          <ClaimSpan
-                            claim={claim}
-                            contested={isContested(claim, contested)}
-                            dim={dim}
-                            highlight={highlight}
-                            onSelect={setSelected}
-                            selected={claim.id === selected}
-                            state={effectiveState(claim, claim.review)}
-                          />
-                        </React.Fragment>
-                      );
-                    })}
-                  </p>
-                </div>
-              ))}
+                  ))
+                : passages.map((passage) => (
+                    <div className="space-y-1" key={passage.key}>
+                      {passage.pageNumber !== null && (
+                        <div className="text-muted-foreground text-2xs font-medium">
+                          {t("common.page", {
+                            page: format.number(passage.pageNumber),
+                          })}
+                        </div>
+                      )}
+                      <p
+                        className="font-serif text-base leading-relaxed"
+                        dir="auto"
+                      >
+                        {passage.claims.map((claim, index) => {
+                          const { dim, highlight } = spanPresentation({
+                            filterActive: filter !== "all",
+                            matches: matches(claim, filter),
+                          });
+                          return (
+                            <React.Fragment key={claim.id}>
+                              {index > 0 && (
+                                <span
+                                  aria-hidden="true"
+                                  className="text-muted-foreground"
+                                >
+                                  {" … "}
+                                </span>
+                              )}
+                              <ClaimSpan
+                                claim={claim}
+                                contested={isContested(claim, contested)}
+                                dim={dim}
+                                highlight={highlight}
+                                onSelect={setSelected}
+                                selected={claim.id === selected}
+                                state={effectiveState(claim, claim.review)}
+                                text={claim.text}
+                              />
+                            </React.Fragment>
+                          );
+                        })}
+                      </p>
+                    </div>
+                  ))}
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {LEGEND_STATES.map((state) => (
                   <StateChip key={state} state={state} />
@@ -431,6 +480,7 @@ type ClaimSpanProps = {
   highlight: boolean;
   contested: boolean;
   onSelect: (id: VerificationClaim["id"]) => void;
+  text: string;
 };
 
 const ClaimSpan = ({
@@ -441,6 +491,7 @@ const ClaimSpan = ({
   highlight,
   contested,
   onSelect,
+  text,
 }: ClaimSpanProps) => {
   const t = useTranslations();
   const reviewStatus = claim.review?.status ?? null;
@@ -449,22 +500,22 @@ const ClaimSpan = ({
     <button
       aria-pressed={selected}
       className={cn(
-        "cursor-pointer rounded px-0.5 text-start underline decoration-2 underline-offset-2",
+        "inline cursor-pointer box-decoration-clone text-start whitespace-pre-wrap underline decoration-2 underline-offset-3 hover:decoration-4 focus-visible:outline-2 focus-visible:outline-offset-2",
         color.decorationClass,
         highlight && color.highlightClass,
         dim && "opacity-40",
-        selected && "ring-2",
-        selected && !highlight && "bg-muted",
+        selected && color.selectedClass,
       )}
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
       style={{
         ...color.decorationStyle,
         ...(highlight ? color.highlightStyle : undefined),
+        ...(selected ? color.selectedStyle : undefined),
       }}
       type="button"
     >
-      {claim.text}
+      {text}
       {contested && (
         <CircleAlertIcon
           aria-hidden="true"
