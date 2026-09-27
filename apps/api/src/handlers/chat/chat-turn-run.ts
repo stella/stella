@@ -339,18 +339,18 @@ export class ChatTurnRun {
   }
 
   /** Stop the run as the user's cancel; resolves once it is over. */
-  stop(): Promise<ChatTurnRunEnd> {
+  async stop(): Promise<ChatTurnRunEnd> {
     this.abortForStop();
-    return this.settled;
+    return await this.settled;
   }
 
   /**
    * End the run because its process is going away: it stores what it has as
    * `owner-lost` and resolves once that is stored.
    */
-  relinquish(): Promise<ChatTurnRunEnd> {
+  async relinquish(): Promise<ChatTurnRunEnd> {
     this.abort(CHAT_TURN_OWNER_LOST_REASON);
-    return this.settled;
+    return await this.settled;
   }
 
   /**

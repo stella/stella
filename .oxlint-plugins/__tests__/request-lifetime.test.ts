@@ -113,4 +113,22 @@ describe.serial("request-lifetime confine-request-reads", () => {
       ),
     ).toEqual([5]);
   });
+
+  test("accepts nested destructuring targets but reports member values", async () => {
+    expect(
+      await lint(
+        lines(
+          "export const send = (ctx: { request: Request }, source: { value: Request }, others: { value: Request }[]) => {",
+          "  ({ value: ctx.request } = source);",
+          "  for ({ value: ctx.request } of others) {}",
+          "  ({ value: ctx.request = source.value } = source);",
+          "  [ctx.request] = [source.value];",
+          "  ({ [ctx.request.url]: ignored } = source);",
+          "  ctx.request ??= source.value;",
+          "  return { value: ctx.request };",
+          "};",
+        ),
+      ),
+    ).toEqual([6, 7, 8]);
+  });
 });

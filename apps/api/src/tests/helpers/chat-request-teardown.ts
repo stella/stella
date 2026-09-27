@@ -51,7 +51,11 @@ export const createTornDownRequest = ({
       }
       // Native accessors need the real request as their receiver.
       const value: unknown = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
     },
   });
   return {
