@@ -9,6 +9,7 @@ import {
   caseLawSources,
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
+  corpusIndexGroupWithdrawals,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -47,6 +48,10 @@ const USA_DIGEST =
     ? USA_CONTRACT.effectiveDigest
     : "usa is not under its own contract";
 const ATTEST_USA = { ...USA, effectiveDigest: USA_DIGEST } as const;
+const WITHDRAWN_BY = {
+  actor: "service:corpus-index-group-provision@test",
+  reason: "physical index configuration drift at $.doc_mapping",
+} as const;
 const SOURCE_ID = toSafeId<"caseLawSource">(
   "0198e331-e578-7000-8000-000000000301",
 );
@@ -303,7 +308,11 @@ test("an attestation withdrawn after reservation stops the append at start, and 
   );
   const withdraw = async () =>
     await inTx(
-      async (tx) => await withdrawCorpusIndexGroupEnrollmentTx(tx, USA),
+      async (tx) =>
+        await withdrawCorpusIndexGroupEnrollmentTx(tx, {
+          ...USA,
+          ...WITHDRAWN_BY,
+        }),
     );
   const reserve = async () =>
     await inTx(
@@ -494,7 +503,11 @@ test("a withdrawn attestation makes the group unready until attested again", asy
     indexGroup: string;
   }) =>
     await inTx(
-      async (tx) => await withdrawCorpusIndexGroupEnrollmentTx(tx, target),
+      async (tx) =>
+        await withdrawCorpusIndexGroupEnrollmentTx(tx, {
+          ...target,
+          ...WITHDRAWN_BY,
+        }),
     );
   const read = async (jurisdiction: string | undefined) =>
     await inTx(
@@ -538,6 +551,43 @@ test("a withdrawn attestation makes the group unready until attested again", asy
   });
   expect(await withdraw(USA)).toBe(false);
 
+  // Only the call that changed the row is on the trail, with who and why.
+  expect(
+    await db
+      .select({
+        family: corpusIndexGroupWithdrawals.family,
+        generation: corpusIndexGroupWithdrawals.generation,
+        indexGroup: corpusIndexGroupWithdrawals.indexGroup,
+        effectiveDigest: corpusIndexGroupWithdrawals.effectiveDigest,
+        actor: corpusIndexGroupWithdrawals.actor,
+        reason: corpusIndexGroupWithdrawals.reason,
+      })
+      .from(corpusIndexGroupWithdrawals),
+  ).toEqual([
+    {
+      family: "case_law",
+      generation: "case_law_v7",
+      indexGroup: "usa",
+      effectiveDigest: USA_DIGEST,
+      ...WITHDRAWN_BY,
+    },
+  ]);
+  // A withdrawal names who and why, or does not happen.
+  for (const by of [
+    { actor: "", reason: WITHDRAWN_BY.reason },
+    { actor: "Operator With Spaces", reason: WITHDRAWN_BY.reason },
+    { actor: WITHDRAWN_BY.actor, reason: "   " },
+  ]) {
+    expect(
+      await rejectionOf(
+        inTx(
+          async (tx) =>
+            await withdrawCorpusIndexGroupEnrollmentTx(tx, { ...USA, ...by }),
+        ),
+      ),
+    ).toBeInstanceOf(Error);
+  }
+
   // The binding survives, so attesting the same contract again converges.
   await inTx(
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
@@ -566,6 +616,11 @@ test("a withdrawn attestation makes the group unready until attested again", asy
     .from(corpusIndexGroupEnrollments)
     .where(eq(corpusIndexGroupEnrollments.indexGroup, "hun"));
   expect(hunRow?.provisioningStatus).toBe("attested");
+  expect(
+    await db
+      .select({ indexGroup: corpusIndexGroupWithdrawals.indexGroup })
+      .from(corpusIndexGroupWithdrawals),
+  ).toEqual([{ indexGroup: "usa" }]);
   expect(await globalIndexes()).toContain("case_law_v7_hun");
   expect((await read("HUN")).route.indexId).toBe("case_law_v7_hun");
 
