@@ -11172,7 +11172,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--check",
                     prop: "check",
                     required: true,
-                    part: "query",
+                    part: "body",
                     partPath: "check",
                   },
                   {
@@ -11184,7 +11184,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--subject-type",
                     prop: "subjectType",
                     required: true,
-                    part: "query",
+                    part: "body",
                     partPath: "subjectType",
                   },
                   {
@@ -11194,7 +11194,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--company-id",
                     prop: "companyId",
                     required: false,
-                    part: "query",
+                    part: "body",
                     partPath: "companyId",
                   },
                   {
@@ -11203,7 +11203,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--first-name",
                     prop: "firstName",
                     required: false,
-                    part: "query",
+                    part: "body",
                     partPath: "firstName",
                   },
                   {
@@ -11212,7 +11212,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--last-name",
                     prop: "lastName",
                     required: false,
-                    part: "query",
+                    part: "body",
                     partPath: "lastName",
                   },
                   {
@@ -11222,7 +11222,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--birth-date",
                     prop: "birthDate",
                     required: false,
-                    part: "query",
+                    part: "body",
                     partPath: "birthDate",
                   },
                 ],
@@ -11234,7 +11234,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
-                    query: {
+                    body: {
                       type: "object",
                       required: ["check", "subjectType"],
                       properties: {
