@@ -303,17 +303,6 @@ export type WebRoutes = {
       };
     };
   };
-  mcp: {
-    [key: string]: {
-      body: unknown;
-      params: T6d90fb7f32;
-      query: unknown;
-      headers: unknown;
-      response: {
-        200: Response;
-      };
-    };
-  };
   ready: {
     get: {
       body: unknown;
@@ -333,6 +322,17 @@ export type WebRoutes = {
           commit: string;
           status: "ok";
         };
+      };
+    };
+  };
+  mcp: {
+    [key: string]: {
+      body: unknown;
+      params: T6d90fb7f32;
+      query: unknown;
+      headers: unknown;
+      response: {
+        200: Response;
       };
     };
   };
@@ -3321,507 +3321,6 @@ export type WebRoutes = {
         };
       };
     };
-    mcp: {
-      oauth: {
-        "client-metadata.json": {
-          get: {
-            body: unknown;
-            params: T6d90fb7f32;
-            query: unknown;
-            headers: unknown;
-            response: {
-              200: {
-                client_id: string;
-                client_name: string;
-                client_uri: string;
-                grant_types: Array<string>;
-                redirect_uris: Array<string>;
-                response_types: Array<string>;
-                token_endpoint_auth_method: "none";
-              };
-            };
-          };
-        };
-      };
-    } & {
-      oauth: {
-        callback: {
-          get: {
-            body: Record<never, never>;
-            params: T6d90fb7f32;
-            query: {
-              code?: string;
-              state?: string;
-            };
-            headers: Record<never, never>;
-            response: {
-              200: Response;
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      connectors: {
-        get: {
-          body: Record<never, never>;
-          params: T6d90fb7f32;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              canManageCustomConnectors: T1bdf39f14a;
-              connectors: Array<{
-                id: Te4598481ee;
-                slug: string;
-                organizationId: (null | Tf4965e37f8);
-                displayName: string;
-                description: string;
-                url: string;
-                authType: Tbb6e0c457f;
-                isCurated: T1bdf39f14a;
-                oauthRequestedScopes: T97430ff0f7;
-                allowedTools: T97430ff0f7;
-                documentationUrl: T432e07d100;
-                tokenHelpUrl: T432e07d100;
-                iconUrl: T432e07d100;
-                isRecommended: T1bdf39f14a;
-                recommendedJurisdictions: ReadonlyArray<T2e1883ac96>;
-              }>;
-              nativeTools: Array<{
-                description: string;
-                displayName: string;
-                documentationUrl: T432e07d100;
-                enabled: T1bdf39f14a;
-                iconUrl: T432e07d100;
-                isRecommended: T1bdf39f14a;
-                recommendedJurisdictions: ReadonlyArray<T2e1883ac96>;
-                slug: string;
-                url: string;
-              }>;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      connectors: {
-        post: {
-          body: {
-            description?: string;
-            displayName?: string;
-            url: string;
-          };
-          params: T6d90fb7f32;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              connector: {
-                id: Te4598481ee;
-                slug: string;
-                authType: Tbb6e0c457f;
-              };
-              probe: T129a6d450b;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      connectors: {
-        probe: {
-          post: {
-            body: {
-              url: string;
-            };
-            params: T6d90fb7f32;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: T129a6d450b;
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      connectors: {
-        ":slug": {
-          connect: {
-            post: {
-              body: Record<never, never>;
-              params: {
-                slug: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  type: "bearer";
-                  requiresToken: true;
-                } | {
-                  type: "none";
-                  connected: true;
-                } | {
-                  type: "oauth2";
-                  authorizeUrl: string;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      connectors: {
-        ":slug": {
-          delete: {
-            body: Record<never, never>;
-            params: {
-              slug: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                slug: string;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      connections: {
-        get: {
-          body: Record<never, never>;
-          params: T6d90fb7f32;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              connections: Array<{
-                id: Td120f37682;
-                connectorId: Te4598481ee;
-                connectorSlug: string;
-                status: T2e4ecabbc4;
-                enabled: T1bdf39f14a;
-                scope: T432e07d100;
-                expiresAt: T4124e1264c;
-                lastUsedAt: T4124e1264c;
-                createdAt: string;
-                updatedAt: string;
-              }>;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      connections: {
-        post: {
-          body: {
-            token: string;
-            connectorSlug: string;
-          };
-          params: T6d90fb7f32;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: Td120f37682;
-              status: T2e4ecabbc4;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      connections: {
-        ":connectionId": {
-          patch: {
-            body: {
-              enabled: T1bdf39f14a;
-            };
-            params: {
-              connectionId: Td120f37682;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Td120f37682;
-                enabled: T1bdf39f14a;
-                status: T2e4ecabbc4;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      connections: {
-        ":connectionId": {
-          delete: {
-            body: Record<never, never>;
-            params: {
-              connectionId: Td120f37682;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Td120f37682;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      "native-tools": {
-        ":slug": {
-          patch: {
-            body: {
-              enabled: T1bdf39f14a;
-            };
-            params: {
-              slug: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                slug: string;
-                enabled: T1bdf39f14a;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    };
     contacts: {
       get: {
         body: Record<never, never>;
@@ -4282,7 +3781,7 @@ export type WebRoutes = {
             currency: T432e07d100;
             notes: T432e07d100;
             color: T432e07d100;
-            organizationId: Tf4965e37f8;
+            organizationId: T10c49ec483;
             prefix: T432e07d100;
             middleName: T432e07d100;
             suffix: T432e07d100;
@@ -4541,7 +4040,7 @@ export type WebRoutes = {
               currency: T432e07d100;
               notes: T432e07d100;
               color: T432e07d100;
-              organizationId: Tf4965e37f8;
+              organizationId: T10c49ec483;
               prefix: T432e07d100;
               middleName: T432e07d100;
               suffix: T432e07d100;
@@ -8729,7 +8228,7 @@ export type WebRoutes = {
                 invoiceNumber: string;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
-                organizationId: Tf4965e37f8;
+                organizationId: T10c49ec483;
                 timeEntries: Array<{
                   status: T7881dfbb44;
                   id: T4fc8c01a92;
@@ -10491,6 +9990,507 @@ export type WebRoutes = {
         };
       };
     };
+    mcp: {
+      oauth: {
+        "client-metadata.json": {
+          get: {
+            body: unknown;
+            params: T6d90fb7f32;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                client_id: string;
+                client_name: string;
+                client_uri: string;
+                grant_types: Array<string>;
+                redirect_uris: Array<string>;
+                response_types: Array<string>;
+                token_endpoint_auth_method: "none";
+              };
+            };
+          };
+        };
+      };
+    } & {
+      oauth: {
+        callback: {
+          get: {
+            body: Record<never, never>;
+            params: T6d90fb7f32;
+            query: {
+              code?: string;
+              state?: string;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: Response;
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      connectors: {
+        get: {
+          body: Record<never, never>;
+          params: T6d90fb7f32;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              canManageCustomConnectors: T1bdf39f14a;
+              connectors: Array<{
+                id: Te4598481ee;
+                slug: string;
+                organizationId: (null | T10c49ec483);
+                displayName: string;
+                description: string;
+                url: string;
+                authType: Tbb6e0c457f;
+                isCurated: T1bdf39f14a;
+                oauthRequestedScopes: T97430ff0f7;
+                allowedTools: T97430ff0f7;
+                documentationUrl: T432e07d100;
+                tokenHelpUrl: T432e07d100;
+                iconUrl: T432e07d100;
+                isRecommended: T1bdf39f14a;
+                recommendedJurisdictions: ReadonlyArray<T2e1883ac96>;
+              }>;
+              nativeTools: Array<{
+                description: string;
+                displayName: string;
+                documentationUrl: T432e07d100;
+                enabled: T1bdf39f14a;
+                iconUrl: T432e07d100;
+                isRecommended: T1bdf39f14a;
+                recommendedJurisdictions: ReadonlyArray<T2e1883ac96>;
+                slug: string;
+                url: string;
+              }>;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    } & {
+      connectors: {
+        post: {
+          body: {
+            description?: string;
+            displayName?: string;
+            url: string;
+          };
+          params: T6d90fb7f32;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              connector: {
+                id: Te4598481ee;
+                slug: string;
+                authType: Tbb6e0c457f;
+              };
+              probe: T129a6d450b;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    } & {
+      connectors: {
+        probe: {
+          post: {
+            body: {
+              url: string;
+            };
+            params: T6d90fb7f32;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T129a6d450b;
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      connectors: {
+        ":slug": {
+          connect: {
+            post: {
+              body: Record<never, never>;
+              params: {
+                slug: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  type: "bearer";
+                  requiresToken: true;
+                } | {
+                  type: "none";
+                  connected: true;
+                } | {
+                  type: "oauth2";
+                  authorizeUrl: string;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      connectors: {
+        ":slug": {
+          delete: {
+            body: Record<never, never>;
+            params: {
+              slug: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                slug: string;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      connections: {
+        get: {
+          body: Record<never, never>;
+          params: T6d90fb7f32;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              connections: Array<{
+                id: Td120f37682;
+                connectorId: Te4598481ee;
+                connectorSlug: string;
+                status: T2e4ecabbc4;
+                enabled: T1bdf39f14a;
+                scope: T432e07d100;
+                expiresAt: T4124e1264c;
+                lastUsedAt: T4124e1264c;
+                createdAt: string;
+                updatedAt: string;
+              }>;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    } & {
+      connections: {
+        post: {
+          body: {
+            token: string;
+            connectorSlug: string;
+          };
+          params: T6d90fb7f32;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Td120f37682;
+              status: T2e4ecabbc4;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    } & {
+      connections: {
+        ":connectionId": {
+          patch: {
+            body: {
+              enabled: T1bdf39f14a;
+            };
+            params: {
+              connectionId: Td120f37682;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Td120f37682;
+                enabled: T1bdf39f14a;
+                status: T2e4ecabbc4;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      connections: {
+        ":connectionId": {
+          delete: {
+            body: Record<never, never>;
+            params: {
+              connectionId: Td120f37682;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Td120f37682;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      "native-tools": {
+        ":slug": {
+          patch: {
+            body: {
+              enabled: T1bdf39f14a;
+            };
+            params: {
+              slug: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                slug: string;
+                enabled: T1bdf39f14a;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    };
     usage: {
       entitlement: {
         get: {
@@ -11063,7 +11063,7 @@ export type WebRoutes = {
               createdAt: string;
               billingReference: T432e07d100;
               color: T432e07d100;
-              organizationId: Tf4965e37f8;
+              organizationId: T10c49ec483;
               clientId: Ta197d6f640;
               leadUserId: T432e07d100;
               stampedVersionCount: number;
@@ -12104,7 +12104,7 @@ export type WebRoutes = {
                 role: T8e2a10c549;
                 isPrimary: T1bdf39f14a;
                 notes: T432e07d100;
-                organizationId: Tf4965e37f8;
+                organizationId: T10c49ec483;
                 contact: (null | {
                   type: Te287bedd42;
                   id: T938d9cc2e1;
@@ -12159,7 +12159,7 @@ export type WebRoutes = {
                 role: T8e2a10c549;
                 isPrimary: T1bdf39f14a;
                 notes: T432e07d100;
-                organizationId: Tf4965e37f8;
+                organizationId: T10c49ec483;
               };
               400: Tc642053948;
               401: Tc642053948;
@@ -15480,7 +15480,7 @@ export type WebRoutes = {
             requestId?: string;
             clientVersion?: string;
             errorReference?: string;
-            client: ("mcp" | "other" | "desktop" | "cli" | "web");
+            client: ("other" | "desktop" | "mcp" | "cli" | "web");
           };
           expected?: string;
           steps?: string;
@@ -31871,6 +31871,10 @@ type T109fc089ae = {
   date: string;
 };
 
+type T10c49ec483 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "organization";
+};
+
 type T1143a9d800 = {
   protocolVersion: 3;
   snapshot: {
@@ -37741,10 +37745,6 @@ type Tf38d7a3340 = string & valibot_Brand<"SafeId"> & {
 type Tf477029a44 = {
   title: string;
   markdown: string;
-};
-
-type Tf4965e37f8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "organization";
 };
 
 type Tf4ac35b786 = {
