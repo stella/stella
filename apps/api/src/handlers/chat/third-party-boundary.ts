@@ -35,6 +35,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
@@ -99,13 +100,12 @@ export const storedRestorationsOf = (
     switch (content.version) {
       case 1:
         // Legacy rows keep their restorations as a data part.
-        return (
-          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs ??
-          []
+        return arrayOrEmpty(
+          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs,
         );
       case 2:
       case 3:
-        return content.metadata?.anonRestorations?.pairs ?? [];
+        return arrayOrEmpty(content.metadata?.anonRestorations?.pairs);
       default:
         content satisfies never;
         return panic(`Unhandled content version: ${String(content)}`);

@@ -32,7 +32,6 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -49,6 +48,8 @@ import type {
 } from "@/api/lib/chat/persisted-message-content";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
@@ -1607,6 +1608,11 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
 /**
  * One message's restorations, each placeholder once. A placeholder names one
  * original across a thread (`createChatThirdPartyBoundary` numbers every
@@ -1636,11 +1642,11 @@ export const mergeAnonRestorations = (
     }
   }
   if (conflicts > 0) {
-    captureError(
+    observeFailure(
       new TelemetryError({
         message: "An anonymization placeholder named two originals",
       }),
-      { source: "chat-anon-restorations", conflicts: String(conflicts) },
+      { sink: ANON_RESTORATION_CONFLICT_SINK },
     );
   }
   return { pairs };
