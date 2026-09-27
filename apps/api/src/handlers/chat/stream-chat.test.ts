@@ -3450,6 +3450,7 @@ const createBoundary = (
   pipelineContext: createPipelineContext(),
   placeholderOffsets: new Map<string, number>(),
   literalPlaceholderAliases: new Map<string, string>(),
+  historicalRedactionMap: new Map<string, string>(),
   redactionMap: new Map(pairs),
   sourcePlaceholders: new Set<string>(),
   type: "anonymized",

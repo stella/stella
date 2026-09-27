@@ -1398,7 +1398,9 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected anonymization to succeed");
     }
     expect(first.value).toBe("[PERSON_1] prepared the memo.");
-    expect(second.value).toBe("Results for [PERSON_1]: [PERSON_2]");
+    expect(second.value).toBe(
+      "Results for [LITERAL_PLACEHOLDER_1]: [PERSON_2]",
+    );
     if (boundary.type !== "anonymized") {
       throw new TypeError("Expected anonymized boundary");
     }
@@ -1407,6 +1409,9 @@ describe("chat third-party anonymization boundary", () => {
         ["[PERSON_1]", "Bob"],
         ["[PERSON_2]", "Alice"],
       ]),
+    );
+    expect(deanonymizeFromBoundary({ boundary, text: second.value })).toBe(
+      "Results for [PERSON_1]: Alice",
     );
   });
 
@@ -1714,6 +1719,43 @@ describe("anonymization placeholders across a thread's requests", () => {
         ["[PERSON_1]", "Alice"],
         ["[PERSON_2]", "Bob"],
       ]),
+    );
+  });
+
+  test("does not restore an omitted historical placeholder", () => {
+    const boundary = createThreadBoundary([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+    ]);
+
+    expect(deanonymizeFromBoundary({ boundary, text: "[PERSON_1]" })).toBe(
+      "[PERSON_1]",
+    );
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, {
+        value: "[PERSON_1]",
+      }),
+    ).toEqual({ value: "[PERSON_1]" });
+  });
+
+  test("aliases a literal historical placeholder in the current request", async () => {
+    const boundary = createThreadBoundary([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+    ]);
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Echo [PERSON_1]; Alice answered.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared) || boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(prepared.value).toBe(
+      "Echo [LITERAL_PLACEHOLDER_1]; [PERSON_1] answered.",
+    );
+    expect(boundary.redactionMap).toEqual(new Map([["[PERSON_1]", "Alice"]]));
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      "Echo [PERSON_1]; Alice answered.",
     );
   });
 

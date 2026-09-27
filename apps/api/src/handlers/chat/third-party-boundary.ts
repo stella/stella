@@ -71,6 +71,8 @@ export type ChatThirdPartyBoundary =
       placeholderOffsets: Map<string, number>;
       /** Provider-visible alias → late literal token restored at the boundary. */
       literalPlaceholderAliases: Map<string, string>;
+      /** Prior requests' identities; only current provider input is restorable. */
+      historicalRedactionMap: Map<string, string>;
       /** Indexed placeholder tokens present literally in provider-bound source text. */
       sourcePlaceholders: Set<string>;
       /**
@@ -123,7 +125,7 @@ export const storedRestorationsOf = (
 const threadPlaceholderMaps = (
   restorations: readonly ChatAnonRestoration[],
 ) => {
-  const redactionMap = new Map<string, string>();
+  const historicalRedactionMap = new Map<string, string>();
   const placeholderOffsets = new Map<string, number>();
   for (const { original, placeholder } of restorations) {
     const parsed = parseIndexedPlaceholder(placeholder);
@@ -133,11 +135,11 @@ const threadPlaceholderMaps = (
         Math.max(placeholderOffsets.get(parsed.label) ?? 0, parsed.index),
       );
     }
-    if (!redactionMap.has(placeholder)) {
-      redactionMap.set(placeholder, original);
+    if (!historicalRedactionMap.has(placeholder)) {
+      historicalRedactionMap.set(placeholder, original);
     }
   }
-  return { placeholderOffsets, redactionMap };
+  return { historicalRedactionMap, placeholderOffsets };
 };
 
 export const createChatThirdPartyBoundary = ({
@@ -191,6 +193,7 @@ export const createChatThirdPartyBoundary = ({
         organizationId,
         pipelineContext: createPipelineContext(),
         ...threadPlaceholderMaps(threadRestorations),
+        redactionMap: new Map<string, string>(),
         literalPlaceholderAliases: new Map<string, string>(),
         sourcePlaceholders: new Set<string>(),
       }
@@ -224,8 +227,17 @@ const findExistingPlaceholder = (
   label: string,
   original: string,
 ): string | null => {
-  for (const [placeholder, mappedOriginal] of boundary.redactionMap) {
+  for (const [placeholder, mappedOriginal] of [
+    ...boundary.redactionMap,
+    ...boundary.historicalRedactionMap,
+  ]) {
     if (mappedOriginal !== original) {
+      continue;
+    }
+    if (
+      boundary.sourcePlaceholders.has(placeholder) &&
+      ![...boundary.literalPlaceholderAliases.values()].includes(placeholder)
+    ) {
       continue;
     }
     const parsed = parseIndexedPlaceholder(placeholder);
@@ -255,6 +267,7 @@ const encodeLateLiteralPlaceholders = (
   const replacements = new Map<string, string>();
   const restorableTokens = [
     ...boundary.redactionMap.keys(),
+    ...boundary.historicalRedactionMap.keys(),
     ...boundary.literalPlaceholderAliases.keys(),
   ];
   for (const token of restorableTokens) {
@@ -667,7 +680,9 @@ export const prepareTextForThirdParty = async ({
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, [text]);
-  const protectedInput = protectBoundaryPlaceholders(boundary, [text]);
+  const protectedInput = protectBoundaryPlaceholders(boundary, [
+    encodeLateLiteralPlaceholders(boundary, text),
+  ]);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
@@ -701,9 +716,11 @@ export const prepareTextForThirdParty = async ({
 
 const prepareTextBatchForThirdParty = async ({
   boundary,
+  sourceAlreadyEncoded = false,
   replacements,
 }: {
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  sourceAlreadyEncoded?: boolean;
   replacements: TextReplacement[];
 }): Promise<Result<void, BoundaryRefusal>> => {
   const fields = replacements.map((replacement) => replacement.text);
@@ -713,7 +730,12 @@ const prepareTextBatchForThirdParty = async ({
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, fields);
-  const protectedInput = protectBoundaryPlaceholders(boundary, fields);
+  const protectedInput = protectBoundaryPlaceholders(
+    boundary,
+    sourceAlreadyEncoded
+      ? fields
+      : fields.map((field) => encodeLateLiteralPlaceholders(boundary, field)),
+  );
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
@@ -747,7 +769,10 @@ const prepareTextBatchForThirdParty = async ({
     const replacement = replacements.at(index);
     if (
       replacement?.type === "reject-if-changed" &&
-      restoredFields.at(index) !== replacement.text
+      rewritePlaceholders(
+        restoredFields.at(index) ?? "",
+        literalPlaceholderRestoreMap(boundary),
+      ) !== replacement.text
     ) {
       return Result.err(
         new HandlerError({
@@ -1192,6 +1217,7 @@ export const prepareUnknownForThirdParty = async ({
   preparedValue = anonymized.value;
   const anonymizedBatch = await prepareTextBatchForThirdParty({
     boundary,
+    sourceAlreadyEncoded: encodeClaimedPlaceholders,
     replacements,
   });
   if (Result.isError(anonymizedBatch)) {
@@ -1823,6 +1849,7 @@ const anonymizeToolOutputForThirdParty = async ({
   preparedOutput = anonymizedOutput.value;
   const anonymizedBatch = await prepareTextBatchForThirdParty({
     boundary,
+    sourceAlreadyEncoded: true,
     replacements,
   });
   if (Result.isError(anonymizedBatch)) {

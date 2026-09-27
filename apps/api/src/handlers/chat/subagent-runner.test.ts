@@ -173,6 +173,7 @@ describe("a subagent run under an anonymizing boundary", () => {
       excludedCanonicals: Promise.resolve([]),
       gazetteerEntries: Promise.resolve([]),
       literalPlaceholderAliases: new Map<string, string>(),
+      historicalRedactionMap: new Map<string, string>(),
       organizationId: ids.orgA,
       pipelineContext: createPipelineContext(),
       placeholderOffsets: new Map<string, number>(),

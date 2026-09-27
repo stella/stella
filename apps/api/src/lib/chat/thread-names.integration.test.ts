@@ -67,7 +67,7 @@ describe("a thread's names derived from its stored messages", () => {
             {
               type: "tool-call",
               id: "call_0",
-              name: "lookup",
+              name: "mcp__external__lookup",
               arguments: "{}",
               state: "input-complete",
             },
@@ -97,6 +97,21 @@ describe("a thread's names derived from its stored messages", () => {
               input: {},
               output: {},
             },
+            {
+              type: "tool-lookup",
+              id: "call_3",
+              state: "output-available",
+              input: {},
+              output: {},
+            },
+            {
+              type: "dynamic-tool",
+              toolName: "mcp__external__search",
+              id: "call_4",
+              state: "output-available",
+              input: {},
+              output: {},
+            },
           ],
         },
       },
@@ -107,7 +122,7 @@ describe("a thread's names derived from its stored messages", () => {
     );
 
     expect(new Set(names.toolCallIds)).toEqual(
-      new Set(["call_0", "call_1", "call_2"]),
+      new Set(["call_0", "call_1", "call_2", "call_3", "call_4"]),
     );
   });
 });
