@@ -2301,7 +2301,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "identifier (company/registration number, VAT number) for an exact " +
       "match, or a company name to search where the register supports it. " +
       "Result IDs belong to the external registry, not stella's contact " +
-      "directory; create a contact with save_contact before using " +
+      "directory. Create a contact with save_contact before using " +
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",

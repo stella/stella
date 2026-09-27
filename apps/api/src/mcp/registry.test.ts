@@ -18,7 +18,26 @@ import {
   LAW_MCP_TOOL_DEFINITIONS,
   LAW_MCP_TOOL_DISPOSITION,
 } from "@/api/mcp/static-tool-definitions";
+import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
+import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
+
+/** A JSON Schema with every `description` string removed, at any depth. */
+const withoutDescriptions = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(withoutDescriptions);
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key, child]) => !(key === "description" && typeof child === "string"),
+      )
+      .map(([key, child]) => [key, withoutDescriptions(child)]),
+  );
+};
 
 describe("MCP tool registry", () => {
   test("anonymizing tools declare at least one text field", () => {
@@ -45,6 +64,9 @@ describe("MCP tool registry", () => {
   });
 
   test("projection preserves schema/annotations and only remaps scope and description", () => {
+    // Descriptions are additionally scoped to the tools this audience lists;
+    // everything else in the input schema is the source's, unchanged.
+    const anonymizedVocabulary = surfaceToolVocabulary("anonymized");
     const byName = new Map<string, McpToolDefinition>(
       DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
     );
@@ -55,7 +77,9 @@ describe("MCP tool registry", () => {
         throw new Error(`Projected tool ${projected.name} has no source`);
       }
 
-      expect(projected.inputSchema).toEqual(source.inputSchema);
+      expect(withoutDescriptions(projected.inputSchema)).toEqual(
+        withoutDescriptions(source.inputSchema),
+      );
       expect(projected.annotations).toEqual(source.annotations);
       // Scope is always remapped to an anonymized scope.
       expect(projected.scope).not.toBe(source.scope);
@@ -65,7 +89,9 @@ describe("MCP tool registry", () => {
         source.anonymized.description !== undefined
           ? source.anonymized.description
           : source.description;
-      expect(projected.description).toBe(expectedDescription);
+      expect(projected.description).toBe(
+        scopeProseToSurface(expectedDescription, anonymizedVocabulary),
+      );
     }
   });
 

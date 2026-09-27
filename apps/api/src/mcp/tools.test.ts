@@ -5109,7 +5109,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expectErrorEnvelope(result, {
       code: "internal_error",
       message: "Tool execution failed",
-      hint: "If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.",
+      hint: "This is a server-side failure; changing the arguments will not fix it. If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.",
     });
     // The message stays out of the event by design; the class, tool, and
     // source are what identify the failure.
