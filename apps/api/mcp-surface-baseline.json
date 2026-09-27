@@ -6,19 +6,19 @@
         "name": 1149,
         "title": 1184,
         "description": 28607,
-        "inputSchema": 80275,
+        "inputSchema": 80381,
         "outputSchema": 53543,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 178132,
+      "payloadUtf8Bytes": 178238,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
       },
       "largestInputSchema": {
         "tool": "save_playbook",
-        "chars": 5559
+        "chars": 5665
       },
       "largestOutputSchema": {
         "tool": "read_document",
