@@ -1,10 +1,14 @@
 import { EventType, toolDefinition } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { ClientMessage } from "@/api/handlers/chat/message-page";
+import { presentStoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildEngineChunks,
   buildEngineSnapshot,
@@ -12,6 +16,7 @@ import {
 } from "@/api/tests/helpers/chat-fixtures";
 import {
   diffLiveAgainstReload,
+  findUnservedSnapshotMessages,
   findUnstoredWireResults,
   findWireIdentityViolations,
   TEXT_SEGMENT_SEPARATOR,
@@ -331,4 +336,73 @@ describe("the stored results oracle", () => {
       }),
     ).toEqual([]);
   });
+});
+
+describe("the served snapshot oracle", () => {
+  const served = {
+    createdAt: "2026-01-02T03:04:05.000Z",
+    id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fb"),
+    metadata: { turnOutcome: { type: "completed" } },
+    parts: [{ content: "Draft the NDA", type: "text" }],
+    role: "user",
+  } satisfies ClientMessage;
+  const asEngineHolds: UIMessage = {
+    id: served.id,
+    parts: [text("Draft the NDA")],
+    role: "user",
+  };
+
+  /** The engine's snapshot of the message, as the stream presents it. */
+  const presented = async (): Promise<StreamChunk[]> => {
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of presentStoredHistory({
+      history: {
+        loadServed: async () =>
+          await Promise.resolve(Result.ok(new Map([[served.id, served]]))),
+        rewrittenOnAcceptance: [],
+      },
+      source: (async function* () {
+        yield await Promise.resolve(buildEngineSnapshot([asEngineHolds]));
+      })(),
+    })) {
+      chunks.push(chunk);
+    }
+    return chunks;
+  };
+
+  test("flags the engine's snapshot of a message the page serves", () => {
+    const snapshot = buildEngineSnapshot([asEngineHolds]);
+    // The fixture must reach the fault: the engine's copy has no timestamp.
+    expect(snapshot.messages[0]).not.toHaveProperty("createdAt");
+
+    expect(
+      findUnservedSnapshotMessages({
+        chunks: [snapshot],
+        served: [served],
+      }).map(({ oracle }) => oracle),
+    ).toEqual([CHAT_ORACLE.wireSnapshotServed]);
+  });
+
+  test("passes a snapshot that carries the history as served", async () => {
+    expect(
+      findUnservedSnapshotMessages({
+        chunks: await presented(),
+        served: [served],
+      }),
+    ).toEqual([]);
+  });
+
+  // Any field the page serves differently is a disagreement, not only the
+  // timestamp. The id is what pairs the two.
+  test.each(Object.keys(served).filter((field) => field !== "id"))(
+    "flags a snapshot whose %s disagrees with the page",
+    async (field) => {
+      expect(
+        findUnservedSnapshotMessages({
+          chunks: await presented(),
+          served: [{ ...served, [field]: "differs" }],
+        }).map(({ oracle }) => oracle),
+      ).toEqual([CHAT_ORACLE.wireSnapshotServed]);
+    },
+  );
 });

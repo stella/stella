@@ -7,6 +7,11 @@ import {
   CHAT_TURN_INTERRUPTION_REASONS,
   CHAT_TURN_STATUSES,
 } from "@/api/handlers/chat/chat-turn-state";
+import {
+  CHAT_THREAD_NAME_KIND,
+  CHAT_THREAD_NAME_KINDS,
+  type ChatThreadNameKind,
+} from "@/api/lib/chat/thread-name-kinds";
 
 import {
   aiMemoryPolicies,
@@ -15,6 +20,7 @@ import {
   chatMessagePolicies,
   chatTurnPolicies,
   chatThreadCompactionPolicies,
+  chatThreadNamePolicies,
   chatThreadPreviewPassagePolicies,
   chatThreadSearchDocumentPolicies,
   chatThreadPolicies,
@@ -57,6 +63,10 @@ const CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES =
 
 const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
+);
+
+const CHAT_THREAD_NAME_KIND_SQL_VALUES = CHAT_THREAD_NAME_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
 );
 
 const CHAT_TURN_INTERACTION_TYPE_SQL_VALUES = CHAT_TURN_INTERACTION_TYPES.map(
@@ -721,6 +731,42 @@ export const chatMessageSearchDocuments = p.pgTable(
       .index("chat_message_search_docs_thread_created_idx")
       .on(table.threadId, table.createdAt, table.messageId),
     ...chatMessageSearchDocumentPolicies(),
+  ],
+);
+
+/**
+ * The names a thread's requests minted that later requests must read the same
+ * way (`ChatThreadNameKind`), so each request reads them with one indexed
+ * query instead of scanning the thread's messages. Rows are appended in the
+ * transaction that stores the messages showing them, and never change.
+ */
+export const chatThreadNames = p.pgTable(
+  "chat_thread_names",
+  {
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    kind: p.varchar({ length: 16 }).$type<ChatThreadNameKind>().notNull(),
+    name: p.text().notNull(),
+    /** What a `ref-binding` names (`ChatRefBinding`); null for any other
+     *  kind. */
+    target: jsonb(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.threadId, table.kind, table.name],
+      name: "chat_thread_names_pkey",
+    }),
+    p.check(
+      "chat_thread_names_kind_values_check",
+      sql`${table.kind} IN (${sql.join(CHAT_THREAD_NAME_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "chat_thread_names_target_check",
+      sql`(${table.kind} = '${sql.raw(CHAT_THREAD_NAME_KIND.refBinding)}') = (${table.target} IS NOT NULL)`,
+    ),
+    ...chatThreadNamePolicies(),
   ],
 );
 

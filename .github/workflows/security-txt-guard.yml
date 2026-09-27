@@ -13,8 +13,10 @@ on:
     - cron: "0 9 * * 1" # Monday 09:00 UTC
   workflow_dispatch:
 
+# Per ref: one pull request's run must not cancel another's or the weekly
+# check on main.
 concurrency:
-  group: security-txt-guard
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: {}

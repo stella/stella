@@ -1532,6 +1532,24 @@ export const chatThreadCompactionPolicies = () => [
   }),
 ];
 
+/**
+ * Append-only: a name keeps its meaning for the thread's life, so rows are
+ * inserted and read, never changed; they go with their thread (the foreign
+ * key cascades).
+ */
+export const chatThreadNamePolicies = () => [
+  p.pgPolicy("chat_thread_name_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
+  }),
+  p.pgPolicy("chat_thread_name_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
+  }),
+];
+
 export const fileChatThreadPolicies = () => [
   p.pgPolicy("file_chat_thread_select", {
     for: "select",

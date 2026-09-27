@@ -2,8 +2,9 @@
   "format": 1,
   "provider": "bedrock",
   "scenario": "length",
-  "source": "synthetic",
-  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T18:02:22.581Z",
+  "prompt": "Count from 1 to 500 in words, separated by commas.",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {
@@ -14,8 +15,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/vnd.amazon.eventstream",
-          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+          "content-type": "application/vnd.amazon.eventstream"
         },
         "body": {
           "encoding": "aws-eventstream",
@@ -27,8 +27,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "role": "assistant",
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"
+                "p": "abcdefghijklmnopqrstuvwxyzABCD",
+                "role": "assistant"
               }
             },
             {
@@ -40,7 +40,35 @@
               "payload": {
                 "contentBlockIndex": 0,
                 "delta": {
-                  "text": "One, two, three,"
+                  "text": "One"
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": ","
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "text": " two, three, four, five,"
                 },
                 "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTU"
               }
@@ -54,23 +82,9 @@
               "payload": {
                 "contentBlockIndex": 0,
                 "delta": {
-                  "text": " four, five, six,"
+                  "text": " six, seven, eight,"
                 },
-                "p": "a"
-              }
-            },
-            {
-              "headers": {
-                ":event-type": "contentBlockDelta",
-                ":content-type": "application/json",
-                ":message-type": "event"
-              },
-              "payload": {
-                "contentBlockIndex": 0,
-                "delta": {
-                  "text": " seven, eight"
-                },
-                "p": "abcdefgh"
+                "p": "abcdefghijklmnopqr"
               }
             },
             {
@@ -81,7 +95,7 @@
               },
               "payload": {
                 "contentBlockIndex": 0,
-                "p": "abcdefghijklmno"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012"
               }
             },
             {
@@ -91,8 +105,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "stopReason": "max_tokens",
-                "p": "abcdefghijklmnopqrstuv"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+                "stopReason": "max_tokens"
               }
             },
             {
@@ -102,15 +116,16 @@
                 ":message-type": "event"
               },
               "payload": {
-                "usage": {
-                  "inputTokens": 598,
-                  "outputTokens": 16,
-                  "totalTokens": 614
-                },
                 "metrics": {
-                  "latencyMs": 690
+                  "latencyMs": 8352
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABC"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV",
+                "usage": {
+                  "inputTokens": 600,
+                  "outputTokens": 16,
+                  "serverToolUsage": {},
+                  "totalTokens": 616
+                }
               }
             }
           ]
@@ -120,12 +135,6 @@
   ],
   "expect": {
     "outcome": "finished",
-    "finishReason": "length",
-    "text": "One, two, three, four, five, six, seven, eight",
-    "usage": {
-      "promptTokens": 598,
-      "completionTokens": 16,
-      "totalTokens": 614
-    }
+    "finishReason": "length"
   }
 }

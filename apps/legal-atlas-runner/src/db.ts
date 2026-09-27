@@ -21,12 +21,14 @@ import { createIngestionDb } from "@/api/db/scoped";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 import { LEGAL_ATLAS_RUNNER_ENV } from "./env";
+import { ingestionStatementTimeoutMs } from "./statement-timeout";
 
 const transactionTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbTransactionTimeoutMs;
 const backfillTransactionTimeoutMs =
   LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs;
 const TRANSACTION_TIMEOUT_GRACE_MS = 30_000;
 const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
+const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
 
 /**
  * Build a `stella_ingestion`-scoped transaction runner with a per-transaction
@@ -49,12 +51,16 @@ const createBoundedIngestionDb = (
     rlsDb,
     timeoutMs === 0 ? {} : { laneWaitMs: timeoutMs },
   );
+  const statementTimeoutMs = ingestionStatementTimeoutMs(
+    timeoutMs,
+    statementTimeoutCapMs,
+  );
   return async (fn) => {
     const operation = async () =>
       await rawIngestionDb(async (tx) => {
-        if (timeoutMs > 0) {
+        if (statementTimeoutMs > 0) {
           await tx.execute(
-            sql`SELECT set_config('statement_timeout', ${`${timeoutMs}ms`}, true)`,
+            sql`SELECT set_config('statement_timeout', ${`${statementTimeoutMs}ms`}, true)`,
           );
         }
 

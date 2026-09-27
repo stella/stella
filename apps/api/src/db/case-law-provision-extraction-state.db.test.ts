@@ -320,6 +320,57 @@ const SESSION_SETTINGS = [
 ] as const;
 
 describe("input digest", () => {
+  test("scalar reader overload matches the row overload for every input shape", async () => {
+    const variants: InputVariant[] = [
+      {
+        content_hash: null,
+        decision_date: null,
+        country: "CZE",
+        language: "cs",
+        redacted_at: null,
+      },
+      {
+        content_hash: "abc",
+        decision_date: "2000-01-01",
+        country: "SVK",
+        language: "sk",
+        redacted_at: null,
+      },
+      {
+        content_hash: "def",
+        decision_date: "infinity",
+        country: "CZE",
+        language: "cs",
+        redacted_at: "2026-01-01T00:00:00+00:00",
+      },
+      {
+        content_hash: "ghi",
+        decision_date: "-infinity",
+        country: "CZE",
+        language: "cs",
+        redacted_at: null,
+      },
+    ];
+    const base = await insertDecision();
+    const comparisons = await rows(sql`
+      SELECT case_law_provision_extraction_input_digest(decision) =
+        case_law_provision_extraction_input_digest(
+          decision."content_hash", decision."decision_date",
+          decision."country"::text, decision."language"::text,
+          decision."redacted_at" IS NULL
+        ) AS equal
+      FROM case_law_decisions stored
+      CROSS JOIN LATERAL jsonb_array_elements(${JSON.stringify(variants)}::text::jsonb)
+        WITH ORDINALITY AS variant(value, position)
+      CROSS JOIN LATERAL jsonb_populate_record(stored, variant.value) AS decision
+      WHERE stored.id = ${base}
+      ORDER BY variant.position
+    `);
+    expect(comparisons.map((row) => row["equal"])).toEqual(
+      variants.map(() => true),
+    );
+  });
+
   test("pins its versioned encoding: day offset, null, redaction flag", async () => {
     const [dated, undated] = await variantDigests([
       {
@@ -396,6 +447,68 @@ describe("input digest", () => {
       ),
     );
     expect(new Set(digests).size).toBe(5);
+  });
+});
+
+describe("provision citation correction shape", () => {
+  test("stores a distinct printed identity only for a correction", async () => {
+    const decisionId = await insertDecision();
+    type CitationInsertOptions = {
+      selection: "text" | "misprint-correction";
+      printedWorkIdentifier: string | null;
+      spanStart: number;
+    };
+    const insert = async ({
+      selection,
+      printedWorkIdentifier,
+      spanStart,
+    }: CitationInsertOptions) =>
+      await run(sql`
+        INSERT INTO case_law_provision_citations (
+          id, decision_id, jurisdiction, work_identifier, work_number,
+          work_year, work_collection, unit, section, anchor,
+          sentence_text, span_start, span_end, confidence, selection,
+          printed_work_identifier
+        ) VALUES (
+          ${createSafeId<"caseLawProvisionCitation">()}, ${decisionId}, 'CZE',
+          '100/2020 Sb.', 100, 2020, 'Sb.', 'section', 1, 'section-1',
+          '§ 1', ${spanStart}, ${spanStart + 3}, 1, ${selection},
+          ${printedWorkIdentifier}
+        )
+      `);
+
+    await insert({
+      selection: "misprint-correction",
+      printedWorkIdentifier: "101/2020 Sb.",
+      spanStart: 0,
+    });
+    expect(
+      await refusal(
+        insert({
+          selection: "misprint-correction",
+          printedWorkIdentifier: null,
+          spanStart: 10,
+        }),
+      ),
+    ).toContain("provision_citations_misprint_correction_shape");
+    expect(
+      await refusal(
+        insert({
+          selection: "misprint-correction",
+          printedWorkIdentifier: "100/2020 Sb.",
+          spanStart: 20,
+        }),
+      ),
+    ).toContain("provision_citations_misprint_correction_shape");
+    expect(
+      await refusal(
+        insert({
+          selection: "text",
+          printedWorkIdentifier: "101/2020 Sb.",
+          spanStart: 30,
+        }),
+      ),
+    ).toContain("provision_citations_misprint_correction_shape");
   });
 });
 

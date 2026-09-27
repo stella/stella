@@ -94,6 +94,13 @@ const MCP_ANONYMIZED_EXCLUSION_REASONS = [
    * fails closed and is excluded from the anonymized surface entirely.
    */
   "dynamic_tenant_payload",
+  /**
+   * Read tool whose output describes natural persons found in an external
+   * register: names, birth dates, identifiers and addresses. Dates and
+   * identifiers are not text the redactor can anonymize, so the tool fails
+   * closed and is excluded from the anonymized surface.
+   */
+  "personal_register_data",
 ] as const;
 
 export type McpAnonymizedExclusionReason =

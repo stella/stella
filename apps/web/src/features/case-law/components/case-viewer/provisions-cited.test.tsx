@@ -47,6 +47,19 @@ const provision = (
   workYear: 1961,
   versionValidFrom: null,
   previewKey: null,
+  spanRole: null,
+  printPieceId: null,
+  printStart: null,
+  printEnd: null,
+  printText: null,
+  namePieceId: null,
+  nameStart: null,
+  nameEnd: null,
+  nameText: null,
+  selection: null,
+  printedWorkIdentifier: null,
+  targetDocumentId: null,
+  targetStatus: null,
   ...overrides,
 });
 
@@ -64,7 +77,17 @@ const seed = (items: ReturnType<typeof provision>[]) => {
     decisionProvisionsInfiniteOptions(decisionId).queryKey,
     {
       pageParams: [null],
-      pages: [{ items, limit: 50, nextCursor: null, previews: [] }],
+      pages: [
+        {
+          items,
+          limit: 50,
+          nextCursor: null,
+          previews: [],
+          status: { type: "legacy" },
+          generation: "0",
+          publishedProjectionDigest: null,
+        },
+      ],
     },
   );
 

@@ -15,7 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cancelAwaitingAssistantMessage,
+  cancelAssistantMessage,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -58,12 +58,18 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
+import {
+  type ChatThreadNamesAdded,
+  type ChatThreadNamesRead,
+  recordChatThreadNamesOnTx,
+} from "@/api/lib/chat/thread-names";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  threadNames?: ChatThreadNamesWrite | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -170,6 +176,31 @@ const applyChatDataScopeExpansionOnTx = async ({
   });
 };
 
+/** The thread's names as a request read them, and what it adds. */
+export type ChatThreadNamesWrite = {
+  added: ChatThreadNamesAdded;
+  read: ChatThreadNamesRead;
+};
+
+/**
+ * Appends the names a write's messages add to the thread, beside those
+ * messages, so a later request never reads fewer names than the thread shows.
+ */
+const applyThreadNamesOnTx = async ({
+  names,
+  threadId,
+  tx,
+}: {
+  names: ChatThreadNamesWrite | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (names === undefined) {
+    return;
+  }
+  await recordChatThreadNamesOnTx({ ...names, threadId, tx });
+};
+
 const applyChatDataScopeReplacementOnTx = async ({
   recordAuditEvent,
   replacement,
@@ -198,6 +229,7 @@ const applyChatDataScopeReplacementOnTx = async ({
 const insertMessages = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   messages,
   recordAuditEvent,
   safeDb,
@@ -229,6 +261,7 @@ const insertMessages = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -285,6 +318,8 @@ const insertMessages = async ({
 export type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names this write's messages add to the thread. */
+  threadNames?: ChatThreadNamesWrite | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -398,11 +433,23 @@ type FinalizedTurn = {
 };
 
 /**
- * What a turn stores once it ends. Normally its own outcome; when the user's
- * stop committed first, the stop, with the message ended as a stop ends it:
- * a turn that would have waited on the user ends like an awaiting turn the
- * user stopped (`cancelAwaitingAssistantMessage`), any other keeps what it
- * produced under the stop's settlement rules.
+ * The terminal message as its outcome stores it. A cancelled turn closes
+ * every call that can no longer run or be answered
+ * (`cancelAssistantMessage`), whether it waited on the user or was cut off
+ * mid-stream; any other outcome keeps what the run produced under its
+ * settlement rules.
+ */
+const endTerminalAssistantMessage = (
+  message: PersistableTerminalAssistantMessage,
+  outcome: ChatTurnOutcome,
+): PersistableTerminalAssistantMessage =>
+  outcome.type === "cancelled"
+    ? cancelAssistantMessage({ message, reason: outcome.reason })
+    : settleTerminalAssistantMessage(message, outcome);
+
+/**
+ * What a turn stores once it ends: its own outcome, or the user's stop when
+ * that committed first.
  */
 const terminalSettlement = ({
   outcome,
@@ -412,33 +459,17 @@ const terminalSettlement = ({
 }: TerminalAssistantMessageProps & {
   stopped: boolean;
 }): TerminalSettlement => {
-  if (!stopped) {
-    return {
-      message: settleTerminalAssistantMessage(
-        toTerminalAssistantMessage({
-          outcome,
-          owningAssistantMessage,
-          responseMessage,
-        }),
-        outcome,
-      ),
-      outcome,
-    };
-  }
-  const produced = toTerminalAssistantMessage({
-    outcome: USER_STOP_OUTCOME,
-    owningAssistantMessage,
-    responseMessage,
-  });
+  const settledAs = stopped ? USER_STOP_OUTCOME : outcome;
   return {
-    message:
-      outcome.type === "awaiting-user"
-        ? cancelAwaitingAssistantMessage({
-            message: produced,
-            reason: USER_STOP_OUTCOME.reason,
-          })
-        : settleTerminalAssistantMessage(produced, USER_STOP_OUTCOME),
-    outcome: USER_STOP_OUTCOME,
+    message: endTerminalAssistantMessage(
+      toTerminalAssistantMessage({
+        outcome: settledAs,
+        owningAssistantMessage,
+        responseMessage,
+      }),
+      settledAs,
+    ),
+    outcome: settledAs,
   };
 };
 
@@ -503,6 +534,7 @@ const mergeContinuationMetadata = ({
 export const finalizeAssistantTurn = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   existingIds,
   execution,
   outcome,
@@ -517,6 +549,8 @@ export const finalizeAssistantTurn = async ({
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names the assistant message adds to the thread. */
+  threadNames: ChatThreadNamesWrite;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
@@ -555,6 +589,7 @@ export const finalizeAssistantTurn = async ({
       const persisted = await persistMessage({
         acceptedSendMode,
         dataScopeExpansion,
+        threadNames,
         persistencePlan,
         recordAuditEvent,
         safeDb,
@@ -773,6 +808,7 @@ export const persistStoppedChatTurn = async (
 const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
+  threadNames,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -788,6 +824,7 @@ const runPersistMessage = async ({
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
+      threadNames,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -823,6 +860,7 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -979,6 +1017,7 @@ const runPersistMessage = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     const deletedMessageId = persistencePlan.deleteMessageId;
     await tx
       .delete(chatMessages)

@@ -121,6 +121,9 @@ export const toRenderableMediaSource = (part: MediaChatPart): string | null => {
         ? source.value
         : null;
     }
+    // A provider file handle has no browser URL.
+    case "file":
+      return null;
     default: {
       source satisfies never;
       return panic(`Unhandled source: ${String(source)}`);

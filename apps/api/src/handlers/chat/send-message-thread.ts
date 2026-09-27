@@ -14,6 +14,11 @@ import type {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  type ChatThreadNamesRead,
+  EMPTY_CHAT_THREAD_NAMES_READ,
+  readChatThreadNames,
+} from "@/api/lib/chat/thread-names";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
@@ -31,6 +36,8 @@ type ThreadValidationState = {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
   } | null;
+  /** Every name the thread's history holds. */
+  threadNames: ChatThreadNamesRead;
   webSearchEnabled: boolean;
 };
 
@@ -45,9 +52,9 @@ export const readThreadValidationState = async ({
   Result<ThreadValidationState, HandlerError<400> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const thread = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.chatThreads.findFirst({
+    const read = yield* Result.await(
+      safeDb(async (tx) => {
+        const thread = await tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
             organizationId: { eq: organizationId },
@@ -63,13 +70,24 @@ export const readThreadValidationState = async ({
               columns: { content: true, role: true },
             },
           },
-        }),
-      ),
+        });
+        if (thread === undefined) {
+          return null;
+        }
+        // The thread's ownership was read in this transaction.
+        const threadNames = await readChatThreadNames({ threadId, tx });
+        return { thread, threadNames };
+      }),
     );
 
-    if (!thread) {
-      return Result.ok({ persistedMessage: null, webSearchEnabled: false });
+    if (read === null) {
+      return Result.ok({
+        persistedMessage: null,
+        threadNames: EMPTY_CHAT_THREAD_NAMES_READ,
+        webSearchEnabled: false,
+      });
     }
+    const { thread, threadNames } = read;
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
     if (persistedWorkspaceId !== workspaceId) {
@@ -90,6 +108,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
+      threadNames,
       webSearchEnabled: thread.webSearchEnabled,
     });
   });

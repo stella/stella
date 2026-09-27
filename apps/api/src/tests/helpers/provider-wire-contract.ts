@@ -62,8 +62,8 @@ export const wireTool = () =>
     inputSchema: toTanStackToolSchema(WIRE_TOOL_INPUT),
   });
 
-const TEXT_PROMPT =
-  "Reply with exactly this sentence and nothing else: The cassette plays.";
+export const EXPECTED_TEXT = "The cassette plays.";
+const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECTED_TEXT}`;
 
 /** The one user message each scenario sends. Recordings capture exactly
  *  these prompts and nothing else. */
@@ -82,18 +82,40 @@ export const SCENARIO_PROMPTS = {
   "early-eof": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
 
+/** A provider's own wording for a scenario, where the shared prompt records
+ *  something else. */
+const PROVIDER_SCENARIO_PROMPTS: Partial<
+  Record<ProviderWireProvider, Partial<Record<ProviderWireScenario, string>>>
+> = {
+  // Bedrock's Claude fills the optional note unless told to leave it out.
+  bedrock: {
+    "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with only name "draft", leaving note out. Do not write any text.`,
+    "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo", neither with a note. Do not write any text.`,
+  },
+};
+
+/** The one user message a scenario sends to `provider`. */
+export const scenarioPrompt = (
+  provider: ProviderWireProvider,
+  scenario: ProviderWireScenario,
+): string =>
+  PROVIDER_SCENARIO_PROMPTS[provider]?.[scenario] ?? SCENARIO_PROMPTS[scenario];
+
 /** The output ceiling the length scenario asks for. */
 const LENGTH_SCENARIO_MAX_TOKENS = 16;
 /** A model id no provider serves, for the rejected request. */
 export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
-/** The chat model a provider's corpus is recorded with. */
+/** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
   BYOK_DEFAULT_MODELS[provider].chat;
 
-/** A second model of the provider's, for side calls such as thread titles. */
-export const wireSideModel = (provider: ProviderWireProvider): string => {
-  const chat = wireChatModel(provider);
+/** A model of the provider's other than `chat`, for side calls such as
+ *  thread titles. */
+export const wireSideModel = (
+  provider: ProviderWireProvider,
+  chat: string,
+): string => {
   const options: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return options.find((model) => model !== chat) ?? chat;
 };
@@ -176,7 +198,9 @@ const prepareWireRequest = ({
   });
   return {
     adapter,
-    messages: [{ role: "user" as const, content: SCENARIO_PROMPTS[scenario] }],
+    messages: [
+      { role: "user" as const, content: scenarioPrompt(provider, scenario) },
+    ],
     modelOptions,
     tools,
   };

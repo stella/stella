@@ -196,9 +196,8 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: "resumed",
     });
 
-    expect(history.engine.map(({ parts }) => parts.length)).toEqual([2, 1]);
-    expect(history.engine[1]).toBe(resumed);
-    expect([...history.storedForms.values()]).toEqual([earlier]);
+    expect(history.map(({ parts }) => parts.length)).toEqual([2, 1]);
+    expect(history[1]).toBe(resumed);
   });
 
   test("a new user turn resumes nothing", () => {
@@ -207,7 +206,7 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: undefined,
     });
 
-    expect(history.engine[0]?.parts.map(({ type }) => type)).toEqual([
+    expect(history[0]?.parts.map(({ type }) => type)).toEqual([
       "tool-call",
       "tool-result",
     ]);
@@ -245,15 +244,10 @@ describe("the history a run hands the engine", () => {
         resumedMessageId: undefined,
       });
 
-      expect(history.engine[0]?.parts).toEqual(
+      expect(history[0]?.parts).toEqual(
         closedForEngine[part.state]
           ? [part, unresolvedResult(part.id)]
           : [part],
-      );
-      // The client is shown every message the engine reads differently as
-      // stored, a denial included: the engine replays it as a result.
-      expect(history.storedForms.get("earlier")?.parts).toEqual(
-        closedForEngine[part.state] || part === denied ? [part] : undefined,
       );
     });
   }
@@ -276,8 +270,7 @@ describe("the history a run hands the engine", () => {
       resumedMessageId: "resumed",
     });
 
-    expect(history.engine[0]?.parts).toEqual(earlier.parts);
-    expect(history.engine[1]).toBe(resumed);
-    expect(history.storedForms.size).toBe(0);
+    expect(history[0]?.parts).toEqual(earlier.parts);
+    expect(history[1]).toBe(resumed);
   });
 });

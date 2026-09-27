@@ -794,6 +794,7 @@ export const buildChatSystemPromptParts = async ({
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,
+              hydrateRefs: refRegistry.hydrateAssistantTextRefs,
               organizationId,
               safeDb,
               userId,

@@ -35,6 +35,7 @@
     "./legislation-publication": "./src/legislation-publication.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./provision-link-status": "./src/provision-link-status.ts",
     "./safe-id": "./src/safe-id.ts",
     "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
@@ -50,7 +51,7 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/api-contract",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/api-contract",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
