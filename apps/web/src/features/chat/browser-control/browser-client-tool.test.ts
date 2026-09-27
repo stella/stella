@@ -116,6 +116,12 @@ const errorCode = (result: unknown) =>
     ? result.code
     : null;
 
+/** What TanStack passes a client tool that runs a call. */
+const executionContext = (toolCallId: string) => ({
+  emitCustomEvent: () => undefined,
+  toolCallId,
+});
+
 describe("browser commands after a stop", () => {
   test("a stopped turn's command never runs until a regeneration resumes the turn", async () => {
     connect();
@@ -125,7 +131,7 @@ describe("browser commands after a stop", () => {
     browser.cancel();
     const stopped = await browser.tool.execute?.(
       { action: "snapshot" },
-      { toolCallId: "call-1" },
+      executionContext("call-1"),
     );
     expect(errorCode(stopped)).toBe(BROWSER_CONTROL_ERROR_CODE.cancelled);
     expect(postedCommands()).toHaveLength(0);
@@ -133,7 +139,7 @@ describe("browser commands after a stop", () => {
     browser.resume();
     const resumed = browser.tool.execute?.(
       { action: "snapshot" },
-      { toolCallId: "call-2" },
+      executionContext("call-2"),
     );
     await Promise.resolve();
     expect(postedCommands()).toEqual([
