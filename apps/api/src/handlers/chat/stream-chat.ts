@@ -58,7 +58,11 @@ import {
 import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { registerChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
-import { KEEPS_PARTIAL_TOOL_INPUT } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  CUT_SHORT_OUTCOME,
+  findHandedOutInteraction,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -1438,11 +1442,6 @@ type ProcessServerChatStreamProps = {
   source: AsyncIterable<PublicStreamChunk>;
 };
 
-type ChatCutShortOutcome = Extract<
-  ChatTurnOutcome,
-  { type: "cancelled" | "interrupted" }
->;
-
 /**
  * Which abort cut this run. A stop aborts the run's controller with
  * upstream's explicit-cancel reason. The deadline fires on its own timer and
@@ -1456,7 +1455,7 @@ const chatCutShortOutcome = ({
 }: {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
-}): ChatCutShortOutcome => {
+}): CutShortOutcome => {
   if (abortSignal.reason === RUN_CANCEL_REASON) {
     return USER_STOP_OUTCOME;
   }
@@ -1625,6 +1624,22 @@ const isRunFinishedOutcome = (
   }
 };
 
+/** The calls bound to the interrupts a run handed out with its final
+ *  finish. */
+const interruptToolCallIdsOf = (
+  chunks: readonly PublicStreamChunk[],
+): ReadonlySet<string> =>
+  new Set(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+        ? chunk.outcome.interrupts.flatMap(({ toolCallId }) =>
+            toolCallId === undefined ? [] : [toolCallId],
+          )
+        : [],
+    ),
+  );
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1655,10 +1670,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "settled") {
       return;
     }
-    if (
-      KEEPS_PARTIAL_TOOL_INPUT[outcome.type] &&
-      flushPendingSource !== undefined
-    ) {
+    if (CUT_SHORT_OUTCOME[outcome.type] && flushPendingSource !== undefined) {
       for (const chunk of flushPendingSource()) {
         trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
         processor.processChunk(chunk);
@@ -1681,7 +1693,7 @@ export const processServerChatStream = async function* ({
         "Persistence processor dropped an assistant turn that carried a complete tool call",
       );
     }
-    const responseMessage = KEEPS_PARTIAL_TOOL_INPUT[outcome.type]
+    const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
       ? restoreInterruptedToolCallInputs(
           getResponseMessage(),
           rawArgumentsByIncompleteToolCallId,
@@ -1836,23 +1848,23 @@ export const processServerChatStream = async function* ({
     // is what ends the message; it is the same call the SDK makes when it
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
-    const awaitingUserInteraction =
-      getAwaitingUserInteraction(getResponseMessage());
+    const responseMessage = getResponseMessage();
+    const awaitingUserInteraction = findHandedOutInteraction({
+      interruptToolCallIds: interruptToolCallIdsOf(finalRunFinishedChunks),
+      message: responseMessage,
+    });
     // A client-resolved call whose input never finished (no TOOL_CALL_END)
     // cannot be answered by any client, so the turn fails instead of waiting.
+    const openInteraction = getAwaitingUserInteraction(responseMessage);
     const incompleteClientInteraction =
-      awaitingUserInteraction !== null &&
-      awaitsCompleteInput(awaitingUserInteraction) &&
-      !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
+      openInteraction !== null &&
+      awaitsCompleteInput(openInteraction) &&
+      !toolCallsWithCompleteInput.has(openInteraction.toolCallId);
     let outcome: ChatTurnOutcome;
-    if (incompleteClientInteraction) {
-      outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction !== null) {
-      outcome = {
-        type: "awaiting-user",
-        interaction: awaitingUserInteraction,
-      };
-    } else if (abortSignal.aborted || runCancelled) {
+    if (
+      (abortSignal.aborted || runCancelled) &&
+      awaitingUserInteraction === null
+    ) {
       // A cancelled run drains like a finished one. TanStack's agent loop
       // checks its cancellation before it reads each adapter chunk, so the
       // terminal `RUN_ERROR` the adapter yields for the aborted provider
@@ -1862,13 +1874,20 @@ export const processServerChatStream = async function* ({
       // the turn was cut, and which signal says why. A finish whose outcome is
       // `cancelled` says the same.
       outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
+    } else if (incompleteClientInteraction) {
+      outcome = { type: "failed", error: "unknown" };
+    } else if (awaitingUserInteraction !== null) {
+      outcome = {
+        type: "awaiting-user",
+        interaction: awaitingUserInteraction,
+      };
     } else {
       outcome = { type: "completed" };
     }
     await terminalize({
       // A cut-short outcome flushes the pending source into the processor,
       // which has to be finalized again for that content to reach the message.
-      flushProcessor: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
+      flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {

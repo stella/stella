@@ -32,7 +32,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import {
   findDroppedParts,
-  findUnsettledToolCallsForOutcome,
+  findUnsettledStoredToolCalls,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
@@ -542,7 +542,7 @@ const unsettledCallsOf = (messages: readonly StoredMessage[]) =>
   messages
     .filter(({ role }) => role === "assistant")
     .flatMap(({ id, outcome, toolCalls }) =>
-      findUnsettledToolCallsForOutcome({
+      findUnsettledStoredToolCalls({
         outcome: outcome?.type ?? "completed",
         parts: toolCalls,
       }).map(({ state, toolCallId }) => ({

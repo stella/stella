@@ -1267,6 +1267,18 @@ describe("outgoing chat stream message ids", () => {
             {
               type: EventType.RUN_FINISHED,
               finishReason: "tool_calls",
+              // The engine hands the call out as an interrupt either way; only
+              // its input decides whether the turn may wait on it.
+              outcome: {
+                type: "interrupt",
+                interrupts: [
+                  {
+                    id: `interrupt-${callChunks[0].toolCallId}`,
+                    reason: "tool_call",
+                    toolCallId: callChunks[0].toolCallId,
+                  },
+                ],
+              },
               runId: "run-1",
               threadId: "thread-1",
             },

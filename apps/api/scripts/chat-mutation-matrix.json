@@ -526,13 +526,13 @@
       "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
       "status": "active",
       "file": "src/handlers/chat/chat-message-persistence.ts",
-      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "search": "  isCutShortOutcome(outcome)\n    ? cutShortAssistantMessage({ message, outcome })\n    : settleTerminalAssistantMessage(message, outcome);",
       "replace": "  settleTerminalAssistantMessage(message, outcome);",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops an answer while it streams (before-tool-end)"
       },
-      "oracle": "chat.persisted.pending-owned"
+      "oracle": "chat.persisted.calls-settled"
     },
     {
       "id": "snapshot-serves-stored-history",
@@ -547,6 +547,34 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "interrupted-closes-cut-off-calls",
+      "fix": "#3994",
+      "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  isCutShortOutcome(outcome)\n",
+      "replace": "  outcome.type === \"cancelled\"\n",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (before-tool-end)"
+      },
+      "oracle": "chat.persisted.calls-settled"
+    },
+    {
+      "id": "waits-only-on-handed-out-interrupts",
+      "fix": "#3994",
+      "behaviour": "A run waits on the user only for a call among the interrupts it handed out, never for a server call cut off before it ran.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    interruptToolCallIds.has(toolCallId),",
+      "replace": "    interruptToolCallIds.size >= 0 || toolCallId === \"\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
+      },
+      "oracle": "chat.ledger.pending"
     }
   ]
 }

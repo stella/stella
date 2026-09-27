@@ -158,8 +158,8 @@ type Ledger = {
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
   approvesAll: boolean;
-  /** How the latest turn ended; `cancelled` when the user stopped it or a
-   *  fork settled what it awaited. */
+  /** How the latest turn ended; `cancelled` when the user stopped it, a
+   *  dropped connection cut it off, or a fork settled what it awaited. */
   latest: "awaiting" | "cancelled" | "failed" | "none" | "text";
   /** How each turn stood when the conversation last settled. */
   outcomes: Map<number, Ledger["latest"]>;
@@ -1553,6 +1553,51 @@ describe("a conversation's live view", () => {
       } finally {
         closeConversation(conversation);
       }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  // A dropped connection cuts the run off before it hands out an interrupt:
+  // a server call whose input completed never ran, and nothing waits on it.
+  test.each(["after-tool-end", "before-tool-end"] as const)(
+    "leaves nothing waiting when a dropped connection cuts an answer off (%s)",
+    async (quietAt) => {
+      await inConversation(async (model, real) => {
+        const { harness, ledger, threadId } = real;
+        ledger.turn += 1;
+        const toolCallId = real.nextId();
+        ledger.calls.push({ id: toolCallId, kind: "plain", turn: ledger.turn });
+        ledger.latest = "cancelled";
+        harness.streamLive(threadId);
+        harness.script(threadId, [
+          {
+            quietUntilAborted: quietAt,
+            text: "Checking the register",
+            toolCalls: [
+              {
+                arguments: PLAIN_TOOL_ARGUMENTS,
+                toolCallId,
+                toolName: PLAIN_TOOL_NAME,
+              },
+            ],
+            type: "step",
+          },
+        ]);
+        await real.client.startUserMessage(
+          Bun.randomUUIDv7(),
+          "Check the register",
+          (messages) =>
+            messages.some(({ parts }) =>
+              parts.some(
+                (part) => part.type === "tool-call" && part.id === toolCallId,
+              ),
+            ),
+        );
+        harness.dropConnection(threadId);
+        await real.client.settle();
+        harness.streamWhole(threadId);
+        await new ReloadPage().run(model, real);
+      });
     },
     propertyTestTimeout(30_000),
   );
