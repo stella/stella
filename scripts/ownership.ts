@@ -302,6 +302,11 @@ export const OWNERSHIP = [
             "Queue transport. The shared facade owns lazy producer connections; BullMQ owns the key layout under its own prefix.",
         },
         {
+          path: "apps/api/src/lib/case-law/sitemap-shard-refresh-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
           path: "apps/api/src/lib/document-deadline-scout-worker.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",

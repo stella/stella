@@ -19,6 +19,7 @@ import {
 const BULLMQ_QUEUE_HOSTS = {
   "account-deletion-cleanup": "api",
   "bilingual-translation-runs": "api",
+  "case-law-sitemap-shards": "api",
   "document-deadline-scouts": "api",
   "document-processing": "document-processing-worker",
   "document-review-runs-v2": "api",

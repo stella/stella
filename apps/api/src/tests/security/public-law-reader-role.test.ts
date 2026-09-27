@@ -33,7 +33,6 @@ import {
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
-  readSitemapBucketShards,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
@@ -807,12 +806,10 @@ describe("public-law reader role", () => {
       languageGroupKeys: ["reader-role-census"],
     });
 
+    // The snapshot is empty here; reading it at all is what the role must allow.
     const shards = await listSitemapShardsHandler(caseLawDb);
-    expect(shards).toMatchObject({ items: [] });
+    expect(shards).toMatchObject({ code: 503 });
     await caseLawDb(async (tx) => {
-      await readSitemapBucketShards(tx, [
-        { country: PUBLIC_COUNTRY, month: "08", year: "2026" },
-      ]);
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });
 

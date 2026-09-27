@@ -22,6 +22,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
     "case_law_provision_extraction_revisions_registry",
   caseLawProvisionExtractions: "case_law_provision_extractions",
   caseLawSearchDocuments: "case_law_search_documents",
+  caseLawSitemapShards: "case_law_sitemap_shards",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
@@ -240,6 +241,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     regconfig: "required",
     tsv: "required",
     searchable_text: "required",
+  },
+  // The shards the public sitemap index lists. The count and the refresh
+  // time are how the refresh works, not what the index states.
+  case_law_sitemap_shards: {
+    country: "required",
+    year: "required",
+    month: "required",
+    bucket: "required",
+    last_modified_at: "required",
   },
   case_law_statute_citation_counts: {
     source_id: "required",
