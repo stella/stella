@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -296,7 +296,28 @@ type EvaluateResultOptions = {
   results: Record<string, string>;
   suiteDepth?: SuiteDepth | "";
   unplannedScopes?: readonly string[];
+  /** The pull request's draft state as the API reports it now; unset fails the lookup. */
+  liveDraft?: boolean;
 };
+
+const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
+
+// The step reads the live draft state through `gh`; this stand-in answers
+// only the pull request the run belongs to, and fails like the API when told
+// nothing.
+const fakeGhDirectory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-gh-"));
+writeFileSync(
+  nodePath.join(fakeGhDirectory, "gh"),
+  `#!/usr/bin/env bash
+[[ "$*" == "api repos/${PULL_REQUEST.repo}/pulls/${PULL_REQUEST.number} --jq .draft" ]] || exit 2
+[[ -n "\${FAKE_LIVE_DRAFT:-}" ]] || exit 1
+echo "$FAKE_LIVE_DRAFT"
+`,
+  { mode: 0o755 },
+);
+afterAll(() => {
+  rmSync(fakeGhDirectory, { force: true, recursive: true });
+});
 
 // Runs the ci-result step as GitHub would, with every job succeeding and
 // every scope selected unless the options say otherwise.
@@ -307,6 +328,7 @@ const evaluateResult = ({
     ? SUITE_DEPTH.fast
     : SUITE_DEPTH.full,
   unplannedScopes = [],
+  liveDraft,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
     Object.values(jobScopes).flatMap((scope) =>
@@ -325,10 +347,13 @@ const evaluateResult = ({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
+      FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
-      PATH: process.env["PATH"] ?? "",
+      PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
+      PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
+      REPO: PULL_REQUEST.repo,
       PLAN: JSON.stringify({
         ...plan,
         suite_depth: suiteDepth,
@@ -513,6 +538,59 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
     expect(
       evaluateResult({ event, results: {}, suiteDepth }),
       `${event} at depth '${suiteDepth}'`,
+    ).toBe(1);
+  }
+});
+
+test("a skipped plan passes only while the pull request is still a draft", () => {
+  const skippedPlan = Object.fromEntries(
+    resultJob.needs.map((job) => [job, "skipped"]),
+  );
+  const event = EVENT.pullRequest;
+  // A push to a draft runs nothing, and nothing has to.
+  expect(
+    evaluateResult({
+      event,
+      results: skippedPlan,
+      suiteDepth: "",
+      liveDraft: true,
+    }),
+  ).toBe(0);
+
+  // A push to a draft, then marking it ready at once: the ready run starts
+  // first and is cancelled by the draft run queued after it, whose payload
+  // still says draft and whose plan skips. The cancelled run may pass, but
+  // the run that stands must not certify a ready pull request unchecked.
+  const cancelledReadyRun = Object.fromEntries(
+    resultJob.needs.map((job) => [job, "cancelled"]),
+  );
+  expect(
+    evaluateResult({ event, results: cancelledReadyRun, liveDraft: false }),
+  ).toBe(0);
+  expect(
+    evaluateResult({
+      event,
+      results: skippedPlan,
+      suiteDepth: "",
+      liveDraft: false,
+    }),
+  ).toBe(1);
+
+  // An unanswered lookup is not a draft either.
+  expect(evaluateResult({ event, results: skippedPlan, suiteDepth: "" })).toBe(
+    1,
+  );
+
+  // Only a pull request can be a draft.
+  for (const other of FULL_DEPTH_EVENTS) {
+    expect(
+      evaluateResult({
+        event: other,
+        results: skippedPlan,
+        suiteDepth: "",
+        liveDraft: true,
+      }),
+      other,
     ).toBe(1);
   }
 });

@@ -3287,10 +3287,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # A skipped plan passes only while the pull request is still a draft.
+      pull-requests: read
     steps:
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; scripts/ci-plan.test.ts requires every job to be
           # in `needs`.
@@ -3334,12 +3339,22 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "web-image-smoke"]
         run: |
-          # When the CI plan was skipped (draft PR), all downstream
-          # jobs are also skipped. This is expected and should not
-          # block the PR.
+          # The plan skips a draft pull request, and every job with it. The
+          # event's draft flag can be stale: a push to a draft followed by
+          # marking it ready queues the draft run after the ready one, which
+          # it then cancels. So the skip passes only while the pull request is
+          # still a draft; a ready one has to run its checks.
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
-            echo "CI plan skipped. Passing."
-            exit 0
+            draft=""
+            if [[ "$EVENT" == "pull_request" ]]; then
+              draft="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
+            fi
+            if [[ "$draft" == "true" ]]; then
+              echo "CI plan skipped for a draft pull request. Passing."
+              exit 0
+            fi
+            echo "::error::CI plan was skipped, but the pull request is not a draft; re-run CI Checks."
+            exit 1
           fi
 
           # Only a pull request or a manual run is ever superseded by a newer
