@@ -32,6 +32,7 @@ import type {
   WorkspaceContactRole,
 } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { deriveBlockId } from "@stll/folio-core/server";
 
 import {
@@ -71,6 +72,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   DEFAULT_DOCUMENT_TYPES,
@@ -115,6 +117,10 @@ const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
 const HEAVY_MATTER_LABEL = "ws-heavy-virtualization";
+// Rows per multi-row INSERT; well under the bind-parameter cap for these tables.
+const SEED_INSERT_CHUNK_SIZE = 500;
+// Matters seeded, and entities indexed, at once.
+const SEED_WORKSPACE_CONCURRENCY = 8;
 const HEAVY_MATTER_FILE_COUNT = 1000;
 const HEAVY_MATTER_FOLDER_COUNT = 25;
 const EXPORT_TABLE_MATTER_LABEL = "ws-export-review";
@@ -5958,7 +5964,12 @@ export async function seed(organizationId?: string, userId?: string) {
     const label = `extra-ws-${mw.reference}`;
     allEntities.push(...buildEntities(wsId, label));
   }
+  // Rows are written in multi-row chunks: one transaction per row cost
+  // seconds of round trips, and every seeded stack start pays for them.
   const entityIndexByWorkspace = new Map<WorkspaceId, number>();
+  const entityRows: (typeof entities.$inferInsert)[] = [];
+  const plainVersionRows: (typeof entityVersions.$inferInsert)[] = [];
+  const supplierAgreementEntities: EntitySeed[] = [];
   for (const [ei, e] of allEntities.entries()) {
     const workspaceActivityAt = workspaceActivityById.get(e.workspaceId);
     if (!workspaceActivityAt) {
@@ -5973,85 +5984,104 @@ export async function seed(organizationId?: string, userId?: string) {
       indexInWorkspace,
       workspaceActivityAt,
     });
+    entityRows.push({
+      id: e.entityId,
+      workspaceId: toWs(e.workspaceId),
+      kind: e.kind,
+      parentId: e.parentId ?? null,
+      name: e.name,
+      createdBy: pickAuthor(seedUserIds, ei),
+      lastEditedBy: pickAuthor(seedUserIds, ei + 1),
+      createdAt,
+      updatedAt,
+    });
+    if (e.name === SUPPLIER_AGREEMENT_DOC_NAME) {
+      supplierAgreementEntities.push(e);
+    } else {
+      plainVersionRows.push({
+        id: e.versionId,
+        workspaceId: toWs(e.workspaceId),
+        entityId: e.entityId,
+      });
+    }
+  }
+
+  // Chunks keep input order, so a folder lands before the documents in it.
+  for (const chunk of chunked(entityRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
           .insert(entities)
-          .values({
-            id: e.entityId,
-            workspaceId: toWs(e.workspaceId),
-            kind: e.kind,
-            parentId: e.parentId,
-            name: e.name,
-            createdBy: pickAuthor(seedUserIds, ei),
-            lastEditedBy: pickAuthor(seedUserIds, ei + 1),
-            createdAt,
-            updatedAt,
-          })
+          .values(chunk)
           .onConflictDoUpdate({
             target: entities.id,
             set: {
-              name: e.name,
-              parentId: e.parentId ?? null,
-              createdAt,
-              updatedAt,
+              name: sql`excluded.name`,
+              parentId: sql`excluded.parent_id`,
+              createdAt: sql`excluded.created_at`,
+              updatedAt: sql`excluded.updated_at`,
             },
           }),
     );
+  }
+  for (const chunk of chunked(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
+    await db.transaction(
+      async (tx) =>
+        await tx.insert(entityVersions).values(chunk).onConflictDoNothing(),
+    );
+  }
+  for (const e of supplierAgreementEntities) {
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(entityVersions)
+          .values({
+            id: e.versionId,
+            workspaceId: toWs(e.workspaceId),
+            entityId: e.entityId,
+            versionNumber: 2,
+            label: "Negotiated draft",
+          })
+          .onConflictDoUpdate({
+            target: entityVersions.id,
+            set: { versionNumber: 2, label: "Negotiated draft" },
+          }),
+    );
+    await db.transaction(
+      async (tx) =>
+        await tx
+          .insert(entityVersions)
+          .values({
+            id: supplierAgreementBaseVersionId(e.workspaceId),
+            workspaceId: toWs(e.workspaceId),
+            entityId: e.entityId,
+            versionNumber: 1,
+            label: "Initial draft",
+          })
+          .onConflictDoUpdate({
+            target: entityVersions.id,
+            set: { versionNumber: 1, label: "Initial draft" },
+          }),
+    );
+  }
 
-    const isSupplierAgreement = e.name === SUPPLIER_AGREEMENT_DOC_NAME;
-    const versionValues = {
-      id: e.versionId,
-      workspaceId: toWs(e.workspaceId),
-      entityId: e.entityId,
-      ...(isSupplierAgreement
-        ? { versionNumber: 2, label: "Negotiated draft" }
-        : {}),
-    };
-    if (isSupplierAgreement) {
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .insert(entityVersions)
-            .values(versionValues)
-            .onConflictDoUpdate({
-              target: entityVersions.id,
-              set: { versionNumber: 2, label: "Negotiated draft" },
-            }),
-      );
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .insert(entityVersions)
-            .values({
-              id: supplierAgreementBaseVersionId(e.workspaceId),
-              workspaceId: toWs(e.workspaceId),
-              entityId: e.entityId,
-              versionNumber: 1,
-              label: "Initial draft",
-            })
-            .onConflictDoUpdate({
-              target: entityVersions.id,
-              set: { versionNumber: 1, label: "Initial draft" },
-            }),
-      );
-    } else {
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .insert(entityVersions)
-            .values(versionValues)
-            .onConflictDoNothing(),
-      );
-    }
-
-    // Link currentVersionId
+  // Link currentVersionId
+  for (const chunk of chunked(allEntities, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
           .update(entities)
-          .set({ currentVersionId: e.versionId })
-          .where((await import("drizzle-orm")).eq(entities.id, e.entityId)),
+          .set({ currentVersionId: sql`${entityVersions.id}` })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.entityId, entities.id),
+              inArray(
+                entityVersions.id,
+                chunk.map((e) => e.versionId),
+              ),
+            ),
+          ),
     );
   }
   console.log(
@@ -6299,9 +6329,15 @@ export async function seed(organizationId?: string, userId?: string) {
     docPlans.push({ wsId, wsLabel, docNames: picked });
   }
 
-  for (const plan of docPlans) {
-    await seedDocumentsForWorkspace(plan.wsId, plan.wsLabel, plan.docNames);
-  }
+  // Matters are independent: documents are built and uploaded for several
+  // at once, while each matter keeps its own document order.
+  await mapWithConcurrency({
+    items: docPlans,
+    limit: SEED_WORKSPACE_CONCURRENCY,
+    operation: async (plan) => {
+      await seedDocumentsForWorkspace(plan.wsId, plan.wsLabel, plan.docNames);
+    },
+  });
 
   console.log(
     `  Files: ${fileCount} (uploaded to S3, ${pdfTwinCount} PDF twins)`,
@@ -6314,18 +6350,20 @@ export async function seed(organizationId?: string, userId?: string) {
     const wsEntities = allEntities.filter((e) => e.workspaceId === plan.wsId);
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
-  for (const f of allFields) {
+  for (const chunk of chunked(allFields, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
           .insert(fields)
-          .values({
-            id: f.id,
-            workspaceId: toWs(f.workspaceId),
-            propertyId: f.propertyId,
-            entityVersionId: f.entityVersionId,
-            content: f.content,
-          })
+          .values(
+            chunk.map((f) => ({
+              id: f.id,
+              workspaceId: toWs(f.workspaceId),
+              propertyId: f.propertyId,
+              entityVersionId: f.entityVersionId,
+              content: f.content,
+            })),
+          )
           .onConflictDoNothing(),
     );
   }
@@ -6338,18 +6376,20 @@ export async function seed(organizationId?: string, userId?: string) {
       ...buildExportReviewJustifications(plan.wsId, plan.wsLabel, wsEntities),
     );
   }
-  for (const justification of allJustifications) {
+  for (const chunk of chunked(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
           .insert(justifications)
-          .values({
-            id: justification.id,
-            workspaceId: toWs(justification.workspaceId),
-            fieldId: justification.fieldId,
-            content: justification.content,
-            fileFieldIds: justification.fileFieldIds,
-          })
+          .values(
+            chunk.map((justification) => ({
+              id: justification.id,
+              workspaceId: toWs(justification.workspaceId),
+              fieldId: justification.fieldId,
+              content: justification.content,
+              fileFieldIds: justification.fileFieldIds,
+            })),
+          )
           .onConflictDoNothing(),
     );
   }
@@ -6399,12 +6439,14 @@ export async function seed(organizationId?: string, userId?: string) {
   `);
 
   // 7c. Search index (depends on fields + extracted content)
-  let searchCount = 0;
-  for (const e of allEntities) {
-    await upsertSearchDocument(e.entityId);
-    searchCount++;
-  }
-  console.log(`  Search index: ${searchCount} documents`);
+  await mapWithConcurrency({
+    items: allEntities,
+    limit: SEED_WORKSPACE_CONCURRENCY,
+    operation: async (e) => {
+      await upsertSearchDocument(e.entityId);
+    },
+  });
+  console.log(`  Search index: ${allEntities.length} documents`);
 
   // 8. Workspace contacts (parties)
   for (const party of seedParties) {
