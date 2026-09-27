@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import {
@@ -501,6 +507,24 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("the full check lints untracked root source files", () => {
+    const file = `.claude/mcp/code-check-untracked-${process.pid}.ts`;
+    expect(existsSync(file)).toBe(false);
+    writeFileSync(file, "export const untracked = true;\n");
+    try {
+      const result = Bun.spawnSync([
+        "bun",
+        "scripts/code-check-affected.ts",
+        "--all",
+        "--dry-run",
+      ]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain(file);
+    } finally {
+      rmSync(file);
+    }
+  });
+
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
   test("every workspace lint runs the type-checking Oxlint pass", () => {

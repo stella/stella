@@ -2,7 +2,7 @@
 
 // Code-quality gate, full or affected.
 //
-// `--all` plans the same checks over every tracked file, so the full
+// `--all` plans the same checks over every tracked or unignored file, so the full
 // repository check and the affected check are one pass list at two scopes.
 // Pre-push and pull-request CI use the affected scope, which asks Turbo for
 // changed workspaces plus reverse dependants. Known global inputs widen only
@@ -414,8 +414,12 @@ const workspacePaths = (): Set<string> => {
   return workspaces;
 };
 
-const trackedPaths = (): string[] =>
-  run(["git", "ls-files", "-z"], { capture: true }).split("\0").filter(Boolean);
+const repositoryPaths = (): string[] =>
+  run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    capture: true,
+  })
+    .split("\0")
+    .filter(Boolean);
 
 const changedPaths = (base: string): { mergeBase: string; paths: string[] } => {
   const mergeBase = run(["git", "merge-base", base, "HEAD"], {
@@ -586,7 +590,7 @@ type FullCheckOptions = {
 };
 
 /**
- * The full check is the affected planner with every tracked file changed and
+ * The full check is the affected planner with every tracked or unignored file changed and
  * every workspace affected, so a pass added to either scope reaches both.
  * Any other outcome means a check the planner can schedule is unreachable
  * from the repository's own files.
@@ -624,13 +628,13 @@ type ScopeCheck = { plan: CheckPlan; presentChangedPaths: string[] };
 const planScope = (scope: CheckScope): ScopeCheck => {
   switch (scope.type) {
     case "all": {
-      const tracked = presentPaths(trackedPaths());
+      const files = presentPaths(repositoryPaths());
       return {
         plan: planFullCheck({
-          files: tracked,
+          files,
           workspacePaths: workspacePaths(),
         }),
-        presentChangedPaths: tracked,
+        presentChangedPaths: files,
       };
     }
     case "affected": {
