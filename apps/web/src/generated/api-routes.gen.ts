@@ -22942,12 +22942,6 @@ export type WebRoutes = {
                 post_claim_scopes?: Array<string>;
                 requiredFields?: Array<T196b4403fb>;
               } | {
-                readonly message: "Case-law sitemap bucket shards exceed sitemap index capacity.";
-              } | {
-                readonly message: "Case-law sitemap bucket rows missing for natural shard.";
-              } | {
-                readonly message: "Case-law sitemap bucket exceeds shard capacity.";
-              } | {
                 readonly message: "Case-law sitemap shard count exceeds sitemap index capacity.";
               };
               502: Tc642053948;

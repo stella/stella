@@ -63,7 +63,7 @@ test("accepts an sql.raw-inlined list join", () => {
 });
 
 test("the migrated sitemap fragments construct without panicking", async () => {
-  const fragments = await import("@/api/handlers/case-law/decisions/sitemap");
+  const fragments = await import("@/api/lib/case-law/sitemap-shard-sql");
   expect(fragments.decisionYearSql).toBeInstanceOf(sql`x`.constructor);
   expect(fragments.decisionMonthSql).toBeInstanceOf(sql`x`.constructor);
   expect(fragments.decisionBucketSql).toBeInstanceOf(sql`x`.constructor);

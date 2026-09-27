@@ -184,6 +184,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Backfill progress: owned by the provision state backfill job, no request read.
   "case_law_provision_repair_cursors",
   "case_law_provision_admission",
+  // Public sitemap shard snapshot: written by the owner-run scheduler refresh
+  // and read only by the public-law reader, never through the request role.
+  "case_law_sitemap_shards",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's
   // identity. Written only through the owner connection in
