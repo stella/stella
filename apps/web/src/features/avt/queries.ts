@@ -169,7 +169,11 @@ export const verificationHistoryOptions = ({
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor,
     refetchInterval: (query) => {
-      for (const page of query.state.data?.pages ?? []) {
+      const data = query.state.data;
+      if (data === undefined) {
+        return false;
+      }
+      for (const page of data.pages) {
         for (const run of page.items) {
           if (runPollInterval(run.status) !== false) {
             return runPollInterval(run.status);

@@ -33,6 +33,8 @@ type RunHistoryPickerProps = {
   workspaceId: string;
   /** The run on screen. */
   run: VerificationRun;
+  /** The document's current file field; history spans all its versions. */
+  fileFieldId: string;
   /** The view's list; a run checked against another one is marked. */
   listId: string | null;
   onOpenRun: (runId: string) => void;
@@ -41,6 +43,7 @@ type RunHistoryPickerProps = {
 export const RunHistoryPicker = ({
   workspaceId,
   run,
+  fileFieldId,
   listId,
   onOpenRun,
 }: RunHistoryPickerProps) => {
@@ -50,7 +53,7 @@ export const RunHistoryPicker = ({
     verificationHistoryOptions({
       workspaceId,
       entityId: run.entityId,
-      fileFieldId: run.fileFieldId,
+      fileFieldId,
     }),
   );
   const options = runHistoryOptions(
@@ -78,7 +81,7 @@ export const RunHistoryPicker = ({
             {t("common.loading")}
           </div>
         )}
-        {history.isError && options.length === 0 && (
+        {history.isError && (
           <p className="text-muted-foreground p-2 text-sm">
             {t("avt.runs.history.loadFailed")}
           </p>
@@ -110,7 +113,7 @@ export const RunHistoryPicker = ({
             closeOnClick={false}
             disabled={history.isFetchingNextPage}
             onClick={() => {
-              detached(history.fetchNextPage(), "avt.run-history.load-more");
+              detached(history.fetchNextPage(), "avt.run-history-load-more");
             }}
           >
             {history.isFetchingNextPage && (

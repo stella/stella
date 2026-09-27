@@ -50,10 +50,14 @@ export const VerificationDetail = ({
     isError,
   } = useQuery(verificationRunOptions(workspaceId, runId));
   const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
-  const documentName =
+  // The document as it stands now: an earlier run may pin a file field a
+  // newer version replaced, and history and re-verification follow the
+  // current one.
+  const currentFile =
     run === undefined
-      ? null
-      : (files?.find((file) => file.entityId === run.entityId)?.name ?? null);
+      ? undefined
+      : files?.find((file) => file.entityId === run.entityId);
+  const documentName = currentFile?.name ?? null;
 
   return (
     <>
@@ -72,6 +76,7 @@ export const VerificationDetail = ({
         )}
         {run !== undefined && (
           <RunHistoryPicker
+            fileFieldId={currentFile?.fieldId ?? run.fileFieldId}
             listId={listId}
             onOpenRun={onOpenRun}
             run={run}
@@ -87,6 +92,7 @@ export const VerificationDetail = ({
       )}
       {run !== undefined && (
         <RunBody
+          currentFileFieldId={currentFile?.fieldId ?? null}
           listId={listId}
           onOpenRun={onOpenRun}
           run={run}
@@ -100,11 +106,19 @@ export const VerificationDetail = ({
 type RunBodyProps = {
   workspaceId: string;
   run: VerificationRun;
+  /** Null while the matter's files load or once the document is gone. */
+  currentFileFieldId: string | null;
   listId: string | null;
   onOpenRun: (runId: string) => void;
 };
 
-const RunBody = ({ workspaceId, run, listId, onOpenRun }: RunBodyProps) => {
+const RunBody = ({
+  workspaceId,
+  run,
+  currentFileFieldId,
+  listId,
+  onOpenRun,
+}: RunBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
 
@@ -125,10 +139,10 @@ const RunBody = ({ workspaceId, run, listId, onOpenRun }: RunBodyProps) => {
           <p className="text-muted-foreground text-sm">
             {t(RUN_ERROR_KEYS[run.errorCode ?? "internal"])}
           </p>
-          {listId !== null && (
+          {listId !== null && currentFileFieldId !== null && (
             <VerifyAgain
               entityId={run.entityId}
-              fileFieldId={run.fileFieldId}
+              fileFieldId={currentFileFieldId}
               listId={listId}
               onOpenRun={onOpenRun}
               workspaceId={workspaceId}
