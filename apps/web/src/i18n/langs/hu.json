@@ -1480,6 +1480,7 @@
     "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
     "documentName": "Dokumentum neve",
+    "documentPage": "<bdi>{document}</bdi> · {page}. o.",
     "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",

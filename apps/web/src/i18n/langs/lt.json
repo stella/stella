@@ -1480,6 +1480,7 @@
     "displayName": "Rodomas vardas",
     "document": "Dokumentas",
     "documentName": "Dokumento pavadinimas",
+    "documentPage": "<bdi>{document}</bdi> · {page} p.",
     "documentReference": "Dokumento nuorodos numeris",
     "documentTitle": "Dokumento pavadinimas",
     "documentation": "Dokumentacija",

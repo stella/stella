@@ -23679,6 +23679,7 @@ export type WebRoutes = {
                       sources: ReadonlyArray<{
                         sourceEntityId: T9a509045a7;
                         sourceEntityVersionId: T116a5c37c8;
+                        sourceName?: string;
                         locator: T0cd9410d68;
                         quote: T432e07d100;
                       }>;
@@ -23990,6 +23991,11 @@ export type WebRoutes = {
                       medium: T432e07d100;
                       interpretationNote: T432e07d100;
                       scoring: T58d852de3d;
+                    });
+                    firstSource: (null | {
+                      documentId: T9a509045a7;
+                      documentName: string;
+                      locator: T0cd9410d68;
                     });
                   } & {
                     customFields: Array<{
