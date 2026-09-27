@@ -20,6 +20,7 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteLegislationPayloadRevision,
+  installPgliteProvisionExtractionState,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
@@ -381,6 +382,31 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT ON TABLE "case_law_corpus_jurisdictions"
     TO stella_ingestion
   `,
+  // Provision extraction state: request code reads it and ingestion updates
+  // it; only owner-run database functions insert state or read scopes.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_provision_extraction_scopes"
+    FROM stella
+  `,
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "case_law_provision_scope_transitions",
+      "case_law_provision_extraction_revisions_registry",
+      "case_law_provision_extraction_revisions",
+      "case_law_provision_extractions"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, UPDATE ON TABLE "case_law_provision_extractions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT ON TABLE
+      "case_law_provision_scope_transitions",
+      "case_law_provision_extraction_revisions_registry",
+      "case_law_provision_extraction_revisions"
+    TO stella_ingestion
+  `,
   // case_law_index_jobs is append-only: ingestion appends audit rows
   // but never updates or deletes them.
   `
@@ -579,6 +605,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
+  await installPgliteProvisionExtractionState(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

@@ -1,5 +1,6 @@
 {
   "initialPage": {
+    "activeTurnId": null,
     "messages": [],
     "olderCursor": null,
     "lastActivityAt": null
@@ -420,6 +421,7 @@
             "status": 200
           },
           "page": {
+            "activeTurnId": "00000000-0000-7000-8000-000000000004",
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:09.000Z",
@@ -447,11 +449,11 @@
                         "ref": "ent_1",
                         "kind": "entity",
                         "entity": {
-                          "id": "00000000-0000-7000-8000-000000000004",
+                          "id": "00000000-0000-7000-8000-000000000005",
                           "type": "entity"
                         },
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000005",
+                          "id": "00000000-0000-7000-8000-000000000006",
                           "type": "workspace"
                         }
                       },
@@ -459,7 +461,7 @@
                         "ref": "mat_2",
                         "kind": "matter",
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000005",
+                          "id": "00000000-0000-7000-8000-000000000006",
                           "type": "workspace"
                         }
                       },
@@ -467,11 +469,11 @@
                         "ref": "ent_2",
                         "kind": "entity",
                         "entity": {
-                          "id": "00000000-0000-7000-8000-000000000006",
+                          "id": "00000000-0000-7000-8000-000000000007",
                           "type": "entity"
                         },
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000007",
+                          "id": "00000000-0000-7000-8000-000000000008",
                           "type": "workspace"
                         }
                       },
@@ -479,7 +481,7 @@
                         "ref": "mat_1",
                         "kind": "matter",
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000007",
+                          "id": "00000000-0000-7000-8000-000000000008",
                           "type": "workspace"
                         }
                       }
@@ -488,11 +490,11 @@
                     "entities": [],
                     "workspaceScope": [
                       {
-                        "id": "00000000-0000-7000-8000-000000000005",
+                        "id": "00000000-0000-7000-8000-000000000006",
                         "type": "workspace"
                       },
                       {
-                        "id": "00000000-0000-7000-8000-000000000007",
+                        "id": "00000000-0000-7000-8000-000000000008",
                         "type": "workspace"
                       }
                     ],
@@ -1161,10 +1163,11 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225648000}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225649000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"deleted\\\":\\\"call-2\\\"}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225650000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-3\",\"toolCallName\":\"execute_typescript\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225651000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-3\",\"delta\":\"{\\\"typescriptCode\\\":\\\"const document = await external_read_document({ entity_id: \\\\\\\"ent_1\\\\\\\" });\\\\nreturn { id: document.entityId, name: document.name };\\\"}\",\"timestamp\":1767225652000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-3\",\"timestamp\":1767225653000,\"metadata\":{\"tanstack\":{\"input\":{\"typescriptCode\":\"const document = await external_read_document({ entity_id: \\\"ent_1\\\" });\\nreturn { id: document.entityId, name: document.name };\"}}}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225654000,\"name\":\"code_mode:execution_started\",\"value\":{\"timestamp\":1767225655000,\"codeLength\":125,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225656000,\"name\":\"code_mode:external_call\",\"value\":{\"function\":\"external_read_document\",\"args\":{\"entity_id\":\"ent_1\"},\"timestamp\":1767225657000,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225658000,\"name\":\"code_mode:external_result\",\"value\":{\"function\":\"external_read_document\",\"result\":{\"entityId\":\"ent_1\",\"kind\":\"document\",\"name\":\"entityA2\",\"fields\":[{\"id\":\"00000000-0000-7000-8000-000000000008\",\"propertyId\":\"prop_1\",\"content\":{\"version\":1,\"type\":\"text\",\"value\":\"a2\"}}],\"contentState\":{\"status\":\"not_applicable\"},\"searchIndexState\":{\"status\":\"pending\",\"sourceVersionId\":\"00000000-0000-7000-8000-000000000009\"}},\"duration\":0,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225659000,\"name\":\"code_mode:execution_finished\",\"value\":{\"timestamp\":1767225660000,\"durationMs\":0,\"phase\":\"execute\",\"success\":true,\"logCount\":0,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225661000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-3\",\"content\":\"{\\\"success\\\":true,\\\"result\\\":{\\\"id\\\":\\\"ent_1\\\",\\\"name\\\":\\\"entityA2\\\"},\\\"logs\\\":[]}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225662000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Deleted the draft and read the first document\",\"timestamp\":1767225663000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225664000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225665000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225666000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225648000}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225649000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"deleted\\\":\\\"call-2\\\"}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225650000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-3\",\"toolCallName\":\"execute_typescript\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225651000}\n\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-3\",\"delta\":\"{\\\"typescriptCode\\\":\\\"const document = await external_read_document({ entity_id: \\\\\\\"ent_1\\\\\\\" });\\\\nreturn { id: document.entityId, name: document.name };\\\"}\",\"timestamp\":1767225652000}\n\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-3\",\"timestamp\":1767225653000,\"metadata\":{\"tanstack\":{\"input\":{\"typescriptCode\":\"const document = await external_read_document({ entity_id: \\\"ent_1\\\" });\\nreturn { id: document.entityId, name: document.name };\"}}}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225654000,\"name\":\"code_mode:execution_started\",\"value\":{\"timestamp\":1767225655000,\"codeLength\":125,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225656000,\"name\":\"code_mode:external_call\",\"value\":{\"function\":\"external_read_document\",\"args\":{\"entity_id\":\"ent_1\"},\"timestamp\":1767225657000,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225658000,\"name\":\"code_mode:external_result\",\"value\":{\"function\":\"external_read_document\",\"result\":{\"entityId\":\"ent_1\",\"kind\":\"document\",\"name\":\"entityA2\",\"fields\":[{\"id\":\"00000000-0000-7000-8000-000000000009\",\"propertyId\":\"prop_1\",\"content\":{\"version\":1,\"type\":\"text\",\"value\":\"a2\"}}],\"contentState\":{\"status\":\"not_applicable\"},\"searchIndexState\":{\"status\":\"pending\",\"sourceVersionId\":\"00000000-0000-7000-8000-00000000000a\"}},\"duration\":0,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"CUSTOM\",\"timestamp\":1767225659000,\"name\":\"code_mode:execution_finished\",\"value\":{\"timestamp\":1767225660000,\"durationMs\":0,\"phase\":\"execute\",\"success\":true,\"logCount\":0,\"toolCallId\":\"call-3\"}}\n\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225661000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-3\",\"content\":\"{\\\"success\\\":true,\\\"result\\\":{\\\"id\\\":\\\"ent_1\\\",\\\"name\\\":\\\"entityA2\\\"},\\\"logs\\\":[]}\",\"role\":\"tool\"}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225662000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Deleted the draft and read the first document\",\"timestamp\":1767225663000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225664000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225665000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"tool_calls\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225666000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
+            "activeTurnId": null,
             "messages": [
               {
                 "createdAt": "2026-01-01T00:00:17.000Z",
@@ -1192,11 +1195,11 @@
                         "ref": "ent_1",
                         "kind": "entity",
                         "entity": {
-                          "id": "00000000-0000-7000-8000-000000000004",
+                          "id": "00000000-0000-7000-8000-000000000005",
                           "type": "entity"
                         },
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000005",
+                          "id": "00000000-0000-7000-8000-000000000006",
                           "type": "workspace"
                         }
                       },
@@ -1204,7 +1207,7 @@
                         "ref": "mat_2",
                         "kind": "matter",
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000005",
+                          "id": "00000000-0000-7000-8000-000000000006",
                           "type": "workspace"
                         }
                       },
@@ -1212,11 +1215,11 @@
                         "ref": "ent_2",
                         "kind": "entity",
                         "entity": {
-                          "id": "00000000-0000-7000-8000-000000000006",
+                          "id": "00000000-0000-7000-8000-000000000007",
                           "type": "entity"
                         },
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000007",
+                          "id": "00000000-0000-7000-8000-000000000008",
                           "type": "workspace"
                         }
                       },
@@ -1224,7 +1227,7 @@
                         "ref": "mat_1",
                         "kind": "matter",
                         "workspace": {
-                          "id": "00000000-0000-7000-8000-000000000007",
+                          "id": "00000000-0000-7000-8000-000000000008",
                           "type": "workspace"
                         }
                       }

@@ -380,7 +380,7 @@ describe("payload revision", () => {
     expect(await revisionOf(DOCUMENT_ID)).toBe(3n);
   });
 
-  test.each([...ASSIGNED_ONLY_INPUTS])(
+  test.each(ASSIGNED_ONLY_INPUTS)(
     "assigning %s its current value changes nothing",
     async (column) => {
       await insertBaseRow();

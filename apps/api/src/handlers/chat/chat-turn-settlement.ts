@@ -81,6 +81,18 @@ const OUTCOME_POLICY = {
   interrupted: "stopped",
 } as const satisfies Record<OutcomeType, OpenCallPolicy>;
 
+/**
+ * Outcomes that cut a run off mid-stream, whose message keeps the tool input
+ * streamed so far: a dropped connection, a deadline, or the user's stop.
+ */
+export const KEEPS_PARTIAL_TOOL_INPUT = {
+  "awaiting-user": false,
+  cancelled: true,
+  completed: false,
+  failed: false,
+  interrupted: true,
+} as const satisfies Record<OutcomeType, boolean>;
+
 const SETTLED_TOOL_CALL_STATE = {
   "approval-requested": false,
   "approval-responded": false,

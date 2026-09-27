@@ -341,6 +341,77 @@ const CELEX = /^[0-9A-Z()]+$/u;
 /** Boundary check for callers that accept CELEX numbers as input. */
 export const isValidCelex = (value: string): boolean => CELEX.test(value);
 
+const ECJ_SPARQL_PREFIXES = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>`;
+
+/**
+ * The graph pattern and filters that decide which variants this adapter can
+ * hold. The listing and the source total both embed it, so the reported total
+ * and the stored rows are drawn from one definition. Languages are narrowed
+ * after the query by `toEcjLanguage`: a language filter inside the pattern
+ * pushes the count query past the endpoint's 60-second limit.
+ */
+export const ECJ_DECISION_PATTERN = `
+  ?doc cdm:case-law_ecli ?ecli .
+  ?doc cdm:work_date_document ?date .
+  ?doc cdm:resource_legal_id_celex ?celex .
+  ?doc a ?type .
+  ?expression cdm:expression_belongs_to_work ?doc .
+  ?expression cdm:expression_uses_language ?language .
+  ?manifestation cdm:manifestation_manifests_expression ?expression .
+  ?manifestation cdm:manifestation_type ?manifestationType .
+  FILTER(?type IN (
+    cdm:judgement,
+    cdm:order,
+    cdm:order_cjeu,
+    cdm:opinion_advocate_general,
+    cdm:opinion_advocate-general
+  ))
+  FILTER(STR(?manifestationType) = "xhtml")`;
+
+/**
+ * The source total per language, counted in the unit a row is stored under:
+ * distinct CELEX numbers, so one (CELEX, language) pair counts once. Cellar
+ * can hold several works for one CELEX and language; they settle onto one
+ * stored row, so counting works would report variants no crawl can hold.
+ */
+export const ECJ_TOTAL_COUNT_QUERY = `
+${ECJ_SPARQL_PREFIXES}
+SELECT ?language (COUNT(DISTINCT ?celex) AS ?n)
+WHERE {
+${ECJ_DECISION_PATTERN}
+}
+GROUP BY ?language`.trim();
+
+/**
+ * Sum the per-language counts for the languages the listing keeps, or
+ * `undefined` when the payload is not the shape the query asks for.
+ * `sourceTotalRead` rejects a sum that is not a positive integer.
+ */
+const sumEcjTotalCount = (json: unknown): number | undefined => {
+  if (!isRecord(json)) {
+    return undefined;
+  }
+  const results = json["results"];
+  if (!isRecord(results) || !Array.isArray(results["bindings"])) {
+    return undefined;
+  }
+  let total = 0;
+  for (const binding of results["bindings"]) {
+    if (
+      !isRecord(binding) ||
+      !isSparqlBinding(binding["language"]) ||
+      !isSparqlBinding(binding["n"])
+    ) {
+      return undefined;
+    }
+    if (toEcjLanguage(binding["language"].value) !== undefined) {
+      total += Number(binding["n"].value);
+    }
+  }
+  return total;
+};
+
 type ListingQueryOptions = {
   dateFrom: string;
   dateTo: string;
@@ -376,26 +447,10 @@ export const buildListingQuery = ({
       : "";
 
   return `
-PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+${ECJ_SPARQL_PREFIXES}
 SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
 WHERE {${celexClause}
-  ?doc cdm:case-law_ecli ?ecli .
-  ?doc cdm:work_date_document ?date .
-  ?doc cdm:resource_legal_id_celex ?celex .
-  ?doc a ?type .
-  ?expression cdm:expression_belongs_to_work ?doc .
-  ?expression cdm:expression_uses_language ?language .
-  ?manifestation cdm:manifestation_manifests_expression ?expression .
-  ?manifestation cdm:manifestation_type ?manifestationType .
-  FILTER(?type IN (
-    cdm:judgement,
-    cdm:order,
-    cdm:order_cjeu,
-    cdm:opinion_advocate_general,
-    cdm:opinion_advocate-general
-  ))
-  FILTER(STR(?manifestationType) = "xhtml")
+${ECJ_DECISION_PATTERN}
   FILTER(STR(?date) >= "${dateFrom}")
   FILTER(STR(?date) <= "${dateTo}")
 }
@@ -2663,36 +2718,13 @@ export const euEcjAdapter = defineSourceAdapter({
   },
 
   /**
-   * Counts (work, language) pairs under the same type and manifestation
-   * filters the page query uses, so the total is the exact universe this
-   * crawl can ever ingest — not Cellar's whole case-law class, which
-   * includes works with no XHTML manifestation that a crawl would never
-   * store.
+   * Counts (CELEX, language) variants under the listing's own pattern and
+   * language mapping, so the total is the exact universe this crawl can ever
+   * store — not Cellar's whole case-law class, which includes works with no
+   * XHTML manifestation.
    */
   async getTotalCount(signal) {
     try {
-      const query = `
-PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-SELECT (COUNT(*) AS ?n)
-WHERE {
-  SELECT DISTINCT ?doc ?language
-  WHERE {
-    ?doc cdm:case-law_ecli ?ecli .
-    ?doc a ?type .
-    ?expression cdm:expression_belongs_to_work ?doc .
-    ?expression cdm:expression_uses_language ?language .
-    ?manifestation cdm:manifestation_manifests_expression ?expression .
-    ?manifestation cdm:manifestation_type ?manifestationType .
-    FILTER(?type IN (
-      cdm:judgement,
-      cdm:order,
-      cdm:order_cjeu,
-      cdm:opinion_advocate_general,
-      cdm:opinion_advocate-general
-    ))
-    FILTER(STR(?manifestationType) = "xhtml")
-  }
-}`.trim();
       const response = await fetchPublisher(SPARQL_URL, {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         method: "POST",
@@ -2703,32 +2735,18 @@ WHERE {
           "Content-Type": "application/x-www-form-urlencoded",
           "User-Agent": INGESTION_USER_AGENT,
         },
-        body: new URLSearchParams({ query }).toString(),
+        body: new URLSearchParams({ query: ECJ_TOTAL_COUNT_QUERY }).toString(),
       });
       if (!response.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const json: unknown = await response.json();
-      if (!isRecord(json)) {
+      const total = sumEcjTotalCount(await response.json());
+      if (total === undefined) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
         );
       }
-      const results = json["results"];
-      if (!isRecord(results) || !Array.isArray(results["bindings"])) {
-        return sourceTotalProbeFailed(
-          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
-        );
-      }
-      const binding: unknown = results["bindings"].at(0);
-      if (!isRecord(binding) || !isRecord(binding["n"])) {
-        return sourceTotalProbeFailed(
-          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
-        );
-      }
-      return sourceTotalRead(
-        Number.parseInt(String(binding["n"]["value"]), 10),
-      );
+      return sourceTotalRead(total);
     } catch (error) {
       return { type: "probe-failed", errorTag: errorTag(error) };
     }

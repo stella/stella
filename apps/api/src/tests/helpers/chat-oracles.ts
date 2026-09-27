@@ -17,6 +17,8 @@ export const CHAT_ORACLE = {
    *  thread's name ledger holds every such ref and every stored tool-call
    *  id. */
   persistedRefsStable: "chat.persisted.refs-stable",
+  /** A settled turn's status and reason are the outcome its answer stores. */
+  persistedTurnOutcome: "chat.persisted.turn-outcome",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",

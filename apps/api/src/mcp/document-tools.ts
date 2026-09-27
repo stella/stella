@@ -558,6 +558,7 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
 const OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA = v.strictObject({
   entityId: v.string(),
   workspaceId: v.string(),
+  nextStep: v.string(),
 });
 
 // The list cursor is [createdAt, entityId]; the query resolves the (createdAt,
@@ -2029,13 +2030,12 @@ const handleOpenDocumentVersionUploadTool: TypedMcpToolHandler<
     return target.response;
   }
 
-  const data = {
+  return toolDataResult({
     entityId: target.entityId,
     workspaceId: target.workspaceId,
-  };
-  return toolDataResult(data, {
-    primaryText:
-      "Choose a file in the upload panel to add a new document version.",
+    nextStep:
+      "Have the user choose a file in the upload panel; the panel uploads " +
+      "it as the document's new version.",
   });
 };
 

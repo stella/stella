@@ -120,7 +120,7 @@ const changeCatalogFormattingOnly = (root: string): void => {
 };
 
 describe("CLI contract changeset guard", () => {
-  test.each([...CLI_CONTRACT_SURFACE_PATHS])(
+  test.each(CLI_CONTRACT_SURFACE_PATHS)(
     "requires release metadata for %s",
     (part) => {
       const partName = part;

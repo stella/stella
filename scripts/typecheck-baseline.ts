@@ -9,18 +9,21 @@
 // weeks later, with no diff to point at. Lint and tests see none of it.
 //
 // This runs the native tsc (tsgo, via packages/scripts/src/tsc-native.ts)
-// with --extendedDiagnostics and --singleThreaded per project, then guards the
-// deterministic size counters against a committed baseline. Native tsc uses
-// independent checker-local caches in parallel mode and assigns files to those
-// checkers by position. Adding an otherwise inert root file can repartition the
-// project and change aggregate Types/Instantiations substantially, so parallel
+// with --extendedDiagnostics and --singleThreaded per project. CI compares the
+// deterministic size counters with the merge base; nightly checks the committed
+// cumulative budget. Native tsc uses independent checker-local caches in
+// parallel mode and assigns files to checkers by position. Adding an otherwise
+// inert root file can repartition the project and change aggregate
+// Types/Instantiations substantially, so parallel
 // diagnostics are unsuitable as a comparable cost metric. Memory and time
 // fields still wobble; they are printed for context but never gated.
 //
 // Modes:
 //   bun scripts/typecheck-baseline.ts                  report per-project counters
 //   bun scripts/typecheck-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/typecheck-baseline.ts --check          CI gate (exit 1 on regression)
+//   bun scripts/typecheck-baseline.ts --check          cumulative budget gate
+//   bun scripts/typecheck-baseline.ts --measure ROOT FILE  write a measurement
+//   bun scripts/typecheck-baseline.ts --check-delta FILE  gate against that measurement
 //   bun scripts/typecheck-baseline.ts --self-test      prove parser + comparison logic
 //
 // CI-only by design: it re-runs full typechecks (tens of seconds), too slow
@@ -28,7 +31,7 @@
 // its own typecheck-baseline job, parallel to the turbo typecheck job.
 
 import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -51,11 +54,17 @@ const CLI_MODES = [
   { flag: "--self-test", mode: "self-test" },
   { flag: "--write-baseline", mode: "write-baseline" },
 ] as const;
-const CLI_MODE_FLAGS = CLI_MODES.map(({ flag }) => flag);
+const CLI_MODE_FLAGS = [
+  ...CLI_MODES.map(({ flag }) => flag),
+  "--measure ROOT FILE",
+  "--check-delta FILE",
+];
 
 type CliMode = "report" | (typeof CLI_MODES)[number]["mode"];
 type CliParseResult =
   | { ok: true; mode: CliMode }
+  | { ok: true; mode: "measure"; root: string; file: string }
+  | { ok: true; mode: "check-delta"; file: string }
   | { ok: false; error: string };
 
 const parseCliMode = (args: readonly string[]): CliParseResult => {
@@ -63,14 +72,31 @@ const parseCliMode = (args: readonly string[]): CliParseResult => {
     return { ok: true, mode: "report" };
   }
   const argument = args.at(0);
+  const firstPath = args.at(1);
+  const secondPath = args.at(2);
   const selected = CLI_MODES.find(({ flag }) => flag === argument);
   if (args.length === 1 && selected !== undefined) {
     return { ok: true, mode: selected.mode };
   }
+  if (
+    args.length === 3 &&
+    argument === "--measure" &&
+    firstPath !== undefined &&
+    secondPath !== undefined
+  ) {
+    return { ok: true, mode: "measure", root: firstPath, file: secondPath };
+  }
+  if (
+    args.length === 2 &&
+    argument === "--check-delta" &&
+    firstPath !== undefined
+  ) {
+    return { ok: true, mode: "check-delta", file: firstPath };
+  }
   return {
     ok: false,
     error:
-      "typecheck-baseline: expected no arguments or exactly one of " +
+      "typecheck-baseline: expected no arguments or one of " +
       `${CLI_MODE_FLAGS.join(", ")}; received ${args.map((arg) => JSON.stringify(arg)).join(" ")}`,
   };
 };
@@ -101,7 +127,7 @@ type GatedField = (typeof GATED_FIELDS)[number];
 type Counters = Record<GatedField, number>;
 type Baseline = Record<ProjectId, Counters>;
 
-// A project may grow by up to this factor before CI fails. Normal feature
+// A project may grow by up to this factor before the gate fails. Normal feature
 // work adds types; this guard exists to catch explosions (an inference
 // blow-up multiplies instantiations, it does not add 3%), so the headroom is
 // generous enough that routine PRs never think about it.
@@ -126,10 +152,10 @@ type RunResult =
   | { ok: true; diagnostics: string }
   | { ok: false; error: string };
 
-const runProject = (project: string): RunResult => {
+const runProject = (project: string, repoRoot: string): RunResult => {
   const proc = Bun.spawnSync(
     [process.execPath, TSC_NATIVE, "-p", project, ...MEASUREMENT_FLAGS],
-    { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+    { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
   );
   const stdout = proc.stdout.toString();
   if (proc.exitCode !== 0) {
@@ -192,11 +218,20 @@ type MeasureResult =
   | { ok: true; measured: Measured[] }
   | { ok: false; error: string };
 
-const measureAll = (): MeasureResult => {
+// A project the change adds does not exist at its merge base; with
+// absentAsEmpty the base measurement records it as zero instead of failing.
+const measureAll = (
+  repoRoot = REPO_ROOT,
+  absentAsEmpty = false,
+): MeasureResult => {
   const measured: Measured[] = [];
   for (const { id, project } of PROJECTS) {
+    if (absentAsEmpty && !existsSync(path.join(repoRoot, project))) {
+      console.log(`  ${project} is absent; recording zero`);
+      continue;
+    }
     console.log(`  typechecking ${project} ...`);
-    const run = runProject(project);
+    const run = runProject(project, repoRoot);
     if (!run.ok) {
       return { ok: false, error: run.error };
     }
@@ -217,19 +252,19 @@ const measureAll = (): MeasureResult => {
 
 const emptyCounters = (): Counters => ({ types: 0, instantiations: 0 });
 
-const writeBaseline = (measured: Measured[]): void => {
+const writeBaseline = (measured: Measured[], file = BASELINE_PATH): void => {
   // Spelled out per project so the committed JSON has a stable key order.
   const baseline: Record<string, Counters> = {};
   for (const { id } of PROJECTS) {
     const entry = measured.find((m) => m.id === id);
     baseline[id] = entry?.counters ?? emptyCounters();
   }
-  writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
+  writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
-const readBaseline = (): Baseline => {
+const readBaseline = (file = BASELINE_PATH): Baseline => {
   const parsed: Record<string, Partial<Counters>> = JSON.parse(
-    readFileSync(BASELINE_PATH, "utf-8"),
+    readFileSync(file, "utf-8"),
   );
   const baseline = {
     api: emptyCounters(),
@@ -264,7 +299,7 @@ type FieldStatus = "ok" | "regressed" | "dropped";
 const gateLimit = (field: GatedField, baseline: number): number =>
   Math.max(baseline * HEADROOM, baseline + HEADROOM_FLOOR[field]);
 
-const compareField = (
+export const compareField = (
   field: GatedField,
   current: number,
   baseline: number,
@@ -291,7 +326,10 @@ type FieldDiff = {
   baseline: number;
 };
 
-const diffAll = (measured: Measured[], baseline: Baseline): FieldDiff[] => {
+export const diffAll = (
+  measured: readonly Measured[],
+  baseline: Baseline,
+): FieldDiff[] => {
   const diffs: FieldDiff[] = [];
   for (const m of measured) {
     for (const field of GATED_FIELDS) {
@@ -306,6 +344,19 @@ const diffAll = (measured: Measured[], baseline: Baseline): FieldDiff[] => {
   }
   return diffs;
 };
+
+// A project with no base measurement is new in the change: the delta gate has
+// nothing to compare it with, so only the committed budget covers it.
+export const deltaDiffs = (
+  measured: readonly Measured[],
+  base: Baseline,
+): FieldDiff[] =>
+  diffAll(
+    measured.filter(
+      ({ id }) => base[id].types > 0 || base[id].instantiations > 0,
+    ),
+    base,
+  );
 
 // --- Formatting ---------------------------------------------------------------
 
@@ -327,12 +378,8 @@ const formatCheckMeasurement = (m: Measured, baseline: Baseline): string =>
   `(${pct(m.counters.instantiations, baseline[m.id].instantiations)})`;
 
 // --- Baseline drift ------------------------------------------------------------
-// The gate compares a PR against a baseline main has already been eating into.
-// Between refreshes, main's own growth silently consumes the headroom until a
-// PR that adds almost nothing fails for cost it did not introduce. Printing the
-// baseline's age and the tightest remaining headroom next to the PR's own
-// numbers lets an author tell "my change exploded" from "the baseline is
-// stale" without measuring main by hand.
+// The nightly gate reports the committed baseline's age and tightest remaining
+// headroom so cumulative growth remains visible between baseline refreshes.
 
 type BaselineAge = { sha: string; date: string; commits: number };
 
@@ -484,6 +531,59 @@ const runWrite = (): number => {
   return 0;
 };
 
+const runMeasure = (root: string, file: string): number => {
+  const result = measureAll(path.resolve(root), true);
+  if (!result.ok) {
+    console.error(result.error);
+    return 1;
+  }
+  writeBaseline(result.measured, file);
+  console.log(`Wrote typecheck measurement to ${file}`);
+  return 0;
+};
+
+const runDelta = (file: string): number => {
+  const base = readBaseline(file);
+  const result = measureAll();
+  if (!result.ok) {
+    console.error(result.error);
+    return 1;
+  }
+
+  const diffs = deltaDiffs(result.measured, base);
+  for (const m of result.measured) {
+    console.log(formatCheckMeasurement(m, base));
+  }
+  for (const d of diffs.filter((diff) => diff.status === "dropped")) {
+    console.log(
+      `typecheck-baseline: ${d.id} ${d.field} shrank ${n(d.baseline)} -> ` +
+        `${n(d.current)} (${pct(d.current, d.baseline)}).`,
+    );
+  }
+  const regressions = diffs.filter((diff) => diff.status === "regressed");
+  if (regressions.length === 0) {
+    console.log(
+      "typecheck-baseline --check-delta: OK. Change is within headroom.",
+    );
+    return 0;
+  }
+
+  console.error(
+    "\ntypecheck-baseline --check-delta: this change grew compiler workload past its base:",
+  );
+  for (const d of regressions) {
+    console.error(
+      `  ${d.id} ${d.field}: ${n(d.baseline)} -> ${n(d.current)} ` +
+        `(${pct(d.current, d.baseline)})`,
+    );
+  }
+  console.error(
+    `\nAllowed growth is ${Math.round((HEADROOM - 1) * 100)}% or the field's ` +
+      "absolute floor, whichever is larger. Review the added type work.",
+  );
+  return 1;
+};
+
 const runCheck = (): number => {
   if (!baselineExists()) {
     console.error(
@@ -526,7 +626,7 @@ const runCheck = (): number => {
   if (regressions.length === 0) {
     console.log(
       `typecheck-baseline --check: OK. ${PROJECTS.length} project(s) within ` +
-        `${Math.round((HEADROOM - 1) * 100)}% of baseline.`,
+        "their cumulative budgets.",
     );
     return 0;
   }
@@ -600,6 +700,26 @@ const runSelfTest = (): number => {
   }
   if (parseCliMode(["--not-a-real-option"]).ok) {
     failures.push("CLI parser accepted an unknown option");
+  }
+  const measureMode = parseCliMode(["--measure", "/base", "/output.json"]);
+  if (
+    !measureMode.ok ||
+    measureMode.mode !== "measure" ||
+    measureMode.root !== "/base" ||
+    measureMode.file !== "/output.json"
+  ) {
+    failures.push("CLI parser did not select measure mode with its paths");
+  }
+  const deltaMode = parseCliMode(["--check-delta", "/base.json"]);
+  if (
+    !deltaMode.ok ||
+    deltaMode.mode !== "check-delta" ||
+    deltaMode.file !== "/base.json"
+  ) {
+    failures.push("CLI parser did not select delta mode with its path");
+  }
+  if (parseCliMode(["--measure", "/base"]).ok) {
+    failures.push("CLI parser accepted an incomplete measure mode");
   }
 
   if (!MEASUREMENT_FLAGS.includes("--singleThreaded")) {
@@ -785,9 +905,13 @@ const main = (args: readonly string[]): number => {
       return runWrite();
     case "check":
       return runCheck();
+    case "measure":
+      return runMeasure(parsed.root, parsed.file);
+    case "check-delta":
+      return runDelta(parsed.file);
     default: {
-      parsed.mode satisfies never;
-      return panic(`Unhandled mode: ${String(parsed.mode)}`);
+      parsed satisfies never;
+      return panic(`Unhandled mode: ${JSON.stringify(parsed)}`);
     }
   }
 };

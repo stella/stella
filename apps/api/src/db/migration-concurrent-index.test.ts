@@ -97,6 +97,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // and its triggers. The same static retry body: only lock_not_available,
   // under a bounded statement budget, changing no rows.
   "20260926150000_legislation_payload_revision/migration.sql:e0b0bda4c5afe7b5e214268b05745e54eda8580496a5d5bb904349e2e0d4ab9b",
+  // Acquires the decisions and the provision rows in writer order before the
+  // provision span columns, the state foreign key and the enqueue trigger.
+  // Same static retry body as above; it changes no rows.
+  "20260926160000_case_law_provision_extraction_state/migration.sql:6b8802ea79fb93234ca5911888421bca3310ac7b718f76df049de02bc3b3601c",
   // Fails the Better Auth cutover before any constraint or index state is
   // committed when the trusted issuer backfill is incomplete. The static body
   // performs one bounded existence read and raises; it executes no dynamic SQL.

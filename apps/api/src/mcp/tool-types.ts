@@ -407,29 +407,15 @@ export type McpStructuredWindow = {
 };
 
 /**
- * A handler either returns a finished internal result, or an egress plan the
- * dispatch layer finalizes (anonymize declared text fields, then window).
- * Egress plans keep the full, pre-window, un-anonymized payload so
- * the central pipeline can anonymize before it windows, without the handler
- * ever seeing the request mode.
- *
- * The `structured` variant is the generic shape: the handler builds the whole
- * response object and declares which text fields to anonymize (with per-field
- * workspace attribution, so multi-tenant payloads like search hits and matter
- * lists group correctly) plus an optional field to window afterwards. The
- * `compatSearch`/`compatFetch` variants predate it and stay as-is: they carry
- * OpenAI-compatible-specific shaping (workspaceId stripping, anonymization
- * metadata) that does not generalize.
+ * A successful Stella tool result is its data and nothing else. The MCP
+ * boundary serializes `data` into `structuredContent` and its JSON text
+ * fallback, and a host shows the model one or the other. There is no prose
+ * side channel: guidance the caller needs (the next call, an onboarding step)
+ * is a typed `nextStep` field of the tool's output contract.
  */
-export type InternalToolMcpPresentation = {
-  additionalText?: readonly string[];
-  primaryText?: string;
-};
-
 export type InternalToolSuccess<TData = unknown> = {
   status: "success";
   data: TData;
-  mcp?: InternalToolMcpPresentation;
 };
 
 export type InternalToolStructuredError = {
@@ -465,6 +451,21 @@ export type InternalToolResult<TData = unknown> =
   | InternalToolSuccess<TData>
   | InternalToolErrorResult;
 
+/**
+ * A handler either returns a finished internal result, or an egress plan the
+ * dispatch layer finalizes (anonymize declared text fields, then window).
+ * Egress plans keep the full, pre-window, un-anonymized payload so
+ * the central pipeline can anonymize before it windows, without the handler
+ * ever seeing the request mode.
+ *
+ * The `structured` variant is the generic shape: the handler builds the whole
+ * response object and declares which text fields to anonymize (with per-field
+ * workspace attribution, so multi-tenant payloads like search hits and matter
+ * lists group correctly) plus an optional field to window afterwards. The
+ * `compatSearch`/`compatFetch` variants predate it and stay as-is: they carry
+ * OpenAI-compatible-specific shaping (workspaceId stripping, anonymization
+ * metadata) that does not generalize.
+ */
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";

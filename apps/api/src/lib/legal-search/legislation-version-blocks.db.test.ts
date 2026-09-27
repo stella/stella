@@ -114,7 +114,7 @@ afterAll(async () => {
   await client.close();
 });
 
-test.each([...CORPUS_STORAGE_MODES])(
+test.each(CORPUS_STORAGE_MODES)(
   "projects a version's AST exactly when the reader parses it (%s)",
   async (mode) => {
     const rows = await db
@@ -136,7 +136,7 @@ test.each([...CORPUS_STORAGE_MODES])(
   },
 );
 
-test.each([...CORPUS_STORAGE_MODES])(
+test.each(CORPUS_STORAGE_MODES)(
   "projects a version's text exactly when the reader takes it from Postgres (%s)",
   async (mode) => {
     const rows = await db

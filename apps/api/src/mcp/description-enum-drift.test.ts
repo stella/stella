@@ -208,7 +208,7 @@ const MIN_TOOLS_WITH_TOKENS = 6;
 const MIN_TOKENS_CHECKED = 12;
 
 describe("MCP tool descriptions only name values their own contract declares", () => {
-  test.each([...SURFACES])(
+  test.each(SURFACES)(
     "$mode surface quotes no value outside the tool's vocabulary",
     ({ definitions }) => {
       const drifted: string[] = [];

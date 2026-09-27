@@ -1,14 +1,57 @@
+import { panic } from "better-result";
+
 /**
  * The connection the online phase of a migration runs on, and the shape of a
  * data repair registered with it. Separate from `online-migrations.ts` so a
  * repair module can name these without importing the registry that names it.
  */
 
+/**
+ * A bound parameter. Scalars only: the migrate entrypoint binds through Bun
+ * SQL's `unsafe`, which sends a JavaScript array as comma-joined text rather
+ * than a PostgreSQL array, while the test database accepts it, so an array
+ * parameter would pass every test and fail the deploy. Bind a list as one
+ * joined string and split it in SQL (`string_to_array($1, ',')::uuid[]`).
+ */
+export type OnlineMigrationParam =
+  | string
+  | number
+  | bigint
+  | boolean
+  | Date
+  | null;
+
+const isOnlineMigrationParam = (
+  value: unknown,
+): value is OnlineMigrationParam =>
+  value === null ||
+  value instanceof Date ||
+  ["string", "number", "bigint", "boolean"].includes(typeof value);
+
+/**
+ * Parameters a query builder rendered, checked for the one shape the
+ * migrate connection cannot bind: an array (or any other object) fails here,
+ * in tests and deploys alike, instead of reaching the driver.
+ */
+export const onlineMigrationParams = (
+  params: readonly unknown[],
+): OnlineMigrationParam[] =>
+  params.map((param, index) =>
+    isOnlineMigrationParam(param)
+      ? param
+      : panic(
+          `Online migration parameter ${String(index + 1)} is not a scalar; bind lists as a joined string`,
+        ),
+  );
+
 export type OnlineMigrationConnection = {
-  execute: (query: string, params?: readonly unknown[]) => Promise<void>;
+  execute: (
+    query: string,
+    params?: readonly OnlineMigrationParam[],
+  ) => Promise<void>;
   query: (
     query: string,
-    params?: readonly unknown[],
+    params?: readonly OnlineMigrationParam[],
   ) => Promise<readonly unknown[]>;
   release: () => void;
 };

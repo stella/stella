@@ -221,6 +221,7 @@ export const ChatThreadPage = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -389,7 +390,7 @@ export const ChatThreadPage = ({
   // first — `chatThreadOptions` keeps the in-flight Chat alive in the
   // query cache, so navigating away would leave it streaming.
   const startNewThread = () => {
-    stop();
+    leave();
     if (threadRef.scope === "workspace") {
       detached(
         navigate({
@@ -440,7 +441,7 @@ export const ChatThreadPage = ({
         // Abort any live stream first: `chatThreadOptions` keeps the
         // in-flight Chat alive in the query cache, so navigating away
         // would leave it streaming against the abandoned thread.
-        stop();
+        leave();
         controller.setContent(composerText(""));
         if (threadRef.scope === "workspace") {
           detached(
@@ -512,7 +513,7 @@ export const ChatThreadPage = ({
         queryClient,
         threadRef: newThreadRef,
       });
-      stop();
+      leave();
       if (newThreadRef.scope === "workspace") {
         await navigate({
           params: {
