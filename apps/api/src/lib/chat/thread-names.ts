@@ -160,7 +160,7 @@ export const readChatThreadNames = async ({
   tx,
 }: {
   threadId: SafeId<"chatThread">;
-  tx: Transaction;
+  tx: Pick<Transaction, "select">;
 }): Promise<ChatThreadNamesRead> => {
   const rows = await tx
     .select({

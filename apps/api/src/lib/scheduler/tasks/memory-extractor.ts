@@ -23,7 +23,7 @@ import {
   type ChatDurableRefText,
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
-import { deriveChatThreadNames } from "@/api/lib/chat/thread-names";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -409,7 +409,7 @@ const extractCandidates = async (
   // nothing outside it: a memory keeps them as canonical links.
   const names = await Result.tryPromise({
     try: async () =>
-      await deriveChatThreadNames({ threadId: compaction.threadId, tx: db }),
+      await readChatThreadNames({ threadId: compaction.threadId, tx: db }),
     catch: (error: unknown) => error,
   });
   if (Result.isError(names)) {

@@ -264,6 +264,10 @@ const seedCodeModeChat = async () => {
     content: toChatMessageContent({
       data: [
         {
+          content: "The literal ent_1 was used in the example.",
+          type: "text",
+        },
+        {
           arguments: "{}",
           id: "call-1",
           input: {},
@@ -379,6 +383,9 @@ describe("past-chat search", () => {
       scope: ALL_CHATS_SCOPE,
     });
 
+    expect(expanded.contents.join("\n")).toContain(
+      "The literal (unavailable reference) was used in the example.",
+    );
     const shown = expanded.contents.join("\n").match(/\bent_[0-9]+\b/gu) ?? [];
     expect(shown.length).toBeGreaterThan(0);
     for (const ref of shown) {

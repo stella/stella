@@ -143,19 +143,16 @@ type ChatHistoryExpansionRow = {
  */
 const respellForeignRefs = ({
   foreignRefs,
-  rendered,
-  role,
 }: {
   foreignRefs: { from: ChatRefRegistry; to: ChatRefRegistry } | null;
-  rendered: string;
-  role: ChatMessageRole;
-}): string => {
+}): ((rendered: string, partType: string) => string) | undefined => {
   if (foreignRefs === null) {
-    return rendered;
+    return undefined;
   }
-  return role === "user"
-    ? neutralizeChatRefTokens(rendered)
-    : rebindChatRefTokens({ ...foreignRefs, text: rendered });
+  return (rendered, partType) =>
+    partType === "tool-call" || partType === "tool-result"
+      ? rebindChatRefTokens({ ...foreignRefs, text: rendered })
+      : neutralizeChatRefTokens(rendered);
 };
 
 /** The refs another chat of this user bound, as a registry. */
@@ -369,18 +366,17 @@ export const createChatHistoryTools = ({
       return {
         targetMessageId: messageId,
         messages: result.value.map((row) => {
-          const rendered = renderChatMessagesForCompaction([
-            persistedRowToChatMessage(row),
-          ]);
+          const rendered = renderChatMessagesForCompaction(
+            [persistedRowToChatMessage(row)],
+            respellForeignRefs({ foreignRefs }),
+          );
           return {
             messageId: row.id,
             role: row.role,
             createdAt: row.createdAt.toISOString(),
             // Same rationale as the search excerpt: persisted mention hrefs
             // must re-enter the model as chat refs, not raw tenant UUIDs.
-            content: refRegistry.hydrateAssistantTextRefs(
-              respellForeignRefs({ foreignRefs, rendered, role: row.role }),
-            ),
+            content: refRegistry.hydrateAssistantTextRefs(rendered),
           };
         }),
       };
