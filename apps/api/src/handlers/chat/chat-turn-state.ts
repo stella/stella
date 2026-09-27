@@ -1,6 +1,13 @@
 import { panic } from "better-result";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import type { SafeId } from "@/api/lib/branded-types";
+
+/** Whoever may start a turn in a thread may also stop it. */
+export const CHAT_TURN_PERMISSIONS = {
+  chat: ["create"],
+} satisfies PermissionInput;
 
 export const CHAT_TURN_STATUSES = [
   "accepted",
@@ -12,6 +19,13 @@ export const CHAT_TURN_STATUSES = [
   "interrupted",
 ] as const;
 export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
+
+/** The statuses of a turn not yet settled; a thread holds at most one. */
+export const ACTIVE_CHAT_TURN_STATUSES = [
+  "accepted",
+  "running",
+  "awaiting-user",
+] as const satisfies readonly ChatTurnStatus[];
 
 export const CHAT_TURN_INTERACTION_TYPES = [
   "ask-user",
@@ -36,7 +50,7 @@ export const CHAT_TURN_CANCELLATION_REASONS = [
   "superseded",
   "user-stop",
 ] as const;
-type ChatTurnCancellationReason =
+export type ChatTurnCancellationReason =
   (typeof CHAT_TURN_CANCELLATION_REASONS)[number];
 
 export const CHAT_TURN_INTERRUPTION_REASONS = [
@@ -109,6 +123,42 @@ export type ChatTurnState =
       threadId: SafeId<"chatThread">;
       userMessageId: SafeId<"chatMessage">;
     };
+
+/** A turn as a client may read it back: its status, and why a cancelled or
+ *  interrupted turn ended. */
+export type ChatTurnView =
+  | {
+      id: SafeId<"chatTurn">;
+      status: Exclude<ChatTurnStatus, "cancelled" | "interrupted">;
+    }
+  | {
+      id: SafeId<"chatTurn">;
+      reason: ChatTurnCancellationReason;
+      status: "cancelled";
+    }
+  | {
+      id: SafeId<"chatTurn">;
+      reason: ChatTurnInterruptionReason;
+      status: "interrupted";
+    };
+
+export const chatTurnViewOf = (state: ChatTurnState): ChatTurnView => {
+  switch (state.status) {
+    case "cancelled":
+      return { id: state.id, reason: state.reason, status: state.status };
+    case "interrupted":
+      return { id: state.id, reason: state.reason, status: state.status };
+    case "accepted":
+    case "awaiting-user":
+    case "completed":
+    case "failed":
+    case "running":
+      return { id: state.id, status: state.status };
+    default:
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
+  }
+};
 
 export type ChatTurnTransition =
   | {

@@ -194,11 +194,11 @@
     {
       "id": "rendered-stop-settles-running-calls",
       "fix": "#1077",
-      "behaviour": "Stop settles a tool call still running, so nothing on the page stays busy.",
+      "behaviour": "Stop reloads the thread from what the server stored, so a tool call the stopped turn left running does not keep the page busy.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "    const sanitized = sanitizeRunningToolCalls(messages, \"cancel\");\n    client.setMessagesManually(sanitized);\n    setSnapshot({ messages: sanitized });",
-      "replace": "    setSnapshot({ messages });",
+      "search": "      setSnapshot({ turnAbandoned: true });\n      reloadThread();",
+      "replace": "      setSnapshot({ turnAbandoned: true });",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "stop-mid-stream shows what the server stored, live and in a second tab"
@@ -491,6 +491,20 @@
         "test": "asks again for an approval whose call id an interrupted turn used"
       },
       "oracle": "chat.live.tool-parts-once"
+    },
+    {
+      "id": "stop-ends-message-with-turn",
+      "fix": "F5",
+      "behaviour": "A stop that ends a turn waiting on the user stores the same outcome on the turn and on its message.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-persistence.ts",
+      "search": "      reason: planned.state.reason,",
+      "replace": "      reason: \"superseded\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "stops a client call the page still runs"
+      },
+      "oracle": "chat.persisted.turn-outcome"
     }
   ]
 }

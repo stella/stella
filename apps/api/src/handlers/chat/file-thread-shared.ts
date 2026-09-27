@@ -79,6 +79,8 @@ type ThreadMetadata = {
  * `fileChatThreadOptions` seed never has to guess the org-wide flag.
  */
 export type FileThreadMessagePage = {
+  /** See `ChatMessagePage.activeTurnId`. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   messages: ClientMessage[];
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
@@ -96,6 +98,7 @@ export type FileThreadMessagePage = {
 export const emptyMessagePage = (
   webSearchAvailable: boolean,
 ): FileThreadMessagePage => ({
+  activeTurnId: null,
   messages: [],
   olderCursor: null,
   contextMatterIds: [],
@@ -237,6 +240,7 @@ export const loadResolvedThreadMessagePage = async ({
     : null;
 
   return {
+    activeTurnId: page.activeTurnId,
     messages: page.messages,
     olderCursor: page.olderCursor,
     contextMatterIds,
