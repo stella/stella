@@ -11,9 +11,13 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
-import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import {
+  decodeMessagePageCursor,
+  loadChatMessagePage,
+} from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import type { SendMessageDependencies } from "@/api/handlers/chat/send-message";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -26,8 +30,11 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import {
   findLiveViewViolations,
+  findUnservedSnapshotMessages,
   findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -44,6 +51,7 @@ import type {
   ChatOracleId,
   OracleViolation,
 } from "@/api/tests/helpers/chat-oracles";
+import { createRefStabilityLedger } from "@/api/tests/helpers/chat-ref-stability";
 import { drainResponse } from "@/api/tests/helpers/chat-round-trip";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import type { ScriptedRun } from "@/api/tests/helpers/chat-scripted-provider";
@@ -132,6 +140,7 @@ const MAX_BARRIER_POLLS = 2000;
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedRefsStable,
   CHAT_ORACLE.persistedTurnOutcome,
   CHAT_ORACLE.persistedTurnSettles,
 ]);
@@ -202,7 +211,8 @@ export const createApprovalHarness = ({
     executions.push(name);
     return await Promise.resolve({ deleted: name });
   });
-  const sendMessage = createSendMessage({
+  const refLedger = createRefStabilityLedger();
+  const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
@@ -224,8 +234,25 @@ export const createApprovalHarness = ({
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     streamResponse: streamChat,
     uploadMessageFiles: uploadMessageFilesWithRollback,
-  });
-  type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
+  } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
+  /** Per thread: the send handler, recording each request's ref registry. */
+  const handlers = new Map<string, ReturnType<typeof createSendMessage>>();
+  const sendMessageOf = (threadId: string) => {
+    const known = handlers.get(threadId);
+    if (known !== undefined) {
+      return known;
+    }
+    const created = createSendMessage({
+      ...sendMessageDependencies,
+      createRefRegistry: (bindings, retired) =>
+        refLedger.track(threadId, createChatRefRegistry(bindings, retired)),
+    });
+    handlers.set(threadId, created);
+    return created;
+  };
+  type SendMessageCtx = Parameters<
+    ReturnType<typeof createSendMessage>["handler"]
+  >[0];
   type SendBody = SendMessageCtx["body"];
   const bodyByContext = new WeakMap<SendMessageCtx, SendBody>();
 
@@ -391,6 +418,41 @@ export const createApprovalHarness = ({
     ];
   };
 
+  const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
+    (
+      await testDb
+        .select({
+          content: chatMessages.content,
+          id: chatMessages.id,
+          role: chatMessages.role,
+        })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, threadId))
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    ).map(chatMessageFromPersisted);
+
+  /** Refs whose target moved, checked once a request of `threadId` settled. */
+  const findUnstableRefs = async (
+    threadId: SafeId<"chatThread">,
+  ): Promise<OracleViolation[]> => {
+    // As the next request reads them: under the thread owner's row scope.
+    const names = await safeDb(
+      async (tx) => await readChatThreadNames({ threadId, tx }),
+    );
+    if (Result.isError(names)) {
+      return panic("The thread's names failed to load", names.error);
+    }
+    const held = names.value.source === "ledger" ? names.value : null;
+    return refLedger.check({
+      ledger: {
+        refs: new Set(held?.refBindings.map(({ ref }) => ref)),
+        toolCallIds: new Set(held?.toolCallIds),
+      },
+      stored: await readThreadMessages(threadId),
+      threadId,
+    });
+  };
+
   /**
    * Sends `ctx` and reads the response to its end, so its terminal
    * persistence runs; then checks the chunks the browser would read and,
@@ -401,7 +463,7 @@ export const createApprovalHarness = ({
       bodyByContext.get(ctx) ??
       panic("Send contexts come from this harness's sendContext");
     const threadId = body.threadId;
-    const result = await sendMessage.handler(ctx);
+    const result = await sendMessageOf(threadId).handler(ctx);
     if (!(result instanceof Response && result.ok)) {
       return { rejection: result, status: "rejected" } as const;
     }
@@ -424,7 +486,12 @@ export const createApprovalHarness = ({
           chunks,
           stored: await reloadView(threadId),
         }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: await readAllMessages(threadId),
+        }),
         ...(await findPersistedViolations(threadId)),
+        ...(await findUnstableRefs(threadId)),
       ],
     } as const;
   };
@@ -485,7 +552,7 @@ export const createApprovalHarness = ({
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
     // The dying process never sees the page go away, so no signal reaches it.
-    const result = await sendMessage.handler(contextFromBody(body));
+    const result = await sendMessageOf(threadId).handler(contextFromBody(body));
     if (!(result instanceof Response && result.ok)) {
       return statusResponse(result);
     }
@@ -506,17 +573,34 @@ export const createApprovalHarness = ({
 
   const readPage = async (
     threadId: SafeId<"chatThread">,
+    before?: SafeId<"chatMessage">,
   ): Promise<RecordedPage> => {
     const page = await loadChatMessagePage({
       safeDb,
       threadId,
       userId: ids.userA1,
+      before,
     });
     if (Result.isError(page)) {
       return panic("The thread's message page failed to load", page.error);
     }
     // The page as the browser receives it: a JSON body.
     return asTestRaw<RecordedPage>(await Response.json(page.value).json());
+  };
+
+  const readAllMessages = async (threadId: SafeId<"chatThread">) => {
+    const messages: unknown[] = [];
+    let page = await readPage(threadId);
+    messages.push(...page.messages);
+    while (page.olderCursor !== null) {
+      const before = decodeMessagePageCursor(page.olderCursor);
+      if (before === null) {
+        return panic("The thread's message page returned an invalid cursor");
+      }
+      page = await readPage(threadId, before);
+      messages.push(...page.messages);
+    }
+    return messages;
   };
 
   type RecordEnd = (
@@ -565,7 +649,12 @@ export const createApprovalHarness = ({
         chunks,
         stored: await reloadView(raw.threadId),
       }),
+      ...findUnservedSnapshotMessages({
+        chunks,
+        served: await readAllMessages(raw.threadId),
+      }),
       ...(await findPersistedViolations(raw.threadId)),
+      ...(await findUnstableRefs(raw.threadId)),
     );
     delivered.set(raw.threadId, deliveredInterrupts(chunks));
     await endRecord({ ended, response: { body: text, status: 200 } });
@@ -684,7 +773,9 @@ export const createApprovalHarness = ({
       }
     }
     if (liveThreads.has(raw.threadId)) {
-      const result = await sendMessage.handler(contextFromBody(raw, signal));
+      const result = await sendMessageOf(raw.threadId).handler(
+        contextFromBody(raw, signal),
+      );
       if (result instanceof Response && result.ok) {
         return streamLive({ endRecord, raw, response: result, signal });
       }
@@ -857,18 +948,17 @@ export const createApprovalHarness = ({
     }
   };
 
-  const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
-    (
-      await testDb
-        .select({
-          content: chatMessages.content,
-          id: chatMessages.id,
-          role: chatMessages.role,
-        })
-        .from(chatMessages)
-        .where(eq(chatMessages.threadId, threadId))
-        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
-    ).map(chatMessageFromPersisted);
+  /**
+   * Fails when any request of `threadId` so far resolved a stored ref to
+   * another target than it named when stored (`chat.persisted.refs-stable`),
+   * for callers that do not run every oracle through `checkWebClient`.
+   */
+  const expectStableRefs = (threadId: SafeId<"chatThread">): void => {
+    const violations = refLedger.findingsOf(threadId);
+    if (violations.length > 0) {
+      panic(`The thread breaks an invariant: ${JSON.stringify(violations)}`);
+    }
+  };
 
   const lastAssistant = async (threadId: SafeId<"chatThread">) => {
     const message = (await readThreadMessages(threadId)).findLast(
@@ -952,6 +1042,7 @@ export const createApprovalHarness = ({
     },
     executions,
     expectSoundWebClient,
+    expectStableRefs,
     lastAssistant,
     openWebClient,
     readPage,

@@ -54,4 +54,37 @@ describe("chat ref encoding validation", () => {
     ).toBe(true);
     expect(isChatRefContext({ version: 1, entities: [] })).toBe(false);
   });
+
+  test("admits a v2 context only when every ref binding names a valid target", () => {
+    const context = {
+      version: 2,
+      entities: [],
+      unresolvedInputs: [],
+      workspaceScope: [],
+    };
+    const workspace = {
+      type: "workspace",
+      id: "01a0df7d-c93a-7105-99f9-c66cf1b14d01",
+    };
+
+    expect(
+      isChatRefContext({
+        ...context,
+        refs: [{ kind: "matter", ref: "mat_1", workspace }],
+      }),
+    ).toBe(true);
+    expect(isChatRefContext(context)).toBe(false);
+    expect(
+      isChatRefContext({
+        ...context,
+        refs: [{ kind: "entity", ref: "ent_1", workspace }],
+      }),
+    ).toBe(false);
+    expect(
+      isChatRefContext({
+        ...context,
+        refs: [{ kind: "source", ref: "src_1", href: "#stella-source=bogus" }],
+      }),
+    ).toBe(false);
+  });
 });

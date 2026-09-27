@@ -22295,36 +22295,69 @@ export type WebRoutes = {
               response: {
                 200: (Tf14f36665b | {
                   items: Array<{
+                    anchor: string;
+                    versionValidFrom: T432e07d100;
                     jurisdiction: string;
+                    point: T432e07d100;
+                    confidence: number;
+                    section: number;
+                    selection: (null | "text" | "date-window" | "misprint-correction");
+                    letter: T432e07d100;
                     workIdentifier: string;
                     workNumber: number;
                     workYear: number;
                     workCollection: string;
                     workEli: T432e07d100;
-                    workSource: (null | "number" | "title" | "definition" | "alias" | "carry-over");
                     unit: ("section" | "article");
-                    section: number;
                     sectionSuffix: T432e07d100;
                     subsection: T432e07d100;
-                    letter: T432e07d100;
-                    point: T432e07d100;
                     sentence: T432e07d100;
                     openEnded: T1bdf39f14a;
-                    anchor: string;
-                    versionValidFrom: T432e07d100;
                     sentenceText: string;
                     spanStart: number;
                     spanEnd: number;
-                    confidence: number;
+                    workSource: (null | "number" | "title" | "definition" | "alias" | "carry-over");
+                    spanRole: (null | "printed" | "range-interior");
+                    printPieceId: T432e07d100;
+                    printStart: T666cefd36e;
+                    printEnd: T666cefd36e;
+                    printText: T432e07d100;
+                    namePieceId: T432e07d100;
+                    nameStart: T666cefd36e;
+                    nameEnd: T666cefd36e;
+                    nameText: T432e07d100;
+                    printedWorkIdentifier: T432e07d100;
+                    targetDocumentId: (null | Taab4f17bbf);
+                    targetStatus: (null | "available" | "anchor_missing" | "no_version_for_date" | "work_not_held" | "unverified_target" | "incomplete_versions");
                   } & {
                     previewKey: T432e07d100;
                   }>;
                   nextCursor: T432e07d100;
                   limit: number;
-                } & {
                   previews: Array<(Tf3f1af6d46 & {
                     key: string;
                   })>;
+                  status: {
+                    type: "pending";
+                  } | {
+                    type: "failed";
+                  } | {
+                    type: "unavailable";
+                  } | {
+                    type: "stale";
+                  } | {
+                    type: "current";
+                  } | {
+                    type: "out_of_scope";
+                  } | {
+                    type: "withheld";
+                  } | {
+                    type: "unplaceable";
+                  } | {
+                    type: "legacy";
+                  };
+                  generation: string;
+                  publishedProjectionDigest: T432e07d100;
                 });
                 400: {
                   code?: string;
@@ -22353,7 +22386,28 @@ export type WebRoutes = {
                 402: Tc642053948;
                 403: Tc642053948;
                 404: T96d298ab9b;
-                409: Tc642053948;
+                409: {
+                  code?: string;
+                  message: string;
+                  hint?: string;
+                  issues?: Array<Tddcaa6c051>;
+                  reason?: string;
+                  required?: number;
+                  available?: number;
+                  confirmation?: T79fba9c913;
+                  error?: string;
+                  claim?: T6662e6acc7;
+                  registration_id?: string;
+                  registration_type?: string;
+                  claim_url?: string;
+                  claim_token?: string;
+                  claim_token_expires?: string;
+                  post_claim_scopes?: Array<string>;
+                  requiredFields?: Array<T196b4403fb>;
+                } | {
+                  readonly type: "conflict";
+                  readonly message: "Provision links changed; restart pagination";
+                };
                 413: Tc642053948;
                 422: (Tc642053948 | {
                   type: "validation";
@@ -28177,8 +28231,8 @@ export type WebRoutes = {
               file: File;
               threadId: T54b6538d9e;
               messageId: T6ee2b8a989;
-              contentSha256Hex: string;
               toolCallId: string;
+              contentSha256Hex: string;
             };
             params: {
               workspaceId: string;
@@ -31828,21 +31882,36 @@ type T076e122386 = {
     }))>;
   };
   refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | {
+  refContext?: undefined | (T5276bc544f & {
     version: 1;
-    entities: Array<{
-      entity: T4b7649261c;
-      toolCallId: string;
-      workspace: T813d1235e5;
-    }>;
-    unresolvedInputs: Array<{
-      kind: ("contact" | "entity" | "matter" | "property");
-      param: string;
+  }) | (T5276bc544f & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
       ref: string;
-      toolCallId: string;
+      contact: Tc0256e5575;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: T4b7649261c;
+      workspace: T813d1235e5;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T813d1235e5;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
     }>;
-    workspaceScope: Array<T813d1235e5>;
-  };
+  });
   serverProvenance?: undefined | {
     type: "search-summary";
     version: 1;
@@ -33852,10 +33921,7 @@ type T5032200a01 = (T0147753607 & {
   color: T432e07d100;
 }) | (T0147753607 & {
   type: "contact";
-  resource: {
-    readonly type: "contact";
-    readonly id: stll_api_contract_SafeId<"contact">;
-  };
+  resource: Tc0256e5575;
   contactId: string;
   contactType: T06c0f9b3e2;
 }) | (T0147753607 & {
@@ -33967,6 +34033,21 @@ type T522ec82615 = {
 };
 
 type T524ce08afa = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
+
+type T5276bc544f = {
+  entities: Array<{
+    entity: T4b7649261c;
+    toolCallId: string;
+    workspace: T813d1235e5;
+  }>;
+  unresolvedInputs: Array<{
+    kind: ("contact" | "entity" | "matter" | "property");
+    param: string;
+    ref: string;
+    toolCallId: string;
+  }>;
+  workspaceScope: Array<T813d1235e5>;
+};
 
 type T527969c00a = {
   skillName: string;
@@ -34972,6 +35053,8 @@ type T85664ba4de = Tf14f36665b | {
       }>>;
     }>;
   });
+  projectionDigest: T432e07d100;
+  documentAstSource: (null | "store" | "row");
   sections: T10aa027c8d;
   sourceUrl: T432e07d100;
   sourceAttributionUrl: T432e07d100;
@@ -36755,6 +36838,11 @@ type Tbeecfc0082 = string & valibot_Brand<"SafeId"> & {
 type Tbfcb6ae0d3 = {
   readonly value: T1f1ce35744;
   readonly issues?: undefined;
+};
+
+type Tc0256e5575 = {
+  readonly type: "contact";
+  readonly id: stll_api_contract_SafeId<"contact">;
 };
 
 type Tc0af612b11 = null | {

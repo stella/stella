@@ -8,7 +8,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
+import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { persistExplicitMemory } from "@/api/lib/memory/persist-explicit-memory";
 
@@ -108,7 +108,7 @@ const createMemory = createSafeRootHandler(
 
     // Stored memory is replayed into future system prompts, so refuse
     // content carrying model-control sequences at the boundary.
-    const sanitized = sanitizeMemoryContent(content);
+    const sanitized = sanitizePersonMemoryContent(content);
     if (Result.isError(sanitized)) {
       return Result.err(
         new HandlerError({

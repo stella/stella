@@ -63,6 +63,7 @@ import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DatabaseError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -103,8 +104,8 @@ import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
+  loadServed: async () => await Promise.resolve(Result.ok(new Map())),
   rewrittenOnAcceptance: [],
-  storedForms: new Map(),
 };
 
 const collectChunks = async (
@@ -3679,6 +3680,38 @@ describe("chat stream refs", () => {
     expect(JSON.stringify(assistant)).toContain(resolved);
   });
 
+  test("reports a failed served-history read as a terminal stream error", async () => {
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([
+          buildEngineSnapshot([]),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "later",
+            delta: "later content",
+          },
+        ]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.err(
+              new DatabaseError({ message: "sensitive storage detail" }),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+
+    expect(chunks).toEqual([
+      {
+        type: EventType.RUN_ERROR,
+        code: "unknown",
+        message: "unknown",
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(JSON.stringify(chunks)).not.toContain("sensitive storage detail");
+  });
+
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
     const chunks: StreamChunk[] = [
       {
@@ -4439,7 +4472,7 @@ describe("a superseded client-tool call in the engine's history", () => {
       settleHistoryForRun({
         messages: supersededHistory,
         resumedMessageId: undefined,
-      }).engine,
+      }),
     );
 
     expect(finish?.outcome).toEqual({ type: "completed" });

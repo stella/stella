@@ -469,9 +469,9 @@
       "fix": "#3885",
       "behaviour": "A snapshot carries each message the engine was handed differently in its stored form, so a result only the engine saw never reaches the client.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  presentStoredHistory({\n    history: storedHistory,",
-      "replace": "  presentStoredHistory({\n    history: { ...storedHistory, storedForms: new Map() },",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "message.role === \"tool\" && servedCallIds.has(message.toolCallId)",
+      "replace": "message.role === \"tool\" && false",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "resumes the new turn's own calls after a message replaced waiting ones"
@@ -491,6 +491,20 @@
         "test": "asks again for an approval whose call id an interrupted turn used"
       },
       "oracle": "chat.live.tool-parts-once"
+    },
+    {
+      "id": "refs-keep-targets-across-requests",
+      "fix": "#3935",
+      "behaviour": "Each request restores the refs the thread's names ledger holds, so a later request resolves every one to its first target and never re-mints its spelling.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "dependencies.createRefRegistry(\n          threadNames.refBindings,\n          threadNames.retiredRefs,\n        )",
+      "replace": "dependencies.createRefRegistry([], [])",
+      "scenario": {
+        "file": "src/handlers/chat/recorded-conversations.integration.test.ts",
+        "test": "the committed recording of code-mode-refs-mint-first matches the server"
+      },
+      "oracle": "chat.persisted.refs-stable"
     },
     {
       "id": "stop-ends-message-with-turn",
@@ -519,6 +533,20 @@
         "test": "stops an answer while it streams (before-tool-end)"
       },
       "oracle": "chat.persisted.pending-owned"
+    },
+    {
+      "id": "snapshot-serves-stored-history",
+      "fix": "#3957",
+      "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      served = loaded.value;",
+      "replace": "      served = new Map();",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an approval that still waits"
+      },
+      "oracle": "chat.wire.snapshot-served"
     }
   ]
 }

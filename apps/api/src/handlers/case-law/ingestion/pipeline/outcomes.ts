@@ -75,6 +75,18 @@ export const processResultForCorpusOutcome = (
 ): ProcessResult => {
   switch (outcome?.type) {
     case undefined:
+      // Asked for after its payloads were queued, so an absent outcome is a
+      // settlement that did not happen, not one that was not needed.
+      logger.error("case_law.ingestion.corpus_settlement_missing", {
+        decisionId,
+        caseNumber: caseNumber ?? "",
+        country: country ?? "",
+      });
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        inserted: true,
+        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+      };
     case "settled":
       return {
         status: PROCESS_DECISION_STATUS.COMPLETE,

@@ -55,6 +55,11 @@ const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
   "20260926170000_case_law_provision_backfill",
   "migration.sql",
 );
+const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260927090000_case_law_provision_read_status",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -292,6 +297,7 @@ export const installPgliteStatuteCitationCounts = async (
 
 const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
+  "CREATE OR REPLACE FUNCTION",
   "CREATE TRIGGER",
   "REVOKE ALL ON FUNCTION",
   "GRANT EXECUTE ON FUNCTION",
@@ -307,6 +313,7 @@ export const installPgliteProvisionExtractionState = async (
   for (const migrationPath of [
     PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
     PROVISION_BACKFILL_MIGRATION_PATH,
+    PROVISION_READ_STATUS_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>

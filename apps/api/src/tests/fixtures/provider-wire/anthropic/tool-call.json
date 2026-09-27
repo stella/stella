@@ -4,6 +4,7 @@
   "scenario": "tool-call",
   "source": "recorded",
   "recordedAt": "2026-09-26T02:55:32.946Z",
+  "prompt": "Call the mcp__external__delete tool once with name \"draft\". Do not write any text.",
   "model": "claude-opus-5-5",
   "exchanges": [
     {

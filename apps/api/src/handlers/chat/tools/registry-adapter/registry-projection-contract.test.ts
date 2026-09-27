@@ -1379,6 +1379,8 @@ const CONTRACT_CORPUS = {
           decisionDate: "2020-05-01",
           decisionType: "judgment",
           documentAst: null,
+          documentAstSource: null,
+          projectionDigest: null,
           // GUID-bearing publisher URL; see the statute fixture above.
           documentUrl: `https://example.test/decision/${uid(92)}`,
           ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",

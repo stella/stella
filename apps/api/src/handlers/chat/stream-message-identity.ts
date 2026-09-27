@@ -1,18 +1,28 @@
 import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
+import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type {
   ChatMessage,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import { classifyAIError } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+const SERVED_HISTORY_READ_FAILED = failureSink({
+  event: "chat.snapshot.served_history_read_failed",
+  expected: [],
+});
 
 export type MessageIdMapper = (messageId: string) => SafeId<"chatMessage">;
 
@@ -141,8 +151,14 @@ export type StoredHistory = {
    * `keepPostedMessagesInSnapshots`), so its older pages and cursor stand.
    */
   rewrittenOnAcceptance: readonly ClientMessage[];
-  /** See `RunHistory.storedForms`. */
-  storedForms: ReadonlyMap<string, ClientMessage>;
+  /**
+   * Every stored message the run was handed except the one it continues, by
+   * id, as served. Read at the first snapshot: only a snapshot shows the
+   * history, and most runs carry none.
+   */
+  loadServed: () => Promise<
+    Result<ReadonlyMap<string, ClientMessage>, SafeDbError>
+  >;
 };
 
 /** A served message as a snapshot carries it: in UI form, which the client
@@ -153,25 +169,29 @@ const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => ({
 });
 
 /**
- * `messages` with every message `storedForms` holds as stored. The tool
- * messages answering its calls and the reasoning ahead of it are the engine's
- * copy of what its stored parts already carry, so they are left out.
+ * `messages` with every message `served` holds as the page serves it. The
+ * tool messages answering its calls and the reasoning ahead of it are the
+ * engine's copy of what its served parts already carry, so they are left
+ * out.
  */
-const withStoredForms = ({
+const withServedHistory = ({
   messages,
-  storedCallIds,
-  storedForms,
+  served,
 }: {
   messages: readonly SnapshotMessage[];
-  storedCallIds: ReadonlySet<string>;
-  storedForms: ReadonlyMap<string, ClientMessage>;
+  served: ReadonlyMap<string, ClientMessage>;
 }): SnapshotMessage[] => {
+  const servedCallIds = new Set(
+    [...served.values()].flatMap(({ parts }) =>
+      parts.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),
+    ),
+  );
   const presented: SnapshotMessage[] = [];
   for (const message of messages) {
-    if (message.role === "tool" && storedCallIds.has(message.toolCallId)) {
+    if (message.role === "tool" && servedCallIds.has(message.toolCallId)) {
       continue;
     }
-    const stored = storedForms.get(message.id);
+    const stored = served.get(message.id);
     if (stored === undefined) {
       presented.push(message);
       continue;
@@ -185,25 +205,21 @@ const withStoredForms = ({
 };
 
 /**
- * Presents the history a run was handed as the thread stores it, never as the
- * engine was handed it: every snapshot carries each message the engine held
- * differently in its stored form, and a turn whose acceptance rewrote a
- * message the page holds opens with that message as stored.
+ * Presents the history a run was handed as the thread's page serves it, never
+ * as the engine holds it: every snapshot carries each stored message the run
+ * does not continue in its served form, so a snapshot and a page load agree
+ * field for field, and a turn whose acceptance rewrote a message the page
+ * holds opens with that message as stored.
  *
  * @yields Each chunk of `source`, its snapshots showing the stored history.
  */
 export const presentStoredHistory = async function* ({
-  history: { rewrittenOnAcceptance, storedForms },
+  history: { loadServed, rewrittenOnAcceptance },
   source,
 }: {
   history: StoredHistory;
   source: AsyncIterable<StreamChunk>;
 }): AsyncIterable<StreamChunk> {
-  const storedCallIds = new Set(
-    [...storedForms.values()].flatMap(({ parts }) =>
-      parts.flatMap((part) => (part.type === "tool-call" ? [part.id] : [])),
-    ),
-  );
   let opening: StreamChunk | undefined =
     rewrittenOnAcceptance.length === 0
       ? undefined
@@ -212,21 +228,35 @@ export const presentStoredHistory = async function* ({
           messages: rewrittenOnAcceptance.map(servedSnapshotMessage),
           timestamp: Temporal.Now.instant().epochMilliseconds,
         };
+  let served: ReadonlyMap<string, ClientMessage> | undefined;
   for await (const chunk of source) {
     if (opening !== undefined && chunk.type !== EventType.RUN_STARTED) {
       yield opening;
       opening = undefined;
     }
-    yield chunk.type === EventType.MESSAGES_SNAPSHOT
-      ? {
-          ...chunk,
-          messages: withStoredForms({
-            messages: chunk.messages,
-            storedCallIds,
-            storedForms,
-          }),
-        }
-      : chunk;
+    if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+      yield chunk;
+      continue;
+    }
+    if (served === undefined) {
+      const loaded = await loadServed();
+      if (Result.isError(loaded)) {
+        observeFailure(loaded.error, { sink: SERVED_HISTORY_READ_FAILED });
+        const kind = classifyAIError(loaded.error);
+        yield {
+          type: EventType.RUN_ERROR,
+          code: kind,
+          message: kind,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        };
+        return;
+      }
+      served = loaded.value;
+    }
+    yield {
+      ...chunk,
+      messages: withServedHistory({ messages: chunk.messages, served }),
+    };
   }
   if (opening !== undefined) {
     yield opening;
