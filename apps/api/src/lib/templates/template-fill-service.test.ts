@@ -525,7 +525,7 @@ describe("fillStoredTemplateDocx use recording", () => {
       panic("Expected a structured stored-template error");
     }
     expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
-    expect(result.storedTemplateError?.status).toBe(404);
+    expect(result.storedTemplateError.status).toBe(404);
     expect(updates).toBe(0);
   });
 });
