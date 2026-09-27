@@ -459,6 +459,19 @@ describe("MCP static tool-set coherence", () => {
 describe("MCP wire schemas under an independent validator", () => {
   const validator = createWireSchemaValidator();
 
+  // Two sources that compact to one published schema are distinct inputs to
+  // the equivalence check, so a contract is keyed by both projections.
+  const contractKey = (
+    contract: Pick<
+      RuntimeMcpToolOutputContract,
+      "outputSchema" | "outputSchemaSource"
+    >,
+  ): string =>
+    JSON.stringify([
+      contract.outputSchema,
+      deriveUncompactedMcpOutputSchema(contract.outputSchemaSource),
+    ]);
+
   const outputContracts = () => {
     const contracts = new Map<
       string,
@@ -473,7 +486,7 @@ describe("MCP wire schemas under an independent validator", () => {
       for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
         const contract = getStaticMcpToolOutputContract(tool.name, mode);
         if (contract !== undefined) {
-          contracts.set(JSON.stringify(contract.outputSchema), {
+          contracts.set(contractKey(contract), {
             tool: `${mode}/${tool.name}`,
             ...contract,
           });
@@ -484,7 +497,7 @@ describe("MCP wire schemas under an independent validator", () => {
       DYNAMIC_TOOL_FAMILY_POLICIES,
     )) {
       if (policy.owner === "stella") {
-        contracts.set(JSON.stringify(policy.output.outputSchema), {
+        contracts.set(contractKey(policy.output), {
           tool: `family/${family}`,
           ...policy.output,
         });
