@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { appShellNavigationLink } from "../helpers/app-shell";
+import {
+  appShellNavigationLink,
+  ROUTE_ERROR_HEADING,
+} from "../helpers/app-shell";
 import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 
@@ -58,7 +61,7 @@ test("chat thread page renders for an entitlement-less owner", async ({
 
   // The route error boundary replaces the thread UI wholesale; its
   // title is the canonical signature of a client-side render crash.
-  await expect(page.getByText("This page couldn’t be opened")).toBeHidden();
+  await expect(page.getByText(ROUTE_ERROR_HEADING)).toBeHidden();
 
   await expect(chatReadySurface(page)).toBeVisible();
 });
