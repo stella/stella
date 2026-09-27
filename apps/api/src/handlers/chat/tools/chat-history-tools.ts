@@ -10,6 +10,7 @@ import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction"
 import { pastChatScopeSql } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type {
   ChatMessage,
   ChatMessageRole,
@@ -128,13 +129,6 @@ type ChatHistoryExpansionRow = {
   threadWorkspaceId: SafeId<"workspace"> | null;
 };
 
-// TanStack expects a rejected promise to preserve a tool's tagged failure.
-async function rejectChatTool(error: ChatToolError): Promise<never> {
-  return await new Promise<never>((_resolve, reject) => {
-    reject(error);
-  });
-}
-
 export const createChatHistoryTools = ({
   excludedMessageIds = [],
   organizationId,
@@ -164,7 +158,7 @@ export const createChatHistoryTools = ({
     }).server(async ({ query, limit }) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) {
-        return rejectChatTool(
+        return raiseChatToolError(
           new ChatToolError({
             kind: "invalid-input",
             message: "Chat history search query must not be empty.",
@@ -195,7 +189,7 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        return rejectChatTool(
+        return raiseChatToolError(
           new ChatToolError({
             kind: "server-defect",
             message: "Failed to search chat history.",
@@ -289,7 +283,7 @@ export const createChatHistoryTools = ({
       );
 
       if (Result.isError(result)) {
-        return rejectChatTool(
+        return raiseChatToolError(
           new ChatToolError({
             kind: "server-defect",
             message: "Failed to expand chat history.",
