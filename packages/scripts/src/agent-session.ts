@@ -207,7 +207,8 @@ const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
     for (const line of lines.slice(printedLines, -1)) {
       if (line.startsWith("==> ")) {
         console.log(line);
-        lastHeading = line.slice("==> ".length).replace(/\.+$/u, "");
+        const heading = line.slice("==> ".length);
+        lastHeading = heading.endsWith("...") ? heading.slice(0, -3) : heading;
         lastProgressAt = Date.now();
       }
     }
