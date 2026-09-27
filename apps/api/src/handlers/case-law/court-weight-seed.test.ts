@@ -48,7 +48,7 @@ describe("court weight seed", () => {
     expect(full.trimEnd().endsWith(courtWeightSeedSql(fullRows))).toBe(true);
 
     const usa = await Bun.file(
-      migrationPath("20260926120200_case_law_court_weight_seed_usa"),
+      migrationPath("20260926160200_case_law_court_weight_seed_usa"),
     ).text();
     expect(usa.trimEnd().endsWith(courtWeightJurisdictionSeedSql("USA"))).toBe(
       true,
