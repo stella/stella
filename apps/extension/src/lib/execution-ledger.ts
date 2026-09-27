@@ -3,6 +3,7 @@ import {
   BROWSER_CONTROL_LIMITS,
   type BrowserControlCommand,
   type BrowserControlResult,
+  isReadOnlyBrowserCommand,
   parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
 
@@ -25,8 +26,10 @@ type CompletedExecutionReceipt = {
 type ExecutionReceipt = CompletedExecutionReceipt | StartedExecutionReceipt;
 
 /**
- * Tool-call keys that ever started, kept far longer than result payloads: a
- * retry whose result was evicted must still never run twice.
+ * Keys of effectful commands that ever started, kept far longer than result
+ * payloads: a retry whose result was evicted must still never run twice.
+ * Page reads are not recorded (repeating one changes nothing), so a pairing,
+ * bounded to `sessionActions` effectful commands, never evicts a key.
  */
 const EXECUTED_KEY_LIMIT = 4096;
 
@@ -161,7 +164,9 @@ export const executeAtMostOnce = async ({
     ...receipts.slice(-(BROWSER_CONTROL_LIMITS.executionReceipts - 1)),
     startedReceipt,
   ];
-  const boundedKeys = [...executedKeys.slice(-(EXECUTED_KEY_LIMIT - 1)), key];
+  const boundedKeys = isReadOnlyBrowserCommand(command)
+    ? executedKeys
+    : [...executedKeys.slice(-(EXECUTED_KEY_LIMIT - 1)), key];
   await store.write({ executedKeys: boundedKeys, receipts: boundedReceipts });
 
   const result = await execute();

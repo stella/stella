@@ -84,10 +84,12 @@ test("an unpaired page cannot forge browser commands and a lease stays tab-bound
           {
             command: { action: "open", url: "https://example.com/" },
             controllerId: "forged-controller",
+            observedTab: null,
             protocolVersion,
             requestId: "forged-command",
             source,
             toolCallId: "tool-call-1",
+            turnId: "turn-1",
             type: "command",
           },
           window.location.origin,

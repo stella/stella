@@ -33051,7 +33051,7 @@ type T3cedcce572 = {
 };
 
 type T3d16f860ff = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -33066,6 +33066,7 @@ type T3d16f860ff = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };
@@ -33720,7 +33721,7 @@ type T594988174f = string & valibot_Brand<"SafeId"> & {
 };
 
 type T596c558ecb = {
-  protocolVersion: 3;
+  protocolVersion: 4;
   snapshot: {
     contentTrust: "untrusted-web-content";
     elements: Array<{
@@ -33735,6 +33736,7 @@ type T596c558ecb = {
     text: string;
     textOffset: number;
     textTotalChars: number;
+    tabId: number;
     title: string;
     url: string;
   };
@@ -33742,7 +33744,7 @@ type T596c558ecb = {
 } | {
   code: Tb4bdb2e8b2;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -33900,7 +33902,7 @@ type T5dbcd4218d = "pending" | "applied";
 type T5e1768906f = {
   code: Tb4bdb2e8b2;
   message: string;
-  protocolVersion: 3;
+  protocolVersion: 4;
   status: "error";
 };
 
@@ -36739,7 +36741,7 @@ type Tb47b7b98fd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowDefinition";
 };
 
-type Tb4bdb2e8b2 = "disconnected" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-closed" | "timed-out" | "unsupported-page";
+type Tb4bdb2e8b2 = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
 type Tb5b50d2995 = {
   workspaceId: string;

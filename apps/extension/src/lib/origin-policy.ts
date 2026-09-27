@@ -98,20 +98,23 @@ export const isControllableFrame = ({
 
 const HOST_END = String.raw`\.?(?::\d+)?(?:[/?#]|$)`;
 const OCTET = String.raw`\d{1,3}`;
+/** HTTPS and secure WebSockets; plain `http:` and `ws:` are blocked outright. */
+const SECURE_SCHEME = String.raw`^(?:https|wss)://`;
 
 /**
  * The URLs `parseControllableUrl` refuses for their authority, as RE2
  * patterns for declarativeNetRequest rules; each stays well under Chrome's
- * 2 KB compiled-regex limit. Chrome canonicalizes IPv4 hosts to dotted
- * decimal before matching.
+ * 2 KB compiled-regex limit. They cover secure WebSocket URLs as well, since
+ * the rules hold for every request a controlled tab makes. Chrome
+ * canonicalizes IPv4 hosts to dotted decimal before matching.
  */
-export const NON_PUBLIC_HTTPS_URL_PATTERNS = [
+export const NON_PUBLIC_SECURE_URL_PATTERNS = [
   // Embedded credentials, which also covers any host behind them.
-  String.raw`^https://[^/?#]*@`,
+  String.raw`${SECURE_SCHEME}[^/?#]*@`,
   // Every IPv6 literal.
-  String.raw`^https://\[`,
+  String.raw`${SECURE_SCHEME}\[`,
   // Single-label names; this also covers bare `local` and `internal`.
-  String.raw`^https://[^./?#:]+${HOST_END}`,
-  String.raw`^https://(?:[^/?#:]*\.)?(?:localhost|local|internal)${HOST_END}`,
-  String.raw`^https://(?:(?:0|10|127|22[4-9]|2[34]\d|25[0-5])\.${OCTET}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])|169\.254|172\.(?:1[6-9]|2\d|3[01])|192\.168|198\.1[89])\.${OCTET}\.${OCTET}${HOST_END}`,
+  String.raw`${SECURE_SCHEME}[^./?#:]+${HOST_END}`,
+  String.raw`${SECURE_SCHEME}(?:[^/?#:]*\.)?(?:localhost|local|internal)${HOST_END}`,
+  String.raw`${SECURE_SCHEME}(?:(?:0|10|127|22[4-9]|2[34]\d|25[0-5])\.${OCTET}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])|169\.254|172\.(?:1[6-9]|2\d|3[01])|192\.168|198\.1[89])\.${OCTET}\.${OCTET}${HOST_END}`,
 ];
