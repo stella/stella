@@ -42,6 +42,19 @@ const { values } = parseArgs({
   },
 });
 
+// Options feed a sampling loop, so a non-integer or unbounded value would
+// skew the rates or never finish; refuse it up front.
+const integerOption = (name: string, value: string, minimum: number) => {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+    console.error(`--${name} must be an integer of at least ${minimum}`);
+    process.exit(2);
+  }
+  return parsed;
+};
+const seed = integerOption("seed", values.seed, 0);
+const perCategory = integerOption("per-category", values["per-category"], 1);
+
 const lists: ParsedList[] = [
   (await parseEuList(Bun.file(values.eu).stream())).unwrap(),
   (await parseUnList(Bun.file(values.un).stream())).unwrap(),
@@ -65,10 +78,7 @@ const started = performance.now();
 const index = buildScreeningIndex(lists);
 const buildMilliseconds = performance.now() - started;
 
-const cases = generateCases(lists, {
-  seed: Number(values.seed),
-  perCategory: Number(values["per-category"]),
-});
+const cases = generateCases(lists, { seed, perCategory });
 const report = evaluate(lists, cases, CUTOFFS);
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -103,12 +113,16 @@ for (const row of report.rows) {
   );
 }
 const categories = Object.keys(report.rows[0]?.byCategory ?? {});
+// A small list runs out of eligible names before the requested count, so
+// each row states how many cases it actually rests on.
+const countOf = (category: string) =>
+  cases.filter((testCase) => testCase.category === category).length;
 console.log(
-  `\n| category (n=${values["per-category"]} each) | ${CUTOFFS.join(" | ")} |`,
+  `\n| category (requested ${perCategory}) | n | ${CUTOFFS.join(" | ")} |`,
 );
-console.log(`| --- | ${CUTOFFS.map(() => "---").join(" | ")} |`);
+console.log(`| --- | --- | ${CUTOFFS.map(() => "---").join(" | ")} |`);
 for (const category of categories) {
   console.log(
-    `| ${category} | ${report.rows.map((row) => percent(row.byCategory[category] ?? 0)).join(" | ")} |`,
+    `| ${category} | ${countOf(category)} | ${report.rows.map((row) => percent(row.byCategory[category] ?? 0)).join(" | ")} |`,
   );
 }
