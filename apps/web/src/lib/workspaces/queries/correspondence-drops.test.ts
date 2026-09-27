@@ -1,13 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, expect, test } from "bun:test";
 
+import type { CorrespondenceDropsPage } from "@stll/api-contract/correspondence";
+
 import { toSafeId } from "@/lib/safe-id";
 
 import { correspondenceKeys } from "./correspondence";
-import {
-  correspondenceDropsOptions,
-  type CorrespondenceDropsPage,
-} from "./correspondence-drops";
+import { correspondenceDropsOptions } from "./correspondence-drops";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

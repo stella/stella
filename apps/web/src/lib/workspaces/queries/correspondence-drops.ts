@@ -1,6 +1,10 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
-import type { CorrespondenceDropReason } from "@stll/api-contract/correspondence";
+import type {
+  CorrespondenceDrop,
+  CorrespondenceDropReason,
+  CorrespondenceDropsPage,
+} from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -8,16 +12,6 @@ import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 import { correspondenceKeys } from "./correspondence";
-
-type CorrespondenceDropsResponse = Awaited<
-  ReturnType<
-    ReturnType<typeof api.workspaces>["correspondence"]["drops"]["get"]
-  >
->;
-export type CorrespondenceDropsPage = NonNullable<
-  CorrespondenceDropsResponse["data"]
->;
-export type CorrespondenceDrop = CorrespondenceDropsPage["items"][number];
 
 export const CORRESPONDENCE_DROP_REASON_LABELS = {
   unknown_recipient: "correspondence.drops.reasons.unknownRecipient",
@@ -46,7 +40,10 @@ export const correspondenceDropsOptions = (workspaceId: string) =>
       { limit: DROP_PAGE_SIZE },
     ],
     initialPageParam: stringCursorSeed(),
-    queryFn: async ({ pageParam, signal }) => {
+    queryFn: async ({
+      pageParam,
+      signal,
+    }): Promise<CorrespondenceDropsPage> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence.drops.get({

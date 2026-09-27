@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
+import type { CorrespondenceDrop } from "@stll/api-contract/correspondence";
 import {
   Accordion,
   AccordionItem,
@@ -34,7 +35,6 @@ import {
   CORRESPONDENCE_DROP_HINT_LABELS,
   CORRESPONDENCE_DROP_REASON_LABELS,
   correspondenceDropsOptions,
-  type CorrespondenceDrop,
 } from "@/lib/workspaces/queries/correspondence-drops";
 
 const dropTableFeatures = tableFeatures({ coreRowModel: createCoreRowModel() });

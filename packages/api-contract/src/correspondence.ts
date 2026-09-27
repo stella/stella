@@ -44,6 +44,20 @@ export const CORRESPONDENCE_DROP_REASONS = [
 export type CorrespondenceDropReason =
   (typeof CORRESPONDENCE_DROP_REASONS)[number];
 
+export type CorrespondenceDrop = {
+  id: SafeId<"correspondenceDropLog">;
+  sender: string;
+  receivedAt: string;
+  reason: CorrespondenceDropReason;
+  setupHint: "configure_sender_spf_dkim_dmarc" | null;
+};
+
+export type CorrespondenceDropsPage = {
+  items: CorrespondenceDrop[];
+  nextCursor: string | null;
+  limit: number;
+};
+
 export type CorrespondenceAddress = {
   address: string;
   name: string | null;
