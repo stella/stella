@@ -121,11 +121,22 @@ const updateCorrespondence = createSafeHandler(
             resourceId: correspondenceId,
             metadata: { subject: record.subject },
             changes: {
-              handlingState: {
-                old: existing.handlingState,
-                new: record.handlingState,
-              },
-              assigneeId: { old: existing.assigneeId, new: record.assigneeId },
+              ...(existing.handlingState === record.handlingState
+                ? {}
+                : {
+                    handlingState: {
+                      old: existing.handlingState,
+                      new: record.handlingState,
+                    },
+                  }),
+              ...(existing.assigneeId === record.assigneeId
+                ? {}
+                : {
+                    assigneeId: {
+                      old: existing.assigneeId,
+                      new: record.assigneeId,
+                    },
+                  }),
             },
           });
         }

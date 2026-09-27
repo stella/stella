@@ -27,7 +27,7 @@ const createMatterInboundAddress = createSafeHandler(
         }),
       );
     }
-    const token = randomBytes(32).toString("base64url");
+    const token = randomBytes(32).toString("hex");
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

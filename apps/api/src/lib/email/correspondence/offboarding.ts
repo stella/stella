@@ -132,6 +132,7 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
   userId,
   scope,
 }: ClearCorrespondenceAssignmentsOptions) => {
+  let clearedCount = 0;
   const organizationId =
     scope.type === "organization" ? scope.organizationId : "";
   await tx.execute(sql`SELECT
@@ -169,6 +170,7 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
     if (cleared.length !== recordIds.length) {
       panic("Locked correspondence assignments were not cleared");
     }
+    clearedCount += cleared.length;
   }
   await tx.execute(sql`SELECT
     set_config(${CORRESPONDENCE_OFFBOARDING_SETTING.userId}, '', true),
@@ -176,6 +178,7 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
     set_config(${CORRESPONDENCE_OFFBOARDING_SETTING.scope}, '', true),
     set_config(${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}, '', true)
   `);
+  return clearedCount;
 };
 
 type ClearOrganizationCorrespondenceAssignmentsOptions = {
@@ -189,11 +192,14 @@ export const clearOrganizationCorrespondenceAssignments = async ({
   organizationId,
   userId,
 }: ClearOrganizationCorrespondenceAssignmentsOptions) => {
-  await clearCorrespondenceAssignmentsForOffboarding({
+  const clearedCount = await clearCorrespondenceAssignmentsForOffboarding({
     tx,
     userId,
     scope: { type: "organization", organizationId },
   });
+  if (clearedCount === 0) {
+    return;
+  }
 
   const recordAuditEvent = createBackgroundAuditRecorder({
     execution: {

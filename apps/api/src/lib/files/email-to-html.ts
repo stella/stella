@@ -807,6 +807,9 @@ export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
 export const sanitizeEmailBodyHtml = (html: string): string => {
   const $ = load(html);
   sanitizeDom($);
+  $("head").prepend(
+    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
+  );
   return $.html();
 };
 

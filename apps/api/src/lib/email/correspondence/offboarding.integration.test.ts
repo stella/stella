@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
@@ -113,6 +113,77 @@ const record = (
   }) as const satisfies typeof correspondence.$inferInsert;
 
 describe("correspondence offboarding", () => {
+  test("organization cleanup audits only a real assignment change, including retries", async () => {
+    try {
+      await testDb.transaction(async (tx) => {
+        const options = {
+          tx: asTestRaw<Transaction>(tx),
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        };
+        await clearOrganizationCorrespondenceAssignments(options);
+        expect(
+          await tx
+            .select({ id: auditLogs.id })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, ids.orgA),
+                eq(auditLogs.resourceType, "organization_settings"),
+              ),
+            ),
+        ).toEqual([]);
+        await tx.insert(correspondence).values([
+          record({
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+            assigneeId: ids.userA1,
+          }),
+          record({
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            assigneeId: ids.userA1,
+          }),
+          record({
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            assigneeId: ids.userA2,
+          }),
+          record({
+            organizationId: ids.orgB,
+            workspaceId: ids.wsB1,
+            assigneeId: ids.userA1,
+          }),
+        ]);
+        await clearOrganizationCorrespondenceAssignments(options);
+        await clearOrganizationCorrespondenceAssignments(options);
+        expect(
+          await tx
+            .select({ changes: auditLogs.changes })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, ids.orgA),
+                eq(auditLogs.resourceType, "organization_settings"),
+              ),
+            ),
+        ).toEqual([
+          {
+            changes: {
+              correspondenceAssigneeId: { old: ids.userA1, new: null },
+            },
+          },
+        ]);
+        tx.rollback();
+      });
+    } catch (error) {
+      if (error instanceof TransactionRollbackError) {
+        return;
+      }
+      throw error;
+    }
+    throw new Error("Expected integration transaction rollback");
+  });
   test.each(["schema", "migration"] as const)(
     "actor erasure is bounded, owner-only, isolated and idempotent (%s)",
     async (policySource) => {
@@ -370,7 +441,9 @@ describe("correspondence offboarding", () => {
           tx.rollback();
         });
       } catch (error) {
-        if (error instanceof TransactionRollbackError) {return;}
+        if (error instanceof TransactionRollbackError) {
+          return;
+        }
         throw error;
       }
       throw new Error("Expected integration transaction rollback");
@@ -537,14 +610,18 @@ describe("correspondence offboarding", () => {
             });
           }
 
-          await clearCorrespondenceAssignmentsForOffboarding({
-            tx: asTestRaw<Transaction>(tx),
-            userId: ids.userA1,
-            scope:
-              scope === "account"
-                ? { type: "account" }
-                : { type: "organization", organizationId: ids.orgA },
-          });
+          const clearedCount =
+            await clearCorrespondenceAssignmentsForOffboarding({
+              tx: asTestRaw<Transaction>(tx),
+              userId: ids.userA1,
+              scope:
+                scope === "account"
+                  ? { type: "account" }
+                  : { type: "organization", organizationId: ids.orgA },
+            });
+          expect(clearedCount).toBe(
+            1 + (scope === "account" ? 1 + additionalAssignments.length : 0),
+          );
           expect(
             await tx.select({ id: correspondence.id }).from(correspondence),
           ).toEqual([]);

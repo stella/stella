@@ -451,6 +451,8 @@ describe("matter correspondence", () => {
         ),
       );
       expect(first.address).not.toBe(second.address);
+      expect(first.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
+      expect(second.address).toMatch(/^[a-f0-9]{64}@inbound\.example\.test$/u);
       const active = expectSuccess(
         await getMatterInboundAddress.handler(
           asTestRaw<Parameters<typeof getMatterInboundAddress.handler>[0]>(
