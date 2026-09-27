@@ -74,6 +74,17 @@ const onlyThese = (
   return queue.map((row) => row.id).filter((id) => wanted.has(id));
 };
 
+/**
+ * What the promise rejected with; a resolution comes back wrapped so it can
+ * never pass for the expected error. bun-types declares `.rejects.toX` as
+ * void, so awaiting it trips type-aware lint; capture the rejection instead.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    (value: unknown) => ({ resolved: value }),
+    (error: unknown) => error,
+  );
+
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -776,7 +787,7 @@ if (!databaseUrl || !runPostgresTests) {
             await Promise.resolve(new Response(null, { status: 429 })),
         );
 
-        await expect(outcome).rejects.toBeInstanceOf(AdapterFetchError);
+        expect(await rejectionOf(outcome)).toBeInstanceOf(AdapterFetchError);
       });
     });
   });

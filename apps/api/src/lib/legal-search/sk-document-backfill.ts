@@ -943,6 +943,31 @@ export const storeBackfilledDocument = async ({
   return stored ? "stored" : "superseded";
 };
 
+type WriteFetchBookkeepingOptions = {
+  set: {
+    documentFetchRequestedAt?: SQL;
+    documentFetchAttempts?: number | SQL;
+  };
+  where: SQL | undefined;
+};
+
+/**
+ * The one writer of the queue's own bookkeeping on a decision: who asked for
+ * it and how many attempts it has had. None of it is a change to the
+ * decision, so `updated_at` is held where it is; the public reads key their
+ * freshness off it. Returns the ids it wrote.
+ */
+const writeFetchBookkeeping = async (
+  tx: Transaction,
+  { set, where }: WriteFetchBookkeepingOptions,
+): Promise<{ id: SafeId<"caseLawDecision"> }[]> =>
+  // audit: skip — queue bookkeeping on public case-law rows; no user action
+  await tx
+    .update(caseLawDecisions)
+    .set({ ...set, updatedAt: sql`${caseLawDecisions.updatedAt}` })
+    .where(where)
+    .returning({ id: caseLawDecisions.id });
+
 /**
  * Record that a reader asked for this document. Only the first request
  * is kept: the queue orders by it, and refreshing the timestamp on every
@@ -952,18 +977,17 @@ export const recordDocumentFetchRequest = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  await scopedDb(async (tx) => {
-    // Raw statement for the same reason as the claim below: a request is
-    // not a change to the decision, so `updated_at` stays where it is.
-    // audit: skip — public case-law read-through; no user action
-    await tx.execute(sql`
-      UPDATE ${caseLawDecisions}
-      SET document_fetch_requested_at = now()
-      WHERE id = ${decisionId}
-        AND redacted_at IS NULL
-        AND document_fetch_requested_at IS NULL
-    `);
-  });
+  await scopedDb(
+    async (tx) =>
+      await writeFetchBookkeeping(tx, {
+        set: { documentFetchRequestedAt: sql`now()` },
+        where: and(
+          eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.redactedAt),
+          isNull(caseLawDecisions.documentFetchRequestedAt),
+        ),
+      }),
+  );
 };
 
 /**
@@ -1115,31 +1139,24 @@ export const markDocumentUnavailable = async (
  * attempts. For a download the parser cannot read: fetching the same bytes
  * again would cost the publisher a request per cooldown and read no better,
  * while a parser fix is exactly what `requeueParkedDocuments` is for.
- *
- * Parking is fetch bookkeeping, not a change to the decision, so
- * `updated_at` is held where it is: the public reads key their freshness
- * off it.
  */
 export const parkDocumentFetch = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  await scopedDb(async (tx) => {
-    // audit: skip — public case-law document fetch bookkeeping; no user action
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
-        updatedAt: sql`${caseLawDecisions.updatedAt}`,
-      })
-      .where(
-        and(
+  await scopedDb(
+    async (tx) =>
+      await writeFetchBookkeeping(tx, {
+        set: {
+          documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
+        },
+        where: and(
           eq(caseLawDecisions.id, decisionId),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
         ),
-      );
-  });
+      }),
+  );
 };
 
 /** Parked decisions of the deferred-document source. */
@@ -1173,7 +1190,6 @@ export type RequeueParkedDocumentsOptions = {
  * requeue; the last attempt's timestamp stays, so a requeued decision still
  * waits out one base cooldown rather than arriving at the head of the queue
  * in a burst. Returns how many were requeued, so a caller loops until zero.
- * Like parking, it leaves `updated_at` alone.
  */
 export const requeueParkedDocuments = async ({
   limit,
@@ -1189,15 +1205,10 @@ export const requeueParkedDocuments = async ({
       )
       .orderBy(asc(caseLawDecisions.id))
       .limit(limit);
-    // audit: skip — operator requeue of public case-law fetch bookkeeping; no user action
-    const requeued = await tx
-      .update(caseLawDecisions)
-      .set({
-        documentFetchAttempts: 0,
-        updatedAt: sql`${caseLawDecisions.updatedAt}`,
-      })
-      .where(inArray(caseLawDecisions.id, parked))
-      .returning({ id: caseLawDecisions.id });
+    const requeued = await writeFetchBookkeeping(tx, {
+      set: { documentFetchAttempts: 0 },
+      where: inArray(caseLawDecisions.id, parked),
+    });
     return requeued.length;
   });
 

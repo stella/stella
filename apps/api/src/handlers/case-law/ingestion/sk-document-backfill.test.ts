@@ -75,6 +75,17 @@ const download = async (
     signal: new AbortController().signal,
   });
 
+/**
+ * What the promise rejected with; a resolution comes back wrapped so it can
+ * never pass for the expected error. bun-types declares `.rejects.toX` as
+ * void, so awaiting it trips type-aware lint; capture the rejection instead.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    (value: unknown) => ({ resolved: value }),
+    (error: unknown) => error,
+  );
+
 /** A network failure as Bun reports it: a `TypeError` carrying a code. */
 const bunNetworkError = (code: string): TypeError =>
   Object.assign(new TypeError(`${code} fetching the document`), { code });
@@ -116,7 +127,7 @@ describe("one document's download", () => {
       async () => await Promise.resolve(new Response(null, { status: 429 })),
     );
 
-    await expect(result).rejects.toBeInstanceOf(AdapterFetchError);
+    expect(await rejectionOf(result)).toBeInstanceOf(AdapterFetchError);
   });
 
   test("a connection that fails for this document is its own failure", async () => {
@@ -175,7 +186,7 @@ describe("one document's download", () => {
       throw failure;
     });
 
-    await expect(result).rejects.toBe(failure);
+    expect(await rejectionOf(result)).toBe(failure);
   });
 });
 
