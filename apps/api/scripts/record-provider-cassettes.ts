@@ -8,6 +8,7 @@
 //   RECORD_OPENAI_API_KEY=... bun run record:provider-cassettes
 //   bun run record:provider-cassettes --provider anthropic,google --scenario text
 //   bun run record:provider-cassettes --provider mistral --pause-ms 5000
+//   bun run record:provider-cassettes --provider openai --model gpt-6-luna
 //
 // A provider is recorded only when its recording key is set:
 // RECORD_OPENAI_API_KEY, RECORD_ANTHROPIC_API_KEY, RECORD_GOOGLE_API_KEY,
@@ -16,7 +17,8 @@
 // so no configured key is ever used by accident. Scenarios no live request
 // can produce on demand (rate limits, outages, corrupted or cut-off streams)
 // stay synthetic. `--pause-ms` waits between requests, for a key whose
-// rate limit a full pass would hit.
+// rate limit a full pass would hit. `--model` records with another of the
+// provider's catalog models than its chat default.
 //
 // Nothing but the synthetic prompts is sent. Request bodies and request
 // headers are never stored; response headers are kept only when an SDK reads
@@ -29,6 +31,8 @@ import { panic, Result } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -130,6 +134,7 @@ export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const IDENTIFIER_KEYS = new Set([
   "account_id",
   "id",
+  "item_id",
   "organization_id",
   "project_id",
   "requestId",
@@ -490,17 +495,49 @@ const listArgument = (name: string): string[] | undefined => {
   return value?.split(",").filter((entry) => entry !== "");
 };
 
+/** `--model`, which must be one of the provider's catalog models. */
+export const offeredModel = (
+  provider: ProviderWireProvider,
+  model: string,
+): string => {
+  const options: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+  return options.includes(model)
+    ? model
+    : panic(`--model ${model} is not one of ${provider}'s models`);
+};
+
+/** The model a scenario is recorded with: the rejected request always names
+ *  a model no provider serves. */
+const recordingModel = ({
+  chatModel,
+  provider,
+  scenario,
+}: {
+  chatModel: string | undefined;
+  provider: ProviderWireProvider;
+  scenario: ProviderWireScenario;
+}): string => {
+  if (scenario === "bad-request") {
+    return UNKNOWN_MODEL_ID;
+  }
+  return chatModel === undefined
+    ? wireChatModel(provider)
+    : offeredModel(provider, chatModel);
+};
+
 export const recordOne = async ({
+  chatModel,
   provider,
   scenario,
   secret,
 }: {
+  /** Records with this model rather than the provider's chat default. */
+  chatModel?: string | undefined;
   provider: ProviderWireProvider;
   scenario: ProviderWireScenario;
   secret: string;
 }): Promise<ProviderWireCassette> => {
-  const model =
-    scenario === "bad-request" ? UNKNOWN_MODEL_ID : wireChatModel(provider);
+  const model = recordingModel({ chatModel, provider, scenario });
   const recorder = installRecorder({ provider, secret });
   try {
     await runWireScenario({ apiKey: secret, model, provider, scenario });
@@ -543,6 +580,12 @@ const main = async (): Promise<number> => {
   if (!Number.isSafeInteger(pauseMs) || pauseMs < 0) {
     return panic("--pause-ms takes a whole number of milliseconds");
   }
+  const chatModel = listArgument("--model")?.at(0);
+  if (chatModel !== undefined) {
+    for (const provider of providers) {
+      offeredModel(provider, chatModel);
+    }
+  }
   let failures = 0;
   let requested = false;
   for (const provider of providers) {
@@ -558,7 +601,12 @@ const main = async (): Promise<number> => {
       }
       requested = true;
       try {
-        const cassette = await recordOne({ provider, scenario, secret });
+        const cassette = await recordOne({
+          chatModel,
+          provider,
+          scenario,
+          secret,
+        });
         const replay = installProviderWireReplay();
         let violations: ReturnType<typeof findWireContractViolations>;
         let accepted: boolean;

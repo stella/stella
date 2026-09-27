@@ -15,6 +15,8 @@ import type {
 import {
   findWireContractViolations,
   replayWireScenario,
+  UNKNOWN_MODEL_ID,
+  wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
 import {
   bodyBytesOf,
@@ -26,6 +28,7 @@ import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-repla
 import {
   keptHeaders,
   MAX_RESPONSE_BYTES,
+  offeredModel,
   recordOne,
   sanitizeEventPayload,
   sanitizeJson,
@@ -47,6 +50,7 @@ describe("provider cassette recording redaction", () => {
             { call_id: "call_abc", id: "fc_abc", type: "function_call" },
           ],
           content: [{ id: "toolu_01", type: "tool_use" }],
+          deltas: [{ item_id: "msg_1" }, { item_id: "fc_abc" }],
         },
         SECRET,
       ),
@@ -58,6 +62,7 @@ describe("provider cassette recording redaction", () => {
         { call_id: "call_abc", id: "fc_abc", type: "function_call" },
       ],
       content: [{ id: "toolu_01", type: "tool_use" }],
+      deltas: [{ item_id: "[item_id]" }, { item_id: "fc_abc" }],
     });
   });
 
@@ -204,10 +209,21 @@ let previousMockAI: boolean;
 const recordAndReplay = async (
   provider: ProviderWireProvider,
   scenario: ProviderWireScenario,
+  chatModel?: string,
 ) => {
-  const source = cassetteFor(cassettes, provider, scenario);
+  // The stand-in answers the model the recording asks for, whichever model
+  // the corpus entry was recorded with.
+  const source = {
+    ...cassetteFor(cassettes, provider, scenario),
+    model: chatModel ?? wireChatModel(provider),
+  };
   upstream.serve(source);
-  const recorded = await recordOne({ provider, scenario, secret: SECRET });
+  const recorded = await recordOne({
+    chatModel,
+    provider,
+    scenario,
+    secret: SECRET,
+  });
   expect(upstream.takeFindings()).toEqual({ unconsumed: [], unexpected: [] });
 
   expect(recorded).toMatchObject({
@@ -295,6 +311,31 @@ describe("a recording replays", () => {
       panic("The Bedrock cassette is not an event stream");
     }
     expect(decodeAwsEventStream(bodyBytesOf(body))).toEqual(body.messages);
+  });
+
+  test("records with a --model the provider's catalog offers", async () => {
+    await recordAndReplay("openai", "tool-call", "gpt-6-luna");
+  });
+
+  test("records the rejected request with the unknown model whatever --model says", async () => {
+    upstream.serve(cassetteFor(cassettes, "openai", "bad-request"));
+    const recorded = await recordOne({
+      chatModel: "gpt-6-luna",
+      provider: "openai",
+      scenario: "bad-request",
+      secret: SECRET,
+    });
+    expect(upstream.takeFindings()).toEqual({ unconsumed: [], unexpected: [] });
+    expect(recorded.model).toBe(UNKNOWN_MODEL_ID);
+  });
+
+  test("refuses a --model outside the provider's catalog", () => {
+    expect(offeredModel("openai", "gpt-6-luna")).toBe("gpt-6-luna");
+    for (const model of ["claude-opus-5-5", "openai/gpt-6-luna", "gpt-x"]) {
+      expect(() => offeredModel("openai", model)).toThrow(
+        `--model ${model} is not one of openai's models`,
+      );
+    }
   });
 
   // Bedrock stays out: a request that ever bypassed `fetch` here would reach
