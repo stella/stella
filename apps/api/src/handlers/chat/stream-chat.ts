@@ -139,6 +139,7 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -1192,8 +1193,9 @@ const runChatAttempt = async function* ({
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* streamChatChunks({
-      adapter,
+      adapter: withProviderStreamContract(adapter),
       messages: preparedMessages,
+      metadata: toolCallIdLedgerMetadata(toolCallIds),
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
