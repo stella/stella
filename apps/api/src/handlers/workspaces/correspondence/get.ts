@@ -1,10 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 
-import { user } from "@/api/db/auth-schema";
 import {
   correspondence,
   correspondenceAllowedSenders,
@@ -18,8 +16,6 @@ import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/pro
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const MAX_FILERS_PER_RECORD = 10_000;
-const filerUser = alias(user, "correspondence_filer_user");
-const approverUser = alias(user, "correspondence_approver_user");
 
 const config = {
   description:
@@ -57,10 +53,8 @@ const getCorrespondence = createSafeHandler(
           tx
             .select({
               userId: correspondenceFilers.filedByUserId,
-              userName: filerUser.name,
-              userDeletedAt: filerUser.deletedAt,
-              approvedByName: approverUser.name,
-              approvedByDeletedAt: approverUser.deletedAt,
+              userDisplay: correspondenceFilers.filedByDisplay,
+              approvedByDisplay: correspondenceAllowedSenders.approvedByDisplay,
               allowedSenderId: correspondenceFilers.filedByAllowedSenderId,
               address: correspondenceAllowedSenders.address,
               approvedBy: correspondenceAllowedSenders.approvedBy,
@@ -73,16 +67,6 @@ const getCorrespondence = createSafeHandler(
                 correspondenceFilers.filedByAllowedSenderId,
                 correspondenceAllowedSenders.id,
               ),
-            )
-            // Historical actors are authorized by this matter-owned relationship,
-            // even after their current organization membership is removed.
-            .leftJoin(
-              filerUser,
-              eq(correspondenceFilers.filedByUserId, filerUser.id),
-            )
-            .leftJoin(
-              approverUser,
-              eq(correspondenceAllowedSenders.approvedBy, approverUser.id),
             )
             .where(
               and(
@@ -154,21 +138,25 @@ const getCorrespondence = createSafeHandler(
           },
           filers: filers.map((filer) => {
             if (filer.userId !== null) {
+              if (filer.userDisplay === null) {
+                return panic("Missing filer display snapshot");
+              }
               return {
                 type: "user" as const,
                 userId: filer.userId,
-                userName: filer.userDeletedAt === null ? filer.userName : null,
-                userStatus:
-                  filer.userDeletedAt === null
-                    ? ("active" as const)
-                    : ("deleted" as const),
+                userName:
+                  filer.userDisplay.status === "active"
+                    ? filer.userDisplay.name
+                    : null,
+                userStatus: filer.userDisplay.status,
                 filedAt: filer.filedAt,
               };
             }
             if (
               filer.allowedSenderId === null ||
               filer.address === null ||
-              filer.approvedBy === null
+              filer.approvedBy === null ||
+              filer.approvedByDisplay === null
             ) {
               return panic("Incomplete mailbox filer provenance");
             }
@@ -178,13 +166,10 @@ const getCorrespondence = createSafeHandler(
               address: filer.address,
               approvedBy: filer.approvedBy,
               approvedByName:
-                filer.approvedByDeletedAt === null
-                  ? filer.approvedByName
+                filer.approvedByDisplay.status === "active"
+                  ? filer.approvedByDisplay.name
                   : null,
-              approvedByStatus:
-                filer.approvedByDeletedAt === null
-                  ? ("active" as const)
-                  : ("deleted" as const),
+              approvedByStatus: filer.approvedByDisplay.status,
               filedAt: filer.filedAt,
             };
           }),

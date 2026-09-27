@@ -31,6 +31,8 @@ import {
   agentSkills,
   chatThreads,
   correspondence,
+  correspondenceAllowedSenders,
+  correspondenceFilers,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
@@ -77,7 +79,10 @@ import {
   consumeInBatches,
   createS3DeletionEffectChunks,
 } from "@/api/lib/destructive-effect-chunks";
-import { clearCorrespondenceAssignmentsForOffboarding } from "@/api/lib/email/correspondence/offboarding";
+import {
+  clearCorrespondenceAssignmentsForOffboarding,
+  eraseCorrespondenceActorDisplays,
+} from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -346,6 +351,8 @@ export const selectActiveTaskAssignments = async (
 
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
   correspondence,
+  correspondenceFilers,
+  correspondenceAllowedSenders,
   taskAssignees,
   workObligations,
   member,
@@ -727,6 +734,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     userId: currentUserId,
     scope: { type: "account" },
   });
+  await eraseCorrespondenceActorDisplays({ tx, userId: currentUserId });
 
   await tx.delete(member).where(eq(member.userId, currentUserId));
   await tx

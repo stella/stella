@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 import { readFileSync } from "node:fs";
 
@@ -11,9 +11,11 @@ import type {
 import { compareCodeUnit } from "@stll/collation";
 
 import { member, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondenceAllowedSenders,
+  correspondenceFilers,
   workspaceMembers,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -31,6 +33,7 @@ import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
 import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
+import { eraseCorrespondenceActorDisplays } from "@/api/lib/email/correspondence/offboarding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -614,23 +617,38 @@ describe("matter correspondence", () => {
   });
 
   test.each(["schema", "migration"] as const)(
-    "historical attribution survives membership removal under %s policies",
+    "write-time attribution survives profile and membership changes until account cleanup under %s policies",
     async (policySource) => {
       if (policySource === "migration") {
-        const statement = migration
+        const policies = migration
           .split("--> statement-breakpoint")
-          .find((part) =>
-            part.includes(
-              'CREATE POLICY "auth_user_correspondence_history_select"',
-            ),
+          .flatMap((statement) => {
+            const match =
+              /CREATE POLICY "([^"]+)" ON "(correspondence_filers|correspondence_allowed_senders)"/u.exec(
+                statement,
+              );
+            const name = match?.at(1);
+            const table = match?.at(2);
+            return name && table ? [{ name, table, statement }] : [];
+          });
+        expect(policies.length).toBeGreaterThan(0);
+        for (const { name, table, statement } of policies) {
+          await testDb.execute(
+            sql`DROP POLICY ${sql.identifier(name)} ON ${sql.identifier(table)}`,
           );
-        if (!statement) {
-          throw new Error("Expected historical user policy migration");
+          await testDb.execute(sql.raw(statement));
         }
-        await testDb.execute(
-          sql`DROP POLICY auth_user_correspondence_history_select ON "user"`,
-        );
-        await testDb.execute(sql.raw(statement));
+      }
+      const originalUsers = await testDb
+        .select({ id: user.id, name: user.name, email: user.email })
+        .from(user)
+        .where(inArray(user.id, [ids.userA1, ids.userAdmin]));
+      const originalApprover = originalUsers.find(
+        ({ id }) => id === ids.userAdmin,
+      );
+      const originalFiler = originalUsers.find(({ id }) => id === ids.userA1);
+      if (!originalApprover || !originalFiler) {
+        throw new Error("Expected original account profiles");
       }
       const filed = await fileMessage(parsedMessage(directProvenance));
       const [sender] = await testDb
@@ -641,6 +659,11 @@ describe("matter correspondence", () => {
           kind: "shared_mailbox",
           scope: "organization",
           approvedBy: ids.userAdmin,
+          approvedByDisplay: {
+            status: "active",
+            name: originalApprover.name,
+            email: originalApprover.email,
+          },
         })
         .returning();
       if (!sender) {
@@ -689,33 +712,94 @@ describe("matter correspondence", () => {
       }
       expect(actor).toMatchObject({
         userStatus: "active",
-        userName: expect.any(String),
+        userName: originalFiler.name,
       });
       expect(approver).toMatchObject({
         approvedByStatus: "active",
-        approvedByName: expect.any(String),
+        approvedByName: originalApprover.name,
       });
-      const removedMemberships = await testDb
-        .delete(member)
-        .where(
-          and(
-            eq(member.organizationId, ids.orgA),
-            eq(member.userId, ids.userAdmin),
-          ),
-        )
-        .returning();
-      const removedAssignments = await testDb
-        .delete(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, ids.wsA1),
-            eq(workspaceMembers.userId, ids.userA1),
-          ),
-        )
-        .returning();
+      const readDisplays = async () => {
+        const filerRows = await testDb
+          .select({ display: correspondenceFilers.filedByDisplay })
+          .from(correspondenceFilers)
+          .where(eq(correspondenceFilers.correspondenceId, filed.id))
+          .limit(1);
+        const approvalRows = await testDb
+          .select({ display: correspondenceAllowedSenders.approvedByDisplay })
+          .from(correspondenceAllowedSenders)
+          .where(eq(correspondenceAllowedSenders.id, sender.id))
+          .limit(1);
+        return {
+          filer: filerRows.at(0)?.display,
+          approver: approvalRows.at(0)?.display,
+        };
+      };
+      const originalDisplays = await readDisplays();
+      expect(originalDisplays).toEqual({
+        filer: {
+          status: "active",
+          name: originalFiler.name,
+          email: originalFiler.email,
+        },
+        approver: {
+          status: "active",
+          name: originalApprover.name,
+          email: originalApprover.email,
+        },
+      });
+      const removedMemberships: (typeof member.$inferSelect)[] = [];
+      const removedAssignments: (typeof workspaceMembers.$inferSelect)[] = [];
       try {
+        for (const originalUser of originalUsers) {
+          await testDb
+            .update(user)
+            .set({
+              name: `Renamed ${originalUser.name}`,
+              email: `renamed-${Bun.randomUUIDv7()}@example.test`,
+            })
+            .where(eq(user.id, originalUser.id));
+        }
         expect((await read(filed.id)).filers).toContainEqual(actor);
         expect((await read(mailbox.id)).filers).toContainEqual(approver);
+        expect(await readDisplays()).toEqual(originalDisplays);
+        removedMemberships.push(
+          ...(await testDb
+            .delete(member)
+            .where(
+              and(
+                eq(member.organizationId, ids.orgA),
+                inArray(member.userId, [ids.userA1, ids.userAdmin]),
+              ),
+            )
+            .returning()),
+        );
+        removedAssignments.push(
+          ...(await testDb
+            .delete(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, ids.wsA1),
+                eq(workspaceMembers.userId, ids.userA1),
+              ),
+            )
+            .returning()),
+        );
+        expect((await read(filed.id)).filers).toContainEqual(actor);
+        expect((await read(mailbox.id)).filers).toContainEqual(approver);
+        expect(await readDisplays()).toEqual(originalDisplays);
+        const historicalActors = await safeDbFor(
+          ids.userA2,
+          ids.wsA1,
+        )((tx) =>
+          tx
+            .select({ id: user.id })
+            .from(user)
+            .where(inArray(user.id, [ids.userA1, ids.userAdmin])),
+        );
+        expect(historicalActors.isOk()).toBe(true);
+        if (historicalActors.isOk()) {
+          expect(historicalActors.value).toEqual([]);
+        }
         const unrelatedMatter = await safeDbFor(
           ids.userA2,
           ids.wsA2,
@@ -741,17 +825,22 @@ describe("matter correspondence", () => {
         if (foreignOrganization.isOk()) {
           expect(foreignOrganization.value).toEqual([]);
         }
-        await testDb
-          .update(user)
-          .set({ deletedAt: new Date() })
-          .where(eq(user.id, ids.userA1));
-        await testDb
-          .update(user)
-          .set({ deletedAt: new Date() })
-          .where(eq(user.id, ids.userAdmin));
+        await testDb.transaction(async (tx) => {
+          for (const userId of [ids.userA1, ids.userAdmin]) {
+            await eraseCorrespondenceActorDisplays({
+              tx: asTestRaw<Transaction>(tx),
+              userId,
+            });
+          }
+        });
+        expect(await readDisplays()).toEqual({
+          filer: { status: "deleted" },
+          approver: { status: "deleted" },
+        });
         expect((await read(filed.id)).filers).toContainEqual(
           expect.objectContaining({
             type: "user",
+            userId: ids.userA1,
             userStatus: "deleted",
             userName: null,
           }),
@@ -759,19 +848,18 @@ describe("matter correspondence", () => {
         expect((await read(mailbox.id)).filers).toContainEqual(
           expect.objectContaining({
             type: "shared_mailbox",
+            approvedBy: ids.userAdmin,
             approvedByStatus: "deleted",
             approvedByName: null,
           }),
         );
       } finally {
-        await testDb
-          .update(user)
-          .set({ deletedAt: null })
-          .where(eq(user.id, ids.userA1));
-        await testDb
-          .update(user)
-          .set({ deletedAt: null })
-          .where(eq(user.id, ids.userAdmin));
+        for (const originalUser of originalUsers) {
+          await testDb
+            .update(user)
+            .set({ name: originalUser.name, email: originalUser.email })
+            .where(eq(user.id, originalUser.id));
+        }
         await testDb
           .delete(workspaceMembers)
           .where(eq(workspaceMembers.id, readerMembership.id));

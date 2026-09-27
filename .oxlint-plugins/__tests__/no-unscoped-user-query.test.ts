@@ -71,89 +71,11 @@ const lintHistorical = async (source: string) =>
   });
 
 describe.serial("no-unscoped-user-query historical correspondence", () => {
-  test("accepts stored filer and approver relationships after current membership ends", async () => {
-    expect(await lintHistorical(HISTORICAL_QUERY)).toEqual([]);
+  test("rejects stored filer and approver joins without current membership scope", async () => {
+    expect(await lintHistorical(HISTORICAL_QUERY)).not.toEqual([]);
   });
 
-  test.each(["organizationId", "workspaceId", "correspondenceId"])(
-    "requires the %s predicate",
-    async (column) => {
-      expect(
-        await lintHistorical(
-          HISTORICAL_QUERY.replace(
-            `orm.eq(filers.${column},`,
-            () => `orm.eq(unrelated.${column},`,
-          ),
-        ),
-      ).not.toEqual([]);
-    },
-  );
-
-  test.each([
-    ["filer actor", "filers.filedByUserId, filer.id", "attackerId, filer.id"],
-    [
-      "approver actor",
-      "senders.approvedBy, approver.id",
-      "attackerId, approver.id",
-    ],
-    [
-      "approved mailbox",
-      "filers.filedByAllowedSenderId, senders.id",
-      "attackerId, senders.id",
-    ],
-    ["mandatory scope", ".where(orm.and(", ".where(orm.or("],
-    [
-      "overwritten scope",
-      ")).limit(100);",
-      ")).$dynamic().where(orm.eq(filers.organizationId, attackerOrg)).limit(100);",
-    ],
-    [
-      "table origin",
-      "correspondenceFilers as filers",
-      "unrelatedTable as filers",
-    ],
-    [
-      "predicate origin",
-      'import * as orm from "drizzle-orm";',
-      'import * as orm from "untrusted-orm";',
-    ],
-  ])("rejects missing or forged %s", async (_label, before, after) => {
-    expect(
-      await lintHistorical(HISTORICAL_QUERY.replace(before, () => after)),
-    ).not.toEqual([]);
-  });
-
-  test("does not authorize an unrelated user read beside the historical query", async () => {
-    expect(
-      await lintHistorical(
-        `${HISTORICAL_QUERY.replace(
-          "export const read = tx.select",
-          "const historical = tx.select",
-        )}\nexport const read = Promise.all([historical, tx.select().from(account)]);\n`,
-      ),
-    ).not.toEqual([]);
-  });
-
-  test("does not confuse distinct user aliases or a shadowed table parameter", async () => {
-    expect(
-      await lintHistorical(
-        HISTORICAL_QUERY.replace(
-          "filers.filedByUserId, filer.id",
-          "filers.filedByUserId, approver.id",
-        ),
-      ),
-    ).not.toEqual([]);
-    expect(
-      await lintHistorical(
-        HISTORICAL_QUERY.replace(
-          "export const read = tx.select",
-          "export const read = (filers) => tx.select",
-        ),
-      ),
-    ).not.toEqual([]);
-  });
-
-  test("accepts the historical query inside Promise.all with an unrelated non-user query", async () => {
+  test("rejects historical user joins inside Promise.all with an unrelated query", async () => {
     expect(
       await lintHistorical(
         HISTORICAL_QUERY.replace(
@@ -164,6 +86,6 @@ describe.serial("no-unscoped-user-query historical correspondence", () => {
           ")).limit(100), tx.select().from(otherTable)]);",
         ),
       ),
-    ).toEqual([]);
+    ).not.toEqual([]);
   });
 });

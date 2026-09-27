@@ -4,11 +4,14 @@ import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
+import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   correspondence,
+  CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_OFFBOARDING_SETTING,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
@@ -31,7 +34,19 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import {
   clearCorrespondenceAssignmentsForOffboarding,
   clearOrganizationCorrespondenceAssignments,
+  eraseCorrespondenceActorDisplays,
 } from "./offboarding";
+
+const actorDisplay = {
+  status: "active",
+  name: "Original actor",
+  email: "original-actor@example.test",
+} as const satisfies CorrespondenceActorDisplay;
+const otherActorDisplay = {
+  status: "active",
+  name: "Other actor",
+  email: "other-actor@example.test",
+} as const satisfies CorrespondenceActorDisplay;
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -98,6 +113,269 @@ const record = (
   }) as const satisfies typeof correspondence.$inferInsert;
 
 describe("correspondence offboarding", () => {
+  test.each(["schema", "migration"] as const)(
+    "actor erasure is bounded, owner-only, isolated and idempotent (%s)",
+    async (policySource) => {
+      try {
+        await testDb.transaction(async (tx) => {
+          const records = Array.from(
+            { length: policySource === "schema" ? 512 : 2 },
+            (_, index) =>
+              record({
+                organizationId: index % 2 === 0 ? ids.orgA : ids.orgB,
+                workspaceId: index % 2 === 0 ? ids.wsA1 : ids.wsB1,
+                assigneeId: null,
+              }),
+          );
+          await tx.insert(correspondence).values(records);
+          const filers = records.map((row) => ({
+            id: createSafeId<"correspondenceFiler">(),
+            organizationId: row.organizationId,
+            workspaceId: row.workspaceId,
+            correspondenceId: row.id,
+            filedByUserId: ids.userA1,
+            filedByDisplay: actorDisplay,
+          }));
+          const senders = records.map((row) => {
+            const id = createSafeId<"correspondenceAllowedSender">();
+            return {
+              id,
+              organizationId: row.organizationId,
+              address: `${id}@example.test`,
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: ids.userA1,
+              approvedByDisplay: actorDisplay,
+            } as const;
+          });
+          const first = records.at(0);
+          if (first === undefined) {
+            throw new Error("Expected nonempty erasure fixture");
+          }
+          const otherFiler = {
+            id: createSafeId<"correspondenceFiler">(),
+            organizationId: first.organizationId,
+            workspaceId: first.workspaceId,
+            correspondenceId: first.id,
+            filedByUserId: ids.userA2,
+            filedByDisplay: otherActorDisplay,
+          };
+          const otherSenderId = createSafeId<"correspondenceAllowedSender">();
+          const otherSender = {
+            id: otherSenderId,
+            organizationId: ids.orgA,
+            address: `${otherSenderId}@example.test`,
+            kind: "shared_mailbox",
+            scope: "organization",
+            approvedBy: ids.userA2,
+            approvedByDisplay: otherActorDisplay,
+          } as const;
+          await tx.insert(correspondenceFilers).values([...filers, otherFiler]);
+          await tx
+            .insert(correspondenceAllowedSenders)
+            .values([...senders, otherSender]);
+          await tx.execute(
+            sql`CREATE ROLE correspondence_erasure_owner_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          );
+          await tx.execute(
+            sql`CREATE ROLE correspondence_erasure_reader_probe NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          );
+          await tx.execute(
+            sql`GRANT USAGE ON SCHEMA public TO correspondence_erasure_owner_probe, correspondence_erasure_reader_probe`,
+          );
+          for (const table of [
+            correspondenceFilers,
+            correspondenceAllowedSenders,
+          ]) {
+            await tx.execute(
+              sql`ALTER TABLE ${table} OWNER TO correspondence_erasure_owner_probe`,
+            );
+            await tx.execute(
+              sql`GRANT SELECT, UPDATE ON ${table} TO correspondence_erasure_reader_probe`,
+            );
+            await tx.execute(
+              sql`CREATE POLICY erasure_reader_fixture ON ${table} FOR SELECT TO correspondence_erasure_reader_probe USING (true)`,
+            );
+            if (policySource === "migration") {
+              const policies = getTableConfig(table).policies.filter(
+                ({ name }) => name.includes("_owner_erasure_"),
+              );
+              expect(policies.length).toBeGreaterThan(0);
+              for (const policy of policies) {
+                const statements = migrationStatements.filter((statement) =>
+                  statement.includes(`CREATE POLICY "${policy.name}"`),
+                );
+                expect(statements).toHaveLength(1);
+                await tx.execute(
+                  sql`DROP POLICY ${sql.identifier(policy.name)} ON ${table}`,
+                );
+                for (const statement of statements) {
+                  await tx.execute(sql.raw(statement));
+                }
+              }
+            }
+          }
+          await tx.execute(
+            sql`SET LOCAL ROLE correspondence_erasure_owner_probe`,
+          );
+          expect(
+            await tx
+              .select({ id: correspondenceFilers.id })
+              .from(correspondenceFilers),
+          ).toEqual([]);
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, ${ids.userA1}, true), set_config(${CORRESPONDENCE_ERASURE_SETTING.recordIds}, '', true)`,
+          );
+          const unbatchedUpdate = await Result.tryPromise({
+            try: async () =>
+              await tx.transaction(async (savepoint) => {
+                await savepoint
+                  .update(correspondenceFilers)
+                  .set({ filedByDisplay: { status: "deleted" } })
+                  .where(eq(correspondenceFilers.filedByUserId, ids.userA1));
+              }),
+            catch: (cause) => cause,
+          });
+          expect(unbatchedUpdate).toMatchObject({
+            error: { cause: { code: "42501" } },
+          });
+          await tx.execute(
+            sql`SELECT set_config(${CORRESPONDENCE_ERASURE_SETTING.recordIds}, ${`{${[...filers.map(({ id }) => id), ...senders.map(({ id }) => id), otherFiler.id, otherSender.id].join(",")}}`}, true)`,
+          );
+          expect(
+            await tx
+              .update(correspondenceFilers)
+              .set({ filedByDisplay: { status: "deleted" } })
+              .where(eq(correspondenceFilers.id, otherFiler.id))
+              .returning({ id: correspondenceFilers.id }),
+          ).toEqual([]);
+          expect(
+            await tx
+              .update(correspondenceAllowedSenders)
+              .set({ approvedByDisplay: { status: "deleted" } })
+              .where(eq(correspondenceAllowedSenders.id, otherSender.id))
+              .returning({ id: correspondenceAllowedSenders.id }),
+          ).toEqual([]);
+          await tx.execute(
+            sql`SET LOCAL ROLE correspondence_erasure_reader_probe`,
+          );
+          expect(
+            await tx
+              .select({ id: correspondenceFilers.id })
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.id, otherFiler.id)),
+          ).toEqual([{ id: otherFiler.id }]);
+          expect(
+            await tx
+              .update(correspondenceFilers)
+              .set({ filedByDisplay: { status: "deleted" } })
+              .where(eq(correspondenceFilers.filedByUserId, ids.userA1))
+              .returning({ id: correspondenceFilers.id }),
+          ).toEqual([]);
+          expect(
+            await tx
+              .update(correspondenceAllowedSenders)
+              .set({ approvedByDisplay: { status: "deleted" } })
+              .where(eq(correspondenceAllowedSenders.approvedBy, ids.userA1))
+              .returning({ id: correspondenceAllowedSenders.id }),
+          ).toEqual([]);
+          await tx.execute(
+            sql`SET LOCAL ROLE correspondence_erasure_owner_probe`,
+          );
+          const invalidReplacement = await Result.tryPromise({
+            try: async () =>
+              await tx.transaction(async (savepoint) => {
+                await savepoint
+                  .update(correspondenceAllowedSenders)
+                  .set({ approvedByDisplay: otherActorDisplay })
+                  .where(
+                    eq(correspondenceAllowedSenders.approvedBy, ids.userA1),
+                  );
+              }),
+            catch: (cause) => cause,
+          });
+          expect(invalidReplacement).toMatchObject({
+            error: { cause: { code: "42501" } },
+          });
+          await eraseCorrespondenceActorDisplays({
+            tx: asTestRaw<Transaction>(tx),
+            userId: ids.userA1,
+          });
+          await eraseCorrespondenceActorDisplays({
+            tx: asTestRaw<Transaction>(tx),
+            userId: ids.userA1,
+          });
+          expect(
+            await tx
+              .select({ id: correspondenceFilers.id })
+              .from(correspondenceFilers),
+          ).toEqual([]);
+          await tx.execute(sql`RESET ROLE`);
+          expect(
+            await tx
+              .select({
+                id: correspondenceFilers.id,
+                userId: correspondenceFilers.filedByUserId,
+                display: correspondenceFilers.filedByDisplay,
+              })
+              .from(correspondenceFilers)
+              .where(
+                inArray(correspondenceFilers.id, [
+                  ...filers.map(({ id }) => id),
+                  otherFiler.id,
+                ]),
+              ),
+          ).toEqual(
+            expect.arrayContaining([
+              ...filers.map(({ id }) => ({
+                id,
+                userId: ids.userA1,
+                display: { status: "deleted" },
+              })),
+              {
+                id: otherFiler.id,
+                userId: ids.userA2,
+                display: otherActorDisplay,
+              },
+            ]),
+          );
+          expect(
+            await tx
+              .select({
+                id: correspondenceAllowedSenders.id,
+                userId: correspondenceAllowedSenders.approvedBy,
+                display: correspondenceAllowedSenders.approvedByDisplay,
+              })
+              .from(correspondenceAllowedSenders)
+              .where(
+                inArray(correspondenceAllowedSenders.id, [
+                  ...senders.map(({ id }) => id),
+                  otherSender.id,
+                ]),
+              ),
+          ).toEqual(
+            expect.arrayContaining([
+              ...senders.map(({ id }) => ({
+                id,
+                userId: ids.userA1,
+                display: { status: "deleted" },
+              })),
+              {
+                id: otherSender.id,
+                userId: ids.userA2,
+                display: otherActorDisplay,
+              },
+            ]),
+          );
+          tx.rollback();
+        });
+      } catch (error) {
+        if (error instanceof TransactionRollbackError) {return;}
+        throw error;
+      }
+      throw new Error("Expected integration transaction rollback");
+    },
+  );
   test.each(
     (["schema", "migration"] as const).flatMap((policySource) =>
       (["account", "organization"] as const).map((scope) => ({
@@ -331,6 +609,7 @@ describe("correspondence offboarding", () => {
             kind: "shared_mailbox",
             scope: "matters",
             approvedBy: ids.userA1,
+            approvedByDisplay: actorDisplay,
           });
           await tx.insert(correspondenceAllowedSenderMatters).values({
             id: scopeId,
@@ -451,6 +730,7 @@ describe("correspondence offboarding", () => {
             workspaceId: ids.wsA2,
             correspondenceId: matterRecord.id,
             filedByUserId: ids.userA1,
+            filedByDisplay: actorDisplay,
           });
           const senderId = createSafeId<"correspondenceAllowedSender">();
           await tx.insert(correspondenceAllowedSenders).values({
@@ -460,6 +740,26 @@ describe("correspondence offboarding", () => {
             kind: "shared_mailbox",
             scope: "organization",
             approvedBy: ids.userA1,
+            approvedByDisplay: actorDisplay,
+          });
+          const otherFilerId = createSafeId<"correspondenceFiler">();
+          await tx.insert(correspondenceFilers).values({
+            id: otherFilerId,
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            correspondenceId: matterRecord.id,
+            filedByUserId: ids.userA2,
+            filedByDisplay: otherActorDisplay,
+          });
+          const otherSenderId = createSafeId<"correspondenceAllowedSender">();
+          await tx.insert(correspondenceAllowedSenders).values({
+            id: otherSenderId,
+            organizationId: ids.orgA,
+            address: `${otherSenderId}@example.test`,
+            kind: "shared_mailbox",
+            scope: "organization",
+            approvedBy: ids.userA2,
+            approvedByDisplay: otherActorDisplay,
           });
 
           switch (scope) {
@@ -569,16 +869,45 @@ describe("correspondence offboarding", () => {
           }
           expect(
             await tx
-              .select({ userId: correspondenceFilers.filedByUserId })
+              .select({
+                userId: correspondenceFilers.filedByUserId,
+                display: correspondenceFilers.filedByDisplay,
+              })
               .from(correspondenceFilers)
-              .where(eq(correspondenceFilers.id, filerId)),
-          ).toEqual([{ userId: ids.userA1 }]);
+              .where(inArray(correspondenceFilers.id, [filerId, otherFilerId])),
+          ).toEqual(
+            expect.arrayContaining([
+              {
+                userId: ids.userA1,
+                display:
+                  scope === "account" ? { status: "deleted" } : actorDisplay,
+              },
+              { userId: ids.userA2, display: otherActorDisplay },
+            ]),
+          );
           expect(
             await tx
-              .select({ userId: correspondenceAllowedSenders.approvedBy })
+              .select({
+                userId: correspondenceAllowedSenders.approvedBy,
+                display: correspondenceAllowedSenders.approvedByDisplay,
+              })
               .from(correspondenceAllowedSenders)
-              .where(eq(correspondenceAllowedSenders.id, senderId)),
-          ).toEqual([{ userId: ids.userA1 }]);
+              .where(
+                inArray(correspondenceAllowedSenders.id, [
+                  senderId,
+                  otherSenderId,
+                ]),
+              ),
+          ).toEqual(
+            expect.arrayContaining([
+              {
+                userId: ids.userA1,
+                display:
+                  scope === "account" ? { status: "deleted" } : actorDisplay,
+              },
+              { userId: ids.userA2, display: otherActorDisplay },
+            ]),
+          );
           tx.rollback();
         });
       } catch (error) {

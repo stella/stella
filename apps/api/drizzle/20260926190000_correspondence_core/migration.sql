@@ -56,6 +56,7 @@ CREATE TABLE "correspondence_filers" (
   "correspondence_id" uuid NOT NULL,
   "filed_by_user_id" text,
   "filed_by_allowed_sender_id" uuid,
+  "filed_by_display" jsonb,
   "filed_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "correspondence_filers_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE cascade,
   CONSTRAINT "correspondence_filers_record_workspace_fk" FOREIGN KEY ("correspondence_id", "workspace_id") REFERENCES "correspondence"("id", "workspace_id") ON DELETE cascade,
@@ -112,6 +113,7 @@ CREATE TABLE "correspondence_allowed_senders" (
   "scope" text NOT NULL,
   "owner_user_id" text,
   "approved_by" text,
+  "approved_by_display" jsonb,
   "approved_at" timestamptz DEFAULT now() NOT NULL,
   "revoked_at" timestamptz,
   CONSTRAINT "correspondence_allowed_senders_id_org_unq" UNIQUE ("id", "organization_id"),
@@ -210,19 +212,12 @@ CREATE POLICY "correspondence_drop_logs_workspace_insert" ON "correspondence_dro
 CREATE POLICY "correspondence_drop_logs_workspace_update" ON "correspondence_drop_logs" FOR UPDATE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "correspondence_drop_logs_workspace_delete" ON "correspondence_drop_logs" FOR DELETE TO "stella" USING (("workspace_id" = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR "workspace_id" IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)) AND "organization_id" = (SELECT pg_catalog.current_setting('app.organization_id', true)));--> statement-breakpoint
 
-CREATE INDEX "correspondence_filers_user_history_idx" ON "correspondence_filers" ("filed_by_user_id", "organization_id", "workspace_id") WHERE "filed_by_user_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "correspondence_filers_user_history_idx" ON "correspondence_filers" ("filed_by_user_id", "id") WHERE "filed_by_user_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "correspondence_filers_sender_history_idx" ON "correspondence_filers" ("filed_by_allowed_sender_id", "organization_id", "workspace_id") WHERE "filed_by_allowed_sender_id" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "correspondence_allowed_senders_approver_idx" ON "correspondence_allowed_senders" ("approved_by", "organization_id", "id") WHERE "approved_by" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "correspondence_allowed_senders_approver_idx" ON "correspondence_allowed_senders" ("approved_by", "id") WHERE "approved_by" IS NOT NULL;--> statement-breakpoint
 
-CREATE POLICY "auth_user_correspondence_history_select" ON "user" FOR SELECT TO "stella" USING (EXISTS (
-  SELECT 1 FROM public.correspondence_filers cf
-  WHERE cf.filed_by_user_id = "user".id
-    AND cf.organization_id = (SELECT current_setting('app.organization_id', true))
-    AND (cf.workspace_id = ANY(COALESCE(NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR cf.workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw))
-) OR EXISTS (
-  SELECT 1 FROM public.correspondence_allowed_senders approved
-  JOIN public.correspondence_filers cf ON cf.filed_by_allowed_sender_id = approved.id AND cf.organization_id = approved.organization_id
-  WHERE approved.approved_by = "user".id
-    AND approved.organization_id = (SELECT current_setting('app.organization_id', true))
-    AND (cf.workspace_id = ANY(COALESCE(NULLIF((SELECT current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) OR cf.workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw))
-));--> statement-breakpoint
+ALTER TABLE "correspondence_filers" ADD CONSTRAINT "correspondence_filers_display_check" CHECK (((filed_by_user_id is null) = (filed_by_display is null)) and (filed_by_display is null or (filed_by_display = '{"status":"deleted"}'::jsonb or (jsonb_typeof(filed_by_display) = 'object' and filed_by_display->>'status' = 'active' and jsonb_typeof(filed_by_display->'name') = 'string' and jsonb_typeof(filed_by_display->'email') = 'string' and filed_by_display - ARRAY['status', 'name', 'email']::text[] = '{}'::jsonb)) is true));--> statement-breakpoint
+CREATE POLICY "correspondence_filers_owner_erasure_select" ON "correspondence_filers" FOR SELECT TO public USING ((current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '')));--> statement-breakpoint
+CREATE POLICY "correspondence_filers_owner_erasure_update" ON "correspondence_filers" FOR UPDATE TO public USING ((current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))) WITH CHECK ((current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb));--> statement-breakpoint
+ALTER TABLE "correspondence_allowed_senders" ADD CONSTRAINT "correspondence_allowed_senders_display_check" CHECK (((approved_by is null) = (approved_by_display is null)) and (approved_by_display is null or (approved_by_display = '{"status":"deleted"}'::jsonb or (jsonb_typeof(approved_by_display) = 'object' and approved_by_display->>'status' = 'active' and jsonb_typeof(approved_by_display->'name') = 'string' and jsonb_typeof(approved_by_display->'email') = 'string' and approved_by_display - ARRAY['status', 'name', 'email']::text[] = '{}'::jsonb)) is true));--> statement-breakpoint
+CREATE POLICY "correspondence_allowed_senders_owner_erasure_update" ON "correspondence_allowed_senders" FOR UPDATE TO public USING ((current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))) WITH CHECK ((current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND approved_by_display = '{"status":"deleted"}'::jsonb));--> statement-breakpoint

@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
@@ -53,6 +54,22 @@ const createAllowedSender = createSafeRootHandler(
 
     const created = yield* Result.await(
       safeDb(async (tx) => {
+        const [approver] = await tx
+          .select({ name: authUser.name, email: authUser.email })
+          .from(authUser)
+          .innerJoin(member, eq(member.userId, authUser.id))
+          .where(
+            and(
+              eq(authUser.id, user.id),
+              eq(member.organizationId, session.activeOrganizationId),
+              isNull(authUser.deletedAt),
+            ),
+          )
+          .limit(1)
+          .for("update", { of: member });
+        if (approver === undefined) {
+          return { kind: "forbidden" as const };
+        }
         const matchingWorkspaces =
           workspaceIds.length === 0
             ? []
@@ -77,6 +94,11 @@ const createAllowedSender = createSafeRootHandler(
             kind: "shared_mailbox",
             scope,
             approvedBy: user.id,
+            approvedByDisplay: {
+              status: "active",
+              name: approver.name,
+              email: approver.email,
+            },
           })
           .onConflictDoNothing()
           .returning({ id: correspondenceAllowedSenders.id });
@@ -109,6 +131,14 @@ const createAllowedSender = createSafeRootHandler(
       }),
     );
 
+    if (created.kind === "forbidden") {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Organization membership required",
+        }),
+      );
+    }
     if (created.kind === "invalid_matters") {
       return Result.err(
         new HandlerError({

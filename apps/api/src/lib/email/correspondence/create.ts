@@ -9,7 +9,7 @@ import type {
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 import { isOrganizationManagementRole } from "@stll/permissions";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { abortableTx } from "@/api/db/safe-db";
@@ -140,6 +140,8 @@ const authorizeFiler = async ({
     case "user": {
       const [access] = await tx
         .select({
+          name: user.name,
+          email: user.email,
           role: member.role,
           clientId: workspaces.clientId,
           assignedUserId: workspaceMembers.userId,
@@ -148,10 +150,11 @@ const authorizeFiler = async ({
         .innerJoin(
           member,
           and(
-            eq(member.organizationId, workspaces.organizationId),
+            eq(member.organizationId, organizationId),
             eq(member.userId, filer.userId),
           ),
         )
+        .innerJoin(user, eq(user.id, member.userId))
         .leftJoin(
           workspaceMembers,
           and(
@@ -163,9 +166,11 @@ const authorizeFiler = async ({
           and(
             eq(workspaces.id, workspaceId),
             eq(workspaces.organizationId, organizationId),
+            isNull(user.deletedAt),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("update", { of: member });
       if (
         access === undefined ||
         (access.assignedUserId === null &&
@@ -181,7 +186,11 @@ const authorizeFiler = async ({
           }),
         );
       }
-      break;
+      return Result.ok({
+        status: "active" as const,
+        name: access.name,
+        email: access.email,
+      });
     }
     case "shared_mailbox": {
       const [approval] = await tx
@@ -235,7 +244,7 @@ const authorizeFiler = async ({
       return panic("Unhandled correspondence filer");
     }
   }
-  return Result.ok();
+  return Result.ok(null);
 };
 
 /** Converges concurrent deliveries on one record and one row per filer. */
@@ -326,6 +335,7 @@ export const createCorrespondence = async ({
         workspaceId,
         correspondenceId,
         filedByUserId: filer.type === "user" ? filer.userId : null,
+        filedByDisplay: access.value,
         filedByAllowedSenderId:
           filer.type === "shared_mailbox" ? filer.allowedSenderId : null,
       })

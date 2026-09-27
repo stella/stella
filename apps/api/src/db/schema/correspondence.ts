@@ -9,6 +9,7 @@ import {
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   type CorrespondenceAddress,
+  type CorrespondenceActorDisplay,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 
@@ -44,6 +45,11 @@ export const CORRESPONDENCE_OFFBOARDING_SETTING = {
   organizationId: "app.correspondence_offboarding_organization_id",
   scope: "app.correspondence_offboarding_scope",
   recordIds: "app.correspondence_offboarding_record_ids",
+} as const;
+
+export const CORRESPONDENCE_ERASURE_SETTING = {
+  userId: "app.correspondence_erasure_user_id",
+  recordIds: "app.correspondence_erasure_record_ids",
 } as const;
 
 // Resolve the owner through the catalog because deployment login names differ.
@@ -183,6 +189,8 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedByAllowedSenderId: safeUuid<"correspondenceAllowedSender">(
       "filed_by_allowed_sender_id",
     ),
+    filedByDisplay:
+      jsonb("filed_by_display").$type<CorrespondenceActorDisplay>(),
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
@@ -223,7 +231,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
       .on(table.workspaceId, table.correspondenceId),
     p
       .index("correspondence_filers_user_history_idx")
-      .on(table.filedByUserId, table.organizationId, table.workspaceId)
+      .on(table.filedByUserId, table.id)
       .where(sql`${table.filedByUserId} is not null`),
     p
       .index("correspondence_filers_sender_history_idx")
@@ -233,6 +241,21 @@ export const correspondenceFilers = p.pgTable.withRLS(
       "correspondence_filers_actor_check",
       sql`(${table.filedByUserId} is null) <> (${table.filedByAllowedSenderId} is null)`,
     ),
+    p.check(
+      "correspondence_filers_display_check",
+      sql`((filed_by_user_id is null) = (filed_by_display is null)) and (filed_by_display is null or (filed_by_display = '{"status":"deleted"}'::jsonb or (jsonb_typeof(filed_by_display) = 'object' and filed_by_display->>'status' = 'active' and jsonb_typeof(filed_by_display->'name') = 'string' and jsonb_typeof(filed_by_display->'email') = 'string' and filed_by_display - ARRAY['status', 'name', 'email']::text[] = '{}'::jsonb)) is true)`,
+    ),
+    p.pgPolicy("correspondence_filers_owner_erasure_select", {
+      for: "select",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
+    }),
+    p.pgPolicy("correspondence_filers_owner_erasure_update", {
+      for: "update",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
+      withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb)`,
+    }),
     ...wsOrganizationPolicies("correspondence_filers"),
   ],
 );
@@ -349,6 +372,9 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
     approvedBy: p
       .text("approved_by")
       .references(() => user.id, { onDelete: "restrict" }),
+    approvedByDisplay: jsonb(
+      "approved_by_display",
+    ).$type<CorrespondenceActorDisplay>(),
     approvedAt: timestamptz("approved_at").notNull().defaultNow(),
     revokedAt: timestamptz("revoked_at"),
   },
@@ -372,7 +398,7 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
       .on(table.organizationId, table.kind),
     p
       .index("correspondence_allowed_senders_approver_idx")
-      .on(table.approvedBy, table.organizationId, table.id)
+      .on(table.approvedBy, table.id)
       .where(sql`${table.approvedBy} is not null`),
     p.check(
       "correspondence_allowed_senders_kind_check",
@@ -390,6 +416,16 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
       "correspondence_allowed_senders_approval_check",
       sql`${table.kind} <> 'shared_mailbox' or ${table.approvedBy} is not null`,
     ),
+    p.check(
+      "correspondence_allowed_senders_display_check",
+      sql`((approved_by is null) = (approved_by_display is null)) and (approved_by_display is null or (approved_by_display = '{"status":"deleted"}'::jsonb or (jsonb_typeof(approved_by_display) = 'object' and approved_by_display->>'status' = 'active' and jsonb_typeof(approved_by_display->'name') = 'string' and jsonb_typeof(approved_by_display->'email') = 'string' and approved_by_display - ARRAY['status', 'name', 'email']::text[] = '{}'::jsonb)) is true)`,
+    ),
+    p.pgPolicy("correspondence_allowed_senders_owner_erasure_update", {
+      for: "update",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
+      withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND approved_by_display = '{"status":"deleted"}'::jsonb)`,
+    }),
     p.pgPolicy("correspondence_allowed_senders_owner_lookup", {
       for: "select",
       to: "public",

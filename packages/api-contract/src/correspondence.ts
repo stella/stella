@@ -92,6 +92,10 @@ export const CORRESPONDENCE_SENDER_SCOPES = [
 export type CorrespondenceSenderScope =
   (typeof CORRESPONDENCE_SENDER_SCOPES)[number];
 
+export type CorrespondenceActorDisplay =
+  | { status: "active"; name: string; email: string }
+  | { status: "deleted" };
+
 export type CorrespondenceFiler =
   | {
       type: "user";
