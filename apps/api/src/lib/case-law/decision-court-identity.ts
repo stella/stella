@@ -11,8 +11,8 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import {
-  resolveWritableUsCourt,
-  type UsWritableCourtResolution,
+  resolveUsCourt,
+  type UsCourtResolution,
 } from "@stll/api-contract/us-courts";
 
 import {
@@ -20,12 +20,15 @@ import {
   isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
 
-/** The directory that admits a jurisdiction's court ids for writing. */
+/**
+ * The directory that admits a jurisdiction's court ids for writing: every
+ * court it accepts, and no other.
+ */
 const COURT_DIRECTORY_RESOLVER = {
-  USA: resolveWritableUsCourt,
+  USA: resolveUsCourt,
 } as const satisfies Record<
   CourtDirectoryJurisdiction,
-  (courtId: string) => UsWritableCourtResolution
+  (courtId: string) => UsCourtResolution
 >;
 
 /**
@@ -41,17 +44,17 @@ export const legacyTrustedUsaCourts = (): readonly {
   name: string;
 }[] =>
   LEGACY_TRUSTED_USA_COURT_IDS.map((courtId) => {
-    const resolution = resolveWritableUsCourt(courtId);
-    return resolution.type === "writable"
+    const resolution = resolveUsCourt(courtId);
+    return resolution.type === "accepted"
       ? { courtId, name: resolution.court.canonicalName }
-      : panic(`Trusted legacy court is not writable: ${courtId}`);
+      : panic(`Trusted legacy court is not accepted: ${courtId}`);
   });
 
 type DecisionCourtIdentityRejection =
   | "missing"
   | "unexpected"
   | "name-mismatch"
-  | Extract<UsWritableCourtResolution, { type: "rejected" }>["reason"];
+  | Extract<UsCourtResolution, { type: "rejected" }>["reason"];
 
 /** A decision whose court identity its jurisdiction does not admit. */
 export class DecisionCourtIdentityError extends TaggedError(
@@ -71,7 +74,7 @@ type DecisionCourtIdentityInput = {
 
 /**
  * The court id a decision is stored with: null where its jurisdiction
- * identifies courts by name, or a writable directory court whose canonical
+ * identifies courts by name, or an accepted directory court whose canonical
  * name is exactly the decision's court. Exact on purpose: no case folding and
  * no lookup by name, since a name is not an identity.
  */
