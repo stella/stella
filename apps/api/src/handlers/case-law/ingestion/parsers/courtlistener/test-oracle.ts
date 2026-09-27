@@ -131,11 +131,13 @@ const xmlText = (node: slimdom.Node): string => {
 const words = (text: string): string[] =>
   text.split(/\s+/u).filter((word) => word !== "");
 
+const NO_EXCLUDED_SPANS = { excludedSpans: [] } as const;
+
 /** The words a reader of `source` sees, per the structure it holds. */
 export const sourceWords = (
   structure: TextStructure,
   source: string,
-  options: { excludedSpans?: readonly SourceSpan[] } = {},
+  options: { excludedSpans: readonly SourceSpan[] } = NO_EXCLUDED_SPANS,
 ): string[] => {
   switch (structure) {
     case "xml":
@@ -152,7 +154,7 @@ export const sourceWords = (
       return words($.root().text());
     }
     case "html":
-      return htmlWords(source, options.excludedSpans ?? []);
+      return htmlWords(source, options.excludedSpans);
     case "plain":
       return words(source);
     default: {
@@ -260,13 +262,13 @@ const htmlWords = (
       continue;
     }
     const raw = source.slice(opening + 1, close);
-    const match = /^\s*(\/?)\s*([a-zA-Z][\w:-]*)/u.exec(raw);
+    const prefix = raw.trimStart();
+    const closing = prefix.startsWith("/");
+    const name = /^([a-zA-Z][\w:-]*)/u
+      .exec((closing ? prefix.slice(1) : prefix).trimStart())
+      ?.at(1)
+      ?.toLowerCase();
     cursor = close + 1;
-    if (match === null) {
-      continue;
-    }
-    const closing = match[1] === "/";
-    const name = match[2]?.toLowerCase();
     if (name === undefined) {
       continue;
     }

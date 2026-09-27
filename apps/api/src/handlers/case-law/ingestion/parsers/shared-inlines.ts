@@ -139,8 +139,8 @@ export const walkInlines = (
         // Preserve its boundary whitespace, but never split a word it bisects.
         const printed = $(child).text();
         const leading = /^\s+/u.exec(printed)?.at(0) ?? "";
-        const trailing =
-          /\s+$/u.exec(printed.slice(leading.length))?.at(0) ?? "";
+        const afterLeading = printed.slice(leading.length);
+        const trailing = afterLeading.slice(afterLeading.trimEnd().length);
         appendTextInline(inlines, leading, anonymized);
         inlines.push(anchor);
         appendTextInline(inlines, trailing, anonymized);

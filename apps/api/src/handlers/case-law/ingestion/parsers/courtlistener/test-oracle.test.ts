@@ -1,6 +1,25 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { sourceWords, wordDifference } from "./test-oracle";
+
+test("the source walk keeps adjacent headings and page text from a recorded opinion", () => {
+  const source = readFileSync(
+    new URL(
+      "__fixtures__/html/heading-4696496-discussion-ii.html",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  expect(sourceWords("html", source)).toEqual([
+    "*45",
+    "II.",
+    "DISCUSSION",
+    "A.",
+    "RESPONDENT'S",
+    "ADJUSTMENTS",
+  ]);
+});
 
 test("the HTML source walk detects lost cross-reference text inside a note", () => {
   const anchor = '<a href="#ref-fn1">the text accompanying note 1</a>';
