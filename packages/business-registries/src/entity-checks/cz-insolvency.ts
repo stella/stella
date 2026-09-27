@@ -29,7 +29,7 @@ const PUBLIC_DETAIL_HOST = "isir.justice.cz";
 // Findings beyond this are counted in `totalMatches` but not returned.
 const MAX_RESULTS = 50;
 
-export const CZ_INSOLVENCY_SOURCE = {
+export const CZ_INSOLVENCY_SOURCE: EntityCheckSource = {
   name: "Insolvenční rejstřík (ISIR)",
   authority: "Ministerstvo spravedlnosti České republiky",
   url: "https://isir.justice.cz",

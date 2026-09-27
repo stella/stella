@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import type { Err } from "better-result";
+import type { Err, TaggedErrorClass } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 // Entity checks are yes/no screening questions put to an official source
@@ -30,7 +30,7 @@ export type EntityCheckSubject =
       birthDate: string;
     };
 
-export const ENTITY_CHECK_SUBJECT_TYPES = [
+export const ENTITY_CHECK_SUBJECT_TYPES: readonly ["company-id", "person"] = [
   "company-id",
   "person",
 ] as const satisfies readonly EntityCheckSubject["type"][];
@@ -117,9 +117,10 @@ export type SourceAnswer<TFinding> =
  * as an `Err` and the check boundary turns it into an `unavailable` outcome,
  * so no parse path can fall through to `clear`.
  */
-export class EntityCheckUnavailableError extends TaggedError(
-  "EntityCheckUnavailableError",
-)<{
+const EntityCheckUnavailableErrorBase: TaggedErrorClass<"EntityCheckUnavailableError"> =
+  TaggedError("EntityCheckUnavailableError");
+
+export class EntityCheckUnavailableError extends EntityCheckUnavailableErrorBase<{
   message: string;
   reason: EntityCheckUnavailableReason;
   /** Source error code or HTTP status; never a raw body. */
@@ -127,9 +128,12 @@ export class EntityCheckUnavailableError extends TaggedError(
 }> {}
 
 /** The caller aborted the check; not an answer from the source. */
-export class EntityCheckCancelledError extends TaggedError(
-  "EntityCheckCancelledError",
-)<{ message: string }> {}
+const EntityCheckCancelledErrorBase: TaggedErrorClass<"EntityCheckCancelledError"> =
+  TaggedError("EntityCheckCancelledError");
+
+export class EntityCheckCancelledError extends EntityCheckCancelledErrorBase<{
+  message: string;
+}> {}
 
 export type EntityCheckSourceError =
   | EntityCheckUnavailableError

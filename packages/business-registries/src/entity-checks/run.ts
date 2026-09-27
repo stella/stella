@@ -1,4 +1,9 @@
-import { panic, Result, TaggedError } from "better-result";
+import {
+  panic,
+  Result,
+  TaggedError,
+  type TaggedErrorClass,
+} from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { validate as validateCzIco } from "@stll/stdnum/cz/ico";
@@ -37,7 +42,9 @@ type EntityCheckDescriptor = {
   subjectTypes: readonly [EntityCheckSubjectType, ...EntityCheckSubjectType[]];
 };
 
-export const ENTITY_CHECKS = {
+export const ENTITY_CHECKS: Readonly<
+  Record<EntityCheckKind, EntityCheckDescriptor>
+> = {
   "cz-insolvency": {
     country: "CZ",
     source: CZ_INSOLVENCY_SOURCE,
@@ -46,9 +53,12 @@ export const ENTITY_CHECKS = {
 } as const satisfies Record<EntityCheckKind, EntityCheckDescriptor>;
 
 /** Rejected before any request: the subject cannot be sent to the source. */
-export class EntityCheckInputError extends TaggedError(
-  "EntityCheckInputError",
-)<{ message: string }> {}
+const EntityCheckInputErrorBase: TaggedErrorClass<"EntityCheckInputError"> =
+  TaggedError("EntityCheckInputError");
+
+export class EntityCheckInputError extends EntityCheckInputErrorBase<{
+  message: string;
+}> {}
 
 type InputResult<T> = Result<T, EntityCheckInputError>;
 
