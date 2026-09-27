@@ -99,7 +99,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
       "text-muted-foreground decoration-muted-foreground decoration-dotted",
     swatchStyle: { backgroundColor: "var(--muted-foreground)" },
     highlightClass: "bg-muted-foreground/8",
-    selectedClass: "bg-muted-foreground/20 ring-1 ring-muted-foreground/50",
+    selectedClass: "bg-muted-foreground/20 ring-1 ring-foreground-disabled",
   },
   recordconflict: {
     icon: SplitIcon,
@@ -125,7 +125,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
       "text-muted-foreground decoration-muted-foreground decoration-dotted italic",
     swatchStyle: { backgroundColor: "var(--muted-foreground)" },
     highlightClass: "bg-muted-foreground/8",
-    selectedClass: "bg-muted-foreground/20 ring-1 ring-muted-foreground/50",
+    selectedClass: "bg-muted-foreground/20 ring-1 ring-foreground-disabled",
   },
 };
 
