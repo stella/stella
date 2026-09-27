@@ -178,7 +178,8 @@ jobs:
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
-              echo "landing_build_required=true"
+              # e2e-landing builds the landing site at full depth.
+              echo "landing_build_required=false"
               echo "legal_atlas_image_required=true"
               echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
@@ -389,6 +390,13 @@ jobs:
           if [[ "$SUITE_DEPTH" == "full" ]]; then
             published_exports_required=true
             web_api_types_required=true
+          fi
+
+          # e2e-landing runs the same landing build before it tests the
+          # preview, so when it is planned a separate landing build only
+          # repeats that work.
+          if [[ "$SUITE_DEPTH" == "full" && "$e2e_landing_required" == "true" ]]; then
+            landing_build_required=false
           fi
 
           # The production e2e shards consume web-build's artifact, so any
@@ -2324,7 +2332,8 @@ jobs:
   # but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
   # here on every PR that could plausibly affect the landing
-  # output.
+  # output. When e2e-landing is planned, ci-plan leaves this job out:
+  # e2e-landing runs the same build before its browser checks.
   landing-build:
     needs: ci-plan
     if: >-

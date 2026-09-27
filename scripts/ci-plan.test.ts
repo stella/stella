@@ -26,6 +26,7 @@ const runSelector = (
   files: readonly string[],
   outputs: readonly string[],
   suiteDepth = "fast",
+  e2eLandingRequired = "false",
 ) => {
   const process = Bun.spawnSync({
     cmd: [
@@ -33,12 +34,17 @@ const runSelector = (
       "-e",
       "-c",
       `changed_files=("$@"); e2e_core_required=false
+e2e_landing_required="$E2E_LANDING_REQUIRED"
 ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "", SUITE_DEPTH: suiteDepth },
+    env: {
+      E2E_LANDING_REQUIRED: e2eLandingRequired,
+      PATH: Bun.env["PATH"] ?? "",
+      SUITE_DEPTH: suiteDepth,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -549,6 +555,28 @@ const jobSteps = (job: unknown) =>
     }),
     job,
   ).steps;
+
+test("the landing site is built once when its browser checks are planned", () => {
+  const landingBuild = (suiteDepth: string, e2eLandingRequired: string) =>
+    runSelector(
+      ["apps/landing/src/pages/index.astro"],
+      ["landing_build_required"],
+      suiteDepth,
+      e2eLandingRequired,
+    ).at(0);
+  // e2e-landing runs only at full depth, and builds the site itself there.
+  expect(landingBuild("full", "true")).toBe("false");
+  expect(landingBuild("full", "false")).toBe("true");
+  expect(landingBuild("fast", "true")).toBe("true");
+  expect(landingBuild("fast", "false")).toBe("true");
+  expect(ciJobs["e2e-landing"]).toBeDefined();
+  expect(jobSteps(ciJobs["e2e-landing"]).map(({ run }) => run)).toContain(
+    jobSteps(ciJobs["landing-build"]).find(
+      ({ name }) => name === "Build landing",
+    )?.run,
+  );
+  expect(jobIf(ciJobs["e2e-landing"])).toContain(FULL_DEPTH_PREDICATE);
+});
 
 test("ci-checks gates each generated-output guard on its planned scope", () => {
   const steps = v.parse(
