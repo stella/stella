@@ -109,7 +109,7 @@ const logicalRuns = (
         `No stamp font has U+${(character.codePointAt(0) ?? 0).toString(16)}`,
       );
     }
-    if (current !== null && current.face === face && current.level === level) {
+    if (current?.face === face && current.level === level) {
       current.text += character;
       current.visualPosition = Math.min(current.visualPosition, visualPosition);
       continue;
@@ -134,7 +134,8 @@ export const layoutStampRow = ({
   fonts: StampFonts;
   text: string;
 }): StampRow => {
-  const characters = [...text];
+  // Levels and faces are per code point, as the bidi resolver reports them.
+  const characters = Array.from(text);
   const { levels, visualOrder } = shaper.resolveBidi({
     direction:
       direction === "rtl"

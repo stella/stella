@@ -95,7 +95,8 @@ const glyphTexts = (
   if (group.length === 1) {
     return [text];
   }
-  const remaining = [...text];
+  // A cmap maps code points, so a cluster is matched one code point at a time.
+  const remaining = Array.from(text);
   const own = group.map(({ glyphId }) => {
     const index = remaining.findIndex(
       (character) =>
@@ -232,7 +233,7 @@ const embedFace = (pdf: PDF, usage: FaceUsage, resource: string) => {
     new PdfArray([PdfNumber.of(declaredWidth.get(glyphId) ?? 0)]),
   ]);
   const name = `${subsetTag(face, glyphIds)}+${face.font.postScriptName}`;
-  const register = <T extends PdfDict | PdfStream>(object: T) =>
+  const register = (object: PdfDict | PdfStream) =>
     pdf.context.registry.register(object);
   const fontFile = register(
     new PdfStream(PdfDict.of({ Length1: PdfNumber.of(bytes.length) }), bytes),

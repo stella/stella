@@ -123,7 +123,7 @@ const legacySet = (
       const codePoint = text.codePointAt(0);
       if (
         codePoint !== undefined &&
-        [...text].length === 1 &&
+        Array.from(text).length === 1 &&
         codePoint !== 0xff_fd &&
         codePoint > 0x7f
       ) {

@@ -135,7 +135,8 @@ type StampTextCheck = {
 export const stampTextCheck = ({ faces }: StampFonts): StampTextCheck => ({
   canDraw: (text) =>
     !REFUSED.test(text) &&
-    [...text].every(
+    // Coverage is per code point: a font maps code points to glyphs.
+    Array.from(text).every(
       (character) =>
         INVISIBLE.test(character) || ownFace(faces, character) !== null,
     ),
