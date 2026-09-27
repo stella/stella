@@ -34,4 +34,18 @@ describe("citation probe coverage", () => {
     expect(covered("sp. zn. 8 C 19/2008")).toBe(false);
     expect(covered("sp. zn. 8 Co/18/2008")).toBe(false);
   });
+
+  test("a missing docket/year slash stays visible as a residual", () => {
+    const covered = citationCoverage(extractedTexts(TEXT));
+    expect(covered("sp. zn. 8 C/18 2008")).toBe(false);
+  });
+
+  test("covers every extracted spelling of a court-prefixed docket", () => {
+    const extracted = extractedTexts(
+      "č. j. KSCB 26 INS 8270/2018. č. j. KSCB 26INS/8270/2018.",
+    );
+    expect(extracted).toEqual(["č. j. KSCB 26 INS 8270/2018"]);
+    const covered = citationCoverage(extracted);
+    expect(covered("č. j. KSCB 26INS/8270/2018-45")).toBe(true);
+  });
 });
