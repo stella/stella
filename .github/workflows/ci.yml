@@ -18,13 +18,13 @@ on:
         options: [fast, full]
         default: fast
 
-# Manual runs share one group whatever their branch, so a newer dispatch
-# replaces the one in progress instead of queueing beside it for runners.
+# A newer manual run replaces an older one on the same branch instead of
+# queueing beside it for runners; manual runs on other branches stay put.
 concurrency:
   group: >-
     ${{ github.event_name == 'workflow_dispatch'
-        && format('{0}-dispatch', github.workflow)
-        || format('{0}-{1}', github.workflow, github.ref) }}
+    && format('ci-dispatch-{0}', github.ref)
+    || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: true
 
 permissions: {}
@@ -2085,7 +2085,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     permissions:
       contents: read
 

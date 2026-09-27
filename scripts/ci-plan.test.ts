@@ -605,6 +605,27 @@ const resolveDepth = (eventName: string, dispatchDepth: string) => {
   }
 };
 
+test("a manual run supersedes only an older manual run on the same branch", () => {
+  const concurrency = v.parse(
+    v.object({
+      concurrency: v.object({
+        group: v.string(),
+        "cancel-in-progress": v.boolean(),
+      }),
+    }),
+    Bun.YAML.parse(workflow),
+  ).concurrency;
+  expect(concurrency["cancel-in-progress"]).toBe(true);
+  expect(concurrency.group).toBe(
+    [
+      "$",
+      "{{ github.event_name == 'workflow_dispatch'",
+      " && format('ci-dispatch-{0}', github.ref)",
+      " || format('{0}-{1}', github.workflow, github.ref) }}",
+    ].join(""),
+  );
+});
+
 test("a manual run plans the depth it was dispatched with, the merge queue always full", () => {
   expect(resolveDepth(EVENT.workflowDispatch, "fast")).toBe("suite_depth=fast");
   expect(resolveDepth(EVENT.workflowDispatch, "full")).toBe("suite_depth=full");
