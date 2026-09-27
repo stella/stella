@@ -36,8 +36,9 @@ import {
   DECISION_ADMISSION,
   encodedIngestionResultBytes,
   prepareCaseLawIngestionBatch,
+  type BoundedCaseLawIngestionBatch,
+  type RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
-import type { BoundedCaseLawIngestionBatch } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -143,6 +144,16 @@ const records = (count: number): IngestionResult[] =>
 const rejectedRecord = (n = 99): IngestionResult => ({
   ...record(n),
   sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+});
+
+const sourceRejection = (n: number): RejectedCaseLawIngestionRecord => ({
+  type: "rejected",
+  recordKey: `source-record-${n}`,
+  recordHash: `sha256-${n}`,
+  language: "cs",
+  primaryLabel: `Unparsed ${n}`,
+  reason: "SourceRecordInvalid",
+  message: `Source record ${n} cannot be parsed`,
 });
 
 /**
@@ -525,7 +536,205 @@ describe("a rejected record whose ledger row cannot be written", () => {
   });
 });
 
+describe("source-rejected batch records", () => {
+  test("admission keeps only serializable DTO fields and rechecks mutations before clone", async () => {
+    const sourceId = await recordSource();
+    const rejection = { ...sourceRejection(12), cause: new Error("private") };
+    const batch = prepareCaseLawIngestionBatch({ records: [rejection] });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    expect(batch.value.batchRecords.at(0)).toEqual(sourceRejection(12));
+
+    Object.assign(batch.value.batchRecords.at(0) ?? expect.unreachable(), {
+      message: new Error("must not be cloned"),
+    });
+    const applied = await applyPrepared({
+      sourceId,
+      batch: batch.value,
+      corpus: landingTransfer().corpus,
+    });
+    expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+      CASE_LAW_BATCH_FAILURE.OUT_OF_BOUNDS,
+    );
+    expect(await ledgerRows(sourceId)).toEqual([]);
+    expect(await decisionRows(sourceId)).toEqual([]);
+  });
+
+  test("a mixed batch keeps original indexes and replayed decisions converge", async () => {
+    const sourceId = await recordSource();
+    const rejection = sourceRejection(7);
+    const batch = prepareCaseLawIngestionBatch({
+      records: [
+        { type: "decision", decision: record(1) },
+        rejection,
+        { type: "decision", decision: record(2) },
+      ],
+    });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    const { corpus } = landingTransfer();
+    const first = await applyPrepared({ sourceId, batch: batch.value, corpus });
+    if (Result.isOk(first)) {
+      throw new Error("expected a ledger-backed rejection");
+    }
+    expect(first.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(first.error.records).toEqual([
+      {
+        index: 1,
+        reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+        caseNumber: "Unparsed 7",
+        sourceDocumentId: null,
+      },
+    ]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(2));
+    expect(await ledgerRows(sourceId)).toEqual([{ caseNumber: "Unparsed 7" }]);
+
+    const replayed = await applyPrepared({
+      sourceId,
+      batch: batch.value,
+      corpus,
+    });
+    expect(
+      Result.isError(replayed) ? replayed.error.records[0]?.index : null,
+    ).toBe(1);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(2));
+    const ledger = await db
+      .select({
+        errorType: caseLawIngestionFailures.errorType,
+        errorMessage: caseLawIngestionFailures.errorMessage,
+        cursor: caseLawIngestionFailures.cursor,
+      })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId));
+    expect(ledger).toEqual([
+      {
+        errorType: rejection.reason,
+        errorMessage: rejection.message,
+        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
+      },
+      {
+        errorType: rejection.reason,
+        errorMessage: rejection.message,
+        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
+      },
+    ]);
+  });
+
+  test("unwritten failures outrank rejected records, with no decision identity", async () => {
+    const sourceId = await recordSource();
+    const batch = prepareCaseLawIngestionBatch({
+      records: [sourceRejection(8)],
+    });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    const { corpus } = landingTransfer();
+    const held = await withUnwritableLedger(
+      async () => await applyPrepared({ sourceId, batch: batch.value, corpus }),
+    );
+    expect(Result.isError(held) ? held.error.reason : null).toBe(
+      CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
+    );
+    expect(await decisionRows(sourceId)).toEqual([]);
+    expect(await ledgerRows(sourceId)).toEqual([]);
+  });
+
+  test("lease loss outranks a persisted source rejection", async () => {
+    const sourceId = await recordSource();
+    const batch = prepareCaseLawIngestionBatch({
+      records: [{ type: "decision", decision: record(1) }, sourceRejection(9)],
+    });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    const { corpus } = landingTransfer(async () => await loseLease(sourceId));
+    const applied = await applyPrepared({
+      sourceId,
+      batch: batch.value,
+      corpus,
+    });
+    expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+      CASE_LAW_BATCH_FAILURE.LEASE_LOST,
+    );
+    expect(await ledgerRows(sourceId)).toEqual([{ caseNumber: "Unparsed 9" }]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(1));
+  });
+
+  test("a failed pack outranks a persisted source rejection", async () => {
+    const sourceId = await recordSource();
+    const batch = prepareCaseLawIngestionBatch({
+      records: [{ type: "decision", decision: record(1) }, sourceRejection(10)],
+    });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    const applied = await applyPrepared({
+      sourceId,
+      batch: batch.value,
+      corpus: failingTransfer(),
+    });
+    expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+      CASE_LAW_BATCH_FAILURE.PACK_WRITE,
+    );
+    expect(await ledgerRows(sourceId)).toEqual([{ caseNumber: "Unparsed 10" }]);
+    expect(await decisionRows(sourceId)).toHaveLength(1);
+  });
+
+  test("ten consecutive source rejections stop before later records", async () => {
+    const sourceId = await recordSource();
+    const batch = prepareCaseLawIngestionBatch({
+      records: [
+        ...Array.from({ length: 10 }, (_, index) => sourceRejection(index)),
+        { type: "decision", decision: record(11) },
+      ],
+    });
+    if (Result.isError(batch)) {
+      throw new TypeError(batch.error.message);
+    }
+    const applied = await applyPrepared({
+      sourceId,
+      batch: batch.value,
+      corpus: landingTransfer().corpus,
+    });
+    if (Result.isOk(applied)) {
+      throw new Error("expected a ledger-backed rejection");
+    }
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.unsettled).toBe(11);
+    expect(applied.error.records.map(({ index }) => index)).toEqual(
+      Array.from({ length: 10 }, (_, index) => index),
+    );
+    expect(await ledgerRows(sourceId)).toHaveLength(10);
+    expect(await decisionRows(sourceId)).toEqual([]);
+  });
+});
+
 describe("the batch bounds", () => {
+  test("rejected records count toward both bounds", () => {
+    const rejection = sourceRejection(1);
+    const tooMany = prepareCaseLawIngestionBatch({
+      records: Array.from(
+        { length: CASE_LAW_INGESTION_BATCH_LIMITS.records + 1 },
+        () => rejection,
+      ),
+    });
+    expect(Result.isError(tooMany) ? tooMany.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_RECORDS,
+    );
+    const tooLarge = prepareCaseLawIngestionBatch({
+      records: [
+        {
+          ...rejection,
+          message: "x".repeat(CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes),
+        },
+      ],
+    });
+    expect(Result.isError(tooLarge) ? tooLarge.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
+    );
+  });
   test(
     "a crawl page over the record bound is applied in bounded batches",
     async () => {
