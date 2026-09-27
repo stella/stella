@@ -10,6 +10,7 @@ import type {
 } from "@stll/business-registries/entity-checks";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
@@ -118,10 +119,8 @@ export const createCounterpartyCheckTools = ({
           message: error.message,
         }),
     );
-    if (Result.isError(result)) {
-      const { error } = result;
-      throw error;
-    }
-    return result.value;
+    return Result.isError(result)
+      ? raiseChatToolError(result.error)
+      : result.value;
   }),
 });
