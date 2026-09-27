@@ -15,6 +15,7 @@ import {
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  chatMessageFromPersisted,
   createChatAttachmentPart,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
@@ -28,6 +29,7 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatToolPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
 import type {
+  ChatAnonRestoration,
   ChatAttachmentPart,
   ChatMessage,
 } from "@/api/handlers/chat/types";
@@ -83,12 +85,68 @@ export type ChatThirdPartyBoundary =
       type: "anonymized";
     };
 
+/**
+ * The restorations stored on `messages`, oldest first: the placeholders
+ * earlier requests sent for the history a request reads.
+ */
+export const storedRestorationsOf = (
+  messages: readonly Parameters<typeof chatMessageFromPersisted>[0][],
+): ChatAnonRestoration[] =>
+  messages.flatMap((message) => {
+    const { content } = message;
+    switch (content.version) {
+      case 1:
+        // Legacy rows keep their restorations as a data part.
+        return (
+          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs ??
+          []
+        );
+      case 2:
+      case 3:
+        return content.metadata?.anonRestorations?.pairs ?? [];
+      default:
+        content satisfies never;
+        return panic(`Unhandled content version: ${String(content)}`);
+    }
+  });
+
+/**
+ * The placeholder maps a boundary starts from: every placeholder the history
+ * it reads already sent, each naming the original it named then, and the
+ * numbering continuing after the highest index per label. Anonymization
+ * numbers each request from `[LABEL_1]`; starting from those names keeps an
+ * original under the placeholder earlier requests gave it and gives a new
+ * original an index none of them used, so one placeholder spelling never
+ * names two values across that history (or in a message a continuation
+ * finishes). Where stored turns already disagree, the earliest meaning wins.
+ */
+const threadPlaceholderMaps = (
+  restorations: readonly ChatAnonRestoration[],
+) => {
+  const redactionMap = new Map<string, string>();
+  const placeholderOffsets = new Map<string, number>();
+  for (const { original, placeholder } of restorations) {
+    const parsed = parseIndexedPlaceholder(placeholder);
+    if (parsed !== null) {
+      placeholderOffsets.set(
+        parsed.label,
+        Math.max(placeholderOffsets.get(parsed.label) ?? 0, parsed.index),
+      );
+    }
+    if (!redactionMap.has(placeholder)) {
+      redactionMap.set(placeholder, original);
+    }
+  }
+  return { placeholderOffsets, redactionMap };
+};
+
 export const createChatThirdPartyBoundary = ({
   anonymizeFields,
   anonymizationScopeId,
   organizationId,
   scopedDb,
   sendMode,
+  threadRestorations,
   workspaceId,
 }: {
   anonymizeFields?: typeof anonymizeTextFields | undefined;
@@ -96,6 +154,9 @@ export const createChatThirdPartyBoundary = ({
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   sendMode: ChatSendMode;
+  /** The restorations the history this request reads holds, oldest first
+   *  (`storedRestorationsOf`). */
+  threadRestorations: readonly ChatAnonRestoration[];
   /**
    * When the chat is workspace-scoped, the validated workspace
    * SafeId from the workspaceAccessMacro. Threads gazetteer
@@ -129,9 +190,8 @@ export const createChatThirdPartyBoundary = ({
             }),
         organizationId,
         pipelineContext: createPipelineContext(),
-        placeholderOffsets: new Map<string, number>(),
+        ...threadPlaceholderMaps(threadRestorations),
         literalPlaceholderAliases: new Map<string, string>(),
-        redactionMap: new Map<string, string>(),
         sourcePlaceholders: new Set<string>(),
       }
     : { type: "raw" };

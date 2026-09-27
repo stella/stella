@@ -32,6 +32,7 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
+import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -46,6 +47,7 @@ import type {
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
@@ -1605,12 +1607,44 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
+/**
+ * One message's restorations, each placeholder once. A placeholder names one
+ * original across a thread (`createChatThirdPartyBoundary` numbers every
+ * request after the thread's earlier ones), so a pair naming another original
+ * for a placeholder already held is a numbering fault: the first meaning
+ * stays, and the fault is reported without its values.
+ */
 export const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
-): NonNullable<ChatMessageMetadata["anonRestorations"]> => ({
-  pairs: [...(current === undefined ? [] : current.pairs), ...next.pairs],
-});
+): NonNullable<ChatMessageMetadata["anonRestorations"]> => {
+  const pairs = current === undefined ? [] : [...current.pairs];
+  const named = new Map<string, string>();
+  for (const { original, placeholder } of pairs) {
+    if (!named.has(placeholder)) {
+      named.set(placeholder, original);
+    }
+  }
+  let conflicts = 0;
+  for (const pair of next.pairs) {
+    const held = named.get(pair.placeholder);
+    if (held === undefined) {
+      named.set(pair.placeholder, pair.original);
+      pairs.push(pair);
+    } else if (held !== pair.original) {
+      conflicts += 1;
+    }
+  }
+  if (conflicts > 0) {
+    captureError(
+      new TelemetryError({
+        message: "An anonymization placeholder named two originals",
+      }),
+      { source: "chat-anon-restorations", conflicts: String(conflicts) },
+    );
+  }
+  return { pairs };
+};
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&

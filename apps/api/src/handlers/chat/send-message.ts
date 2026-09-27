@@ -125,7 +125,10 @@ import {
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
-import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  createChatThirdPartyBoundary,
+  storedRestorationsOf,
+} from "@/api/handlers/chat/third-party-boundary";
 import {
   createToolReadScopeRecorder,
   recordToolReadScope,
@@ -1441,6 +1444,7 @@ const prepareValidatedIncomingMessage = async ({
       organizationId,
       scopedDb,
       sendMode: body.sendMode,
+      threadRestorations: storedRestorationsOf(thread.data.messages),
       workspaceId: workspaceId ?? undefined,
     });
 
@@ -2332,6 +2336,7 @@ export const createSendMessage = (
                   messages: chatContext.hydratedMessages,
                   latestMessageId: parsedMessage.message.id,
                   storedHistory: storedHistory.value,
+                  threadToolCallIds: threadNames.toolCallIds,
                   ...(owningAssistantMessage === undefined
                     ? {}
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
