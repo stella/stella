@@ -648,7 +648,7 @@ export const OWNERSHIP = [
     capability: "Creating chat ref registries for a turn or saved transcript",
     owner: ["apps/api/src/handlers/chat/send-message.ts"],
     summary:
-      "A ref such as `ent_1` names a document only within its chat turn. " +
+      "A ref such as `ent_1` keeps its target within its chat thread. " +
       "The send owns minting new refs; readers of saved transcripts rebuild " +
       "the registry from persisted bindings to resolve or neutralize those " +
       "refs. Other code returns ids and resolved links instead.",
