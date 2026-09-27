@@ -86,6 +86,12 @@ const errorCodeBody = (code: string): string =>
 const check = async (options: Parameters<typeof runEntityCheck>[0]) =>
   (await runEntityCheck(options)).unwrap();
 
+/** The phase of the first insolvency finding, or null for any other outcome. */
+const firstPhase = (result: Awaited<ReturnType<typeof check>>) =>
+  result.status === "found" && result.kind === "cz-insolvency"
+    ? result.findings[0].phase
+    : null;
+
 describe("Czech insolvency check", () => {
   test("reports a company in reorganisation as found, with its pending proceeding", async () => {
     const found = await fixture("isir-company-found.xml");
@@ -144,7 +150,7 @@ describe("Czech insolvency check", () => {
       kind: "cz-insolvency",
       subject: INSOLVENT_COMPANY,
     });
-    expect(result.status === "found" && result.findings[0].phase).toBe("ended");
+    expect(firstPhase(result)).toBe("ended");
   });
 
   test("matches a pending proceeding by court as well as file number", async () => {
@@ -162,7 +168,7 @@ describe("Czech insolvency check", () => {
       kind: "cz-insolvency",
       subject: INSOLVENT_COMPANY,
     });
-    expect(result.status === "found" && result.findings[0].phase).toBe("ended");
+    expect(firstPhase(result)).toBe("ended");
   });
 
   test("leaves the phase unverified when the pending-only page is capped", async () => {
@@ -182,9 +188,7 @@ describe("Czech insolvency check", () => {
       kind: "cz-insolvency",
       subject: INSOLVENT_COMPANY,
     });
-    expect(result.status === "found" && result.findings[0].phase).toBe(
-      "unverified",
-    );
+    expect(firstPhase(result)).toBe("unverified");
   });
 
   test("keeps the findings when the pending-only query fails", async () => {
@@ -199,9 +203,7 @@ describe("Czech insolvency check", () => {
       kind: "cz-insolvency",
       subject: INSOLVENT_COMPANY,
     });
-    expect(result.status === "found" && result.findings[0].phase).toBe(
-      "unverified",
-    );
+    expect(firstPhase(result)).toBe("unverified");
   });
 
   test("reports a company without proceedings as clear after one query", async () => {
@@ -607,12 +609,8 @@ describe("Czech VAT reliability check never reports clear without an explicit an
   const PAYER = { type: "tax-id", value: "CZ45274649" } as const;
   const entry = (attributes: string) =>
     adisBody(`${ADIS_OK}<statusSubjektu dic="45274649" ${attributes}/>`);
-  const failures: readonly {
-    name: string;
-    reply: () => Promise<Reply | Error>;
-    reason: string;
-  }[] = [
-    ...["2", "3", "9"].map((code) => ({
+  const failures: readonly FailureCase[] = [
+    ...["2", "3", "9"].map((code): FailureCase => ({
       name: `status code ${code}`,
       reply: async () => ({
         body: adisBody(
