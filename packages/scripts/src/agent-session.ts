@@ -269,7 +269,7 @@ const readSessionCookie = (root: string) => {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(root, STORAGE_STATE_PATH), "utf-8"),
   );
-  const cookie =
+  const cookie: unknown =
     typeof parsed === "object" &&
     parsed !== null &&
     "cookies" in parsed &&
@@ -330,7 +330,7 @@ const listsKey = (payload: unknown, id: string) =>
 const ensureAgentKey = async (root: string, apiUrl: string) => {
   const cookie = readSessionCookie(root);
   const stored = readStoredAgentKey(root);
-  if (stored !== null && stored.apiUrl === apiUrl) {
+  if (stored?.apiUrl === apiUrl) {
     const listing = await apiRequest({
       cookie,
       method: "GET",
@@ -413,12 +413,12 @@ const up = async (root: string, args: readonly string[]) => {
         spawnRunner({ root, skipInstall: args.includes("--skip-install") }),
       root,
     }));
-  if (!runtime.seeded || runtime.apiUrl === null) {
-    return fail(
+  const apiUrl =
+    (runtime.seeded ? runtime.apiUrl : null) ??
+    fail(
       "The running stack was started without --seed; stop it and run `bun run agent:up`",
     );
-  }
-  const agentKey = await ensureAgentKey(root, runtime.apiUrl);
+  const agentKey = await ensureAgentKey(root, apiUrl);
   const env = agentEnv({ apiKey: agentKey.key, runtime });
   writeFileSync(
     devStatePath(root, AGENT_ENV_FILE),
@@ -610,7 +610,7 @@ const attach = (root: string, args: readonly string[]) => {
     ],
     { stderr: "inherit", stdout: "inherit" },
   );
-  process.exit(result.exitCode);
+  return process.exit(result.exitCode);
 };
 
 // Worktree stacks only: the root checkout's database may hold the person's
@@ -626,7 +626,7 @@ const reset = async (root: string, args: readonly string[]) => {
     // worktree shares with the root checkout.
     runtime.infraOffset === 0
   ) {
-    return fail(
+    fail(
       "Only a worktree's own stack can be reset; this one may hold your data",
     );
   }
@@ -705,7 +705,7 @@ const main = async () => {
     }
     default: {
       command satisfies never;
-      return panic(`Unhandled command: ${String(command)}`);
+      panic(`Unhandled command: ${String(command)}`);
     }
   }
 };

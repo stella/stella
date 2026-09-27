@@ -2248,7 +2248,8 @@ const resolveInfraOffset = async ({
       });
     }
     default: {
-      return setting satisfies never;
+      setting satisfies never;
+      return panic(`Unhandled infra offset setting: ${String(setting)}`);
     }
   }
 };
