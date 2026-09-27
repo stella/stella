@@ -11,7 +11,38 @@ import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedCorrespondenceDropId } from "@/api/lib/safe-id-boundaries";
+
+type CorrespondenceDropRow = typeof correspondenceDropLogs.$inferSelect;
+
+const DROP_COLUMNS = {
+  id: correspondenceDropLogs.id,
+  senderAddress: correspondenceDropLogs.senderAddress,
+  receivedAt: correspondenceDropLogs.receivedAt,
+  reason: correspondenceDropLogs.reason,
+};
+
+const UNPROJECTED_DROP_COLUMNS = [
+  "organizationId", // The authorized session determines the organization.
+  "workspaceId", // The authorized route already identifies the matter.
+] as const satisfies readonly (keyof CorrespondenceDropRow)[];
+
+type MissingDropColumn = UnprojectedColumns<
+  CorrespondenceDropRow,
+  typeof DROP_COLUMNS,
+  (typeof UNPROJECTED_DROP_COLUMNS)[number]
+>;
+type UnexpectedDropColumn = UnbackedProjectionKeys<
+  CorrespondenceDropRow,
+  typeof DROP_COLUMNS,
+  (typeof UNPROJECTED_DROP_COLUMNS)[number]
+>;
+true satisfies MissingDropColumn extends never ? true : never;
+true satisfies UnexpectedDropColumn extends never ? true : never;
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -45,10 +76,7 @@ export default createSafeHandler(
         async (tx) =>
           await tx
             .select({
-              id: correspondenceDropLogs.id,
-              sender: correspondenceDropLogs.senderAddress,
-              receivedAt: correspondenceDropLogs.receivedAt,
-              reason: correspondenceDropLogs.reason,
+              ...DROP_COLUMNS,
               cursorTimestamp: cursorCodec.cursorValue,
             })
             .from(correspondenceDropLogs)
@@ -83,9 +111,9 @@ export default createSafeHandler(
     });
     return Result.ok({
       ...page,
-      items: page.items.map(({ id, sender, receivedAt, reason }) => ({
+      items: page.items.map(({ id, senderAddress, receivedAt, reason }) => ({
         id,
-        sender,
+        sender: senderAddress,
         receivedAt,
         reason,
         setupHint:
