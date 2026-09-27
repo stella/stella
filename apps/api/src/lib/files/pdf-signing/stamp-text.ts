@@ -52,7 +52,7 @@ const covers = (face: StampFace, codePoint: number) =>
   face.font.glyphIdFor(codePoint) !== 0;
 
 /** The face that draws `character` when it has no neighbour to follow. */
-export const ownFace = (
+const ownFace = (
   faces: readonly StampFace[],
   character: string,
 ): StampFace | null => {

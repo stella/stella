@@ -368,7 +368,7 @@ const runOperators = ({
   return operators;
 };
 
-export type StampTextRow = {
+type StampTextRow = {
   row: StampRow;
   /** Left end of the row's baseline, in appearance space. */
   x: number;
