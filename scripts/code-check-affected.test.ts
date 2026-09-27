@@ -283,14 +283,15 @@ describe("affected code-check planning", () => {
       }
       expect(planned.lint).toEqual({ type: "targets", targets: [] });
       expect(planned.typecheck).toEqual({ type: "targets", targets: [] });
-      expect(planned.rootChecks.toSorted()).toEqual(
-        [
+      expect(planned.rootChecks).toHaveLength(5);
+      expect(planned.rootChecks).toEqual(
+        expect.arrayContaining([
           "env",
           "assets",
           "rule-decisions",
           rootCheck,
           "repo-typecheck",
-        ].toSorted(),
+        ]),
       );
     },
   );
@@ -557,10 +558,10 @@ describe("full and affected code-check parity", () => {
     const generating = workspaceManifests().filter(({ scripts }) => {
       const typecheck = scripts["typecheck"];
       return (
-        typecheck !== undefined &&
         typecheck
-          .split("&&")
-          .some((command) => !command.includes(TYPESCRIPT_NATIVE_RUNNER))
+          ?.split("&&")
+          .some((command) => !command.includes(TYPESCRIPT_NATIVE_RUNNER)) ??
+        false
       );
     });
 
