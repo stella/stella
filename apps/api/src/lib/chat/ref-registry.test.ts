@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -16,6 +16,8 @@ import {
   brandPersistedFieldId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const WORKSPACE_IDS = [
   brandPersistedWorkspaceId("01a0df7d-c93a-7105-99f9-c66cf1b14d01"),
@@ -57,6 +59,16 @@ const runRequest = ({
   };
   return { registry, shown, persisted: registry.collectRefBindings(message) };
 };
+
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 describe("chat refs across the requests of a thread", () => {
   test("a ref keeps its target in every later request, and no spelling names two targets", () => {
@@ -159,5 +171,39 @@ describe("chat refs across the requests of a thread", () => {
     expect(next.resolveAssistantTextRefs(`[p. 3](${href})`)).not.toContain(
       "#stella-unresolved-ref",
     );
+  });
+
+  test("restoring the same binding twice keeps it, and reports nothing", () => {
+    const first = createChatRefRegistry();
+    const ref = first.toEntityRef(entityTarget(0));
+    const bindings = first.collectRefBindings(ref);
+
+    const next = createChatRefRegistry([...bindings, ...bindings]);
+
+    expect(resolveEntity(next, ref)).toEqual(entityTarget(0));
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("a target stored under two spellings resolves from both", () => {
+    const first = createChatRefRegistry();
+    const earlier = first.toEntityRef(entityTarget(0));
+    const binding =
+      first.collectRefBindings(earlier).at(0) ??
+      expect.unreachable("The registry holds the ref it minted");
+    // A later spelling of the same target, as a request that could not see
+    // the earlier binding leaves behind.
+    const later = "ent_5";
+    const aliased = createChatRefRegistry([
+      binding,
+      { ...binding, ref: later },
+    ]);
+
+    expect(resolveEntity(aliased, earlier)).toEqual(entityTarget(0));
+    expect(resolveEntity(aliased, later)).toEqual(entityTarget(0));
+    // The first spelling stays the one the target is shown under.
+    expect(aliased.toEntityRef(entityTarget(0))).toBe(earlier);
+    // New mints continue past both.
+    expect(aliased.toEntityRef(entityTarget(2))).toBe("ent_6");
+    expect(analytics.exceptions()).toEqual([]);
   });
 });
