@@ -52,6 +52,11 @@ export const CASE_LAW_BATCH_FAILURE = {
   RECORD_REJECTED: "record-rejected",
   /** A record's failure could not be written to the ingestion ledger. */
   FAILURE_WRITE: "failure-write",
+  /**
+   * Consecutive rejections stopped the batch before it reached every record;
+   * the records it did not reach were never attempted.
+   */
+  FAILURE_STREAK: "failure-streak",
   /** A fault outside the records that the batch does not classify. */
   UNCLASSIFIED: "unclassified",
 } as const;
@@ -84,13 +89,15 @@ export class CaseLawBatchApplyError extends TaggedError(
 
 /**
  * Text as UTF-8, a number or boolean as its text, and a binary payload (any
- * typed-array view, `Buffer` included) at its byte length. Walked rather than
- * serialized, so a view is never measured through its own `toJSON`.
+ * typed-array view, `Buffer` included) at its byte length. Structure is
+ * charged as JSON writes it (quotes, `null`, brackets, separators), so no
+ * value weighs nothing. Walked rather than serialized, so a view is never
+ * measured through its own `toJSON`.
  */
 const encodedValueBytes = (value: unknown, ancestors: Set<object>): number => {
   switch (typeof value) {
     case "string":
-      return Buffer.byteLength(value, "utf-8");
+      return Buffer.byteLength(value, "utf-8") + 2;
     case "number":
     case "boolean":
     case "bigint":
@@ -103,7 +110,7 @@ const encodedValueBytes = (value: unknown, ancestors: Set<object>): number => {
       return 0;
   }
   if (value === null) {
-    return 0;
+    return 4;
   }
   if (ArrayBuffer.isView(value)) {
     return value.byteLength;
@@ -112,14 +119,15 @@ const encodedValueBytes = (value: unknown, ancestors: Set<object>): number => {
     return panic("An ingestion record contains itself");
   }
   ancestors.add(value);
-  let bytes = 0;
+  // Brackets, then a separator per element and quotes and a colon per key.
+  let bytes = 2;
   if (Array.isArray(value)) {
     for (const item of value) {
-      bytes += encodedValueBytes(item, ancestors);
+      bytes += 1 + encodedValueBytes(item, ancestors);
     }
   } else {
     for (const [key, child] of Object.entries(value)) {
-      bytes += Buffer.byteLength(key, "utf-8");
+      bytes += Buffer.byteLength(key, "utf-8") + 4;
       bytes += encodedValueBytes(child, ancestors);
     }
   }

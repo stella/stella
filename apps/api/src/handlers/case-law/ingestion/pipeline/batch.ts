@@ -643,6 +643,7 @@ const underSourceLease = async <T>(
 /** A stop that no reached record's own settlement accounts for. */
 const stopFailure = (
   stop: DecisionBatchHalt | null,
+  unreached: number,
 ): CaseLawBatchFailureReason | null => {
   if (stop === null) {
     return null;
@@ -650,9 +651,12 @@ const stopFailure = (
   switch (stop.type) {
     case "retryable":
     case "timeout":
-    case "failure-streak":
       // The record that stopped the batch carries the reason.
       return null;
+    case "failure-streak":
+      // A rejection explains the records it reached, never the ones it did
+      // not: those were never attempted.
+      return unreached > 0 ? CASE_LAW_BATCH_FAILURE.FAILURE_STREAK : null;
     case "aborted":
       return CASE_LAW_BATCH_FAILURE.ABORTED;
     case "insert-limit":
@@ -687,7 +691,7 @@ const batchFailure = (
     unsettled.find(({ reason }) => matches(reason))?.reason ?? null;
   const reason =
     reasonWhere((found) => found === CASE_LAW_BATCH_FAILURE.FAILURE_WRITE) ??
-    stopFailure(halt) ??
+    stopFailure(halt, decisions.length - settlements.length) ??
     reasonWhere((found) => found !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED) ??
     unsettled.at(0)?.reason ??
     null;

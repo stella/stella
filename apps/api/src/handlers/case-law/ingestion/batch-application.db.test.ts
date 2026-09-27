@@ -622,6 +622,16 @@ describe("the batch bounds", () => {
     ).toBe(true);
   });
 
+  test("structure weighs something even when every value is empty", () => {
+    const measured = (aliases: number) =>
+      encodedIngestionResultBytes({
+        ...record(1),
+        sourceDocumentIdAliases: Array.from({ length: aliases }, () => ""),
+      });
+
+    expect(measured(1000) - measured(0)).toBeGreaterThanOrEqual(1000);
+  });
+
   test("a prepared batch refuses what it cannot carry before any write", () => {
     const { records: maxRecords, encodedBytes } =
       CASE_LAW_INGESTION_BATCH_LIMITS;
@@ -757,6 +767,40 @@ describe("why a batch is not certified", () => {
     );
     expect(crawled.type).toBe("certified");
     expect(await ledgerRows(crawlSourceId)).toHaveLength(2);
+  });
+
+  test("records a rejection streak did not reach are not called rejected", async () => {
+    const sourceId = await recordSource();
+    const decisions = [
+      ...Array.from({ length: 10 }, (_, n) => rejectedRecord(70 + n)),
+      record(1),
+      record(2),
+    ];
+
+    const applied = await applyPrepared({
+      sourceId,
+      batch: prepared(decisions),
+      corpus: landingTransfer().corpus,
+    });
+
+    if (Result.isOk(applied)) {
+      throw new Error("expected no receipt");
+    }
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
+    expect(applied.error.unsettled).toBe(12);
+    expect(await ledgerRows(sourceId)).toHaveLength(10);
+    expect(await decisionRows(sourceId)).toEqual([]);
+
+    // A streak that ends on the last record leaves nothing unreached.
+    const rejectedOnlySourceId = await recordSource();
+    const rejectedOnly = await applyPrepared({
+      sourceId: rejectedOnlySourceId,
+      batch: prepared(decisions.slice(0, 10)),
+      corpus: landingTransfer().corpus,
+    });
+    expect(
+      Result.isError(rejectedOnly) ? rejectedOnly.error.reason : null,
+    ).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
   });
 
   test("an unclassified fault renewing the lease holds the batch before any write", async () => {
