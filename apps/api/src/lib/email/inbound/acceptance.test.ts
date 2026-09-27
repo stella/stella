@@ -92,11 +92,13 @@ describe("inbound acceptance", () => {
       const token = generateInboundAddressToken();
       tokens.add(token);
       expect(token).toMatch(/^[a-f0-9]{64}$/u);
-      const result = parseInboundAddressToken(
-        `${token}@MAIL.EXAMPLE.COM`,
-        "mail.example.com",
-      );
-      expect(result.isOk() && result.value).toBe(token);
+      for (const localPart of [token, token.toUpperCase()]) {
+        const result = parseInboundAddressToken(
+          `${localPart}@MAIL.EXAMPLE.COM`,
+          "mail.example.com",
+        );
+        expect(result.isOk() && result.value).toBe(token);
+      }
       for (const address of [
         `${token}+tag@mail.example.com`,
         `${token}@mail.example.com.evil.test`,
