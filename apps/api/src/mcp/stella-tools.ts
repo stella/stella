@@ -2594,7 +2594,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent.value, read.value),
+            matches: exactDecisionMatches(intent, read.value),
           },
         ];
       },
