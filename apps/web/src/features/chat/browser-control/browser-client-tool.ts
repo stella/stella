@@ -64,6 +64,16 @@ export const createBrowserClientTool = ({
         stopper.stop(turnId);
       }
     },
+    /**
+     * Lets the latest turn's browser commands run again after a stop: a
+     * regeneration reuses that turn's user message, and so its turn.
+     */
+    resume(): void {
+      const turnId = turnIdFor();
+      if (turnId !== null) {
+        stopper.resume(turnId);
+      }
+    },
     tool,
   };
 };

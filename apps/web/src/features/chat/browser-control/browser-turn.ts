@@ -29,7 +29,8 @@ const TRACKED_TURNS = 32;
 /**
  * Stop signals by chat turn. Stopping a turn aborts every command of that
  * turn, including one whose approval was already given but whose callback
- * has not run yet; only a later turn gets a live signal.
+ * has not run yet; only a later turn, or the same turn resumed by a
+ * regeneration, gets a live signal.
  */
 export const createTurnStopper = () => {
   const controllers = new Map<string, AbortController>();
@@ -55,6 +56,12 @@ export const createTurnStopper = () => {
     signalFor: (turnId: string): AbortSignal => controllerFor(turnId).signal,
     stop(turnId: string): void {
       controllerFor(turnId).abort();
+    },
+    /** A regeneration runs the stopped turn again: its commands start live. */
+    resume(turnId: string): void {
+      if (controllers.get(turnId)?.signal.aborted === true) {
+        controllers.delete(turnId);
+      }
     },
   };
 };

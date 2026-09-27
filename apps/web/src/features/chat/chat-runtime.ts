@@ -820,6 +820,7 @@ export const createChatRuntime = ({
     getSnapshot: () => snapshot,
     reload: async (options) => {
       startTurn();
+      browserTool.resume();
       await withBody(
         {
           body: {

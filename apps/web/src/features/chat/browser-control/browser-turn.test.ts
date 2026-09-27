@@ -62,6 +62,21 @@ describe("turn stopper", () => {
     expect(stopper.signalFor("turn-2").aborted).toBe(false);
   });
 
+  test("a resumed turn's later calls start live; a live turn is left alone", () => {
+    const stopper = createTurnStopper();
+    const stopped = stopper.signalFor("turn-1");
+    stopper.stop("turn-1");
+
+    stopper.resume("turn-1");
+
+    expect(stopped.aborted).toBe(true);
+    expect(stopper.signalFor("turn-1").aborted).toBe(false);
+
+    const running = stopper.signalFor("turn-2");
+    stopper.resume("turn-2");
+    expect(stopper.signalFor("turn-2")).toBe(running);
+  });
+
   test("stopping a turn before any of its calls ran still stops them", () => {
     const stopper = createTurnStopper();
     stopper.stop("turn-1");
