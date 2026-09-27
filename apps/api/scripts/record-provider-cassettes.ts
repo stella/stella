@@ -48,6 +48,7 @@ import type {
   ProviderWireScenario,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import {
+  EXPECTED_TEXT,
   findWireContractViolations,
   replayWireScenario,
   runWireScenario,
@@ -146,6 +147,8 @@ const ECHO_KEYS = new Set([
   "safety_identifier",
   "user",
 ]);
+/** OpenRouter may attach live account pricing and routing to usage. */
+const PRIVATE_USAGE_KEYS = new Set(["cost", "cost_details", "is_byok"]);
 /** Tool call ids stay: they tie a call to its result in a continuation. */
 const TOOL_CALL_ID = /^(?:call|toolu|tooluse|fc)_/u;
 /** Ids of the account the key belongs to, wherever a string carries them
@@ -167,18 +170,21 @@ export const sanitizeJson = (value: unknown, secret: string): unknown => {
     return value;
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => {
+    Object.entries(value).flatMap(([key, child]) => {
+      if (PRIVATE_USAGE_KEYS.has(key)) {
+        return [];
+      }
       if (
         IDENTIFIER_KEYS.has(key) &&
         typeof child === "string" &&
         !TOOL_CALL_ID.test(child)
       ) {
-        return [key, `[${key}]`];
+        return [[key, `[${key}]`]];
       }
       if (ECHO_KEYS.has(key) && typeof child === "string") {
-        return [key, "[redacted]"];
+        return [[key, "[redacted]"]];
       }
-      return [key, sanitizeJson(child, secret)];
+      return [[key, sanitizeJson(child, secret)]];
     }),
   );
 };
@@ -400,7 +406,7 @@ const expectationFor = (
   const draft = { input: { name: "draft" }, name: "mcp__external__delete" };
   switch (scenario) {
     case "text":
-      return { finishReason: "stop", outcome: "finished" };
+      return { finishReason: "stop", outcome: "finished", text: EXPECTED_TEXT };
     case "tool-call":
     case "strict-null":
       return {

@@ -91,6 +91,22 @@ describe("provider cassette recording redaction", () => {
     ).toEqual({ instructions: "[redacted]", model: "m", user: "[redacted]" });
   });
 
+  test("omits live billing and account routing metadata from usage", () => {
+    const usage = {
+      prompt_tokens: 12,
+      completion_tokens: 3,
+      cost: 0.001,
+      cost_details: { upstream_inference_cost: 0.0008 },
+      is_byok: true,
+    };
+    expect(sanitizeJson({ usage }, SECRET)).toEqual({
+      usage: { prompt_tokens: 12, completion_tokens: 3 },
+    });
+    expect(
+      sanitizeTextBody(`data: ${JSON.stringify({ usage })}\n\n`, SECRET),
+    ).toBe('data: {"usage":{"prompt_tokens":12,"completion_tokens":3}}\n\n');
+  });
+
   test("refuses a response that contains the key", () => {
     const refusal = "A provider response contains the recording key";
     expect(() =>
@@ -200,6 +216,9 @@ const recordAndReplay = async (
     scenario,
     source: "recorded",
   });
+  if (scenario === "text") {
+    expect(recorded.expect).toEqual(source.expect);
+  }
   // The same request and status; the body with its identifiers replaced.
   const [recordedExchange] = recorded.exchanges;
   const [sourceExchange] = source.exchanges;

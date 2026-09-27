@@ -25,6 +25,7 @@
   ],
   "expect": {
     "outcome": "finished",
-    "finishReason": "stop"
+    "finishReason": "stop",
+    "text": "The cassette plays."
   }
 }
