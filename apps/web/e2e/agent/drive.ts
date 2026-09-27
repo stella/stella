@@ -1,7 +1,9 @@
 // Drive the running web app as the seeded owner and write evidence: a
 // screenshot, the browser errors, the failed API calls and, for `measure`,
-// timing and network numbers. Run through `bun run agent:drive`, which points
-// E2E_WEB_URL / E2E_API_URL at this checkout's stack (`bun run agent:up`).
+// timing and network numbers. Run only through `bun run agent:drive`, which
+// points it at this checkout's seeded stack (`bun run agent:up`) and records
+// where every screenshot came from, so `agent:attach` can refuse any image
+// that could show non-fixture data.
 //
 // Exit code 1 means the page itself showed a problem (browser error, 5xx,
 // sign-in redirect, route error boundary); the report says which.
@@ -11,8 +13,9 @@
 /// <reference lib="dom" />
 import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Page, Response } from "@playwright/test";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -36,15 +39,35 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const STORAGE_STATE = path.join(REPO_ROOT, ".playwright/storage-state.json");
 const EVIDENCE_DIR = path.join(REPO_ROOT, ".stella-dev/evidence");
 const MEASUREMENTS_DIR = path.join(REPO_ROOT, ".stella-dev/measurements");
-const WEB_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
-const API_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
+// No fallbacks: a default URL would point at whatever stack happens to run on
+// it, including one holding real data.
+const requiredEnv = (name: string) => {
+  const value = process.env[name];
+  if (value === undefined || value === "") {
+    console.error(
+      `${name} is not set; run this through \`bun run agent:drive\``,
+    );
+    process.exit(2);
+  }
+  return value;
+};
+const WEB_URL = requiredEnv("E2E_WEB_URL");
+const API_URL = requiredEnv("E2E_API_URL");
+// One JSON line per screenshot; agent-session.ts turns it into the manifest.
+const CAPTURE_LOG = requiredEnv("STELLA_AGENT_CAPTURE_LOG");
 const API_ORIGIN = new URL(API_URL).origin;
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const BLOCKED_REQUEST_ERROR = /net::ERR_BLOCKED_BY_CLIENT/u;
 // Matches route-smoke: API quiet for 500 ms after at least one second.
 const QUIET = { idleMs: 500, minimumObservationMs: 1000, timeoutMs: 20_000 };
 const READY_TIMEOUT_MS = 30_000;
 const LCP_GLOBAL = "__stellaAgentLcp";
 // @stll/ui Skeleton; a route still showing one inside main has not rendered.
 const LOADING_PLACEHOLDER = 'main [data-slot="skeleton"]';
+
+// Origins the driver refused to contact, reported so a missing avatar or font
+// in a screenshot is explained.
+const blockedRequests = new Set<string>();
 
 type Session = {
   browser: Browser;
@@ -60,14 +83,52 @@ const openSession = async (options: DriveOptions): Promise<Session> => {
   const browser = await chromium.launch();
   return {
     browser,
-    newContext: async () =>
-      await browser.newContext({
+    newContext: async () => {
+      const context = await browser.newContext({
         baseURL: WEB_URL,
         colorScheme: options.colorScheme,
         storageState: STORAGE_STATE,
         viewport: options.viewport,
-      }),
+      });
+      // Only the local stack is reachable, so no screenshot can show another
+      // site or a signed-in outside service.
+      await context.route("**/*", async (route) => {
+        const { hostname } = new URL(route.request().url());
+        if (LOCAL_HOSTNAMES.has(hostname)) {
+          await route.continue();
+          return;
+        }
+        blockedRequests.add(new URL(route.request().url()).origin);
+        await route.abort("blockedbyclient");
+      });
+      return context;
+    },
   };
+};
+
+type CaptureOptions = {
+  fullPage: boolean;
+  label: string;
+  page: Page;
+  screenshotPath: string;
+};
+
+const capture = async ({
+  fullPage,
+  label,
+  page,
+  screenshotPath,
+}: CaptureOptions) => {
+  const image = await page.screenshot({ fullPage, path: screenshotPath });
+  await appendFile(
+    CAPTURE_LOG,
+    `${JSON.stringify({
+      label,
+      path: screenshotPath,
+      sha256: createHash("sha256").update(image).digest("hex"),
+      url: page.url(),
+    })}\n`,
+  );
 };
 
 type TrackedPage = {
@@ -115,7 +176,10 @@ const trackPage = async (context: BrowserContext): Promise<TrackedPage> => {
       detachNetwork();
       detachErrors();
       return {
-        browserErrors: browserErrors.entries(),
+        // Aborted outside requests are this driver's own doing.
+        browserErrors: browserErrors
+          .entries()
+          .filter((entry) => !BLOCKED_REQUEST_ERROR.test(entry)),
         failedRequests,
         navigationProblems,
       };
@@ -184,11 +248,16 @@ const createOutputDir = async (name: string) => {
 type ReportSection = { findings: PageFindings; lines: string[]; title: string };
 
 const writeReport = async (outputDir: string, sections: ReportSection[]) => {
+  const blocked =
+    blockedRequests.size === 0
+      ? ""
+      : `\n\nBlocked requests to non-local origins: ${[...blockedRequests].toSorted().join(", ")}`;
   const markdown = sections
     .map(({ findings, lines, title }) =>
       [`## ${title}`, "", ...lines, "", formatFindings(findings)].join("\n"),
     )
-    .join("\n\n");
+    .join("\n\n")
+    .concat(blocked);
   await writeFile(path.join(outputDir, "report.md"), `${markdown}\n`);
   console.log(markdown);
   console.log(`\nEvidence: ${outputDir}`);
@@ -208,9 +277,11 @@ const snap = async (targets: string[], options: DriveOptions) => {
       await tracked.page.goto(target, { waitUntil: "domcontentloaded" });
       const ready = await waitUntilReady(tracked, options.waitFor);
       const screenshot = path.join(outputDir, `${slugify(target)}.png`);
-      await tracked.page.screenshot({
+      await capture({
         fullPage: options.fullPage,
-        path: screenshot,
+        label: target,
+        page: tracked.page,
+        screenshotPath: screenshot,
       });
       const findings = await tracked.finish();
       findings.navigationProblems.push(...ready.problems);
@@ -272,9 +343,11 @@ const run = async (scriptPath: string, options: DriveOptions) => {
           ...ready.problems.map((problem) => `${label}: ${problem}`),
         );
         const screenshot = path.join(outputDir, `${slugify(label)}.png`);
-        await tracked.page.screenshot({
+        await capture({
           fullPage: options.fullPage,
-          path: screenshot,
+          label,
+          page: tracked.page,
+          screenshotPath: screenshot,
         });
         lines.push(`- ${label}: ${screenshot}`);
       },
@@ -288,7 +361,12 @@ const run = async (scriptPath: string, options: DriveOptions) => {
     if (scriptResult !== null) {
       // The failure screenshot is the most useful evidence of a broken step.
       const screenshot = path.join(outputDir, "failure.png");
-      await tracked.page.screenshot({ path: screenshot });
+      await capture({
+        fullPage: false,
+        label: "failure",
+        page: tracked.page,
+        screenshotPath: screenshot,
+      });
       findings.navigationProblems.push(
         `script failed: ${scriptResult instanceof Error ? scriptResult.message : String(scriptResult)} (${screenshot})`,
       );

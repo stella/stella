@@ -4,8 +4,10 @@
 //   bun run agent:up       start (or reuse) this checkout's seeded stack
 //   bun run agent:status   print the live URLs and credentials paths
 //   bun run agent:down     stop the stack this checkout started
+//   bun run agent:reset    recreate a worktree stack from the seed alone
 //   bun run agent:cli ...  run the `stella` CLI against the stack
 //   bun run agent:drive .. drive the web app (apps/web/e2e/agent/drive.ts)
+//   bun run agent:attach . add drive screenshots to a pull request
 //
 // `up` runs the dev runner detached with `--seed`, waits for the runtime file
 // it writes once every service is ready, then mints a machine API key for the
@@ -14,12 +16,14 @@
 
 import { Result } from "better-result";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   closeSync,
   existsSync,
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -29,13 +33,24 @@ import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import {
+  decideAttachable,
+  ghSupportsAttach,
+  parseCaptureLog,
+  parseManifest,
+  parseSealStatus,
+  verifyAttachment,
+} from "./agent-evidence";
+import { buildStackScriptStep } from "./dev-runner";
+import {
   DEV_STATE_DIR,
   devStatePath,
   readDevRuntime,
+  SEAL_FILE,
   type DevRuntime,
 } from "./dev-runtime";
 
 const RUNNER_SCRIPT = "packages/scripts/src/dev-runner.ts";
+const DRIVE_SCRIPT = "apps/web/e2e/agent/drive.ts";
 const RUNNER_LOG_FILE = "runner.log";
 const STARTING_FILE = "starting.pid";
 const AGENT_KEY_FILE = "agent-key.json";
@@ -50,7 +65,16 @@ const POLL_INTERVAL_MS = 1000;
 const HEARTBEAT_MS = 30_000;
 const LOG_TAIL_LINES = 40;
 
-const COMMANDS = ["up", "down", "status", "env", "cli", "drive"] as const;
+const COMMANDS = [
+  "up",
+  "down",
+  "reset",
+  "status",
+  "env",
+  "cli",
+  "drive",
+  "attach",
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 const isCommand = (value: string | undefined): value is Command =>
@@ -421,6 +445,185 @@ const down = async (root: string) => {
   console.log("Stopped.");
 };
 
+const runStackScript = (
+  root: string,
+  runtime: DevRuntime,
+  { args, label }: { args: string[]; label: string },
+) => {
+  if (runtime.apiUrl === null || runtime.webUrl === null) {
+    return fail("The running stack has no API or web server");
+  }
+  const step = buildStackScriptStep({
+    apiUrl: runtime.apiUrl,
+    args,
+    infraOffset: runtime.infraOffset,
+    label,
+    rootDir: root,
+    webUrl: runtime.webUrl,
+  });
+  const result = Bun.spawnSync(step.cmd, {
+    cwd: step.cwd,
+    env: step.env,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (!result.success) {
+    console.error(result.stderr.toString());
+    return fail(`${label} failed`);
+  }
+  return result.stdout.toString();
+};
+
+const checkSeal = (root: string, runtime: DevRuntime) =>
+  parseSealStatus(
+    runStackScript(root, runtime, {
+      args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
+      label: "Checking the seal",
+    }),
+  ) ?? fail("The seal check printed no status");
+
+const EVIDENCE_DIR = "evidence";
+const MANIFEST_FILE = "manifest.json";
+
+const evidencePath = (root: string, ...segments: string[]) =>
+  path.join(root, DEV_STATE_DIR, EVIDENCE_DIR, ...segments);
+
+const readManifest = (root: string) => {
+  const manifestPath = evidencePath(root, MANIFEST_FILE);
+  return existsSync(manifestPath)
+    ? parseManifest(readFileSync(manifestPath, "utf-8"))
+    : [];
+};
+
+// The driver writes captures; only this process records whether each may be
+// attached, after checking the seal on both sides of the run.
+const drive = async (root: string, args: readonly string[]) => {
+  const runtime = await requireRuntime(root);
+  const env = await requireAgentEnv(root);
+  mkdirSync(evidencePath(root), { recursive: true });
+  const captureLog = evidencePath(
+    root,
+    `captures-${String(process.pid)}.jsonl`,
+  );
+  writeFileSync(captureLog, "");
+
+  const before = checkSeal(root, runtime);
+  const child = Bun.spawn({
+    cmd: [process.execPath, path.join(root, DRIVE_SCRIPT), ...args],
+    env: { ...process.env, ...env, STELLA_AGENT_CAPTURE_LOG: captureLog },
+    stderr: "inherit",
+    stdin: "inherit",
+    stdout: "inherit",
+  });
+  const exitCode = await child.exited;
+  const after = checkSeal(root, runtime);
+
+  const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
+  rmSync(captureLog, { force: true });
+  const capturedAt = new Date().toISOString();
+  const entries = records.map((record) => ({
+    ...record,
+    ...decideAttachable({ after, before, record }),
+    capturedAt,
+  }));
+  if (entries.length > 0) {
+    writeFileSync(
+      evidencePath(root, MANIFEST_FILE),
+      `${JSON.stringify([...readManifest(root), ...entries], null, 2)}\n`,
+    );
+    const refused = entries.find((entry) => !entry.attachable);
+    console.log(
+      refused === undefined
+        ? "\nThese screenshots show only seeded content; `bun run agent:attach` accepts them."
+        : `\nThese screenshots cannot be attached to a pull request: ${refused.reason ?? ""}`,
+    );
+  }
+  process.exit(exitCode);
+};
+
+const sha256File = (filePath: string) =>
+  createHash("sha256").update(readFileSync(filePath)).digest("hex");
+
+// The only way screenshots reach a pull request: each must be an unaltered
+// agent:drive capture of a stack that held only seeded content.
+const attach = (root: string, args: readonly string[]) => {
+  const [pullRequest, ...files] = args;
+  if (
+    pullRequest === undefined ||
+    !/^\d+$/u.test(pullRequest) ||
+    files.length === 0
+  ) {
+    return fail("Usage: bun run agent:attach <pr number> <screenshot.png>...");
+  }
+  const version = Bun.spawnSync(["gh", "--version"], { stdout: "pipe" });
+  if (!ghSupportsAttach(version.stdout.toString())) {
+    return fail("gh 2.101 or later is needed for --attach; update gh");
+  }
+
+  const manifest = readManifest(root);
+  const evidenceDir = realpathSync(evidencePath(root));
+  const attachments: string[] = [];
+  for (const file of files) {
+    if (!existsSync(file)) {
+      return fail(`${file} does not exist`);
+    }
+    const filePath = realpathSync(file);
+    const verdict = verifyAttachment({
+      evidenceDir,
+      filePath,
+      fileSha256: sha256File(filePath),
+      manifest,
+    });
+    switch (verdict.type) {
+      case "refused": {
+        return fail(`Refused: ${verdict.reason}`);
+      }
+      case "ok": {
+        attachments.push(`${filePath}#${verdict.entry.label}`);
+        break;
+      }
+      default: {
+        return verdict satisfies never;
+      }
+    }
+  }
+
+  const result = Bun.spawnSync(
+    [
+      "gh",
+      "pr",
+      "edit",
+      pullRequest,
+      ...attachments.flatMap((attachment) => ["--attach", attachment]),
+    ],
+    { stderr: "inherit", stdout: "inherit" },
+  );
+  process.exit(result.exitCode);
+};
+
+// Worktree stacks only: the root checkout's database may hold the person's
+// own data, and a reset must never be able to reach it.
+const WORKTREE_PROJECT_PATTERN = /^stella-dev-\d+-[a-f0-9]{12}$/u;
+
+const reset = async (root: string, args: readonly string[]) => {
+  const runtime = await requireRuntime(root);
+  if (
+    runtime.dockerProject === null ||
+    !WORKTREE_PROJECT_PATTERN.test(runtime.dockerProject)
+  ) {
+    return fail(
+      "Only a worktree's own stack can be reset; this one may hold your data",
+    );
+  }
+  runStackScript(root, runtime, {
+    args: ["scripts/seed-reset.ts", "--confirm-local-reset"],
+    label: "Recreating the database",
+  });
+  await down(root);
+  rmSync(devStatePath(root, AGENT_KEY_FILE), { force: true });
+  await up(root, args);
+};
+
 type PassThroughOptions = {
   args: readonly string[];
   env: Record<string, string>;
@@ -473,12 +676,16 @@ const main = async () => {
       });
       return;
     }
+    case "reset": {
+      await reset(root, args);
+      return;
+    }
     case "drive": {
-      await passThrough({
-        args,
-        env: await requireAgentEnv(root),
-        script: path.join(root, "apps/web/e2e/agent/drive.ts"),
-      });
+      await drive(root, args);
+      return;
+    }
+    case "attach": {
+      attach(root, args);
       return;
     }
     default: {

@@ -293,15 +293,8 @@ rules.
 
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
-write evidence. See the `dev` skill.
-
-A pull request that changes what a user sees in the web app attaches
-screenshots from `agent:drive` (`gh pr create --attach` or
-`gh pr edit --attach`), before and after when it changes an existing
-screen. A performance claim includes the `agent:drive measure --compare`
-table. Capture only the seeded fixture data: this repository is public, so
-an attachment is too. Backend-only, refactor and documentation PRs skip
-this.
+write evidence, and `agent:attach` is this repository's attach command for
+pull request screenshots. See the `dev` skill.
 
 Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.

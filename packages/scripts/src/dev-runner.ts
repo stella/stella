@@ -24,7 +24,12 @@ import {
   type InfraOffsetSetting,
   readDevRunnerConfig,
 } from "./dev-runner-config";
-import { removeDevRuntime, writeDevRuntime } from "./dev-runtime";
+import {
+  devStatePath,
+  removeDevRuntime,
+  SEAL_FILE,
+  writeDevRuntime,
+} from "./dev-runtime";
 
 const ENV_FILE_SPECS = [
   {
@@ -1803,14 +1808,76 @@ const buildApiEnv = ({
   };
 };
 
-// Runs once the API is ready: the test user, its session and Playwright
-// storage state, then the fixture matters, contacts and documents.
-const buildSeedStep = (options: BuildApiEnvOptions): Step => ({
-  cmd: [resolveCommandPath("bun"), "run", "db:seed-local"],
-  cwd: path.resolve(options.rootDir, "apps/api"),
-  env: buildApiEnv(options),
-  label: "Seeding local fixtures",
+type ApiScriptStepOptions = BuildApiEnvOptions & {
+  args: string[];
+  label: string;
+};
+
+// An apps/api script run against this stack's database, object store and
+// auth settings, exactly as the API process sees them.
+const buildApiScriptStep = ({
+  args,
+  label,
+  ...envOptions
+}: ApiScriptStepOptions): Step => ({
+  cmd: [resolveCommandPath("bun"), ...args],
+  cwd: path.resolve(envOptions.rootDir, "apps/api"),
+  env: buildApiEnv(envOptions),
+  label,
 });
+
+// The test user, its session and Playwright storage state, then the fixture
+// matters, contacts and documents.
+const buildSeedStep = (options: BuildApiEnvOptions) =>
+  buildApiScriptStep({
+    ...options,
+    args: ["run", "db:seed-local"],
+    label: "Seeding local fixtures",
+  });
+
+// Fingerprints every table once the seed and the servers' own start-up writes
+// are done; see apps/api/scripts/seed-seal.ts.
+const buildSealStep = (options: BuildApiEnvOptions) =>
+  buildApiScriptStep({
+    ...options,
+    args: [
+      "scripts/seed-seal.ts",
+      "write",
+      devStatePath(options.rootDir, SEAL_FILE),
+    ],
+    label: "Sealing the seeded content",
+  });
+
+type StackScriptOptions = {
+  apiUrl: string;
+  args: string[];
+  infraOffset: number;
+  label: string;
+  rootDir: string;
+  webUrl: string;
+};
+
+/**
+ * An apps/api script against a running stack described by its runtime file,
+ * for tools outside the runner (`agent-session.ts`).
+ */
+export const buildStackScriptStep = ({
+  apiUrl,
+  infraOffset,
+  webUrl,
+  ...rest
+}: StackScriptOptions) =>
+  buildApiScriptStep({
+    ...rest,
+    infraOffset,
+    infraPorts: infraPortsForOffset(infraOffset),
+    // The API environment reads only the API and web ports.
+    ports: {
+      ...portsForOffset(0),
+      api: Number(new URL(apiUrl).port),
+      web: Number(new URL(webUrl).port),
+    },
+  });
 
 export const buildPersistentSteps = ({
   infraOffset,
@@ -2430,6 +2497,16 @@ const main = async () => {
 
     for (const step of backgroundSteps) {
       await finishBackgroundStep(step);
+    }
+    if (seeds) {
+      runStep(
+        buildSealStep({
+          infraOffset,
+          infraPorts,
+          ports,
+          rootDir: gitContext.currentRoot,
+        }),
+      );
     }
 
     writeDevRuntime(gitContext.currentRoot, {

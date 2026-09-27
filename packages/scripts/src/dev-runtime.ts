@@ -16,6 +16,8 @@ import { DEV_MODES, type DevMode } from "./dev-runner-config";
 // is gitignored.
 export const DEV_STATE_DIR = ".stella-dev";
 const RUNTIME_FILE = "runtime.json";
+// Written after the seed by apps/api/scripts/seed-seal.ts.
+export const SEAL_FILE = "seal.json";
 
 export type DevRuntime = {
   apiUrl: string | null;

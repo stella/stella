@@ -32,7 +32,8 @@ and a retry joins a runner that is still starting. The runner is
 
 `bun run agent:status` prints the live URLs; `bun run agent:down` stops the
 stack (volumes and data survive). Leave it running while you iterate; the API
-and web servers reload on save.
+and web servers reload on save. `bun run agent:reset` recreates a worktree's
+database from the seed alone (it refuses the root checkout's stack).
 
 If `up` fails, read the tail it prints and `.stella-dev/runner.log`; fix the
 cause and rerun. Do not start a second runner by hand in the same checkout.
@@ -92,11 +93,21 @@ When handing work back, say what you ran and what it showed: the command,
 the report's findings, and the screenshot or measurement paths. A before and
 after pair is the evidence for a performance claim.
 
-In a pull request that changes what a user sees, attach the screenshots:
-reference each one in the body as `![What it shows](./path.png)` and pass
-`--attach ./path.png` to `gh pr create` or `gh pr edit`; `gh` uploads it and
-rewrites the reference. When a change alters an existing screen, take the
-"before" shots before editing it. Screenshots of the seeded stack show only
-fixture data, which is what may appear in this public repository; never
-attach anything else. If an upload fails, `gh` exits non-zero: retry the edit
-rather than leaving a broken image.
+## 6. Screenshots in pull requests
+
+`bun run agent:attach <pr number> <screenshot.png>...` is the only way to add
+images to a pull request; the command guard blocks `gh ... --attach`. It
+accepts an image only when it is an unaltered `agent:drive` capture taken while
+the stack held nothing but seeded content: after seeding, the runner
+fingerprints every table, and `agent:drive` checks the fingerprint before and
+after each run. Anything created since (an upload, a new matter, a typed name,
+a chat message) makes that run's captures unattachable, and the driver says so.
+
+- Take "before" shots before editing an existing screen.
+- To show a change that needed new content, verify it for yourself, then run
+  `bun run agent:reset` and capture a state reachable without creating
+  anything (for example the empty dialog).
+- The driver blocks requests to non-local sites, so pictures fetched from the
+  web (avatars) are missing from screenshots.
+- `agent:attach` appends the images to the pull request body; if an upload
+  fails it exits non-zero, so run it again.
