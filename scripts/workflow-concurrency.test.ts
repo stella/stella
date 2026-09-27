@@ -10,13 +10,20 @@ import { fileURLToPath } from "node:url";
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
-/** Expressions that tell one pull request's runs from another's. */
-const PER_PULL_REQUEST_KEYS = [
-  "github.ref",
-  "github.head_ref",
-  "github.event.pull_request.number",
-  "github.event.number",
+/**
+ * Keys that tell one pull request's runs from another's. `github.ref` is
+ * `refs/pull/<n>/merge` under pull_request but the base branch under
+ * pull_request_target, so that trigger needs the number itself. `head_ref`
+ * never counts: two forks can push branches of the same name.
+ */
+const PULL_REQUEST_NUMBER = [
+  /\bgithub\.event\.pull_request\.number\b/u,
+  /\bgithub\.event\.number\b/u,
 ];
+/** On an issue_comment trigger, the pull request is the commented issue. */
+const COMMENTED_ISSUE_NUMBER = /\bgithub\.event\.issue\.number\b/u;
+/** Not `github.ref_name`, which is only the branch name on a push. */
+const PULL_REQUEST_MERGE_REF = /\bgithub\.ref\b(?!_)/u;
 /** The pull request workflows today. Fewer means the scan broke. */
 const MINIMUM_PULL_REQUEST_WORKFLOWS = 10;
 
@@ -48,13 +55,19 @@ const concurrencyProblems = (workflow: unknown): string[] => {
       "declares no top-level `concurrency` with `group` and `cancel-in-progress`",
     ];
   }
+  const events = triggers(workflow["on"]);
+  const keys = events.includes("pull_request_target")
+    ? [
+        ...PULL_REQUEST_NUMBER,
+        ...(events.includes("issue_comment") ? [COMMENTED_ISSUE_NUMBER] : []),
+      ]
+    : [...PULL_REQUEST_NUMBER, PULL_REQUEST_MERGE_REF];
   const group = concurrency["group"];
   return [
-    ...(typeof group === "string" &&
-    PER_PULL_REQUEST_KEYS.some((key) => group.includes(key))
+    ...(typeof group === "string" && keys.some((key) => key.test(group))
       ? []
       : [
-          `concurrency group is not keyed per pull request (${PER_PULL_REQUEST_KEYS.join(", ")})`,
+          `concurrency group is not keyed per pull request (${keys.map(({ source }) => source).join(", ")})`,
         ]),
     ...(concurrency["cancel-in-progress"] === true
       ? []
@@ -126,6 +139,51 @@ describe("pull request workflow concurrency", () => {
         },
       }),
     ).toEqual([expect.stringContaining("cancel-in-progress")]);
+  });
+
+  test.each([
+    // Two forks can push branches of the same name.
+    ["pull_request", `\${{ github.workflow }}-\${{ github.head_ref }}`],
+    ["pull_request_target", `\${{ github.workflow }}-\${{ github.head_ref }}`],
+    // Only the branch name, shared by every pull request from it.
+    ["pull_request", `\${{ github.workflow }}-\${{ github.ref_name }}`],
+    // Under pull_request_target the ref is the base branch.
+    ["pull_request_target", `\${{ github.workflow }}-\${{ github.ref }}`],
+    // The issue number identifies a pull request only on a comment trigger.
+    [
+      "pull_request_target",
+      `\${{ github.workflow }}-\${{ github.event.issue.number }}`,
+    ],
+  ])("rejects a %s group keyed as %s", (event, group) => {
+    expect(
+      concurrencyProblems({
+        on: { [event]: null },
+        concurrency: { group, "cancel-in-progress": true },
+      }),
+    ).toEqual([expect.stringContaining("not keyed per pull request")]);
+  });
+
+  test.each([
+    [["pull_request"], `\${{ github.workflow }}-\${{ github.ref }}`],
+    [
+      ["pull_request"],
+      `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
+    ],
+    [
+      ["pull_request_target"],
+      `\${{ github.workflow }}-\${{ github.event.number }}`,
+    ],
+    [
+      ["pull_request_target", "issue_comment"],
+      `\${{ github.workflow }}-\${{ github.event.issue.number }}`,
+    ],
+  ])("accepts %p grouped as %s", (events, group) => {
+    expect(
+      concurrencyProblems({
+        on: events,
+        concurrency: { group, "cancel-in-progress": true },
+      }),
+    ).toEqual([]);
   });
 
   test("accepts a per pull request group that cancels in progress", () => {
