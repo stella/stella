@@ -1097,7 +1097,12 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({
+          values: () =>
+            Object.assign(Promise.resolve(undefined), {
+              onConflictDoUpdate: async () => await Promise.resolve(undefined),
+            }),
+        }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
@@ -1190,7 +1195,12 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({
+          values: () =>
+            Object.assign(Promise.resolve(undefined), {
+              onConflictDoUpdate: async () => await Promise.resolve(undefined),
+            }),
+        }),
       };
 
       inTransaction = true;
@@ -1338,7 +1348,12 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({
+          values: () =>
+            Object.assign(Promise.resolve(undefined), {
+              onConflictDoUpdate: async () => await Promise.resolve(undefined),
+            }),
+        }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
