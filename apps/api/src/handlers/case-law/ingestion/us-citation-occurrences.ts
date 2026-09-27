@@ -25,6 +25,7 @@ import type {
 import type { CitationScopeIndex } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import {
+  abstainShort,
   closeClause,
   createScopeRegistry,
   recordBarrier,
@@ -127,6 +128,7 @@ type TextRun = {
   inlines: readonly Inline[];
   registryKey: string;
   known: boolean;
+  boundaries: "proven" | "unproven" | null;
   opinionId: string | null;
   noteId: string | null;
   /** The block's projected text, for locating its search section. */
@@ -144,8 +146,10 @@ const runsOf = (
 ): TextRun[] => {
   const runs: TextRun[] = [];
   for (const block of ast.blocks) {
-    const opinionId = scopes?.get(block.id) ?? null;
+    const membership = scopes?.get(block.id);
+    const opinionId = membership?.opinionId ?? null;
     const known = opinionId !== null;
+    const boundaries = membership?.boundaries ?? null;
     const noteId =
       block.type === "paragraph" && block.note !== undefined
         ? (block.note.noteId ?? block.id)
@@ -155,6 +159,7 @@ const runsOf = (
     const shared = {
       blockId: block.id,
       known,
+      boundaries,
       opinionId,
       noteId,
       blockText: block.plainText,
@@ -302,7 +307,11 @@ const readRun = (
     const reading =
       token.kind === "full"
         ? recordFull(context, registry, token, site)
-        : Result.ok(resolveShort(context, registry, token, site));
+        : Result.ok(
+            run.boundaries === "unproven"
+              ? abstainShort(registry)
+              : resolveShort(context, registry, token, site),
+          );
     if (Result.isError(reading)) {
       return Result.err(reading.error);
     }

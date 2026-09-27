@@ -14,6 +14,10 @@ export const COURTLISTENER_REJECTION_REASON = {
   MISSING_PRIMARY_REFERENCE: "missing-primary-reference",
   INVALID_IDENTIFIER: "invalid-identifier",
   IDENTIFIER_OVERFLOW: "identifier-overflow",
+  /** Some opinion has no text representation a parser could use. */
+  NO_USABLE_TEXT: "no-usable-text",
+  /** Some opinion's text depends on images or scans nothing captured. */
+  REQUIRES_ASSETS: "requires-assets",
 } as const;
 
 export type CourtListenerRejectionReason =

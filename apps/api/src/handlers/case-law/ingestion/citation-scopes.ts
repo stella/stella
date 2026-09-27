@@ -14,10 +14,16 @@ const CITATION_SCOPE_DEFECTS = {
   DUPLICATE_BLOCK: "duplicate-block",
   UNKNOWN_BLOCK: "unknown-block",
   DISCONTIGUOUS_OPINION: "discontiguous-opinion",
+  INVALID_BOUNDARIES: "invalid-boundaries",
 } as const;
 
 type CitationScopeDefect =
   (typeof CITATION_SCOPE_DEFECTS)[keyof typeof CITATION_SCOPE_DEFECTS];
+
+const CITATION_SCOPE_BOUNDARIES: ReadonlySet<string> = new Set([
+  "proven",
+  "unproven",
+]);
 
 export class CitationScopesRejectedError extends TaggedError(
   "CitationScopesRejectedError",
@@ -27,8 +33,11 @@ export class CitationScopesRejectedError extends TaggedError(
   opinionId: string;
 }> {}
 
-/** The opinion each block belongs to; a block absent here is in none. */
-export type CitationScopeIndex = ReadonlyMap<string, string>;
+/** The opinion and boundary confidence for each block; absent means none. */
+export type CitationScopeIndex = ReadonlyMap<
+  string,
+  { readonly opinionId: string; readonly boundaries: "proven" | "unproven" }
+>;
 
 const rejected = (
   defect: CitationScopeDefect,
@@ -52,9 +61,15 @@ export const indexCitationScopes = (
   scopes: readonly CitationOpinionScope[],
 ): Result<CitationScopeIndex, CitationScopesRejectedError> => {
   const position = new Map(blocks.map((block, index) => [block.id, index]));
-  const opinionOf = new Map<string, string>();
+  const opinionOf = new Map<
+    string,
+    { readonly opinionId: string; readonly boundaries: "proven" | "unproven" }
+  >();
   const opinions = new Set<string>();
-  for (const { blockIds, opinionId } of scopes) {
+  for (const { blockIds, boundaries, opinionId } of scopes) {
+    if (!CITATION_SCOPE_BOUNDARIES.has(boundaries)) {
+      return rejected(CITATION_SCOPE_DEFECTS.INVALID_BOUNDARIES, opinionId);
+    }
     if (opinions.has(opinionId)) {
       return rejected(CITATION_SCOPE_DEFECTS.DUPLICATE_OPINION, opinionId);
     }
@@ -72,7 +87,7 @@ export const indexCitationScopes = (
       if (opinionOf.has(blockId)) {
         return rejected(CITATION_SCOPE_DEFECTS.DUPLICATE_BLOCK, opinionId);
       }
-      opinionOf.set(blockId, opinionId);
+      opinionOf.set(blockId, { opinionId, boundaries });
       first = Math.min(first, at);
       last = Math.max(last, at);
     }
