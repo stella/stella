@@ -27,7 +27,10 @@ import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
-import { applyCaseLawIngestionBatch } from "@/api/handlers/case-law/ingestion/pipeline/batch";
+import {
+  applyCaseLawIngestionBatch,
+  recordIngestionFailures,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
   CASE_LAW_BATCH_BOUNDS_REASON,
@@ -619,6 +622,68 @@ describe("source-rejected batch records", () => {
         errorMessage: rejection.message,
         cursor: `${rejection.recordKey}:${rejection.recordHash}`,
       },
+    ]);
+  });
+
+  test("a mixed ledger write absorbs only the identity conflict", async () => {
+    const sourceId = await recordSource();
+    const failure = (
+      recordIdentity: string | undefined,
+      id = createSafeId<"caseLawIngestionFailure">(),
+    ) => ({
+      id,
+      sourceId,
+      caseNumber: `mixed ${recordIdentity ?? "anonymous"}`,
+      language: "cs",
+      errorType: "SourceRecordInvalid",
+      errorMessage: "cannot be parsed",
+      cursor: null,
+      ...(recordIdentity === undefined ? {} : { recordIdentity }),
+    });
+    const write = async (failures: ReturnType<typeof failure>[]) =>
+      await recordIngestionFailures({
+        scopedDb,
+        failures,
+        adapterKey: "mixed-ledger",
+      });
+    const rows = async () =>
+      (
+        await db
+          .select({
+            id: caseLawIngestionFailures.id,
+            recordIdentity: caseLawIngestionFailures.recordIdentity,
+          })
+          .from(caseLawIngestionFailures)
+          .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      ).map(({ recordIdentity }) => recordIdentity ?? "anonymous");
+
+    const anonymous = failure(undefined);
+    expect(await write([anonymous, failure("import:m:1")])).toEqual({
+      type: "written",
+    });
+
+    // An identity-less row keeps the plain insert: its own conflict is not
+    // absorbed because an identified row shares its batch.
+    expect(
+      await write([failure(undefined, anonymous.id), failure("import:m:1")]),
+    ).toEqual({ type: "rejected" });
+    // Nor is any conflict of an identified row other than its identity's.
+    expect(await write([failure("import:m:9", anonymous.id)])).toEqual({
+      type: "rejected",
+    });
+
+    expect(
+      await write([
+        failure(undefined),
+        failure("import:m:1"),
+        failure("import:m:2"),
+      ]),
+    ).toEqual({ type: "written" });
+    expect((await rows()).toSorted()).toEqual([
+      "anonymous",
+      "anonymous",
+      "import:m:1",
+      "import:m:2",
     ]);
   });
 
