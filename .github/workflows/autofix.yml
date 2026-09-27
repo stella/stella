@@ -1,11 +1,12 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
+# No `paths` filter: each job scopes itself. The Dependabot job runs only on
+# dependabot/bun/* heads, which always carry a bun.lock or
+# packages/*/package.json change, and the regeneration job reads the whole
+# source tree.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "bun.lock"
-      - "packages/*/package.json"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -125,3 +126,153 @@ jobs:
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
           commit-message: "chore: autofix Dependabot Bun update"
+
+  regenerate-scope:
+    name: Scope derived-file regeneration
+    # Same-repository pull requests only: the generators run the pull
+    # request's own code, and the result lands on that pull request's branch,
+    # which its author can already push to. Fork and Dependabot pull requests
+    # keep the CI drift guards alone.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      # The generators read apps/api, the workspace packages whose types reach
+      # the API, the dependency graph and their own outputs; a pull request
+      # touching none of them cannot drift. The files API lists at most 3000
+      # files, so a list that long regenerates rather than guessing.
+      - name: Match generator inputs
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+          inputs='^(apps/api/|packages/|apps/web/src/generated/|scripts/ownership\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
+          if [[ "$(wc -l <<<"$files")" -ge 3000 ]] || grep -qE "$inputs" <<<"$files"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No generator input changed; skipping regeneration."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  regenerate-derived-files:
+    name: Regenerate derived files
+    needs: regenerate-scope
+    if: needs.regenerate-scope.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; pull request installs get none.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      # Each step writes what a CI drift guard in ci.yml compares, with the
+      # command that guard names as its fix. The capability catalog runs
+      # before the CLI codegen, which reads it.
+      - name: Regenerate the capability catalog
+        run: bun apps/api/scripts/export-capability-catalog.ts
+
+      - name: Regenerate the CLI registry projections
+        run: (cd packages/cli && bun run codegen)
+
+      - name: Regenerate the MCP App bundles
+        run: (cd apps/api && bun run build:mcp-apps)
+
+      - name: Regenerate the web API types
+        run: bun --filter @stll/api gen:web-api-types
+
+      # --write records exact numbers, so it runs only when a row is past its
+      # tolerance; a within-tolerance change stays unrewritten. The drift
+      # lands as a reviewable diff on the pull request.
+      - name: Rewrite the MCP surface baseline when it drifted
+        working-directory: apps/api
+        run: |
+          if ! bun run mcp:surface-baseline --check; then
+            bun run mcp:surface-baseline --write
+          fi
+
+      - name: Regenerate the module ownership doc
+        run: bun scripts/ownership.ts --write
+
+      - name: Regenerate the design token docs
+        run: bun scripts/design-tokens-doc.ts --write
+
+      - name: Restrict regenerated changes
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Regeneration moved HEAD away from $HEAD_SHA."
+            exit 1
+          fi
+
+          generated=(
+            DESIGN.md
+            apps/api/mcp-surface-baseline.json
+            "apps/api/src/mcp/apps/*/generated/app.html.txt"
+            apps/api/src/mcp/generated/capability-dispatch.ts
+            apps/web/src/generated/api-routes.gen.ts
+            chatgpt-app-submission.json
+            docs/capability-coverage.md
+            docs/module-ownership.md
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+            packages/cli/capability-catalog.json
+            packages/cli/skills
+            packages/cli/src/generated
+          )
+          excludes=()
+          for path in "${generated[@]}"; do
+            excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
+          done
+
+          unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
+          unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"
+          if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
+            echo "::error::Regeneration changed files outside the generated paths."
+            git status --short
+            exit 1
+          fi
+
+          git status --short
+
+      - name: Push regenerated files
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: regenerate derived files"
