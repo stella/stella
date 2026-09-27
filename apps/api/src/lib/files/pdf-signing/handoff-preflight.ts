@@ -109,7 +109,7 @@ export const resolveStampRequest = (
   });
 };
 
-export type PreflightedPdfSigning = {
+type PreflightedPdfSigning = {
   /**
    * The version whose bytes were checked, or `null` when the target was
    * missing or not signable (the caller's own check reports that). The

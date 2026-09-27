@@ -25,14 +25,11 @@ import { properties } from "./properties";
  * token_expires_at > now()`, so an open row past its TTL is already dead and
  * the status endpoints report it as expired.
  */
-export const PDF_SIGNING_SESSION_STATUSES = [
+const PDF_SIGNING_SESSION_STATUSES = [
   "open",
   "finalized",
   "cancelled",
 ] as const;
-
-export type PdfSigningSessionStatus =
-  (typeof PDF_SIGNING_SESSION_STATUSES)[number];
 
 /**
  * Why a cancelled exchange ended. Set only together with `cancelled`, so the
@@ -58,7 +55,7 @@ export type PdfSigningSessionCloseReason =
   (typeof PDF_SIGNING_SESSION_CLOSE_REASONS)[number];
 
 /** Signing key family, derived from the certificate's SPKI algorithm OID. */
-export const PDF_SIGNING_KEY_TYPES = ["RSA", "EC"] as const;
+const PDF_SIGNING_KEY_TYPES = ["RSA", "EC"] as const;
 
 export type PdfSigningKeyType = (typeof PDF_SIGNING_KEY_TYPES)[number];
 
@@ -74,7 +71,7 @@ const PDF_SIGNING_SESSION_CLOSE_REASON_SQL_VALUES = sqlValues(
 const PDF_SIGNING_KEY_TYPE_SQL_VALUES = sqlValues(PDF_SIGNING_KEY_TYPES);
 
 /** Base64 DER of each intermediate the desktop keychain resolved. */
-export type PdfSigningCertificateChain = string[];
+type PdfSigningCertificateChain = string[];
 
 export type PdfSigningStampRotation = 0 | 90 | 180 | 270;
 

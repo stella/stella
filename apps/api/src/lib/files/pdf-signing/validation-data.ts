@@ -19,7 +19,7 @@ import type { PdfRevisionAppendError } from "@/api/lib/files/pdf-signatures";
 import { parseCertificate } from "@/api/lib/files/pdf-signing/certificate-chain";
 import type { TrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 
-export type ValidationMaterial = {
+type ValidationMaterial = {
   certificates: Uint8Array[];
   crls: Uint8Array[];
   ocspResponses: Uint8Array[];
@@ -83,7 +83,7 @@ export const findRevokedCertificates = async ({
   };
 };
 
-export type GatheredValidationData = {
+type GatheredValidationData = {
   material: ValidationMaterial;
   /** Certificates of either chain with no revocation data behind them. */
   uncovered: Uint8Array[];

@@ -16,7 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export type PreparedStateValues = {
+type PreparedStateValues = {
   digestHex: string;
   keyType: PdfSigningKeyType;
   placeholderSize: number;
@@ -26,7 +26,7 @@ export type PreparedStateValues = {
   signingTime: Date;
 };
 
-export type StoredPreparedState =
+type StoredPreparedState =
   | { status: "stored" }
   /** Another preparation won; it is for this same certificate. */
   | { status: "already-prepared"; digestHex: string }

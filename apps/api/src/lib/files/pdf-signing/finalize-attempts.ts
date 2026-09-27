@@ -25,7 +25,7 @@ export const MAX_FINALIZE_ATTEMPTS = 3;
  */
 const FINALIZE_LEASE_MS = 120_000;
 
-export type StoredSignature =
+type StoredSignature =
   | { status: "stored" }
   | { status: "conflict" }
   | { status: "closed" };
@@ -84,7 +84,7 @@ export const storeDesktopSignature = async ({
     : { status: "conflict" };
 };
 
-export type FinalizeClaim =
+type FinalizeClaim =
   | { status: "claimed"; attempt: number }
   | { status: "in-progress" }
   | { status: "exhausted" }

@@ -32,7 +32,7 @@ export const ENGLISH_STAMP_LABELS: PdfSigningStamp["labels"] = {
   signedBy: "Digitally signed by",
 };
 
-export type StampTextCheck = {
+type StampTextCheck = {
   /** Whether `text` can be drawn glyph by glyph, left to right. */
   canDraw: (text: string) => boolean;
 };

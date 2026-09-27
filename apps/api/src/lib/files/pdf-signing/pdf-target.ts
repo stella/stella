@@ -35,7 +35,7 @@ const PDF_SIGNING_TARGET_REJECTIONS = [
 export type PdfSigningTargetRejection =
   (typeof PDF_SIGNING_TARGET_REJECTIONS)[number];
 
-export type PdfSigningTarget =
+type PdfSigningTarget =
   | { status: "rejected"; reason: PdfSigningTargetRejection }
   | { status: "signable"; fileContent: PdfFieldContent };
 

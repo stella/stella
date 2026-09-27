@@ -71,7 +71,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * claims its own time (B-B); with a timestamp it is B-T; with validation data
  * for its whole chain as well, B-LT.
  */
-export type PdfSigningLevel = "B-B" | "B-T" | "B-LT";
+type PdfSigningLevel = "B-B" | "B-T" | "B-LT";
 
 const DIGEST_ALGORITHM = "SHA-256" as const satisfies DigestAlgorithm;
 
@@ -288,14 +288,14 @@ const buildSignOptions = (
     ...(location !== null && { location }),
   }) as const;
 
-export type CapturedSigningDigest = {
+type CapturedSigningDigest = {
   /** SHA-256 of `signedAttributes`: what the desktop's keychain signs. */
   digestHex: string;
   /** The DER-encoded CMS signed attributes the signature covers. */
   signedAttributes: Uint8Array;
 };
 
-export type CaptureSigningDigestError =
+type CaptureSigningDigestError =
   | PdfSigningCertifiedDocumentError
   | PdfSigningError
   | PdfSigningPlaceholderTooSmallError
@@ -441,7 +441,7 @@ export type AppliedSignature = {
   warnings: PdfSigningWarning[];
 };
 
-export type PdfSigningWarning = { code: string; message: string };
+type PdfSigningWarning = { code: string; message: string };
 
 const WARNING_LIMIT = 20;
 const WARNING_MESSAGE_MAX_LENGTH = 500;
@@ -492,7 +492,7 @@ const isTimestampFailure = (error: unknown) =>
   PdfSigningTimestampUnavailableError.is(error) ||
   error instanceof PlaceholderError;
 
-export type ApplySignatureError =
+type ApplySignatureError =
   | PdfSigningCertificateRevokedError
   | PdfSigningDigestMismatchError
   | PdfSigningError

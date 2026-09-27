@@ -47,7 +47,7 @@ export type PreparedSigningState = {
   signingTime: Date;
 };
 
-export type FinalizeFailure =
+type FinalizeFailure =
   | { kind: "retryable"; error: HandlerError }
   | {
       kind: "terminal";
@@ -63,7 +63,7 @@ export const certificateRevokedError = () =>
       "The signing certificate, or one that issued it, has been revoked.",
   });
 
-export type FinalizedSignature = {
+type FinalizedSignature = {
   versionId: SafeId<"entityVersion">;
   versionNumber: number;
 };

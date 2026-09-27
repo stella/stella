@@ -22,7 +22,7 @@ import {
 
 const PKI_FETCH_TIMEOUT_MS = 5000;
 
-export type PkiFetchRequest = {
+type PkiFetchRequest = {
   body?: Uint8Array;
   contentType?: string;
   maxBytes: number;

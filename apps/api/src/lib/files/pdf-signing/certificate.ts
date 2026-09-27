@@ -41,7 +41,7 @@ type SigningCertificateRejection =
   | "expired"
   | "key_usage_forbids_signing";
 
-export type SigningCertificateInspection =
+type SigningCertificateInspection =
   | { status: "rejected"; reason: SigningCertificateRejection }
   | {
       status: "accepted";

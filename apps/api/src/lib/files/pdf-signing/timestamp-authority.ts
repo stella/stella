@@ -46,12 +46,12 @@ export class PdfSigningTimestampUnavailableError extends TaggedError(
   "PdfSigningTimestampUnavailableError",
 )<{ message: string; failures: { url: string; message: string }[] }> {}
 
-export type UsedTimestamp = ValidatedTimestamp & {
+type UsedTimestamp = ValidatedTimestamp & {
   token: Uint8Array;
   url: string;
 };
 
-export type FallbackTimestampAuthority = TimestampAuthority & {
+type FallbackTimestampAuthority = TimestampAuthority & {
   /** The token that was used and what it carried, once one was valid. */
   used: () => UsedTimestamp | null;
   /** The token that was used, once an authority has answered. */

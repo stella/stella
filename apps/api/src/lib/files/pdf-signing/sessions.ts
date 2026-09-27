@@ -76,7 +76,7 @@ const isPdfSigningTokenShape = isOpaqueTokenShape;
  * integration test can drive the real statements against a test database.
  */
 
-export type OpenedPdfSigningSession =
+type OpenedPdfSigningSession =
   | { status: "created" }
   | { status: "in-progress" }
   | { status: "version-changed" };
@@ -154,7 +154,7 @@ export const openPdfSigningSession = async ({
   return inserted.at(0) ? { status: "created" } : { status: "in-progress" };
 };
 
-export type RedeemedPdfSigningSession = {
+type RedeemedPdfSigningSession = {
   documentName: string;
   /** 1-based page of the visible stamp, `null` for an invisible signature. */
   stampPageNumber: number | null;

@@ -27,7 +27,7 @@ import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 /** RFC 5280 id-pe-authorityInfoAccess. */
 const AUTHORITY_INFO_ACCESS_OID = "1.3.6.1.5.5.7.1.1";
 /** RFC 5280 id-ad-caIssuers. */
-export const CA_ISSUERS_ACCESS_METHOD = "1.3.6.1.5.5.7.48.2";
+const CA_ISSUERS_ACCESS_METHOD = "1.3.6.1.5.5.7.48.2";
 /** RFC 5280 id-ad-ocsp. */
 export const OCSP_ACCESS_METHOD = "1.3.6.1.5.5.7.48.1";
 /** RFC 5280 id-ce-basicConstraints and id-ce-keyUsage. */
@@ -303,7 +303,7 @@ const fetchIssuer = async (subject: pkijs.Certificate, fetcher: PkiFetcher) => {
   return null;
 };
 
-export type CompletedCertificateChain = {
+type CompletedCertificateChain = {
   /** Issuers above the leaf, innermost first. */
   chain: Uint8Array[];
   /** Whether the chain reaches a self-signed root. */

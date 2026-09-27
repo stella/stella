@@ -176,7 +176,7 @@ const displayedPage = (pdf: PDF, page: PdfDict) => {
  * 1.6; 1 when absent or unusable). Size limits and font sizes are physical,
  * so they are divided by it before comparing with user-space lengths.
  */
-export const pageUserUnit = (page: PdfDict): number => {
+const pageUserUnit = (page: PdfDict): number => {
   const value = page.get("UserUnit");
   return value instanceof PdfNumber &&
     Number.isFinite(value.value) &&
@@ -428,7 +428,7 @@ const wrapLine = (
  * inside the box, or `null` when they do not fit even at 6 pt. Sizes are
  * physical points; `unit` converts them to the page's user space.
  */
-export const layoutStampText = ({
+const layoutStampText = ({
   height,
   lines,
   unit,

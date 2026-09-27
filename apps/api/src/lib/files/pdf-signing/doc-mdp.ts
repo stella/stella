@@ -14,7 +14,7 @@ import { Result } from "better-result";
 
 import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 
-export type DocMdpPermission = 1 | 2 | 3;
+type DocMdpPermission = 1 | 2 | 3;
 
 /** ISO 32000-1 Table 254: an absent `P` means 2. */
 const DEFAULT_DOC_MDP_PERMISSION = 2;
