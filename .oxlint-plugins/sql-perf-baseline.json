@@ -1,0 +1,16 @@
+{
+  "apps/api/src/handlers/case-law/citation-authority.ts": 1,
+  "apps/api/src/handlers/case-law/citation-resolution.ts": 2,
+  "apps/api/src/handlers/case-law/decisions/sitemap.ts": 5,
+  "apps/api/src/handlers/chat/threads/list.ts": 2,
+  "apps/api/src/handlers/clauses/read.ts": 1,
+  "apps/api/src/handlers/contacts/list-query.ts": 1,
+  "apps/api/src/handlers/contacts/search.ts": 4,
+  "apps/api/src/handlers/legislation/list.ts": 3,
+  "apps/api/src/handlers/workspaces/read-overview-activity-actors.query.ts": 2,
+  "apps/api/src/lib/entities/query-entities.ts": 2,
+  "apps/api/src/lib/entity-filters.ts": 4,
+  "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts": 1,
+  "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts": 1,
+  "apps/api/src/lib/search/index-global.ts": 1
+}
