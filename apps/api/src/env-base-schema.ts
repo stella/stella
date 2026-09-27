@@ -165,6 +165,12 @@ export const envBaseServerSchema = {
   CASE_LAW_DATABASE_POOL_MAX: v.optional(databasePoolMaxValueSchema),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
+  // Session statement_timeout for the root and RLS pools, sent when each
+  // connection opens. 0 leaves the server's default in place.
+  DATABASE_STATEMENT_TIMEOUT_MS: v.optional(
+    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer()),
+    "0",
+  ),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
   S3_ENDPOINT: v.pipe(v.string(), v.url()),
   S3_BUCKET: v.string(),

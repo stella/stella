@@ -28211,8 +28211,8 @@ export type WebRoutes = {
               file: File;
               threadId: T780bacb7ad;
               messageId: T7d9d93bde2;
-              contentSha256Hex: string;
               toolCallId: string;
+              contentSha256Hex: string;
             };
             params: {
               workspaceId: string;
@@ -31710,21 +31710,36 @@ type T0122da017b = {
     }))>;
   };
   refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | {
+  refContext?: undefined | (T4d0fc76558 & {
     version: 1;
-    entities: Array<{
-      entity: Tfa4d090dd5;
-      toolCallId: string;
-      workspace: T9d6eb42931;
-    }>;
-    unresolvedInputs: Array<{
-      kind: ("contact" | "entity" | "matter" | "property");
-      param: string;
+  }) | (T4d0fc76558 & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
       ref: string;
-      toolCallId: string;
+      contact: T98812161df;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: Tfa4d090dd5;
+      workspace: T9d6eb42931;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T9d6eb42931;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
     }>;
-    workspaceScope: Array<T9d6eb42931>;
-  };
+  });
   serverProvenance?: undefined | {
     type: "search-summary";
     version: 1;
@@ -33441,6 +33456,21 @@ type T4d0c38f22c = {
   perspective?: "neutral" | "buyer" | "seller";
   documentTypeKey?: string;
   trigger?: "manual" | "onClassified";
+};
+
+type T4d0fc76558 = {
+  entities: Array<{
+    entity: Tfa4d090dd5;
+    toolCallId: string;
+    workspace: T9d6eb42931;
+  }>;
+  unresolvedInputs: Array<{
+    kind: ("contact" | "entity" | "matter" | "property");
+    param: string;
+    ref: string;
+    toolCallId: string;
+  }>;
+  workspaceScope: Array<T9d6eb42931>;
 };
 
 type T4d6a470586 = {
@@ -35476,6 +35506,11 @@ type T9871c1e63a = {
   viewId: Tf962ada343;
 };
 
+type T98812161df = {
+  readonly type: "contact";
+  readonly id: stll_api_contract_SafeId<"contact">;
+};
+
 type T988e7b2faa = null | T9ccef839a9;
 
 type T98953a0f12 = {
@@ -36539,10 +36574,7 @@ type Tafda8a9ee4 = (T27402211cc & {
   color: T432e07d100;
 }) | (T27402211cc & {
   type: "contact";
-  resource: {
-    readonly type: "contact";
-    readonly id: stll_api_contract_SafeId<"contact">;
-  };
+  resource: T98812161df;
   contactId: string;
   contactType: Te287bedd42;
 }) | (T27402211cc & {

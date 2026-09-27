@@ -4,6 +4,7 @@
   "scenario": "strict-null",
   "source": "recorded",
   "recordedAt": "2026-09-27T14:32:00.608Z",
+  "prompt": "Call the mcp__external__delete tool once with name \"draft\" and note set to JSON null. Do not write any text.",
   "model": "gpt-6-luna",
   "exchanges": [
     {

@@ -45,6 +45,7 @@ import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -102,6 +103,10 @@ const unwrap = <T>(result: Result<T, unknown>): T =>
     : result.value;
 
 const USER_STOP = { reason: "user-stop", type: "cancelled" } as const;
+const NO_THREAD_NAMES = {
+  added: { refBindings: [], toolCallIds: [] },
+  read: EMPTY_CHAT_THREAD_NAMES_READ,
+};
 
 const seedAcceptedTurn = async () => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
@@ -429,6 +434,7 @@ describe("stopping a chat turn", () => {
     unwrap(
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set(),
         execution,
         outcome: { type: "completed" },
@@ -541,6 +547,7 @@ const finalizeAs =
   async ({ execution, threadId }) =>
     await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadNames: NO_THREAD_NAMES,
       existingIds: new Set(),
       execution,
       outcome,
@@ -664,6 +671,7 @@ describe("a running turn's owner, once the user asked to stop", () => {
     const finish = async () =>
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set(),
         execution,
         outcome: { type: "completed" },
