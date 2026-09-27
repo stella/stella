@@ -209,6 +209,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
       <div className="overflow-hidden rounded-lg border">
         {items.map((item) => (
           <Link
+            from={Route.fullPath}
             className="hover:bg-muted/40 flex min-h-16 items-center gap-4 border-b px-4 py-3 last:border-0"
             key={item.id}
             params={{ workspaceId, correspondenceId: item.id }}

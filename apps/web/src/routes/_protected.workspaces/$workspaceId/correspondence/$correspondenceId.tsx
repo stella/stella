@@ -65,6 +65,7 @@ function CorrespondenceDetailPage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Link
+          from={Route.fullPath}
           params={{ workspaceId }}
           to="/workspaces/$workspaceId/correspondence"
         >

@@ -162,7 +162,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({

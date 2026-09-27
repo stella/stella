@@ -1361,7 +1361,7 @@ const ActivityDetailsSheet = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations();
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   if (!group) {
     return null;
   }

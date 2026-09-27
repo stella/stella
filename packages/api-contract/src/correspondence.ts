@@ -1,3 +1,5 @@
+import type { SafeId } from "./safe-id";
+
 export const CORRESPONDENCE_CHANNELS = ["email"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
 
@@ -130,4 +132,49 @@ export type ParsedCorrespondence = CorrespondenceProvenance & {
   references: string[];
   bodyText: string;
   bodyHtml: string | null;
+};
+
+type CorrespondenceListRecord = CorrespondenceProvenance & {
+  id: SafeId<"correspondence">;
+  subject: string;
+  from: CorrespondenceAddress;
+  to: CorrespondenceAddress[];
+  cc: CorrespondenceAddress[];
+  receivedAt: string;
+  sentAt: string | null;
+  handlingState: CorrespondenceHandlingState;
+  assigneeId: string | null;
+};
+
+export type CorrespondenceListResponse = {
+  items: CorrespondenceListRecord[];
+  nextCursor: string | null;
+  limit: number;
+};
+
+export type CorrespondenceDetailResponse = {
+  record: CorrespondenceListRecord & {
+    direction: CorrespondenceDirection;
+    channel: CorrespondenceChannel;
+    messageId: string | null;
+    inReplyTo: string | null;
+    references: string[];
+    bodyText: string;
+    bodyHtml: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  filers: CorrespondenceFiler[];
+  attachments: {
+    entityId: SafeId<"entity">;
+    filename: string;
+    mediaType: string;
+    byteSize: number;
+    scanVerdict: CorrespondenceScanVerdict;
+  }[];
+};
+
+export type CorrespondenceAddressResponse = {
+  address: string | null;
+  setupHint: string | null;
 };

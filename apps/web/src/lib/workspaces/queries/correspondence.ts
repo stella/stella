@@ -2,8 +2,11 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type {
   CorrespondenceAddress,
+  CorrespondenceAddressResponse,
   CorrespondenceAuthResult,
+  CorrespondenceDetailResponse,
   CorrespondenceHandlingState,
+  CorrespondenceListResponse,
 } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -56,7 +59,10 @@ export const correspondenceInfiniteOptions = (
 ) =>
   infiniteQueryOptions({
     queryKey: correspondenceKeys.infinite(workspaceId, limit),
-    queryFn: async ({ pageParam, signal }) => {
+    queryFn: async ({
+      pageParam,
+      signal,
+    }): Promise<CorrespondenceListResponse> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence.get({
@@ -79,7 +85,7 @@ export const correspondenceByIdOptions = (
   queryOptions({
     queryKey: correspondenceKeys.byId(workspaceId, correspondenceId),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }): Promise<CorrespondenceDetailResponse> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId })
@@ -87,14 +93,6 @@ export const correspondenceByIdOptions = (
       return unwrapEden(response);
     },
   });
-
-type CorrespondenceAddressResponse = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof api.workspaces>["correspondence"]["address"]["get"]
-    >
-  >["data"]
->;
 
 export const correspondenceAddressState = (
   data: CorrespondenceAddressResponse,
@@ -109,7 +107,7 @@ export const correspondenceAddressOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: correspondenceKeys.address(workspaceId),
     select: correspondenceAddressState,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }): Promise<CorrespondenceAddressResponse> => {
       const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.get({ fetch: { signal } });
