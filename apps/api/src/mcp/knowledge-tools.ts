@@ -1486,7 +1486,11 @@ const savePlaybookArgsSchema = nullAsAbsent(
             perspective: v.optional(
               v.pipe(
                 v.picklist(PLAYBOOK_PERSPECTIVES),
-                v.description("Side the review takes"),
+                v.description(
+                  "Side the review takes. Set only for a buyer, seller, or " +
+                    "neutral side; a recipient, controller, or customer has " +
+                    "none, so omit it",
+                ),
               ),
             ),
           }),

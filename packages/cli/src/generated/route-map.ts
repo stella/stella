@@ -5725,7 +5725,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["buyer", "seller", "neutral"],
                 repeatable: false,
                 description:
-                  "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "Side the review takes. Set only for a buyer, seller, or neutral side; a recipient, controller, or customer has none, so omit it. Use an advertised value; case and surrounding whitespace are normalized.",
                 required: false,
               },
               {
@@ -5783,7 +5783,7 @@ export const generatedRouteMap: RouteNode = {
                       enum: ["buyer", "seller", "neutral"],
                       type: "string",
                       description:
-                        "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                        "Side the review takes. Set only for a buyer, seller, or neutral side; a recipient, controller, or customer has none, so omit it. Use an advertised value; case and surrounding whitespace are normalized.",
                       "x-stella-agent-input": {
                         kind: "enum",
                       },
