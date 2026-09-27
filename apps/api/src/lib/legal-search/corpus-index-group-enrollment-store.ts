@@ -234,6 +234,34 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
 };
 
 /**
+ * Withdraw a group's attestation: an attested row returns to `pending`, so
+ * the group is unready again until it is attested anew. The binding is left
+ * as it is. Returns whether this call changed the row; an unbound or pending
+ * group is not changed.
+ */
+export const withdrawCorpusIndexGroupEnrollmentTx = async (
+  tx: Transaction,
+  target: CorpusIndexGroupTarget,
+): Promise<boolean> => {
+  const group = requireRegisteredGroup(target);
+  const withdrawn = await tx
+    .update(corpusIndexGroupEnrollments)
+    .set({
+      provisioningStatus: "pending",
+      attestedAt: null,
+      updatedAt: sql`clock_timestamp()`,
+    })
+    .where(
+      and(
+        enrollmentKey(group),
+        eq(corpusIndexGroupEnrollments.provisioningStatus, "attested"),
+      ),
+    )
+    .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
+  return withdrawn.length === 1;
+};
+
+/**
  * Whether a group under a contract of its own may be read and written; a
  * group under its manifest's contract always may. Only the columns the public
  * reader may see are read, so request code and workers ask the same question.

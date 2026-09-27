@@ -22,6 +22,7 @@ import {
   readCorpusIndexGroupReadinessTx,
   readServingCorpusIndexTargetTx,
   unattestedCorpusIndexIdsTx,
+  withdrawCorpusIndexGroupEnrollmentTx,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -484,6 +485,78 @@ test("no append reaches a group before its attestation, and its work waits rathe
       .from(corpusIndexProjectionIntents)
       .where(eq(corpusIndexProjectionIntents.entityId, USA_DECISION_ID)),
   ).toEqual([{ indexId: "case_law_v7_usa" }]);
+});
+
+test("a withdrawn attestation makes the group unready until attested again", async () => {
+  const hun = { manifest: MANIFEST, indexGroup: "hun" } as const;
+  const withdraw = async (target: {
+    manifest: typeof MANIFEST;
+    indexGroup: string;
+  }) =>
+    await inTx(
+      async (tx) => await withdrawCorpusIndexGroupEnrollmentTx(tx, target),
+    );
+  const globalIndexes = async () =>
+    (
+      await inTx(
+        async (tx) =>
+          await readServingCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            jurisdiction: undefined,
+          }),
+      )
+    ).route.indexId;
+
+  // Nothing to withdraw before a binding or an attestation.
+  expect(await withdraw(USA)).toBe(false);
+  await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
+  expect(await withdraw(USA)).toBe(false);
+  expect(await readiness()).toEqual({ type: "unready", reason: "pending" });
+
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  expect(await readiness()).toEqual({ type: "attested" });
+  expect(await withdraw(USA)).toBe(true);
+  expect(await readiness()).toEqual({ type: "unready", reason: "pending" });
+  expect(
+    await inTx(async (tx) => await unattestedCorpusIndexIdsTx(tx, MANIFEST)),
+  ).toEqual(["case_law_v7_usa"]);
+  const [row] = await db
+    .select()
+    .from(corpusIndexGroupEnrollments)
+    .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
+  expect(row).toMatchObject({
+    effectiveDigest: USA_DIGEST,
+    provisioningStatus: "pending",
+    attestedAt: null,
+  });
+  expect(await withdraw(USA)).toBe(false);
+
+  // The binding survives, so attesting the same contract again converges.
+  await inTx(
+    async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
+  );
+  expect(await readiness()).toEqual({ type: "attested" });
+
+  // A later-declared base group drops out of generation-wide reads while
+  // withdrawn; it is not bridged again, because it stays enrolled.
+  await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
+  await inTx(
+    async (tx) =>
+      await attestCorpusIndexGroupEnrollmentTx(tx, {
+        ...hun,
+        effectiveDigest: corpusIndexManifestDigest(MANIFEST),
+      }),
+  );
+  expect(await globalIndexes()).toContain("case_law_v7_hun");
+  expect(await withdraw(hun)).toBe(true);
+  expect(await globalIndexes()).not.toContain("case_law_v7_hun");
+
+  const cze = { manifest: MANIFEST, indexGroup: "cs_sk" } as const;
+  expect(await rejectionOf(withdraw(cze))).toMatchObject({
+    message: expect.stringContaining("not one the registry records"),
+  });
 });
 
 test("a generation's enrollments leave with its registration", async () => {
