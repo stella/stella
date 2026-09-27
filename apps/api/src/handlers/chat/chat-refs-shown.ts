@@ -16,6 +16,8 @@ const PART_REFS = {
   document: "none",
   image: "none",
   "structured-output": "whole",
+  // Stella drops TanStack subagent parts at the persistence boundary.
+  subagent: "none",
   text: "whole",
   thinking: "whole",
   "tool-call": "tool-call",
