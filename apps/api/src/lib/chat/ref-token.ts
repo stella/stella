@@ -132,6 +132,71 @@ const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
   }
 };
 
+/**
+ * Every ref a thread's stored messages showed the model, kept on the thread
+ * so each request restores them with one row read. It only grows: a ref
+ * keeps its spelling for the thread's life, even once the message that
+ * showed it is deleted, so no later mint can reuse the spelling.
+ */
+export type ChatThreadRefState = {
+  bindings: ChatRefBinding[];
+  version: 1;
+};
+
+export const EMPTY_CHAT_THREAD_REF_STATE: ChatThreadRefState = {
+  bindings: [],
+  version: 1,
+};
+
+export const isChatThreadRefState = (
+  value: unknown,
+): value is ChatThreadRefState =>
+  isRecord(value) &&
+  value["version"] === 1 &&
+  Array.isArray(value["bindings"]) &&
+  value["bindings"].every(isChatRefBinding);
+
+/** One binding's identity: its spelling and its target, in a fixed order
+ *  (stored JSON keeps no key order). */
+const chatRefBindingKey = (binding: ChatRefBinding): string => {
+  switch (binding.kind) {
+    case "contact":
+      return JSON.stringify([binding.ref, binding.contact.id]);
+    case "entity":
+      return JSON.stringify([
+        binding.ref,
+        binding.workspace.id,
+        binding.entity.id,
+      ]);
+    case "matter":
+      return JSON.stringify([binding.ref, binding.workspace.id]);
+    case "property":
+      return JSON.stringify([binding.ref, binding.property.id]);
+    case "source":
+      return JSON.stringify([binding.ref, binding.href]);
+    default:
+      binding satisfies never;
+      return panic("Unhandled chat ref binding");
+  }
+};
+
+/** `state` with `bindings` it does not hold yet. */
+export const addChatThreadRefBindings = (
+  state: ChatThreadRefState,
+  bindings: readonly ChatRefBinding[],
+): ChatThreadRefState => {
+  const held = new Set(state.bindings.map(chatRefBindingKey));
+  const added: ChatRefBinding[] = [];
+  for (const binding of bindings) {
+    const key = chatRefBindingKey(binding);
+    if (!held.has(key)) {
+      held.add(key);
+      added.push(binding);
+    }
+  }
+  return { bindings: [...state.bindings, ...added], version: state.version };
+};
+
 /** Bindings a stored context carries; version 1 predates them. */
 export const getChatRefBindings = (
   context: ChatRefContext,

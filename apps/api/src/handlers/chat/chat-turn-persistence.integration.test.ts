@@ -29,6 +29,7 @@ import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CHAT_THREAD_REF_STATE } from "@/api/lib/chat/ref-token";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -347,6 +348,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadRefState: EMPTY_CHAT_THREAD_REF_STATE,
         existingIds: new Set([userMessageId, assistantMessageId]),
         execution,
         outcome: { error: "unknown", type: "failed" },
@@ -449,6 +451,7 @@ describe("durable chat turn persistence", () => {
 
     const result = await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadRefState: EMPTY_CHAT_THREAD_REF_STATE,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,
@@ -536,6 +539,7 @@ describe("durable chat turn persistence", () => {
 
     const result = await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadRefState: EMPTY_CHAT_THREAD_REF_STATE,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
       existingIds: new Set([userMessageId]),
       execution,
@@ -1913,6 +1917,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     try {
       const result = await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadRefState: EMPTY_CHAT_THREAD_REF_STATE,
         existingIds: new Set([userMessageId, assistantMessageId]),
         execution,
         outcome: { type: "completed" },

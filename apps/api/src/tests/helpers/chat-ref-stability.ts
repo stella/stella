@@ -138,34 +138,44 @@ export const createRefStabilityLedger = () => {
      * must name its first target in each registry built since the last
      * check, and refs first stored now are learned from the newest one. A
      * token that registry does not resolve (text a user typed) is not a
-     * minted ref and is not tracked. Returns the new violations.
+     * minted ref and is not tracked. Every tracked ref must also be in the
+     * thread's stored ref state (`threadRefs`), which later requests restore.
+     * Returns the new violations.
      */
-    check: (
-      threadId: string,
-      stored: readonly StoredMessage[],
-    ): OracleViolation[] => {
+    check: ({
+      stored,
+      threadId,
+      threadRefs,
+    }: {
+      stored: readonly StoredMessage[];
+      threadId: string;
+      threadRefs: ReadonlySet<string>;
+    }): OracleViolation[] => {
       const ledger = ledgerOf(threadId);
       const registries = ledger.pending.splice(0);
-      const findings = violationsOf(
-        CHAT_ORACLE.persistedRefsStable,
-        registries.flatMap((registry) =>
-          [...ledger.shown].flatMap(([ref, shown]) => {
-            const later = targetOf(registry, ref);
-            return later === shown ? [] : [{ later, ref, shown }];
-          }),
-        ),
+      const moved = registries.flatMap((registry) =>
+        [...ledger.shown].flatMap(([ref, shown]) => {
+          const later = targetOf(registry, ref);
+          return later === shown ? [] : [{ later, ref, shown }];
+        }),
       );
-      ledger.findings.push(...findings);
       const newest = registries.at(-1);
-      if (newest === undefined) {
-        return findings;
-      }
-      for (const ref of storedRefTokens(stored)) {
-        const target = ledger.shown.has(ref) ? null : targetOf(newest, ref);
+      for (const ref of newest === undefined ? [] : storedRefTokens(stored)) {
+        const target =
+          newest === undefined || ledger.shown.has(ref)
+            ? null
+            : targetOf(newest, ref);
         if (target !== null) {
           ledger.shown.set(ref, target);
         }
       }
+      const findings = violationsOf(CHAT_ORACLE.persistedRefsStable, [
+        ...moved,
+        ...[...ledger.shown.keys()]
+          .filter((ref) => !threadRefs.has(ref))
+          .map((ref) => ({ missingFromThreadState: ref })),
+      ]);
+      ledger.findings.push(...findings);
       return findings;
     },
     /** Every violation found on `threadId` so far. */

@@ -203,6 +203,8 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
   type ChatEntityRefContext,
+  addChatThreadRefBindings,
+  type ChatRefBinding,
   type ChatRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
@@ -1697,7 +1699,7 @@ export const createSendMessage = (
       // answer is a new request, and every ref its history shows the model
       // must keep its target.
       const refRegistry = dependencies.createRefRegistry(
-        validationThreadState.refBindings,
+        validationThreadState.refState.bindings,
       );
       const activeDraftContext = yield* Result.await(
         validateActiveDraftContext({
@@ -2265,6 +2267,10 @@ export const createSendMessage = (
                     //
                     const persistResult = await finalizeAssistantTurn({
                       acceptedSendMode: body.sendMode,
+                      threadRefState: addChatThreadRefBindings(
+                        validationThreadState.refState,
+                        resolved.refBindings,
+                      ),
                       dataScopeExpansion: {
                         newWorkspaceIds: resolved.workspaceIds,
                       },
@@ -2953,6 +2959,8 @@ type ResolveAssistantMessageRefsProps = {
 
 type ResolveAssistantMessageRefsResult = {
   messages: PersistableChatMessage[];
+  /** The refs the messages showed the model. */
+  refBindings: ChatRefBinding[];
   workspaceIds: SafeId<"workspace">[];
 };
 
@@ -3071,6 +3079,7 @@ const resolveAssistantMessageRefs = ({
 
   const observedWorkspaceIdsAfterStream = refRegistry.getObservedWorkspaceIds();
   const turnWorkspaceIds = new Set<SafeId<"workspace">>();
+  const refBindings: ChatRefBinding[] = [];
 
   const resolvedMessages = messages.map((message) => {
     if (message.role !== "assistant") {
@@ -3092,11 +3101,13 @@ const resolveAssistantMessageRefs = ({
     for (const id of messageWorkspaceIds) {
       turnWorkspaceIds.add(id);
     }
+    const shownRefBindings = refRegistry.collectRefBindings(
+      chatRefsShownIn({ isServerTool, parts: message.parts }),
+    );
+    refBindings.push(...shownRefBindings);
     const refContext = {
       version: 2,
-      refs: refRegistry.collectRefBindings(
-        chatRefsShownIn({ isServerTool, parts: message.parts }),
-      ),
+      refs: shownRefBindings,
       entities: entityContexts,
       unresolvedInputs: unresolvedInputRefs,
       workspaceScope: messageWorkspaceIds.map((id) =>
@@ -3114,7 +3125,11 @@ const resolveAssistantMessageRefs = ({
     };
   });
 
-  return { messages: resolvedMessages, workspaceIds: [...turnWorkspaceIds] };
+  return {
+    messages: resolvedMessages,
+    refBindings,
+    workspaceIds: [...turnWorkspaceIds],
+  };
 };
 
 type HydrateAssistantMessageRefsProps = {

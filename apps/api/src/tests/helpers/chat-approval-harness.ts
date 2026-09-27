@@ -7,7 +7,7 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatTurns } from "@/api/db/schema";
+import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
@@ -26,6 +26,7 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { isChatThreadRefState } from "@/api/lib/chat/ref-token";
 import {
   findLiveViewViolations,
   findUnstoredWireResults,
@@ -377,8 +378,22 @@ export const createApprovalHarness = ({
   /** Refs whose target moved, checked once a request of `threadId` settled. */
   const findUnstableRefs = async (
     threadId: SafeId<"chatThread">,
-  ): Promise<OracleViolation[]> =>
-    refLedger.check(threadId, await readThreadMessages(threadId));
+  ): Promise<OracleViolation[]> => {
+    const [thread] = await testDb
+      .select({ refState: chatThreads.refState })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId));
+    const refState = thread?.refState ?? null;
+    return refLedger.check({
+      stored: await readThreadMessages(threadId),
+      threadId,
+      threadRefs: new Set(
+        isChatThreadRefState(refState)
+          ? refState.bindings.map(({ ref }) => ref)
+          : [],
+      ),
+    });
+  };
 
   /**
    * Sends `ctx` and reads the response to its end, so its terminal

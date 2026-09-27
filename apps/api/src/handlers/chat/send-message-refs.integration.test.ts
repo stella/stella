@@ -33,7 +33,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
+  type ChatRefBinding,
   type ChatRefContext,
+  type ChatThreadRefState,
 } from "@/api/lib/chat/ref-token";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -145,21 +147,44 @@ const listedPart = {
   type: "text",
 } satisfies ChatPart;
 
+/** Where a seeded thread records that `ent_1` is entity A. */
+const BINDING_STORE = {
+  /** On the thread, beside a message that carries no binding. */
+  thread: "thread",
+  /** Only on the message, as a thread whose state is not stored yet. */
+  message: "message",
+} as const;
+
+type BindingStore = (typeof BINDING_STORE)[keyof typeof BINDING_STORE];
+
 /**
  * A turn that showed the model `ent_1` for entity A and now awaits an
  * `ask-user` answer. The user message before it mentions entity B.
  */
-const seedAwaitingTurn = async () => {
+const seedAwaitingTurn = async (bindingStore: BindingStore) => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
   const assistantMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
+  const binding = {
+    kind: "entity",
+    ref: "ent_1",
+    entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ids.entityA1 }),
+    workspace: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: ids.wsA1 }),
+  } satisfies ChatRefBinding;
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId: ids.orgA,
     title: "Ref continuation test",
     userId: ids.userA1,
     workspaceId: null,
+    refState:
+      bindingStore === BINDING_STORE.thread
+        ? ({
+            bindings: [binding],
+            version: 1,
+          } satisfies ChatThreadRefState)
+        : null,
   });
 
   const mentionHref = toChatResourceHref({
@@ -172,14 +197,7 @@ const seedAwaitingTurn = async () => {
   });
   const refContext = {
     version: 2,
-    refs: [
-      {
-        kind: "entity",
-        ref: "ent_1",
-        entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ids.entityA1 }),
-        workspace: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: ids.wsA1 }),
-      },
-    ],
+    refs: bindingStore === BINDING_STORE.message ? [binding] : [],
     entities: [],
     unresolvedInputs: [],
     workspaceScope: [
@@ -317,41 +335,45 @@ const messageText = (message: ChatMessage | undefined) =>
     .join("\n");
 
 describe("chat refs across an interactive answer", () => {
-  test("a new request keeps a stored ref's target and mints past it", async () => {
-    const { assistantMessageId, threadId } = await seedAwaitingTurn();
-    streamChatMock.mockClear();
+  test.each(Object.values(BINDING_STORE))(
+    "a new request keeps a stored ref's target and mints past it (binding on the %s)",
+    async (bindingStore) => {
+      const { assistantMessageId, threadId } =
+        await seedAwaitingTurn(bindingStore);
+      streamChatMock.mockClear();
 
-    const result = await sendMessage.handler(
-      createContext({
-        message: {
-          id: assistantMessageId,
-          parts: [
-            listedPart,
-            {
-              ...pendingAskUserCall,
-              output: {
-                answers: [{ answer: "CloudStore", question: "Which DPA?" }],
+      const result = await sendMessage.handler(
+        createContext({
+          message: {
+            id: assistantMessageId,
+            parts: [
+              listedPart,
+              {
+                ...pendingAskUserCall,
+                output: {
+                  answers: [{ answer: "CloudStore", question: "Which DPA?" }],
+                },
+                state: "complete",
               },
-              state: "complete",
-            },
-          ],
-          role: "assistant",
-        },
-        threadId,
-      }),
-    );
+            ],
+            role: "assistant",
+          },
+          threadId,
+        }),
+      );
 
-    expect(result).toBeInstanceOf(Response);
-    const messages = streamChatMock.mock.calls.at(0)?.[0].messages;
-    // Entity B is re-minted from its stored id. It must not take `ent_1`,
-    // which the model already holds for entity A.
-    const userText = messageText(
-      messages?.find((message) => message.role === "user"),
-    );
-    expect(userText).toContain("#stella-entity-ref=ent_2");
-    expect(userText).not.toContain("#stella-entity-ref=ent_1");
-    expect(
-      messageText(messages?.find((message) => message.role === "assistant")),
-    ).toContain("ent_1");
-  });
+      expect(result).toBeInstanceOf(Response);
+      const messages = streamChatMock.mock.calls.at(0)?.[0].messages;
+      // Entity B is re-minted from its stored id. It must not take `ent_1`,
+      // which the model already holds for entity A.
+      const userText = messageText(
+        messages?.find((message) => message.role === "user"),
+      );
+      expect(userText).toContain("#stella-entity-ref=ent_2");
+      expect(userText).not.toContain("#stella-entity-ref=ent_1");
+      expect(
+        messageText(messages?.find((message) => message.role === "assistant")),
+      ).toContain("ent_1");
+    },
+  );
 });

@@ -55,12 +55,14 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
+import type { ChatThreadRefState } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  threadRefState?: ChatThreadRefState | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -156,6 +158,30 @@ const applyChatDataScopeExpansionOnTx = async ({
   });
 };
 
+/**
+ * Stores the thread's ref state beside the messages that showed the refs,
+ * so a later request never restores less than what the thread shows.
+ */
+const applyThreadRefStateOnTx = async ({
+  refState,
+  threadId,
+  tx,
+}: {
+  refState: ChatThreadRefState | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (refState === undefined) {
+    return;
+  }
+  // audit: skip — derived bookkeeping of the audited message write in the
+  // same transaction; it records what those messages show.
+  await tx
+    .update(chatThreads)
+    .set({ refState })
+    .where(eq(chatThreads.id, threadId));
+};
+
 const applyChatDataScopeReplacementOnTx = async ({
   recordAuditEvent,
   replacement,
@@ -184,6 +210,7 @@ const applyChatDataScopeReplacementOnTx = async ({
 const insertMessages = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadRefState,
   messages,
   recordAuditEvent,
   safeDb,
@@ -215,6 +242,7 @@ const insertMessages = async ({
       tx,
       workspaceId,
     });
+    await applyThreadRefStateOnTx({ refState: threadRefState, threadId, tx });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -271,6 +299,8 @@ const insertMessages = async ({
 export type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The thread's ref state once this write's messages are stored. */
+  threadRefState?: ChatThreadRefState | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -416,6 +446,7 @@ const mergeContinuationMetadata = ({
 export const finalizeAssistantTurn = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadRefState,
   existingIds,
   execution,
   outcome,
@@ -430,6 +461,8 @@ export const finalizeAssistantTurn = async ({
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The thread's ref state once the assistant message is stored. */
+  threadRefState: ChatThreadRefState;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
@@ -467,6 +500,7 @@ export const finalizeAssistantTurn = async ({
   const persistResult = await persistMessage({
     acceptedSendMode,
     dataScopeExpansion,
+    threadRefState,
     persistencePlan,
     recordAuditEvent,
     safeDb,
@@ -669,6 +703,7 @@ export const persistInterruptedChatTurn = async ({
 const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
+  threadRefState,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -684,6 +719,7 @@ const runPersistMessage = async ({
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
+      threadRefState,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -719,6 +755,7 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      await applyThreadRefStateOnTx({ refState: threadRefState, threadId, tx });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -875,6 +912,7 @@ const runPersistMessage = async ({
       tx,
       workspaceId,
     });
+    await applyThreadRefStateOnTx({ refState: threadRefState, threadId, tx });
     const deletedMessageId = persistencePlan.deleteMessageId;
     await tx
       .delete(chatMessages)

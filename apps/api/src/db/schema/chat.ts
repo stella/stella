@@ -203,6 +203,14 @@ export const chatThreads = p.pgTable(
      */
     compactionScheduledAt: timestamptz("compaction_scheduled_at"),
     /**
+     * Every chat ref the thread's stored messages showed the model, with its
+     * target (`ChatThreadRefState`), so each request restores them from this
+     * row instead of reading every message. Written with each assistant
+     * message. Null until the first such write; a request then derives it
+     * from the stored messages.
+     */
+    refState: jsonb("ref_state"),
+    /**
      * When the compactor last attempted this thread. Failed attempts stay
      * eligible but rotate behind untouched work, so one permanently failing
      * thread cannot monopolize a batch.

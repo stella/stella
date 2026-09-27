@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
@@ -11,15 +12,23 @@ import type {
   ChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type ChatRefBinding,
+  addChatThreadRefBindings,
+  type ChatThreadRefState,
+  EMPTY_CHAT_THREAD_REF_STATE,
   getChatRefBindings,
   isChatRefContext,
+  isChatThreadRefState,
 } from "@/api/lib/chat/ref-token";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseError,
+  HandlerError,
+  TelemetryError,
+} from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 type ReadThreadValidationStateProps = {
@@ -36,9 +45,65 @@ type ThreadValidationState = {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
   } | null;
-  /** Ref bindings the thread's stored assistant messages recorded. */
-  refBindings: ChatRefBinding[];
+  /** Every ref the thread's stored messages showed the model. */
+  refState: ChatThreadRefState;
   webSearchEnabled: boolean;
+};
+
+/**
+ * The thread's ref state as its stored messages record it: the bindings
+ * each assistant message carries. Only derived while the thread has no
+ * stored state yet; the thread's next assistant message stores it.
+ */
+const deriveThreadRefState = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<ChatThreadRefState> => {
+  const rows = await tx
+    .select({
+      // Only the ref contexts leave the database.
+      refContext: sql<unknown>`${chatMessages.content}->'metadata'->'refContext'`,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        eq(chatMessages.role, "assistant"),
+      ),
+    );
+  return addChatThreadRefBindings(
+    EMPTY_CHAT_THREAD_REF_STATE,
+    rows.flatMap(({ refContext }) =>
+      isChatRefContext(refContext) ? getChatRefBindings(refContext) : [],
+    ),
+  );
+};
+
+/** The thread's stored ref state, or one derived from its messages. */
+const readThreadRefState = async ({
+  stored,
+  threadId,
+  tx,
+}: {
+  stored: unknown;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<ChatThreadRefState> => {
+  if (isChatThreadRefState(stored)) {
+    return stored;
+  }
+  if (stored !== null) {
+    captureError(
+      new TelemetryError({
+        message: "Stored chat thread ref state is invalid",
+      }),
+      { source: "chat-ref-state" },
+    );
+  }
+  return await deriveThreadRefState({ threadId, tx });
 };
 
 export const readThreadValidationState = async ({
@@ -52,30 +117,18 @@ export const readThreadValidationState = async ({
   Result<ThreadValidationState, HandlerError<400> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const thread = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.chatThreads.findFirst({
+    const read = yield* Result.await(
+      safeDb(async (tx) => {
+        const thread = await tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
             organizationId: { eq: organizationId },
             userId: { eq: userId },
           },
           columns: {
+            refState: true,
             workspaceId: true,
             webSearchEnabled: true,
-          },
-          extras: {
-            // Only the ref contexts leave the database: message content
-            // stays unread.
-            storedRefContexts: (table) => sql<unknown>`(
-              SELECT coalesce(
-                jsonb_agg(${chatMessages.content}->'metadata'->'refContext'),
-                '[]'::jsonb
-              )
-              FROM ${chatMessages}
-              WHERE ${chatMessages.threadId} = ${table.id}
-                AND ${chatMessages.role} = 'assistant'
-            )`,
           },
           with: {
             messages: {
@@ -83,17 +136,28 @@ export const readThreadValidationState = async ({
               columns: { content: true, role: true },
             },
           },
-        }),
-      ),
+        });
+        if (thread === undefined) {
+          return null;
+        }
+        // The thread's ownership was read in this transaction.
+        const refState = await readThreadRefState({
+          stored: thread.refState,
+          threadId,
+          tx,
+        });
+        return { refState, thread };
+      }),
     );
 
-    if (!thread) {
+    if (read === null) {
       return Result.ok({
         persistedMessage: null,
-        refBindings: [],
+        refState: EMPTY_CHAT_THREAD_REF_STATE,
         webSearchEnabled: false,
       });
     }
+    const { refState, thread } = read;
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
     if (persistedWorkspaceId !== workspaceId) {
@@ -105,13 +169,6 @@ export const readThreadValidationState = async ({
       );
     }
 
-    const { storedRefContexts } = thread;
-    const refBindings = Array.isArray(storedRefContexts)
-      ? storedRefContexts.flatMap((refContext: unknown) =>
-          isChatRefContext(refContext) ? getChatRefBindings(refContext) : [],
-        )
-      : [];
-
     const persistedMessage = thread.messages.at(0);
     return Result.ok({
       persistedMessage:
@@ -121,7 +178,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
-      refBindings,
+      refState,
       webSearchEnabled: thread.webSearchEnabled,
     });
   });
