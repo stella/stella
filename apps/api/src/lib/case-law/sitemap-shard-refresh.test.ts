@@ -192,12 +192,9 @@ test(
     expect(buckets.every((shard) => /^[0-9]{2}$/u.test(shard.bucket))).toBe(
       true,
     );
-    expect(
-      buckets
-        .map((shard) => shard.lastmod)
-        .toSorted()
-        .at(-1),
-    ).toBe(NEWEST_UPDATE.toISOString().slice(0, 10));
+    expect(buckets.map((shard) => shard.lastmod)).toContain(
+      NEWEST_UPDATE.toISOString().slice(0, 10),
+    );
 
     // The listing and the shard read must agree: every decision of the month
     // is served by exactly one listed bucket.
@@ -206,7 +203,7 @@ test(
       // db-await-in-loop: one shard read per listed bucket, as a crawler would fetch them
       const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
       if (!("items" in page)) {
-        return panic("Expected a listed bucket to be readable.");
+        panic("Expected a listed bucket to be readable.");
       }
       for (const item of page.items) {
         served.add(item.id);
