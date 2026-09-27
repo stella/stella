@@ -22,6 +22,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import { withReservedSession } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -529,5 +530,46 @@ if (!databaseUrl || !runPostgresTests) {
         }
       });
     }, 120_000);
+
+    /**
+     * Bun's `cancel()` does not stop a statement that has started, so the
+     * abort cancels the backend from another connection, and the aborted
+     * connection is closed, never pooled, once that cancel has settled.
+     */
+    test("an abort stops the statement in flight and discards its connection", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const pool = openClient({ max: 2 }).sql;
+        const observer = openClient().sql;
+        const controller = new AbortController();
+        let reservedPid: unknown;
+        const started = Date.now();
+        const outcome = await withReservedSession({
+          reserve: async () => await pool.reserve(),
+          cancelBackend: async (pid) =>
+            await observer`SELECT pg_cancel_backend(${pid})`,
+          signal: controller.signal,
+          work: async (session) => {
+            const [row] = await session.query("SELECT pg_backend_pid() AS pid");
+            reservedPid =
+              row !== null && typeof row === "object" && "pid" in row
+                ? row.pid
+                : undefined;
+            setTimeout(() => {
+              controller.abort();
+            }, 200);
+            return await session.query("SELECT pg_sleep(30)").then(
+              () => "finished",
+              () => "cancelled",
+            );
+          },
+        });
+        expect(outcome).toBe("cancelled");
+        expect(Date.now() - started).toBeLessThan(10_000);
+        const [alive] = await observer`
+          SELECT count(*)::int AS count FROM pg_stat_activity
+          WHERE pid = ${Number(reservedPid)}`;
+        expect(alive?.count).toBe(0);
+      });
+    }, 30_000);
   });
 }

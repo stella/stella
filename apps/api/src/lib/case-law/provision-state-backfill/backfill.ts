@@ -409,6 +409,7 @@ type BackfillRun = {
   deadline: number;
   signal: AbortSignal;
   now: () => number;
+  admission: Admission;
   steps: readonly ProvisionBackfillStep[];
 };
 
@@ -433,6 +434,12 @@ const runFrom = async (
   }
   if (run.signal.aborted) {
     return Result.ok({ type: "aborted", step: step.name });
+  }
+  // A newer release may apply its admission while this run is under way;
+  // from then on this build changes nothing more.
+  const applied = await readAppliedAdmission(run.connection, "none");
+  if (applied !== null && applied > run.admission.revision) {
+    return Result.ok({ type: "superseded", appliedRevision: applied });
   }
   const isScan = step.budget === PROVISION_BACKFILL_BUDGET.WHOLE_RUN;
   if (run.now() >= run.deadline || (isScan && worked)) {
@@ -461,15 +468,16 @@ export const runProvisionStateBackfill = async ({
   admission = CURRENT_ADMISSION,
 }: ProvisionStateBackfillOptions): Promise<
   Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
-> => {
-  // A newer release reconciles the scopes; this build does nothing at all.
-  const applied = await readAppliedAdmission(connection, "none");
-  if (applied !== null && applied > admission.revision) {
-    return Result.ok({ type: "superseded", appliedRevision: applied });
-  }
-  return await runFrom(
-    { connection, deadline, signal, now, steps: backfillSteps(admission) },
+> =>
+  await runFrom(
+    {
+      connection,
+      deadline,
+      signal,
+      now,
+      admission,
+      steps: backfillSteps(admission),
+    },
     0,
     false,
   );
-};

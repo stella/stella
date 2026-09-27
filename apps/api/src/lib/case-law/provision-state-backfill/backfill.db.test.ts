@@ -420,4 +420,40 @@ describe("provision state backfill", () => {
       await rows(`SELECT revision FROM case_law_provision_admission`),
     ).toEqual([{ revision: 2 }]);
   });
+
+  test("a run stops once a newer admission is applied between its units", async () => {
+    await db.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
+    await insertDecision("CZE", "cs");
+    // Stands in for a newer release committing its admission right after
+    // this run's first unit commits.
+    let commits = 0;
+    const racing: ProvisionBackfillSession = {
+      execute: async (query, params = []) => {
+        await connection.execute(query, params);
+        if (query === "COMMIT") {
+          commits += 1;
+          if (commits === 1) {
+            await connection.execute(
+              "UPDATE case_law_provision_admission SET revision = 7 WHERE key = 'global'",
+            );
+          }
+        }
+      },
+      query: async (query, params = []) =>
+        await connection.query(query, params),
+    };
+    const outcome = (
+      await runProvisionStateBackfill({
+        connection: racing,
+        deadline: Number.POSITIVE_INFINITY,
+        signal: new AbortController().signal,
+        admission: {
+          revision: 2,
+          scopes: [{ country: "CZE", language: "cs" }],
+        },
+      })
+    ).unwrap();
+    expect(outcome).toEqual({ type: "superseded", appliedRevision: 7 });
+    expect(commits).toBe(1);
+  });
 });

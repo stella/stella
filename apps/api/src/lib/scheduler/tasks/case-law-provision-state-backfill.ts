@@ -27,6 +27,77 @@ const backfillUnitFailed = failureSink({
   expected: [],
 });
 
+/** The part of a reserved Bun SQL connection the backfill uses. */
+type ReservedConnection = {
+  unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
+  release: () => void;
+  close: () => Promise<void>;
+};
+
+type ReservedSessionOptions<T> = {
+  reserve: () => Promise<ReservedConnection>;
+  /** Cancels whatever the given backend is running, from another connection. */
+  cancelBackend: (pid: number) => Promise<unknown>;
+  signal: AbortSignal;
+  work: (session: ProvisionBackfillSession) => Promise<T>;
+};
+
+const readRows = (result: unknown): readonly unknown[] =>
+  Array.isArray(result) ? result : panic("Bun SQL returned a non-array result");
+
+/**
+ * Runs `work` on one reserved connection and gives the connection back on
+ * every path. An abort cancels the statement in flight: Bun's own
+ * `cancel()` stops only a query that has not started, so the cancel goes to
+ * the backend from another connection. Such a cancel can land after the
+ * statement it was meant for, so an aborted connection is closed rather
+ * than returned to the pool, once the cancel has settled: no later user of
+ * the pool can receive it.
+ */
+export const withReservedSession = async <T>({
+  reserve,
+  cancelBackend,
+  signal,
+  work,
+}: ReservedSessionOptions<T>): Promise<T> => {
+  const reserved = await reserve();
+  let cancelling: Promise<unknown> | undefined;
+  let cancelInFlight: (() => void) | undefined;
+  const body = (async () => {
+    const pid = readRows(
+      await reserved.unsafe("SELECT pg_backend_pid() AS pid"),
+    ).find(isRecord)?.["pid"];
+    if (typeof pid !== "number") {
+      return panic("Expected the reserved session's PostgreSQL backend pid");
+    }
+    cancelInFlight = () => {
+      cancelling = cancelBackend(pid);
+      detached(cancelling, "provision-state-backfill.cancel-statement");
+    };
+    signal.addEventListener("abort", cancelInFlight, { once: true });
+    return await work({
+      execute: async (query, params = []) => {
+        await reserved.unsafe(query, [...params]);
+      },
+      query: async (query, params = []) =>
+        readRows(await reserved.unsafe(query, [...params])),
+    });
+  })();
+  // The connection goes back however the body ends; its outcome, value or
+  // rejection, is returned only after that.
+  await Promise.allSettled([body]);
+  if (cancelInFlight !== undefined) {
+    signal.removeEventListener("abort", cancelInFlight);
+  }
+  if (cancelling === undefined) {
+    reserved.release();
+  } else {
+    await Promise.allSettled([cancelling]);
+    await reserved.close();
+  }
+  return await body;
+};
+
 /**
  * The provision state backfill: scope rows for every decision key, the
  * profiles' scopes and their transition jobs, state for every in-scope
@@ -44,46 +115,17 @@ export const backfillCaseLawProvisionState: SchedulerTask = async ({
   signal,
 }) => {
   signal.throwIfAborted();
-  // One reserved session: every unit is BEGIN ... COMMIT on it. An abort
-  // (shutdown, lease loss) cancels the statement in flight on that backend,
-  // which fails and rolls back its unit; the runner starts nothing after it.
-  const reserved = await db.$client.reserve();
-  const backendRows: unknown = await reserved`SELECT pg_backend_pid() AS pid`;
-  const backend: unknown = Array.isArray(backendRows)
-    ? backendRows.at(0)
-    : undefined;
-  const pid = isRecord(backend) ? backend["pid"] : undefined;
-  if (typeof pid !== "number") {
-    reserved.release();
-    panic("Expected the reserved session's PostgreSQL backend pid");
-  }
-  const cancelInFlight = () => {
-    detached(
-      db.execute(sql`SELECT pg_cancel_backend(${pid})`),
-      "provision-state-backfill.cancel-statement",
-    );
-  };
-  signal.addEventListener("abort", cancelInFlight, { once: true });
-  const connection: ProvisionBackfillSession = {
-    execute: async (query, params = []) => {
-      await reserved.unsafe(query, [...params]);
-    },
-    query: async (query, params = []) => {
-      const result: unknown = await reserved.unsafe(query, [...params]);
-      if (!Array.isArray(result)) {
-        return panic("Bun SQL returned a non-array result");
-      }
-      const rows: readonly unknown[] = result;
-      return rows;
-    },
-  };
-  const run = await runProvisionStateBackfill({
-    connection,
-    deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+  const run = await withReservedSession({
+    reserve: async () => await db.$client.reserve(),
+    cancelBackend: async (pid) =>
+      await db.execute(sql`SELECT pg_cancel_backend(${pid})`),
     signal,
-  }).finally(() => {
-    signal.removeEventListener("abort", cancelInFlight);
-    reserved.release();
+    work: async (connection) =>
+      await runProvisionStateBackfill({
+        connection,
+        deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+        signal,
+      }),
   });
   if (run.isErr()) {
     // A cancelled statement is the abort itself, not a failure; either way
