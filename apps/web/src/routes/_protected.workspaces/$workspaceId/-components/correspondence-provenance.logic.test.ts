@@ -7,10 +7,14 @@ import {
   type ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 
+import type { LocaleMessages } from "@/i18n/i18n-store";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 
 import { correspondenceProvenancePresentation } from "./correspondence-provenance.logic";
+
+// Every catalog shares the source catalog's shape.
+const arabicMessages: LocaleMessages = ar;
 
 const authenticatedSender = {
   address: "member@firm.example",
@@ -51,7 +55,7 @@ describe("correspondence delivery and original provenance", () => {
   });
 
   test("Arabic preserves the outer address in an isolated rich-text slot", () => {
-    const t = createTranslator({ locale: "ar", messages: ar });
+    const t = createTranslator({ locale: "ar", messages: arabicMessages });
     const presentation = correspondenceProvenancePresentation(forgedInline);
     expect(
       t.markup(presentation.deliveryLabel, {
