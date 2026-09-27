@@ -19,8 +19,12 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import {
+  ensureRouteInfiniteQueryData,
+  prefetchRouteQuery,
+} from "@/lib/react-query";
 import {
   correspondenceAddressOptions,
   CORRESPONDENCE_STATE_LABEL_KEYS,
@@ -34,11 +38,35 @@ import {
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
+const PAGE_SIZE = 50;
+
+const isListLocation = (pathname: string, workspaceId: string) =>
+  pathname.replace(/\/+$/u, "") === `/workspaces/${workspaceId}/correspondence`;
+
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/correspondence",
-)({ component: CorrespondencePage });
-
-const PAGE_SIZE = 50;
+)({
+  component: CorrespondencePage,
+  loader: async ({ context, location, params }) => {
+    // A record renders in place of the list; only the list view needs it.
+    if (!isListLocation(location.pathname, params.workspaceId)) {
+      return;
+    }
+    await Promise.all([
+      ensureRouteInfiniteQueryData(
+        context.queryClient,
+        correspondenceInfiniteOptions(params.workspaceId, PAGE_SIZE),
+      ),
+      prefetchRouteQuery(
+        context.queryClient,
+        correspondenceAddressOptions(params.workspaceId),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+    ]);
+  },
+});
 
 function CorrespondencePage() {
   const t = useTranslations();
