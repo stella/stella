@@ -68,7 +68,11 @@ export type MailVerifier = (
   options: VerifyMailOptions,
 ) => Promise<Result<MailAuthentication, MailAuthenticationError>>;
 
-const normalizeDomain = (input: string) => {
+const normalizeDomain = (input: unknown) => {
+  // mailauth can omit signingDomain for unsigned messages despite its type.
+  if (typeof input !== "string") {
+    return null;
+  }
   const domain = input.toLowerCase();
   if (
     domain.length > 253 ||
@@ -308,6 +312,8 @@ export const parseProviderAuthentication = ({
             ? result
             : "permerror";
         break;
+      default:
+        return panic("Unexpected parsed authentication method");
     }
   }
   return Result.ok(auth);
@@ -316,7 +322,9 @@ export const parseProviderAuthentication = ({
 export const createProviderMailVerifier =
   (metadata: Omit<ProviderAuthOptions, "fromAddress">): MailVerifier =>
   async ({ fromAddress }) =>
-    parseProviderAuthentication({ ...metadata, fromAddress });
+    await Promise.resolve(
+      parseProviderAuthentication({ ...metadata, fromAddress }),
+    );
 
 type LocalDnsResolver = { resolve: DNSResolver; cancel: () => void };
 
@@ -364,10 +372,10 @@ const runMailVerification = async <T>({
   verify,
 }: RunMailVerificationOptions<T>) => {
   const resolver = createResolver();
-  let budgetExceeded = false;
+  const budget = { exceeded: false };
   const verified = await Result.tryPromise({
-    try: () =>
-      withTimeout(
+    try: async () =>
+      await withTimeout(
         async (signal) => {
           let queries = 0;
           const cancellation = () => resolver.cancel();
@@ -376,14 +384,14 @@ const runMailVerification = async <T>({
             const result = await verify(async (domain, rrtype) => {
               queries += 1;
               if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-                budgetExceeded = true;
+                budget.exceeded = true;
                 resolver.cancel();
                 return [];
               }
               return await resolver.resolve(domain, rrtype);
             });
             if (signal.aborted || queries > INBOUND_MAIL_LIMITS.dnsQueries) {
-              budgetExceeded = true;
+              budget.exceeded = true;
             }
             return result;
           } finally {
@@ -401,7 +409,7 @@ const runMailVerification = async <T>({
       }),
   });
   resolver.cancel();
-  if (budgetExceeded) {
+  if (budget.exceeded) {
     return Result.err(
       new MailAuthenticationError({
         message: "Mail verification budget exhausted",
@@ -451,18 +459,21 @@ export const createLocalMailVerifier =
       evidence: "identifiers",
       fromDomain,
       spf: {
-        result: spf ? authResult(spf.status.result) : "none",
-        domain: spf ? spf.domain : null,
-        alignment: dmarc && dmarc.alignment.spf.strict ? "strict" : "relaxed",
+        result: spf === false ? "none" : authResult(spf.status.result),
+        domain: spf === false ? null : spf.domain,
+        alignment:
+          dmarc !== false && dmarc.alignment.spf.strict ? "strict" : "relaxed",
       },
       dkim: dkim.results.map((signature) => ({
-        result: signature.status.underSized
-          ? "fail"
-          : authResult(signature.status.result),
-        domain: signature.signingDomain ?? null,
-        alignment: dmarc && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
+        result:
+          (signature.status.underSized ?? 0) > 0
+            ? "fail"
+            : authResult(signature.status.result),
+        domain: normalizeDomain(signature.signingDomain),
+        alignment:
+          dmarc !== false && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
       })),
-      dmarc: dmarc ? authResult(dmarc.status.result) : "none",
+      dmarc: dmarc === false ? "none" : authResult(dmarc.status.result),
     } satisfies MailAuthentication);
   };
 
@@ -498,7 +509,10 @@ export const createOriginalSignatureVerifier =
     }
     return verified.map(({ results }) => {
       for (const signature of results) {
-        if (signature.status.result !== "pass" || signature.status.underSized) {
+        if (
+          signature.status.result !== "pass" ||
+          (signature.status.underSized ?? 0) > 0
+        ) {
           continue;
         }
         const domain = normalizeDomain(signature.signingDomain);

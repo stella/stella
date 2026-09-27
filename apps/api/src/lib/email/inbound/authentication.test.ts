@@ -175,6 +175,9 @@ test("local verification uses SMTP envelope and DNS, ignoring forged authenticat
     expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
       remoteIp === "192.0.2.1",
     );
+    expect(auth.value.dkim).toEqual([
+      { result: "none", domain: null, alignment: "relaxed" },
+    ]);
   }
   expect(cancelled).toBe(2);
 });
@@ -248,9 +251,7 @@ test("local verification validates DKIM bytes, alignment, and DMARC policy", asy
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
     .toString("base64");
-  const privateKeyPem = privateKey
-    .export({ type: "pkcs8", format: "pem" })
-    .toString();
+  const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" });
   const unsigned = Buffer.from(
     "From: member@example.com\r\nTo: recipient@example.net\r\nSubject: local DKIM check\r\n\r\nOriginal body\r\n",
   );
@@ -268,8 +269,8 @@ test("local verification validates DKIM bytes, alignment, and DMARC policy", asy
     expect(signed.errors).toEqual([]);
     return Buffer.concat([Buffer.from(signed.signatures), unsigned]);
   };
-  const verify = (raw: Uint8Array) =>
-    createLocalMailVerifier(() => ({
+  const verify = async (raw: Uint8Array) =>
+    await createLocalMailVerifier(() => ({
       resolve: async (domain, rrtype) => {
         if (rrtype !== "TXT") {
           return [];

@@ -171,7 +171,7 @@ export const createInboundMailPersistence =
               }
               return await createInboundMailStore({
                 database,
-                fileCandidate: async () =>
+                fileCandidate: (): Promise<never> =>
                   panic("Rejected attachment reached filing"),
               })({
                 ...options,
@@ -195,7 +195,7 @@ export const createInboundMailPersistence =
           fileCandidate: async (candidate) => {
             const created = await createCorrespondence({
               safeDb: async (work) =>
-                await Result.tryPromise(() => work(candidate.tx)),
+                await Result.tryPromise(async () => await work(candidate.tx)),
               organizationId: candidate.organizationId,
               workspaceId: candidate.workspaceId,
               filer: candidate.filer,
@@ -282,8 +282,8 @@ export const createInboundMailPersistence =
                 | null;
             } = { error: null };
             const written = await Result.tryPromise({
-              try: () =>
-                createDocument({
+              try: async () =>
+                await createDocument({
                   scopedDb,
                   ...scope,
                   recordAuditEvent,
@@ -306,6 +306,7 @@ export const createInboundMailPersistence =
                       aborted.error = attachmentLink.error;
                       return tx.rollback();
                     }
+                    return undefined;
                   },
                 }),
               catch: (cause) =>

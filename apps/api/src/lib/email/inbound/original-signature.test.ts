@@ -52,9 +52,7 @@ test("verifies only a complete DKIM signature over the exact attached original b
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
   });
-  const privateKeyPem = privateKey
-    .export({ type: "pkcs8", format: "pem" })
-    .toString();
+  const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" });
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
     .toString("base64");

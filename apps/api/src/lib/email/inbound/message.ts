@@ -306,8 +306,8 @@ const parseMime = async (raw: Uint8Array) => {
     return headerEnd;
   }
   const parsed = await Result.tryPromise({
-    try: () =>
-      PostalMime.parse(raw, {
+    try: async () =>
+      await PostalMime.parse(raw, {
         attachmentEncoding: "arraybuffer",
         forceRfc822Attachments: true,
         maxNestingDepth: INBOUND_MAIL_LIMITS.mimeDepth,

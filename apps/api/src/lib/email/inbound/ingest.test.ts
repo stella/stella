@@ -72,8 +72,8 @@ const memoryStore = () => {
   return { persist, records, drops, members, deliveries };
 };
 
-const ingest = (raw: Uint8Array, persist: InboundDeliveryStore) =>
-  ingestInboundMail({
+const ingest = async (raw: Uint8Array, persist: InboundDeliveryStore) =>
+  await ingestInboundMail({
     raw,
     envelope,
     receivedAt,

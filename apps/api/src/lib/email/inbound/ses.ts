@@ -218,8 +218,8 @@ export const readSesInboundDelivery = async ({
         .digest("hex"),
     });
   const read = await Result.tryPromise({
-    try: () =>
-      withTimeout(
+    try: async () =>
+      await withTimeout(
         async (signal) =>
           await readObject({ key: receipt.action.objectKey, signal }),
         {
@@ -248,28 +248,32 @@ export const readSesInboundDelivery = async ({
   const verify: MailVerifier = async ({ fromAddress }) => {
     const fromDomain = mailboxDomain(fromAddress);
     if (!fromDomain) {
-      return Result.err(
-        new MailAuthenticationError({ message: "Invalid author domain" }),
+      return await Promise.resolve(
+        Result.err(
+          new MailAuthenticationError({ message: "Invalid author domain" }),
+        ),
       );
     }
-    return Result.ok({
-      source: "provider",
-      evidence: "provider-dmarc",
-      fromDomain,
-      spf: {
-        result: AUTH_RESULT[receipt.spfVerdict.status],
-        domain: null,
-        alignment: "relaxed",
-      },
-      dkim: [
-        {
-          result: AUTH_RESULT[receipt.dkimVerdict.status],
+    return await Promise.resolve(
+      Result.ok({
+        source: "provider",
+        evidence: "provider-dmarc",
+        fromDomain,
+        spf: {
+          result: AUTH_RESULT[receipt.spfVerdict.status],
           domain: null,
           alignment: "relaxed",
         },
-      ],
-      dmarc: AUTH_RESULT[receipt.dmarcVerdict.status],
-    } satisfies MailAuthentication);
+        dkim: [
+          {
+            result: AUTH_RESULT[receipt.dkimVerdict.status],
+            domain: null,
+            alignment: "relaxed",
+          },
+        ],
+        dmarc: AUTH_RESULT[receipt.dmarcVerdict.status],
+      } satisfies MailAuthentication),
+    );
   };
   return Result.ok({
     status: "received" as const,

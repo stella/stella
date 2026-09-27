@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -86,6 +87,8 @@ const ownerWrite = async (operation: "insert" | "update" | "delete") =>
             .returning({ id: matterInboundAddresses.id })
         ).length;
     }
+    operation satisfies never;
+    return panic("Unhandled owner write operation");
   });
 
 beforeAll(async () => {

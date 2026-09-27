@@ -467,9 +467,11 @@ if (!databaseUrl || !runPostgresTests) {
           bodyText: "Original body.",
         },
       ]);
-      expect(
-        (await filers()).map(({ filedByUserId }) => filedByUserId).toSorted(),
-      ).toEqual([colleagueId, memberId].toSorted());
+      const filedUserIds = (await filers()).map(
+        ({ filedByUserId }) => filedByUserId,
+      );
+      expect(filedUserIds).toHaveLength(2);
+      expect(new Set(filedUserIds)).toEqual(new Set([colleagueId, memberId]));
     });
 
     test("a fabricated inline original remains asserted content beside its authenticated delivery", async () => {
@@ -673,7 +675,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         (await db.select().from(correspondenceAttachments))
           .map(({ ordinal }) => ordinal)
-          .toSorted(),
+          .toSorted((a, b) => a - b),
       ).toEqual([0, 1]);
       expect(
         await db

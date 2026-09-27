@@ -168,7 +168,8 @@ if (!databaseUrl || !runPostgresTests) {
             delivery: candidate,
           }: FileInboundCandidateOptions<Transaction>) => {
             const result = await createCorrespondence({
-              safeDb: async (work) => await Result.tryPromise(() => work(tx)),
+              safeDb: async (work) =>
+                await Result.tryPromise(async () => await work(tx)),
               organizationId,
               workspaceId,
               filer,

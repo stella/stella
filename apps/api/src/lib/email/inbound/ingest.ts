@@ -228,7 +228,8 @@ const persistClassifiedDelivery = async ({
   const outcomes: InboundDeliveryOutcome[] = [];
   for (const token of tokens) {
     const persisted = await Result.tryPromise({
-      try: () => persist({ token, receivedAt, deliveryKey, delivery }),
+      try: async () =>
+        await persist({ token, receivedAt, deliveryKey, delivery }),
       catch: () =>
         new InboundIngestError({
           message: "Inbound filing could not complete",
@@ -301,7 +302,7 @@ export const ingestInboundMail = async ({
 
   const parsed = (
     await Result.tryPromise({
-      try: () => parseInboundMessage(raw),
+      try: async () => await parseInboundMessage(raw),
       catch: () =>
         new InboundMessageError({
           message: "Malformed inbound message",
