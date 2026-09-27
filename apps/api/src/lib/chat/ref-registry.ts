@@ -948,13 +948,6 @@ export const createChatRefRegistry = (
     }
   };
 
-  for (const binding of restoredBindings) {
-    const outcome = restoreRefBinding(binding);
-    if (outcome !== "restored") {
-      reportRestoreFailure(binding, outcome);
-    }
-  }
-
   const refStates = [
     contactState,
     entityState,
@@ -962,18 +955,26 @@ export const createChatRefRegistry = (
     propertyState,
     sourceCitationState,
   ];
+  // Retired first: a retired spelling names nothing even when a binding for
+  // it is restored too, since the model may read it as it was first shown.
   for (const ref of retiredRefs) {
     const state = refStates.find(
       ({ prefix }) => parseRefCounter(prefix, ref) !== null,
     );
     const counter =
       state === undefined ? null : parseRefCounter(state.prefix, ref);
-    // A binding is what history knows of the spelling; it outranks retiring.
-    if (state === undefined || counter === null || state.refToKey.has(ref)) {
+    if (state === undefined || counter === null) {
       continue;
     }
     state.counter = Math.max(state.counter, counter);
     state.conflicted.add(ref);
+  }
+
+  for (const binding of restoredBindings) {
+    const outcome = restoreRefBinding(binding);
+    if (outcome !== "restored") {
+      reportRestoreFailure(binding, outcome);
+    }
   }
 
   const toRefBinding = (ref: string): ChatRefBinding | null => {

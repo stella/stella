@@ -113,27 +113,25 @@ export const deriveChatThreadNames = async ({
       targetsByRef.set(binding.ref, targets);
     }
   }
-  const refBindings: ChatRefBinding[] = [];
-  const conflicted: string[] = [];
-  for (const [ref, targets] of targetsByRef) {
-    const only = targets.size === 1 ? [...targets.values()].at(0) : undefined;
-    if (only === undefined) {
-      conflicted.push(ref);
-    } else {
-      refBindings.push(only);
-    }
-  }
+  // A spelling a message stored before bindings existed showed the model
+  // named something history cannot prove, even when a later message bound
+  // the same spelling: the model may still read it the earlier way.
   const legacyRefs = new Set(
     rows.flatMap(({ legacyContent }) =>
       legacyContent === null ? [] : findChatRefTokens(legacyContent),
     ),
   );
-  const retiredRefs = [
-    ...new Set([
-      ...conflicted,
-      ...[...legacyRefs].filter((ref) => !targetsByRef.has(ref)),
-    ]),
-  ];
+  const refBindings: ChatRefBinding[] = [];
+  const conflicted: string[] = [];
+  for (const [ref, targets] of targetsByRef) {
+    const only = targets.size === 1 ? [...targets.values()].at(0) : undefined;
+    if (only === undefined || legacyRefs.has(ref)) {
+      conflicted.push(ref);
+    } else {
+      refBindings.push(only);
+    }
+  }
+  const retiredRefs = [...new Set([...conflicted, ...legacyRefs])];
   if (retiredRefs.length > 0) {
     reportLedgerDefect("A chat thread retired refs its history cannot bind", {
       conflictedCount: String(conflicted.length),
@@ -208,6 +206,9 @@ export const readChatThreadNames = async ({
         return panic(`Unhandled chat thread name kind: ${String(kind)}`);
     }
   }
+  // A retired spelling names nothing, whatever a binding row says.
+  const retired = new Set(read.retiredRefs);
+  read.refBindings = read.refBindings.filter(({ ref }) => !retired.has(ref));
   return read;
 };
 

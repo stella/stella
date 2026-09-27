@@ -254,7 +254,7 @@ describe("chat refs across the requests of a thread", () => {
     ).toContain("#stella-unresolved-ref");
   });
 
-  test("a binding outranks retiring the same spelling", () => {
+  test("retiring a spelling outranks a binding for it", () => {
     const first = createChatRefRegistry();
     const ref = first.toEntityRef(entityTarget(0));
 
@@ -263,7 +263,8 @@ describe("chat refs across the requests of a thread", () => {
       [ref],
     );
 
-    expect(resolveEntity(next, ref)).toEqual(entityTarget(0));
+    expect(resolveEntity(next, ref)).toBeNull();
+    expect(next.toEntityRef(entityTarget(0))).toBe("ent_2");
   });
 
   test("durable text keeps no ref only this thread can read", () => {

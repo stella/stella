@@ -167,7 +167,19 @@ const BINDING_STORE = {
   /** Nowhere: the message was stored before bindings existed, so what
    *  `ent_1` named is unknown. */
   legacy: "legacy",
+  /** Both: a message stored before bindings existed showed `ent_1`, and a
+   *  later message bound the spelling to entity A. What the model read
+   *  first is unknown, so the spelling names nothing. */
+  mixed: "mixed",
 } as const;
+
+/** Whether `ent_1` still names entity A for the next request. */
+const KEEPS_ENT_1 = {
+  legacy: false,
+  message: true,
+  mixed: false,
+  thread: true,
+} as const satisfies Record<BindingStore, boolean>;
 
 type BindingStore = (typeof BINDING_STORE)[keyof typeof BINDING_STORE];
 
@@ -220,7 +232,11 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
   });
   const refContext = {
     version: 2,
-    refs: bindingStore === BINDING_STORE.message ? [binding] : [],
+    refs:
+      bindingStore === BINDING_STORE.message ||
+      bindingStore === BINDING_STORE.mixed
+        ? [binding]
+        : [],
     entities: [],
     unresolvedInputs: [],
     workspaceScope: [
@@ -237,6 +253,30 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
   });
   unwrap(
     await safeDb(async (tx) => {
+      if (bindingStore === BINDING_STORE.mixed) {
+        await tx.insert(chatMessages).values({
+          content: toChatMessageContent({
+            data: [listedPart],
+            metadata: {
+              refContext: {
+                entities: [],
+                unresolvedInputs: [],
+                version: 1,
+                workspaceScope: refContext.workspaceScope,
+              },
+              refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+            },
+            version: 2,
+          }),
+          // Stored before the turn below.
+          createdAt: new Date(Date.now() - 60_000),
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          role: "assistant",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: null,
+        });
+      }
       await tx.insert(chatMessages).values([
         {
           content: toChatMessageContent({
@@ -411,7 +451,7 @@ describe("chat refs across an interactive answer", () => {
         .at(-1)
         ?.resolveEntityRefTargets(["ent_1"]);
       expect(resolved === undefined ? undefined : Result.isOk(resolved)).toBe(
-        bindingStore !== BINDING_STORE.legacy,
+        KEEPS_ENT_1[bindingStore],
       );
       if (resolved !== undefined && Result.isOk(resolved)) {
         expect(resolved.value).toEqual([
