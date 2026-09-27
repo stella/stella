@@ -1,6 +1,6 @@
 import { EventType, modelMessageToUIMessage } from "@tanstack/ai";
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
-import type { Result } from "better-result";
+import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -11,6 +11,8 @@ import type {
   ChatMessage,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import { classifyAIError } from "@/api/lib/ai-error";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -230,7 +232,21 @@ export const presentStoredHistory = async function* ({
       yield chunk;
       continue;
     }
-    served ??= (await loadServed()).unwrap();
+    if (served === undefined) {
+      const loaded = await loadServed();
+      if (Result.isError(loaded)) {
+        captureError(loaded.error, { kind: "served_history_read_failed" });
+        const kind = classifyAIError(loaded.error);
+        yield {
+          type: EventType.RUN_ERROR,
+          code: kind,
+          message: kind,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+        };
+        return;
+      }
+      served = loaded.value;
+    }
     yield {
       ...chunk,
       messages: withServedHistory({ messages: chunk.messages, served }),

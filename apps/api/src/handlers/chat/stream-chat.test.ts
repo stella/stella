@@ -62,6 +62,7 @@ import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DatabaseError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -3676,6 +3677,38 @@ describe("chat stream refs", () => {
     expect(assistant).toHaveProperty("parts");
     expect(JSON.stringify(assistant)).not.toContain(ref);
     expect(JSON.stringify(assistant)).toContain(resolved);
+  });
+
+  test("reports a failed served-history read as a terminal stream error", async () => {
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([
+          buildEngineSnapshot([]),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "later",
+            delta: "later content",
+          },
+        ]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.err(
+              new DatabaseError({ message: "sensitive storage detail" }),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+
+    expect(chunks).toEqual([
+      {
+        type: EventType.RUN_ERROR,
+        code: "unknown",
+        message: "unknown",
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(JSON.stringify(chunks)).not.toContain("sensitive storage detail");
   });
 
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
