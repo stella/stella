@@ -125,6 +125,8 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
         "IV ÚS999/99",
         "IV.US 999/99",
         "IV.ÚS/999/99",
+        "IV. ÚS 999/99-1",
+        "IV.ÚS/999/99−12",
       ],
     },
     {
@@ -133,7 +135,11 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
     },
     {
       canonical: "99Xyz/999999/2099",
-      variants: ["99 xyz 999999/2099", "99 xyz / 999999/2099"],
+      variants: [
+        "99 xyz 999999/2099",
+        "99 xyz / 999999/2099",
+        "99Xyz/999999/2099‑42",
+      ],
     },
   ],
 } as const satisfies Record<

@@ -32,6 +32,7 @@ type DecisionDocketGrammarFor<TJurisdiction extends string> = {
 export const DECISION_DASH_CLASS_SOURCE = String.raw`-‐-―−`;
 
 const DECISION_DASH_RE = new RegExp(`[${DECISION_DASH_CLASS_SOURCE}]`, "gu");
+const DECISION_SHEET_SUFFIX_RE = /-\d{1,4}$/u;
 
 /**
  * Normalize compatibility characters, dash styles, and whitespace before a
@@ -46,7 +47,7 @@ export const foldDecisionIdentifierInput = (raw: string): string =>
 
 export const canonicalDecisionIdentifierKey = (value: string): string =>
   foldDecisionIdentifierInput(value)
-    .replace(/-\d{1,4}$/u, "")
+    .replace(DECISION_SHEET_SUFFIX_RE, "")
     .normalize("NFKD")
     .replace(/\p{M}+/gu, "")
     .toLocaleLowerCase("und")
@@ -536,7 +537,10 @@ const slovakConstitutionalDocketOf = (
 const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
   jurisdiction: "SVK",
   parse: (raw) => {
-    const folded = foldDecisionIdentifierInput(raw);
+    const folded = foldDecisionIdentifierInput(raw).replace(
+      DECISION_SHEET_SUFFIX_RE,
+      "",
+    );
     const constitutional = slovakConstitutionalDocketOf(folded);
     if (constitutional !== null) {
       return { jurisdiction: "SVK", ...constitutional };

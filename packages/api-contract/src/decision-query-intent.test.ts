@@ -321,12 +321,15 @@ describe("an entry finds its decision within its own jurisdiction", () => {
     });
   }
 
-  test("a compact Slovak docket finds its spaced and compact spellings", () => {
+  test("a Slovak docket finds spaced, compact, and sheet-suffixed spellings", () => {
     for (const [typed, stored] of [
       ["II.ÚS55/98", "II. ÚS 55/98"],
       ["II. ÚS 55/98", "II.ÚS55/98"],
       ["PL.ÚS3/2019", "PL. ÚS 3/2019"],
       ["II.ÚS/251/04", "II. ÚS 251/04"],
+      ["II. ÚS 55/98", "II. ÚS 55/98-1"],
+      ["II.ÚS55/98", "II. ÚS 55/98−12"],
+      ["II. ÚS 55/98-1", "II.ÚS55/98"],
     ] as const) {
       const identity = identityOf(typed, DECISION_DOCKET_GRAMMARS.SVK);
       expect(exactDecisionMatches(identity, [hit(stored)]), typed).toEqual([
