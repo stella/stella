@@ -126,6 +126,8 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /** What a guard has to drive one adapter with. */
 export type EnrolledAdapterFixture = {
+  /** Source-column values before mapping, for exact raw-path conformance. */
+  readonly rawFieldValues?: Readonly<Record<string, unknown>>;
   /** The decision this adapter builds from the payloads it was served. */
   readonly buildDecision: () => Promise<IngestionResult>;
 };

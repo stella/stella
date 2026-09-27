@@ -43,12 +43,34 @@ const PART_FIELDS = [
 const PEOPLE = "people[].";
 const JOINDERS = "joinedBy[].";
 
-const prefixed = (
-  prefix: string,
-  fields: Readonly<Record<string, SourceFieldDisposition>>,
-) =>
+type PrefixedFieldsOptions = {
+  prefix: string;
+  part: string;
+  rowPath: readonly string[];
+  fields: Readonly<Record<string, SourceFieldDisposition>>;
+};
+
+const prefixed = ({ prefix, part, rowPath, fields }: PrefixedFieldsOptions) =>
   Object.entries(fields).map(
-    ([name, disposition]) => [`${prefix}${name}`, disposition] as const,
+    ([name, disposition]) =>
+      [
+        `${prefix}${name}`,
+        disposition.disposition === "excluded" ||
+        (disposition.target.type === "document" && name !== "headmatter")
+          ? ({
+              disposition: "stored",
+              target: {
+                type: "raw",
+                part,
+                path: [...rowPath, name],
+                reason:
+                  disposition.disposition === "excluded"
+                    ? disposition.reason
+                    : "Alternate source text is retained verbatim; the selected rendition forms the document",
+              },
+            } as const)
+          : disposition,
+      ] as const,
   );
 
 const keysOf = (value: unknown): string[] => {
@@ -87,9 +109,26 @@ const listSourceFields = (parts: SourceRawParts): readonly string[] => {
 export const COURTLISTENER_SOURCE_FIELD_INVENTORY = {
   status: "declared",
   fields: Object.fromEntries([
-    ...PART_FIELDS.flatMap(([, prefix, fields]) => prefixed(prefix, fields)),
-    ...prefixed(PEOPLE, PERSON_FIELDS),
-    ...prefixed(JOINDERS, { opinionId: JUDGES, personId: JUDGES }),
+    ...PART_FIELDS.flatMap(([part, prefix, fields]) =>
+      prefixed({
+        prefix,
+        part,
+        rowPath: prefix.includes("[]") ? ["*"] : [],
+        fields,
+      }),
+    ),
+    ...prefixed({
+      prefix: PEOPLE,
+      part: COURTLISTENER_RAW_PART.JUDGE_RELATIONS,
+      rowPath: ["people", "*"],
+      fields: PERSON_FIELDS,
+    }),
+    ...prefixed({
+      prefix: JOINDERS,
+      part: COURTLISTENER_RAW_PART.JUDGE_RELATIONS,
+      rowPath: ["joinedBy", "*"],
+      fields: { opinionId: JUDGES, personId: JUDGES },
+    }),
   ]),
   listSourceFields,
 } as const satisfies SourceFieldInventory;
