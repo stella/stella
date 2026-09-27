@@ -11223,7 +11223,7 @@ export const generatedRouteMap: RouteNode = {
                     flag: "--tax-id",
                     prop: "taxId",
                     required: false,
-                    part: "query",
+                    part: "body",
                     partPath: "taxId",
                   },
                   {

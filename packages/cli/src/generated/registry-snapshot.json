@@ -2764,7 +2764,7 @@
       "scope": "read"
     },
     "name": "check_counterparty",
-    "description": "Screen a company or a person against an official register for due diligence. `check` picks the source; `subject` is a company ID, a tax ID or a person by name and birth date. Returns one outcome: clear (the source answered and lists nothing adverse), found (the adverse records), not-registered (the source holds no record, e.g. not a VAT payer; not a clearance), unavailable (the source did not answer: the subject is NOT cleared; retry later or say the check could not run), or not-covered (the source cannot screen this subject type). Person matches rely on name and birth date: compare the record before relying on one.",
+    "description": "Screen a company or a person against an official register for due diligence. `check` picks the source; `subject` is a company ID, a tax ID or a person by name and birth date. Returns one outcome: clear (the source answered and lists nothing adverse), found (the adverse records), not-registered (the source holds no record, e.g. not a VAT payer; not a clearance), unavailable (the source did not answer: the subject is NOT cleared; retry later or say the check could not run), or not-covered (the source cannot screen this subject type, or needs the tax ID because one derived from the company ID was not on file). Person matches rely on name and birth date: compare the record before relying on one.",
     "inputSchema": {
       "type": "object",
       "required": ["check", "subject"],

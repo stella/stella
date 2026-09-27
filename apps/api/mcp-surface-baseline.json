@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28416,
-        "inputSchema": 75325,
-        "outputSchema": 52936,
+        "description": 28457,
+        "inputSchema": 75851,
+        "outputSchema": 53525,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 172382,
+      "payloadUtf8Bytes": 173540,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
