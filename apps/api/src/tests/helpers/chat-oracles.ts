@@ -19,6 +19,10 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn's run does not depend on the request that started it: once the
+   *  handler hands its response back, nothing reads the request, and its end
+   *  cuts no turn short whose response is read to the end. */
+  runOutlivesRequest: "chat.run.outlives-request",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",

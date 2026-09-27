@@ -86,6 +86,7 @@ import {
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import {
   KEEPS_PARTIAL_TOOL_INPUT,
   settleHistoryForRun,
@@ -404,10 +405,11 @@ const stampValidatedMessageWithActiveDraftContext = ({
 type ClaimedChatTurnOwnership =
   | { status: "unclaimed" }
   | {
-      status: "preflight" | "streaming";
+      status: "preflight";
       execution: ChatTurnExecution;
       owningAssistantMessage?: PersistableChatMessage | undefined;
-    };
+    }
+  | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
@@ -419,7 +421,10 @@ type ChatSendLifecycleOptions = {
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
 };
 
-/** Owns every resource that must be settled when a send stops before streaming. */
+/**
+ * Owns every resource that must be settled when a send stops before its run
+ * starts. Starting the run hands the claimed turn over for good.
+ */
 class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
@@ -463,32 +468,40 @@ class ChatSendLifecycle {
     };
   }
 
-  /** Whether this send still holds a turn it has to settle. */
-  ownsTurn(): boolean {
-    return this.claimedTurn.status !== "unclaimed";
-  }
-
-  handOffConnectors(loaded: boolean): void {
-    this.connectorsHandedOff = loaded;
-  }
-
-  markStreaming(): void {
-    if (this.claimedTurn.status === "unclaimed") {
-      panic("Cannot stream a chat turn without durable ownership");
+  /**
+   * Hand the claimed turn to its run, with the connector clients the run's
+   * tools use: from here the run alone settles the turn and closes them. The
+   * run gets nothing of the request, so it behaves the same once the request
+   * is gone.
+   */
+  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+    if (this.claimedTurn.status !== "preflight") {
+      return panic("Cannot start a run for a turn this send does not hold");
     }
-    this.claimedTurn = {
-      status: "streaming",
-      execution: this.claimedTurn.execution,
-      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
-    };
+    const run = new ChatTurnRun({
+      connectors,
+      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      owner: {
+        execution: this.claimedTurn.execution,
+        owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+        recordAuditEvent: this.options.recordAuditEvent,
+        safeDb: this.options.safeDb,
+        threadId: this.options.threadId,
+        userId: this.options.userId,
+        workspaceId: this.options.workspaceId,
+      },
+    });
+    this.claimedTurn = { status: "handed-over" };
+    this.connectorsHandedOff = connectors !== undefined;
+    return run;
   }
 
   async failCurrentTurn(
     code: ChatTurnFailureCode,
     retryable: boolean,
   ): Promise<void> {
-    if (this.claimedTurn.status === "unclaimed") {
-      panic("Cannot fail a chat turn without durable ownership");
+    if (this.claimedTurn.status !== "preflight") {
+      panic("Cannot fail a chat turn this send does not hold");
     }
     const failureResult = await persistFailedChatTurn({
       code,
@@ -510,8 +523,8 @@ class ChatSendLifecycle {
 
   /** The user stopped the turn before its provider call started. */
   async stopCurrentTurn() {
-    if (this.claimedTurn.status === "unclaimed") {
-      return panic("Cannot stop a chat turn without durable ownership");
+    if (this.claimedTurn.status !== "preflight") {
+      return panic("Cannot stop a chat turn this send does not hold");
     }
     const settlementResult = await persistStoppedChatTurn({
       execution: this.claimedTurn.execution,
@@ -529,8 +542,8 @@ class ChatSendLifecycle {
   }
 
   async interruptCurrentTurn() {
-    if (this.claimedTurn.status === "unclaimed") {
-      return panic("Cannot interrupt a chat turn without durable ownership");
+    if (this.claimedTurn.status !== "preflight") {
+      return panic("Cannot interrupt a chat turn this send does not hold");
     }
     const settlementResult = await persistInterruptedChatTurn({
       execution: this.claimedTurn.execution,
@@ -590,55 +603,79 @@ class ChatSendLifecycle {
 }
 
 /**
- * Renew the lease immediately before provider dispatch. Connector discovery
- * and prompt assembly can take meaningful time, so the renewal, not the
- * earlier claim, makes the owner cover the entire provider timeout. A stop
- * recorded during preflight ends the turn here, before any provider call.
- * Throws the send's refusal.
+ * The send's last step before its run starts. A closed connection ends the
+ * turn here, the last time the send asks its request anything. The lease is
+ * renewed immediately before provider dispatch: connector discovery and prompt
+ * assembly can take meaningful time, so the renewal, not the earlier claim,
+ * makes the owner cover the entire provider timeout. A stop recorded during
+ * preflight ends the turn here, before any provider call. Every refusal leaves
+ * the turn settled.
  */
-const renewBeforeDispatch = async ({
+const prepareDispatch = async ({
   execution,
+  isClientConnectionAborted,
   lifecycle,
   safeDb,
 }: {
   execution: ChatTurnExecution;
+  isClientConnectionAborted: () => boolean;
   lifecycle: ChatSendLifecycle;
   safeDb: SafeDb;
-}): Promise<void> => {
+}): Promise<Result<void, HandlerError<400 | 409 | 500>>> => {
+  if (isClientConnectionAborted()) {
+    await lifecycle.failCurrentTurn("internal", true);
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Client disconnected before stream started",
+      }),
+    );
+  }
   const leaseRenewal = await renewChatTurnExecutionLease({
     execution,
     safeDb,
   });
   if (Result.isError(leaseRenewal)) {
-    throw new HandlerError({
-      status: 500,
-      message: "Failed to renew chat execution lease",
-      cause: leaseRenewal.error,
-    });
+    await lifecycle.failCurrentTurn("internal", true);
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to renew chat execution lease",
+        cause: leaseRenewal.error,
+      }),
+    );
   }
   switch (leaseRenewal.value) {
     case "owned":
-      return;
+      return Result.ok(undefined);
     case "stop-requested": {
       const stopped = await lifecycle.stopCurrentTurn();
       if (Result.isError(stopped)) {
-        throw new HandlerError({
-          status: 500,
-          message: "Failed to store the stopped chat turn",
-          cause: stopped.error,
-        });
+        await lifecycle.failCurrentTurn("internal", true);
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to store the stopped chat turn",
+            cause: stopped.error,
+          }),
+        );
       }
-      throw new HandlerError({
-        code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
-        status: 409,
-        message: "Chat turn was stopped",
-      });
+      return Result.err(
+        new HandlerError({
+          code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+          status: 409,
+          message: "Chat turn was stopped",
+        }),
+      );
     }
     case "lost":
-      throw new HandlerError({
-        status: 409,
-        message: "Chat turn lost its durable execution owner",
-      });
+      await lifecycle.failCurrentTurn("internal", true);
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Chat turn lost its durable execution owner",
+        }),
+      );
     default:
       leaseRenewal.value satisfies never;
       return panic(`Unhandled standing: ${String(leaseRenewal.value)}`);
@@ -2293,39 +2330,34 @@ export const createSendMessage = (
           sendMode: body.sendMode,
         });
 
-        // A normal chat hands loaded clients to the stream. Agent runs leave
-        // this false so the outer finally closes any validation-only load.
-        lifecycle.handOffConnectors(externalMcpTools !== undefined);
+        yield* Result.await(
+          prepareDispatch({
+            execution: turnExecution,
+            isClientConnectionAborted,
+            lifecycle,
+            safeDb,
+          }),
+        );
+
         const isServerTool = (toolName: string) =>
           streamingTools[toolName]?.execute !== undefined;
         const response = yield* Result.await(
           Result.tryPromise({
             try: async () => {
+              // Snapshot what the registry has observed before streaming.
+              // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
+              // resolved during prompt construction and are not reads of the
+              // turn; tool schemas only offer matter refs, which the registry
+              // does not count as observed. Reads observed from here on widen
+              // `data_workspace_ids` as each tool returns and again at finish.
+              const workspaceIdsBeforeStream = toolReadScope.startTurn();
+
+              // The run owns the turn and the loaded connectors from here.
+              // Agent runs load none for streaming, so the send's cleanup
+              // closes any validation-only load.
+              const run = lifecycle.startRun(externalMcpTools);
               try {
-                if (isClientConnectionAborted()) {
-                  throw new HandlerError({
-                    status: 400,
-                    message: "Client disconnected before stream started",
-                  });
-                }
-
-                await renewBeforeDispatch({
-                  execution: turnExecution,
-                  lifecycle,
-                  safeDb,
-                });
-
-                // Snapshot what the registry has observed before streaming.
-                // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
-                // resolved during prompt construction and are not reads of the
-                // turn; tool schemas only offer matter refs, which the registry
-                // does not count as observed. Reads observed from here on widen
-                // `data_workspace_ids` as each tool returns and again at finish.
-                const workspaceIdsBeforeStream = toolReadScope.startTurn();
-
                 const chatResponse = await dependencies.streamResponse({
-                  abortSignal: createMeteredAIAbortSignal(),
-                  execution: turnExecution,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -2411,7 +2443,7 @@ export const createSendMessage = (
                       captureError(persistResult.error, {
                         threadId: body.threadId,
                       });
-                      await lifecycle.failCurrentTurn("persistence", true);
+                      await run.fail("persistence", true);
                       throw new HandlerError({
                         status: 500,
                         message: "Failed to persist assistant turn",
@@ -2492,6 +2524,7 @@ export const createSendMessage = (
                     }),
                   resolveAssistantValueRefs:
                     refRegistry.resolveAssistantValueRefs,
+                  run,
                   safeDb,
                   tenantWorkspaceIds: accessibleWorkspaceIds,
                   thirdPartyBoundary,
@@ -2504,33 +2537,18 @@ export const createSendMessage = (
                   workspaceId,
                 });
 
-                if (
-                  externalMcpTools !== undefined &&
-                  !isChatStreamResponse(chatResponse)
-                ) {
-                  await externalMcpTools.close();
-                  // streamChat can reject before it creates an SSE stream (for
-                  // example an anonymization-boundary or attachment-modality
-                  // refusal). No terminal middleware hook runs in that branch,
-                  // so settle the claimed turn here instead of leaving it
-                  // indefinitely running.
-                  await lifecycle.failCurrentTurn(
-                    "internal",
-                    chatResponse.status >= 500,
-                  );
-                } else {
-                  lifecycle.markStreaming();
+                // streamChat can reject before it creates an SSE stream (for
+                // example an anonymization-boundary or attachment-modality
+                // refusal). No terminal middleware hook runs in that branch,
+                // so settle the claimed turn here instead of leaving it
+                // indefinitely running.
+                if (!isChatStreamResponse(chatResponse)) {
+                  await run.fail("internal", chatResponse.status >= 500);
                 }
 
                 return chatResponse;
               } catch (error) {
-                if (externalMcpTools !== undefined) {
-                  await externalMcpTools.close();
-                }
-                // A stop settled the turn already.
-                if (lifecycle.ownsTurn()) {
-                  await lifecycle.failCurrentTurn("internal", true);
-                }
+                await run.fail("internal", true);
                 throw error;
               }
             },
