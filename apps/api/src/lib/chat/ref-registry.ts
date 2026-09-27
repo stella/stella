@@ -60,12 +60,6 @@ const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
   CHAT_SOURCE_CITATION_REF_PREFIX,
 );
 
-const REF_LINK_REGEXES = [
-  ENTITY_REF_LINK_REGEX,
-  WORKSPACE_REF_LINK_REGEX,
-  SOURCE_CITATION_REF_LINK_REGEX,
-] as const;
-
 /**
  * Text whose chat refs are durable: every ref this thread's registry bound is
  * a canonical link to its target, and every other ref-shaped token is
@@ -196,6 +190,11 @@ type RefState<TTarget> = {
   conflicted: Set<string>;
   /** Refs minted by a read path, as opposed to only offered to the model. */
   observed: Set<string>;
+  /**
+   * Refs the model has been shown: offered, read, or restored from history.
+   * Only these are bound when the model writes them.
+   */
+  shown: Set<string>;
 };
 
 type ResolveRefsResult<TTarget> = Result<TTarget[], ChatToolError>;
@@ -208,6 +207,7 @@ const createRefState = <TTarget>(prefix: string): RefState<TTarget> => ({
   targetToRef: new Map(),
   conflicted: new Set(),
   observed: new Set(),
+  shown: new Set(),
 });
 
 const REF_MINT_PURPOSE = {
@@ -215,6 +215,8 @@ const REF_MINT_PURPOSE = {
   observe: "observe",
   /** The id is only offered as a choice (a tool schema enum), not read. */
   offer: "offer",
+  /** The id only widens what the turn read, and is not shown by this ref. */
+  register: "register",
 } as const;
 
 type RefMintPurpose = (typeof REF_MINT_PURPOSE)[keyof typeof REF_MINT_PURPOSE];
@@ -238,8 +240,11 @@ const getOrCreateRef = <TTarget>({
     state.targetToRef.set(key, ref);
     state.refToTarget.set(ref, target);
   }
-  if (purpose === REF_MINT_PURPOSE.observe) {
+  if (purpose !== REF_MINT_PURPOSE.offer) {
     state.observed.add(ref);
+  }
+  if (purpose !== REF_MINT_PURPOSE.register) {
+    state.shown.add(ref);
   }
   return ref;
 };
@@ -290,6 +295,7 @@ const restoreRef = <TTarget>({
   }
   state.refToKey.set(ref, key);
   state.refToTarget.set(ref, target);
+  state.shown.add(ref);
   if (!state.targetToRef.has(key)) {
     state.targetToRef.set(key, ref);
   }
@@ -388,12 +394,10 @@ export type ResolveRefIdProps = {
   value: unknown;
 };
 
-/** Where a message showed the model refs. */
-export type ChatRefsShown = {
-  /** Outputs of tools the server ran. */
-  outputs: readonly unknown[];
-  /** The assistant's text, whose ref links are shown refs. */
-  texts: readonly string[];
+/** The parts of a message that may hold refs the model was shown. */
+export type ChatRefsWritten = {
+  /** Model-written parts and tool inputs, and server tool outputs. */
+  values: readonly unknown[];
 };
 
 export type ChatRefRegistry = {
@@ -426,14 +430,13 @@ export type ChatRefRegistry = {
    */
   hydrateRefId: (props: HydrateRefIdProps) => unknown;
   /**
-   * Bindings for every ref this registry holds that the model was shown:
-   * any whole token in a tool output this server produced, and the target
-   * of a ref link in the assistant's text. A token only present elsewhere
-   * (text a user typed, bare prose) is not one this registry showed, so it
-   * is never bound. Persisted with the message so a later request of the
-   * thread resolves each shown ref to the same target.
+   * Bindings for every ref the model was shown (offered, read, or restored)
+   * that appears as a whole token anywhere in `written`. A token the model
+   * was never shown is not bound, whatever this registry holds. Persisted
+   * with the message so a later request of the thread resolves each ref to
+   * the same target.
    */
-  collectRefBindings: (shown: ChatRefsShown) => ChatRefBinding[];
+  collectRefBindings: (written: ChatRefsWritten) => ChatRefBinding[];
   /** Resolve one declared model-facing ref without guessing from its text. */
   resolveRefId: (props: ResolveRefIdProps) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
@@ -576,9 +579,11 @@ export const createChatRefRegistry = (
     // Source citations necessarily disclose content from their owning matter.
     // Register the entity as well so thread-scope persistence cannot omit that
     // workspace when the final answer contains only passage citations.
-    toEntityRef({
-      entityId: target.entityId,
-      workspaceId: target.workspaceId,
+    getOrCreateRef({
+      key: createEntityRefKey(target),
+      purpose: REF_MINT_PURPOSE.register,
+      state: entityState,
+      target: { entityId: target.entityId, workspaceId: target.workspaceId },
     });
     return getOrCreateRef({
       key: createSourceCitationRefKey(target),
@@ -1021,30 +1026,24 @@ export const createChatRefRegistry = (
     return null;
   };
 
+  const wasShown = (ref: string) =>
+    [
+      contactState,
+      entityState,
+      matterState,
+      propertyState,
+      sourceCitationState,
+    ].some(({ shown }) => shown.has(ref));
+
   const collectRefBindings = ({
-    outputs,
-    texts,
-  }: ChatRefsShown): ChatRefBinding[] => {
-    const refs = new Set<string>();
-    for (const output of outputs) {
-      for (const [token] of JSON.stringify(output).matchAll(
-        MINTED_REF_TOKEN_REGEX,
-      )) {
-        refs.add(token);
-      }
-    }
-    for (const text of texts) {
-      for (const regex of REF_LINK_REGEXES) {
-        for (const [, ref] of text.matchAll(regex)) {
-          if (ref !== undefined) {
-            refs.add(ref);
-          }
-        }
-      }
-    }
+    values,
+  }: ChatRefsWritten): ChatRefBinding[] => {
+    const refs = new Set(
+      values.flatMap((value) => findChatRefTokens(JSON.stringify(value))),
+    );
     const bindings: ChatRefBinding[] = [];
     for (const ref of refs) {
-      const binding = toRefBinding(ref);
+      const binding = wasShown(ref) ? toRefBinding(ref) : null;
       if (binding !== null) {
         bindings.push(binding);
       }

@@ -62,7 +62,7 @@ const runRequest = ({
   return {
     registry,
     shown,
-    persisted: registry.collectRefBindings({ outputs: [message], texts: [] }),
+    persisted: registry.collectRefBindings({ values: [message] }),
   };
 };
 
@@ -123,7 +123,7 @@ describe("chat refs across the requests of a thread", () => {
     const first = createChatRefRegistry();
     const matterRef = first.toMatterRef(WORKSPACE_IDS[1]);
     const next = createChatRefRegistry(
-      first.collectRefBindings({ outputs: [{ matter: matterRef }], texts: [] }),
+      first.collectRefBindings({ values: [{ matter: matterRef }] }),
     );
 
     expect(next.offerMatterRef(WORKSPACE_IDS[0])).toBe("mat_2");
@@ -138,8 +138,8 @@ describe("chat refs across the requests of a thread", () => {
     expect(refA).toBe(refB);
 
     const next = createChatRefRegistry([
-      ...registryA.collectRefBindings({ outputs: [refA], texts: [] }),
-      ...registryB.collectRefBindings({ outputs: [refB], texts: [] }),
+      ...registryA.collectRefBindings({ values: [refA] }),
+      ...registryB.collectRefBindings({ values: [refB] }),
     ]);
 
     expect(resolveEntity(next, refA)).toBeNull();
@@ -153,10 +153,7 @@ describe("chat refs across the requests of a thread", () => {
     }
 
     const refs = registry
-      .collectRefBindings({
-        outputs: ["see ent_12, xent_2 and ent_3x"],
-        texts: [],
-      })
+      .collectRefBindings({ values: ["see ent_12, xent_2 and ent_3x"] })
       .map(({ ref }) => ref);
 
     expect(refs).toEqual(["ent_12"]);
@@ -176,7 +173,7 @@ describe("chat refs across the requests of a thread", () => {
       workspaceId: WORKSPACE_IDS[0],
     });
     const next = createChatRefRegistry(
-      first.collectRefBindings({ outputs: [], texts: [`[p. 3](${href})`] }),
+      first.collectRefBindings({ values: [`[p. 3](${href})`] }),
     );
 
     expect(next.resolveAssistantTextRefs(`[p. 3](${href})`)).not.toContain(
@@ -187,7 +184,7 @@ describe("chat refs across the requests of a thread", () => {
   test("restoring the same binding twice keeps it, and reports nothing", () => {
     const first = createChatRefRegistry();
     const ref = first.toEntityRef(entityTarget(0));
-    const bindings = first.collectRefBindings({ outputs: [ref], texts: [] });
+    const bindings = first.collectRefBindings({ values: [ref] });
 
     const next = createChatRefRegistry([...bindings, ...bindings]);
 
@@ -199,7 +196,7 @@ describe("chat refs across the requests of a thread", () => {
     const first = createChatRefRegistry();
     const earlier = first.toEntityRef(entityTarget(0));
     const binding =
-      first.collectRefBindings({ outputs: [earlier], texts: [] }).at(0) ??
+      first.collectRefBindings({ values: [earlier] }).at(0) ??
       expect.unreachable("The registry holds the ref it minted");
     // A later spelling of the same target, as a request that could not see
     // the earlier binding leaves behind.
@@ -218,29 +215,41 @@ describe("chat refs across the requests of a thread", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("binds only refs a tool output or an answer link showed", () => {
+  test("binds only refs the model was shown", () => {
     const registry = createChatRefRegistry();
     for (let index = 0; index < 7; index += 1) {
       registry.toEntityRef(entityTarget(index));
     }
 
-    // `ent_7` exists in the registry, but text naming it bare (what a user
-    // typed, or prose) never showed it.
-    expect(
-      registry.collectRefBindings({
-        outputs: [],
-        texts: ["Use ent_7 please", "ent_7 is the one"],
-      }),
-    ).toEqual([]);
+    // A citation registers its document for scope without showing its ref.
+    registry.toSourceCitationHref({
+      type: "pdf-bates",
+      bates: "NW-000042",
+      entityId: entityTarget(9).entityId,
+      entityVersionId: brandPersistedEntityVersionId(
+        "01a0df7d-c93a-7105-99f9-c66cf1b14d10",
+      ),
+      fieldId: brandPersistedFieldId("01a0df7d-c93a-7105-99f9-c66cf1b14d11"),
+      pageNumber: 3,
+      workspaceId: entityTarget(9).workspaceId,
+    });
+
+    // Every shown ref the model writes is bound, wherever it writes it: a
+    // script's input, bare prose, a link. `ent_8` was never shown.
     expect(
       registry
         .collectRefBindings({
-          outputs: [{ documents: [{ id: "ent_2" }] }],
-          texts: ["See [the NDA](#stella-entity-ref=ent_7)"],
+          values: [
+            {
+              typescriptCode: 'external_read_document({ entity_id: "ent_1" })',
+            },
+            "Use ent_7 please, not ent_8",
+            "See [the NDA](#stella-entity-ref=ent_2)",
+          ],
         })
         .map(({ ref }) => ref)
         .toSorted(),
-    ).toEqual(["ent_2", "ent_7"]);
+    ).toEqual(["ent_1", "ent_2", "ent_7"]);
   });
 
   test("a retired spelling resolves to nothing and is never minted again", () => {
@@ -259,7 +268,7 @@ describe("chat refs across the requests of a thread", () => {
     const ref = first.toEntityRef(entityTarget(0));
 
     const next = createChatRefRegistry(
-      first.collectRefBindings({ outputs: [ref], texts: [] }),
+      first.collectRefBindings({ values: [ref] }),
       [ref],
     );
 

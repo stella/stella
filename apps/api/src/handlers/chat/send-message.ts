@@ -50,7 +50,7 @@ import type {
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
 import {
-  chatRefsShownIn,
+  chatRefsWrittenIn,
   toolCallIdsOf,
 } from "@/api/handlers/chat/chat-refs-shown";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
@@ -3152,7 +3152,7 @@ const resolveAssistantMessageRefs = ({
       turnWorkspaceIds.add(id);
     }
     const shownRefBindings = refRegistry.collectRefBindings(
-      chatRefsShownIn({ isServerTool, parts: message.parts }),
+      chatRefsWrittenIn({ isServerTool, parts: message.parts }),
     );
     refBindings.push(...shownRefBindings);
     const refContext = {

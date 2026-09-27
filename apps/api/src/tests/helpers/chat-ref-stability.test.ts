@@ -75,9 +75,7 @@ describe("chat.persisted.refs-stable", () => {
     const { ledger, registry, stored } = firstRequest();
     const next = ledger.track(
       THREAD_ID,
-      createChatRefRegistry(
-        registry.collectRefBindings({ outputs: stored, texts: [] }),
-      ),
+      createChatRefRegistry(registry.collectRefBindings({ values: stored })),
     );
     next.toEntityRef(DOCUMENT_B);
 
