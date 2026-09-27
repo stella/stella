@@ -10,7 +10,7 @@ import { readChatTurnExecutionStanding } from "@/api/handlers/chat/chat-turn-per
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { PersistableChatMessage } from "@/api/handlers/chat/types";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -36,6 +36,14 @@ const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
   expected: [],
 });
+const SETTLEMENT_FAILED_SINK = failureSink({
+  event: "chat.turn.failure_settlement_failed",
+  expected: [],
+});
+const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
+  event: "chat.turn.connector_close_failed",
+  expected: [],
+});
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -49,7 +57,7 @@ type ChatTurnRunOwner = {
 };
 
 /** Connector clients the run's tools talk through. */
-type ChatTurnRunConnectors = { close: () => Promise<void> };
+type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 
 /** What cuts a run's producer short. */
 type ChatTurnRunControl = {
@@ -158,7 +166,10 @@ export class ChatTurnRun {
       workspaceId: owner.workspaceId,
     });
     if (Result.isError(failure)) {
-      captureError(failure.error, { threadId: owner.threadId });
+      observeFailure(failure.error, {
+        sink: SETTLEMENT_FAILED_SINK,
+        ctx: { threadId: owner.threadId },
+      });
     }
     if (status !== "handed-over") {
       return;
@@ -169,7 +180,10 @@ export class ChatTurnRun {
         async () => await connectors.close(),
       );
       if (Result.isError(closed)) {
-        captureError(closed.error, { threadId: owner.threadId });
+        observeFailure(closed.error, {
+          sink: CONNECTOR_CLOSE_FAILED_SINK,
+          ctx: { threadId: owner.threadId },
+        });
       }
     }
     this.release();
