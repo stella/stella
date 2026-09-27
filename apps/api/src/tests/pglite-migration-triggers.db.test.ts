@@ -5,7 +5,8 @@
  * Schema push has no construct for triggers, so each one reaches the test
  * database only through an installer in `pglite-schema.ts`. The allowlist
  * names the triggers not installed yet and only shrinks: an entry that is
- * installed, or that the migrations no longer define, fails the test.
+ * installed, that the migrations no longer define, or that a migration after
+ * the allowlist closed created, fails the test.
  */
 
 import type { PGlite } from "@electric-sql/pglite";
@@ -74,21 +75,34 @@ const triggerKey = (match: RegExpExecArray | null): string | undefined => {
     : `${table}.${trigger}`;
 };
 
-/** The triggers left in place after every migration runs, in order. */
-const triggersDefinedByMigrations = (): Set<string> => {
-  const defined = new Set<string>();
+/**
+ * The last migration whose triggers may be allowlisted. A trigger created by
+ * a later migration is installed in the test database from the start.
+ */
+const ALLOWLIST_CLOSED_AFTER_MIGRATION =
+  "20260926190000_chat_turn_cancel_requested_at";
+
+/**
+ * The triggers left in place after every migration runs, in order, each with
+ * the migration that last created it.
+ */
+const triggersDefinedByMigrations = (): Map<string, string> => {
+  const defined = new Map<string, string>();
   const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => nodePath.join(DRIZZLE_DIR, entry.name, "migration.sql"))
+    .map((entry) => entry.name)
     .toSorted();
-  for (const migrationPath of migrations) {
-    const statements = readFileSync(migrationPath, "utf-8")
+  for (const migration of migrations) {
+    const statements = readFileSync(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      "utf-8",
+    )
       .split("--> statement-breakpoint")
       .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
     for (const statement of statements) {
       const created = triggerKey(CREATE_TRIGGER.exec(statement));
       if (created !== undefined) {
-        defined.add(created);
+        defined.set(created, migration);
       }
       const dropped = triggerKey(DROP_TRIGGER.exec(statement));
       if (dropped !== undefined) {
@@ -101,7 +115,7 @@ const triggersDefinedByMigrations = (): Set<string> => {
             .trim()
             .replaceAll('"', "")
             .replace(/^public\./u, "");
-          for (const trigger of [...defined]) {
+          for (const trigger of [...defined.keys()]) {
             if (trigger.startsWith(`${name}.`)) {
               defined.delete(trigger);
             }
@@ -135,7 +149,7 @@ afterAll(async () => {
 
 describe("migration triggers in the test database", () => {
   test("every trigger the migrations define is installed or allowlisted", () => {
-    const missing = [...defined]
+    const missing = [...defined.keys()]
       .filter((trigger) => !installed.has(trigger) && !allowlisted.has(trigger))
       .toSorted();
 
@@ -156,6 +170,23 @@ describe("migration triggers in the test database", () => {
     ).toEqual([]);
   });
 
+  test("the allowlist takes no trigger from a newer migration", () => {
+    const tooNew = [...allowlisted]
+      .filter((trigger) => {
+        const migration = defined.get(trigger);
+        return (
+          migration !== undefined &&
+          migration > ALLOWLIST_CLOSED_AFTER_MIGRATION
+        );
+      })
+      .toSorted();
+
+    expect(
+      tooNew,
+      `A trigger created after ${ALLOWLIST_CLOSED_AFTER_MIGRATION} is installed in the test database, not allowlisted: ${tooNew.join(", ")}`,
+    ).toEqual([]);
+  });
+
   test("the test database installs no trigger the migrations do not define", () => {
     const undefinedTriggers = [...installed]
       .filter((trigger) => !defined.has(trigger))
@@ -168,5 +199,8 @@ describe("migration triggers in the test database", () => {
     // A parser that matched nothing would satisfy every assertion above.
     expect(defined.size).toBeGreaterThan(50);
     expect(installed.size).toBeGreaterThan(25);
+    expect(readdirSync(DRIZZLE_DIR)).toContain(
+      ALLOWLIST_CLOSED_AFTER_MIGRATION,
+    );
   });
 });
