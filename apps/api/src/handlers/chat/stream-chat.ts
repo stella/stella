@@ -1607,6 +1607,24 @@ const restoreInterruptedToolCallInputs = (
   };
 };
 
+const isRunFinishedOutcome = (
+  lifecycle: ReturnType<typeof tanStackStreamEventLifecycle>,
+): boolean => {
+  switch (lifecycle) {
+    case "completed":
+    case "waiting":
+    case "cancelled":
+      return true;
+    case "content":
+    case "failed":
+    case "started":
+      return false;
+    default:
+      lifecycle satisfies never;
+      return panic(`Unhandled TanStack stream lifecycle: ${String(lifecycle)}`);
+  }
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1619,6 +1637,7 @@ export const processServerChatStream = async function* ({
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
+  let runCancelled = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
@@ -1760,7 +1779,8 @@ export const processServerChatStream = async function* ({
           ? normalizeRunErrorChunk(sourceChunk)
           : sourceChunk;
       const lifecycle = tanStackStreamEventLifecycle(chunk);
-      if (lifecycle === "completed" || lifecycle === "waiting") {
+      if (isRunFinishedOutcome(lifecycle)) {
+        runCancelled ||= lifecycle === "cancelled";
         if (chunk.type !== EventType.RUN_FINISHED) {
           panic("Unhandled TanStack completed stream event");
         }
@@ -1832,14 +1852,15 @@ export const processServerChatStream = async function* ({
         type: "awaiting-user",
         interaction: awaitingUserInteraction,
       };
-    } else if (abortSignal.aborted) {
+    } else if (abortSignal.aborted || runCancelled) {
       // A cancelled run drains like a finished one. TanStack's agent loop
       // checks its cancellation before it reads each adapter chunk, so the
       // terminal `RUN_ERROR` the adapter yields for the aborted provider
       // request is dropped rather than forwarded, and this generator sees a
       // source that simply ended. Grading that silence as a completion
       // persists a turn with no answer and no reason; the signal is what says
-      // the turn was cut, and which signal says why.
+      // the turn was cut, and which signal says why. A finish whose outcome is
+      // `cancelled` says the same.
       outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
     } else {
       outcome = { type: "completed" };
@@ -2435,6 +2456,9 @@ const createOutgoingChunkTransformer = ({
     }
 
     if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      if (typeof chunk.content !== "string") {
+        return panic("The engine emits a tool result's content as a string");
+      }
       const toolName = toolNamesByCallId.get(chunk.toolCallId);
       const result = transformToolResultContent({
         boundary,

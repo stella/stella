@@ -8,8 +8,8 @@ import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentAp
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
 import type { CentsAmount as stll_money_CentsAmount } from "@stll/money";
 import type { FieldDateFormat as stll_template_conditions_FieldDateFormat, NamedCondition as stll_template_conditions_NamedCondition } from "@stll/template-conditions";
-import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
-import type { TextPart as tanstack_ai_client_TextPart, ThinkingPart as tanstack_ai_client_ThinkingPart, ToolResultPart as tanstack_ai_client_ToolResultPart, UIMessage as tanstack_ai_client_UIMessage } from "@tanstack/ai-client";
+import type { AudioPart as tanstack_ai_AudioPart, ContentPart as tanstack_ai_ContentPart, DocumentPart as tanstack_ai_DocumentPart, ImagePart as tanstack_ai_ImagePart, JSONSchema as tanstack_ai_JSONSchema, StructuredOutputPart as tanstack_ai_StructuredOutputPart, SubagentStatus as tanstack_ai_SubagentStatus, TextPart as tanstack_ai_TextPart, ThinkingPart as tanstack_ai_ThinkingPart, ToolCallPart as tanstack_ai_ToolCallPart, ToolExecutionContext as tanstack_ai_ToolExecutionContext, ToolResultState as tanstack_ai_ToolResultState, UIResourcePart as tanstack_ai_UIResourcePart, VideoPart as tanstack_ai_VideoPart } from "@tanstack/ai";
+import type { SubagentPart as tanstack_ai_client_SubagentPart, TextPart as tanstack_ai_client_TextPart, ThinkingPart as tanstack_ai_client_ThinkingPart, ToolResultPart as tanstack_ai_client_ToolResultPart, UIMessage as tanstack_ai_client_UIMessage } from "@tanstack/ai-client";
 import type { Brand as valibot_Brand } from "valibot";
 
 export type WebRoutes = {
@@ -31186,11 +31186,11 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   metadata?: Tc200f177cb;
   execute?: T8c66118833;
   readonly [__symbol0]?: Tc9666df965;
-}>, unknown> & {
+}>, unknown, undefined> & {
   metadata?: T076e122386;
 });
 
-export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T2fd6632c84 | T6acb3b5690 | T518b961ae2 | T5f53c435e4 | T608df20a57 | T99c39ce719 | T9155f21e5d | T9d2f036b37 | T91cbd6d462 | T2e3d039a8f | Tf72e354c94 | Tca31ec9b81 | T57ef812287 | T50771b5329 | T95f4d90090 | T3537429844 | Tc53ef6d8b6 | Tfd3f6ed9f2 | T30b07e7096 | T3f053f8a74 | T50533ddde2 | Teb1573e4e4 | T8abbca0884 | T457a2eee80 | Tf95c202d07 | T725cfe06f6 | T34c45d3600 | T99366f51bd | T1a29cebfd3 | T4faf43eff8 | T652427854b | Ta7e8599a87 | T001a6f66f8 | T483305fff2 | Tb8001a5589 | T0554c5a7f6 | T27d41fcb28 | Teb5dfc4307 | T4ff75c3887 | Tca005a5982 | Tbeafb502b6 | Tfdf95d3a5c | Tf70b14a1df | T10b7929d15 | T5a244a6d74 | Tc90fa1f75d | T50abdc8d77 | Tb657b47583 | T9494f3b7e1 | T9d2d39194e | T481f345ab9 | T5286af8692 | T564e4686e9 | Td95c5f4815 | T4dfe5ecddd | T8eada61c09 | T60b437ab96 | T2e4323b8d0 | T2533f06b93 | T1c9e9da346 | T6215759c21 | Tf18d3bb9ff | T76f85bb4f2 | Tdc8f8bc7c8 | Tb03fabefe4 | Tf86a8847bd | Tf543fda330 | T3e2f9c741e | Tc453bc50ea | Tec8933aa01 | T404cd7e0b9 | tanstack_ai_StructuredOutputPart<unknown>);
+export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T2fd6632c84 | T6acb3b5690 | T518b961ae2 | T5f53c435e4 | T608df20a57 | T99c39ce719 | T9155f21e5d | T9d2f036b37 | T91cbd6d462 | T2e3d039a8f | Tf72e354c94 | Tca31ec9b81 | T57ef812287 | T50771b5329 | T95f4d90090 | T3537429844 | Tc53ef6d8b6 | Tfd3f6ed9f2 | T30b07e7096 | T3f053f8a74 | T50533ddde2 | Teb1573e4e4 | T8abbca0884 | T457a2eee80 | Tf95c202d07 | T725cfe06f6 | T34c45d3600 | T99366f51bd | T1a29cebfd3 | T4faf43eff8 | T652427854b | Ta7e8599a87 | T001a6f66f8 | T483305fff2 | Tb8001a5589 | T0554c5a7f6 | T27d41fcb28 | Teb5dfc4307 | T4ff75c3887 | Tca005a5982 | Tbeafb502b6 | Tfdf95d3a5c | Tf70b14a1df | T10b7929d15 | T5a244a6d74 | Tc90fa1f75d | T50abdc8d77 | Tb657b47583 | T9494f3b7e1 | T9d2d39194e | T481f345ab9 | T5286af8692 | T564e4686e9 | Td95c5f4815 | T4dfe5ecddd | T8eada61c09 | T60b437ab96 | T2e4323b8d0 | T2533f06b93 | T1c9e9da346 | T6215759c21 | Tf18d3bb9ff | T76f85bb4f2 | Tdc8f8bc7c8 | Tb03fabefe4 | Tf86a8847bd | Tf543fda330 | T3e2f9c741e | Tc453bc50ea | Tec8933aa01 | T404cd7e0b9 | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_client_SubagentPart);
 
 export type ChatSourceDocument = T237ab7a6b1;
 
@@ -32228,6 +32228,11 @@ type T187f4d6f63 = {
   companyRepresentationsBody: string;
   generalHeading: string;
   generalBody: string;
+};
+
+type T18a838d547 = {
+  code?: string;
+  message: string;
 };
 
 type T18cef8e315 = string & valibot_Brand<"SafeId"> & {
@@ -33949,6 +33954,10 @@ type T51cad8ef60 = T208b997ed2 | Tfec33edb63 | T24e4183eca | T2a6d9b3ccf;
 type T51e72178de = {
   readonly input: Tb985d60808;
   readonly output: Tb985d60808;
+};
+
+type T5213e57f92 = {
+  [key: string]: any;
 };
 
 type T522ec82615 = {
@@ -36812,7 +36821,25 @@ type Tc2b225d3df = {
     error?: string;
     metadata?: Tc200f177cb;
     createdAt?: string;
-  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T2fd6632c84 | T6acb3b5690 | T518b961ae2 | T5f53c435e4 | T608df20a57 | T99c39ce719 | T9155f21e5d | T9d2f036b37 | T91cbd6d462 | T2e3d039a8f | Tf72e354c94 | Tca31ec9b81 | T57ef812287 | T50771b5329 | T95f4d90090 | T3537429844 | Tc53ef6d8b6 | Tfd3f6ed9f2 | T30b07e7096 | T3f053f8a74 | T50533ddde2 | Teb1573e4e4 | T8abbca0884 | T457a2eee80 | Tf95c202d07 | T725cfe06f6 | T34c45d3600 | T99366f51bd | T1a29cebfd3 | T4faf43eff8 | T652427854b | Ta7e8599a87 | T001a6f66f8 | T483305fff2 | Tb8001a5589 | T0554c5a7f6 | T27d41fcb28 | Teb5dfc4307 | T4ff75c3887 | Tca005a5982 | Tbeafb502b6 | Tfdf95d3a5c | Tf70b14a1df | T10b7929d15 | T5a244a6d74 | Tc90fa1f75d | T50abdc8d77 | Tb657b47583 | T9494f3b7e1 | T9d2d39194e | T481f345ab9 | T5286af8692 | T564e4686e9 | Td95c5f4815 | T4dfe5ecddd | T8eada61c09 | T60b437ab96 | T2e4323b8d0 | T2533f06b93 | T1c9e9da346 | T6215759c21 | Tf18d3bb9ff | T76f85bb4f2 | Tdc8f8bc7c8 | Tb03fabefe4 | Tf86a8847bd | Tf543fda330 | T3e2f9c741e | Tc453bc50ea | Tec8933aa01 | T404cd7e0b9 | tanstack_ai_StructuredOutputPart<unknown>)>;
+  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T2fd6632c84 | T6acb3b5690 | T518b961ae2 | T5f53c435e4 | T608df20a57 | T99c39ce719 | T9155f21e5d | T9d2f036b37 | T91cbd6d462 | T2e3d039a8f | Tf72e354c94 | Tca31ec9b81 | T57ef812287 | T50771b5329 | T95f4d90090 | T3537429844 | Tc53ef6d8b6 | Tfd3f6ed9f2 | T30b07e7096 | T3f053f8a74 | T50533ddde2 | Teb1573e4e4 | T8abbca0884 | T457a2eee80 | Tf95c202d07 | T725cfe06f6 | T34c45d3600 | T99366f51bd | T1a29cebfd3 | T4faf43eff8 | T652427854b | Ta7e8599a87 | T001a6f66f8 | T483305fff2 | Tb8001a5589 | T0554c5a7f6 | T27d41fcb28 | Teb5dfc4307 | T4ff75c3887 | Tca005a5982 | Tbeafb502b6 | Tfdf95d3a5c | Tf70b14a1df | T10b7929d15 | T5a244a6d74 | Tc90fa1f75d | T50abdc8d77 | Tb657b47583 | T9494f3b7e1 | T9d2d39194e | T481f345ab9 | T5286af8692 | T564e4686e9 | Td95c5f4815 | T4dfe5ecddd | T8eada61c09 | T60b437ab96 | T2e4323b8d0 | T2533f06b93 | T1c9e9da346 | T6215759c21 | Tf18d3bb9ff | T76f85bb4f2 | Tdc8f8bc7c8 | Tb03fabefe4 | Tf86a8847bd | Tf543fda330 | T3e2f9c741e | Tc453bc50ea | Tec8933aa01 | T404cd7e0b9 | tanstack_ai_StructuredOutputPart<unknown> | {
+    type: "subagent";
+    subagent: {
+      stop?: {
+        (): void;
+      };
+      id: string;
+      status: tanstack_ai_SubagentStatus;
+      parentRunId?: string;
+      interruptIds?: undefined | Array<string>;
+      messages: Array<Tf74ece9516>;
+      error?: T18a838d547;
+      name: string;
+      description?: string;
+      metadata?: T5213e57f92;
+      parentSubagentRunId?: string;
+      parentToolCallId?: string;
+    };
+  })>;
 };
 
 type Tc343157371 = {
@@ -38099,6 +38126,42 @@ type Tf72e354c94 = {
   state: T7bc9fb91b4;
   output?: unknown;
 } & T21d1ccce7b;
+
+type Tf74ece9516 = {
+  id: string;
+  role: Tee7c8f6638;
+  parts: Array<(tanstack_ai_UIResourcePart | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_TextPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ToolCallPart<unknown> | {
+    type: "tool-result";
+    id?: string;
+    name?: string;
+    toolCallId: string;
+    content: (string | Array<tanstack_ai_ContentPart<unknown, unknown, unknown, unknown, unknown>>);
+    state: tanstack_ai_ToolResultState;
+    error?: string;
+    metadata?: Tc200f177cb;
+    createdAt?: string;
+  } | tanstack_ai_ThinkingPart | {
+    type: "subagent";
+    subagent: {
+      id: string;
+      status: tanstack_ai_SubagentStatus;
+      parentRunId?: string;
+      interruptIds?: undefined | Array<string>;
+      messages: Array<Tf74ece9516>;
+      error?: T18a838d547;
+      name: string;
+      description?: string;
+      metadata?: T5213e57f92;
+      parentSubagentRunId?: string;
+      parentToolCallId?: string;
+    };
+  })>;
+  createdAt?: string;
+  name?: string;
+  metadata?: {
+    [key: string]: any;
+  };
+};
 
 type Tf760005e9d = {
   version: 1;

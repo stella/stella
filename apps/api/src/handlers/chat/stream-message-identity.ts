@@ -416,7 +416,7 @@ const mergeCopies = ({
   }
   const { content: _content, toolCalls: _toolCalls, ...identity } = copies[0];
   const metadata = withToolCallMetadata({
-    metadata: "metadata" in identity ? identity.metadata : undefined,
+    metadata: identity.metadata,
     toolCallMetadata,
   });
   return {
@@ -445,9 +445,9 @@ const withToolCallMetadata = ({
   metadata,
   toolCallMetadata,
 }: {
-  metadata: unknown;
+  metadata: AssistantSnapshotMessage["metadata"];
   toolCallMetadata: Record<string, unknown>;
-}): unknown => {
+}): AssistantSnapshotMessage["metadata"] => {
   if (Object.keys(toolCallMetadata).length === 0) {
     return metadata;
   }

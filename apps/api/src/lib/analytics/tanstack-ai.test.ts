@@ -860,7 +860,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     },
   );
 
-  test("the SDK preserves truncation metadata when combined structured output fails JSON parsing", async () => {
+  test("the SDK reports combined structured output cut off at the token limit, with its truncation metadata", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const { logger } = await import("@/api/lib/observability/logger");
@@ -943,7 +943,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           callbacks.captureError(error);
           throw error;
         }),
-      ).rejects.toThrow("Failed to parse structured output as JSON");
+      ).rejects.toThrow("the maximum token limit was reached");
       expect(
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",
