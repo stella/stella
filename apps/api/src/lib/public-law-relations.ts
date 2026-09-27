@@ -1,5 +1,5 @@
 /**
- * Exact PostgreSQL columns exposed through the public-law reader role.
+ * Exact PostgreSQL columns required or permitted for the public-law reader role.
  *
  * Every relation is column-restricted. Operational cursors, source config,
  * raw publisher payloads, ingestion leases and index-repair state stay on the
@@ -46,22 +46,65 @@ export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
 
+const PROVISION_LINK_STATUS_GRANT = "permitted";
+
+/** Columns the provision link status capability requires after its grants land. */
+export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
+  case_law_provision_citations: {
+    span_role: PROVISION_LINK_STATUS_GRANT,
+    print_piece_id: PROVISION_LINK_STATUS_GRANT,
+    print_start: PROVISION_LINK_STATUS_GRANT,
+    print_end: PROVISION_LINK_STATUS_GRANT,
+    print_text: PROVISION_LINK_STATUS_GRANT,
+    name_piece_id: PROVISION_LINK_STATUS_GRANT,
+    name_start: PROVISION_LINK_STATUS_GRANT,
+    name_end: PROVISION_LINK_STATUS_GRANT,
+    name_text: PROVISION_LINK_STATUS_GRANT,
+    selection: PROVISION_LINK_STATUS_GRANT,
+    printed_work_identifier: PROVISION_LINK_STATUS_GRANT,
+    target_document_id: PROVISION_LINK_STATUS_GRANT,
+    target_status: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extraction_revisions: {
+    jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    min_current_revision: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extraction_revisions_registry: {
+    jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    revision: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extractions: {
+    decision_id: PROVISION_LINK_STATUS_GRANT,
+    desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    work_status: PROVISION_LINK_STATUS_GRANT,
+    generation: PROVISION_LINK_STATUS_GRANT,
+    outcome: PROVISION_LINK_STATUS_GRANT,
+    published_input_digest: PROVISION_LINK_STATUS_GRANT,
+    published_jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    published_revision: PROVISION_LINK_STATUS_GRANT,
+    published_projection_digest: PROVISION_LINK_STATUS_GRANT,
+    payload_class: PROVISION_LINK_STATUS_GRANT,
+    payload_class_input_digest: PROVISION_LINK_STATUS_GRANT,
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /**
  * Each column declares how this release relates to its grant:
  *
  * - `required`: this release reads the column, so a role that cannot read it
  *   cannot serve. A missing grant fails the attestation.
- * - `permitted`: this release does not read it. The role may hold the grant
- *   or not, and serves either way.
+ * - `permitted`: this release can use it when granted, but also serves
+ *   without it. The role may hold the grant or not.
  *
  * The attestation holds the role to `required ⊆ grants ⊆ required ∪
  * permitted`, column by column; a table-wide grant is refused outright.
  *
  * Both bounds come from the running release's own map, and a release cannot
  * know a column a later map adds: it reads any grant outside its map as
- * over-privilege. So a new grant ships as `required`, in the same release as
- * the read that needs it and the migration that grants it. That is a
- * coordinated cutover; no earlier release serves against the widened role.
+ * over-privilege. The provision link status columns are `permitted` during
+ * the expand phase. The read checks for the complete capability grant and
+ * falls back until a follow-up grant migration lands. Deploy this expansion
+ * release before applying that migration, so running readers accept it.
  * Giving a grant up runs the other way: drop the read and mark the column
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
@@ -178,40 +221,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     span_end: "required",
     work_source: "required",
     confidence: "required",
-    span_role: "required",
-    print_piece_id: "required",
-    print_start: "required",
-    print_end: "required",
-    print_text: "required",
-    name_piece_id: "required",
-    name_start: "required",
-    name_end: "required",
-    name_text: "required",
-    selection: "required",
-    printed_work_identifier: "required",
-    target_document_id: "required",
-    target_status: "required",
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_citations,
   },
   case_law_provision_extraction_revisions: {
-    jurisdiction: "required",
-    min_current_revision: "required",
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extraction_revisions,
   },
   case_law_provision_extraction_revisions_registry: {
-    jurisdiction: "required",
-    revision: "required",
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extraction_revisions_registry,
   },
   case_law_provision_extractions: {
-    decision_id: "required",
-    desired_input_digest: "required",
-    work_status: "required",
-    generation: "required",
-    outcome: "required",
-    published_input_digest: "required",
-    published_jurisdiction: "required",
-    published_revision: "required",
-    published_projection_digest: "required",
-    payload_class: "required",
-    payload_class_input_digest: "required",
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extractions,
   },
   // What a search matches, ranks and cuts its headline from. The stored
   // title, the preview generation and the refresh time serve the indexer.

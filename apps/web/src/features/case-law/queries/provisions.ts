@@ -1,7 +1,9 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { APIError } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -78,13 +80,34 @@ type DecisionProvisionsPage = Awaited<
 export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   infiniteQueryOptions({
     queryKey: decisionProvisionKeys.forDecision(decisionId),
-    queryFn: async ({ pageParam, signal }) =>
-      await fetchDecisionProvisionsPage({
-        cursor: pageParam,
-        decisionId,
-        limit: PROVISIONS_PAGE_SIZE,
-        signal,
-      }),
+    queryFn: async ({ client, pageParam, signal }) => {
+      const page = await Result.tryPromise({
+        try: async () =>
+          await fetchDecisionProvisionsPage({
+            cursor: pageParam,
+            decisionId,
+            limit: PROVISIONS_PAGE_SIZE,
+            signal,
+          }),
+        catch: (cause: unknown) => cause,
+      });
+      if (Result.isError(page)) {
+        if (
+          pageParam !== null &&
+          APIError.is(page.error) &&
+          page.error.status === 409
+        ) {
+          // Reset cancels this fetch and starts the active observer again with
+          // no old pages. Clearing data alone would not change its captured pages.
+          await client.resetQueries({
+            queryKey: decisionProvisionKeys.forDecision(decisionId),
+            exact: true,
+          });
+        }
+        throw page.error;
+      }
+      return page.value;
+    },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

@@ -1073,7 +1073,7 @@ describe("privileges", () => {
     expect(await readState(id)).toMatchObject({ enqueueReason: "seed" });
   });
 
-  test("only ingestion may call ensure; the public reader may call the scope predicate", async () => {
+  test("only ingestion may call ensure and the scope predicate", async () => {
     const id = await insertDecision();
     for (const role of APPLICATION_ROLES.filter(
       (name) => name !== "stella_ingestion",
@@ -1086,23 +1086,14 @@ describe("privileges", () => {
           ),
         ),
       ).toMatch(/permission denied/u);
-      if (role === "stella_public_law_reader") {
-        expect(
-          await asRole(
+      expect(
+        await refusal(
+          asRole(
             role,
-            sql`SELECT case_law_provision_extraction_in_scope('CZE', 'cs') AS "inScope"`,
+            sql`SELECT case_law_provision_extraction_in_scope('CZE', 'cs')`,
           ),
-        ).toEqual([{ inScope: true }]);
-      } else {
-        expect(
-          await refusal(
-            asRole(
-              role,
-              sql`SELECT case_law_provision_extraction_in_scope('CZE', 'cs')`,
-            ),
-          ),
-        ).toMatch(/permission denied/u);
-      }
+        ),
+      ).toMatch(/permission denied/u);
     }
   });
 });

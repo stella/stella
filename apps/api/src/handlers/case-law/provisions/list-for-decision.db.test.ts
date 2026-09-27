@@ -15,6 +15,11 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-db";
+import {
+  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
+} from "@/api/lib/public-law-relations";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -59,6 +64,7 @@ beforeAll(async () => {
   await run(sql`INSERT INTO case_law_provision_extraction_revisions
     (jurisdiction, desired_revision, min_current_revision)
     VALUES ('CZE', 2, 1)`);
+  await setStatusGrants("grant");
 }, 120_000);
 
 afterAll(async () => await client.close());
@@ -150,6 +156,109 @@ const page = async (id: SafeId<"caseLawDecision">, cursor?: string) =>
         query: { limit: 2, ...(cursor === undefined ? {} : { cursor }) },
       }),
   );
+
+const setStatusGrants = async (mode: "grant" | "revoke") => {
+  const columnsByRelation = new Map<string, string[]>();
+  for (const { relation, column } of publicLawColumnPairs(
+    PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
+  )) {
+    const columns = columnsByRelation.get(relation) ?? [];
+    columns.push(column);
+    columnsByRelation.set(relation, columns);
+  }
+  for (const [relation, columns] of columnsByRelation) {
+    const selection = sql.join(
+      columns.map((column) => sql.identifier(column)),
+      sql`, `,
+    );
+    if (mode === "grant") {
+      await run(sql`GRANT SELECT (${selection}) ON TABLE ${sql.identifier(relation)}
+        TO stella_public_law_reader`);
+    } else {
+      await run(sql`REVOKE SELECT (${selection}) ON TABLE ${sql.identifier(relation)}
+        FROM stella_public_law_reader`);
+    }
+  }
+  if (mode === "grant") {
+    await run(
+      sql.raw(`GRANT EXECUTE ON FUNCTION
+      case_law_provision_extraction_in_scope(varchar, varchar),
+      case_law_provision_extraction_input_digest(text, date, text, text, boolean)
+      TO stella_public_law_reader`),
+    );
+  } else {
+    await run(
+      sql.raw(`REVOKE EXECUTE ON FUNCTION
+      case_law_provision_extraction_in_scope(varchar, varchar),
+      case_law_provision_extraction_input_digest(text, date, text, text, boolean)
+      FROM stella_public_law_reader`),
+    );
+  }
+};
+
+test("pre-grant reader serves legacy links and picks up status grants without a restart", async () => {
+  const id = await decision();
+  await extracted({ id, outcome: "extracted_with_rows" });
+  await citation({
+    decisionId: id,
+    spanStart: 10,
+    anchor: "a",
+    printedWorkIdentifier: "98/2012 Sb.",
+  });
+  await citation({ decisionId: id, spanStart: 20, anchor: "b" });
+  await citation({ decisionId: id, spanStart: 30, anchor: "c" });
+  await setStatusGrants("revoke");
+  try {
+    const attestation = await withPublicLawReaderRole(
+      db,
+      async (tx) => await tx.execute(publicLawDatabaseRolePermissionsSql()),
+    );
+    expect(attestation.rows.at(0)).toMatchObject({
+      canReadPublicLaw: true,
+      canDelegatePublicLaw: false,
+    });
+    const fallback = await page(id);
+    expect(fallback).toMatchObject({
+      items: [
+        {
+          spanStart: 10,
+          anchor: "a",
+          spanRole: null,
+          selection: null,
+          printedWorkIdentifier: null,
+          targetDocumentId: null,
+          targetStatus: null,
+        },
+        { spanStart: 20 },
+      ],
+      status: { type: "pending" },
+      generation: "0",
+      publishedProjectionDigest: null,
+    });
+    if (!("items" in fallback) || fallback.nextCursor === null) {
+      return panic("expected a pre-grant cursor page");
+    }
+    await setStatusGrants("grant");
+    expect(await page(id, fallback.nextCursor)).toMatchObject({
+      code: 409,
+      response: { type: "conflict" },
+    });
+    expect(await page(id)).toMatchObject({
+      items: [
+        {
+          selection: "misprint-correction",
+          printedWorkIdentifier: "98/2012 Sb.",
+        },
+        { spanStart: 20 },
+      ],
+      status: { type: "current" },
+      generation: "1",
+      publishedProjectionDigest: PROJECTION_DIGEST,
+    });
+  } finally {
+    await setStatusGrants("grant");
+  }
+});
 
 test("status precedence uses the decision, scope, and current payload before publication", async () => {
   const outOfScope = await decision({ language: "sk" });

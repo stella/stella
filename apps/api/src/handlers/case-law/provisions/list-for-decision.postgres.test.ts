@@ -9,6 +9,11 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-db";
+import {
+  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
+} from "@/api/lib/public-law-relations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -24,11 +29,57 @@ if (!databaseUrl || !runPostgresTests) {
 } else {
   test("public reader resolves the gated status and rejects a cursor after publication advances", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-      const { sql: owner } = openClient();
+      const { sql: owner, db: ownerDb } = openClient();
       const { db: readerDb } = openClient();
       const sourceId = createSafeId<"caseLawSource">();
       const decisionId = createSafeId<"caseLawDecision">();
       const language = `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
+      const setStatusGrants = async (mode: "grant" | "revoke") => {
+        const columnsByRelation = new Map<string, string[]>();
+        for (const { relation, column } of publicLawColumnPairs(
+          PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
+        )) {
+          const columns = columnsByRelation.get(relation) ?? [];
+          columns.push(column);
+          columnsByRelation.set(relation, columns);
+        }
+        for (const [relation, columns] of columnsByRelation) {
+          const selection = sql.join(
+            columns.map((column) => sql.identifier(column)),
+            sql`, `,
+          );
+          if (mode === "grant") {
+            await ownerDb.execute(sql`GRANT SELECT (${selection}) ON TABLE ${sql.identifier(relation)}
+              TO stella_public_law_reader`);
+          } else {
+            await ownerDb.execute(sql`REVOKE SELECT (${selection}) ON TABLE ${sql.identifier(relation)}
+              FROM stella_public_law_reader`);
+          }
+        }
+        if (mode === "grant") {
+          await ownerDb.execute(
+            sql.raw(`GRANT EXECUTE ON FUNCTION
+            case_law_provision_extraction_in_scope(varchar, varchar),
+            case_law_provision_extraction_input_digest(text, date, text, text, boolean)
+            TO stella_public_law_reader`),
+          );
+        } else {
+          await ownerDb.execute(
+            sql.raw(`REVOKE EXECUTE ON FUNCTION
+            case_law_provision_extraction_in_scope(varchar, varchar),
+            case_law_provision_extraction_input_digest(text, date, text, text, boolean)
+            FROM stella_public_law_reader`),
+          );
+        }
+      };
+      const [initialAccess] = await owner`
+        SELECT has_function_privilege(
+          'stella_public_law_reader',
+          'public.case_law_provision_extraction_in_scope(character varying,character varying)',
+          'EXECUTE'
+        ) AS enabled`;
+      const initialGrantMode =
+        initialAccess?.enabled === true ? "grant" : "revoke";
       const readDb = asTestRaw<CaseLawPublicReadDb>(
         async <T>(read: (tx: CaseLawPublicReadTransaction) => Promise<T>) =>
           await readerDb.transaction(
@@ -75,6 +126,40 @@ if (!databaseUrl || !runPostgresTests) {
               'section', 1, ${anchor}, ${start}, ${start + 5}, 'citation', 1)`;
         }
 
+        await setStatusGrants("revoke");
+        const attestation = await readerDb.transaction(async (tx) => {
+          await tx.execute(sql.raw("SET LOCAL ROLE stella_public_law_reader"));
+          return await tx.execute(publicLawDatabaseRolePermissionsSql());
+        });
+        expect(attestation.at(0)).toMatchObject({
+          canReadPublicLaw: true,
+          canDelegatePublicLaw: false,
+        });
+        expect(await page()).toMatchObject({
+          items: [
+            {
+              spanStart: 10,
+              spanRole: null,
+              selection: null,
+              printedWorkIdentifier: null,
+              targetDocumentId: null,
+              targetStatus: null,
+            },
+          ],
+          status: { type: "pending" },
+          generation: "0",
+          publishedProjectionDigest: null,
+        });
+        await setStatusGrants("grant");
+        const activatedAttestation = await readerDb.transaction(async (tx) => {
+          await tx.execute(sql.raw("SET LOCAL ROLE stella_public_law_reader"));
+          return await tx.execute(publicLawDatabaseRolePermissionsSql());
+        });
+        expect(activatedAttestation.at(0)).toMatchObject({
+          canReadPublicLaw: true,
+          canDelegatePublicLaw: false,
+        });
+
         const first = await page();
         expect(first).toMatchObject({
           items: [{ spanStart: 10 }],
@@ -118,6 +203,7 @@ if (!databaseUrl || !runPostgresTests) {
           publishedProjectionDigest: "c".repeat(64),
         });
       } finally {
+        await setStatusGrants(initialGrantMode);
         await owner`DELETE FROM case_law_decisions WHERE id = ${decisionId}::uuid`;
         await owner`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`;
       }
