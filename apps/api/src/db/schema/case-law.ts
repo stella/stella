@@ -2090,7 +2090,6 @@ export const caseLawSitemapShards = p.pgTable(
     bucket: p.varchar({ length: 3 }).notNull(),
     total: p.integer().notNull(),
     lastModifiedAt: timestamptz("last_modified_at").notNull(),
-    refreshedAt: timestamptz("refreshed_at").defaultNow().notNull(),
   },
   (t) => [
     p.primaryKey({

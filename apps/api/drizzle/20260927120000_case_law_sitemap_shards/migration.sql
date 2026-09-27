@@ -10,7 +10,6 @@ CREATE TABLE "case_law_sitemap_shards" (
   "bucket" varchar(3) NOT NULL,
   "total" integer NOT NULL,
   "last_modified_at" timestamptz NOT NULL,
-  "refreshed_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "case_law_sitemap_shards_pkey" PRIMARY KEY ("country", "year", "month", "bucket"),
   CONSTRAINT "case_law_sitemap_shards_total_positive" CHECK ("total" > 0)
 );--> statement-breakpoint

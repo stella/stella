@@ -242,8 +242,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
   },
-  // The shards the public sitemap index lists. The count and the refresh
-  // time are how the refresh works, not what the index states.
+  // The shards the public sitemap index lists. The count is how the refresh
+  // splits a month, not what the index states.
   case_law_sitemap_shards: {
     country: "required",
     year: "required",
