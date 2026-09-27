@@ -240,4 +240,27 @@ describe("chat refs across the requests of a thread", () => {
         .toSorted(),
     ).toEqual(["ent_2", "ent_7"]);
   });
+
+  test("a retired spelling resolves to nothing and is never minted again", () => {
+    const registry = createChatRefRegistry([], ["ent_3", "mat_2", "src_1"]);
+
+    expect(resolveEntity(registry, "ent_3")).toBeNull();
+    expect(registry.toEntityRef(entityTarget(0))).toBe("ent_4");
+    expect(registry.toMatterRef(WORKSPACE_IDS[0])).toBe("mat_3");
+    expect(
+      registry.resolveAssistantTextRefs("[p. 1](#stella-source-ref=src_1)"),
+    ).toContain("#stella-unresolved-ref");
+  });
+
+  test("a binding outranks retiring the same spelling", () => {
+    const first = createChatRefRegistry();
+    const ref = first.toEntityRef(entityTarget(0));
+
+    const next = createChatRefRegistry(
+      first.collectRefBindings({ outputs: [ref], texts: [] }),
+      [ref],
+    );
+
+    expect(resolveEntity(next, ref)).toEqual(entityTarget(0));
+  });
 });

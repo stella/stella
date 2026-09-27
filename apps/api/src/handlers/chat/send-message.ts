@@ -1700,6 +1700,7 @@ export const createSendMessage = (
       // must keep its target.
       const refRegistry = dependencies.createRefRegistry(
         validationThreadState.refState.bindings,
+        validationThreadState.refState.retired,
       );
       const activeDraftContext = yield* Result.await(
         validateActiveDraftContext({

@@ -94,8 +94,9 @@ type ChatRefContextFields = {
 
 /**
  * Version 1 predates ref bindings and stays readable for messages persisted
- * before them; their raw refs cannot be restored. Remove once no stored
- * message carries a version 1 context.
+ * before them. Their raw refs cannot be restored, so a thread retires their
+ * spellings (`ChatThreadRefState.retired`). Remove once the
+ * `chat-ref-state` retired-spellings telemetry stops reporting.
  */
 export type ChatRefContext =
   | (ChatRefContextFields & { version: 1 })
@@ -140,11 +141,19 @@ const isChatRefBinding = (value: unknown): value is ChatRefBinding => {
  */
 export type ChatThreadRefState = {
   bindings: ChatRefBinding[];
+  /**
+   * Spellings a message stored before bindings existed showed the model,
+   * whose targets are unknown. They resolve to nothing and are never minted
+   * again, so a ref from that history fails loudly instead of naming
+   * another target.
+   */
+  retired: string[];
   version: 1;
 };
 
 export const EMPTY_CHAT_THREAD_REF_STATE: ChatThreadRefState = {
   bindings: [],
+  retired: [],
   version: 1,
 };
 
@@ -154,7 +163,9 @@ export const isChatThreadRefState = (
   isRecord(value) &&
   value["version"] === 1 &&
   Array.isArray(value["bindings"]) &&
-  value["bindings"].every(isChatRefBinding);
+  value["bindings"].every(isChatRefBinding) &&
+  Array.isArray(value["retired"]) &&
+  value["retired"].every((ref) => typeof ref === "string");
 
 /** One binding's identity: its spelling and its target, in a fixed order
  *  (stored JSON keeps no key order). */
@@ -194,7 +205,11 @@ export const addChatThreadRefBindings = (
       added.push(binding);
     }
   }
-  return { bindings: [...state.bindings, ...added], version: state.version };
+  return {
+    bindings: [...state.bindings, ...added],
+    retired: state.retired,
+    version: state.version,
+  };
 };
 
 /** Bindings a stored context carries; version 1 predates them. */

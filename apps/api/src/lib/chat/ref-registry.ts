@@ -453,13 +453,21 @@ export type ChatRefRegistry = {
   toSourceCitationHref: (target: ChatSourceCitationTarget) => string;
 };
 
+/** Every whole chat ref token in `text`. */
+export const findChatRefTokens = (text: string): string[] => [
+  ...new Set(Array.from(text.matchAll(MINTED_REF_TOKEN_REGEX), ([ref]) => ref)),
+];
+
 /**
  * `restoredBindings` are the refs the thread's stored history showed the
  * model. They are bound before anything can mint, so every one keeps its
- * target and new mints continue past them.
+ * target and new mints continue past them. `retiredRefs` are spellings that
+ * history showed without a known target: they resolve to nothing, and new
+ * mints continue past them too.
  */
 export const createChatRefRegistry = (
   restoredBindings: readonly ChatRefBinding[] = [],
+  retiredRefs: readonly string[] = [],
 ): ChatRefRegistry => {
   const contactState = createRefState<SafeId<"contact">>(
     CHAT_REF_TOKEN_PREFIX.contact,
@@ -889,6 +897,27 @@ export const createChatRefRegistry = (
     if (outcome !== "restored") {
       reportRestoreFailure(binding, outcome);
     }
+  }
+
+  const refStates = [
+    contactState,
+    entityState,
+    matterState,
+    propertyState,
+    sourceCitationState,
+  ];
+  for (const ref of retiredRefs) {
+    const state = refStates.find(
+      ({ prefix }) => parseRefCounter(prefix, ref) !== null,
+    );
+    const counter =
+      state === undefined ? null : parseRefCounter(state.prefix, ref);
+    // A binding is what history knows of the spelling; it outranks retiring.
+    if (state === undefined || counter === null || state.refToKey.has(ref)) {
+      continue;
+    }
+    state.counter = Math.max(state.counter, counter);
+    state.conflicted.add(ref);
   }
 
   const toRefBinding = (ref: string): ChatRefBinding | null => {

@@ -30,7 +30,10 @@ import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
   type ChatRefBinding,
@@ -65,8 +68,15 @@ const loadExternalMcpToolsForTest = async () => {
   };
 };
 
+/** The ref registry each request built, newest last. */
+const builtRegistries: ChatRefRegistry[] = [];
+
 const sendMessage = createSendMessage({
-  createRefRegistry: createChatRefRegistry,
+  createRefRegistry: (bindings, retired) => {
+    const registry = createChatRefRegistry(bindings, retired);
+    builtRegistries.push(registry);
+    return registry;
+  },
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,
   loadWebSearchProviders: async () => ({
@@ -147,12 +157,16 @@ const listedPart = {
   type: "text",
 } satisfies ChatPart;
 
-/** Where a seeded thread records that `ent_1` is entity A. */
+/** Where a seeded thread records what `ent_1` names. */
 const BINDING_STORE = {
-  /** On the thread, beside a message that carries no binding. */
+  /** On the thread, beside a message that carries no binding: entity A. */
   thread: "thread",
-  /** Only on the message, as a thread whose state is not stored yet. */
+  /** Only on the message, as a thread whose state is not stored yet:
+   *  entity A. */
   message: "message",
+  /** Nowhere: the message was stored before bindings existed, so what
+   *  `ent_1` named is unknown. */
+  legacy: "legacy",
 } as const;
 
 type BindingStore = (typeof BINDING_STORE)[keyof typeof BINDING_STORE];
@@ -182,6 +196,7 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
       bindingStore === BINDING_STORE.thread
         ? ({
             bindings: [binding],
+            retired: [],
             version: 1,
           } satisfies ChatThreadRefState)
         : null,
@@ -232,7 +247,15 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
           content: toChatMessageContent({
             data: [listedPart, pendingAskUserCall],
             metadata: {
-              refContext,
+              refContext:
+                bindingStore === BINDING_STORE.legacy
+                  ? ({
+                      entities: refContext.entities,
+                      unresolvedInputs: refContext.unresolvedInputs,
+                      version: 1,
+                      workspaceScope: refContext.workspaceScope,
+                    } satisfies ChatRefContext)
+                  : refContext,
               refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
             },
             version: 2,
@@ -374,6 +397,19 @@ describe("chat refs across an interactive answer", () => {
       expect(
         messageText(messages?.find((message) => message.role === "assistant")),
       ).toContain("ent_1");
+      // `ent_1` names entity A where the thread knows it, and nothing (a
+      // loud unknown-ref failure) where it cannot know it: never entity B.
+      const resolved = builtRegistries
+        .at(-1)
+        ?.resolveEntityRefTargets(["ent_1"]);
+      expect(resolved === undefined ? undefined : Result.isOk(resolved)).toBe(
+        bindingStore !== BINDING_STORE.legacy,
+      );
+      if (resolved !== undefined && Result.isOk(resolved)) {
+        expect(resolved.value).toEqual([
+          { entityId: ids.entityA1, workspaceId: ids.wsA1 },
+        ]);
+      }
     },
   );
 });

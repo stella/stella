@@ -231,8 +231,8 @@ export const createApprovalHarness = ({
     }
     const created = createSendMessage({
       ...sendMessageDependencies,
-      createRefRegistry: (bindings) =>
-        refLedger.track(threadId, createChatRefRegistry(bindings)),
+      createRefRegistry: (bindings, retired) =>
+        refLedger.track(threadId, createChatRefRegistry(bindings, retired)),
     });
     handlers.set(threadId, created);
     return created;

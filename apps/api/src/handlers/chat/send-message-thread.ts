@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { findChatRefTokens } from "@/api/lib/chat/ref-registry";
 import {
   addChatThreadRefBindings,
   type ChatThreadRefState,
@@ -62,10 +63,16 @@ const deriveThreadRefState = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<ChatThreadRefState> => {
+  const refContextPath = sql`${chatMessages.content}->'metadata'->'refContext'`;
   const rows = await tx
     .select({
-      // Only the ref contexts leave the database.
-      refContext: sql<unknown>`${chatMessages.content}->'metadata'->'refContext'`,
+      refContext: sql<unknown>`${refContextPath}`,
+      // A message stored before bindings existed is read whole, once, for
+      // the spellings it showed; any other message only for its bindings.
+      legacyContent: sql<string | null>`CASE
+        WHEN ${refContextPath}->>'version' = '2' THEN NULL
+        ELSE ${chatMessages.content}::text
+      END`,
     })
     .from(chatMessages)
     .where(
@@ -74,12 +81,29 @@ const deriveThreadRefState = async ({
         eq(chatMessages.role, "assistant"),
       ),
     );
-  return addChatThreadRefBindings(
+  const state = addChatThreadRefBindings(
     EMPTY_CHAT_THREAD_REF_STATE,
     rows.flatMap(({ refContext }) =>
       isChatRefContext(refContext) ? getChatRefBindings(refContext) : [],
     ),
   );
+  const bound = new Set(state.bindings.map(({ ref }) => ref));
+  const retired = [
+    ...new Set(
+      rows.flatMap(({ legacyContent }) =>
+        legacyContent === null ? [] : findChatRefTokens(legacyContent),
+      ),
+    ),
+  ].filter((ref) => !bound.has(ref));
+  if (retired.length > 0) {
+    captureError(
+      new TelemetryError({
+        message: "A chat thread retired refs stored before their bindings",
+      }),
+      { retiredCount: String(retired.length), source: "chat-ref-state" },
+    );
+  }
+  return { ...state, retired };
 };
 
 /** The thread's stored ref state, or one derived from its messages. */
