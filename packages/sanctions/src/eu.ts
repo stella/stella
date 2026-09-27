@@ -21,6 +21,7 @@ import {
   missingField,
   parseDayBirthDate,
   parseSmallInteger,
+  publisherStamp,
 } from "./values";
 import {
   attribute,
@@ -52,14 +53,18 @@ const IDENTIFIER_KINDS: Readonly<Record<string, IdentifierKind>> = {
 const listVersion = (
   root: Record<string, string>,
 ): Result<ListVersion, SanctionsListParseError> => {
-  const publishedAt = root["generationDate"]?.trim();
-  if (publishedAt === undefined || publishedAt === "") {
+  const stamp = root["generationDate"]?.trim();
+  if (stamp === undefined || stamp === "") {
     return Result.err(missingField(SOURCE, "<export> has no generationDate"));
+  }
+  const publishedAt = publisherStamp(SOURCE, stamp);
+  if (publishedAt.isErr()) {
+    return Result.err(publishedAt.error);
   }
   const fileId = root["globalFileId"]?.trim();
   const version: ListVersion = {
     source: SOURCE,
-    publishedAt,
+    publishedAt: publishedAt.value,
     fileId: fileId === undefined || fileId === "" ? null : fileId,
   };
   return Result.ok(version);
@@ -117,6 +122,9 @@ const birthDate = (node: XmlNode): Result<BirthRow, SanctionsListParseError> =>
     }
     if (month !== null && year === null) {
       return incomplete("has a month but no year");
+    }
+    if (month !== null && (month < 1 || month > 12)) {
+      return incomplete(`has month ${month}`);
     }
     switch (calendar) {
       // "ISLAMIC" rows carry lunar Hijri years and, for Iranian entries, solar

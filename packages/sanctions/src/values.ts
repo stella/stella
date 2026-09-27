@@ -79,6 +79,35 @@ export const isoDate = (
     ].join("-"),
   );
 
+/**
+ * The instant an edition stamp names: an ISO 8601 instant with an offset, or a
+ * calendar date read as the start of that day in UTC. Null for anything else.
+ */
+export const stampInstant = (stamp: string): Temporal.Instant | null => {
+  const instant = Result.try(() => Temporal.Instant.from(stamp)).unwrapOr(null);
+  if (instant !== null) {
+    return instant;
+  }
+  return ISO_DATE.test(stamp)
+    ? Result.try(() =>
+        Temporal.PlainDate.from(stamp.slice(0, 10), { overflow: "reject" })
+          .toZonedDateTime("UTC")
+          .toInstant(),
+      ).unwrapOr(null)
+    : null;
+};
+
+/** A publisher's edition stamp; anything but an instant or a date is drift. */
+export const publisherStamp = (
+  source: SanctionsSource,
+  value: string,
+): Result<string, SanctionsListParseError> =>
+  stampInstant(value) === null
+    ? Result.err(
+        invalidValue(source, `"${value}" is not an ISO 8601 edition stamp`),
+      )
+    : Result.ok(value);
+
 export const parseSmallInteger = (
   source: SanctionsSource,
   value: string,

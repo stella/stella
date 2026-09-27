@@ -183,6 +183,13 @@ describe("EU consolidated list parser", () => {
       source.replace('circa="true"', 'circa="maybe"'),
       // A month without its year.
       source.replace('monthOfYear="8" year="1961"', 'monthOfYear="8"'),
+      // A month past December.
+      source.replace(
+        'monthOfYear="8" year="1961"',
+        'monthOfYear="13" year="1961"',
+      ),
+      // An edition stamp that is not a date.
+      source.replace(/generationDate="[^"]*"/u, 'generationDate="yesterday"'),
       // A year and a range at once.
       source.replace(
         'yearRangeFrom="1953"',

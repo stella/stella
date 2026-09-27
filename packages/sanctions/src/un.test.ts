@@ -123,6 +123,16 @@ describe("UN consolidated list parser", () => {
     }
   });
 
+  test("fails on an edition stamp that is not a date", async () => {
+    const source = await Bun.file(FIXTURE).text();
+    const result = await parseUnList(
+      once(
+        source.replace(/dateGenerated="[^"]*"/u, 'dateGenerated="26/09/2026"'),
+      ),
+    );
+    expect(result.isErr() && result.error.code).toBe("invalid-value");
+  });
+
   test("fails on a truncated file", async () => {
     const source = await Bun.file(FIXTURE).text();
     const result = await parseUnList(

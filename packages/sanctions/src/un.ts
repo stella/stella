@@ -21,6 +21,7 @@ import {
   missingField,
   parseDayBirthDate,
   parseSmallInteger,
+  publisherStamp,
 } from "./values";
 import {
   childText,
@@ -56,14 +57,17 @@ const YEAR = /^\d{4}$/u;
 const listVersion = (
   root: Record<string, string>,
 ): Result<ListVersion, SanctionsListParseError> => {
-  const publishedAt = root["dateGenerated"]?.trim();
-  if (publishedAt === undefined || publishedAt === "") {
+  const stamp = root["dateGenerated"]?.trim();
+  if (stamp === undefined || stamp === "") {
     return Result.err(
       missingField(SOURCE, `<${ROOT}> has no dateGenerated attribute`),
     );
   }
-  const version: ListVersion = { source: SOURCE, publishedAt, fileId: null };
-  return Result.ok(version);
+  return publisherStamp(SOURCE, stamp).map((publishedAt): ListVersion => ({
+    source: SOURCE,
+    publishedAt,
+    fileId: null,
+  }));
 };
 
 const birthDate = (
