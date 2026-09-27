@@ -10,7 +10,7 @@ import type {
 } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
-import { api } from "@/lib/api";
+import { correspondenceApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { correspondenceQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -63,7 +63,7 @@ export const correspondenceInfiniteOptions = (
       pageParam,
       signal,
     }): Promise<CorrespondenceListResponse> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence.get({
           query: {
@@ -86,7 +86,7 @@ export const correspondenceByIdOptions = (
     queryKey: correspondenceKeys.byId(workspaceId, correspondenceId),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }): Promise<CorrespondenceDetailResponse> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId })
         .get({ fetch: { signal } });
@@ -108,7 +108,7 @@ export const correspondenceAddressOptions = (workspaceId: string) =>
     queryKey: correspondenceKeys.address(workspaceId),
     select: correspondenceAddressState,
     queryFn: async ({ signal }): Promise<CorrespondenceAddressResponse> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence.address.get({ fetch: { signal } });
       return unwrapEden(response);

@@ -6,7 +6,7 @@ import type { CorrespondenceHandlingState } from "@stll/api-contract/corresponde
 import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import { correspondenceApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -31,7 +31,7 @@ export const useUpdateCorrespondence = () => {
       correspondenceId,
       ...body
     }: UpdateCorrespondenceVars): Promise<void> => {
-      const endpoint = api
+      const endpoint = correspondenceApi
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId });
       switch (body.type) {
@@ -82,7 +82,7 @@ export const useRotateCorrespondenceAddress = () => {
     }: {
       workspaceId: string;
     }): Promise<void> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence.address.post();
       unwrapEden(response);
@@ -113,7 +113,7 @@ export const useRevokeCorrespondenceAddress = () => {
     }: {
       workspaceId: string;
     }): Promise<void> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence.address.delete();
       unwrapEden(response);
