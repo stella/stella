@@ -57,7 +57,11 @@ const runRequest = ({
   const message = {
     result: { documents: shown.map(({ ref }) => ({ id: ref })) },
   };
-  return { registry, shown, persisted: registry.collectRefBindings(message) };
+  return {
+    registry,
+    shown,
+    persisted: registry.collectRefBindings({ outputs: [message], texts: [] }),
+  };
 };
 
 let analytics: RecordingAnalytics;
@@ -117,7 +121,7 @@ describe("chat refs across the requests of a thread", () => {
     const first = createChatRefRegistry();
     const matterRef = first.toMatterRef(WORKSPACE_IDS[1]);
     const next = createChatRefRegistry(
-      first.collectRefBindings({ matter: matterRef }),
+      first.collectRefBindings({ outputs: [{ matter: matterRef }], texts: [] }),
     );
 
     expect(next.offerMatterRef(WORKSPACE_IDS[0])).toBe("mat_2");
@@ -132,8 +136,8 @@ describe("chat refs across the requests of a thread", () => {
     expect(refA).toBe(refB);
 
     const next = createChatRefRegistry([
-      ...registryA.collectRefBindings(refA),
-      ...registryB.collectRefBindings(refB),
+      ...registryA.collectRefBindings({ outputs: [refA], texts: [] }),
+      ...registryB.collectRefBindings({ outputs: [refB], texts: [] }),
     ]);
 
     expect(resolveEntity(next, refA)).toBeNull();
@@ -147,7 +151,10 @@ describe("chat refs across the requests of a thread", () => {
     }
 
     const refs = registry
-      .collectRefBindings("see ent_12, xent_2 and ent_3x")
+      .collectRefBindings({
+        outputs: ["see ent_12, xent_2 and ent_3x"],
+        texts: [],
+      })
       .map(({ ref }) => ref);
 
     expect(refs).toEqual(["ent_12"]);
@@ -166,7 +173,9 @@ describe("chat refs across the requests of a thread", () => {
       pageNumber: 3,
       workspaceId: WORKSPACE_IDS[0],
     });
-    const next = createChatRefRegistry(first.collectRefBindings(href));
+    const next = createChatRefRegistry(
+      first.collectRefBindings({ outputs: [], texts: [`[p. 3](${href})`] }),
+    );
 
     expect(next.resolveAssistantTextRefs(`[p. 3](${href})`)).not.toContain(
       "#stella-unresolved-ref",
@@ -176,7 +185,7 @@ describe("chat refs across the requests of a thread", () => {
   test("restoring the same binding twice keeps it, and reports nothing", () => {
     const first = createChatRefRegistry();
     const ref = first.toEntityRef(entityTarget(0));
-    const bindings = first.collectRefBindings(ref);
+    const bindings = first.collectRefBindings({ outputs: [ref], texts: [] });
 
     const next = createChatRefRegistry([...bindings, ...bindings]);
 
@@ -188,7 +197,7 @@ describe("chat refs across the requests of a thread", () => {
     const first = createChatRefRegistry();
     const earlier = first.toEntityRef(entityTarget(0));
     const binding =
-      first.collectRefBindings(earlier).at(0) ??
+      first.collectRefBindings({ outputs: [earlier], texts: [] }).at(0) ??
       expect.unreachable("The registry holds the ref it minted");
     // A later spelling of the same target, as a request that could not see
     // the earlier binding leaves behind.
@@ -205,5 +214,30 @@ describe("chat refs across the requests of a thread", () => {
     // New mints continue past both.
     expect(aliased.toEntityRef(entityTarget(2))).toBe("ent_6");
     expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("binds only refs a tool output or an answer link showed", () => {
+    const registry = createChatRefRegistry();
+    for (let index = 0; index < 7; index += 1) {
+      registry.toEntityRef(entityTarget(index));
+    }
+
+    // `ent_7` exists in the registry, but text naming it bare (what a user
+    // typed, or prose) never showed it.
+    expect(
+      registry.collectRefBindings({
+        outputs: [],
+        texts: ["Use ent_7 please", "ent_7 is the one"],
+      }),
+    ).toEqual([]);
+    expect(
+      registry
+        .collectRefBindings({
+          outputs: [{ documents: [{ id: "ent_2" }] }],
+          texts: ["See [the NDA](#stella-entity-ref=ent_7)"],
+        })
+        .map(({ ref }) => ref)
+        .toSorted(),
+    ).toEqual(["ent_2", "ent_7"]);
   });
 });

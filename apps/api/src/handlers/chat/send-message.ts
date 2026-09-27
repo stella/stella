@@ -49,6 +49,7 @@ import type {
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import { chatRefsShownIn } from "@/api/handlers/chat/chat-refs-shown";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
@@ -2233,6 +2234,8 @@ export const createSendMessage = (
                     });
                     const resolved = resolveAssistantMessageRefs({
                       accessibleWorkspaceIds: accessibleSet,
+                      isServerTool: (toolName) =>
+                        streamingTools[toolName]?.execute !== undefined,
                       messages: [canonicalResponseMessage],
                       opaqueReadWorkspaceIds:
                         body.runMode === CHAT_RUN_MODE.agent
@@ -2940,6 +2943,8 @@ const readActiveFileFallbackForModel = async ({
 
 type ResolveAssistantMessageRefsProps = {
   accessibleWorkspaceIds: ReadonlySet<string>;
+  /** Whether this request's server ran `toolName`, rather than a client. */
+  isServerTool: (toolName: string) => boolean;
   messages: PersistableChatMessage[];
   opaqueReadWorkspaceIds: readonly SafeId<"workspace">[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
@@ -3002,6 +3007,7 @@ const synchronizeToolResultContent = (
 
 const resolveAssistantMessageRefs = ({
   accessibleWorkspaceIds,
+  isServerTool,
   messages,
   opaqueReadWorkspaceIds,
   refRegistry,
@@ -3088,7 +3094,9 @@ const resolveAssistantMessageRefs = ({
     }
     const refContext = {
       version: 2,
-      refs: refRegistry.collectRefBindings(message.parts),
+      refs: refRegistry.collectRefBindings(
+        chatRefsShownIn({ isServerTool, parts: message.parts }),
+      ),
       entities: entityContexts,
       unresolvedInputs: unresolvedInputRefs,
       workspaceScope: messageWorkspaceIds.map((id) =>

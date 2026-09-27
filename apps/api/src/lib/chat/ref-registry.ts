@@ -59,6 +59,12 @@ const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
   CHAT_SOURCE_CITATION_REF_PREFIX,
 );
 
+const REF_LINK_REGEXES = [
+  ENTITY_REF_LINK_REGEX,
+  WORKSPACE_REF_LINK_REGEX,
+  SOURCE_CITATION_REF_LINK_REGEX,
+] as const;
+
 // Shape of a ref this registry mints: `<prefix>_<counter>`.
 const MINTED_REF_SHAPE = /^[a-z]+_[0-9]+$/u;
 
@@ -361,6 +367,14 @@ export type ResolveRefIdProps = {
   value: unknown;
 };
 
+/** Where a message showed the model refs. */
+export type ChatRefsShown = {
+  /** Outputs of tools the server ran. */
+  outputs: readonly unknown[];
+  /** The assistant's text, whose ref links are shown refs. */
+  texts: readonly string[];
+};
+
 export type ChatRefRegistry = {
   /**
    * Deduped union of every workspace id this registry holds a matter or
@@ -391,11 +405,14 @@ export type ChatRefRegistry = {
    */
   hydrateRefId: (props: HydrateRefIdProps) => unknown;
   /**
-   * Bindings for every ref this registry holds that appears anywhere in
-   * `value`. Persisted with the message so a later request of the thread
-   * resolves each visible ref to the same target.
+   * Bindings for every ref this registry holds that the model was shown:
+   * any whole token in a tool output this server produced, and the target
+   * of a ref link in the assistant's text. A token only present elsewhere
+   * (text a user typed, bare prose) is not one this registry showed, so it
+   * is never bound. Persisted with the message so a later request of the
+   * thread resolves each shown ref to the same target.
    */
-  collectRefBindings: (value: unknown) => ChatRefBinding[];
+  collectRefBindings: (shown: ChatRefsShown) => ChatRefBinding[];
   /** Resolve one declared model-facing ref without guessing from its text. */
   resolveRefId: (props: ResolveRefIdProps) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
@@ -918,8 +935,27 @@ export const createChatRefRegistry = (
     return null;
   };
 
-  const collectRefBindings = (value: unknown): ChatRefBinding[] => {
-    const refs = new Set(JSON.stringify(value).match(MINTED_REF_TOKEN_REGEX));
+  const collectRefBindings = ({
+    outputs,
+    texts,
+  }: ChatRefsShown): ChatRefBinding[] => {
+    const refs = new Set<string>();
+    for (const output of outputs) {
+      for (const [token] of JSON.stringify(output).matchAll(
+        MINTED_REF_TOKEN_REGEX,
+      )) {
+        refs.add(token);
+      }
+    }
+    for (const text of texts) {
+      for (const regex of REF_LINK_REGEXES) {
+        for (const [, ref] of text.matchAll(regex)) {
+          if (ref !== undefined) {
+            refs.add(ref);
+          }
+        }
+      }
+    }
     const bindings: ChatRefBinding[] = [];
     for (const ref of refs) {
       const binding = toRefBinding(ref);
