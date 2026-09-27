@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28569,
+        "description": 28607,
         "inputSchema": 75861,
         "outputSchema": 53543,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 173680,
+      "payloadUtf8Bytes": 173718,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -80,13 +80,13 @@
       "chars": {
         "name": 161,
         "title": 176,
-        "description": 6018,
+        "description": 6055,
         "inputSchema": 10039,
         "outputSchema": 8622,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 26833,
+      "payloadUtf8Bytes": 26870,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802

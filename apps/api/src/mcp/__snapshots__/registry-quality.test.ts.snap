@@ -6,7 +6,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "search",
     "scope": "stella:search",
     "access": "read",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes for the jurisdictions the organization practises in. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes from every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
@@ -6658,7 +6658,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the public legal corpus (case-law decisions and statutes) using the OpenAI-compatible search tool shape, over the jurisdictions the organization practises in. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim. No matter, document, contact or billing data is reachable here.",
+    "description": "Search the public legal corpus (case-law decisions and statutes) using the OpenAI-compatible search tool shape, over every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim. No matter, document, contact or billing data is reachable here.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
