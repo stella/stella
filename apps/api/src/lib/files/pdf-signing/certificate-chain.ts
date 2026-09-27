@@ -152,7 +152,7 @@ const basicConstraints = (certificate: pkijs.Certificate) => {
     } else if (pathLenConstraint instanceof asn1js.Integer) {
       pathLength = pathLenConstraint.valueBlock.valueDec;
     }
-    return { ca: Boolean(parsed.cA), pathLength };
+    return { ca: parsed.cA, pathLength };
   }).unwrapOr(null);
 };
 

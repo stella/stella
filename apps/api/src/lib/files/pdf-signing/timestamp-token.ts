@@ -171,9 +171,9 @@ const verifiedSigner = async (
     if (signedAttributes !== undefined) {
       // With signed attributes the signature covers them, and they bind the
       // content through its message digest.
-      const messageDigest = signedAttributes.attributes.find(
-        ({ type }) => type === MESSAGE_DIGEST_OID,
-      )?.values[0];
+      const messageDigest: unknown = signedAttributes.attributes
+        .find(({ type }) => type === MESSAGE_DIGEST_OID)
+        ?.values.at(0);
       const contentHash = Buffer.from(
         await crypto.subtle.digest(hashName, new Uint8Array(content)),
       );
