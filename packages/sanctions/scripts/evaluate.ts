@@ -56,12 +56,16 @@ const seed = integerOption("seed", values.seed, 0);
 const perCategory = integerOption("per-category", values["per-category"], 1);
 
 const lists: ParsedList[] = [
-  (await parseEuList(Bun.file(values.eu).stream())).unwrap(),
-  (await parseUnList(Bun.file(values.un).stream())).unwrap(),
+  (await parseEuList(Bun.file(values.eu).stream())).unwrap(
+    "The EU list file must parse",
+  ),
+  (await parseUnList(Bun.file(values.un).stream())).unwrap(
+    "The UN list file must parse",
+  ),
   parseCzList({
     csv: await Bun.file(values.cz).text(),
     fileNameOrUrl: values.cz,
-  }).unwrap(),
+  }).unwrap("The CZ list file must parse"),
 ];
 
 if (values["write-sample"]) {
