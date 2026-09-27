@@ -30,7 +30,7 @@ const ENDPOINT =
 const SERVICE_NAMESPACE = "http://adis.mfcr.cz/rozhraniCRPDPH/";
 const OPERATION = "getStatusNespolehlivySubjektRozsirenyV2";
 
-export const CZ_VAT_RELIABILITY_SOURCE = {
+export const CZ_VAT_RELIABILITY_SOURCE: EntityCheckSource = {
   name: "Registr plátců DPH (ADIS)",
   authority: "Ministerstvo financí České republiky",
   url: "https://adisspr.mfcr.cz/adistc/adis/idpr_pub/dpr/uvod.faces",

@@ -37,7 +37,11 @@ export type EntityCheckSubject =
       birthDate: string;
     };
 
-export const ENTITY_CHECK_SUBJECT_TYPES: readonly ["company-id", "person"] = [
+export const ENTITY_CHECK_SUBJECT_TYPES: readonly [
+  "company-id",
+  "tax-id",
+  "person",
+] = [
   "company-id",
   "tax-id",
   "person",

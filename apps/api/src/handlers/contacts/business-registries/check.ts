@@ -64,11 +64,11 @@ const subjectFromBody = (
           } satisfies EntityCheckSubject);
     }
     case "tax-id": {
-      return query.taxId === undefined
+      return body.taxId === undefined
         ? missingSubjectFields("taxId")
         : Result.ok({
             type: "tax-id",
-            value: query.taxId,
+            value: body.taxId,
           } satisfies EntityCheckSubject);
     }
     case "person": {
