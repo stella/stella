@@ -24,8 +24,16 @@ import {
   type OpinionType,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import type {
+  DecisionSection,
+  DecisionSectionType,
+} from "@/api/lib/legal-search/document-types";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
+import {
+  composeFrontMatter,
+  type CourtListenerFrontMatter,
+} from "./front-matter";
 import { hasUnprovenBoundaries, unitClass } from "./opinion-class";
 import { createTextBudget, type TextCounts, type TextUnit } from "./outcome";
 import { type OpinionTextSelection, selectOpinionText } from "./select";
@@ -60,6 +68,12 @@ export type CourtListenerTextOutcome =
   | {
       readonly status: "parsed";
       readonly blocks: readonly Block[];
+      readonly sections: DecisionSection[];
+      readonly textFields: {
+        headnotes: string;
+        syllabus: string;
+        summary: string;
+      };
       readonly citationScopes: readonly CitationOpinionScope[];
       readonly principal: Extract<PrincipalTextEvidence, { status: "parsed" }>;
       readonly opinions: readonly OpinionTextReport[];
@@ -67,11 +81,6 @@ export type CourtListenerTextOutcome =
   | {
       readonly status: "held";
       readonly reason: HeldReason;
-      readonly opinions: readonly OpinionTextReport[];
-    }
-  /** Some row's text is of a structure no parser reads yet. */
-  | {
-      readonly status: "unsupported";
       readonly opinions: readonly OpinionTextReport[];
     }
   /** The composed scopes failed their own validation: a parser defect. */
@@ -145,8 +154,23 @@ const scopeRow = (
   let proven = 0;
   let unproven = 0;
   let classConflicts = 0;
+  let outsideNotes = 0;
   for (const unit of units) {
     if (unit.kind === "outside") {
+      // Some HTML conversions append marked notes after the opinion container.
+      // Their own boundaries are explicit even when ownership by a sub-opinion is not.
+      for (const group of blockGroups(unit.blocks)) {
+        const first = group.at(0);
+        if (first?.type !== "paragraph" || first.note === undefined) {
+          continue;
+        }
+        outsideNotes += 1;
+        scopes.push({
+          opinionId: `${base}/note-${outsideNotes}`,
+          blockIds: group.map(({ id }) => id),
+          boundaries: unit.boundaries === "markup" ? "proven" : "unproven",
+        });
+      }
       continue;
     }
     const unitType = unitClass(type, unit.domType, unit.position);
@@ -207,7 +231,7 @@ const report = (
 /** Why a cluster is held, the most fundamental reason first. */
 const heldReason = (
   selections: readonly OpinionTextSelection[],
-): HeldReason | "unsupported" | null => {
+): HeldReason | null => {
   const statuses = new Set(selections.map(({ status }) => status));
   if (statuses.has("over-limit")) {
     return COURTLISTENER_REJECTION_REASON.OVER_LIMIT;
@@ -218,7 +242,44 @@ const heldReason = (
   if (statuses.has("no-usable-text")) {
     return COURTLISTENER_REJECTION_REASON.NO_USABLE_TEXT;
   }
-  return statuses.has("unsupported") ? "unsupported" : null;
+  return null;
+};
+
+const appendSections = (
+  sections: DecisionSection[],
+  blocks: readonly Block[],
+  bodyType: DecisionSectionType,
+): void => {
+  let current: DecisionSection | undefined;
+  for (const block of blocks) {
+    let type = bodyType;
+    if (block.type === "paragraph") {
+      if (block.note !== undefined && bodyType === "header") {
+        type = "unknown";
+      } else if (
+        isApparatusRole(block.role) ||
+        block.role === "panel" ||
+        block.role === "parties" ||
+        block.role === "front-matter" ||
+        block.role === "case-number"
+      ) {
+        type = "header";
+      } else if (block.role === "history") {
+        type = "history";
+      }
+    }
+    if (current === undefined || current.type !== type) {
+      current = {
+        index: sections.length,
+        type,
+        title: null,
+        text: block.plainText,
+      };
+      sections.push(current);
+    } else {
+      current.text += `\n\n${block.plainText}`;
+    }
+  }
 };
 
 /**
@@ -227,6 +288,7 @@ const heldReason = (
  */
 export const composeCourtListenerText = (
   opinions: readonly CourtListenerTextOpinion[],
+  frontMatter: CourtListenerFrontMatter = {},
 ): CourtListenerTextOutcome => {
   const budget = createTextBudget();
   const selected = opinions.toSorted(compareOpinionOrder).map((opinion) => ({
@@ -239,12 +301,30 @@ export const composeCourtListenerText = (
     const reports = selected.map(({ opinion, selection }) =>
       report(opinion, selection, null),
     );
-    return held === "unsupported"
-      ? { status: "unsupported", opinions: reports }
-      : { status: "held", reason: held, opinions: reports };
+    return { status: "held", reason: held, opinions: reports };
   }
 
   const blocks: Block[] = [];
+  const sections: DecisionSection[] = [];
+  const front = composeFrontMatter({
+    budget,
+    source: frontMatter,
+    existing: selected.flatMap(({ selection }) =>
+      selection.status === "parsed"
+        ? selection.text.units.flatMap((unit) => [...unit.blocks])
+        : [],
+    ),
+  });
+  if (front.status === "held") {
+    return {
+      ...front,
+      opinions: selected.map(({ opinion, selection }) =>
+        report(opinion, selection, null),
+      ),
+    };
+  }
+  blocks.push(...front.blocks);
+  appendSections(sections, front.blocks, "header");
   const citationScopes: CitationOpinionScope[] = [];
   const principal: PrincipalUnit[] = [];
   const reports = selected.map(({ opinion, selection }) => {
@@ -255,6 +335,13 @@ export const composeCourtListenerText = (
     const scoped = scopeRow(opinion, units);
     for (const unit of units) {
       blocks.push(...unit.blocks);
+      let section: DecisionSectionType = "header";
+      if (unit.kind !== "outside") {
+        const { body } = unitClass(opinion.type, unit.domType, unit.position);
+        section =
+          body === "argumentation" || body === "dissent" ? body : "unknown";
+      }
+      appendSections(sections, unit.blocks, section);
     }
     citationScopes.push(...scoped.scopes);
     principal.push(...scoped.principal);
@@ -279,6 +366,8 @@ export const composeCourtListenerText = (
   return {
     status: "parsed",
     blocks,
+    sections,
+    textFields: front.textFields,
     citationScopes,
     principal: {
       status: "parsed",

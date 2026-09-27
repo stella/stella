@@ -41,7 +41,7 @@ import type { TextUnit } from "./outcome";
 export type PageAnchor = Extract<Inline, { type: "page-anchor" }>;
 
 /** A paragraph role, or `body`: whatever the enclosing opinion's class is. */
-type DraftRole = ParagraphRole | "body";
+export type DraftRole = ParagraphRole | "body";
 
 // ── Whitespace ──────────────────────────────────────────
 
@@ -399,6 +399,11 @@ export const createUnitBuilder = ({
 export type BodyVocabulary = {
   /** Elements that are one paragraph each, by role. */
   readonly paragraphs: Readonly<Record<string, DraftRole>>;
+  /**
+   * An element whose attributes, not its name, give it a block meaning: a
+   * paragraph role, or `heading`. Consulted before `paragraphs`.
+   */
+  readonly semantics?: (element: Element) => DraftRole | "heading" | undefined;
   /** Elements printed as an opinion's heading (an author line). */
   readonly headings: ReadonlySet<string>;
   /** Elements that only group blocks. */
@@ -425,9 +430,11 @@ const TABLE_PARTS = new Set([
   "caption",
   "col",
   "colgroup",
+  "colspec",
   "tbody",
   "td",
   "tfoot",
+  "tgroup",
   "th",
   "thead",
   "tr",
@@ -436,8 +443,8 @@ const TABLE_PARTS = new Set([
 /** A row's cell elements. */
 const CELLS = new Set(["td", "th"]);
 
-/** A table's row groups. */
-const ROW_GROUPS = new Set(["tbody", "tfoot", "thead"]);
+/** A table's row groups, the CALS `tgroup` among them. */
+const ROW_GROUPS = new Set(["tbody", "tfoot", "tgroup", "thead"]);
 
 /**
  * Elements that render a picture, a formula or embedded content rather than
@@ -797,6 +804,7 @@ export const walkBody = ({
     return (
       vocabulary.containers.has(name) ||
       vocabulary.headings.has(name) ||
+      vocabulary.semantics?.(element) !== undefined ||
       Object.hasOwn(vocabulary.paragraphs, name) ||
       name === "table" ||
       vocabulary.opinion(element) !== null ||
@@ -919,12 +927,19 @@ export const walkBody = ({
       walkTable(element, inherited);
       return;
     }
-    if (vocabulary.headings.has(name) && !holdsBlocks(element)) {
+    const semantic = vocabulary.semantics?.(element);
+    const heading =
+      semantic === "heading" ||
+      (semantic === undefined && vocabulary.headings.has(name));
+    if (heading && !holdsBlocks(element)) {
       countInlineUnknowns(element);
       builder.heading(readInlines(element));
       return;
     }
-    const declared = vocabulary.paragraphs[name];
+    const declared =
+      semantic === undefined || semantic === "heading"
+        ? vocabulary.paragraphs[name]
+        : semantic;
     const role: DraftRole =
       declared === undefined || declared === "body" ? inherited : declared;
     if (!isKnown(element)) {

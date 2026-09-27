@@ -250,7 +250,6 @@ const textCounts = {
   opinionOutcomes: new Map<string, number>(),
   unusable: new Map<string, number>(),
   requiresAssets: new Map<string, number>(),
-  unsupported: new Map<string, number>(),
   coverage: new Map<string, number>(),
   classifications: new Map<string, number>(),
   classificationRules: new Map<string, number>(),
@@ -286,8 +285,6 @@ const countText = (
       );
     } else if (opinion.selection === "requires-assets") {
       increment(textCounts.requiresAssets, chosen);
-    } else if (opinion.selection === "unsupported") {
-      increment(textCounts.unsupported, opinion.format ?? "none");
     }
     for (const [name, count] of Object.entries(
       opinion.counts?.unknownConstructs ?? {},

@@ -209,13 +209,26 @@ const textOf = (node: AnyNode): string => {
 
 /**
  * A body of `<pre>` runs. Citation links between the runs are unwrapped to
- * their words; any other top-level markup is HTML this parser does not read.
+ * their words. `null` where other top-level markup makes the body HTML,
+ * decided from the top level alone before the tree is charged to the budget.
  */
-export const parsePreformatted = (input: FormatInput): FormatParse => {
+export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   if (input.text.trim() === "") {
     return { status: "unusable", reason: TEXT_CANDIDATE_UNUSABLE.BLANK };
   }
   const $ = cheerio.load(input.text, null, false);
+  const foreign = $.root()
+    .children()
+    .toArray()
+    .some(
+      (part) =>
+        isTag(part) &&
+        !PREFORMATTED_PARTS.has(part.name.toLowerCase()) &&
+        !IGNORED.has(part.name.toLowerCase()),
+    );
+  if (foreign) {
+    return null;
+  }
   const [root] = $.root().toArray();
   if (root === undefined) {
     return { status: "over-limit", limit: "DOM_NODES" };
@@ -227,16 +240,6 @@ export const parsePreformatted = (input: FormatInput): FormatParse => {
   const graphics = graphicsIn(root);
   if (Object.keys(graphics).length > 0) {
     return { status: "requires-assets", graphics };
-  }
-  const parts = $.root().children().toArray();
-  const foreign = parts.find(
-    (part) =>
-      isTag(part) &&
-      !PREFORMATTED_PARTS.has(part.name.toLowerCase()) &&
-      !IGNORED.has(part.name.toLowerCase()),
-  );
-  if (foreign !== undefined && isTag(foreign)) {
-    return { status: "unsupported", structure: `html:${foreign.name}` };
   }
   // The retention check reads the source through cheerio's own text, not
   // through the walk above.

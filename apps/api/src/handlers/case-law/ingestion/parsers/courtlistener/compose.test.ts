@@ -177,13 +177,13 @@ describe("which column becomes an opinion's text", () => {
     });
   }
 
-  test("stops at a structure no parser reads yet rather than fall to plain text", () => {
+  test("reads HTML before a lower-priority plain rendition", () => {
     const outcome = composeCourtListenerText(
       mutated("5094940", { html_with_citations: "<div><p>Opinion.</p></div>" }),
     );
-    expect(outcome.status).toBe("unsupported");
+    expect(outcome.status).toBe("parsed");
     expect(outcome.opinions[0]).toMatchObject({
-      selection: "unsupported",
+      selection: "parsed",
       format: "html_with_citations",
     });
   });
@@ -696,4 +696,140 @@ describe("short forms across unproven note boundaries", () => {
       expect(id[0]?.status).toBe("unresolved");
     });
   }
+});
+
+describe("cluster front matter and section projection", () => {
+  test("retains headmatter outside opinion scopes and principal evidence", () => {
+    const opinions = [
+      {
+        row: opinionRow({
+          xml_harvard:
+            '<opinion type="majority"><p>Certiorari denied.</p></opinion>',
+        }),
+        type: "020lead" as const,
+      },
+    ];
+    const body = parsed(composeCourtListenerText(opinions));
+    const result = parsed(
+      composeCourtListenerText(opinions, {
+        headmatter:
+          "<parties>State v. Citizen</parties><headnotes><p>A summary.</p></headnotes><p>Caption continuation.</p>",
+      }),
+    );
+    expect(result.principal).toEqual(body.principal);
+    expect(result.blocks.slice(0, 3).map((block) => block.plainText)).toEqual([
+      "State v. Citizen",
+      "A summary.",
+      "Caption continuation.",
+    ]);
+    const scoped = new Set(
+      result.citationScopes.flatMap((scope) => scope.blockIds),
+    );
+    expect(
+      result.blocks.slice(0, 3).every((block) => !scoped.has(block.id)),
+    ).toBe(true);
+    expect(result.sections.map((section) => section.index)).toEqual(
+      result.sections.map((_, i) => i),
+    );
+    expect(result.sections[0]?.type).toBe("header");
+    expect(result.sections.map((section) => section.text).join("\n\n")).toBe(
+      result.blocks.map((block) => block.plainText).join("\n\n"),
+    );
+    expect(new Set(result.blocks.map((block) => block.id)).size).toBe(
+      result.blocks.length,
+    );
+  });
+
+  test("holds the complete cluster when nonblank headmatter cannot be retained", () => {
+    const opinions = [
+      {
+        row: opinionRow({
+          xml_harvard: "<opinion><p>The judgment is affirmed.</p></opinion>",
+        }),
+        type: "020lead" as const,
+      },
+    ];
+    expect(
+      composeCourtListenerText(opinions, {
+        headmatter: '<svg><path d="M0 0"/></svg>',
+      }),
+    ).toMatchObject({ status: "held", reason: "requires-assets" });
+    expect(
+      composeCourtListenerText(opinions, {
+        headmatter: "<script>nothing readable</script>",
+      }),
+    ).toMatchObject({ status: "held", reason: "no-usable-text" });
+  });
+});
+
+test("apparatus deduplicates exact semantic runs, never matching body text", () => {
+  const opinions = [
+    {
+      row: opinionRow({
+        xml_harvard:
+          '<opinion type="majority"><headnotes><p>Already present.</p></headnotes><p>Body summary.</p></opinion>',
+      }),
+      type: "020lead" as const,
+    },
+  ];
+  const result = parsed(
+    composeCourtListenerText(opinions, {
+      headnotes: "<p>Already present.</p>",
+      summary: "<p>Body summary.</p>",
+      syllabus: "A & B < C.",
+    }),
+  );
+  expect(
+    result.blocks.filter((block) => block.plainText === "Already present."),
+  ).toHaveLength(1);
+  expect(
+    result.blocks.filter((block) => block.plainText === "Body summary."),
+  ).toHaveLength(2);
+  expect(result.textFields).toEqual({
+    headnotes: "Already present.",
+    summary: "Body summary.",
+    syllabus: "A & B < C.",
+  });
+  expect(
+    result.blocks.find((block) => block.plainText === "A & B < C."),
+  ).toMatchObject({ role: "syllabus" });
+});
+
+test("marked HTML notes outside the opinion container keep their own contiguous scope", () => {
+  const result = parsed(
+    composeCourtListenerText([
+      {
+        row: opinionRow({
+          xml_harvard: "",
+          html_anon_2020:
+            '<div class="opinion" opiniontype="majority"><p>Body: 410 U.S. 113.</p></div><div class="footnote" label="1"><p>See 347 U.S. 483.</p><p>Id. at 485.</p></div>',
+        }),
+        type: "020lead",
+      },
+    ]),
+  );
+  const noteBlocks = result.blocks.filter(
+    (block) => block.type === "paragraph" && block.note !== undefined,
+  );
+  expect(noteBlocks).toHaveLength(2);
+  expect(result.citationScopes.at(-1)).toMatchObject({
+    boundaries: "proven",
+    blockIds: noteBlocks.map((block) => block.id),
+  });
+  const extracted = extractDecisionCitations({
+    country: "USA",
+    documentAst: asDocument(result.blocks),
+    citationScopes: result.citationScopes,
+    sections: result.sections,
+  }).unwrap();
+  const targets = extracted.occurrences
+    .filter(({ form }) => form === "id")
+    .map(({ target }) => target);
+  expect(targets).toEqual([
+    {
+      status: "identified",
+      identifiers: [{ type: "reporter-citation", value: "347 U.S. 483" }],
+    },
+  ]);
+  expect(result.principal.body).toBe("Body: 410 U.S. 113.");
 });
