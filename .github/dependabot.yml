@@ -4,8 +4,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -28,8 +28,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -50,8 +50,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/web"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -72,8 +72,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/legal-atlas-runner"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -94,8 +94,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/packages/agent-engine/docker"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -116,8 +116,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -138,8 +138,8 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -191,8 +191,8 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "daily"
-      time: "03:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
