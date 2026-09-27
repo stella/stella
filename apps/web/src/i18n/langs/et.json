@@ -797,6 +797,12 @@
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
+    "seo": {
+      "collectionName": "Stella kohtupraktika",
+      "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
+      "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
+      "scopedDescription": "Avalik kohtupraktika andmebaas piirkonna {scope} kohta, indekseeritavate kohtulahendite ja õiguse allikatega."
+    },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
@@ -4298,6 +4304,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",

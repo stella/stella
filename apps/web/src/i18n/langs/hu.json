@@ -797,6 +797,12 @@
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
+    "seo": {
+      "collectionName": "Stella ítélkezési gyakorlat",
+      "description": "Nyilvános ítélkezési adatbázis indexelhető bírósági határozatokkal és jogforrásokkal.",
+      "homeDescription": "Nyilvános jogi adatbázis: bírósági határozatok és egységes szerkezetű jogszabályok, azonosító vagy szavak alapján kereshetők.",
+      "scopedDescription": "Nyilvános ítélkezési adatbázis ({scope}), indexelhető bírósági határozatokkal és jogforrásokkal."
+    },
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
@@ -4298,6 +4304,7 @@
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
     "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",

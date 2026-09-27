@@ -797,6 +797,12 @@
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
+    "seo": {
+      "collectionName": "Jurisprudencia de stella",
+      "description": "Base de datos pública de jurisprudencia con resoluciones judiciales y fuentes jurídicas indexables.",
+      "homeDescription": "Base de datos jurídica pública con resoluciones judiciales y normas consolidadas; búsqueda por identificador o palabras.",
+      "scopedDescription": "Base de datos pública de jurisprudencia de {scope}, con resoluciones judiciales y fuentes jurídicas indexables."
+    },
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",
@@ -4298,6 +4304,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versión no tiene texto disponible.",

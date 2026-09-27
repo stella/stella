@@ -797,6 +797,12 @@
       "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"
     },
+    "seo": {
+      "collectionName": "Stella teismų praktika",
+      "description": "Vieša teismų praktikos duomenų bazė su indeksuojamais teismų sprendimais ir teisės šaltiniais.",
+      "homeDescription": "Vieša teisės duomenų bazė: teismų sprendimai ir konsoliduoti teisės aktai, ieškomi pagal identifikatorių arba žodžius.",
+      "scopedDescription": "Vieša teismų praktikos duomenų bazė ({scope}) su indeksuojamais teismų sprendimais ir teisės šaltiniais."
+    },
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",
@@ -4298,6 +4304,7 @@
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
     "compareWithVersion": "Palyginti su redakcija {version}",
+    "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
     "diffInserted": "Įterpta:",
     "diffRemoved": "Išbraukta:",
     "emptyDocument": "Ši redakcija neturi teksto.",

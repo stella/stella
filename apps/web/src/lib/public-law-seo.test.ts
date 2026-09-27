@@ -1,4 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { createTranslator } from "use-intl/core";
+
+import {
+  getTranslator,
+  messageLoaders,
+  supportedLanguages,
+} from "@/i18n/i18n-store";
+import cs from "@/i18n/langs/cs.json";
+import en from "@/i18n/langs/en.json";
+
+const t = createTranslator({ locale: "en", messages: en });
 
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -121,9 +132,9 @@ describe("public law SEO", () => {
     ]);
   });
 
-  test("creates case-law decision JSON-LD without private fields", () => {
+  test("creates case-law decision JSON-LD without private fields", async () => {
     expect(
-      createCaseLawDecisionJsonLd({
+      await createCaseLawDecisionJsonLd({
         canonicalUrl:
           "http://localhost:3000/law/cze/cases/nejvyssi-soud/2017-09-20/20-cdo--id",
         caseNumber: "20 Cdo 470/2017",
@@ -148,7 +159,7 @@ describe("public law SEO", () => {
       inLanguage: "cs",
       isPartOf: {
         "@type": "Collection",
-        name: "Stella case law",
+        name: cs.caseLaw.seo.collectionName,
       },
       mainEntityOfPage: {
         "@id":
@@ -170,9 +181,9 @@ describe("public law SEO", () => {
     });
   });
 
-  test("does not publish invalid source URLs in case-law JSON-LD", () => {
+  test("does not publish invalid source URLs in case-law JSON-LD", async () => {
     expect(
-      createCaseLawDecisionJsonLd({
+      await createCaseLawDecisionJsonLd({
         canonicalUrl: "http://localhost:3000/law/cze/cases/court/date/id",
         caseNumber: "20 Cdo 470/2017",
         country: "CZE",
@@ -188,7 +199,7 @@ describe("public law SEO", () => {
   test("creates case-law collection JSON-LD", () => {
     expect(
       createLegalCollectionJsonLd({
-        aboutName: "Case-law decisions",
+        t,
         canonicalUrl: "http://localhost:3000/law/cases",
         description: "Public case-law database.",
         kind: "caseLaw",
@@ -199,7 +210,7 @@ describe("public law SEO", () => {
       "@type": "CollectionPage",
       about: {
         "@type": "LegalDocument",
-        name: "Case-law decisions",
+        name: en.common.caseLaw,
       },
       description: "Public case-law database.",
       mainEntity: {
@@ -214,7 +225,7 @@ describe("public law SEO", () => {
   test("creates case-law collection JSON-LD with first-page decision links", () => {
     expect(
       createLegalCollectionJsonLd({
-        aboutName: "Case-law decisions",
+        t,
         canonicalUrl: "http://localhost:3000/law/cases",
         items: [
           {
@@ -296,7 +307,7 @@ describe("public law SEO", () => {
   test("creates statute collection JSON-LD typed as legislation", () => {
     expect(
       createLegalCollectionJsonLd({
-        aboutName: "Statutes",
+        t,
         canonicalUrl: "http://localhost:3000/law/cze/statutes",
         description: "Public statute database.",
         items: [
@@ -334,5 +345,103 @@ describe("public law SEO", () => {
       name: "Statutes | stella",
       url: "http://localhost:3000/law/cze/statutes",
     });
+  });
+});
+
+describe("public law metadata language", () => {
+  test.each(supportedLanguages)(
+    "uses the %s catalog without changing the interface language",
+    async (locale) => {
+      const interfaceTranslator = getTranslator();
+      const messages = await messageLoaders[locale]();
+      const translate = createTranslator({ locale, messages });
+      const canonicalUrl = "http://localhost:3000/law/cases";
+      const decision = await createCaseLawDecisionJsonLd({
+        canonicalUrl,
+        caseNumber: "20 Cdo 470/2017",
+        country: "CZE",
+        court: "Nejvyšší soud",
+        decisionDate: null,
+        ecli: null,
+        language: locale,
+      });
+      expect(getTranslator()).toBe(interfaceTranslator);
+      expect(decision).toMatchObject({
+        "@type": "LegalDocument",
+        inLanguage: locale,
+        isPartOf: {
+          "@type": "Collection",
+          name: messages.caseLaw.seo.collectionName,
+        },
+        name: "20 Cdo 470/2017",
+        publisher: { "@type": "Organization", name: "Nejvyšší soud" },
+      });
+
+      for (const description of [
+        translate("caseLaw.seo.description"),
+        translate("caseLaw.seo.scopedDescription", { scope: "CZE" }),
+        translate("caseLaw.seo.homeDescription"),
+        translate("caseLaw.coverage.description"),
+      ]) {
+        const name = translate("common.caseLaw");
+        expect(
+          createLegalCollectionJsonLd({
+            t: translate,
+            canonicalUrl,
+            kind: "caseLaw",
+            name,
+            description,
+          }),
+        ).toMatchObject({
+          "@type": "CollectionPage",
+          about: { "@type": "LegalDocument", name: messages.common.caseLaw },
+          mainEntity: { "@type": "ItemList", name },
+          name,
+          description,
+        });
+      }
+      expect(
+        createLegalCollectionJsonLd({
+          t: translate,
+          canonicalUrl,
+          kind: "statutes",
+          name: translate("statutes.title"),
+          description: translate("statutes.description"),
+        }),
+      ).toMatchObject({
+        "@type": "CollectionPage",
+        about: { "@type": "Legislation", name: messages.statutes.title },
+        description: messages.statutes.description,
+      });
+    },
+  );
+
+  test("keeps concurrent document languages independent and normalizes content tags", async () => {
+    const decisions = await Promise.all(
+      ["cs-CZ", "EN-gb", "ar", "pt"].map(
+        async (language) =>
+          await createCaseLawDecisionJsonLd({
+            canonicalUrl: "http://localhost:3000/law/cases",
+            caseNumber: "20 Cdo 470/2017",
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: null,
+            ecli: null,
+            language,
+          }),
+      ),
+    );
+    const catalogs = await Promise.all([
+      messageLoaders.cs(),
+      messageLoaders.en(),
+      messageLoaders.ar(),
+      messageLoaders["pt-BR"](),
+    ]);
+    expect(decisions.map((decision) => decision["isPartOf"])).toEqual(
+      catalogs.map((messages) => ({
+        "@type": "Collection",
+        name: messages.caseLaw.seo.collectionName,
+      })),
+    );
   });
 });

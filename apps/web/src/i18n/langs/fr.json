@@ -797,6 +797,12 @@
       "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"
     },
+    "seo": {
+      "collectionName": "Jurisprudence stella",
+      "description": "Base de données publique de jurisprudence contenant des décisions de justice et des sources juridiques indexables.",
+      "homeDescription": "Base de données juridique publique : décisions de justice et textes consolidés, avec recherche par identifiant ou par mots.",
+      "scopedDescription": "Base de données publique de jurisprudence pour {scope}, contenant des décisions de justice et des sources juridiques indexables."
+    },
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
@@ -4298,6 +4304,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
     "emptyDocument": "Aucun texte disponible pour cette version.",
