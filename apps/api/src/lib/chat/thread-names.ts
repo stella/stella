@@ -3,7 +3,6 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreadNames } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { findChatRefTokens } from "@/api/lib/chat/ref-registry";
 import {
@@ -17,6 +16,8 @@ import {
   type ChatThreadNameKind,
 } from "@/api/lib/chat/thread-name-kinds";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 // A chat thread's name ledger: the names one request minted that every later
 // request of the thread must read the same way. A request reads them once
@@ -55,13 +56,14 @@ export const EMPTY_CHAT_THREAD_NAMES_READ: ChatThreadNamesRead = {
   toolCallIds: [],
 };
 
-const reportLedgerDefect = (
-  message: string,
-  details: Record<string, string>,
-) => {
-  captureError(new TelemetryError({ message }), {
-    source: "chat-thread-names",
-    ...details,
+const LEDGER_DEFECT_SINK = failureSink({
+  event: "chat.thread_names.ledger_defect",
+  expected: [],
+});
+
+const reportLedgerDefect = (message: string): void => {
+  observeFailure(new TelemetryError({ message }), {
+    sink: LEDGER_DEFECT_SINK,
   });
 };
 
@@ -133,10 +135,7 @@ export const deriveChatThreadNames = async ({
   }
   const retiredRefs = [...new Set([...conflicted, ...legacyRefs])];
   if (retiredRefs.length > 0) {
-    reportLedgerDefect("A chat thread retired refs its history cannot bind", {
-      conflictedCount: String(conflicted.length),
-      retiredCount: String(retiredRefs.length),
-    });
+    reportLedgerDefect("A chat thread retired refs its history cannot bind");
   }
   const toolCallIds = [
     ...new Set(
@@ -189,7 +188,7 @@ export const readChatThreadNames = async ({
           read.refBindings.push(target);
         } else {
           // A binding that no longer parses names nothing it can prove.
-          reportLedgerDefect("A stored chat ref binding is invalid", {});
+          reportLedgerDefect("A stored chat ref binding is invalid");
           read.retiredRefs.push(name);
         }
         break;
@@ -353,12 +352,10 @@ export const recordChatThreadNamesOnTx = async ({
   if (conflicting.length > 0) {
     // Storing the message would show the model a spelling that already
     // names something else in this thread; fail the write instead.
-    reportLedgerDefect("A chat ref spelling was bound to a second target", {
-      conflictingCount: String(conflicting.length),
-    });
+    reportLedgerDefect("A chat ref spelling was bound to a second target");
     return panic("A chat ref spelling was bound to a second target");
   }
-  // audit: skip — derived bookkeeping of the audited message write in the
-  // same transaction; it records the names those messages show.
+  // The ledger records names shown by messages whose write is audited in the
+  // same transaction.
   await tx.insert(chatThreadNames).values(rows).onConflictDoNothing();
 };

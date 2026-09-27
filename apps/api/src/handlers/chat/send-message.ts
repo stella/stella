@@ -3140,6 +3140,69 @@ const synchronizeToolResultContent = (
   });
 };
 
+type ResolveAssistantPartRefsProps = {
+  part: ChatMessage["parts"][number];
+  entityContexts: ChatEntityRefContext[];
+  unresolvedInputRefs: ChatUnresolvedInputRefContext[];
+  refRegistry: ReturnType<typeof createChatRefRegistry>;
+};
+
+const resolveAssistantPartRefs = ({
+  part,
+  entityContexts,
+  unresolvedInputRefs,
+  refRegistry,
+}: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  const withDeclaredToolRefs: unknown =
+    part.type === "tool-call"
+      ? {
+          ...part,
+          ...("input" in part
+            ? {
+                input: resolveRegistryToolInputRefs({
+                  input: part.input,
+                  onEntityRefResolved: (target) => {
+                    entityContexts.push({
+                      entity: resourceRef({
+                        type: RESOURCE_TYPE.ENTITY,
+                        id: target.entityId,
+                      }),
+                      toolCallId: part.id,
+                      workspace: resourceRef({
+                        type: RESOURCE_TYPE.WORKSPACE,
+                        id: target.workspaceId,
+                      }),
+                    });
+                  },
+                  onRefUnresolved: (unresolved) => {
+                    unresolvedInputRefs.push({
+                      ...unresolved,
+                      toolCallId: part.id,
+                    });
+                  },
+                  refRegistry,
+                  toolName: part.name,
+                }),
+              }
+            : {}),
+          ...("output" in part
+            ? {
+                output: resolveRegistryToolOutputRefs({
+                  output: part.output,
+                  refRegistry,
+                  toolName: part.name,
+                }),
+              }
+            : {}),
+        }
+      : part;
+  const resolved = refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
+  if (!isChatPart(resolved)) {
+    panic("Resolving assistant refs changed the message part shape");
+  }
+  return resolved;
+};
+
 const resolveAssistantMessageRefs = ({
   accessibleWorkspaceIds,
   isServerTool,
@@ -3148,62 +3211,6 @@ const resolveAssistantMessageRefs = ({
   refRegistry,
   workspaceIdsBeforeStream,
 }: ResolveAssistantMessageRefsProps): ResolveAssistantMessageRefsResult => {
-  const resolvePart = (
-    part: ChatMessage["parts"][number],
-    entityContexts: ChatEntityRefContext[],
-    unresolvedInputRefs: ChatUnresolvedInputRefContext[],
-  ): ChatMessage["parts"][number] => {
-    const withDeclaredToolRefs: unknown =
-      part.type === "tool-call"
-        ? {
-            ...part,
-            ...("input" in part
-              ? {
-                  input: resolveRegistryToolInputRefs({
-                    input: part.input,
-                    onEntityRefResolved: (target) => {
-                      entityContexts.push({
-                        entity: resourceRef({
-                          type: RESOURCE_TYPE.ENTITY,
-                          id: target.entityId,
-                        }),
-                        toolCallId: part.id,
-                        workspace: resourceRef({
-                          type: RESOURCE_TYPE.WORKSPACE,
-                          id: target.workspaceId,
-                        }),
-                      });
-                    },
-                    onRefUnresolved: (unresolved) => {
-                      unresolvedInputRefs.push({
-                        ...unresolved,
-                        toolCallId: part.id,
-                      });
-                    },
-                    refRegistry,
-                    toolName: part.name,
-                  }),
-                }
-              : {}),
-            ...("output" in part
-              ? {
-                  output: resolveRegistryToolOutputRefs({
-                    output: part.output,
-                    refRegistry,
-                    toolName: part.name,
-                  }),
-                }
-              : {}),
-          }
-        : part;
-    const resolved =
-      refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
-    if (!isChatPart(resolved)) {
-      panic("Resolving assistant refs changed the message part shape");
-    }
-    return resolved;
-  };
-
   const observedWorkspaceIdsAfterStream = refRegistry.getObservedWorkspaceIds();
   const turnWorkspaceIds = new Set<SafeId<"workspace">>();
   const refBindings: ChatRefBinding[] = [];
@@ -3215,7 +3222,12 @@ const resolveAssistantMessageRefs = ({
     const entityContexts: ChatEntityRefContext[] = [];
     const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
     const resolvedParts = message.parts.map((part) =>
-      resolvePart(part, entityContexts, unresolvedInputRefs),
+      resolveAssistantPartRefs({
+        part,
+        entityContexts,
+        unresolvedInputRefs,
+        refRegistry,
+      }),
     );
     const parts = synchronizeToolResultContent(resolvedParts);
     const messageWorkspaceIds = computeAssistantTurnWorkspaceIds({
