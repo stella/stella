@@ -4,10 +4,10 @@ instead of an invented RUN_FINISHED.
 Remove when @tanstack/openai-base >= 0.12.0 is installed.
 
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 5428b96879040c20dbecc6d600013b87e0baa894..1793ed854ce5d550485772bed9f60a77913a77b3 100644
+index 07021945c7ddb267ba9a822ebbc900ad8b3333ca..46322928a74db7bafb8ee34fab737d5382bb317c 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -1119,13 +1119,19 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+@@ -1172,13 +1172,19 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
  					model: model || options.model,
  					timestamp: Date.now()
  				};
