@@ -7,3 +7,6 @@ import type { Page } from "@playwright/test";
  */
 export const appShellNavigationLink = (page: Page, path: `/${string}`) =>
   page.locator('[data-slot="sidebar"]').locator(`a[href="${path}"]`);
+
+/** Heading of the route error boundary; its presence means the route crashed. */
+export const ROUTE_ERROR_HEADING = "This page couldn’t be opened";

@@ -3300,6 +3300,9 @@ export default defineConfig({
               // rather than through env.ts so it stays side-effect-free at
               // import time, matching the two call sites it replaces.
               "apps/api/src/lib/version.ts",
+              // Reads the stack URLs and credentials agent:drive hands it;
+              // e2e infra has no app env module to route through.
+              "apps/web/e2e/agent/drive.ts",
               "apps/web/e2e/helpers/api.ts",
               // Reads E2E_API_URL (same contract as helpers/api.ts) and the
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
