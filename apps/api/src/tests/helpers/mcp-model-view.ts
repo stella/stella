@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { isRecord } from "@/api/lib/type-guards";
+
 /**
  * A successful tool result as the model reads it. Hosts show the model either
  * the text block or `structuredContent`, so a success must carry exactly one
@@ -13,8 +15,10 @@ export const modelViewOf = (
 ): Record<string, unknown> => {
   expect(result.isError).toBeUndefined();
   const { structuredContent } = result;
-  if (structuredContent === undefined) {
-    return panic("Expected structuredContent on a successful tool result");
+  if (!isRecord(structuredContent)) {
+    return panic(
+      "Expected object structuredContent on a successful tool result",
+    );
   }
   expect(result.content).toHaveLength(1);
   const [block] = result.content;

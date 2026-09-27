@@ -4,6 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
+import { isRecord } from "@/api/lib/type-guards";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -64,7 +65,7 @@ const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
   const parsed: unknown = JSON.parse(item.text);
   const envelope = result.structuredContent;
   const isCapabilityEnvelope =
-    envelope !== undefined &&
+    isRecord(envelope) &&
     Object.keys(envelope).length === 1 &&
     Object.hasOwn(envelope, "result");
   return asTestRaw<T>(
