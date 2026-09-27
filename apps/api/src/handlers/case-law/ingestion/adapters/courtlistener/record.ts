@@ -8,7 +8,7 @@
  * with one reason; nothing is truncated, defaulted or partially accepted.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -162,6 +162,7 @@ const completeRelations = ({ judgeRelations }: CourtListenerRecordV1) =>
 
 const scalarChecks = (record: CourtListenerRecordV1): Check[] => {
   const { cluster, docket } = record;
+  const relations = completeRelations(record);
   return [
     idCheck("cluster.id", cluster.id),
     idCheck("cluster.docket_id", cluster.docket_id),
@@ -202,9 +203,11 @@ const scalarChecks = (record: CourtListenerRecordV1): Check[] => {
       idCheck(`citations.${index}.id`, citation.id),
       idCheck(`citations.${index}.cluster_id`, citation.cluster_id),
     ]),
-    ...(completeRelations(record)?.people ?? []).map((person, index) =>
-      idCheck(`judgeRelations.people.${index}.id`, person.id),
-    ),
+    ...(relations === null
+      ? []
+      : relations.people.map((person, index) =>
+          idCheck(`judgeRelations.people.${index}.id`, person.id),
+        )),
   ];
 };
 
@@ -227,12 +230,17 @@ const uniquenessChecks = (record: CourtListenerRecordV1): Check[] => {
     ["opinions.id", record.opinions.map(({ id }) => id)],
     ["citations.id", record.citations.map(({ id }) => id)],
     ["provenance.expectedOpinionIds", record.provenance.expectedOpinionIds],
-    ["judgeRelations.people.id", relations?.people.map(({ id }) => id) ?? []],
-    [
-      "judgeRelations.joinedBy",
-      relations?.joinedBy.map((pair) => `${pair.opinionId}/${pair.personId}`) ??
-        [],
-    ],
+    ...(relations === null
+      ? []
+      : ([
+          ["judgeRelations.people.id", relations.people.map(({ id }) => id)],
+          [
+            "judgeRelations.joinedBy",
+            relations.joinedBy.map(
+              (pair) => `${pair.opinionId}/${pair.personId}`,
+            ),
+          ],
+        ] as const)),
   ] as const;
   return sets.flatMap(([path, values]) => {
     const seen = new Set<string>();
@@ -374,7 +382,7 @@ const unexpectedKeys = (keys: readonly string[]): string =>
  */
 const trustedPath = (issue: v.BaseIssue<unknown>) => {
   const unexpected: string[] = [];
-  const segments = (issue.path ?? []).map(({ key }) => {
+  const segments = issue.path?.map(({ key }) => {
     if (
       typeof key === "number" ||
       (typeof key === "string" && DECLARED_KEYS.has(key))
@@ -384,7 +392,7 @@ const trustedPath = (issue: v.BaseIssue<unknown>) => {
     unexpected.push(String(key));
     return "*";
   });
-  return { path: segments.join(".") || "$", unexpected };
+  return { path: segments?.join(".") || "$", unexpected };
 };
 
 const ROW_TABLES: Readonly<Record<string, readonly string[]>> = {
@@ -426,7 +434,11 @@ const schemaDiagnostics = (
   const diagnostics: RejectionDiagnostic[] = [];
   for (const issue of drift) {
     const { path } = trustedPath(issue);
-    const columns = ROW_TABLES[path.split(".")[0] ?? ""] ?? [];
+    const table = path.split(".").at(0);
+    const columns = table === undefined ? undefined : ROW_TABLES[table];
+    if (columns === undefined) {
+      return panic(`No CourtListener row columns for ${path}`);
+    }
     const { missing, notText, unexpected } = columnDrift(columns, issue.input);
     for (const column of missing) {
       diagnostics.push({ path: `${path}.${column}`, detail: "missing column" });

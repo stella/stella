@@ -96,9 +96,12 @@ const rankGroups = (field: RankField): readonly RankGroup[] => {
     if (value === UNRANKED_COURT_RANK[field]) {
       continue;
     }
-    const ids = idsByValue.get(value) ?? [];
-    ids.push(id);
-    idsByValue.set(value, ids);
+    const ids = idsByValue.get(value);
+    if (ids === undefined) {
+      idsByValue.set(value, [id]);
+    } else {
+      ids.push(id);
+    }
   }
   return [...idsByValue]
     .toSorted(([left], [right]) => right - left)

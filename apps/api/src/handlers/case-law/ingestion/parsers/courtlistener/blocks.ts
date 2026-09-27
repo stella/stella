@@ -677,8 +677,6 @@ const blockText = (block: Block): string => {
   }
 };
 
-const VISIBLE = /\S/gu;
-
 /**
  * Whether the blocks hold exactly the source's visible characters, in the
  * source's order. Whitespace is layout and not compared; a character lost,
@@ -687,14 +685,14 @@ const VISIBLE = /\S/gu;
 export const conservesText = (
   source: string,
   units: readonly TextUnit[],
-): boolean =>
-  (source.match(VISIBLE) ?? []).join("") ===
-  (
-    units
-      .flatMap(({ blocks }) => blocks.map(blockText))
-      .join(" ")
-      .match(VISIBLE) ?? []
-  ).join("");
+): boolean => {
+  const visibleSource = source.replace(/\s/gu, "");
+  const visibleBlocks = units
+    .flatMap(({ blocks }) => blocks.map(blockText))
+    .join(" ")
+    .replace(/\s/gu, "");
+  return visibleSource === visibleBlocks;
+};
 
 /**
  * Walks tables into `builder`: each grid as table blocks, and everything

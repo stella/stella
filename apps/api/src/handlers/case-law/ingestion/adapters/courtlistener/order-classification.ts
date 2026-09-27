@@ -130,9 +130,13 @@ const readOrderWording = (body: string) => {
     .trim();
   const length = Array.from(text).length;
   const short = length > 0 && length <= SHORT_ORDER_MAX_CHARACTERS;
+  const sentences = short ? orderSentencesOf(text) : null;
+  if (sentences === null) {
+    return { length, matchedPatterns: [] };
+  }
   return {
     length,
-    matchedPatterns: short ? (orderSentencesOf(text) ?? []) : [],
+    matchedPatterns: sentences,
   };
 };
 
@@ -174,7 +178,7 @@ export const classifyCourtListenerDecision = ({
       classifierVersion: ORDER_CLASSIFIER_VERSION,
       opinionTypes,
       principalLength: wording?.length ?? null,
-      matchedPatterns: wording?.matchedPatterns ?? [],
+      matchedPatterns: wording === null ? [] : wording.matchedPatterns,
       scdbPresent,
     },
   });

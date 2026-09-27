@@ -325,11 +325,14 @@ const planJudges = (
         value: row.author_id,
       });
     }
-    const joiners = (relations?.joinedBy ?? [])
-      .filter(({ opinionId }) => opinionId === row.id)
-      .toSorted((left, right) =>
-        compareCanonicalIds(left.personId, right.personId),
-      );
+    const joiners =
+      relations === null
+        ? []
+        : relations.joinedBy
+            .filter(({ opinionId }) => opinionId === row.id)
+            .toSorted((left, right) =>
+              compareCanonicalIds(left.personId, right.personId),
+            );
     for (const { personId } of joiners) {
       attribute(personId, role, {
         opinionId: row.id,

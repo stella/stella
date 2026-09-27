@@ -165,13 +165,17 @@ const isWellFormedFragment = (body: string): boolean => {
   const parsed = Result.try(() =>
     slimdom.parseXmlDocument(`<cl-fragment>${body}</cl-fragment>`),
   );
-  return (
-    Result.isOk(parsed) &&
-    (parsed.value.documentElement?.childNodes ?? []).every(
-      (node) =>
-        node.nodeType !== slimdom.Node.TEXT_NODE ||
-        (node.nodeValue ?? "").trim() === "",
-    )
+  if (Result.isError(parsed)) {
+    return false;
+  }
+  const root = parsed.value.documentElement;
+  if (root === null) {
+    return false;
+  }
+  return Array.from(root.childNodes).every(
+    (node) =>
+      node.nodeType !== slimdom.Node.TEXT_NODE ||
+      (node.nodeValue ?? "").trim() === "",
   );
 };
 
