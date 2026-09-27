@@ -428,8 +428,8 @@
       "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
-      "search": "    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&",
-      "replace": "    false &&",
+      "search": "    if (ENGINE_ASKS_CLIENT_AGAIN[part.state]) {",
+      "replace": "    if (false) {",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "continues a fork taken while a question waits"
@@ -561,6 +561,48 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "transcript-closing-results-join-their-step",
+      "fix": "",
+      "behaviour": "A result the engine history adds to close a call of an ended turn joins its step's results, so the step's calls stay in one model message and every one of them is answered right after it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "      stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "      closed.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace a mixed batch that still waits"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-denial-answered-in-its-step",
+      "fix": "",
+      "behaviour": "A denied call in a step its message goes on past is answered in that step's results, not at the end of the message.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    } else if (isDeniedCall(part) && index < earlierStepsEnd) {",
+      "replace": "    } else if (isDeniedCall(part) && index < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays a denied call's answer before the later steps of its message"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-thinking-keeps-its-step",
+      "fix": "",
+      "behaviour": "A replayed message keeps each signed thinking block in place, on the step that produced it.",
+      "status": "active",
+      "file": "src/handlers/chat/third-party-boundary.ts",
+      "search": "      if (isProviderVisibleChatPart(part)) {\n        parts.push(part);\n      }",
+      "replace": "      if (isProviderVisibleChatPart(part)) {\n        if (part.type === \"thinking\") {\n          parts.unshift(part);\n        } else {\n          parts.push(part);\n        }\n      }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays each step's signed thinking on its own step"
+      },
+      "oracle": "chat.provider.transcript-settled"
     }
   ]
 }

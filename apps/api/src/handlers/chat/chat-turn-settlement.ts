@@ -217,21 +217,59 @@ const ENGINE_ASKS_CLIENT_AGAIN = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
+/** What the model sees for a denied call answered before a later step of
+ *  its message. */
+export const DENIED_CALL_ERROR = "The user denied this call, so it never ran.";
+
 /**
- * Close every call on a message the run does not resume that the engine
- * would otherwise ask the client about again. Such a call belongs to a turn
- * that already ended, so nobody can answer it any more.
+ * The index of the last stored result that a later part of `parts` follows:
+ * every call before it belongs to a step the message goes on past. -1 when
+ * the message has one step.
  */
-const closeUnresolvedCallsForEngine = (
-  parts: readonly ChatPart[],
-): ChatPart[] =>
-  parts.flatMap((part): ChatPart[] =>
-    part.type === "tool-call" &&
-    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&
-    !hasStoredResult(part, parts)
-      ? [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)]
-      : [part],
+const endOfEarlierSteps = (parts: readonly ChatPart[]): number => {
+  const lastOther = parts.findLastIndex((part) => part.type !== "tool-result");
+  return parts.findLastIndex(
+    (part, index) => part.type === "tool-result" && index < lastOther,
   );
+};
+
+/**
+ * Close the calls on a message the run does not resume that the engine cannot
+ * be handed without a result. Their turn already ended:
+ * - a call the engine would otherwise ask the client about again, which
+ *   nobody can answer any more;
+ * - a denied call in a step the message goes on past. The engine answers a
+ *   denial at the end of the message, which is right after the message making
+ *   the call only when its step is the last one.
+ *
+ * Each closing result joins its step's results: before the first stored
+ * result after its call, or at the end of the message. The engine ends a
+ * model message at a result, so a result right after its call would split
+ * the step's calls into two model messages, and a denial of the first would
+ * no longer follow the message making it.
+ */
+const closeCallsForEngine = (parts: readonly ChatPart[]): ChatPart[] => {
+  const earlierStepsEnd = endOfEarlierSteps(parts);
+  const closed: ChatPart[] = [];
+  let stepResults: ChatPart[] = [];
+  for (const [index, part] of parts.entries()) {
+    if (part.type === "tool-result") {
+      closed.push(...stepResults);
+      stepResults = [];
+    }
+    closed.push(part);
+    if (part.type !== "tool-call" || hasStoredResult(part, parts)) {
+      continue;
+    }
+    if (ENGINE_ASKS_CLIENT_AGAIN[part.state]) {
+      stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));
+    } else if (isDeniedCall(part) && index < earlierStepsEnd) {
+      stepResults.push(errorToolResult(part.id, DENIED_CALL_ERROR));
+    }
+  }
+  closed.push(...stepResults);
+  return closed;
+};
 
 /**
  * Close the approved calls a turn left without a result once it ended some
@@ -278,7 +316,7 @@ export const settleHistoryForRun = ({
     if (message.role !== "assistant" || message.id === resumedMessageId) {
       return message;
     }
-    const parts = closeUnresolvedCallsForEngine(
+    const parts = closeCallsForEngine(
       settleOpenToolCallsForOutcome({
         outcome: "interrupted",
         parts: message.parts,

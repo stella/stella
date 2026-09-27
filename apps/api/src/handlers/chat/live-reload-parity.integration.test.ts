@@ -1375,6 +1375,50 @@ const forkWhileAQuestionWaits = async () => {
   });
 };
 
+/** One of two approvals denied, and the run goes on past their step: the
+ *  next message's request answers the denial right after the step. */
+const denyBeforeLaterSteps = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["approval", "approval"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    await new ResolveCards(
+      ["deny", "approve"],
+      [
+        [
+          { ...STEP, calls: ["plain"] },
+          { ...STEP, text: true },
+        ],
+      ],
+    ).run(model, real);
+    await new SendUserMessage([TEXT_ANSWER], "Use the buyer's form").run(
+      model,
+      real,
+    );
+  });
+};
+
+/** A turn that thinks before a call and again before its answer: the next
+ *  message's request replays each signed thinking block on its own step. */
+const replayThinkingPerStep = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [
+        [
+          { ...STEP, calls: ["plain"], reasoning: true },
+          { ...STEP, reasoning: true, text: true },
+        ],
+      ],
+      "Draft the NDA",
+    ).run(model, real);
+    await new SendUserMessage([TEXT_ANSWER], "Use the buyer's form").run(
+      model,
+      real,
+    );
+  });
+};
+
 const stopARunningClientCall = async () => {
   await inConversation(async (model, real) => {
     await new SendUserMessage(
@@ -1984,6 +2028,18 @@ describe("a conversation's live view", () => {
   test(
     "continues a fork taken while a question waits",
     forkWhileAQuestionWaits,
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "replays a denied call's answer before the later steps of its message",
+    denyBeforeLaterSteps,
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "replays each step's signed thinking on its own step",
+    replayThinkingPerStep,
     propertyTestTimeout(30_000),
   );
 
