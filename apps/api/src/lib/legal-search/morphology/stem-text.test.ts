@@ -24,7 +24,7 @@ const SAMPLES = [
  * in order, is the whole contract; a dropped or split token would shift every
  * position after it.
  */
-test.each([...MORPHOLOGY_LANGUAGES])(
+test.each(MORPHOLOGY_LANGUAGES)(
   "%s stems one token to one stem, in order",
   (language) => {
     for (const sample of SAMPLES) {

@@ -1038,6 +1038,9 @@
     "packages/typescript-config": {
       "name": "@stll/typescript-config",
       "version": "0.0.0",
+      "devDependencies": {
+        "bun-types": "catalog:",
+      },
     },
     "packages/ui": {
       "name": "@stll/ui",

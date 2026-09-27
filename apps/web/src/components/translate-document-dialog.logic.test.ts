@@ -101,7 +101,7 @@ describe("document translation failure copy", () => {
     );
   });
 
-  test.each([...DOCUMENT_TRANSLATION_RUN_ERROR_CODES])(
+  test.each(DOCUMENT_TRANSLATION_RUN_ERROR_CODES)(
     "maps persisted $0 errors to intentional copy",
     (errorCode) => {
       expect(documentTranslationRunFailureKey(errorCode)).toBe(

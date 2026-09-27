@@ -90,7 +90,7 @@ describe("MCP tool-surface baseline", () => {
   });
 });
 
-describe.each([...SURFACES])(
+describe.each(SURFACES)(
   "MCP registry quality ($mode surface)",
   ({ mode, definitions }) => {
     test("tool surface snapshot (name, scope, description, annotations, inputSchema)", () => {
@@ -414,7 +414,7 @@ describe("MCP static tool-set coherence", () => {
     }
   });
 
-  test.each([...MCP_MODES])(
+  test.each(MCP_MODES)(
     "every %s wire tool advertises its executable output contract",
     (mode) => {
       const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);

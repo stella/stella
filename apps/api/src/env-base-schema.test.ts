@@ -166,7 +166,7 @@ describe("query expansion mode", () => {
   // Every mode is deployable. `on` was reserved by a boot refusal while a
   // corpus cursor could not say which dictionary built its page; the cursor
   // carries that now, so nothing is left to reserve.
-  test.each([...QUERY_EXPANSION_MODES])("accepts %p", (mode) => {
+  test.each(QUERY_EXPANSION_MODES)("accepts %p", (mode) => {
     expect(v.parse(envBaseServerSchema.QUERY_EXPANSION_MODE, mode)).toBe(mode);
   });
 

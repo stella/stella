@@ -149,7 +149,7 @@ describe("compare operators", () => {
   // An invariant over the whole operator union: a per-operator exception like
   // the `eq`/`neq` one this replaced cannot be reintroduced silently, and a new
   // `CompareOp` is covered the moment it is added.
-  test.each([...COMPARE_OPS])(
+  test.each(COMPARE_OPS)(
     "pruneIncomplete drops a blank `%s` comparison",
     (op) => {
       expect(

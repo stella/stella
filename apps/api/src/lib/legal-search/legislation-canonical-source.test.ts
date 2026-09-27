@@ -12,7 +12,7 @@ const API_SRC = nodePath.resolve(import.meta.dir, "../..");
 const STORED_KEY = "legislation/cze/2012/89/payload.zst";
 
 describe("canonical legislation payload source", () => {
-  test.each([...CORPUS_STORAGE_MODES])(
+  test.each(CORPUS_STORAGE_MODES)(
     "object storage serves a keyed payload exactly when storage is on (%s)",
     (mode) => {
       const expectedKeyed =
