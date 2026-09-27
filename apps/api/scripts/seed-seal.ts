@@ -132,6 +132,7 @@ switch (mode) {
   }
   default: {
     mode satisfies never;
+    panic(`Unhandled seal mode: ${String(mode)}`);
   }
 }
 process.exit(0);

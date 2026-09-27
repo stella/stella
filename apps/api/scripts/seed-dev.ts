@@ -6072,7 +6072,8 @@ export async function seed(organizationId?: string, userId?: string) {
         await tx
           .update(entities)
           .set({ currentVersionId: sql`${entityVersions.id}` })
-          .from(entityVersions)
+          // Drizzle emits FROM before WHERE whatever the call order; `where`
+          // follows `set` so the unscoped-update lint can see it.
           .where(
             and(
               eq(entityVersions.entityId, entities.id),
@@ -6081,7 +6082,8 @@ export async function seed(organizationId?: string, userId?: string) {
                 chunk.map((e) => e.versionId),
               ),
             ),
-          ),
+          )
+          .from(entityVersions),
     );
   }
   console.log(

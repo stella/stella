@@ -13,6 +13,7 @@
 /// <reference lib="dom" />
 import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Page, Response } from "@playwright/test";
+import { panic } from "better-result";
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -231,9 +232,8 @@ const trackPage = async (context: BrowserContext): Promise<TrackedPage> => {
 // whatever rendered instead is the evidence.
 const waitUntilReady = async (
   { network, page }: TrackedPage,
-  waitFor: string | undefined,
+  selector = "main",
 ) => {
-  const selector = waitFor ?? "main";
   const visible = await page
     .locator(selector)
     .first()
@@ -448,13 +448,13 @@ const measureOnce = async (
   await tracked.page.goto(target, { waitUntil: "domcontentloaded" });
   const ready = await waitUntilReady(tracked, options.waitFor);
   const settledMs = performance.now() - startedAt - QUIET.idleMs;
-  const capture = await tracked.network.capture();
+  const networkCapture = await tracked.network.capture();
   const sample: MeasureSample = {
-    ...pageTotals(capture),
+    ...pageTotals(networkCapture),
     domContentLoadedMs: await readDomContentLoaded(tracked.page),
     largestContentfulPaintMs: await readLcp(tracked.page),
     settledMs,
-    waterfallDepth: summarizeCapture(capture).depth,
+    waterfallDepth: summarizeCapture(networkCapture).depth,
   };
   const findings = await tracked.finish();
   findings.navigationProblems.push(...ready.problems);
@@ -563,7 +563,8 @@ const main = async () => {
       break;
     }
     default: {
-      return command satisfies never;
+      command satisfies never;
+      panic(`Unhandled drive command: ${String(command)}`);
     }
   }
   process.exit(blocking ? 1 : 0);
