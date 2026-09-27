@@ -34295,6 +34295,7 @@ type T7bba2468e2 = T2430547df2 | {
       id: string;
       role?: undefined | "related-proceedings" | "metadata-table";
       anchorId: string;
+      note?: undefined | T5b30b2c0a8;
       plainText: string;
     } & {
       rows: Array<Array<{
@@ -35025,6 +35026,7 @@ type T96412b8318 = {
       anchorId: string;
       type: "table";
       role?: undefined | "related-proceedings" | "metadata-table";
+      note?: undefined | T5b30b2c0a8;
       rows: Array<Array<{
         inlines: Array<T7522841395>;
         plainText: string;
