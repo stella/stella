@@ -1,12 +1,23 @@
 /**
  * The ranks a court can hold, and the rank a directory court holds by its
- * directory tier. The seed renders its rows from these (`court-weight-seed.ts`)
- * and the ranking reads a directory court's rank from them by id, so the two
- * cannot disagree about a court the seed names.
+ * directory tier. The seed renders its name rows from these
+ * (`court-weight-seed.ts`); a directory court is ranked by its id alone, in
+ * TypeScript by `usCourtRank` and in SQL by `usCourtRankSql`, both read from
+ * the one directory.
  */
-import { resolveUsCourt, type UsCourtTier } from "@stll/api-contract/us-courts";
+import { type SQL, sql } from "drizzle-orm";
 
-type CourtRank = { tier: number; tierLabel: string; weight: number };
+import {
+  resolveUsCourt,
+  US_COURT_BY_CANONICAL_NAME,
+  US_COURTS,
+  type UsCourtTier,
+} from "@stll/api-contract/us-courts";
+
+import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+
+export type CourtRank = { tier: number; tierLabel: string; weight: number };
 
 /**
  * A tier and its weight belong to the label, not to the jurisdiction, so two
@@ -35,6 +46,12 @@ export const US_TIER_RANK = {
   special: RANK.special,
 } as const satisfies Record<UsCourtTier, (typeof RANK)[keyof typeof RANK]>;
 
+/** The rank of a court nobody ranks: the bottom tier and the default weight. */
+export const UNRANKED_COURT_RANK = {
+  tier: LOWEST_COURT_TIER,
+  weight: 1,
+} as const;
+
 /**
  * The rank of an accepted United States court, by its exact directory id, or
  * null for an id the directory does not accept.
@@ -45,3 +62,82 @@ export const usCourtRank = (courtId: string): CourtRank | null => {
     ? US_TIER_RANK[resolution.court.tier]
     : null;
 };
+
+/**
+ * The rank of the accepted United States court stored under exactly this
+ * canonical name, or null. For a reader that holds only the name (a court
+ * facet bucket): the write boundary stores a directory court under its
+ * canonical name, and the directory's canonical names are unique.
+ */
+export const usCourtRankByCanonicalName = (court: string): CourtRank | null => {
+  const directoryCourt = US_COURT_BY_CANONICAL_NAME.get(court);
+  return directoryCourt === undefined
+    ? null
+    : US_TIER_RANK[directoryCourt.tier];
+};
+
+type RankField = "tier" | "weight";
+
+/** A `text[]` input literal of directory ids, each element quoted. */
+const courtIdArrayLiteral = (ids: readonly string[]): string =>
+  `{${ids.map((id) => `"${id.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`).join(",")}}`;
+
+/** A rank value and the `text[]` literal of the accepted ids holding it. */
+type RankGroup = { value: number; ids: string };
+
+/**
+ * The accepted ids grouped by the rank value they hold, highest first. A
+ * group at the unranked value is left out: the ELSE answers it already.
+ */
+const rankGroups = (field: RankField): readonly RankGroup[] => {
+  const idsByValue = new Map<number, string[]>();
+  for (const { id, tier } of US_COURTS) {
+    const value = US_TIER_RANK[tier][field];
+    if (value === UNRANKED_COURT_RANK[field]) {
+      continue;
+    }
+    const ids = idsByValue.get(value);
+    if (ids === undefined) {
+      idsByValue.set(value, [id]);
+    } else {
+      ids.push(id);
+    }
+  }
+  return [...idsByValue]
+    .toSorted(([left], [right]) => right - left)
+    .map(([value, ids]) => ({ value, ids: courtIdArrayLiteral(ids) }));
+};
+
+let rankGroupsByField: Record<RankField, readonly RankGroup[]> | null = null;
+
+/** Built once per process: the directory is fixed at build time. */
+const usRankGroups = (field: RankField): readonly RankGroup[] => {
+  rankGroupsByField ??= {
+    tier: rankGroups("tier"),
+    weight: rankGroups("weight"),
+  };
+  return rankGroupsByField[field];
+};
+
+/**
+ * `usCourtRank`'s tier or weight as SQL over a court id column: one branch
+ * per rank value, testing membership in the accepted ids holding it. The ids
+ * travel as bound `text[]` parameters, so the statement text stays the same
+ * size whatever the directory holds, and each `IN (SELECT unnest(...))` is an
+ * uncorrelated subquery Postgres hashes once per statement, so a row's
+ * lookup does not scan the list.
+ *
+ * A NULL or unaccepted id takes the ELSE, the unranked rank: never a name
+ * pattern and never another jurisdiction's rank. The write boundary admits
+ * accepted ids only, so a stored row reaches the ELSE only through corruption
+ * or directory drift; `decisionCourtWeight` gives the same row the same rank
+ * in TypeScript and reports it.
+ */
+export const usCourtRankSql = (courtIdColumn: string, field: RankField): SQL =>
+  sqlCaseFragment({
+    branches: usRankGroups(field).map(
+      ({ value, ids }) =>
+        sql`WHEN ${sql.raw(courtIdColumn)} IN (SELECT unnest(${ids}::text[])) THEN ${sql.raw(String(value))}`,
+    ),
+    fallback: sql.raw(String(UNRANKED_COURT_RANK[field])),
+  });
