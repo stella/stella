@@ -12,11 +12,17 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { classifyAIError } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+const SERVED_HISTORY_READ_FAILED = failureSink({
+  event: "chat.snapshot.served_history_read_failed",
+  expected: [],
+});
 
 export type MessageIdMapper = (messageId: string) => SafeId<"chatMessage">;
 
@@ -235,7 +241,7 @@ export const presentStoredHistory = async function* ({
     if (served === undefined) {
       const loaded = await loadServed();
       if (Result.isError(loaded)) {
-        captureError(loaded.error, { kind: "served_history_read_failed" });
+        observeFailure(loaded.error, { sink: SERVED_HISTORY_READ_FAILED });
         const kind = classifyAIError(loaded.error);
         yield {
           type: EventType.RUN_ERROR,
