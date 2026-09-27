@@ -38,7 +38,7 @@ describe("provision citation CHECK validation", () => {
       statements,
     );
 
-    await PROVISION_CITATION_CHECK_STEP.advance(connection);
+    (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
 
     expect(statements).toEqual([
       "BEGIN",
@@ -55,8 +55,8 @@ describe("provision citation CHECK validation", () => {
       type: "incomplete",
     });
 
-    await PROVISION_CITATION_CHECK_STEP.advance(connection);
-    await PROVISION_CITATION_CHECK_STEP.advance(connection);
+    (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
+    (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
     expect(
       await PROVISION_CITATION_CHECK_STEP.readCompletion(connection),
     ).toEqual({ type: "complete" });

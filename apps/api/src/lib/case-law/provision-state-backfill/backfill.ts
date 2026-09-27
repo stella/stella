@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { Temporal } from "@stll/time";
@@ -6,9 +6,11 @@ import { Temporal } from "@stll/time";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
-import { PROVISION_BACKFILL_BUDGET } from "./step";
+import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
 import type {
   ProvisionBackfillCompletion,
+  ProvisionBackfillUnit,
+  ProvisionBackfillUnitError,
   ProvisionBackfillSession,
   ProvisionBackfillStep,
 } from "./step";
@@ -56,23 +58,16 @@ const readBoolean = (row: unknown, key: string): boolean => {
     : panic(`Provision repair returned an invalid ${key}`);
 };
 
+const PAGE_BUDGET = {
+  lockTimeout: LOCK_TIMEOUT,
+  statementTimeout: STATEMENT_TIMEOUT,
+} as const;
+
 const inTransaction = async (
   connection: ProvisionBackfillSession,
   work: () => Promise<void>,
-): Promise<void> => {
-  await connection.execute("BEGIN");
-  try {
-    await connection.execute(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`,
-    );
-    await work();
-    await connection.execute("COMMIT");
-  } catch (error: unknown) {
-    await connection.execute("ROLLBACK");
-    throw error;
-  }
-};
+): Promise<ProvisionBackfillUnit> =>
+  await inBackfillTransaction(connection, PAGE_BUDGET, work);
 
 const readCursorCompletion = async (
   connection: ProvisionBackfillSession,
@@ -154,8 +149,7 @@ const readDecisionPage = async (
 const repairCursorPage = async (
   connection: ProvisionBackfillSession,
   name: "scope-bootstrap" | "state-seed",
-): Promise<boolean> => {
-  let advanced = false;
+): Promise<ProvisionBackfillUnit> =>
   await inTransaction(connection, async () => {
     const previous = await readCursor(connection, name);
     const ids = await readDecisionPage(
@@ -195,10 +189,7 @@ const repairCursorPage = async (
       }
     }
     await advanceCursor(connection, name, previous, ids.at(-1) ?? null);
-    advanced = ids.length > 0;
   });
-  return advanced;
-};
 
 const cursorStep = (
   name: "scope-bootstrap" | "state-seed",
@@ -207,16 +198,14 @@ const cursorStep = (
   budget: PROVISION_BACKFILL_BUDGET.PAGE,
   readCompletion: async (connection) =>
     await readCursorCompletion(connection, name),
-  advance: async (connection) => {
-    await repairCursorPage(connection, name);
-  },
+  advance: async (connection) => await repairCursorPage(connection, name),
 });
 
 const transitionScope = async (
   connection: ProvisionBackfillSession,
   { country, language }: ScopeKey,
   action: "activate" | "retire",
-): Promise<void> => {
+): Promise<ProvisionBackfillUnit> =>
   await inTransaction(connection, async () => {
     const status = action === "activate" ? "active" : "retired";
     const row = (
@@ -241,7 +230,6 @@ const transitionScope = async (
       [country, language, readString(row, "generation"), action],
     );
   });
-};
 
 const readActiveScopes = async (
   connection: ProvisionBackfillSession,
@@ -271,18 +259,20 @@ const scopeSeedStep: ProvisionBackfillStep = {
         };
   },
   advance: async (connection) => {
+    // One transition per unit: retirements first, then activations.
     const active = await readActiveScopes(connection);
+    const activeKeys = new Set(active.map(keyOf));
     const desired = new Set(PROVISION_CITATION_SCOPE_KEYS.map(keyOf));
-    for (const scope of active) {
-      if (!desired.has(keyOf(scope))) {
-        // db-await-in-loop: each scope and its generation-stamped job commit atomically.
-        await transitionScope(connection, scope, "retire");
-      }
+    const retiring = active.find((scope) => !desired.has(keyOf(scope)));
+    if (retiring !== undefined) {
+      return await transitionScope(connection, retiring, "retire");
     }
-    for (const scope of PROVISION_CITATION_SCOPE_KEYS) {
-      // db-await-in-loop: each scope and its generation-stamped job commit atomically.
-      await transitionScope(connection, scope, "activate");
-    }
+    const activating = PROVISION_CITATION_SCOPE_KEYS.find(
+      (scope) => !activeKeys.has(keyOf(scope)),
+    );
+    return activating === undefined
+      ? Result.ok(undefined)
+      : await transitionScope(connection, activating, "activate");
   },
 };
 
@@ -308,9 +298,9 @@ const scopeTransitionsStep: ProvisionBackfillStep = {
       )
     ).at(0);
     if (row === undefined) {
-      return;
+      return Result.ok(undefined);
     }
-    await inTransaction(connection, async () => {
+    return await inTransaction(connection, async () => {
       await connection.query(
         `SELECT run_case_law_provision_scope_transition_page($1::varchar, $2::varchar, $3::bigint)`,
         [
@@ -348,6 +338,40 @@ type ProvisionStateBackfillOutcome =
   | { type: "complete" }
   | { type: "progress"; step: string };
 
+type BackfillRun = Required<ProvisionStateBackfillOptions>;
+
+/**
+ * The run from step `index` on. Sequential by construction: a unit starts
+ * only after the previous one committed, and the next completion read sees
+ * its cursor.
+ */
+const runFrom = async (
+  run: BackfillRun,
+  index: number,
+  worked: boolean,
+): Promise<
+  Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
+> => {
+  const step = PROVISION_STATE_BACKFILL_STEPS.at(index);
+  if (step === undefined) {
+    return Result.ok({ type: "complete" });
+  }
+  if ((await step.readCompletion(run.connection)).type === "complete") {
+    return await runFrom(run, index + 1, worked);
+  }
+  const isScan = step.budget === PROVISION_BACKFILL_BUDGET.WHOLE_RUN;
+  if (run.now() >= run.deadline || (isScan && worked)) {
+    return Result.ok({ type: "progress", step: step.name });
+  }
+  const unit = await step.advance(run.connection);
+  if (unit.isErr()) {
+    return unit;
+  }
+  return isScan
+    ? Result.ok({ type: "progress", step: step.name })
+    : await runFrom(run, index, true);
+};
+
 /**
  * One bounded run of the backfill. Each unit commits its own work and its
  * cursor together, so a run that stops anywhere is resumed by the next one.
@@ -358,22 +382,6 @@ export const runProvisionStateBackfill = async ({
   connection,
   deadline,
   now = () => Temporal.Now.instant().epochMilliseconds,
-}: ProvisionStateBackfillOptions): Promise<ProvisionStateBackfillOutcome> => {
-  let worked = false;
-  for (const step of PROVISION_STATE_BACKFILL_STEPS) {
-    // db-await-in-loop: each step starts only once the previous one is complete.
-    while ((await step.readCompletion(connection)).type === "incomplete") {
-      const isScan = step.budget === PROVISION_BACKFILL_BUDGET.WHOLE_RUN;
-      if (now() >= deadline || (isScan && worked)) {
-        return { type: "progress", step: step.name };
-      }
-      // db-await-in-loop: one committed unit per iteration; the next reads its cursor.
-      await step.advance(connection);
-      worked = true;
-      if (isScan) {
-        return { type: "progress", step: step.name };
-      }
-    }
-  }
-  return { type: "complete" };
-};
+}: ProvisionStateBackfillOptions): Promise<
+  Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
+> => await runFrom({ connection, deadline, now }, 0, false);

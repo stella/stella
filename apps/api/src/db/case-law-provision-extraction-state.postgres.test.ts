@@ -507,10 +507,12 @@ if (!databaseUrl || !runPostgresTests) {
           };
           const outcomes: string[] = [];
           for (let run = 0; run < 20; run += 1) {
-            const outcome = await runProvisionStateBackfill({
-              connection: session,
-              deadline: Number.POSITIVE_INFINITY,
-            });
+            const outcome = (
+              await runProvisionStateBackfill({
+                connection: session,
+                deadline: Number.POSITIVE_INFINITY,
+              })
+            ).unwrap();
             outcomes.push(outcome.type);
             if (outcome.type === "complete") {
               break;

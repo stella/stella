@@ -63,7 +63,7 @@ const completeStep = async (name: string): Promise<void> => {
     if ((await step.readCompletion(connection)).type === "complete") {
       return;
     }
-    await step.advance(connection);
+    (await step.advance(connection)).unwrap();
   }
   panic(`Provision backfill step ${name} did not complete`);
 };
@@ -89,11 +89,13 @@ describe("provision state backfill", () => {
       ADD CONSTRAINT provision_citations_selection_values
       CHECK (selection IS NULL OR selection IN ('text', 'date-window')) NOT VALID`);
     let clock = 0;
-    const first = await runProvisionStateBackfill({
-      connection,
-      deadline: 1,
-      now: () => clock++,
-    });
+    const first = (
+      await runProvisionStateBackfill({
+        connection,
+        deadline: 1,
+        now: () => clock++,
+      })
+    ).unwrap();
     expect(first).toEqual({ type: "progress", step: "scope-bootstrap" });
     expect(
       await rows(`SELECT cursor_decision_id IS NOT NULL AS advanced,
@@ -103,10 +105,12 @@ describe("provision state backfill", () => {
 
     const outcomes: string[] = [];
     for (let run = 0; run < 20; run += 1) {
-      const outcome = await runProvisionStateBackfill({
-        connection,
-        deadline: Number.POSITIVE_INFINITY,
-      });
+      const outcome = (
+        await runProvisionStateBackfill({
+          connection,
+          deadline: Number.POSITIVE_INFINITY,
+        })
+      ).unwrap();
       outcomes.push(outcome.type === "progress" ? outcome.step : "complete");
       if (outcome.type === "complete") {
         break;

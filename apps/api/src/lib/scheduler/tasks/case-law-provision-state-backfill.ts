@@ -2,6 +2,8 @@ import { Temporal } from "@stll/time";
 
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
@@ -14,6 +16,11 @@ export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
  * its own statement budget.
  */
 const RUN_BUDGET_MS = 5 * 60_000;
+
+const backfillUnitFailed = failureSink({
+  event: "scheduler.case_law_provision_state_backfill_failed",
+  expected: [],
+});
 
 /**
  * The provision state backfill: scope rows for every decision key, the
@@ -34,24 +41,28 @@ export const backfillCaseLawProvisionState: SchedulerTask = async ({
   signal.throwIfAborted();
   // One reserved session: every unit is BEGIN ... COMMIT on it.
   const reserved = await db.$client.reserve();
-  try {
-    const connection: ProvisionBackfillSession = {
-      execute: async (query, params = []) => {
-        await reserved.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await reserved.unsafe(query, [...params]),
-    };
-    const outcome = await runProvisionStateBackfill({
-      connection,
-      deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
-    });
-    logger.info("scheduler.case_law_provision_state_backfill", {
-      // The step still owed, or "complete".
-      "caseLawProvisionStateBackfill.pending":
-        outcome.type === "progress" ? outcome.step : outcome.type,
-    });
-  } finally {
+  const connection: ProvisionBackfillSession = {
+    execute: async (query, params = []) => {
+      await reserved.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await reserved.unsafe(query, [...params]),
+  };
+  const run = await runProvisionStateBackfill({
+    connection,
+    deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+  }).finally(() => {
     reserved.release();
+  });
+  // A failed unit was rolled back, so nothing is half written; the next run
+  // retries it from the committed cursors.
+  if (run.isErr()) {
+    observeFailure(run.error, { sink: backfillUnitFailed });
+    return;
   }
+  logger.info("scheduler.case_law_provision_state_backfill", {
+    // The step still owed, or "complete".
+    "caseLawProvisionStateBackfill.pending":
+      run.value.type === "progress" ? run.value.step : run.value.type,
+  });
 };

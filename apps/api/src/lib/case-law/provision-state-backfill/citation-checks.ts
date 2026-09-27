@@ -13,13 +13,14 @@
  * blocks neither reads nor writes; it waits only on vacuum and other DDL.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { isRecord } from "@/api/lib/type-guards";
 
-import { PROVISION_BACKFILL_BUDGET } from "./step";
+import { inBackfillTransaction, PROVISION_BACKFILL_BUDGET } from "./step";
 import type {
   ProvisionBackfillCompletion,
+  ProvisionBackfillUnit,
   ProvisionBackfillSession,
   ProvisionBackfillStep,
 } from "./step";
@@ -100,33 +101,28 @@ const readCompletion = async (
 const validateOne = async (
   connection: ProvisionBackfillSession,
   constraintName: string,
-): Promise<void> => {
-  await connection.execute("BEGIN");
-  try {
-    await connection.execute(
-      `SET LOCAL lock_timeout = '${VALIDATE_LOCK_TIMEOUT}'`,
-    );
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${VALIDATE_STATEMENT_TIMEOUT}'`,
-    );
-    await connection.execute(
-      `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${constraintName}"`,
-    );
-    await connection.execute("COMMIT");
-  } catch (error: unknown) {
-    await connection.execute("ROLLBACK");
-    throw error;
-  }
-};
+): Promise<ProvisionBackfillUnit> =>
+  await inBackfillTransaction(
+    connection,
+    {
+      lockTimeout: VALIDATE_LOCK_TIMEOUT,
+      statementTimeout: VALIDATE_STATEMENT_TIMEOUT,
+    },
+    async () => {
+      await connection.execute(
+        `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${constraintName}"`,
+      );
+    },
+  );
 
 /** Validates the first CHECK still pending; one full-table scan. */
 const validateNext = async (
   connection: ProvisionBackfillSession,
-): Promise<void> => {
+): Promise<ProvisionBackfillUnit> => {
   const pending = await readPendingConstraint(connection);
-  if (pending !== undefined) {
-    await validateOne(connection, pending);
-  }
+  return pending === undefined
+    ? Result.ok(undefined)
+    : await validateOne(connection, pending);
 };
 
 export const PROVISION_CITATION_CHECK_STEP: ProvisionBackfillStep = {
