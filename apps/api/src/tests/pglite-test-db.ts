@@ -20,6 +20,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
@@ -624,6 +625,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawObservationFence(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
