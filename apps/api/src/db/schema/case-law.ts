@@ -2078,7 +2078,7 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
  * unsplit month or the two-digit bucket of a split one.
  *
- * Row security is forced (migration `20260927120000_case_law_sitemap_shards`)
+ * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
  */
 export const caseLawSitemapShards = p.pgTable(
