@@ -479,7 +479,35 @@ export type ChatRefRegistry = {
    * cannot resolve become neutral text.
    */
   toDurableRefText: (text: string) => ChatDurableRefText;
+  /** What `ref` names in this registry, or null. */
+  bindingOf: (ref: string) => ChatRefBinding | null;
+  /** This registry's ref for what `binding` names (minted if new). */
+  refFor: (binding: ChatRefBinding) => string;
 };
+
+/**
+ * `text` from another thread, whose chat refs `from` resolves, with each ref
+ * spelled as `to` names the same target; a ref `from` cannot resolve becomes
+ * neutral text rather than a spelling that means something else here.
+ */
+export const rebindChatRefTokens = ({
+  from,
+  text,
+  to,
+}: {
+  from: ChatRefRegistry;
+  text: string;
+  to: ChatRefRegistry;
+}): string =>
+  text.replaceAll(MINTED_REF_TOKEN_REGEX, (ref) => {
+    const binding = from.bindingOf(ref);
+    return binding === null ? CHAT_UNAVAILABLE_REF_TEXT : to.refFor(binding);
+  });
+
+/** `text` with every chat ref token neutral, for text whose thread's refs
+ *  are not read. */
+export const neutralizeChatRefTokens = (text: string): string =>
+  text.replaceAll(MINTED_REF_TOKEN_REGEX, () => CHAT_UNAVAILABLE_REF_TEXT);
 
 /** Every whole chat ref token in `text`. */
 export const findChatRefTokens = (text: string): string[] => [
@@ -1033,6 +1061,32 @@ export const createChatRefRegistry = (
     return [...ids];
   };
 
+  const refFor = (binding: ChatRefBinding): string => {
+    switch (binding.kind) {
+      case "contact":
+        return toContactRef(brandPersistedContactId(binding.contact.id));
+      case "entity":
+        return toEntityRef({
+          entityId: brandPersistedEntityId(binding.entity.id),
+          workspaceId: brandPersistedWorkspaceId(binding.workspace.id),
+        });
+      case "matter":
+        return toMatterRef(brandPersistedWorkspaceId(binding.workspace.id));
+      case "property":
+        return toPropertyRef(brandPersistedPropertyId(binding.property.id));
+      case "source": {
+        const target = parseCanonicalChatSourceCitationHref(binding.href);
+        if (target === null) {
+          return panic("Validated source ref binding has no canonical href");
+        }
+        return toSourceCitationRef(target);
+      }
+      default:
+        binding satisfies never;
+        return panic(`Unhandled ref binding: ${String(binding)}`);
+    }
+  };
+
   const toDurableRefText = (text: string): ChatDurableRefText => {
     const linked = resolveAssistantTextRefs(text);
     const durable = linked.replaceAll(MINTED_REF_TOKEN_REGEX, (ref) => {
@@ -1062,6 +1116,8 @@ export const createChatRefRegistry = (
 
   return {
     toDurableRefText,
+    bindingOf: toRefBinding,
+    refFor,
     getObservedWorkspaceIds,
     getRegisteredWorkspaceIds,
     offerMatterRef: (workspaceId: SafeId<"workspace">) =>

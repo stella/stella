@@ -2,9 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
   createPastChatTools,
@@ -15,7 +18,14 @@ import {
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_REF_ENCODING,
+  type ChatRefBinding,
+} from "@/api/lib/chat/ref-token";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -106,6 +116,7 @@ beforeAll(async () => {
       await scoped(
         async (tx) =>
           await run({
+            select: tx.select.bind(tx),
             execute: async (query: SQL) =>
               (await tx.execute(query)).rows.map((row) =>
                 typeof row["createdAt"] === "string"
@@ -181,12 +192,14 @@ const ALL_CHATS_SCOPE: PastChatScope = { type: PAST_CHAT_SCOPE_TYPE.allChats };
 
 const expandFor = async ({
   messageId,
+  refRegistry = createChatRefRegistry(),
   scope,
 }: {
   messageId: SafeId<"chatMessage">;
+  /** This chat's registry; a fresh one by default. */
+  refRegistry?: ChatRefRegistry;
   scope: PastChatScope;
 }) => {
-  const refRegistry = createChatRefRegistry();
   const expandTool = createChatHistoryTools({
     organizationId: ids.orgA,
     pastChatScope: scope,
@@ -200,9 +213,67 @@ const expandFor = async ({
     asTestRaw<Parameters<NonNullable<typeof expandTool.execute>>[1]>({}),
   );
   return {
+    contents: output?.messages.map((message) => message.content) ?? [],
     messageIds: output?.messages.map((message) => message.messageId),
     registered: refRegistry.getRegisteredWorkspaceIds(),
   };
+};
+
+/**
+ * A chat whose code-mode result showed the model `ent_1` for entity A1, as
+ * its stored message records.
+ */
+const seedCodeModeChat = async () => {
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+  await testDb.insert(chatThreads).values({
+    id: threadId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    title: "Past chat",
+    workspaceId: ids.wsA1,
+    dataWorkspaceIds: [ids.wsA1],
+  });
+  seededThreadIds.push(threadId);
+  const binding = {
+    kind: "entity",
+    ref: "ent_1",
+    entity: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ids.entityA1 }),
+    workspace: resourceRef({ type: RESOURCE_TYPE.WORKSPACE, id: ids.wsA1 }),
+  } satisfies ChatRefBinding;
+  await testDb.insert(chatMessages).values({
+    id: messageId,
+    threadId,
+    userId: ids.userA1,
+    workspaceId: ids.wsA1,
+    role: "assistant",
+    content: toChatMessageContent({
+      data: [
+        {
+          arguments: "{}",
+          id: "call-1",
+          input: {},
+          name: "execute_typescript",
+          output: { result: [{ id: "ent_1", name: "entityA1" }] },
+          state: "complete",
+          type: "tool-call",
+        },
+      ],
+      metadata: {
+        refContext: {
+          entities: [],
+          refs: [binding],
+          unresolvedInputs: [],
+          version: 2,
+          workspaceScope: [binding.workspace],
+        },
+        refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+      },
+      version: 2,
+    }),
+    createdAt: new Date(),
+  });
+  return { messageId, threadId };
 };
 
 describe("past-chat search", () => {
@@ -275,5 +346,32 @@ describe("past-chat search", () => {
     });
 
     expect(expanded.messageIds).toEqual([]);
+  });
+
+  test("expanding another chat spells its refs as this chat's refs for the same targets", async () => {
+    const codeModeChat = await seedCodeModeChat();
+    // In this chat `ent_1` already names another document.
+    const refRegistry = createChatRefRegistry();
+    expect(
+      refRegistry.toEntityRef({
+        entityId: ids.entityA2,
+        workspaceId: ids.wsA2,
+      }),
+    ).toBe("ent_1");
+
+    const expanded = await expandFor({
+      messageId: codeModeChat.messageId,
+      refRegistry,
+      scope: ALL_CHATS_SCOPE,
+    });
+
+    const shown = expanded.contents.join("\n").match(/\bent_[0-9]+\b/gu) ?? [];
+    expect(shown.length).toBeGreaterThan(0);
+    for (const ref of shown) {
+      const resolved = refRegistry.resolveEntityRefTargets([ref]);
+      expect(resolved.isOk() ? resolved.value : null).toEqual([
+        { entityId: ids.entityA1, workspaceId: ids.wsA1 },
+      ]);
+    }
   });
 });

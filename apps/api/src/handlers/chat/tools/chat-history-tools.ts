@@ -16,7 +16,12 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+  rebindChatRefTokens,
+} from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -125,7 +130,32 @@ type ChatHistoryExpansionRow = {
   dataWorkspaceIds: SafeId<"workspace">[];
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
+};
+
+/** The refs another chat of this user bound, as a registry. */
+const readForeignChatRefs = async ({
+  safeDb,
+  threadId,
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}): Promise<ChatRefRegistry> => {
+  const names = await safeDb(
+    async (tx) => await readChatThreadNames({ threadId, tx }),
+  );
+  if (Result.isError(names)) {
+    throw new ChatToolError({
+      kind: "server-defect",
+      message: "Failed to expand chat history.",
+      cause: names.error,
+    });
+  }
+  return createChatRefRegistry(
+    names.value.refBindings,
+    names.value.retiredRefs,
+  );
 };
 
 export const createChatHistoryTools = ({
@@ -270,6 +300,7 @@ export const createChatHistoryTools = ({
           w.role,
           w.content,
           w.created_at AS "createdAt",
+          t.thread_id AS "threadId",
           t.thread_workspace_id AS "threadWorkspaceId",
           t.data_workspace_ids AS "dataWorkspaceIds"
         FROM window_rows w, target t
@@ -297,10 +328,20 @@ export const createChatHistoryTools = ({
         }
       }
 
+      // Another chat's raw refs (a code-mode result, say) name what that
+      // chat bound them to, so they are spelled again as this chat's refs
+      // for the same targets; this chat's own refs already are.
+      const foreignRefs =
+        target === undefined || target.threadId === threadId
+          ? null
+          : await readForeignChatRefs({ safeDb, threadId: target.threadId });
+
       return {
         targetMessageId: messageId,
         messages: result.value.map((row) => {
-          const message = persistedRowToChatMessage(row);
+          const rendered = renderChatMessagesForCompaction([
+            persistedRowToChatMessage(row),
+          ]);
           return {
             messageId: row.id,
             role: row.role,
@@ -308,7 +349,13 @@ export const createChatHistoryTools = ({
             // Same rationale as the search excerpt: persisted mention hrefs
             // must re-enter the model as chat refs, not raw tenant UUIDs.
             content: refRegistry.hydrateAssistantTextRefs(
-              renderChatMessagesForCompaction([message]),
+              foreignRefs === null
+                ? rendered
+                : rebindChatRefTokens({
+                    from: foreignRefs,
+                    text: rendered,
+                    to: refRegistry,
+                  }),
             ),
           };
         }),

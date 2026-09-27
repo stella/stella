@@ -8,7 +8,10 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessageRole } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  neutralizeChatRefTokens,
+} from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
@@ -225,7 +228,11 @@ export const createPastChatTools = ({
               : refRegistry.toMatterRef(row.workspaceId),
           messageId: row.messageId,
           role: row.role,
-          excerpt: refRegistry.hydrateAssistantTextRefs(row.excerpt),
+          // Another chat's raw refs name nothing here; its excerpt shows them
+          // neutrally (expand-chat-history spells them as this chat's refs).
+          excerpt: refRegistry.hydrateAssistantTextRefs(
+            neutralizeChatRefTokens(row.excerpt),
+          ),
           createdAt: row.createdAt.toISOString(),
         };
       }),
