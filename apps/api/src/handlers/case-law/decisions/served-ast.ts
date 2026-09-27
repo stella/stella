@@ -14,6 +14,12 @@ import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 
 type DecisionAstSource = "store" | "row";
 
+/** One copy of the AST, named by where it was read from; null when it is absent. */
+const astFrom = (
+  source: DecisionAstSource,
+  payload: DocumentAst | EmptyAst | null,
+) => (payload === null ? null : { payload, source });
+
 type ServedAst = {
   payload: DocumentAst | EmptyAst | null;
   source: DecisionAstSource | null;
@@ -38,27 +44,19 @@ export const readServedDecisionAst = async ({
   corpusReadEnabled,
   readStore,
 }: ReadServedAstOptions): Promise<ServedAst> => {
-  const rowAst = () => parsePersistedCorpusAst(pgAst);
+  const rowAst = () => astFrom("row", parsePersistedCorpusAst(pgAst));
   const resolved =
     !corpusReadEnabled || astS3Key === null || contentHash === null
-      ? { payload: rowAst(), source: "row" as const }
+      ? rowAst()
       : await readCorpusPayloadOrFallback({
           documentId: decisionId,
           key: astS3Key,
           step: "readDecision.corpusAst",
-          read: async () => ({
-            payload: await readStore(),
-            source: "store" as const,
-          }),
-          fallback: () => {
-            const payload = rowAst();
-            return payload === null
-              ? null
-              : { payload, source: "row" as const };
-          },
+          read: async () => astFrom("store", await readStore()),
+          fallback: rowAst,
         });
 
-  if (resolved === null || resolved.payload === null) {
+  if (resolved === null) {
     return { payload: null, source: null, projectionDigest: null };
   }
 
