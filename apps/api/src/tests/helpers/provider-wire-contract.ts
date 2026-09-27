@@ -62,8 +62,8 @@ export const wireTool = () =>
     inputSchema: toTanStackToolSchema(WIRE_TOOL_INPUT),
   });
 
-const TEXT_PROMPT =
-  "Reply with exactly this sentence and nothing else: The cassette plays.";
+export const EXPECTED_TEXT = "The cassette plays.";
+const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECTED_TEXT}`;
 
 /** The one user message each scenario sends. Recordings capture exactly
  *  these prompts and nothing else. */
