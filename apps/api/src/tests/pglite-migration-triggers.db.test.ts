@@ -65,6 +65,15 @@ const DROP_TRIGGER = new RegExp(
 const DROP_TABLE =
   /^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^;]+?)(?:\s+CASCADE)?\s*;?$/iu;
 
+/** `table.trigger` from a match whose groups are the trigger, then the table. */
+const triggerKey = (match: RegExpExecArray | null): string | undefined => {
+  const trigger = match?.[1];
+  const table = match?.[2];
+  return trigger === undefined || table === undefined
+    ? undefined
+    : `${table}.${trigger}`;
+};
+
 /** The triggers left in place after every migration runs, in order. */
 const triggersDefinedByMigrations = (): Set<string> => {
   const defined = new Set<string>();
@@ -77,13 +86,13 @@ const triggersDefinedByMigrations = (): Set<string> => {
       .split("--> statement-breakpoint")
       .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
     for (const statement of statements) {
-      const created = CREATE_TRIGGER.exec(statement);
-      if (created !== null) {
-        defined.add(`${created[2]}.${created[1]}`);
+      const created = triggerKey(CREATE_TRIGGER.exec(statement));
+      if (created !== undefined) {
+        defined.add(created);
       }
-      const dropped = DROP_TRIGGER.exec(statement);
-      if (dropped !== null) {
-        defined.delete(`${dropped[2]}.${dropped[1]}`);
+      const dropped = triggerKey(DROP_TRIGGER.exec(statement));
+      if (dropped !== undefined) {
+        defined.delete(dropped);
       }
       const droppedTables = DROP_TABLE.exec(statement)?.[1];
       if (droppedTables !== undefined) {
