@@ -88,6 +88,15 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     fallback: 960_000,
     min: 0,
   }),
+  // Per-statement ceiling inside those transactions. Without it each
+  // statement may run for the whole transaction budget. Statements that need
+  // longer raise it themselves with `SET LOCAL`. 0 keeps the budget as the
+  // statement timeout.
+  dbStatementTimeoutMs: readIntegerEnv({
+    name: "DB_STATEMENT_TIMEOUT_MS",
+    fallback: 0,
+    min: 0,
+  }),
   // The deferred Slovak document walk. Off unless a deployment turns it
   // on: it is the only loop here that fetches from a publisher outside
   // the adapter crawl, so starting it is a decision about outbound load,
