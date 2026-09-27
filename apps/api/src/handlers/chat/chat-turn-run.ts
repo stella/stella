@@ -190,9 +190,10 @@ export class ChatTurnRun {
   }
 
   /** Stop the run as the user's cancel; resolves once its outcome is stored. */
-  stop(): Promise<undefined> {
+  async stop(): Promise<undefined> {
     this.abortForStop();
-    return this.settled;
+    await this.settled;
+    return undefined;
   }
 
   /**

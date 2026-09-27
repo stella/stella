@@ -208,23 +208,45 @@ const isRead = (
 };
 
 const isMemberRead = (node: AstNode): boolean => {
-  const parent = node.parent;
+  let target = node;
+  let parent = target.parent;
+  while (isAstNode(parent)) {
+    if (
+      (parent.type === "Property" &&
+        parent.value === target &&
+        isAstNode(parent.parent) &&
+        parent.parent.type === "ObjectPattern") ||
+      (parent.type === "AssignmentPattern" && parent.left === target) ||
+      (parent.type === "RestElement" && parent.argument === target) ||
+      (parent.type === "ArrayPattern" &&
+        Array.isArray(parent.elements) &&
+        parent.elements.includes(target)) ||
+      (parent.type === "ObjectPattern" &&
+        Array.isArray(parent.properties) &&
+        parent.properties.includes(target))
+    ) {
+      target = parent;
+      parent = target.parent;
+      continue;
+    }
+    break;
+  }
   if (!isAstNode(parent)) {
     return true;
   }
-  if (parent.type === "AssignmentExpression" && parent.left === node) {
+  if (parent.type === "AssignmentExpression" && parent.left === target) {
     return parent.operator !== "=";
   }
   if (
     (parent.type === "ForInStatement" || parent.type === "ForOfStatement") &&
-    parent.left === node
+    parent.left === target
   ) {
     return false;
   }
   return !(
     parent.type === "UnaryExpression" &&
     parent.operator === "delete" &&
-    parent.argument === node
+    parent.argument === target
   );
 };
 
