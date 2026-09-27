@@ -75,58 +75,8 @@
     "reason": "maintained by a database trigger on every payload or version-selection change and read by ingestion outside this workspace; app code never writes or reads it."
   },
   {
-    "table": "case_law_provision_citations",
-    "column": "spanRole",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "printPieceId",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "printStart",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "printEnd",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "printText",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "namePieceId",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "nameText",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "targetDocumentId",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
-    "table": "case_law_provision_citations",
-    "column": "targetStatus",
-    "reason": "not app-code dead: a provision span column written by the provision extraction writer; no application read yet."
-  },
-  {
     "table": "case_law_provision_extraction_revisions",
     "column": "desiredRevision",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extraction_revisions",
-    "column": "minCurrentRevision",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
   },
   {
@@ -137,11 +87,6 @@
   {
     "table": "case_law_provision_extraction_revisions_registry",
     "column": "profileDigest",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "desiredInputDigest",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
   },
   {
@@ -162,36 +107,6 @@
   {
     "table": "case_law_provision_extractions",
     "column": "terminalReason",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "publishedInputDigest",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "publishedJurisdiction",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "publishedRevision",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "publishedProjectionDigest",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "payloadClass",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "payloadClassInputDigest",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
   },
   {
