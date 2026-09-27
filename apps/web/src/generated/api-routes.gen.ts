@@ -22391,27 +22391,28 @@ export type WebRoutes = {
               response: {
                 200: (T2430547df2 | {
                   items: Array<{
+                    anchor: string;
+                    versionValidFrom: T432e07d100;
                     jurisdiction: string;
+                    point: T432e07d100;
+                    confidence: number;
+                    section: number;
+                    selection: (null | "text" | "date-window" | "misprint-correction");
+                    letter: T432e07d100;
                     workIdentifier: string;
                     workNumber: number;
                     workYear: number;
                     workCollection: string;
                     workEli: T432e07d100;
-                    workSource: (null | "number" | "title" | "definition" | "alias" | "carry-over");
                     unit: ("section" | "article");
-                    section: number;
                     sectionSuffix: T432e07d100;
                     subsection: T432e07d100;
-                    letter: T432e07d100;
-                    point: T432e07d100;
                     sentence: T432e07d100;
                     openEnded: T1bdf39f14a;
-                    anchor: string;
-                    versionValidFrom: T432e07d100;
                     sentenceText: string;
                     spanStart: number;
                     spanEnd: number;
-                    confidence: number;
+                    workSource: (null | "number" | "title" | "definition" | "alias" | "carry-over");
                     spanRole: (null | "printed" | "range-interior");
                     printPieceId: T432e07d100;
                     printStart: T688f6f1190;
@@ -22421,7 +22422,6 @@ export type WebRoutes = {
                     nameStart: T688f6f1190;
                     nameEnd: T688f6f1190;
                     nameText: T432e07d100;
-                    selection: (null | "text" | "date-window" | "misprint-correction");
                     printedWorkIdentifier: T432e07d100;
                     targetDocumentId: (null | Td90f3cb611);
                     targetStatus: (null | "available" | "anchor_missing" | "no_version_for_date" | "work_not_held" | "unverified_target" | "incomplete_versions");
