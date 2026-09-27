@@ -40,8 +40,10 @@ import {
 
 const PAGE_SIZE = 50;
 
-const isListLocation = (pathname: string, workspaceId: string) =>
-  pathname.replace(/\/+$/u, "") === `/workspaces/${workspaceId}/correspondence`;
+const isListLocation = (pathname: string, workspaceId: string) => {
+  const listPath = `/workspaces/${workspaceId}/correspondence`;
+  return pathname === listPath || pathname === `${listPath}/`;
+};
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/correspondence",
