@@ -801,7 +801,7 @@
       "collectionName": "Orzecznictwo stella",
       "description": "Publiczna baza orzecznictwa z orzeczeniami sądów i źródłami prawa, które można indeksować.",
       "homeDescription": "Publiczna baza prawna: orzeczenia sądów i ujednolicone akty prawne, z wyszukiwaniem według identyfikatora lub słów.",
-      "scopedDescription": "Publiczna baza orzecznictwa dla obszaru {scope}, z orzeczeniami sądów i źródłami prawa, które można indeksować."
+      "scopedDescription": "Publiczna baza orzecznictwa ({scope}) z orzeczeniami sądów i źródłami prawa, które można indeksować."
     },
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {

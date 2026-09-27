@@ -801,7 +801,7 @@
       "collectionName": "Judikatúra stella",
       "description": "Verejná databáza judikatúry s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi.",
       "homeDescription": "Verejná právna databáza súdnych rozhodnutí a konsolidovaných právnych predpisov; vyhľadávanie podľa identifikátora alebo slov.",
-      "scopedDescription": "Verejná databáza judikatúry pre oblasť {scope} s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi."
+      "scopedDescription": "Verejná databáza judikatúry ({scope}) s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi."
     },
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
