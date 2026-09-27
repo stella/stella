@@ -553,9 +553,9 @@ jobs:
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
 
   # The repository guards. The suites this job used to run serially after them
-  # are ci-tests and ci-browser: the runners are two-core, so the way to
-  # shorten the critical path is more jobs, not more threads. The three share
-  # nothing but the checkout and the install.
+  # are ci-tests and ci-browser, which run as separate jobs so they overlap
+  # instead of queueing behind one another. The three share nothing but the
+  # checkout and the install.
   ci-checks:
     needs: ci-plan
     if: >-
@@ -1482,6 +1482,12 @@ jobs:
           needs.ci-plan.outputs.package_checks_required == 'true'
           && matrix.shard == 'rest'
         run: bun --cwd .claude/mcp test
+
+      # The API test runner sizes its parallel lanes from the runner's cores
+      # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
+      - name: Runner resources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: nproc; free -g
 
       - name: Test
         if: needs.ci-plan.outputs.package_checks_required == 'true'
