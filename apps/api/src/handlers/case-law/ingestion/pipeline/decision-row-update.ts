@@ -476,12 +476,12 @@ const reopenMovedIdentityTx = async (
   // path deliberately excludes its own links, so nothing else would
   // ever ask about them again.
   await reopenCitationsResolvedTo(tx, existing.id);
-  // And the edges this decision *makes*. Its jurisdiction and date are
-  // the resolver's policy and time filters, so moving either changes
-  // what its own citations may match — a date moving forwards can
-  // revive an unmatched one, moving backwards invalidates a resolved
-  // one, and the walk excludes terminal rows either way.
-  await reopenCitationsFrom(tx, existing.id);
+  // And, when this source writes graph rows, the edges this decision
+  // *makes*. Its jurisdiction and date are the resolver's policy and time
+  // filters, so moving either changes what those citations may match.
+  if (write.plan.citations.disposition === "legacy-graph") {
+    await reopenCitationsFrom(tx, existing.id);
+  }
   // The old key as well as the new one. An ambiguous citation carries
   // no target, so nothing that searches by target can reach it — and
   // this decision leaving its old key is exactly what can make the
