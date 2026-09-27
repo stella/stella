@@ -2298,6 +2298,8 @@ export const createSendMessage = (
         // A normal chat hands loaded clients to the stream. Agent runs leave
         // this false so the outer finally closes any validation-only load.
         lifecycle.handOffConnectors(externalMcpTools !== undefined);
+        const isServerTool = (toolName: string) =>
+          streamingTools[toolName]?.execute !== undefined;
         const response = yield* Result.await(
           Result.tryPromise({
             try: async () => {
@@ -2354,8 +2356,7 @@ export const createSendMessage = (
                     });
                     const resolved = resolveAssistantMessageRefs({
                       accessibleWorkspaceIds: accessibleSet,
-                      isServerTool: (toolName) =>
-                        streamingTools[toolName]?.execute !== undefined,
+                      isServerTool,
                       messages: [canonicalResponseMessage],
                       opaqueReadWorkspaceIds:
                         body.runMode === CHAT_RUN_MODE.agent
@@ -2364,10 +2365,13 @@ export const createSendMessage = (
                       refRegistry,
                       workspaceIdsBeforeStream,
                     });
-                    const resolvedResponseMessage = resolved.messages.at(0);
-                    if (!resolvedResponseMessage) {
+                    const resolvedResponseMessage =
+                      resolved.messages.at(0) ??
                       panic("Missing chat response message");
-                    }
+                    const addedThreadNames = {
+                      refBindings: resolved.refBindings,
+                      toolCallIds: toolCallIdsOf(resolvedResponseMessage.parts),
+                    };
 
                     // Widen the thread's data scope to cover any
                     // workspace-scoped content the assistant just
@@ -2386,12 +2390,7 @@ export const createSendMessage = (
                     const persistResult = await finalizeAssistantTurn({
                       acceptedSendMode: body.sendMode,
                       threadNames: {
-                        added: {
-                          refBindings: resolved.refBindings,
-                          toolCallIds: toolCallIdsOf(
-                            resolvedResponseMessage.parts,
-                          ),
-                        },
+                        added: addedThreadNames,
                         read: threadNames,
                       },
                       dataScopeExpansion: {
