@@ -20,9 +20,13 @@ export const createTestCorrespondence = async (workspaceId: string) => {
         CORRESPONDENCE_SMOKE_SUBJECT,
       ],
       { cwd: API_ROOT, timeout: 30_000 },
-      (error) => {
+      (error, _stdout, stderr) => {
         if (error !== null) {
-          reject(error);
+          reject(
+            new Error(`Correspondence seed failed: ${stderr}`, {
+              cause: error,
+            }),
+          );
           return;
         }
         resolve(undefined);
