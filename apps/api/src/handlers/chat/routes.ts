@@ -19,6 +19,7 @@ import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
+import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -121,6 +122,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+  })
+  .post("/threads/:threadId/turns/:turnId/cancel", cancelTurn.handler, {
+    params: cancelTurn.config.params,
+    permissions: cancelTurn.config.permissions,
   })
   .post("/threads/:threadId/fork", forkThread.handler, {
     body: forkThread.config.body,

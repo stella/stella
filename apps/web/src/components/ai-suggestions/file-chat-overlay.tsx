@@ -1559,6 +1559,7 @@ const FileChatOverlayInner = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -2128,7 +2129,7 @@ const FileChatOverlayInner = ({
       return false;
     }
     newThreadCommitRef.current = true;
-    stop();
+    leave();
     return true;
   };
   const endNewThreadCommit = (next: NewThreadChoiceState) => {

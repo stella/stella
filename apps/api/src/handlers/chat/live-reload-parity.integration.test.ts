@@ -1,5 +1,4 @@
 import type { UIMessage } from "@tanstack/ai-client";
-import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import fc from "fast-check";
@@ -762,6 +761,23 @@ class StopRunningCall implements fc.AsyncCommand<Model, Real> {
 }
 
 /**
+ * The user leaves the thread for a new chat while the page may still run a
+ * client call, and comes back: leaving asks the server for nothing, so the
+ * conversation is as it was and still waits on whatever it waited on.
+ */
+class LeaveThread implements fc.AsyncCommand<Model, Real> {
+  static readonly allows = () => true;
+  check = LeaveThread.allows;
+  run = async (model: Model, real: Real) => {
+    await real.client.leave();
+    real.client.dispose();
+    real.client = await real.harness.openWebClient(real.threadId);
+    await verify(model, real, { failuresBefore: real.ledger.failures });
+  };
+  toString = () => "LeaveThread";
+}
+
+/**
  * The user sends a message and stops the answer while it streams: after its
  * server call has streamed, or while the call's input still streams. The
  * call stays in the answer and nothing waits on the user.
@@ -1029,7 +1045,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
-  "new-chat": notModelled("It leaves the thread."),
+  "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
   "remove-queued-message": notModelled(
@@ -1072,7 +1088,7 @@ const findUncoveredActions = async (
 ): Promise<OracleViolation[]> => {
   const web = await loadWebChat();
   const messages = real.client.messages();
-  const { hasError, requestActive } = real.client.runtimeState();
+  const { hasError, requestActive, stopStatus } = real.client.runtimeState();
   const isGenerating = web.isChatTurnGenerating({
     hasError:
       hasError ||
@@ -1080,6 +1096,7 @@ const findUncoveredActions = async (
     messages,
     requestActive,
     sessionGenerating: false,
+    stopStatus,
   });
   const answers = messages.filter(({ role }) => role === "assistant");
   const offeredOnAnswer = (gate: typeof web.canForkAssistantMessage): boolean =>
@@ -1185,6 +1202,7 @@ const pageActionCommandsOf = (runsArb: fc.Arbitrary<RunShape[]>) => [
   ...conversationCommandsOf(runsArb),
   fc.nat({ max: 5 }).map((pick) => new ForkFrom(pick)),
   fc.constant(new StopRunningCall()),
+  fc.constant(new LeaveThread()),
   fc
     .constantFrom<"after-tool-end" | "before-tool-end">(
       "after-tool-end",
@@ -1369,62 +1387,19 @@ const stopARunningClientCall = async () => {
   });
 };
 
-/** The command a step performs, through any second tab it is taken in. */
-const innermost = (
-  command: fc.AsyncCommand<Model, Real>,
-): fc.AsyncCommand<Model, Real> =>
-  command instanceof OnSecondTab ? innermost(command.step) : command;
-
-type OpenGap = {
-  /** The steps the page-action property leaves out while this is open. */
-  condition: string;
-  excludes: (command: fc.AsyncCommand<Model, Real>) => boolean;
-  /** Fails while this is open. */
-  reproduce: () => Promise<void>;
+const leaveARunningClientCall = async () => {
+  await inConversation(async (model, real) => {
+    await new SendUserMessage(
+      [[{ ...STEP, calls: ["client"] }]],
+      "Draft the NDA",
+    ).run(model, real);
+    // The fixture must reach the fault: the page still runs the call.
+    expect(model.pendingKinds).toEqual(["client"]);
+    await new LeaveThread().run(model, real);
+    // Leaving stopped nothing: the turn still waits on the call.
+    expect(model.pendingKinds).toEqual(["client"]);
+  });
 };
-
-/**
- * Open findings, by id: each one's excluded steps and its failing case. The
- * ledger only shrinks: every case must still fail, an entry whose case
- * passes fails until it is removed, and its size is pinned to
- * OPEN_GAPS_SIZE, which only goes down.
- */
-const OPEN_GAPS = {
-  F2: {
-    condition: "StopMidStream",
-    excludes: (command) => command instanceof StopMidStream,
-    reproduce: async () => {
-      await stopWhileStreaming("after-tool-end");
-      await stopWhileStreaming("before-tool-end");
-    },
-  },
-  F5: {
-    condition: "StopRunningCall",
-    excludes: (command) => command instanceof StopRunningCall,
-    reproduce: stopARunningClientCall,
-  },
-} as const satisfies Record<string, OpenGap>;
-
-/** The ledger's size. Lower it with every entry removed; never raise it. */
-const OPEN_GAPS_SIZE = 2;
-
-/** A step the page-action property takes unless an open finding excludes
- *  it. */
-class OutsideOpenGaps implements fc.AsyncCommand<Model, Real> {
-  readonly command: fc.AsyncCommand<Model, Real>;
-  constructor(command: fc.AsyncCommand<Model, Real>) {
-    this.command = command;
-  }
-  check = (model: Readonly<Model>) =>
-    this.command.check(model) &&
-    !Object.values(OPEN_GAPS).some(({ excludes }) =>
-      excludes(innermost(this.command)),
-    );
-  run = async (model: Model, real: Real) => {
-    await this.command.run(model, real);
-  };
-  toString = () => String(this.command);
-}
 
 const STEP: StepShape = {
   calls: [],
@@ -1619,6 +1594,7 @@ describe("a conversation's live view", () => {
             messages,
             requestActive: real.client.runtimeState().requestActive,
             sessionGenerating: false,
+            stopStatus: real.client.runtimeState().stopStatus,
           }),
         ).toBe(false);
       } finally {
@@ -1996,7 +1972,7 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing.each(["after-tool-end", "before-tool-end"] as const)(
+  test.each(["after-tool-end", "before-tool-end"] as const)(
     "stops an answer while it streams (%s)",
     async (quietAt) => {
       await stopWhileStreaming(quietAt);
@@ -2010,37 +1986,17 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.failing(
+  test(
     "stops a client call the page still runs",
     stopARunningClientCall,
     propertyTestTimeout(30_000),
   );
 
-  test.each(Object.keys(OPEN_GAPS))(
-    "open finding %s still fails its case",
-    async (id) => {
-      const gap = Object.entries(OPEN_GAPS).find(([key]) => key === id)?.[1];
-      const outcome = await (gap ?? expect.unreachable(`No open finding ${id}`))
-        .reproduce()
-        .then(
-          () => "passes",
-          () => "fails",
-        );
-      if (outcome === "passes") {
-        panic(`${id} passes now: remove it from OPEN_GAPS`);
-      }
-    },
+  test(
+    "leaves a thread whose client call the page still runs",
+    leaveARunningClientCall,
     propertyTestTimeout(30_000),
   );
-
-  test("the open findings only shrink, and each names its condition", () => {
-    expect(Object.keys(OPEN_GAPS)).toHaveLength(OPEN_GAPS_SIZE);
-    expect(
-      Object.entries(OPEN_GAPS)
-        .filter(([, { condition }]) => condition.trim() === "")
-        .map(([id]) => id),
-    ).toEqual([]);
-  });
 
   test("maps every action the page offers to the model's commands", async () => {
     const web = await loadWebChat();
@@ -2053,12 +2009,9 @@ describe("a conversation's live view", () => {
     "matches a reload and the ledger after every action the page offers",
     async () => {
       await runConversations(
-        fc.commands(
-          pageActionCommandsOf(runsOf(mixedCallsArb)).map((arbitrary) =>
-            arbitrary.map((command) => new OutsideOpenGaps(command)),
-          ),
-          { maxCommands: 6 },
-        ),
+        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+          maxCommands: 6,
+        }),
       );
     },
     propertyTestTimeout(240_000),

@@ -644,6 +644,29 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "chat-ref-registry",
+    capability: "Minting the ref registry of a chat request",
+    owner: ["apps/api/src/handlers/chat/send-message.ts"],
+    summary:
+      "A ref such as `ent_1` names a document only inside the chat request " +
+      "whose registry minted it, and every request counts from 1 again. A " +
+      "registry built anywhere else hands its caller refs that name nothing " +
+      "outside that call and name other documents inside a chat. Code outside " +
+      "a chat request returns ids and a resolved link instead.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/chat/ref-registry"],
+      names: ["createChatRefRegistry"],
+      allowed: [
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds one chat request's toolsets offline to project their schemas for each provider; the registry never leaves that build.",
+        },
+      ],
+    },
+  },
+  {
     id: "chat-composer-status-row",
     capability: "Chat composer status-row assembly and loading state",
     owner: ["apps/web/src/components/chat/chat-composer-dock.tsx"],

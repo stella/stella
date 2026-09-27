@@ -173,6 +173,11 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Table definition.",
   },
+  "apps/api/src/db/schema/case-law-provision-extraction.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Table definition; references the decision table by foreign key only.",
+  },
   "apps/api/src/db/schema/legislation.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Table definition; references the decision table by name only.",

@@ -7091,3 +7091,919 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
   }
 ]"
 `;
+
+exports[`MCP registry quality (documents surface) tool surface snapshot (name, scope, description, annotations, inputSchema) 1`] = `
+"[
+  {
+    "name": "list_documents",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
+    "annotations": {
+      "title": "List documents",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID to list documents in."
+        },
+        "mode": {
+          "enum": [
+            "flat",
+            "children"
+          ],
+          "type": "string",
+          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
+        },
+        "parent_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max entities to return"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_documents call to fetch the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_document",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
+    "annotations": {
+      "title": "Read document",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Document entity ID"
+        },
+        "version_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Return this version's metadata and field values instead of the current version"
+        },
+        "compare_with_version_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "With version_id, return a plain-text line diff of this version (base) against version_id (target)"
+        },
+        "include_versions": {
+          "type": "boolean",
+          "description": "Also return the document's version history"
+        },
+        "versions_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Cursor from a previous call for the next page of version history"
+        }
+      }
+    }
+  },
+  {
+    "name": "save_document",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
+    "annotations": {
+      "title": "Save document",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Document entity ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID to create the entity in; required when creating."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Display name: required when creating, or the new name when renaming"
+        },
+        "parent_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating"
+        },
+        "kind": {
+          "enum": [
+            "document",
+            "folder"
+          ],
+          "type": "string",
+          "description": "Entity kind to create; defaults to 'document'. Only valid when creating."
+        },
+        "move_to_root": {
+          "type": "boolean",
+          "description": "Move the document to the matter root (no parent folder). Only valid when updating."
+        },
+        "version_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Version ID to annotate; required when setting label or description. Only valid when updating."
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged"
+        }
+      }
+    }
+  },
+  {
+    "name": "upload_document_version",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
+    "annotations": {
+      "title": "Upload document version",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "entity_id",
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Existing document entity ID that will receive a new version"
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "download_url": {
+              "type": "string",
+              "description": "Temporary URL supplied by the host for downloading the file"
+            },
+            "file_id": {
+              "type": "string",
+              "description": "Host-assigned identifier for the attached file"
+            },
+            "mime_type": {
+              "type": "string",
+              "description": "MIME type reported by the host"
+            },
+            "file_name": {
+              "type": "string",
+              "description": "Original file name reported by the host"
+            }
+          },
+          "required": [
+            "download_url",
+            "file_id"
+          ],
+          "additionalProperties": false,
+          "description": "File reference supplied by a compatible MCP host"
+        }
+      }
+    }
+  },
+  {
+    "name": "open_document_version_upload",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Open a portable file picker for uploading a new version of an existing document. Use only when upload_document_version cannot receive a host file reference; do not use when the host already supplied an attached file.",
+    "annotations": {
+      "title": "Open document version upload",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Existing document entity ID that will receive a new version"
+        }
+      }
+    }
+  },
+  {
+    "name": "compare_documents",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
+    "annotations": {
+      "title": "Compare document versions",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "source",
+        "base_tracked_changes",
+        "target_tracked_changes",
+        "output_mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "description": "Which two files to compare.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "versions"
+                  ],
+                  "description": "Compare one explicit base version with later targets.",
+                  "type": "string"
+                },
+                "document_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Document entity ID both versions belong to"
+                },
+                "base_version_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Version ID the redline compares from"
+                },
+                "target_version_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Version ID the redline compares to"
+                  },
+                  "minItems": 1,
+                  "maxItems": 8,
+                  "description": "Version IDs to compare against the base, 1 to 8; each is compared separately."
+                },
+                "file_property_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "DOCX file property (column) to compare. Omit it: the server resolves it, and names the candidates when the document holds several."
+                }
+              },
+              "required": [
+                "type",
+                "document_id",
+                "base_version_id",
+                "target_version_ids"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "previous"
+                  ],
+                  "description": "Compare one target version with its immediate predecessor.",
+                  "type": "string"
+                },
+                "document_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Document entity ID the version belongs to"
+                },
+                "target_version_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Version ID the redline compares to"
+                },
+                "file_property_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "DOCX file property (column) to compare. Omit it: the server resolves it, and names the candidates when the document holds several."
+                }
+              },
+              "required": [
+                "type",
+                "document_id",
+                "target_version_id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "uploads"
+                  ],
+                  "description": "Compare two .docx files staged by prepare_file_comparison, which echoes this whole source back.",
+                  "type": "string"
+                },
+                "base_upload_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Upload ID the redline compares from"
+                },
+                "target_upload_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Upload ID the redline compares to"
+                }
+              },
+              "required": [
+                "type",
+                "base_upload_id",
+                "target_upload_id"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "base_tracked_changes": {
+          "enum": [
+            "keep",
+            "accept",
+            "reject"
+          ],
+          "type": "string",
+          "description": "Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text."
+        },
+        "target_tracked_changes": {
+          "enum": [
+            "keep",
+            "accept",
+            "reject"
+          ],
+          "type": "string",
+          "description": "Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text."
+        },
+        "mode": {
+          "enum": [
+            "strict",
+            "best-effort"
+          ],
+          "type": "string",
+          "description": "strict (default) refuses a redline it cannot verify; best-effort returns it with the failed checks."
+        },
+        "granularity": {
+          "enum": [
+            "word",
+            "character"
+          ],
+          "type": "string",
+          "description": "Token size a change is marked at: word (default) or character."
+        },
+        "output_mode": {
+          "enum": [
+            "preview",
+            "download",
+            "version"
+          ],
+          "type": "string",
+          "description": "preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source."
+        }
+      }
+    }
+  },
+  {
+    "name": "prepare_file_comparison",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, prefer open_file_comparison, whose panel uploads from the user's browser, or prepare_file_comparison_from_links when the files are reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "annotations": {
+      "title": "Prepare file comparison",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "base",
+        "target"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix."
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 52428800,
+              "description": "Exact byte length of the file, at most 50 MB."
+            },
+            "sha256_hex": {
+              "type": "string",
+              "description": "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters."
+            }
+          },
+          "required": [
+            "name",
+            "size",
+            "sha256_hex"
+          ],
+          "additionalProperties": false,
+          "description": "The file the redline compares from."
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix."
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 52428800,
+              "description": "Exact byte length of the file, at most 50 MB."
+            },
+            "sha256_hex": {
+              "type": "string",
+              "description": "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters."
+            }
+          },
+          "required": [
+            "name",
+            "size",
+            "sha256_hex"
+          ],
+          "additionalProperties": false,
+          "description": "The file the redline compares to."
+        }
+      }
+    }
+  },
+  {
+    "name": "prepare_file_comparison_from_links",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "annotations": {
+      "title": "Prepare file comparison from links",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "base",
+        "target"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix; defaults to the last path segment of the link."
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "The file the redline compares from."
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix; defaults to the last path segment of the link."
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "The file the redline compares to."
+        }
+      }
+    }
+  },
+  {
+    "name": "open_file_comparison",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Open a panel where the user picks two .docx files that are not stored in stella; the panel uploads them from the user's browser and reports the staged ids for compare_documents. Use this whenever the user wants files redlined that are not in a matter and has no HTTPS link to them; you cannot upload attached files yourself. Takes no input.",
+    "annotations": {
+      "title": "Open file comparison",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {}
+    }
+  },
+  {
+    "name": "delete_document",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Delete a document and all its versions, or delete a single version when version_id is provided (the current version is promoted to the next latest; the only remaining version cannot be deleted). This is irreversible.",
+    "annotations": {
+      "title": "Delete document",
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Document entity ID to delete"
+        },
+        "version_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Delete only this version instead of the whole document"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
+        }
+      }
+    }
+  },
+  {
+    "name": "list_properties",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
+    "annotations": {
+      "title": "List properties",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID to list properties for."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max properties to return"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_properties call to fetch the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "set_field_value",
+    "scope": "stella:documents_write",
+    "access": "write",
+    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
+    "annotations": {
+      "title": "Set field value",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "entity_id",
+        "property_id",
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Document entity ID whose cell to set"
+        },
+        "property_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Property ID, as returned by list_properties"
+        },
+        "content": {
+          "description": "The value to set; 'type' must match the property.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "text"
+                  ],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "single-select"
+                  ],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "multi-select"
+                  ],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "date"
+                  ],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "int"
+                  ],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "integer",
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                },
+                "currency": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "For int values only: 3-letter ISO currency code, or null"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "invoke_capability",
+    "scope": "stella:read",
+    "access": "write",
+    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "annotations": {
+      "title": "Invoke capability",
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "capability"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Capability id to invoke, as returned by list_capabilities."
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Request body fields, per the capability's body schema."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Path parameters; matter-scoped capabilities require matterId here."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Query parameters, per the capability's query schema."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "The capability's input, split into the parts its schema declares."
+        },
+        "validate_only": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
+        }
+      }
+    }
+  }
+]"
+`;

@@ -9,6 +9,7 @@ import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -147,6 +148,11 @@ const parseToolPayload = (
   }
   return JSON.parse(item.text) as unknown;
 };
+
+/** The onboarding step, read from the result the model sees. */
+const onboardingNextStepOf = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+): unknown => modelViewOf(result)["nextStep"];
 
 describe("set_practice_jurisdictions MCP tool", () => {
   let analytics: RecordingAnalytics;
@@ -397,7 +403,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
   });
 });
 
-describe("empty-result onboarding hints", () => {
+describe("empty-result onboarding next step", () => {
   let analytics: RecordingAnalytics;
 
   beforeEach(() => {
@@ -410,7 +416,7 @@ describe("empty-result onboarding hints", () => {
     analytics.restore();
   });
 
-  test("list_matters appends a hint when empty and jurisdictions are missing", async () => {
+  test("list_matters returns the onboarding next step when empty and jurisdictions are missing", async () => {
     const context = createContext({
       scopedDb: createScopedDb({
         matters: [],
@@ -424,16 +430,12 @@ describe("empty-result onboarding hints", () => {
       toolName: "list_matters",
     });
 
-    expect(result.content).toHaveLength(2);
-    const hint = result.content.at(1);
-    expect(hint?.type).toBe("text");
-    if (hint?.type === "text") {
-      expect(hint.text).toContain("set_practice_jurisdictions");
-      expect(hint.text).toContain(APP_BASE_URL);
-    }
+    const nextStep = onboardingNextStepOf(result);
+    expect(nextStep).toContain("set_practice_jurisdictions");
+    expect(nextStep).toContain(APP_BASE_URL);
   });
 
-  test("list_matters does not append a hint when jurisdictions are configured", async () => {
+  test("list_matters returns no next step when jurisdictions are configured", async () => {
     const context = createContext({
       scopedDb: createScopedDb({
         matters: [],
@@ -447,10 +449,10 @@ describe("empty-result onboarding hints", () => {
       toolName: "list_matters",
     });
 
-    expect(result.content).toHaveLength(1);
+    expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 
-  test("list_matters does not append a hint when results are non-empty", async () => {
+  test("list_matters returns no next step when results are non-empty", async () => {
     const context = createContext({
       scopedDb: createScopedDb({
         matters: [
@@ -473,10 +475,10 @@ describe("empty-result onboarding hints", () => {
       toolName: "list_matters",
     });
 
-    expect(result.content).toHaveLength(1);
+    expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 
-  test("search_case_law appends a hint when empty and jurisdictions are missing", async () => {
+  test("search_case_law returns the onboarding next step when empty and jurisdictions are missing", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: null,
       hits: [],
@@ -499,15 +501,12 @@ describe("empty-result onboarding hints", () => {
       toolName: "search_case_law",
     });
 
-    expect(result.content).toHaveLength(2);
-    const hint = result.content.at(1);
-    expect(hint?.type).toBe("text");
-    if (hint?.type === "text") {
-      expect(hint.text).toContain("set_practice_jurisdictions");
-    }
+    expect(onboardingNextStepOf(result)).toContain(
+      "set_practice_jurisdictions",
+    );
   });
 
-  test("search_case_law does not append a hint when results are non-empty", async () => {
+  test("search_case_law returns no next step when results are non-empty", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: null,
       hits: [
@@ -546,10 +545,10 @@ describe("empty-result onboarding hints", () => {
       toolName: "search_case_law",
     });
 
-    expect(result.content).toHaveLength(1);
+    expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 
-  test("search_case_law does not append a hint when jurisdictions are configured", async () => {
+  test("search_case_law returns no next step when jurisdictions are configured", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: null,
       hits: [],
@@ -571,6 +570,6 @@ describe("empty-result onboarding hints", () => {
       toolName: "search_case_law",
     });
 
-    expect(result.content).toHaveLength(1);
+    expect(onboardingNextStepOf(result)).toBeUndefined();
   });
 });

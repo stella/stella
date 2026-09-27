@@ -55,6 +55,7 @@ const { useChatThreadRuntime } =
   await import("@/features/chat/hooks/use-chat-thread-runtime");
 const { __resetChatRequestStateForTests, chatThreadOptions } =
   await import("@/features/chat/queries");
+const { ensureRouteQueryData } = await import("@/lib/react-query");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
@@ -98,12 +99,13 @@ afterAll(async () => {
 // --- Recordings ------------------------------------------------------------
 
 type RecordedPage = {
+  activeTurnId: string | null;
   lastActivityAt: string | null;
   messages: unknown[];
   olderCursor: string | null;
 };
 type RecordedExchange = {
-  ended: "complete" | "connection-lost" | "disconnected";
+  ended: "complete" | "connection-lost" | "disconnected" | "stopped";
   page: RecordedPage;
   request: Record<string, unknown>;
   response: { body: string; status: number };
@@ -172,7 +174,17 @@ const EXCHANGE_ENDINGS: readonly RecordedExchange["ended"][] = [
   "complete",
   "connection-lost",
   "disconnected",
+  "stopped",
 ];
+
+/**
+ * A response that stays open after what the page read: cut off, or ended by
+ * the server once the page's Stop reached it. The replay serves no Stop (the
+ * recording carries no turn id to stop), so the page closes the response
+ * itself, as it does when it stops a turn it cannot name.
+ */
+const staysOpen = (ended: RecordedExchange["ended"]): boolean =>
+  ended === "disconnected" || ended === "stopped";
 
 // --- The fake server -------------------------------------------------------
 
@@ -183,6 +195,14 @@ const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
 const API_ORIGIN = "http://localhost:3001";
 /** What the page shows while a part of it is still loading. */
 const SUSPENDED = "The page is loading";
+/**
+ * Whether a part of the page is still loading. Checked as a boolean because a
+ * `waitFor` callback fails on every poll until the page settles, and a failed
+ * matcher formats what it received: for a DOM node that is its whole
+ * document, which costs about a second per poll.
+ */
+const isSuspended = (container: HTMLElement) =>
+  testing.within(container).queryByText(SUSPENDED) !== null;
 
 type Posted = { body: Record<string, unknown>; exchange: RecordedExchange };
 
@@ -308,7 +328,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
             settle(exchange);
           }
           controller.enqueue(encoder.encode(event));
-          stalled = last && exchange.ended === "disconnected";
+          stalled = last && staysOpen(exchange.ended);
           return;
         }
         if (exchange.ended === "complete") {
@@ -377,6 +397,19 @@ const createRecordedServer = (recording: RecordedConversation) => {
 
 type Session = ReturnType<typeof useChatSession>;
 
+const CHAT_THREAD_CONTEXT = { allowMissingThread: true } as const;
+
+const threadRefOf = (threadId: string) =>
+  ({ scope: "global", threadId: toChatThreadId(threadId) }) as const;
+
+/** The thread query the page suspends on, keyed as `ChatThreadPage` keys it. */
+const threadQueryOptions = (organizationId: string, threadId: string) =>
+  chatThreadOptions({
+    activeOrganizationId: organizationId,
+    context: CHAT_THREAD_CONTEXT,
+    key: threadRefOf(threadId),
+  });
+
 /** The thread page's chat, wired as `ChatThreadPage` wires it. */
 const RecordedThreadPage = ({
   onSession,
@@ -387,21 +420,13 @@ const RecordedThreadPage = ({
   organizationId: string;
   threadId: string;
 }) => {
-  const threadRef = {
-    scope: "global",
-    threadId: toChatThreadId(threadId),
-  } as const;
-  const chatThreadContext = { allowMissingThread: true };
+  const threadRef = threadRefOf(threadId);
   const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId: organizationId,
-      context: chatThreadContext,
-      key: threadRef,
-    }),
+    threadQueryOptions(organizationId, threadId),
   );
   const chat = useChatThreadRuntime({
     activeOrganizationId: organizationId,
-    context: chatThreadContext,
+    context: CHAT_THREAD_CONTEXT,
     data,
     key: threadRef,
   });
@@ -474,6 +499,13 @@ const openPage = async (
     workspacesNavigationOptions(organizationId).queryKey,
     { workspaces: [] },
   );
+  // The thread route's loader fills a cold thread query before the page
+  // mounts, so the page renders its messages on first paint instead of
+  // suspending on them.
+  await ensureRouteQueryData(
+    queryClient,
+    threadQueryOptions(organizationId, recording.threadId),
+  );
   let session: Session | undefined;
   const view = testing.render(
     <ChatThreadTestRouter>
@@ -507,7 +539,7 @@ const openPage = async (
   );
   await testing.waitFor(() => {
     expect(session).toBeDefined();
-    expect(testing.within(view.container).queryByText(SUSPENDED)).toBeNull();
+    expect(isSuspended(view.container)).toBe(false);
   });
   return {
     session: () => session ?? expect.unreachable("The page is not rendered"),
@@ -1029,8 +1061,9 @@ const replay = async (scenario: string) => {
     }
     const where = `${scenario}, step ${String(index + 1)} (${action.type})`;
     const requests = finding(RENDER_ORACLE.requestsMatchRecorded, where);
+    const lastEnded = exchanges.at(-1)?.ended;
     const midStream =
-      exchanges.at(-1)?.ended === "disconnected" && next !== undefined;
+      lastEnded !== undefined && staysOpen(lastEnded) && next !== undefined;
     await waitFor(
       () => {
         expect(server.posted.length, requests).toBe(expectedPosts);
@@ -1038,7 +1071,7 @@ const replay = async (scenario: string) => {
           midStream ? server.stalled() : server.streaming() === 0,
           requests,
         ).toBe(true);
-        expect(within(container).queryByText(SUSPENDED)).toBeNull();
+        expect(isSuspended(container)).toBe(false);
       },
       { timeout: 5000 },
     );

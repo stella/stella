@@ -389,6 +389,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-09-27T00:00:00.000Z",
+      dependency: "ajv",
+      explanation:
+        "https://ajv.js.org/llms.txt returns 404. Use the API reference at https://ajv.js.org/api.html and the strict-mode rules at https://ajv.js.org/strict-mode.html directly.",
+      expiresAt: "2026-10-27T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-27T00:00:00.000Z",
+      dependency: "ajv-formats",
+      explanation:
+        "The Ajv project publishes no llms.txt. Use the format list in the README at https://github.com/ajv-validator/ajv-formats directly.",
+      expiresAt: "2026-10-27T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-26T00:00:00.000Z",
       dependency: "cldr-misc-full",
       explanation:

@@ -383,6 +383,9 @@ run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "Instruction references" run_instruction_reference_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
+# registry-quality.test.ts holds every MCP audience to the committed surface
+# baseline; this proves the comparison it uses still fires.
+run_step "MCP surface baseline self-test" bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 run_step "CLI registry snapshot" run_cli_registry_snapshot
 run_step "CLI contract changeset guard" bun scripts/check-cli-contract-changeset.ts --base "$base_ref"
 run_step "MCP App bundle" run_mcp_app_bundle

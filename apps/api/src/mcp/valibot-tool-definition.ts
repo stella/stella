@@ -7,6 +7,7 @@ import {
 } from "@stll/agent-input";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
   McpToolDefinition,
   McpToolInputSchema,
@@ -164,9 +165,17 @@ const deriveMcpInputSchema = (
       };
 };
 
+/**
+ * `equivalent` folds alternatives into shorter schemas that accept exactly the
+ * same values; `none` is the projection without those folds, kept only so a
+ * test can prove the equivalence on the real registry.
+ */
+type OutputSchemaCompaction = "equivalent" | "none";
+
 const deriveMcpOutputSchema = (
   schema: v.GenericSchema,
   customSchemaProjection: "none" | "chat-string-ids" = "none",
+  compaction: OutputSchemaCompaction = "equivalent",
 ): McpToolOutputSchema => {
   const { $schema: _dialect, ...jsonSchema } = toJsonSchema(
     schema,
@@ -188,7 +197,7 @@ const deriveMcpOutputSchema = (
         },
   );
   const projected = compactMcpOutputSchema(
-    simplifyMcpOutputSchema(projectSchemaKeywords(jsonSchema)),
+    simplifyMcpOutputSchema(projectSchemaKeywords(jsonSchema), compaction),
   );
   const acceptsObject =
     projected["type"] === "object" ||
@@ -205,7 +214,9 @@ const deriveMcpOutputSchema = (
   if (!acceptsObject) {
     return panic("A native MCP tool output schema must accept an object root");
   }
-  return projected;
+  return compaction === "equivalent"
+    ? nullableAsTypeArray(projected)
+    : projected;
 };
 
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
@@ -323,11 +334,74 @@ const uniqueSchemas = (
   });
 };
 
+/**
+ * The type of a branch that is exactly `{ type, enum }`, a literal list
+ * `projectSchemaKeywords` makes of `v.literal` and `v.picklist`. A branch
+ * carrying any other keyword is never a literal list here.
+ */
+const literalListType = (
+  schema: Record<string, unknown>,
+): string | undefined => {
+  const type = schema["type"];
+  return typeof type === "string" &&
+    Array.isArray(schema["enum"]) &&
+    Object.keys(schema).length === 2
+    ? type
+    : undefined;
+};
+
+/**
+ * Folds literal-list alternatives of one type into a single list: a value
+ * matches some `{ type: T, enum: Ei }` exactly when it is a `T` in the union
+ * of the `Ei`. Every other alternative stays as it is and where it is.
+ */
+const mergeLiteralAlternatives = (
+  schemas: readonly Record<string, unknown>[],
+): Record<string, unknown>[] => {
+  const merged: Record<string, unknown>[] = [];
+  const listIndexByType = new Map<string, number>();
+  for (const schema of schemas) {
+    const type = literalListType(schema);
+    const index = type === undefined ? undefined : listIndexByType.get(type);
+    const list = index === undefined ? undefined : merged[index];
+    if (type === undefined || index === undefined || list === undefined) {
+      if (type !== undefined) {
+        listIndexByType.set(type, merged.length);
+      }
+      merged.push(schema);
+      continue;
+    }
+    merged[index] = {
+      ...list,
+      enum: unionOfLiterals(list["enum"], schema["enum"]),
+    };
+  }
+  return merged;
+};
+
+const unionOfLiterals = (left: unknown, right: unknown): unknown[] => {
+  const seen = new Set<string>();
+  return [
+    ...(isUnknownArray(left) ? left : []),
+    ...(isUnknownArray(right) ? right : []),
+  ].filter((literal) => {
+    const key = JSON.stringify(literal);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
 const combineSchemas = (
   schemas: readonly Record<string, unknown>[],
+  compaction: OutputSchemaCompaction,
 ): Record<string, unknown> => {
   const unique = uniqueSchemas(schemas);
-  return unique.length === 1 ? (unique.at(0) ?? {}) : { anyOf: unique };
+  const combined =
+    compaction === "equivalent" ? mergeLiteralAlternatives(unique) : unique;
+  return combined.length === 1 ? (combined.at(0) ?? {}) : { anyOf: combined };
 };
 
 const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
@@ -341,10 +415,12 @@ const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
  * Safely widens a union of closed object outputs into one compact object. It
  * never drops a possible property or narrows a value schema: properties seen
  * in only some branches become optional, while differing property schemas stay
- * as `anyOf`. The executable Valibot source remains exact at dispatch.
+ * as `anyOf`, their literal lists of one type folded into one. The executable
+ * Valibot source remains exact at dispatch.
  */
 const mergeObjectUnion = (
   branches: readonly unknown[],
+  compaction: OutputSchemaCompaction,
 ): Record<string, unknown> | undefined => {
   if (
     branches.length === 0 ||
@@ -382,7 +458,7 @@ const mergeObjectUnion = (
         : undefined;
       return isSchemaRecord(property) ? [property] : [];
     });
-    properties[name] = combineSchemas(schemas);
+    properties[name] = combineSchemas(schemas, compaction);
   }
 
   const required = [...propertyNames].filter((name) =>
@@ -406,11 +482,13 @@ const mergeObjectUnion = (
 
 /**
  * Provider-facing output schemas favor a compact safe superset. This recursive
- * pass only deduplicates alternatives and merges object unions with the
- * widening rule above; it never guesses which domain fields are unimportant.
+ * pass only deduplicates alternatives, folds literal lists and merges object
+ * unions with the widening rule above; it never guesses which domain fields
+ * are unimportant.
  */
 const simplifyMcpOutputSchema = (
   schema: Record<string, unknown>,
+  compaction: OutputSchemaCompaction,
 ): Record<string, unknown> => {
   const simplified: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
@@ -418,7 +496,7 @@ const simplifyMcpOutputSchema = (
       const mapped: Record<string, unknown> = {};
       for (const [name, nested] of Object.entries(value)) {
         mapped[name] = isSchemaRecord(nested)
-          ? simplifyMcpOutputSchema(nested)
+          ? simplifyMcpOutputSchema(nested, compaction)
           : nested;
       }
       simplified[key] = mapped;
@@ -426,12 +504,14 @@ const simplifyMcpOutputSchema = (
     }
     if (Array.isArray(value)) {
       simplified[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested) ? simplifyMcpOutputSchema(nested) : nested,
+        isSchemaRecord(nested)
+          ? simplifyMcpOutputSchema(nested, compaction)
+          : nested,
       );
       continue;
     }
     simplified[key] = isSchemaRecord(value)
-      ? simplifyMcpOutputSchema(value)
+      ? simplifyMcpOutputSchema(value, compaction)
       : value;
   }
 
@@ -440,14 +520,25 @@ const simplifyMcpOutputSchema = (
     return simplified;
   }
   const unique = uniqueSchemas(alternatives);
-  if (unique.length !== alternatives.length) {
-    simplified["anyOf"] = unique;
+  const combined =
+    compaction === "equivalent" ? mergeLiteralAlternatives(unique) : unique;
+  const { anyOf: _alternatives, ...siblings } = simplified;
+  // Literal lists that merged into one alternative replace the `anyOf`.
+  const literalList =
+    combined.length === 1 && unique.length > 1 ? combined.at(0) : undefined;
+  if (
+    literalList !== undefined &&
+    Object.keys(literalList).every((key) => !(key in siblings))
+  ) {
+    return { ...siblings, ...literalList };
   }
-  const merged = mergeObjectUnion(unique);
+  if (combined.length !== alternatives.length) {
+    simplified["anyOf"] = combined;
+  }
+  const merged = mergeObjectUnion(combined, compaction);
   if (merged === undefined) {
     return simplified;
   }
-  const { anyOf: _alternatives, ...siblings } = simplified;
   return { ...siblings, ...merged };
 };
 
@@ -495,6 +586,96 @@ const compactMcpOutputSchema = (
       : value;
   }
   return compacted;
+};
+
+/**
+ * Keywords that constrain only instances of one JSON type, so `null` satisfies
+ * each of them vacuously. A branch built from `type` and these alone accepts
+ * `null` exactly when its `type` admits it.
+ */
+const TYPE_SCOPED_KEYWORDS = new Set([
+  "additionalItems",
+  "additionalProperties",
+  "contains",
+  "dependencies",
+  "exclusiveMaximum",
+  "exclusiveMinimum",
+  "format",
+  "items",
+  "maxItems",
+  "maxLength",
+  "maxProperties",
+  "maximum",
+  "minItems",
+  "minLength",
+  "minProperties",
+  "minimum",
+  "multipleOf",
+  "pattern",
+  "patternProperties",
+  "properties",
+  "propertyNames",
+  "required",
+  "uniqueItems",
+]);
+
+const isNullSchema = (schema: unknown): boolean =>
+  isSchemaRecord(schema) &&
+  schema["type"] === "null" &&
+  Object.keys(schema).length === 1;
+
+/**
+ * `anyOf: [S, { type: "null" }]` becomes S with `type: [T, "null"]` when S is
+ * one `type: T` plus type-scoped keywords only: both accept `null`, and both
+ * accept a `T` exactly when S does. A branch with `enum`, a combinator or any
+ * other keyword that also constrains `null` keeps its `anyOf`, as does a node
+ * whose own keywords would collide with S's. Runs after the depth widening,
+ * which reads `type: "object"` literally.
+ */
+const nullableAsTypeArray = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> => {
+  const rewritten: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+      rewritten[key] = Object.fromEntries(
+        Object.entries(value).map(([name, nested]): [string, unknown] => [
+          name,
+          isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+        ]),
+      );
+      continue;
+    }
+    if (Array.isArray(value)) {
+      rewritten[key] = value.map((nested: unknown) =>
+        isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+      );
+      continue;
+    }
+    rewritten[key] = isSchemaRecord(value) ? nullableAsTypeArray(value) : value;
+  }
+
+  const { anyOf, ...siblings } = rewritten;
+  if (!Array.isArray(anyOf) || anyOf.length !== 2) {
+    return rewritten;
+  }
+  const nullIndex = anyOf.findIndex(isNullSchema);
+  const branch: unknown = anyOf.at(1 - nullIndex);
+  if (nullIndex === -1 || !isSchemaRecord(branch)) {
+    return rewritten;
+  }
+  const type = branch["type"];
+  if (
+    typeof type !== "string" ||
+    type === "null" ||
+    !Object.keys(branch).every(
+      (key) =>
+        (key === "type" || TYPE_SCOPED_KEYWORDS.has(key)) && !(key in siblings),
+    )
+  ) {
+    return rewritten;
+  }
+  return { ...siblings, ...branch, type: [type, "null"] };
 };
 
 /**
@@ -583,6 +764,17 @@ export const defineChatProjectionMcpToolOutput = <
   project: (data) => data,
   projection: "identity",
 });
+
+/**
+ * The published output projection without its equivalent compaction, read
+ * only by the test that proves the compaction accepts exactly the same values.
+ * The chat string-id projection is safe for every source: a schema it changes
+ * cannot be defined without it.
+ */
+export const deriveUncompactedMcpOutputSchema = (
+  outputSchemaSource: v.GenericSchema,
+): McpToolOutputSchema =>
+  deriveMcpOutputSchema(outputSchemaSource, "chat-string-ids", "none");
 
 export const defineProjectedMcpToolOutput = <
   const TSchema extends v.GenericSchema,

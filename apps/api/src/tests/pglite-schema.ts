@@ -45,6 +45,16 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926160000_case_law_provision_extraction_state",
+  "migration.sql",
+);
+const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926170000_case_law_provision_backfill",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -277,6 +287,36 @@ export const installPgliteStatuteCitationCounts = async (
     ),
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
+  }
+};
+
+const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "CREATE TRIGGER",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install the provision extraction functions and triggers, including the
+ * decision enqueue trigger, which declarative schema push omits.
+ */
+export const installPgliteProvisionExtractionState = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const migrationPath of [
+    PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
+    PROVISION_BACKFILL_MIGRATION_PATH,
+  ]) {
+    const statements = readMigrationStatements(migrationPath).filter(
+      (statement) =>
+        PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES.some((prefix) =>
+          executableSql(statement).startsWith(prefix),
+        ),
+    );
+    for (const statement of statements) {
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 

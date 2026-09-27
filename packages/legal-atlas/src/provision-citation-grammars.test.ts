@@ -89,7 +89,7 @@ const printed = (
 ): string[] => citations.map(({ end, start }) => text.slice(start, end));
 
 describe("provision citation grammars", () => {
-  test.each([...CASE_LAW_JURISDICTIONS])(
+  test.each(CASE_LAW_JURISDICTIONS)(
     "%s reads its own fixture, or declares no grammar",
     (jurisdiction) => {
       const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];

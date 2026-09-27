@@ -120,7 +120,11 @@ function Button({
   const defaultProps = {
     children: loading ? (
       <>
-        <LoaderIcon className="animate-spin" data-slot="button-loader" />
+        {/* Scale leaves animate-spin in control of transform. */}
+        <LoaderIcon
+          className="animate-spin [transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+          data-slot="button-loader"
+        />
         {children}
       </>
     ) : (

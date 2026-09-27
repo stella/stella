@@ -63,6 +63,10 @@
       "types": "./src/provision-preview.ts",
       "import": "./src/provision-preview.ts"
     },
+    "./projection-digest": {
+      "types": "./src/projection-digest.ts",
+      "import": "./src/projection-digest.ts"
+    },
     "./provision-reference": {
       "types": "./src/provision-reference.ts",
       "import": "./src/provision-reference.ts"

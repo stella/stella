@@ -230,6 +230,25 @@ export const PROVISION_WORK_SOURCES = [
   "carry-over",
 ] as const;
 
+/**
+ * How a stored provision row appears in the text: a `printed` row links the
+ * characters its print segment names; a `range-interior` row is a provision
+ * a printed range covers without printing it, so it has no segment.
+ */
+const PROVISION_SPAN_ROLES = ["printed", "range-interior"] as const;
+
+/** What chose the cited act's version: the text itself, or the decision date. */
+const PROVISION_SELECTIONS = ["text", "date-window"] as const;
+
+const PROVISION_TARGET_STATUSES = [
+  "available",
+  "anchor_missing",
+  "no_version_for_date",
+  "work_not_held",
+  "unverified_target",
+  "incomplete_versions",
+] as const;
+
 export const STATUTE_CITATION_TARGET_TYPES = ["work", "provision"] as const;
 
 export const STATUTE_CITATION_TARGET_TYPE = {
@@ -252,6 +271,18 @@ const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
 
 const PROVISION_WORK_SOURCE_SQL_VALUES = PROVISION_WORK_SOURCES.map((source) =>
   sql.raw(`'${source}'`),
+);
+
+const PROVISION_SPAN_ROLE_SQL_VALUES = PROVISION_SPAN_ROLES.map((role) =>
+  sql.raw(`'${role}'`),
+);
+
+const PROVISION_SELECTION_SQL_VALUES = PROVISION_SELECTIONS.map((selection) =>
+  sql.raw(`'${selection}'`),
+);
+
+const PROVISION_TARGET_STATUS_SQL_VALUES = PROVISION_TARGET_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
 );
 
 const STATUTE_CITATION_TARGET_TYPE_SQL_VALUES =
@@ -632,6 +663,9 @@ export const caseLawDecisions = p.pgTable(
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),
+    p
+      .index("case_law_decisions_provision_scope_cursor_idx")
+      .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
     p
@@ -1751,6 +1785,29 @@ export const caseLawProvisionCitations = p.pgTable(
       .numeric("confidence", { precision: 3, scale: 2, mode: "number" })
       .notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
+    /**
+     * The exact characters a row links, as UTF-16 offsets into the text of
+     * one reader piece (`projectionPieces` in `@stll/legal-ast`). Offsets
+     * mean something only under the projection digest the decision's
+     * extraction state records. `print_text` and `name_text` repeat the
+     * expected characters so a reader can refuse a span that no longer
+     * slices to them.
+     */
+    spanRole: p.text("span_role", { enum: PROVISION_SPAN_ROLES }),
+    printPieceId: p.varchar("print_piece_id", { length: 64 }),
+    printStart: p.integer("print_start"),
+    printEnd: p.integer("print_end"),
+    printText: p.varchar("print_text", { length: 128 }),
+    /** The act's name as printed, when the chain names it in the text. */
+    namePieceId: p.varchar("name_piece_id", { length: 64 }),
+    nameStart: p.integer("name_start"),
+    nameEnd: p.integer("name_end"),
+    nameText: p.varchar("name_text", { length: 256 }),
+    selection: p.text("selection", { enum: PROVISION_SELECTIONS }),
+    targetDocumentId: safeUuid<"legislationDocument">("target_document_id"),
+    targetStatus: p.text("target_status", {
+      enum: PROVISION_TARGET_STATUSES,
+    }),
   },
   (t) => [
     p
@@ -1827,6 +1884,29 @@ export const caseLawProvisionCitations = p.pgTable(
     p.check(
       "provision_citations_confidence_range",
       sql`${t.confidence} > 0 AND ${t.confidence} <= 1`,
+    ),
+    // Added NOT VALID in production: every existing row satisfies them,
+    // since the columns they read start NULL.
+    p.check(
+      "provision_citations_span_role_values",
+      sql`${t.spanRole} IS NULL OR ${t.spanRole} IN (${sql.join(PROVISION_SPAN_ROLE_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "provision_citations_selection_values",
+      sql`${t.selection} IS NULL OR ${t.selection} IN (${sql.join(PROVISION_SELECTION_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "provision_citations_target_status_values",
+      sql`${t.targetStatus} IS NULL OR ${t.targetStatus} IN (${sql.join(PROVISION_TARGET_STATUS_SQL_VALUES, sql.raw(","))})`,
+    ),
+    // A printed row names its whole segment; any other row names none.
+    p.check(
+      "provision_citations_print_segment_shape",
+      sql`CASE WHEN ${t.spanRole} = 'printed' THEN num_nulls(${t.printPieceId}, ${t.printStart}, ${t.printEnd}, ${t.printText}) = 0 AND ${t.printStart} >= 0 AND ${t.printEnd} > ${t.printStart} ELSE num_nonnulls(${t.printPieceId}, ${t.printStart}, ${t.printEnd}, ${t.printText}) = 0 END`,
+    ),
+    p.check(
+      "provision_citations_name_segment_shape",
+      sql`num_nonnulls(${t.namePieceId}, ${t.nameStart}, ${t.nameEnd}, ${t.nameText}) = 0 OR (num_nulls(${t.namePieceId}, ${t.nameStart}, ${t.nameEnd}, ${t.nameText}) = 0 AND ${t.nameStart} >= 0 AND ${t.nameEnd} > ${t.nameStart})`,
     ),
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
