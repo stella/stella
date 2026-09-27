@@ -190,6 +190,7 @@ runtime validation, or integration tests.
 ### Errors, async work, results, and observability
 
 - [`no-async-context-enter-with`](./no-async-context-enter-with.ts) (`no-async-context-enter-with`): bans `AsyncLocalStorage.enterWith`, whose ambient context can leak into unrelated background work; use `run`.
+- [`request-lifetime`](./request-lifetime.ts) (`confine-request-reads`): on a chat turn's send-to-settlement path, reads the request only through the send's `isClientConnectionAborted` probe, called while the send runs, so a turn's run never depends on a request that has ended.
 - [`no-bare-error`](./no-bare-error.ts) (`no-bare-error`): requires structured tagged errors or `panic()` instead of unclassified `new Error()` values.
 - [`no-minted-auth-provider-id`](./no-minted-auth-provider-id.ts) (`no-minted-auth-provider-id`): bans handing a generated UUID to `toSafeId<"user" | "organization">` or a persisted user/organization brand; those ids come from the auth provider and are not UUIDs.
 - [`no-swallowed-rejection`](./no-swallowed-rejection.ts) (`no-swallowed-rejection`, `require-rejection-parameter`): rejects constant empty rejection fallbacks and requires a rejection parameter in locally resolvable `.catch()` / `.then()` handlers; response-body reads and teardown keep their deliberate exemptions. Detection is syntax-based, not type-aware: unrelated APIs with those method names need a narrow explained suppression.

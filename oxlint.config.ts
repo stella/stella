@@ -155,6 +155,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
   ]),
+  fixtureRuleOverride("request-lifetime.fixture.ts", [
+    "request-lifetime/confine-request-reads",
+  ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),
@@ -1238,6 +1241,7 @@ export default defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
@@ -2205,6 +2209,22 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // A chat turn's run outlives the request that started it (see
+      // `chat-turn-run.ts`), so nothing on the send-to-settlement path may
+      // read the request except the send's own disconnect probe.
+      files: [
+        "apps/api/src/handlers/chat/send-message*.ts",
+        "apps/api/src/handlers/chat/stream-chat.ts",
+        "apps/api/src/handlers/chat/chat-turn-*.ts",
+        "apps/api/src/handlers/chat/chat-message-persistence.ts",
+        "apps/api/src/handlers/chat/tools/**/*.ts",
+      ],
+      excludeFiles: ["apps/api/src/handlers/chat/**/*.test.ts"],
+      rules: {
+        "request-lifetime/confine-request-reads": "error",
       },
     },
     {
