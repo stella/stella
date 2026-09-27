@@ -23,6 +23,8 @@ type AbsorbComposedSupplementRowsOptions = {
   sourceId: SafeId<"caseLawSource">;
   judgmentId: SafeId<"caseLawDecision">;
   supplements: readonly Pick<StoredSupplement, "kind" | "sourceDocumentId">[];
+  /** The source observation the absorptions write as. */
+  observationOrder: bigint;
   /** Test seam; production absorbs through the corpus stores. */
   absorb?: typeof absorbStandaloneSupplementRow;
 };
@@ -45,6 +47,7 @@ export const absorbComposedSupplementRows = async ({
   sourceId,
   judgmentId,
   supplements,
+  observationOrder,
   absorb = absorbStandaloneSupplementRow,
 }: AbsorbComposedSupplementRowsOptions): Promise<AbsorbComposedSupplementRowsOutcome> => {
   // One at a time: each absorption takes the citation graph lock.
@@ -85,6 +88,7 @@ export const absorbComposedSupplementRows = async ({
         kind,
         sourceDocumentId,
         judgmentId,
+        observationOrder,
       });
       if (Result.isError(absorbed)) {
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
@@ -107,6 +111,15 @@ export const absorbComposedSupplementRows = async ({
           sourceDocumentId,
           "error.detail":
             "a corpus object still holds the standalone row's document",
+        });
+        return [sourceDocumentId];
+      }
+      if (absorbed.value.type === "superseded") {
+        logger.warn(SUPPLEMENT_ABSORB_FAILED, {
+          sourceId,
+          judgmentId,
+          sourceDocumentId,
+          "error.detail": "a later observation wrote the standalone row",
         });
         return [sourceDocumentId];
       }
