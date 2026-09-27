@@ -199,6 +199,9 @@ const PUBLIC_DECISION_READ_GATES = {
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {

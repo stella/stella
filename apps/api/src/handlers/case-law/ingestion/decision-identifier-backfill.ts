@@ -24,6 +24,7 @@ import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
   normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -217,6 +218,7 @@ const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
 type DecisionRow = {
   id: string;
   caseNumber: string;
+  country: string;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -258,11 +260,13 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
   executedRows(result).flatMap((row) =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
-    typeof row["caseNumber"] === "string"
+    typeof row["caseNumber"] === "string" &&
+    typeof row["country"] === "string"
       ? [
           {
             id: row["id"],
             caseNumber: row["caseNumber"],
+            country: row["country"],
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
             metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
           },
@@ -331,7 +335,7 @@ const decisionRowsSql = (
   lock: boolean,
 ) => sql`
   SELECT decision.id::text AS id, decision.case_number AS "caseNumber",
-         decision.ecli, decision.metadata
+         decision.country, decision.ecli, decision.metadata
   FROM case_law_decisions decision
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
   ORDER BY decision.id
@@ -398,14 +402,16 @@ const projectDecisionPage = async (
   }
   const projections = rows.flatMap((row) => {
     const identifiers = identifiersForStoredDecision(row);
-    return identifiers === null ? [] : [{ decisionId: row.id, identifiers }];
+    return identifiers === null
+      ? []
+      : [{ country: row.country, decisionId: row.id, identifiers }];
   });
   if (projections.length > 0) {
     const expected = sql.join(
-      projections.flatMap(({ decisionId, identifiers }) =>
+      projections.flatMap(({ country, decisionId, identifiers }) =>
         identifiers.map(
           (identifier) =>
-            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifier(identifier)}::varchar)`,
+            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifierIn(country, identifier)}::varchar)`,
         ),
       ),
       sql`, `,
@@ -639,7 +645,10 @@ const decisionMismatchCount = async (
         identifierKey({
           type: identifier.type,
           value: identifier.value,
-          normalizedValue: normalizeDecisionIdentifier(identifier),
+          normalizedValue: normalizeDecisionIdentifierIn(
+            row.country,
+            identifier,
+          ),
         }),
       ),
     );

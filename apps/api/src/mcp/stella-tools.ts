@@ -17,6 +17,7 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 
@@ -731,7 +732,7 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
       v.description(
-        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
+        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored), an ECLI, or a reporter citation (volume, reporter, first page; a pin is ignored). Each is answered on its own.`,
       ),
     ),
     country: countryInputSchema(
@@ -935,9 +936,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve case references to decisions: docket numbers as the courts " +
-      "write them (a trailing sheet number is ignored) and ECLIs. Answered " +
-      "from the identity columns, never by ranking text, so a hit is the " +
+      "Resolve case references to decisions: docket numbers, ECLIs and " +
+      "reporter citations. Answered from the identity columns, never by ranking text, so a hit is the " +
       "decision named, not one citing it. Every `identifiers[]` entry is " +
       "answered on its own, in input order, under `status`: `found` carries " +
       "that decision's id, resourceName, appUrl, docket, court, date and " +
@@ -2006,6 +2006,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   // search required, so the request it would have made is what answers that
   // rather than a second reading of the filters.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const requests = queries.map((query, index) => {
     // Three states, not two: a string continues this phrasing, `undefined` is
     // its first page, and `null` means it ended on an earlier one. Only a
@@ -2033,7 +2034,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery(
         body,
-        parseDecisionQuery(query, { grammar }),
+        parseDecisionQuery(query, { grammar, reporters }),
       ),
     };
   });
@@ -2561,7 +2562,7 @@ const lookupItemResult = ({
       identifier,
       hint: SEARCH_INSTEAD_HINT,
       message:
-        "This is not a docket number or ECLI in a grammar the corpus's courts use.",
+        "This is not a docket number, ECLI or reporter citation in a grammar the corpus reads.",
       status: DECISION_LOOKUP_STATUS.notFound,
     };
   }
@@ -2620,6 +2621,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
   // lookup that classified an identifier differently from the search beside it
   // would decline a reference that search resolves.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const lookup =
     context.testDependencies?.lookupDecisionsByIdentity ??
     defaultLookupDecisionsByIdentity;
@@ -2637,7 +2639,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         // The sheet number names a page of the court file, not the decision,
         // so it is dropped before the grammars see the reference.
         const { caseNumber } = splitCaseReference(identifier);
-        const intent = parseDecisionQuery(caseNumber, { grammar });
+        const intent = parseDecisionQuery(caseNumber, {
+          grammar,
+          reporters,
+        });
         if (intent.type !== "identifier") {
           return [identifier, { type: "not_an_identifier" }];
         }
@@ -2668,7 +2673,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent, read.value),
+            matches: exactDecisionMatches(intent, read.value, { reporters }),
           },
         ];
       },

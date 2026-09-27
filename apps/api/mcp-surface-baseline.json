@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28620,
-        "inputSchema": 80866,
-        "outputSchema": 53720,
+        "description": 28578,
+        "inputSchema": 81157,
+        "outputSchema": 53854,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 178913,
+      "payloadUtf8Bytes": 179296,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -55,13 +55,13 @@
       "chars": {
         "name": 472,
         "title": 496,
-        "description": 12893,
-        "inputSchema": 26219,
-        "outputSchema": 30621,
+        "description": 12851,
+        "inputSchema": 26290,
+        "outputSchema": 30755,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 75956,
+      "payloadUtf8Bytes": 76119,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
@@ -80,13 +80,13 @@
       "chars": {
         "name": 161,
         "title": 176,
-        "description": 6055,
-        "inputSchema": 12263,
+        "description": 6013,
+        "inputSchema": 12334,
         "outputSchema": 8622,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 29094,
+      "payloadUtf8Bytes": 29123,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
