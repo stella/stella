@@ -265,11 +265,11 @@ const parseAdisAnswer = (
     if (!Array.isArray(entries)) {
       return yield* malformed("ADIS subject statuses are not a list");
     }
-    const matching = entries.filter(
-      (entry) => isRecord(entry) && entry["@dic"] === digits,
-    );
+    const matching = entries
+      .filter(isRecord)
+      .filter((entry) => entry["@dic"] === digits);
     const [entry, ...others] = matching;
-    if (entry === undefined || others.length > 0 || !isRecord(entry)) {
+    if (entry === undefined || others.length > 0) {
       // One DIČ was asked, so exactly one answer for it must come back.
       return yield* malformed("ADIS did not answer for the requested DIČ");
     }
