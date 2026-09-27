@@ -233,17 +233,38 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
   }
 };
 
+/** A withdrawal was asked of a group whose attestation gates nothing. */
+export class CorpusIndexGroupWithdrawalRefusedError extends TaggedError(
+  "CorpusIndexGroupWithdrawalRefusedError",
+)<{ message: string; indexId: string }> {}
+
 /**
  * Withdraw a group's attestation: an attested row returns to `pending`, so
- * the group is unready again until it is attested anew. The binding is left
- * as it is. Returns whether this call changed the row; an unbound or pending
- * group is not changed.
+ * its scoped reads refuse, generation-wide reads leave its index out and no
+ * append to it starts, until it is attested anew. The binding is left as it
+ * is. Returns whether this call changed the row; an unbound or pending group
+ * is not changed.
+ *
+ * Only a group under a contract of its own can be withdrawn. A group under
+ * its manifest's contract is read by scope and appended to without asking
+ * the registry, so a withdrawal would report a group out of service that
+ * still serves; it is refused with `CorpusIndexGroupWithdrawalRefusedError`.
  */
 export const withdrawCorpusIndexGroupEnrollmentTx = async (
   tx: Transaction,
   target: CorpusIndexGroupTarget,
 ): Promise<boolean> => {
   const group = requireRegisteredGroup(target);
+  if (group.contractVersion === "base") {
+    const message = `Corpus index group under its manifest's contract cannot be withdrawn: ${group.indexId}`;
+    return panic(
+      message,
+      new CorpusIndexGroupWithdrawalRefusedError({
+        message,
+        indexId: group.indexId,
+      }),
+    );
+  }
   const withdrawn = await tx
     .update(corpusIndexGroupEnrollments)
     .set({

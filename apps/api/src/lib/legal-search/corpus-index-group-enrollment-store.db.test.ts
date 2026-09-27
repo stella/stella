@@ -19,6 +19,7 @@ import {
   attestCorpusIndexGroupEnrollmentTx,
   bindCorpusIndexGroupEnrollmentTx,
   CorpusIndexGroupNotReadyError,
+  CorpusIndexGroupWithdrawalRefusedError,
   readCorpusIndexGroupReadinessTx,
   readServingCorpusIndexTargetTx,
   unattestedCorpusIndexIdsTx,
@@ -301,10 +302,9 @@ test("an attestation withdrawn after reservation stops the append at start, and 
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
   );
   const withdraw = async () =>
-    await db
-      .update(corpusIndexGroupEnrollments)
-      .set({ provisioningStatus: "pending", attestedAt: null })
-      .where(eq(corpusIndexGroupEnrollments.indexGroup, "usa"));
+    await inTx(
+      async (tx) => await withdrawCorpusIndexGroupEnrollmentTx(tx, USA),
+    );
   const reserve = async () =>
     await inTx(
       async (tx) =>
@@ -496,16 +496,15 @@ test("a withdrawn attestation makes the group unready until attested again", asy
     await inTx(
       async (tx) => await withdrawCorpusIndexGroupEnrollmentTx(tx, target),
     );
-  const globalIndexes = async () =>
-    (
-      await inTx(
-        async (tx) =>
-          await readServingCorpusIndexTargetTx(tx, {
-            family: "case_law",
-            jurisdiction: undefined,
-          }),
-      )
-    ).route.indexId;
+  const read = async (jurisdiction: string | undefined) =>
+    await inTx(
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction,
+        }),
+    );
+  const globalIndexes = async () => (await read(undefined)).route.indexId;
 
   // Nothing to withdraw before a binding or an attestation.
   expect(await withdraw(USA)).toBe(false);
@@ -517,8 +516,14 @@ test("a withdrawn attestation makes the group unready until attested again", asy
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
   );
   expect(await readiness()).toEqual({ type: "attested" });
+  expect((await read("USA")).route.indexId).toBe("case_law_v7_usa");
+  expect(await globalIndexes()).toContain("case_law_v7_usa");
   expect(await withdraw(USA)).toBe(true);
   expect(await readiness()).toEqual({ type: "unready", reason: "pending" });
+  // Out of service: scoped reads refuse, generation-wide reads leave it out,
+  // and it is among the indexes no append may start on.
+  expect(await rejectionOf(read("USA"))).toMatchObject({ status: 503 });
+  expect(await globalIndexes()).not.toContain("case_law_v7_usa");
   expect(
     await inTx(async (tx) => await unattestedCorpusIndexIdsTx(tx, MANIFEST)),
   ).toEqual(["case_law_v7_usa"]);
@@ -539,8 +544,8 @@ test("a withdrawn attestation makes the group unready until attested again", asy
   );
   expect(await readiness()).toEqual({ type: "attested" });
 
-  // A later-declared base group drops out of generation-wide reads while
-  // withdrawn; it is not bridged again, because it stays enrolled.
+  // A later-declared base group is read by scope and appended to without the
+  // registry, so its withdrawal is refused rather than reported as done.
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
   await inTx(
     async (tx) =>
@@ -549,9 +554,20 @@ test("a withdrawn attestation makes the group unready until attested again", asy
         effectiveDigest: corpusIndexManifestDigest(MANIFEST),
       }),
   );
+  const refusal = await rejectionOf(withdraw(hun));
+  expect(refusal).toMatchObject({
+    message: expect.stringContaining("cannot be withdrawn"),
+  });
+  expect(refusal instanceof Error ? refusal.cause : undefined).toBeInstanceOf(
+    CorpusIndexGroupWithdrawalRefusedError,
+  );
+  const [hunRow] = await db
+    .select()
+    .from(corpusIndexGroupEnrollments)
+    .where(eq(corpusIndexGroupEnrollments.indexGroup, "hun"));
+  expect(hunRow?.provisioningStatus).toBe("attested");
   expect(await globalIndexes()).toContain("case_law_v7_hun");
-  expect(await withdraw(hun)).toBe(true);
-  expect(await globalIndexes()).not.toContain("case_law_v7_hun");
+  expect((await read("HUN")).route.indexId).toBe("case_law_v7_hun");
 
   const cze = { manifest: MANIFEST, indexGroup: "cs_sk" } as const;
   expect(await rejectionOf(withdraw(cze))).toMatchObject({
