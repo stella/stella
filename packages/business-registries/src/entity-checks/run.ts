@@ -84,23 +84,24 @@ const normalizeBirthDate = (value: string): InputResult<string> => {
   return Result.ok(parsed.toString());
 };
 
+// One entry per country a check covers; a new country fails to compile until
+// it says how its business IDs are validated.
+const COMPANY_ID_NORMALIZERS = {
+  CZ: (value) => {
+    const result = validateCzIco(value);
+    return result.valid
+      ? Result.ok(result.compact)
+      : invalidInput("Company ID must be a valid Czech IČO (8 digits)");
+  },
+} as const satisfies Record<
+  EntityCheckDescriptor["country"],
+  (value: string) => InputResult<string>
+>;
+
 const normalizeCompanyId = (
   country: EntityCheckDescriptor["country"],
   value: string,
-): InputResult<string> => {
-  switch (country) {
-    case "CZ": {
-      const result = validateCzIco(value);
-      return result.valid
-        ? Result.ok(result.compact)
-        : invalidInput("Company ID must be a valid Czech IČO (8 digits)");
-    }
-    default: {
-      country satisfies never;
-      return panic("Unhandled country");
-    }
-  }
-};
+): InputResult<string> => COMPANY_ID_NORMALIZERS[country](value);
 
 const normalizeSubject = (
   country: EntityCheckDescriptor["country"],
@@ -225,6 +226,22 @@ const settle = async <TKind extends EntityCheckKind, TFinding>({
   }
 };
 
+type EntityCheckRunner = (
+  subject: EntityCheckSubject,
+  signal: AbortSignal | undefined,
+) => Promise<Result<EntityCheckResult, EntityCheckError>>;
+
+// One runner per kind; a new kind fails to compile until it names its source.
+const ENTITY_CHECK_RUNNERS = {
+  "cz-insolvency": async (subject, signal) =>
+    await settle({
+      kind: "cz-insolvency",
+      subject,
+      signal,
+      query: checkCzInsolvency,
+    }),
+} as const satisfies Record<EntityCheckKind, EntityCheckRunner>;
+
 export type RunEntityCheckOptions = {
   kind: EntityCheckKind;
   subject: EntityCheckSubject;
@@ -242,14 +259,4 @@ export const runEntityCheck = async ({
   signal,
 }: RunEntityCheckOptions): Promise<
   Result<EntityCheckResult, EntityCheckError>
-> => {
-  switch (kind) {
-    case "cz-insolvency": {
-      return await settle({ kind, subject, signal, query: checkCzInsolvency });
-    }
-    default: {
-      kind satisfies never;
-      return panic("Unhandled kind");
-    }
-  }
-};
+> => await ENTITY_CHECK_RUNNERS[kind](subject, signal);
