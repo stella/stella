@@ -258,8 +258,34 @@ export type UsCourtDirectoryRow = UsAcceptedCourtRow | UsRejectedCourtRow;
  */
 export const US_COURT_DIRECTORY_FIELD_SEPARATOR = "|";
 
+/** True when a tuple names some member twice. */
+type HasRepeat<TFields extends readonly unknown[]> = TFields extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? Head extends Tail[number]
+    ? true
+    : HasRepeat<Tail>
+  : false;
+
+/**
+ * The fields a row is written as: every key of the row, each once. A key the
+ * list leaves out or repeats fails to compile, so a field added to a row type
+ * cannot be silently dropped from the directory.
+ */
+const everyRowField =
+  <TRow>() =>
+  <const TFields extends readonly (keyof TRow)[]>(
+    fields: TFields &
+      ([Exclude<keyof TRow, TFields[number]>] extends [never]
+        ? unknown
+        : never) &
+      (HasRepeat<TFields> extends true ? never : unknown),
+  ): TFields =>
+    fields;
+
 /** The fields of an accepted row, in the order the directory writes them. */
-export const US_ACCEPTED_COURT_FIELDS = [
+export const US_ACCEPTED_COURT_FIELDS = everyRowField<UsAcceptedCourtRow>()([
   "status",
   "id",
   "sourceName",
@@ -274,13 +300,13 @@ export const US_ACCEPTED_COURT_FIELDS = [
   "sourceInUse",
   "parentId",
   "courtPartition",
-] as const satisfies readonly (keyof UsAcceptedCourtRow)[];
+]);
 
 /** The fields of a rejected row, as `US_ACCEPTED_COURT_FIELDS` describes. */
-export const US_REJECTED_COURT_FIELDS = [
+export const US_REJECTED_COURT_FIELDS = everyRowField<UsRejectedCourtRow>()([
   "status",
   "id",
   "sourceName",
   "rawJurisdiction",
   "reason",
-] as const satisfies readonly (keyof UsRejectedCourtRow)[];
+]);

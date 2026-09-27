@@ -563,7 +563,8 @@ const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
  * - `21-123`: the term year, then the case's number in that term's docket.
  * - `20A87`: an application, numbered per term.
  * - `22O141`: an original-jurisdiction case, in the electronic form.
- * - `No. 8, Orig.`: the same, as the Court prints it.
+ * - `No. 141, Orig.`: the same case, as the Court prints it. Original numbers
+ *   run on across terms, so both forms key by the number alone.
  * - `No. 1`: a number with no term, as older dockets were written. The `No.`
  *   is required here, because a bare number is not a docket.
  *
@@ -577,6 +578,9 @@ type UnitedStatesDocketParts = {
   readonly number: string;
 };
 
+const originalDocketKey = (number: string): string =>
+  `${Number.parseInt(number, 10)} orig`;
+
 const USA_DOCKET_FORMS = [
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})-(?<number>\d{1,5})$/iu,
@@ -588,11 +592,11 @@ const USA_DOCKET_FORMS = [
   },
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
-    key: ({ number, term }: UnitedStatesDocketParts) => `${term}o${number}`,
+    key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
   },
   {
     pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
-    key: ({ number }: UnitedStatesDocketParts) => `${number} orig`,
+    key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
   },
   {
     pattern: /^no\.? ?(?<number>\d{1,5})$/iu,

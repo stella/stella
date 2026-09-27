@@ -118,9 +118,12 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   expect(first.filter((row) => row.country === "USA")).toHaveLength(
     USA_ROWS.length,
   );
-  // Together the two leave exactly the declaration.
-  expect(
-    first
+  // Together the two leave exactly the declaration, and applying them again
+  // changes no row of it.
+  const logical = (
+    rows: readonly (typeof caseLawCourtWeights.$inferSelect)[],
+  ) =>
+    rows
       .map(({ country, courtPattern, tier, tierLabel, weight }) => ({
         country,
         courtPattern,
@@ -128,28 +131,13 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
         tierLabel,
         weight,
       }))
-      .toSorted((left, right) =>
-        `${left.country}:${left.courtPattern}` <
-        `${right.country}:${right.courtPattern}`
-          ? -1
-          : 1,
-      ),
-  ).toEqual(
-    COURT_WEIGHT_SEED.toSorted((left, right) =>
-      `${left.country}:${left.courtPattern}` <
-      `${right.country}:${right.courtPattern}`
-        ? -1
-        : 1,
-    ),
-  );
+      .toSorted(byKey);
+  const declared = COURT_WEIGHT_SEED.toSorted(byKey);
+  expect(logical(first)).toEqual(declared);
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, USA_SEED);
   const second = await db.select().from(caseLawCourtWeights);
-  expect(second).toHaveLength(COURT_WEIGHT_SEED.length);
-  expect(
-    second.find((row) => row.country === "EU" && row.tierLabel === "supreme")
-      ?.weight,
-  ).toBe(8);
+  expect(logical(second)).toEqual(declared);
   await client.close();
 }, 60_000);
 

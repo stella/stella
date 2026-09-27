@@ -160,17 +160,14 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       canonical: "20A87",
       variants: ["20a87", "No. 20A87"],
     },
+    // An original case: its electronic and printed forms are one docket.
     {
       canonical: "22O141",
-      variants: ["22o141", "No. 22O141"],
+      variants: ["22o141", "No. 22O141", "No. 141, Orig.", "141, Orig."],
     },
     {
       canonical: "No. 8, Orig.",
       variants: ["8, Orig.", "No. 8 Orig", "no. 8, original"],
-    },
-    {
-      canonical: "No. 141, Orig.",
-      variants: ["141, Orig."],
     },
     {
       canonical: "No. 1",

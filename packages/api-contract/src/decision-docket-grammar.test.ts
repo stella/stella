@@ -244,6 +244,9 @@ describe("declared decision docket grammars", () => {
     expect(canonicalOf("21-123")).not.toBe(canonicalOf("21-456"));
     expect(canonicalOf("20A87")).not.toBe(canonicalOf("20A870"));
     expect(canonicalOf("No. 8, Orig.")).not.toBe(canonicalOf("No. 8"));
+    // An original case's electronic and printed forms are one docket.
+    expect(canonicalOf("22O141")).toBe(canonicalOf("No. 141, Orig."));
+    expect(canonicalOf("22O141")).not.toBe(canonicalOf("22O142"));
     // The generic key other identifiers compare under is unchanged: it still
     // reads a trailing number as a sheet.
     expect(canonicalDecisionIdentifierKey("21-123")).toBe("21");
