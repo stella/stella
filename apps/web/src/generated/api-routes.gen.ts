@@ -35796,7 +35796,7 @@ type Ta130d275b4 = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Ta189dcf2fe = "client-disconnected" | "timeout";
+type Ta189dcf2fe = "client-disconnected" | "owner-lost" | "timeout";
 
 type Ta197d6f640 = null | T938d9cc2e1;
 
