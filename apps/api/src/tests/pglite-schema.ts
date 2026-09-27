@@ -50,6 +50,11 @@ const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
   "20260926160000_case_law_provision_extraction_state",
   "migration.sql",
 );
+const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926170000_case_law_provision_backfill",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -299,15 +304,19 @@ const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
 export const installPgliteProvisionExtractionState = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
+  for (const migrationPath of [
     PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
-  ).filter((statement) =>
-    PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES.some((prefix) =>
-      executableSql(statement).startsWith(prefix),
-    ),
-  );
-  for (const statement of statements) {
-    await db.execute(sql.raw(statement));
+    PROVISION_BACKFILL_MIGRATION_PATH,
+  ]) {
+    const statements = readMigrationStatements(migrationPath).filter(
+      (statement) =>
+        PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES.some((prefix) =>
+          executableSql(statement).startsWith(prefix),
+        ),
+    );
+    for (const statement of statements) {
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 

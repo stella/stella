@@ -12,6 +12,10 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+  backfillCaseLawProvisionState,
+} from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   censusCaseLawRawObjectsTask,
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
@@ -129,6 +133,7 @@ const SCHEDULER_TASKS = {
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
+  [BACKFILL_CASE_LAW_PROVISION_STATE_TASK]: backfillCaseLawProvisionState,
   [BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK]: backfillCorpusIndexJobDetail,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,

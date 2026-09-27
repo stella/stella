@@ -663,6 +663,9 @@ export const caseLawDecisions = p.pgTable(
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),
+    p
+      .index("case_law_decisions_provision_scope_cursor_idx")
+      .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
     p
