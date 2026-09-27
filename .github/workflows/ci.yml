@@ -52,7 +52,6 @@ jobs:
       # services, other platforms). Every heavy job gates on
       # `suite_depth == 'full'`.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
-      changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       # JSON matrix `include` list for api-image-smoke.
@@ -470,68 +469,6 @@ jobs:
             echo "::notice::Only provenance files changed; skipping package CI checks."
           fi
 
-  changeset:
-    name: Changeset present for published package changes
-    needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.changeset_required == 'true'
-      && needs.ci-plan.outputs.trusted == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Load release policy
-        # scripts/changeset-policy.json is the single source of truth for which
-        # paths are release-gated: scripts/changeset-guard.ts matches the same
-        # lists at pre-push, so this failure reaches the developer before CI
-        # spends a whole run to report it. Inlining the lists here again would
-        # let the two sides gate different paths.
-        id: policy
-        run: |
-          {
-            echo "release_paths<<POLICY_EOF"
-            jq -er '.releasePaths[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-            echo "generated_paths<<POLICY_EOF"
-            jq -er '.generatedPaths[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-            echo "package_files<<POLICY_EOF"
-            jq -er '.packageFiles[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Published package lists match the release policy
-        # CONTRIBUTING.md and .changeset/README.md tell contributors which
-        # packages need a changeset. Both are rendered from the same policy
-        # this job gates on, so neither can name a different set. The script
-        # reads only the policy file and needs no dependency install.
-        run: bun scripts/check-published-package-lists.ts --check
-
-      - name: Changeset packages match changed files
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
-
-      - name: Enforce release intent
-        # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
-        with:
-          release-paths: ${{ steps.policy.outputs.release_paths }}
-          generated-paths: ${{ steps.policy.outputs.generated_paths }}
-          package-files: ${{ steps.policy.outputs.package_files }}
-          version-file: bun.lock
-
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
   # receives no secrets, keeps the token read-only, and runs on an ephemeral
@@ -675,6 +612,53 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
+
+      # The changeset gate for pull requests. It reads only the policy file
+      # and git history, so it runs here, before any dependency install.
+      - name: Load release policy
+        # scripts/changeset-policy.json is the single source of truth for which
+        # paths are release-gated: scripts/changeset-guard.ts matches the same
+        # lists at pre-push, so this failure reaches the developer before CI
+        # spends a whole run to report it. Inlining the lists here again would
+        # let the two sides gate different paths.
+        if: github.event_name == 'pull_request'
+        id: policy
+        run: |
+          {
+            echo "release_paths<<POLICY_EOF"
+            jq -er '.releasePaths[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+            echo "generated_paths<<POLICY_EOF"
+            jq -er '.generatedPaths[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+            echo "package_files<<POLICY_EOF"
+            jq -er '.packageFiles[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Published package lists match the release policy
+        # CONTRIBUTING.md and .changeset/README.md tell contributors which
+        # packages need a changeset. Both are rendered from the same policy
+        # these steps gate on, so neither can name a different set. The script
+        # reads only the policy file and needs no dependency install.
+        if: github.event_name == 'pull_request'
+        run: bun scripts/check-published-package-lists.ts --check
+
+      - name: Changeset packages match changed files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
+
+      - name: Changeset present for published package changes
+        # The repository owner publishes this versioned shared contract.
+        if: github.event_name == 'pull_request'
+        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        with:
+          release-paths: ${{ steps.policy.outputs.release_paths }}
+          generated-paths: ${{ steps.policy.outputs.generated_paths }}
+          package-files: ${{ steps.policy.outputs.package_files }}
+          version-file: bun.lock
 
       - name: Validate AI skills
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1401,7 +1385,7 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/code-check-affected.test.ts
 
-      # The pre-push guard and the `changeset` job above must gate the same
+      # The pre-push guard and the changeset steps above must gate the same
       # paths. This fails when they diverge, when a policy pathspec goes stale,
       # and when a newly published package is missing from the policy file.
       - name: Test changeset guard
@@ -3254,7 +3238,6 @@ jobs:
     needs:
       [
         ci-plan,
-        changeset,
         agent-sandbox-docker,
         ci-checks,
         ci-browser,
@@ -3303,7 +3286,6 @@ jobs:
             "agent-sandbox-docker": "agent_sandbox_docker_required",
             "api-image-deps": "api_image_deps_required",
             "api-image-smoke": "api_image_smoke_required",
-            "changeset": "changeset_required",
             "ci-browser": null,
             "ci-checks": null,
             "ci-tests": null,
