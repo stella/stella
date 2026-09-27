@@ -34,7 +34,8 @@ const SQL_STRING = /'(?:''|[^'])*'/gu;
 const S3_KEY = /(?:\b[a-z][\w]*_s3_key\b|\b[a-z][\w]*S3Key\b)/iu;
 const REASON =
   /^(?:small table\s+[a-z][\w.]*\b|index\s+[a-z][\w.]*\b|bounded by\s+\S[\s\S]*)/iu;
-const COMMENT = /\/\/\s*sql-perf-allow:\s*(.*)$/iu;
+// The reason is trimmed where it is read.
+const COMMENT = /\/\/\s*sql-perf-allow:(.*)$/iu;
 const COMMENT_START = /\/\/\s*sql-perf-allow\b/iu;
 
 type TemplateParts = {
@@ -259,6 +260,28 @@ export const listSqlPerfAllowComments = (source: string, filename: string) => {
   return allowCommentsOf(source, file);
 };
 
+const OPERAND_CHARACTER = /[\w."-]/u;
+
+/**
+ * The operand a LIKE follows: the run of identifier, quote, dot and dash
+ * characters ending the text, trailing whitespace ignored. Walked by hand so
+ * a long input cannot make a backtracking pattern re-scan it.
+ */
+const trailingOperand = (text: string): string => {
+  const trimmed = text.trimEnd();
+  let start = trimmed.length;
+  while (start > 0 && OPERAND_CHARACTER.test(trimmed[start - 1] ?? "")) {
+    start -= 1;
+  }
+  return trimmed.slice(start);
+};
+
+/** The text after a LIKE, past whitespace and one opening parenthesis. */
+const leadingOperand = (text: string): string => {
+  const trimmed = text.trimStart();
+  return trimmed.startsWith("(") ? trimmed.slice(1).trimStart() : trimmed;
+};
+
 /** The statement (or class member) a node sits in, where a comment can go. */
 const statementOf = (node: ts.Node): ts.Node => {
   let current = node;
@@ -315,7 +338,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       const index = match.index;
       const after = sql.slice(index + match[0].length);
       const before = sql.slice(Math.max(0, index - 100), index);
-      const lhs = /(?:__SQL_EXPR_\d+__|[\w."-]+)\s*$/u.exec(before)?.[0] ?? "";
+      const lhs = trailingOperand(before);
       const lhsMarker = /__SQL_EXPR_(\d+)__/u.exec(lhs);
       const lhsExpression =
         lhsMarker === null ? undefined : expressions[Number(lhsMarker[1])];
@@ -326,8 +349,10 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
         add("s3-key-like", offset, node);
       }
 
-      const literal = /^\s*\(?\s*['"]\s*[%_]/u.test(after);
-      const operand = /^\s*\(?\s*__SQL_EXPR_(\d+)__/u.exec(after);
+      const pattern = leadingOperand(after);
+      const literal =
+        /^['"]/u.test(pattern) && /^[%_]/u.test(pattern.slice(1).trimStart());
+      const operand = /^__SQL_EXPR_(\d+)__/u.exec(pattern);
       const expression =
         operand === null ? undefined : expressions[Number(operand[1])];
       if (
