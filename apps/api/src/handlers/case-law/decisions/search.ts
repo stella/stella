@@ -60,7 +60,7 @@ import type {
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
   courtTierSqlFromMap,
-  courtWeightFromMap,
+  decisionCourtWeight,
   flattenCourtWeightEntries,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
@@ -120,11 +120,11 @@ import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+  courtPartitionsForCourtFilter,
+  type CorpusIndexGroupContract,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -833,6 +833,8 @@ const searchPostgresDecisions = async (
 type CorpusIndexQueryOptions = {
   body: SearchDecisionsBody;
   jurisdictionClause: string | undefined;
+  /** The contract of the one index a scoped read targets, else null. */
+  contract: CorpusIndexGroupContract | null;
   fields: CaseLawCorpusQueryFields;
   expand?: CorpusTermExpander | undefined;
   /**
@@ -848,6 +850,7 @@ type CorpusIndexQueryOptions = {
 const buildCorpusIndexQuery = ({
   body,
   jurisdictionClause,
+  contract,
   fields,
   expand,
   functionWords,
@@ -859,6 +862,7 @@ const buildCorpusIndexQuery = ({
     legalAlternatives,
     filters: {
       court: body.court,
+      courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
       documentType: body.decisionType,
@@ -916,6 +920,7 @@ type ResolveCorpusIndexQueryOptions = {
   body: SearchDecisionsBody;
   generation: string;
   jurisdictionClause: string | undefined;
+  contract: CorpusIndexGroupContract | null;
   functionWords: ReadonlySet<string> | null;
   legalAlternatives: LegalAlternatives;
 };
@@ -937,6 +942,7 @@ const resolveCorpusIndexQuery = async ({
   body,
   generation,
   jurisdictionClause,
+  contract,
   functionWords,
   legalAlternatives: alternatives,
 }: ResolveCorpusIndexQueryOptions): Promise<ResolvedCorpusIndexQuery> => {
@@ -957,6 +963,7 @@ const resolveCorpusIndexQuery = async ({
       const query = buildCorpusIndexQuery({
         body,
         jurisdictionClause,
+        contract,
         fields,
         expand,
         functionWords,
@@ -987,6 +994,7 @@ const resolveCorpusIndexQuery = async ({
         buildCorpusIndexQuery({
           body: bodyWithoutFacetFilter(body, facet),
           jurisdictionClause,
+          contract,
           fields,
           expand,
           // The same exclusion the page was built with: a facet counted over
@@ -1060,6 +1068,8 @@ const candidateDecisionRowsQuery = (
       // match that resolves it, since court names repeat across borders.
       court: caseLawDecisions.court,
       country: caseLawDecisions.country,
+      // A directory court is ranked by its id, not by its name.
+      courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
     })
     .from(caseLawDecisions)
@@ -1352,10 +1362,7 @@ export const rehydrateCaseLawCandidates = async ({
   const courtTierById = new Map<string, number>();
   for (const [id, row] of byId) {
     authorityById.set(id, row.citationAuthority);
-    courtTierById.set(
-      id,
-      courtWeightFromMap(courtWeights, row.court, row.country).tier,
-    );
+    courtTierById.set(id, decisionCourtWeight(courtWeights, row).tier);
   }
 
   // Candidates missing from Postgres (index/DB drift) are dropped. Every
@@ -1745,11 +1752,15 @@ export const searchCorpusIndexDecisions = async (
     });
   };
 
-  const serving = await dbTimer.time(
+  const { serving, route, contract, cursorTarget } = await dbTimer.time(
     CASE_LAW_SEARCH_DB_READ.servingGeneration,
     async () =>
       await caseLawDb(
-        async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+        async (tx) =>
+          await readServingCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            jurisdiction: body.country,
+          }),
       ),
   );
   const generation = serving.generation;
@@ -1863,16 +1874,15 @@ export const searchCorpusIndexDecisions = async (
   }
 
   // Scoped query → that country's index, plus a jurisdiction clause when that
-  // index holds other countries; unscoped → the generation glob.
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    requireCorpusIndexManifest("case_law", generation),
-    body.country,
-  );
+  // index holds other countries; unscoped → every index of the generation a
+  // read may reach (`corpusIndexReadTarget`).
+  const { indexId, jurisdictionClause } = route;
 
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
     generation,
     jurisdictionClause,
+    contract,
     functionWords: interpretation.functionWords,
     legalAlternatives: interpretation.legalAlternatives,
   });
@@ -1899,6 +1909,7 @@ export const searchCorpusIndexDecisions = async (
     isStaleCorpusSearchCursor(parsedCursor, {
       dictionary: resolved.dictionary,
       sort,
+      target: cursorTarget,
     })
   ) {
     return status(400, { message: "Invalid cursor" });
@@ -1988,6 +1999,7 @@ export const searchCorpusIndexDecisions = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: resolved.dictionary,
+          target: cursorTarget,
         });
 
   // A row the candidate read saw and this one no longer answers for was

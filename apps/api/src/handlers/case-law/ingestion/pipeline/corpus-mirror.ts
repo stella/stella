@@ -121,6 +121,7 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   sourceDocumentId: "text",
   ecli: "text",
   court: "text",
+  courtId: "text",
   country: "text",
   language: "text",
   sheetNumber: "text",
