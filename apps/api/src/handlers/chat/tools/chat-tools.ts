@@ -695,7 +695,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const businessRegistryTools = createBusinessRegistryTools({
     enabledHandlers: businessRegistryHandlers,
   });
-  const counterpartyCheckTools = createCounterpartyCheckTools();
+  // Findings name natural persons with birth dates and identifiers, which the
+  // anonymization boundary cannot redact, so anonymized chat never sees them.
+  const counterpartyCheckTools =
+    thirdPartyBoundary.type === "raw" ? createCounterpartyCheckTools() : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
