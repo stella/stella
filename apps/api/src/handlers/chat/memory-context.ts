@@ -41,6 +41,8 @@ type MemoryRow = {
 };
 
 type BuildMemoryPromptPartsProps = {
+  /** Turns a memory's canonical links into this thread's chat refs. */
+  hydrateRefs: (text: string) => string;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   contextMatterIds: readonly SafeId<"workspace">[];
@@ -49,6 +51,7 @@ type BuildMemoryPromptPartsProps = {
 };
 
 export const buildMemoryPromptParts = async ({
+  hydrateRefs,
   organizationId,
   userId,
   contextMatterIds,
@@ -127,6 +130,7 @@ export const buildMemoryPromptParts = async ({
 
     const { block, omittedRowCount, renderedRowIds } = renderMemoryBlock({
       contextMatterIds: effectiveMatterIds,
+      hydrateRefs,
       rows,
     });
 
@@ -170,6 +174,8 @@ export const buildMemoryPromptParts = async ({
 
 type RenderMemoryBlockProps = {
   contextMatterIds: readonly SafeId<"workspace">[];
+  /** Turns a memory's canonical links into this thread's chat refs. */
+  hydrateRefs: (text: string) => string;
   rows: readonly MemoryRow[];
 };
 
@@ -187,6 +193,7 @@ export type RenderedMemoryBlock = {
 
 export const renderMemoryBlock = ({
   contextMatterIds,
+  hydrateRefs,
   rows,
 }: RenderMemoryBlockProps): RenderedMemoryBlock => {
   if (rows.length === 0) {
@@ -207,7 +214,7 @@ export const renderMemoryBlock = ({
     // strip invisible/control chars and flatten to one line again here so
     // a row that predates the write-time guard still renders as a single,
     // inert bullet rather than smuggling a fresh instruction line.
-    const safeContent = stripPromptUnsafeChars(row.content)
+    const safeContent = stripPromptUnsafeChars(hydrateRefs(row.content))
       .replace(/\s+/gu, " ")
       .trim();
     if (safeContent.length === 0) {

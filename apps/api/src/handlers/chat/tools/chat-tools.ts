@@ -551,6 +551,7 @@ type CreateRememberToolsProps = {
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   resolveSourceDataWorkspaceIds: () => readonly SafeId<"workspace">[];
+  toDurableRefText: ChatRefRegistry["toDurableRefText"];
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -561,6 +562,7 @@ const createRememberTools = ({
   recordAuditEvent,
   safeDb,
   resolveSourceDataWorkspaceIds,
+  toDurableRefText,
   userId,
   workspaceId,
 }: CreateRememberToolsProps) => ({
@@ -570,6 +572,7 @@ const createRememberTools = ({
     recordAuditEvent,
     safeDb,
     resolveSourceDataWorkspaceIds,
+    toDurableRefText,
     userId,
     workspaceId,
   }),
@@ -872,6 +875,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           recordAuditEvent,
           safeDb,
           resolveSourceDataWorkspaceIds: resolveMemorySourceWorkspaceIds,
+          toDurableRefText: refRegistry.toDurableRefText,
           userId,
           workspaceId,
         });

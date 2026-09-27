@@ -58,12 +58,18 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
+import {
+  type ChatThreadNamesAdded,
+  type ChatThreadNamesRead,
+  recordChatThreadNamesOnTx,
+} from "@/api/lib/chat/thread-names";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  threadNames?: ChatThreadNamesWrite | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -170,6 +176,31 @@ const applyChatDataScopeExpansionOnTx = async ({
   });
 };
 
+/** The thread's names as a request read them, and what it adds. */
+export type ChatThreadNamesWrite = {
+  added: ChatThreadNamesAdded;
+  read: ChatThreadNamesRead;
+};
+
+/**
+ * Appends the names a write's messages add to the thread, beside those
+ * messages, so a later request never reads fewer names than the thread shows.
+ */
+const applyThreadNamesOnTx = async ({
+  names,
+  threadId,
+  tx,
+}: {
+  names: ChatThreadNamesWrite | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (names === undefined) {
+    return;
+  }
+  await recordChatThreadNamesOnTx({ ...names, threadId, tx });
+};
+
 const applyChatDataScopeReplacementOnTx = async ({
   recordAuditEvent,
   replacement,
@@ -198,6 +229,7 @@ const applyChatDataScopeReplacementOnTx = async ({
 const insertMessages = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   messages,
   recordAuditEvent,
   safeDb,
@@ -229,6 +261,7 @@ const insertMessages = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -285,6 +318,8 @@ const insertMessages = async ({
 export type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names this write's messages add to the thread. */
+  threadNames?: ChatThreadNamesWrite | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -499,6 +534,7 @@ const mergeContinuationMetadata = ({
 export const finalizeAssistantTurn = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   existingIds,
   execution,
   outcome,
@@ -513,6 +549,8 @@ export const finalizeAssistantTurn = async ({
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names the assistant message adds to the thread. */
+  threadNames: ChatThreadNamesWrite;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
@@ -551,6 +589,7 @@ export const finalizeAssistantTurn = async ({
       const persisted = await persistMessage({
         acceptedSendMode,
         dataScopeExpansion,
+        threadNames,
         persistencePlan,
         recordAuditEvent,
         safeDb,
@@ -769,6 +808,7 @@ export const persistStoppedChatTurn = async (
 const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
+  threadNames,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -784,6 +824,7 @@ const runPersistMessage = async ({
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
+      threadNames,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -819,6 +860,7 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -975,6 +1017,7 @@ const runPersistMessage = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     const deletedMessageId = persistencePlan.deleteMessageId;
     await tx
       .delete(chatMessages)

@@ -17,7 +17,13 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+  neutralizeChatRefTokens,
+  rebindChatRefTokens,
+} from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -126,7 +132,52 @@ type ChatHistoryExpansionRow = {
   dataWorkspaceIds: SafeId<"workspace">[];
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
+};
+
+/**
+ * An expanded message of another chat, with its raw refs spelled for this
+ * one. A user's message is neutral: a ref-shaped token a user typed may
+ * predate the binding its chat later gave the spelling, so only the mention
+ * links it carries (canonical, hydrated after) name anything.
+ */
+const respellForeignRefs = ({
+  foreignRefs,
+}: {
+  foreignRefs: { from: ChatRefRegistry; to: ChatRefRegistry } | null;
+}): ((rendered: string, partType: string) => string) | undefined => {
+  if (foreignRefs === null) {
+    return undefined;
+  }
+  return (rendered, partType) =>
+    partType === "tool-call" || partType === "tool-result"
+      ? rebindChatRefTokens({ ...foreignRefs, text: rendered })
+      : neutralizeChatRefTokens(rendered);
+};
+
+/** The refs another chat of this user bound, as a registry. */
+const readForeignChatRefs = async ({
+  safeDb,
+  threadId,
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}): Promise<ChatRefRegistry> => {
+  const names = await safeDb(
+    async (tx) => await readChatThreadNames({ threadId, tx }),
+  );
+  if (Result.isError(names)) {
+    throw new ChatToolError({
+      kind: "server-defect",
+      message: "Failed to expand chat history.",
+      cause: names.error,
+    });
+  }
+  return createChatRefRegistry(
+    names.value.refBindings,
+    names.value.retiredRefs,
+  );
 };
 
 export const createChatHistoryTools = ({
@@ -275,6 +326,7 @@ export const createChatHistoryTools = ({
           w.role,
           w.content,
           w.created_at AS "createdAt",
+          t.thread_id AS "threadId",
           t.thread_workspace_id AS "threadWorkspaceId",
           t.data_workspace_ids AS "dataWorkspaceIds"
         FROM window_rows w, target t
@@ -304,19 +356,34 @@ export const createChatHistoryTools = ({
         }
       }
 
+      // Another chat's raw refs (a code-mode result, say) name what that
+      // chat bound them to, so they are spelled again as this chat's refs
+      // for the same targets; this chat's own refs already are.
+      const foreignRefs =
+        target === undefined || target.threadId === threadId
+          ? null
+          : {
+              from: await readForeignChatRefs({
+                safeDb,
+                threadId: target.threadId,
+              }),
+              to: refRegistry,
+            };
+
       return {
         targetMessageId: messageId,
         messages: result.value.map((row) => {
-          const message = persistedRowToChatMessage(row);
+          const rendered = renderChatMessagesForCompaction(
+            [persistedRowToChatMessage(row)],
+            respellForeignRefs({ foreignRefs }),
+          );
           return {
             messageId: row.id,
             role: row.role,
             createdAt: row.createdAt.toISOString(),
             // Same rationale as the search excerpt: persisted mention hrefs
             // must re-enter the model as chat refs, not raw tenant UUIDs.
-            content: refRegistry.hydrateAssistantTextRefs(
-              renderChatMessagesForCompaction([message]),
-            ),
+            content: refRegistry.hydrateAssistantTextRefs(rendered),
           };
         }),
       };
