@@ -414,6 +414,15 @@ const plannedContent = async (
     incomingCarriesDocument: true,
     polarityRules: undefined,
   });
+  switch (plan.citations.disposition) {
+    case "legacy-graph":
+      break;
+    case "annotation-only":
+      throw new TypeError("Expected a legacy citation graph plan");
+    default:
+      plan.citations satisfies never;
+      throw new TypeError("Unhandled citation disposition");
+  }
   expect(plan.citations.citingDecisionId).toBe(citingDecisionId);
   return plan.citations.references
     .map(({ reference, verdict }) => {

@@ -229,7 +229,7 @@ const runDecisionAttempt = async ({
     persistedDecisionDate: observation.persistedDecisionDate,
     sourceId,
     decisionId,
-    result,
+    result: plan.preparedResult,
     composedSupplements,
     observedAt,
     observationOrder,

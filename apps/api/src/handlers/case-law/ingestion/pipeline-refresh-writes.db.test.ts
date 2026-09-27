@@ -650,11 +650,16 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   await ingest(withDocument("30 Cdo 900/2024", "page-v1"), canonical);
   expect(await courtIdOf("No. 19-1392")).toEqual(["scotus"]);
   expect(await courtIdOf("30 Cdo 900/2024")).toEqual([null]);
+  const usaRow = await storedRow("No. 19-1392");
+  const czechRow = await storedRow("30 Cdo 900/2024");
+  expect(await citationHeaders(usaRow.id)).toHaveLength(0);
+  expect(await citationHeaders(czechRow.id)).toHaveLength(1);
 
   // A refresh that states the same court id is not a change of the row.
   const first = await storedRow("No. 19-1392");
   await ingest(usa("page-v2"), canonical);
   expect((await storedRow("No. 19-1392")).updatedAt).toBe(first.updatedAt);
+  expect(await citationHeaders(usaRow.id)).toHaveLength(0);
 
   // A result that reaches the write path without its court id is an adapter
   // defect; nothing is written for it.

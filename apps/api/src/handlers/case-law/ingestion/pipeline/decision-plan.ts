@@ -1,7 +1,13 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
+import { eq } from "drizzle-orm";
+
+import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { proceduralKeysFromMetadata } from "@/api/handlers/case-law/citation-kind";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -9,12 +15,22 @@ import {
   bareCitationKey,
   decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
-  extractCitations,
+  extractDecisionCitations,
   isSelfCitation,
   normalizeDecisionIdentifierIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import type { DecisionCitationExtraction } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
-import { planDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import {
+  CITATION_SCOPE_METADATA_KEY,
+  CitationScopesRejectedError,
+  citationScopeEnvelope,
+  validatedCitationScopes,
+} from "@/api/handlers/case-law/ingestion/citation-scopes";
+import {
+  annotationOnlyCitationPlan,
+  planDecisionCitations,
+} from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   caseLawCanonicalPayload,
   decisionSections,
@@ -38,6 +54,7 @@ import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
   planCorpusDocumentWrite,
+  readCorpusAst,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -58,6 +75,23 @@ import { logger } from "@/api/lib/observability/logger";
 type PendingMirrorPayload = Awaited<
   ReturnType<typeof loadPendingMirrorPayload>
 >;
+
+const storedScopeAst = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+) => {
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({
+        documentAst: caseLawDecisions.documentAst,
+        astS3Key: caseLawDecisions.astS3Key,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId))
+      .limit(1),
+  );
+  return row?.astS3Key ? await readCorpusAst(row.astS3Key) : row?.documentAst;
+};
 
 type ReportStoredDocumentQualityOptions = {
   result: IngestionResult;
@@ -163,7 +197,7 @@ const reportStoredDocumentQuality = ({
 
 type ReportCitationRecallOptions = {
   result: IngestionResult;
-  citations: readonly ReturnType<typeof extractCitations>[number][];
+  citations: readonly DecisionCitationExtraction["citations"][number][];
   incomingCarriesDocument: boolean;
   preserveStoredDocument: boolean;
 };
@@ -400,6 +434,59 @@ export const planDecisionWrite = async ({
       ? await loadPendingMirrorPayload(existing.id, scopedDb)
       : null;
 
+  const reusedCitationScopeEnvelope =
+    !incomingCarriesDocument && existing?.metadata
+      ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
+      : undefined;
+  if (reusedCitationScopeEnvelope !== undefined && existing) {
+    const ast =
+      pendingMirrorPayload?.ast ??
+      (await storedScopeAst(existing.id, scopedDb));
+    const verified = validatedCitationScopes(existing.metadata ?? {}, ast);
+    if (Result.isError(verified)) {
+      throw verified.error;
+    }
+  }
+
+  if (result.citationScopes && !hasUsableAst(result.documentAst)) {
+    throw new CitationScopesRejectedError({
+      message: "Citation scopes require a document AST",
+      defect: "invalid-envelope",
+      opinionId: "",
+    });
+  }
+  const extraction = extractDecisionCitations({
+    country: result.country,
+    sections: sections.map(({ index, text }) => ({ index, text })),
+    documentAst: hasUsableAst(result.documentAst)
+      ? result.documentAst
+      : undefined,
+    citationScopes: result.citationScopes,
+  });
+  if (Result.isError(extraction)) {
+    throw extraction.error;
+  }
+  const finalAst = extraction.value.documentAst ?? result.documentAst;
+  const {
+    [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
+    ...ordinaryMetadata
+  } = result.metadata;
+  const preparedMetadata =
+    result.citationScopes && hasUsableAst(finalAst)
+      ? {
+          ...ordinaryMetadata,
+          [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
+            finalAst,
+            result.citationScopes,
+          ),
+        }
+      : ordinaryMetadata;
+  const preparedResult = {
+    ...result,
+    documentAst: finalAst,
+    metadata: preparedMetadata,
+  };
+
   reportStoredDocumentQuality({
     result,
     sourceId,
@@ -427,9 +514,9 @@ export const planDecisionWrite = async ({
     value: identifier.value,
     normalizedValue: normalizeDecisionIdentifierIn(result.country, identifier),
   }));
-  const citations = extractCitations(
-    sections.map((s) => ({ index: s.index, text: s.text })),
-  ).filter((c) => !isSelfCitation(c.citationText, decisionIdentifiers));
+  const citations = extraction.value.citations.filter(
+    (c) => !isSelfCitation(c.citationText, decisionIdentifiers),
+  );
 
   reportCitationRecall({
     result,
@@ -453,7 +540,7 @@ export const planDecisionWrite = async ({
     payloadColumns,
     storedPayloadUnchanged,
   } = planCorpusPayload({
-    result,
+    result: preparedResult,
     existing,
     decisionId,
     corpus,
@@ -471,16 +558,21 @@ export const planDecisionWrite = async ({
     // lock across that read. The citing row is either the one identity
     // resolution found or the one this attempt is about to insert under
     // the id it already reserved.
-    citations: await planDecisionCitations({
-      citations,
-      citingDecisionId: existing?.id ?? decisionId,
-      language: result.language,
-      polarityRules,
-      proceduralKeys,
-      scopedDb,
-      sections,
-    }),
+    citations: readsUsReporterCitations(result.country)
+      ? annotationOnlyCitationPlan()
+      : await planDecisionCitations({
+          citations,
+          citingDecisionId: existing?.id ?? decisionId,
+          language: result.language,
+          polarityRules,
+          proceduralKeys,
+          scopedDb,
+          sections,
+        }),
     caseNumberType,
+    preparedMetadata,
+    preparedResult,
+    reusedCitationScopeEnvelope,
     corpusPayload,
     corpusPlan,
     identifierRows,
