@@ -459,9 +459,8 @@
                   {
                     "arguments": "{}",
                     "id": "call-1",
-                    "input": {},
                     "name": "list_templates",
-                    "state": "input-complete",
+                    "state": "error",
                     "type": "tool-call"
                   }
                 ]

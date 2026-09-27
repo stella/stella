@@ -505,6 +505,20 @@
         "test": "stops a client call the page still runs"
       },
       "oracle": "chat.persisted.turn-outcome"
+    },
+    {
+      "id": "stop-closes-cut-off-calls",
+      "fix": "F2",
+      "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "replace": "  settleTerminalAssistantMessage(message, outcome);",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "stops an answer while it streams (before-tool-end)"
+      },
+      "oracle": "chat.persisted.pending-owned"
     }
   ]
 }

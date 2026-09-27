@@ -15,7 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cancelAwaitingAssistantMessage,
+  cancelAssistantMessage,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -398,11 +398,23 @@ type FinalizedTurn = {
 };
 
 /**
- * What a turn stores once it ends. Normally its own outcome; when the user's
- * stop committed first, the stop, with the message ended as a stop ends it:
- * a turn that would have waited on the user ends like an awaiting turn the
- * user stopped (`cancelAwaitingAssistantMessage`), any other keeps what it
- * produced under the stop's settlement rules.
+ * The terminal message as its outcome stores it. A cancelled turn closes
+ * every call that can no longer run or be answered
+ * (`cancelAssistantMessage`), whether it waited on the user or was cut off
+ * mid-stream; any other outcome keeps what the run produced under its
+ * settlement rules.
+ */
+const endTerminalAssistantMessage = (
+  message: PersistableTerminalAssistantMessage,
+  outcome: ChatTurnOutcome,
+): PersistableTerminalAssistantMessage =>
+  outcome.type === "cancelled"
+    ? cancelAssistantMessage({ message, reason: outcome.reason })
+    : settleTerminalAssistantMessage(message, outcome);
+
+/**
+ * What a turn stores once it ends: its own outcome, or the user's stop when
+ * that committed first.
  */
 const terminalSettlement = ({
   outcome,
@@ -412,33 +424,17 @@ const terminalSettlement = ({
 }: TerminalAssistantMessageProps & {
   stopped: boolean;
 }): TerminalSettlement => {
-  if (!stopped) {
-    return {
-      message: settleTerminalAssistantMessage(
-        toTerminalAssistantMessage({
-          outcome,
-          owningAssistantMessage,
-          responseMessage,
-        }),
-        outcome,
-      ),
-      outcome,
-    };
-  }
-  const produced = toTerminalAssistantMessage({
-    outcome: USER_STOP_OUTCOME,
-    owningAssistantMessage,
-    responseMessage,
-  });
+  const settledAs = stopped ? USER_STOP_OUTCOME : outcome;
   return {
-    message:
-      outcome.type === "awaiting-user"
-        ? cancelAwaitingAssistantMessage({
-            message: produced,
-            reason: USER_STOP_OUTCOME.reason,
-          })
-        : settleTerminalAssistantMessage(produced, USER_STOP_OUTCOME),
-    outcome: USER_STOP_OUTCOME,
+    message: endTerminalAssistantMessage(
+      toTerminalAssistantMessage({
+        outcome: settledAs,
+        owningAssistantMessage,
+        responseMessage,
+      }),
+      settledAs,
+    ),
+    outcome: settledAs,
   };
 };
 
