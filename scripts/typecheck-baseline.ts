@@ -31,7 +31,7 @@
 // its own typecheck-baseline job, parallel to the turbo typecheck job.
 
 import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -218,9 +218,18 @@ type MeasureResult =
   | { ok: true; measured: Measured[] }
   | { ok: false; error: string };
 
-const measureAll = (repoRoot = REPO_ROOT): MeasureResult => {
+// A project the change adds does not exist at its merge base; with
+// absentAsEmpty the base measurement records it as zero instead of failing.
+const measureAll = (
+  repoRoot = REPO_ROOT,
+  absentAsEmpty = false,
+): MeasureResult => {
   const measured: Measured[] = [];
   for (const { id, project } of PROJECTS) {
+    if (absentAsEmpty && !existsSync(path.join(repoRoot, project))) {
+      console.log(`  ${project} is absent; recording zero`);
+      continue;
+    }
     console.log(`  typechecking ${project} ...`);
     const run = runProject(project, repoRoot);
     if (!run.ok) {
@@ -335,6 +344,19 @@ export const diffAll = (
   }
   return diffs;
 };
+
+// A project with no base measurement is new in the change: the delta gate has
+// nothing to compare it with, so only the committed budget covers it.
+export const deltaDiffs = (
+  measured: readonly Measured[],
+  base: Baseline,
+): FieldDiff[] =>
+  diffAll(
+    measured.filter(
+      ({ id }) => base[id].types > 0 || base[id].instantiations > 0,
+    ),
+    base,
+  );
 
 // --- Formatting ---------------------------------------------------------------
 
@@ -510,7 +532,7 @@ const runWrite = (): number => {
 };
 
 const runMeasure = (root: string, file: string): number => {
-  const result = measureAll(path.resolve(root));
+  const result = measureAll(path.resolve(root), true);
   if (!result.ok) {
     console.error(result.error);
     return 1;
@@ -528,7 +550,7 @@ const runDelta = (file: string): number => {
     return 1;
   }
 
-  const diffs = diffAll(result.measured, base);
+  const diffs = deltaDiffs(result.measured, base);
   for (const m of result.measured) {
     console.log(formatCheckMeasurement(m, base));
   }

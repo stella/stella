@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { compareField, diffAll } from "./typecheck-baseline";
+import { compareField, deltaDiffs, diffAll } from "./typecheck-baseline";
 
 test("a change is compared with its merge base even when main has used the committed budget", () => {
   const committed = {
@@ -77,4 +77,31 @@ test("the per-change allowance uses the larger of percentage and floor", () => {
   expect(compareField("types", 60_001, 40_000)).toBe("regressed");
   expect(compareField("instantiations", 160_000, 60_000)).toBe("ok");
   expect(compareField("instantiations", 160_001, 60_000)).toBe("regressed");
+});
+
+test("a project new in the change is left to the committed budget", () => {
+  const base = {
+    api: { types: 1_000_000, instantiations: 8_000_000 },
+    web: { types: 1_000_000, instantiations: 8_000_000 },
+    "web-e2e": { types: 0, instantiations: 0 },
+  } as const;
+  const head = [
+    {
+      id: "api",
+      counters: { types: 1_000_000, instantiations: 8_000_000 },
+      context: "",
+    },
+    {
+      id: "web-e2e",
+      counters: { types: 40_000, instantiations: 60_000 },
+      context: "",
+    },
+  ] as const;
+
+  expect(deltaDiffs(head, base).map((diff) => diff.id)).toEqual(["api", "api"]);
+  expect(
+    diffAll(head, base).some(
+      (diff) => diff.id === "web-e2e" && diff.status === "regressed",
+    ),
+  ).toBe(true);
 });
