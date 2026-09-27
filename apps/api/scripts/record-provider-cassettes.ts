@@ -148,6 +148,10 @@ const ECHO_KEYS = new Set([
 ]);
 /** Tool call ids stay: they tie a call to its result in a continuation. */
 const TOOL_CALL_ID = /^(?:call|toolu|tooluse|fc)_/u;
+/** Ids of the account the key belongs to, wherever a string carries them
+ *  (an error message naming the project, say). */
+const ACCOUNT_TOKEN =
+  /\b(?:org|proj|user)[-_](?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{6,}\b/gu;
 
 export const sanitizeJson = (value: unknown, secret: string): unknown => {
   if (Array.isArray(value)) {
@@ -157,7 +161,7 @@ export const sanitizeJson = (value: unknown, secret: string): unknown => {
     if (secret !== "" && value.includes(secret)) {
       return panic("A provider response contains the recording key");
     }
-    return value;
+    return value.replaceAll(ACCOUNT_TOKEN, "[id]");
   }
   if (value === null || typeof value !== "object") {
     return value;

@@ -69,6 +69,12 @@ describe("provider cassette recording redaction", () => {
       ),
     ).toEqual({ error: { code: 400 }, user_id: "[user_id]" });
     expect(
+      sanitizeJson(
+        { error: { message: "Project `proj_2Ab3Cd4Ef5Gh6` has no access" } },
+        SECRET,
+      ),
+    ).toEqual({ error: { message: "Project `[id]` has no access" } });
+    expect(
       sanitizeTextBody(
         ": account user_2Ab3Cd4Ef5Gh6 org-9Zy8Xw7Vu6\n\n",
         SECRET,
