@@ -1813,9 +1813,7 @@ export const processServerChatStream = async function* ({
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
         }
-        if (chunk.usage) {
-          usage = tokenUsageFromTerminalChunk(chunk);
-        }
+        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
         await terminalize({
           flushProcessor: true,
           outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
