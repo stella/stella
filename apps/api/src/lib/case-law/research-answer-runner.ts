@@ -623,13 +623,18 @@ const retrievePassages = async (
     return [];
   }
   const searched = await Result.tryPromise(async () => {
-    const { serving, manifest } = await caseLawDb(
+    const target = await caseLawDb(
       async (tx) =>
         await readServingCorpusIndexTargetTx(tx, {
           family: "case_law",
           jurisdiction: decision.country,
         }),
     );
+    // An unready index group reads as no passages, as a failed search does.
+    if (Result.isError(target)) {
+      return target;
+    }
+    const { serving, manifest } = target.value;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
     return await getCorpusIndexClient(serving.cluster).search({
       indexId,

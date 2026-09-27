@@ -59,10 +59,12 @@ const corpusIndexBrowseFacets = async (
       if (resolution.type === "unready") {
         throw new Error(`unready: ${resolution.contract.indexId}`);
       }
-      return await Promise.resolve({
-        serving: servingGeneration,
-        route: resolution.target.route,
-      });
+      return await Promise.resolve(
+        Result.ok({
+          serving: servingGeneration,
+          route: resolution.target.route,
+        }),
+      );
     },
   });
 

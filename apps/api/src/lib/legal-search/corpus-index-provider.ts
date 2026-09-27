@@ -156,7 +156,7 @@ export const rehydrateCorpusIndexProviderCandidates =
 
 const searchResult = async (
   query: LegalSearchQuery,
-): Promise<Result<LegalSearchResult, InvalidLegalSearchCursorError>> => {
+): Promise<Result<LegalSearchResult, LegalSearchError>> => {
   const limit = query.limit;
   const family = query.documentFamily ?? "case_law";
 
@@ -175,13 +175,22 @@ const searchResult = async (
     );
   }
 
-  const { serving, route, contract, cursorTarget } = await caseLawPublicReadDb(
+  const target = await caseLawPublicReadDb(
     async (tx) =>
       await readServingCorpusIndexTargetTx(tx, {
         family,
         jurisdiction: query.jurisdiction,
       }),
   );
+  if (Result.isError(target)) {
+    return Result.err(
+      new LegalSearchUnavailableError({
+        message: "Corpus index legal search reached an unready index group.",
+        cause: target.error,
+      }),
+    );
+  }
+  const { serving, route, contract, cursorTarget } = target.value;
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when

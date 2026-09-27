@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  type CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTarget,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -184,7 +185,12 @@ type CorpusIndexBrowseFacetsDependencies = {
    */
   readServingTarget: (
     jurisdiction: string | undefined,
-  ) => Promise<Pick<ServingCorpusIndexTarget, "serving" | "route">>;
+  ) => Promise<
+    Result<
+      Pick<ServingCorpusIndexTarget, "serving" | "route">,
+      CorpusIndexGroupNotReadyError
+    >
+  >;
 };
 
 const defaultCorpusIndexBrowseFacetsDependencies = {
@@ -206,9 +212,16 @@ export const corpusIndexBrowseFacets = async (
   dependencies: CorpusIndexBrowseFacetsDependencies = defaultCorpusIndexBrowseFacetsDependencies,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const family = query.documentFamily ?? "case_law";
-  const { serving, route } = await dependencies.readServingTarget(
-    query.jurisdiction,
-  );
+  const target = await dependencies.readServingTarget(query.jurisdiction);
+  if (Result.isError(target)) {
+    return Result.err(
+      new LegalBrowseFacetsError({
+        message: target.error.message,
+        cause: target.error,
+      }),
+    );
+  }
+  const { serving, route } = target.value;
   const generation = serving.generation;
   const readContract = corpusIndexReadContract(family, generation);
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when

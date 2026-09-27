@@ -183,12 +183,20 @@ import type {
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
+
+/** A scoped search reached an index group that is not attested yet. */
+const corpusIndexGroupNotReady = failureSink({
+  event: "case_law.search.index_group_not_ready",
+  expected: [],
+});
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -1752,7 +1760,7 @@ export const searchCorpusIndexDecisions = async (
     });
   };
 
-  const { serving, route, contract, cursorTarget } = await dbTimer.time(
+  const target = await dbTimer.time(
     CASE_LAW_SEARCH_DB_READ.servingGeneration,
     async () =>
       await caseLawDb(
@@ -1763,6 +1771,11 @@ export const searchCorpusIndexDecisions = async (
           }),
       ),
   );
+  if (Result.isError(target)) {
+    observeFailure(target.error, { sink: corpusIndexGroupNotReady });
+    return status(503, { message: "Search is temporarily unavailable" });
+  }
+  const { serving, route, contract, cursorTarget } = target.value;
   const generation = serving.generation;
   // Asserted before any engine work: every decision count this branch reports
   // is a cardinality over this field, so a generation that cannot aggregate

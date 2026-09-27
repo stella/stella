@@ -15,7 +15,7 @@
  * configuration. Binding is compare-or-insert: a second bind with the same
  * digest converges, and one with another fails rather than overwriting.
  */
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,7 +23,6 @@ import {
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
 } from "@/api/db/schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   readServingCorpusIndexGenerationTx,
@@ -254,7 +253,7 @@ export const readCorpusIndexGroupReadinessTx = async (
       });
 
 /** A read or write reached a group whose index is not attested. */
-class CorpusIndexGroupNotReadyError extends TaggedError(
+export class CorpusIndexGroupNotReadyError extends TaggedError(
   "CorpusIndexGroupNotReadyError",
 )<{
   message: string;
@@ -358,7 +357,8 @@ export type ServingCorpusIndexTarget = CorpusIndexReadTarget & {
 /**
  * The serving generation and what a read of it reaches
  * (`corpusIndexReadTarget`). A scoped read of a group that is not attested
- * refuses as unavailable rather than answering from an index nobody proved:
+ * is refused with `CorpusIndexGroupNotReadyError`, which each caller answers
+ * as unavailable, rather than answering from an index nobody proved:
  * an empty or differently mapped index would read as a corpus with no
  * matches. A scoped read of a group under its manifest's contract reads no
  * enrollment.
@@ -369,7 +369,7 @@ export const readServingCorpusIndexTargetTx = async (
     family,
     jurisdiction,
   }: { family: CorpusFamily; jurisdiction: string | undefined },
-): Promise<ServingCorpusIndexTarget> => {
+): Promise<Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>> => {
   const serving = await readServingCorpusIndexGenerationTx(tx, family);
   const manifest = requireCorpusIndexManifest(family, serving.generation);
   const readsEnrollment =
@@ -391,15 +391,13 @@ export const readServingCorpusIndexTargetTx = async (
       resolution.contract,
     );
     const reason = readiness.type === "unready" ? readiness.reason : "pending";
-    throw new HandlerError({
-      status: 503,
-      message: "Search is temporarily unavailable",
-      cause: new CorpusIndexGroupNotReadyError({
+    return Result.err(
+      new CorpusIndexGroupNotReadyError({
         message: `Corpus index group is not attested (${reason}): ${resolution.contract.indexId}`,
         indexId: resolution.contract.indexId,
         reason,
       }),
-    });
+    );
   }
-  return { serving, manifest, ...resolution.target };
+  return Result.ok({ serving, manifest, ...resolution.target });
 };

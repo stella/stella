@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -13,11 +14,11 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveCorpusIndexGroupContract } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   attestCorpusIndexGroupEnrollmentTx,
   bindCorpusIndexGroupEnrollmentTx,
+  CorpusIndexGroupNotReadyError,
   readCorpusIndexGroupReadinessTx,
   readServingCorpusIndexTargetTx,
   unattestedCorpusIndexIdsTx,
@@ -179,7 +180,7 @@ test("a group under its manifest's contract is never enrolled and never waits", 
 });
 
 test("a scoped read of a group refuses until it is attested; other reads never wait on it", async () => {
-  const target = async (jurisdiction: string | undefined) =>
+  const read = async (jurisdiction: string | undefined) =>
     await inTx(
       async (tx) =>
         await readServingCorpusIndexTargetTx(tx, {
@@ -187,12 +188,17 @@ test("a scoped read of a group refuses until it is attested; other reads never w
           jurisdiction,
         }),
     );
-  const refusal = await target("USA").then(
-    () => null,
-    (error: unknown) => error,
-  );
-  expect(refusal).toBeInstanceOf(HandlerError);
-  expect(refusal).toMatchObject({ status: 503 });
+  const target = async (jurisdiction: string | undefined) => {
+    const served = await read(jurisdiction);
+    return Result.isOk(served)
+      ? served.value
+      : panic(`Refused: ${served.error.message}`);
+  };
+  const refusal = async (jurisdiction: string | undefined) => {
+    const served = await read(jurisdiction);
+    return Result.isError(served) ? served.error : null;
+  };
+  expect(await refusal("USA")).toBeInstanceOf(CorpusIndexGroupNotReadyError);
   // A scoped base read keeps its route and its legacy cursor form.
   expect(await target("CZE")).toMatchObject({
     contract: { type: "base" },
@@ -211,7 +217,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
-  expect(await rejectionOf(target("USA"))).toBeInstanceOf(HandlerError);
+  expect(await refusal("USA")).toBeInstanceOf(CorpusIndexGroupNotReadyError);
   expect((await target(undefined)).route).toEqual(unattestedGlobal.route);
   await inTx(
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
