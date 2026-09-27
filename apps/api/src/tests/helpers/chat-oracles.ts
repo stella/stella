@@ -50,6 +50,11 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every request handed to a provider answers each tool call exactly once,
+   *  right after the message making it, with no result for a call it does
+   *  not hold; each signed thinking block stays, once and in order, first on
+   *  the message holding the calls it was produced with. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",

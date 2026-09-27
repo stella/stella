@@ -705,7 +705,12 @@ export const replayWireScenario = async ({
       ? await runCancelledWireScenario(request)
       : await runWireScenario(request);
   const requests = replay.requests().length;
-  return { findings: replay.takeFindings(), requests, run };
+  return {
+    findings: replay.takeFindings(),
+    requests,
+    run,
+    transcripts: replay.takeRequests(),
+  };
 };
 
 /** Where a text cassette goes quiet for the cancel run: at the end of its

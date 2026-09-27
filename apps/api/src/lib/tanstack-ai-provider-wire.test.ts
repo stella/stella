@@ -7,6 +7,8 @@ import { env } from "@/api/env";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import {
   cassetteFor,
   cassetteKey,
@@ -87,16 +89,33 @@ const expectContract = (
   expect(violatedOracles(violations)).toEqual(unmet.oracles.toSorted());
 };
 
+/** The transcript check reads every request the adapter sent, and each one
+ *  is settled. */
+const expectSettledTranscripts = ({
+  requests,
+  transcripts,
+}: {
+  requests: number;
+  transcripts: readonly ProviderRequest[];
+}) => {
+  expect(transcripts).toHaveLength(requests);
+  expect(findTranscriptViolations(transcripts)).toEqual([]);
+};
+
 const checkCassette = async (cassette: ProviderWireCassette) => {
-  const { findings, run } = await replayWireScenario({ cassette, replay });
+  const { findings, requests, run, transcripts } = await replayWireScenario({
+    cassette,
+    replay,
+  });
   expectContract(
     cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
-  const { findings, requests, run } = await replayWireScenario({
+  const { findings, requests, run, transcripts } = await replayWireScenario({
     cancelAfterFirstDelta: true,
     cassette: cassetteFor(cassettes, provider, "text"),
     replay,
@@ -105,6 +124,7 @@ const checkCancel = async (provider: ProviderWireProvider) => {
     `${provider}/cancel`,
     findWireCancelViolations({ replay: findings, requests, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
 };
 
 /** Retried failures wait out each SDK's backoff. */

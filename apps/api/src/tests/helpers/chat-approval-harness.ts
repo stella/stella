@@ -64,6 +64,7 @@ import {
 } from "@/api/tests/helpers/chat-thread-invariants";
 import { createWebChatClient } from "@/api/tests/helpers/chat-web-client";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
+import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -141,9 +142,11 @@ const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
 const MAX_BARRIER_POLLS = 2000;
-/** The checks a hand-built send answers for: the stored thread's, and the
- *  run's independence from its request. */
+/** The checks a hand-built send answers for: the stored thread's, the
+ *  requests the provider was handed, and the run's independence from its
+ *  request. */
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
+  CHAT_ORACLE.providerTranscriptSettled,
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedRefsStable,
@@ -186,7 +189,12 @@ const statusResponse = (answer: unknown): Response => {
  */
 export type HarnessModel = Pick<
   ReturnType<typeof installScriptedProvider>,
-  "modelOptionsOf" | "restore" | "script" | "stalled" | "takeFindings"
+  | "modelOptionsOf"
+  | "restore"
+  | "script"
+  | "stalled"
+  | "takeFindings"
+  | "takeRequests"
 >;
 
 export const createApprovalHarness = ({
@@ -580,6 +588,7 @@ export const createApprovalHarness = ({
         }),
         ...(await findPersistedViolations(threadId)),
         ...(await findUnstableRefs(threadId)),
+        ...findTranscriptViolations(provider.takeRequests(threadId)),
       ],
     } as const;
   };
@@ -1019,6 +1028,7 @@ export const createApprovalHarness = ({
         ...unconsumedScripts.map((script) => ({ unconsumed: script })),
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
+      ...findTranscriptViolations(provider.takeRequests(threadId)),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [
         ...(expectsError ? [] : errors),
         ...(expectsError && errors.length === 0

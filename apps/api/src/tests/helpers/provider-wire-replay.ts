@@ -1,5 +1,7 @@
 import { panic, TaggedError } from "better-result";
 
+import { providerWireFormatOf } from "@/api/tests/helpers/provider-request-transcript";
+import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
   ProviderWireCassette,
@@ -297,6 +299,7 @@ export const installProviderWireReplay = () => {
   let options: ServeOptions = {};
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
+  const transcripts: ProviderRequest[] = [];
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -305,6 +308,16 @@ export const installProviderWireReplay = () => {
     const { bodyText, method, signal, url } = await readRequest(input, init);
     const path = cassetteRequestPath(url);
     const requestModel = requestModelOf(url, bodyText);
+    const format = providerWireFormatOf(url);
+    if (format !== null) {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        // Unreadable: the transcript check reports it.
+      }
+      transcripts.push({ body, format });
+    }
     const refuse = (reason: string): never => {
       unexpected.push(`${method} ${url.host}${path}: ${reason}`);
       requests.push({
@@ -409,6 +422,9 @@ export const installProviderWireReplay = () => {
     },
     /** Every request since the last `takeFindings`. */
     requests: (): readonly ReplayedRequest[] => requests,
+    /** The transcript-bearing requests since the last call, as sent,
+     *  cleared on read. */
+    takeRequests: (): ProviderRequest[] => transcripts.splice(0),
     /** Findings since the last call, cleared on read. */
     takeFindings: (): ProviderWireReplayFindings => {
       const findings = {
