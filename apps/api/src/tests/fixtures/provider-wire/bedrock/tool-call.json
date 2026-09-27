@@ -2,8 +2,9 @@
   "format": 1,
   "provider": "bedrock",
   "scenario": "tool-call",
-  "source": "synthetic",
-  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata)",
+  "source": "recorded",
+  "recordedAt": "2026-09-27T18:04:47.461Z",
+  "prompt": "Call the mcp__external__delete tool once with only name \"draft\", leaving note out. Do not write any text.",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "exchanges": [
     {
@@ -14,8 +15,7 @@
       "response": {
         "status": 200,
         "headers": {
-          "content-type": "application/vnd.amazon.eventstream",
-          "x-amzn-requestid": "5c7e3b1a-0f7d-4d7e-9a57-2f4a9c1b6e01"
+          "content-type": "application/vnd.amazon.eventstream"
         },
         "body": {
           "encoding": "aws-eventstream",
@@ -27,8 +27,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "role": "assistant",
-                "p": "abc"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFG",
+                "role": "assistant"
               }
             },
             {
@@ -39,13 +39,14 @@
               },
               "payload": {
                 "contentBlockIndex": 0,
+                "p": "abcdefghijklm",
                 "start": {
                   "toolUse": {
-                    "toolUseId": "tooluse_Cq3hV9mJTbGx1dK2uYw8Aa",
-                    "name": "mcp__external__delete"
+                    "name": "mcp__external__delete",
+                    "toolUseId": "tooluse_4wZwyWq4NfhGjMO1BcvB1F",
+                    "type": "tool_use"
                   }
-                },
-                "p": "abcdefghij"
+                }
               }
             },
             {
@@ -61,7 +62,7 @@
                     "input": ""
                   }
                 },
-                "p": "abcdefghijklmnopq"
+                "p": "abcdefghijkl"
               }
             },
             {
@@ -74,10 +75,10 @@
                 "contentBlockIndex": 0,
                 "delta": {
                   "toolUse": {
-                    "input": "{\"name\": \"d"
+                    "input": "{\"name\": \"dr"
                   }
                 },
-                "p": "abcdefghijklmnopqrstuvwx"
+                "p": "abcdefghijklm"
               }
             },
             {
@@ -90,10 +91,10 @@
                 "contentBlockIndex": 0,
                 "delta": {
                   "toolUse": {
-                    "input": "raft\"}"
+                    "input": "aft\"}"
                   }
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDE"
+                "p": "abcdefghijklmnopqrstuvwxy"
               }
             },
             {
@@ -104,7 +105,7 @@
               },
               "payload": {
                 "contentBlockIndex": 0,
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL"
+                "p": "abcdef"
               }
             },
             {
@@ -114,8 +115,8 @@
                 ":message-type": "event"
               },
               "payload": {
-                "stopReason": "tool_use",
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRS"
+                "p": "abcdefghijklmnopqr",
+                "stopReason": "tool_use"
               }
             },
             {
@@ -125,15 +126,16 @@
                 ":message-type": "event"
               },
               "payload": {
-                "usage": {
-                  "inputTokens": 641,
-                  "outputTokens": 52,
-                  "totalTokens": 693
-                },
                 "metrics": {
-                  "latencyMs": 1188
+                  "latencyMs": 1641
                 },
-                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGH",
+                "usage": {
+                  "inputTokens": 609,
+                  "outputTokens": 56,
+                  "serverToolUsage": {},
+                  "totalTokens": 665
+                }
               }
             }
           ]
@@ -151,11 +153,6 @@
           "name": "draft"
         }
       }
-    ],
-    "usage": {
-      "promptTokens": 641,
-      "completionTokens": 52,
-      "totalTokens": 693
-    }
+    ]
   }
 }

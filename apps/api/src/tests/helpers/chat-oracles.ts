@@ -12,6 +12,11 @@ export const CHAT_ORACLE = {
   /** Every turn a request starts reaches a settled status once the
    *  request is done. */
   persistedTurnSettles: "chat.persisted.turn-settles",
+  /** Every chat ref the stored thread shows the model names, in every later
+   *  request of the thread, the target it named when first stored; the
+   *  thread's name ledger holds every such ref and every stored tool-call
+   *  id. */
+  persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
   /** A turn's run does not depend on the request that started it: once the

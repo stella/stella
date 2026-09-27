@@ -51,6 +51,10 @@ import type {
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import {
+  chatRefsWrittenIn,
+  toolCallIdsOf,
+} from "@/api/handlers/chat/chat-refs-shown";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
@@ -208,10 +212,15 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
   type ChatEntityRefContext,
+  type ChatRefBinding,
   type ChatRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
+import {
+  type ChatThreadNamesRead,
+  readChatThreadNames,
+} from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -1548,6 +1557,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
@@ -1557,12 +1567,35 @@ export type SendMessageDependencies = {
 };
 
 const SEND_MESSAGE_DEPENDENCIES: SendMessageDependencies = {
+  createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocument,
   loadExternalMcpTools: loadExternalMcpToolsForUser,
   loadWebSearchProviders: loadWebSearchProvidersForOrg,
   rollbackSideEffects: rollbackUnpersistedChatSideEffects,
   streamResponse: streamChat,
   uploadMessageFiles: uploadMessageFilesWithRollback,
+};
+
+/**
+ * The thread's names, read by a request that owns the thread's turn; a read
+ * that fails fails the turn.
+ */
+const readOwnedTurnThreadNames = async ({
+  lifecycle,
+  safeDb,
+  threadId,
+}: {
+  lifecycle: ChatSendLifecycle;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}): Promise<Result<ChatThreadNamesRead, SafeDbError>> => {
+  const read = await safeDb(
+    async (tx) => await readChatThreadNames({ threadId, tx }),
+  );
+  if (Result.isError(read)) {
+    await lifecycle.failCurrentTurn("persistence", true);
+  }
+  return read;
 };
 
 export const createSendMessage = (
@@ -1734,10 +1767,9 @@ export const createSendMessage = (
         );
       }
 
-      const refRegistry = createChatRefRegistry();
-      // Turn-scoped alongside the ref registry: records tool calls that failed
-      // with a server defect so every toolset built this turn refuses to
-      // re-execute the identical call (see `ChatToolDefectMemo`).
+      // Records tool calls that failed with a server defect so every toolset
+      // built this turn refuses to re-execute the identical call (see
+      // `ChatToolDefectMemo`).
       const toolDefectMemo = createChatToolDefectMemo();
       // Narrower than the combined `suggest_changes` gate below:
       // only the file overlay (`file-chat-overlay.tsx`) mounts the
@@ -1809,6 +1841,12 @@ export const createSendMessage = (
           userId: user.id,
           workspaceId,
         }),
+      );
+      // Validation only builds tool schemas and never shows the model a ref;
+      // the registry that does is built once this request owns the turn.
+      const validationRefRegistry = createChatRefRegistry(
+        validationThreadState.threadNames.refBindings,
+        validationThreadState.threadNames.retiredRefs,
       );
       const activeDraftContext = yield* Result.await(
         validateActiveDraftContext({
@@ -1901,7 +1939,7 @@ export const createSendMessage = (
               editApplyMode,
               externalMcpToolsLoader,
               orgAIConfig,
-              refRegistry,
+              refRegistry: validationRefRegistry,
               toolDefectMemo,
               usageLane,
               validationActiveSkillContext,
@@ -1953,6 +1991,23 @@ export const createSendMessage = (
           toolWorkspaceIds,
           turnExecution,
         } = acceptedTurnResult.value;
+
+        // Refs live as long as the thread, not the request: an interactive
+        // answer is a new request, and every ref its history shows the model
+        // must keep its target. Read now that this request owns the turn:
+        // a request that settled while this one prepared has stored its
+        // names, and none can settle until this one does.
+        const threadNames = yield* Result.await(
+          readOwnedTurnThreadNames({
+            lifecycle,
+            safeDb,
+            threadId: body.threadId,
+          }),
+        );
+        const refRegistry = dependencies.createRefRegistry(
+          threadNames.refBindings,
+          threadNames.retiredRefs,
+        );
 
         // The incoming message is durable now, so a disconnect must not run the
         // pre-persistence rollback (which would delete files referenced by that
@@ -2284,6 +2339,8 @@ export const createSendMessage = (
           }),
         );
 
+        const isServerTool = (toolName: string) =>
+          streamingTools[toolName]?.execute !== undefined;
         const response = yield* Result.await(
           Result.tryPromise({
             try: async () => {
@@ -2329,6 +2386,7 @@ export const createSendMessage = (
                     });
                     const resolved = resolveAssistantMessageRefs({
                       accessibleWorkspaceIds: accessibleSet,
+                      isServerTool,
                       messages: [canonicalResponseMessage],
                       opaqueReadWorkspaceIds:
                         body.runMode === CHAT_RUN_MODE.agent
@@ -2337,10 +2395,13 @@ export const createSendMessage = (
                       refRegistry,
                       workspaceIdsBeforeStream,
                     });
-                    const resolvedResponseMessage = resolved.messages.at(0);
-                    if (!resolvedResponseMessage) {
+                    const resolvedResponseMessage =
+                      resolved.messages.at(0) ??
                       panic("Missing chat response message");
-                    }
+                    const addedThreadNames = {
+                      refBindings: resolved.refBindings,
+                      toolCallIds: toolCallIdsOf(resolvedResponseMessage.parts),
+                    };
 
                     // Widen the thread's data scope to cover any
                     // workspace-scoped content the assistant just
@@ -2358,6 +2419,10 @@ export const createSendMessage = (
                     //
                     const persistResult = await finalizeAssistantTurn({
                       acceptedSendMode: body.sendMode,
+                      threadNames: {
+                        added: addedThreadNames,
+                        read: threadNames,
+                      },
                       dataScopeExpansion: {
                         newWorkspaceIds: resolved.workspaceIds,
                       },
@@ -3026,6 +3091,8 @@ const readActiveFileFallbackForModel = async ({
 
 type ResolveAssistantMessageRefsProps = {
   accessibleWorkspaceIds: ReadonlySet<string>;
+  /** Whether this request's server ran `toolName`, rather than a client. */
+  isServerTool: (toolName: string) => boolean;
   messages: PersistableChatMessage[];
   opaqueReadWorkspaceIds: readonly SafeId<"workspace">[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
@@ -3034,6 +3101,8 @@ type ResolveAssistantMessageRefsProps = {
 
 type ResolveAssistantMessageRefsResult = {
   messages: PersistableChatMessage[];
+  /** The refs the messages showed the model. */
+  refBindings: ChatRefBinding[];
   workspaceIds: SafeId<"workspace">[];
 };
 
@@ -3086,71 +3155,80 @@ const synchronizeToolResultContent = (
   });
 };
 
+type ResolveAssistantPartRefsProps = {
+  part: ChatMessage["parts"][number];
+  entityContexts: ChatEntityRefContext[];
+  unresolvedInputRefs: ChatUnresolvedInputRefContext[];
+  refRegistry: ReturnType<typeof createChatRefRegistry>;
+};
+
+const resolveAssistantPartRefs = ({
+  part,
+  entityContexts,
+  unresolvedInputRefs,
+  refRegistry,
+}: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  const withDeclaredToolRefs: unknown =
+    part.type === "tool-call"
+      ? {
+          ...part,
+          ...("input" in part
+            ? {
+                input: resolveRegistryToolInputRefs({
+                  input: part.input,
+                  onEntityRefResolved: (target) => {
+                    entityContexts.push({
+                      entity: resourceRef({
+                        type: RESOURCE_TYPE.ENTITY,
+                        id: target.entityId,
+                      }),
+                      toolCallId: part.id,
+                      workspace: resourceRef({
+                        type: RESOURCE_TYPE.WORKSPACE,
+                        id: target.workspaceId,
+                      }),
+                    });
+                  },
+                  onRefUnresolved: (unresolved) => {
+                    unresolvedInputRefs.push({
+                      ...unresolved,
+                      toolCallId: part.id,
+                    });
+                  },
+                  refRegistry,
+                  toolName: part.name,
+                }),
+              }
+            : {}),
+          ...("output" in part
+            ? {
+                output: resolveRegistryToolOutputRefs({
+                  output: part.output,
+                  refRegistry,
+                  toolName: part.name,
+                }),
+              }
+            : {}),
+        }
+      : part;
+  const resolved = refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
+  if (!isChatPart(resolved)) {
+    panic("Resolving assistant refs changed the message part shape");
+  }
+  return resolved;
+};
+
 const resolveAssistantMessageRefs = ({
   accessibleWorkspaceIds,
+  isServerTool,
   messages,
   opaqueReadWorkspaceIds,
   refRegistry,
   workspaceIdsBeforeStream,
 }: ResolveAssistantMessageRefsProps): ResolveAssistantMessageRefsResult => {
-  const resolvePart = (
-    part: ChatMessage["parts"][number],
-    entityContexts: ChatEntityRefContext[],
-    unresolvedInputRefs: ChatUnresolvedInputRefContext[],
-  ): ChatMessage["parts"][number] => {
-    const withDeclaredToolRefs: unknown =
-      part.type === "tool-call"
-        ? {
-            ...part,
-            ...("input" in part
-              ? {
-                  input: resolveRegistryToolInputRefs({
-                    input: part.input,
-                    onEntityRefResolved: (target) => {
-                      entityContexts.push({
-                        entity: resourceRef({
-                          type: RESOURCE_TYPE.ENTITY,
-                          id: target.entityId,
-                        }),
-                        toolCallId: part.id,
-                        workspace: resourceRef({
-                          type: RESOURCE_TYPE.WORKSPACE,
-                          id: target.workspaceId,
-                        }),
-                      });
-                    },
-                    onRefUnresolved: (unresolved) => {
-                      unresolvedInputRefs.push({
-                        ...unresolved,
-                        toolCallId: part.id,
-                      });
-                    },
-                    refRegistry,
-                    toolName: part.name,
-                  }),
-                }
-              : {}),
-            ...("output" in part
-              ? {
-                  output: resolveRegistryToolOutputRefs({
-                    output: part.output,
-                    refRegistry,
-                    toolName: part.name,
-                  }),
-                }
-              : {}),
-          }
-        : part;
-    const resolved =
-      refRegistry.resolveAssistantValueRefs(withDeclaredToolRefs);
-    if (!isChatPart(resolved)) {
-      panic("Resolving assistant refs changed the message part shape");
-    }
-    return resolved;
-  };
-
   const observedWorkspaceIdsAfterStream = refRegistry.getObservedWorkspaceIds();
   const turnWorkspaceIds = new Set<SafeId<"workspace">>();
+  const refBindings: ChatRefBinding[] = [];
 
   const resolvedMessages = messages.map((message) => {
     if (message.role !== "assistant") {
@@ -3159,7 +3237,12 @@ const resolveAssistantMessageRefs = ({
     const entityContexts: ChatEntityRefContext[] = [];
     const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
     const resolvedParts = message.parts.map((part) =>
-      resolvePart(part, entityContexts, unresolvedInputRefs),
+      resolveAssistantPartRefs({
+        part,
+        entityContexts,
+        unresolvedInputRefs,
+        refRegistry,
+      }),
     );
     const parts = synchronizeToolResultContent(resolvedParts);
     const messageWorkspaceIds = computeAssistantTurnWorkspaceIds({
@@ -3172,8 +3255,13 @@ const resolveAssistantMessageRefs = ({
     for (const id of messageWorkspaceIds) {
       turnWorkspaceIds.add(id);
     }
+    const shownRefBindings = refRegistry.collectRefBindings(
+      chatRefsWrittenIn({ isServerTool, parts: message.parts }),
+    );
+    refBindings.push(...shownRefBindings);
     const refContext = {
-      version: 1,
+      version: 2,
+      refs: shownRefBindings,
       entities: entityContexts,
       unresolvedInputs: unresolvedInputRefs,
       workspaceScope: messageWorkspaceIds.map((id) =>
@@ -3191,7 +3279,11 @@ const resolveAssistantMessageRefs = ({
     };
   });
 
-  return { messages: resolvedMessages, workspaceIds: [...turnWorkspaceIds] };
+  return {
+    messages: resolvedMessages,
+    refBindings,
+    workspaceIds: [...turnWorkspaceIds],
+  };
 };
 
 type HydrateAssistantMessageRefsProps = {

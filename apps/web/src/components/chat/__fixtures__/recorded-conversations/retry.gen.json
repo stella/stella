@@ -439,7 +439,8 @@
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []
@@ -897,7 +898,8 @@
                     "completionTokens": 1
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []
@@ -1375,7 +1377,8 @@
                     "completionTokens": 1
                   },
                   "refContext": {
-                    "version": 1,
+                    "refs": [],
+                    "version": 2,
                     "entities": [],
                     "workspaceScope": [],
                     "unresolvedInputs": []

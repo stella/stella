@@ -4,6 +4,7 @@
   "scenario": "tool-call",
   "source": "recorded",
   "recordedAt": "2026-09-26T02:55:41.070Z",
+  "prompt": "Call the mcp__external__delete tool once with name \"draft\". Do not write any text.",
   "model": "gemini-3.8-flash",
   "exchanges": [
     {

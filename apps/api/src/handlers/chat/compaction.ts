@@ -588,6 +588,7 @@ export const compactModelMessagesForModel = async ({
 
 export const renderChatMessagesForCompaction = (
   messages: readonly ChatMessage[],
+  transformPart?: (rendered: string, partType: string) => string,
 ): string => {
   const renderedMessages: string[] = [];
 
@@ -600,7 +601,10 @@ export const renderChatMessagesForCompaction = (
     renderedMessages.push(
       [
         `<message index="${renderedMessages.length + 1}" role="${message.role}" id="${message.id}">`,
-        ...visibleParts.map(renderPartForCompaction),
+        ...visibleParts.map((part) => {
+          const rendered = renderPartForCompaction(part);
+          return transformPart?.(rendered, part.type) ?? rendered;
+        }),
         "</message>",
       ].join("\n"),
     );

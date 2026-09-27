@@ -4,6 +4,7 @@
   "scenario": "bad-request",
   "source": "recorded",
   "recordedAt": "2026-09-26T02:55:39.321Z",
+  "prompt": "Reply with exactly this sentence and nothing else: The cassette plays.",
   "model": "stella-cassette-no-such-model",
   "exchanges": [
     {
