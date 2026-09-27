@@ -4,6 +4,11 @@ import { mockStructuredData } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import {
+  createPromptPrefixLedger,
+  promptBlocksOf,
+} from "@/api/tests/helpers/chat-prompt-prefix";
+import type { PromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
+import {
   ScriptedProviderError,
   scriptedAdapterBase,
   scriptedTurnChunks,
@@ -39,6 +44,8 @@ type ThreadScripts = {
   modelOptions: unknown[];
   /** Resolves the current `stalled` promise and arms the next one. */
   onStall: () => void;
+  /** The prompt of every scripted model call, in order. */
+  prompts: PromptPrefixLedger;
   queue: ScriptedRun[];
   /** Resolves once a request on the thread reaches a stalling turn. */
   stalled: Promise<undefined>;
@@ -49,6 +56,7 @@ const newThreadScripts = (): ThreadScripts => {
   const scripts: ThreadScripts = {
     modelOptions: [],
     onStall: () => undefined,
+    prompts: createPromptPrefixLedger(),
     queue: [],
     stalled: Promise.resolve(undefined),
     unscriptedCalls: [],
@@ -71,7 +79,16 @@ const runs = new Map<string, { index: number; run: ScriptedRun }>();
 
 const adapter: AnyTextAdapter = {
   ...scriptedAdapterBase,
-  async *chatStream({ model, modelOptions, request, runId, threadId }) {
+  async *chatStream({
+    messages,
+    model,
+    modelOptions,
+    request,
+    runId,
+    systemPrompts,
+    threadId,
+    tools,
+  }) {
     const scripts = threadId === undefined ? undefined : threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
     if (
@@ -102,6 +119,8 @@ const adapter: AnyTextAdapter = {
       active = { index: 0, run: next };
       runs.set(runId, active);
     }
+    // Read now: the engine keeps building on the arrays it hands over.
+    scripts.prompts.record(promptBlocksOf({ messages, systemPrompts, tools }));
     const index = active.index;
     active.index += 1;
     const turn = active.run.at(index);
@@ -166,6 +185,10 @@ export const installScriptedProvider = () => {
     script: (threadId: string, ...scripted: readonly ScriptedRun[]) => {
       scriptsOf(threadId).queue.push(...scripted);
     },
+    /** The prompts of `threadId`'s scripted model calls
+     *  (`chat.provider.prefix-stable`). */
+    promptsOf: (threadId: string): PromptPrefixLedger =>
+      scriptsOf(threadId).prompts,
     /** Resolves once `threadId`'s next request reaches a stalling turn. */
     stalled: async (threadId: string): Promise<void> => {
       await scriptsOf(threadId).stalled;

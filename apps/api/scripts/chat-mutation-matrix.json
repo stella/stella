@@ -561,6 +561,48 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "prompt-prefix-system-stable",
+      "fix": "maintenance",
+      "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    ...systemPromptsPatch({ caching, model, system: baseSystem }),",
+      "replace": "    ...systemPromptsPatch({ caching, model, system: `${baseSystem}\\nRequest time: ${String(performance.now())}` }),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "prompt-prefix-tools-stable-on-the-wire",
+      "fix": "maintenance",
+      "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }),",
+      "replace": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }).toSorted(() => Math.random() - 0.5),",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
+        "test": "anthropic: a tool call reaches its card, runs once approved, and the answer reloads"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-json-keys-sorted",
+      "fix": "maintenance",
+      "behaviour": "A tool call's arguments and a tool result reach the model with their JSON keys in one order, so the call and result rebuilt from the stored thread on its next request repeat them byte for byte.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        patch.messages = sortedToolJson;",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
     }
   ]
 }

@@ -162,6 +162,8 @@ type ServeOptions = {
 
 /** A request the replay answered or refused. */
 export type ReplayedRequest = {
+  /** The body the SDK sent, as text. */
+  body: string;
   exchange: number | "side" | null;
   model: string | null;
   path: string;
@@ -308,6 +310,7 @@ export const installProviderWireReplay = () => {
     const refuse = (reason: string): never => {
       unexpected.push(`${method} ${url.host}${path}: ${reason}`);
       requests.push({
+        body: bodyText,
         exchange: null,
         model: requestModel,
         path,
@@ -333,6 +336,7 @@ export const installProviderWireReplay = () => {
       requestModel !== model
     ) {
       requests.push({
+        body: bodyText,
         exchange: "side",
         model: requestModel,
         path,
@@ -365,6 +369,7 @@ export const installProviderWireReplay = () => {
     }
     current.entry.served += 1;
     requests.push({
+      body: bodyText,
       exchange: current.index,
       model: requestModel,
       path,
