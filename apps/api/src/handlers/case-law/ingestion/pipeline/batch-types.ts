@@ -52,6 +52,8 @@ export const CASE_LAW_BATCH_FAILURE = {
   RECORD_REJECTED: "record-rejected",
   /** A record's failure could not be written to the ingestion ledger. */
   FAILURE_WRITE: "failure-write",
+  /** A fault outside the records that the batch does not classify. */
+  UNCLASSIFIED: "unclassified",
 } as const;
 
 export type CaseLawBatchFailureReason =

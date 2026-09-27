@@ -759,6 +759,43 @@ describe("why a batch is not certified", () => {
     expect(await ledgerRows(crawlSourceId)).toHaveLength(2);
   });
 
+  test("an unclassified fault renewing the lease holds the batch before any write", async () => {
+    const sourceId = await recordSource();
+    const decisions = [record(1), record(2)];
+    const { corpus } = landingTransfer();
+    const sourceLease = await leaseFor(sourceId);
+
+    const applied = await applyCaseLawIngestionBatch({
+      batch: prepared(decisions),
+      sourceLease: {
+        ...sourceLease,
+        beforeDatabaseMark: async () => {
+          await Promise.resolve();
+          throw new Error("lease store unreachable");
+        },
+      },
+      scopedDb,
+      signal: new AbortController().signal,
+      refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+    });
+    await sourceLease.release();
+
+    if (Result.isOk(applied)) {
+      throw new Error("expected no receipt");
+    }
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.UNCLASSIFIED);
+    expect(applied.error.unsettled).toBe(2);
+    expect(await decisionRows(sourceId)).toEqual([]);
+
+    const replayed = await applyPrepared({
+      sourceId,
+      batch: prepared(decisions),
+      corpus,
+    });
+    expect(Result.isOk(replayed) ? replayed.value.applied : null).toBe(2);
+  });
+
   test("a queued payload the pack did not answer for has not settled", () => {
     const settlement = processResultForCorpusOutcome(undefined, {
       decisionId: createSafeId<"caseLawDecision">(),

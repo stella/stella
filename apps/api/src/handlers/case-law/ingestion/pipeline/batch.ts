@@ -72,6 +72,11 @@ const decisionNotApplied = failureSink({
   expected: [],
 });
 
+const sourceLeaseStepFailed = failureSink({
+  event: "case_law.ingestion.source_lease_step_failed",
+  expected: [],
+});
+
 export type IngestionFailureRow = typeof caseLawIngestionFailures.$inferInsert;
 
 /** Column bounds of `case_law_ingestion_failures` (schema/case-law.ts). */
@@ -589,8 +594,8 @@ const uncertifiedBatch = (
 
 /**
  * Run one step that renews or relies on the source lease. A lost lease and
- * a database timeout are the batch's answer; any other fault is not one
- * this boundary classifies, and propagates as it does from a crawl.
+ * a database timeout are the batch's answer; any other fault is observed and
+ * holds the batch, retryable only when it grades as transient.
  */
 const underSourceLease = async <T>(
   decisions: readonly IngestionResult[],
@@ -619,7 +624,20 @@ const underSourceLease = async <T>(
       ),
     );
   }
-  throw error;
+  observeFailure(error, {
+    sink: sourceLeaseStepFailed,
+    ctx: { step: "underSourceLease" },
+  });
+  return Result.err(
+    uncertifiedBatch(
+      gradeFailure(readEvidence(error), sourceLeaseStepFailed).grade ===
+        "transient"
+        ? CASE_LAW_BATCH_FAILURE.TRANSIENT
+        : CASE_LAW_BATCH_FAILURE.UNCLASSIFIED,
+      decisions,
+      error instanceof Error ? error.message : String(error),
+    ),
+  );
 };
 
 /** A stop that no reached record's own settlement accounts for. */
