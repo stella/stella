@@ -110,15 +110,12 @@ const requiredNamesOf = (
   return names;
 };
 
-const objectChildSchemas = (
+/** The schemas a node itself, not its union branches, gives `key`. */
+const ownChildSchemas = (
   schema: Record<string, unknown>,
   key: string,
-  value: Record<string, unknown>,
 ): unknown[] => {
   const children: unknown[] = [];
-  for (const branch of matchingUnionBranches(schema, value)) {
-    children.push(...objectChildSchemas(branch, key, value));
-  }
   const properties = schema["properties"];
   if (isRecord(properties) && key in properties) {
     children.push(properties[key]);
@@ -131,6 +128,19 @@ const objectChildSchemas = (
       }
     }
   }
+  return children;
+};
+
+const objectChildSchemas = (
+  schema: Record<string, unknown>,
+  key: string,
+  value: Record<string, unknown>,
+): unknown[] => {
+  const children: unknown[] = [];
+  for (const branch of matchingUnionBranches(schema, value)) {
+    children.push(...objectChildSchemas(branch, key, value));
+  }
+  children.push(...ownChildSchemas(schema, key));
   const additionalProperties = schema["additionalProperties"];
   if (children.length === 0 && isRecord(additionalProperties)) {
     children.push(additionalProperties);
@@ -140,6 +150,45 @@ const objectChildSchemas = (
 
 /** Whether `value` is a placeholder `schema` rejects, standing for "not set". */
 type AbsentPlaceholderTest = (value: unknown, schema: unknown) => boolean;
+
+type PlaceholderSite = {
+  entry: unknown;
+  isAbsent: AbsentPlaceholderTest;
+  key: string;
+  value: Record<string, unknown>;
+};
+
+/**
+ * Whether the node refuses `entry` at `key`. Every schema the node itself
+ * gives the key applies, so one refusing it is enough; union branches are
+ * alternatives, so every branch that declares the key must refuse it, or a
+ * value valid under one branch would lose a field another branch refuses.
+ */
+const refusesPlaceholder = (
+  schema: Record<string, unknown>,
+  site: PlaceholderSite,
+): boolean => {
+  const { entry, isAbsent, key, value } = site;
+  const branches = matchingUnionBranches(schema, value).filter(
+    (branch) => objectChildSchemas(branch, key, value).length > 0,
+  );
+  const own = ownChildSchemas(schema, key);
+  const additionalProperties = schema["additionalProperties"];
+  if (
+    own.length === 0 &&
+    branches.length === 0 &&
+    isRecord(additionalProperties)
+  ) {
+    own.push(additionalProperties);
+  }
+  if (own.some((childSchema) => isAbsent(entry, childSchema))) {
+    return true;
+  }
+  return (
+    branches.length > 0 &&
+    branches.every((branch) => refusesPlaceholder(branch, site))
+  );
+};
 
 const omitAbsentPlaceholders = (
   schema: unknown,
@@ -152,6 +201,17 @@ const omitAbsentPlaceholders = (
   const items = schema["items"];
   if (items !== undefined && isUnknownArray(value)) {
     return value.map((entry) => omitAbsentPlaceholders(items, entry, isAbsent));
+  }
+  // An array under a union node is declared by its array members.
+  if (isUnknownArray(value)) {
+    let current: unknown = value;
+    for (const keyword of UNION_KEYWORDS) {
+      const branches = schema[keyword];
+      for (const branch of isUnknownArray(branches) ? branches : []) {
+        current = omitAbsentPlaceholders(branch, current, isAbsent);
+      }
+    }
+    return current;
   }
   if (!isRecord(value)) {
     return value;
@@ -166,7 +226,7 @@ const omitAbsentPlaceholders = (
     }
     if (
       !requiredNames.has(key) &&
-      childSchemas.some((childSchema) => isAbsent(entry, childSchema))
+      refusesPlaceholder(schema, { entry, isAbsent, key, value })
     ) {
       continue;
     }
@@ -270,3 +330,115 @@ export const withModelPlaceholdersOmitted = (
   schema: unknown,
   value: unknown,
 ): unknown => omitAbsentPlaceholders(schema, value, isRejectedPlaceholder);
+
+const NULL_SCHEMA = { type: "null" } as const;
+
+/** Keywords past which a node is more than a bare `type`. */
+const BEYOND_TYPE_KEYWORDS = [
+  "anyOf",
+  "oneOf",
+  "allOf",
+  "enum",
+  "const",
+  "$ref",
+] as const;
+
+/** `schema`, also admitting `null`. */
+const admittingNull = (schema: unknown): unknown => {
+  if (!isRecord(schema) || admitsNull(schema)) {
+    return schema;
+  }
+  const type = schema["type"];
+  if (BEYOND_TYPE_KEYWORDS.every((keyword) => !(keyword in schema))) {
+    if (typeof type === "string") {
+      return { ...schema, type: [type, "null"] };
+    }
+    if (isUnknownArray(type)) {
+      return { ...schema, type: [...type, "null"] };
+    }
+  }
+  return { anyOf: [schema, NULL_SCHEMA] };
+};
+
+/** The names a node requires, its union branches' included. */
+const requiredAnywhere = (schema: Record<string, unknown>): Set<unknown> => {
+  const required = schema["required"];
+  const names = new Set<unknown>(isUnknownArray(required) ? required : []);
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (!isUnknownArray(branches)) {
+      continue;
+    }
+    for (const branch of branches) {
+      if (isRecord(branch)) {
+        for (const name of requiredAnywhere(branch)) {
+          names.add(name);
+        }
+      }
+    }
+  }
+  return names;
+};
+
+const mapEntries = (
+  record: Record<string, unknown>,
+  map: (name: string, entry: unknown) => unknown,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(record).map(([name, entry]) => [name, map(name, entry)]),
+  );
+
+const NO_NAMES: ReadonlySet<unknown> = new Set();
+
+/** A union branch's object is read with its parent's required names too. */
+const widenOptionals = (
+  schema: unknown,
+  inheritedRequired: ReadonlySet<unknown>,
+): unknown => {
+  if (!isRecord(schema)) {
+    return schema;
+  }
+  const widened: Record<string, unknown> = { ...schema };
+  const required = requiredAnywhere(schema);
+  for (const name of inheritedRequired) {
+    required.add(name);
+  }
+  const properties = schema["properties"];
+  if (isRecord(properties)) {
+    widened["properties"] = mapEntries(properties, (name, property) => {
+      const inner = widenOptionals(property, NO_NAMES);
+      return required.has(name) ? inner : admittingNull(inner);
+    });
+  }
+  const patternProperties = schema["patternProperties"];
+  if (isRecord(patternProperties)) {
+    widened["patternProperties"] = mapEntries(
+      patternProperties,
+      (_name, entry) => widenOptionals(entry, NO_NAMES),
+    );
+  }
+  for (const keyword of ["additionalProperties", "items"] as const) {
+    if (isRecord(schema[keyword])) {
+      widened[keyword] = widenOptionals(schema[keyword], NO_NAMES);
+    }
+  }
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (isUnknownArray(branches)) {
+      widened[keyword] = branches.map((branch) =>
+        widenOptionals(branch, required),
+      );
+    }
+  }
+  return widened;
+};
+
+/**
+ * `schema` with every optional property also admitting `null`, at every level
+ * `withModelPlaceholdersOmitted` reads: the spelling a model can use for "not
+ * set" on a route that treats every declared field as one to fill. Read
+ * against the original schema, `withModelPlaceholdersOmitted` drops exactly
+ * those nulls again, so the input a tool receives keeps its declared shape.
+ */
+export const withOptionalsNullable = (schema: unknown): unknown =>
+  widenOptionals(schema, NO_NAMES);
