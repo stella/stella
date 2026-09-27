@@ -522,7 +522,7 @@
     },
     {
       "id": "run-binds-its-id",
-      "fix": "turn ownership",
+      "fix": "#3975",
       "behaviour": "A run binds the run id its request posted to its turn when it starts.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
@@ -536,7 +536,7 @@
     },
     {
       "id": "reaper-settles-dead-owner",
-      "fix": "turn ownership",
+      "fix": "#3975",
       "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
       "status": "active",
       "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
