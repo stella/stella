@@ -510,6 +510,78 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
     });
 
+    test("stores a keyed row under its docket without a trailing part marker", async () => {
+      await processDecision({
+        input: {
+          ...decisionAt("Trailing marker", "trailing-marker-document"),
+          caseNumber: "0T/44/2019- II.",
+          metadata: { caseNumber: "0T/44/2019- II." },
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const row = await db.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          sourceDocumentId: "trailing-marker-document",
+        },
+        columns: { caseNumber: true, citationKey: true, metadata: true },
+      });
+      expect(row?.caseNumber).toBe("0T/44/2019");
+      expect(row?.citationKey).toBe(bareCitationKey("0T/44/2019"));
+      // The publisher's spelling survives in the adapter's metadata.
+      expect(isRecord(row?.metadata) ? row.metadata["caseNumber"] : null).toBe(
+        "0T/44/2019- II.",
+      );
+      expect(await storedSlugs(["trailing-marker-document"])).toEqual([
+        "0t-44-2019",
+      ]);
+    });
+
+    test("adopts a legacy row stored under the publisher's uncut docket", async () => {
+      const caseNumber = "0T/45/2019- III.";
+      const legacyUrl = "https://publisher.test/uncut-docket";
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket", undefined),
+          caseNumber,
+          sourceUrl: legacyUrl,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      // Keyed by its docket, the legacy row keeps the tail that may be all
+      // that separates it from a sibling.
+      const [legacyRow] = await docketRows(caseNumber);
+      expect(legacyRow?.sourceDocumentId).toBeNull();
+
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket", "uncut-docket-document"),
+          caseNumber,
+          legacySourceUrls: [legacyUrl],
+          rawHash: "hash-uncut-docket-identified",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows(caseNumber)).toEqual([]);
+      expect(await docketRows("0T/45/2019")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "uncut-docket-document",
+        },
+      ]);
+    });
+
     test("keeps a legacy row whose ECLI names a sibling under the docket", async () => {
       const caseNumber = "Pl.ÚS 19/01";
       const legacyUrl = "https://publisher.test/sibling-ecli-legacy";

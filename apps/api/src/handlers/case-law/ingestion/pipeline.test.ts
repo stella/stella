@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
+  observedDocketOf,
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
@@ -192,6 +193,66 @@ describe("sanitizeResult — decision identifiers", () => {
         value: "12 Test Reporter 34",
       },
     ]);
+  });
+});
+
+describe("sanitizeResult — docket grammar", () => {
+  const observed = (country: string, caseNumber: string): IngestionResult => ({
+    ...baseResult(EMPTY_AST),
+    country,
+    caseNumber,
+    sourceDocumentId: "publisher-document",
+    metadata: { caseNumber },
+  });
+
+  test.each([
+    ["CZE", "33 Cdo 1751/2023- II.", "33 Cdo 1751/2023"],
+    ["SVK", "5Obo/12/2020 - IV.", "5Obo/12/2020"],
+    ["POL", "I ACa 123/20.", "I ACa 123/20"],
+    ["HUN", "Pfv.IV.20.123/2020/5 -", "Pfv.IV.20.123/2020/5"],
+  ])("%s: %s is stored as %s", (country, raw, caseNumber) => {
+    const input = observed(country, raw);
+    expect(observedDocketOf(input)).toEqual({
+      type: "trimmed",
+      caseNumber,
+      removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
+    });
+    const sanitized = sanitizeResult(input);
+    expect(sanitized.caseNumber).toBe(caseNumber);
+    expect(sanitized.metadata["caseNumber"]).toBe(raw);
+  });
+
+  test("a docket keyed row keeps its tail and is reported unkeyed", () => {
+    const input = {
+      ...observed("CZE", "33 Cdo 1751/2023- II."),
+      sourceDocumentId: undefined,
+    };
+    expect(observedDocketOf(input)).toEqual({
+      type: "unkeyed",
+      caseNumber: "33 Cdo 1751/2023",
+      removed: "- II.",
+    });
+    expect(sanitizeResult(input).caseNumber).toBe("33 Cdo 1751/2023- II.");
+  });
+
+  test.each([
+    ["CZE", "21 Cdo 1234/2020-5", "kept"],
+    ["HUN", "5.P.21.203/2004.", "kept"],
+    ["CZE", "33 Cdo 1751/2023 civil", "unparsed"],
+    ["XXX", "1 A 2/2020 - II.", "kept"],
+  ])("%s: %s is stored as written (%s)", (country, raw, type) => {
+    const input = observed(country, raw);
+    expect(observedDocketOf(input)).toEqual({ type });
+    expect(sanitizeResult(input).caseNumber).toBe(raw);
+  });
+
+  test("a placeholder docket is never read against the grammar", () => {
+    expect(
+      observedDocketOf({
+        ...observed("CZE", "NALUS record 7301"),
+        caseNumberIsPlaceholder: true,
+      }),
+    ).toEqual({ type: "kept" });
   });
 });
 
