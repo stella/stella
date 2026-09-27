@@ -1431,15 +1431,16 @@ describe("OpenAI-compatible MCP tools", () => {
   describe("check_counterparty", () => {
     const source = CZ_INSOLVENCY_SOURCE;
     const company = { type: "company-id", value: "26863154" } as const;
+    const clearOutcome = {
+      status: "clear",
+      kind: "cz-insolvency",
+      source,
+      subject: company,
+      checkedAt: "2026-09-26T14:00:00Z",
+      sourceDataAsOf: null,
+    } satisfies EntityCheckResult;
     const outcomes = [
-      {
-        status: "clear",
-        kind: "cz-insolvency",
-        source,
-        subject: company,
-        checkedAt: "2026-09-26T14:00:00Z",
-        sourceDataAsOf: null,
-      },
+      clearOutcome,
       {
         status: "found",
         kind: "cz-insolvency",
@@ -1518,7 +1519,10 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     test("reads a person subject and a localized birth date", async () => {
-      const runEntityCheck = mock(async () => Result.ok(outcomes[0]));
+      const runEntityCheck = mock(
+        async (): ReturnType<typeof runEntityCheckForTest> =>
+          Result.ok(clearOutcome),
+      );
       await callWith(runEntityCheck, {
         check: "cz-insolvency",
         subject: {
