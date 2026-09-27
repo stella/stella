@@ -32,8 +32,9 @@ export const eraseCorrespondenceActorDisplays = async ({
     set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, ${userId}, true),
     set_config(${CORRESPONDENCE_ERASURE_SETTING.recordIds}, '', true)
   `);
-  let afterFilerId: SafeId<"correspondenceFiler"> | undefined;
-  while (true) {
+  const eraseFilerBatch = async (
+    afterFilerId: SafeId<"correspondenceFiler"> | undefined,
+  ): Promise<void> => {
     const rows = await tx
       .select({ id: correspondenceFilers.id })
       .from(correspondenceFilers)
@@ -50,7 +51,7 @@ export const eraseCorrespondenceActorDisplays = async ({
       .for("update");
     const last = rows.at(-1);
     if (last === undefined) {
-      break;
+      return;
     }
 
     const recordIds = rows.map(({ id }) => id);
@@ -70,11 +71,13 @@ export const eraseCorrespondenceActorDisplays = async ({
     if (erased.length !== recordIds.length) {
       panic("Locked correspondence filer snapshots were not erased");
     }
-    afterFilerId = last.id;
-  }
+    await eraseFilerBatch(last.id);
+  };
+  await eraseFilerBatch(undefined);
 
-  let afterSenderId: SafeId<"correspondenceAllowedSender"> | undefined;
-  while (true) {
+  const eraseSenderBatch = async (
+    afterSenderId: SafeId<"correspondenceAllowedSender"> | undefined,
+  ): Promise<void> => {
     const rows = await tx
       .select({ id: correspondenceAllowedSenders.id })
       .from(correspondenceAllowedSenders)
@@ -91,7 +94,7 @@ export const eraseCorrespondenceActorDisplays = async ({
       .for("update");
     const last = rows.at(-1);
     if (last === undefined) {
-      break;
+      return;
     }
 
     const recordIds = rows.map(({ id }) => id);
@@ -111,8 +114,9 @@ export const eraseCorrespondenceActorDisplays = async ({
     if (erased.length !== recordIds.length) {
       panic("Locked correspondence approver snapshots were not erased");
     }
-    afterSenderId = last.id;
-  }
+    await eraseSenderBatch(last.id);
+  };
+  await eraseSenderBatch(undefined);
   await tx.execute(sql`SELECT
     set_config(${CORRESPONDENCE_ERASURE_SETTING.userId}, '', true),
     set_config(${CORRESPONDENCE_ERASURE_SETTING.recordIds}, '', true)
@@ -132,7 +136,6 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
   userId,
   scope,
 }: ClearCorrespondenceAssignmentsOptions) => {
-  let clearedCount = 0;
   const organizationId =
     scope.type === "organization" ? scope.organizationId : "";
   await tx.execute(sql`SELECT
@@ -146,7 +149,9 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
       : undefined,
     eq(correspondence.assigneeId, userId),
   );
-  while (true) {
+  const clearAssignmentBatch = async (
+    clearedCount: number,
+  ): Promise<number> => {
     const records = await tx
       .select({ id: correspondence.id })
       .from(correspondence)
@@ -155,7 +160,7 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
       .limit(OFFBOARDING_ASSIGNMENT_BATCH_SIZE)
       .for("update");
     if (records.length === 0) {
-      break;
+      return clearedCount;
     }
 
     const recordIds = records.map(({ id }) => id);
@@ -170,8 +175,9 @@ export const clearCorrespondenceAssignmentsForOffboarding = async ({
     if (cleared.length !== recordIds.length) {
       panic("Locked correspondence assignments were not cleared");
     }
-    clearedCount += cleared.length;
-  }
+    return await clearAssignmentBatch(clearedCount + cleared.length);
+  };
+  const clearedCount = await clearAssignmentBatch(0);
   await tx.execute(sql`SELECT
     set_config(${CORRESPONDENCE_OFFBOARDING_SETTING.userId}, '', true),
     set_config(${CORRESPONDENCE_OFFBOARDING_SETTING.organizationId}, '', true),
