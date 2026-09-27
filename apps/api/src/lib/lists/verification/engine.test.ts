@@ -11,7 +11,10 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  gradedClaimType,
+} from "@/api/lib/lists/verification/claim-grade";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
@@ -332,6 +335,9 @@ describe("gradeClaims", () => {
         recordConflict: null,
         refs: [],
       });
+      // Stored types must match the verdicts: only a fact is checkable.
+      const types = [...outcome.grades.values()].map(gradedClaimType);
+      expect(types).toEqual(["unverifiable", "fact"]);
     }
   });
 

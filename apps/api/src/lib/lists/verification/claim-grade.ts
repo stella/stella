@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimRef,
+  ClaimType,
   ClaimVerdict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
@@ -69,6 +70,15 @@ const gradingSchema = v.strictObject({ grades: v.array(rawGradeSchema) });
 type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
 export type ClaimGrade = ClaimVerdict & { refs: ClaimRef[] };
+
+/**
+ * The type a graded claim is stored with. Extraction sets aside the claims it
+ * recognises as untestable, but the grader can still find that one taken for
+ * a fact cannot be tested; that claim is stored as unverifiable, the only type
+ * the state may carry.
+ */
+export const gradedClaimType = (grade: ClaimGrade): ClaimType =>
+  grade.state === "notverifiable" ? "unverifiable" : "fact";
 
 /** A claim to grade, with the text of the block it sits in for meaning. */
 type GradeableClaim = { key: string; text: string; context: string };
