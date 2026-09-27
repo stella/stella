@@ -82,7 +82,10 @@ import {
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
+import {
+  ChatTurnRun,
+  processChatTurnOwnership,
+} from "@/api/handlers/chat/chat-turn-run";
 import {
   KEEPS_PARTIAL_TOOL_INPUT,
   settleHistoryForRun,
@@ -420,6 +423,8 @@ type ChatSendLifecycleOptions = {
 class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
+  /** Ends this process's record of the claim; a no-op once ended. */
+  private releaseClaim: () => void = () => undefined;
   private connectorsHandedOff = false;
   private pendingSideEffects:
     | {
@@ -458,6 +463,10 @@ class ChatSendLifecycle {
         ? {}
         : { owningAssistantMessage }),
     };
+    this.releaseClaim = processChatTurnOwnership.holdClaim({
+      execution,
+      safeDb: this.options.safeDb,
+    });
   }
 
   /**
@@ -484,6 +493,7 @@ class ChatSendLifecycle {
       },
     });
     this.claimedTurn = { status: "handed-over" };
+    this.releaseClaim();
     this.connectorsHandedOff = connectors !== undefined;
     return run;
   }
@@ -553,6 +563,7 @@ class ChatSendLifecycle {
   }
 
   async cleanup(): Promise<void> {
+    this.releaseClaim();
     if (this.claimedTurn.status === "preflight") {
       const failureResult = await persistFailedChatTurn({
         code: "internal",

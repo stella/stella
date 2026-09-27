@@ -26,7 +26,7 @@ describe("API service shutdown", () => {
       onHttpStopError: () => undefined,
       relinquishChatTurnRuns: async () => {
         events.push("chat-turn-runs-relinquished");
-        await Promise.resolve();
+        return await Promise.resolve("stored" as const);
       },
       stopHttp: async () => {
         events.push("http-stop-started");
@@ -104,11 +104,11 @@ describe("API service shutdown", () => {
           onHttpStopError: (error) => {
             loggedErrors.push(error);
           },
-          relinquishChatTurnRuns: async () => {
-            if (failedService === "chat-turn-runs") {
-              throw failure;
-            }
-          },
+          // A run that could not store its outcome fails the drain.
+          relinquishChatTurnRuns: async () =>
+            await Promise.resolve(
+              failedService === "chat-turn-runs" ? "unstored" : "stored",
+            ),
           stopHttp: async () => {
             if (failedService === "http") {
               throw failure;

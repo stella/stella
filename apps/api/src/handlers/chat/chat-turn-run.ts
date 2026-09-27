@@ -91,6 +91,8 @@ type ChatTurnRunOptions = {
   deadlineMs: number;
   heartbeat?: ChatTurnRunHeartbeat | undefined;
   owner: ChatTurnRunOwner;
+  /** Who tracks the run; the process by default. */
+  ownership?: ChatTurnOwnership | undefined;
 };
 
 type ChatTurnRunState =
@@ -98,15 +100,127 @@ type ChatTurnRunState =
   | { status: "producing"; stopHeartbeat: () => void }
   | { status: "settled" };
 
-/** The runs this process produces, by execution id. */
-const producingRuns = new Map<string, ChatTurnRun>();
+/** Whether a run stored the turn's outcome (its own, or its failure). */
+type ChatTurnRunEnd = "stored" | "unstored";
+
+type ChatTurnClaim = { execution: ChatTurnExecution; safeDb: SafeDb };
+
+/**
+ * What a process owns of chat turns: the runs handed a turn and not yet over,
+ * by execution id, and the turns a send has claimed but not yet handed to a
+ * run. The process has one (`processChatTurnOwnership`); a test gives its runs
+ * their own.
+ */
+export class ChatTurnOwnership {
+  private readonly liveRuns = new Map<string, ChatTurnRun>();
+  private readonly claims = new Set<ChatTurnClaim>();
+  private relinquishing = false;
+  private changed = Promise.withResolvers<undefined>();
+
+  /** The live run `executionId` names, if this owner has one. */
+  run(executionId: string): ChatTurnRun | undefined {
+    return this.liveRuns.get(executionId);
+  }
+
+  /** Track `run`; while relinquishing, it is cut short at once. */
+  adopt(run: ChatTurnRun): void {
+    this.liveRuns.set(run.execution.executionId, run);
+    this.noteChange();
+    if (this.relinquishing) {
+      detached(run.relinquish(), "chat-turn-run.relinquish-late-run");
+    }
+  }
+
+  /** Stop tracking `run`, which is over. */
+  release(run: ChatTurnRun): void {
+    if (this.liveRuns.delete(run.execution.executionId)) {
+      this.noteChange();
+    }
+  }
+
+  /**
+   * Record a turn a send has claimed and still prepares, so relinquishing
+   * finds it. Call the returned function once the send no longer holds it.
+   */
+  holdClaim(claim: ChatTurnClaim): () => void {
+    this.claims.add(claim);
+    return () => {
+      if (this.claims.delete(claim)) {
+        this.noteChange();
+      }
+    };
+  }
+
+  /**
+   * Give up every turn owned here, for a process that is stopping. Each run
+   * is cut short and stores what it has as `owner-lost`, so none waits out
+   * its lease; a run handed a turn from now on is cut short at once. A turn a
+   * send still prepares gets the short run lease, so if the process ends
+   * before the send hands it over, the reaper finds it within that lease.
+   * Resolves once nothing is owned any more, saying whether every run stored
+   * its outcome; the caller bounds the wait.
+   */
+  async relinquish(): Promise<ChatTurnRunEnd> {
+    this.relinquishing = true;
+    try {
+      return await this.relinquishOwned();
+    } finally {
+      this.relinquishing = false;
+    }
+  }
+
+  private async relinquishOwned(): Promise<ChatTurnRunEnd> {
+    const ends = new Map<ChatTurnRun, Promise<ChatTurnRunEnd>>();
+    const shortened = new Set<ChatTurnClaim>();
+    while (this.liveRuns.size > 0 || this.claims.size > 0) {
+      const { promise: changed } = this.changed;
+      for (const claim of this.claims) {
+        if (!shortened.has(claim)) {
+          shortened.add(claim);
+          detached(shortenClaimLease(claim), "chat-turn-run.relinquish-claim");
+        }
+      }
+      const current: Promise<ChatTurnRunEnd>[] = [];
+      for (const run of this.liveRuns.values()) {
+        const runEnd = ends.get(run) ?? run.relinquish();
+        ends.set(run, runEnd);
+        current.push(runEnd);
+      }
+      // A live run's end is still pending (a run leaves `liveRuns` before its
+      // end resolves), so this waits for a run to end or for a change.
+      await Promise.race([...current, changed]);
+    }
+    const settled = await Promise.all(ends.values());
+    return settled.includes("unstored") ? "unstored" : "stored";
+  }
+
+  private noteChange(): void {
+    this.changed.resolve(undefined);
+    this.changed = Promise.withResolvers<undefined>();
+  }
+}
+
+/** Give a claimed turn the short run lease; a failure leaves the long one. */
+const shortenClaimLease = async (claim: ChatTurnClaim): Promise<void> => {
+  const renewed = await renewChatTurnExecutionLease(claim);
+  if (Result.isError(renewed)) {
+    observeFailure(renewed.error, { sink: HEARTBEAT_FAILED_SINK });
+  }
+};
+
+/** What this process owns of chat turns. */
+export const processChatTurnOwnership = new ChatTurnOwnership();
 
 export class ChatTurnRun {
   /** What cuts the run's producer short. */
   readonly control: ChatTurnRunControl;
   private readonly options: ChatTurnRunOptions;
-  private readonly settledResolvers = Promise.withResolvers<undefined>();
+  private readonly ownership: ChatTurnOwnership;
+  private readonly settledResolvers = Promise.withResolvers<ChatTurnRunEnd>();
   private state: ChatTurnRunState = { status: "handed-over" };
+  private stored = false;
+  /** A cut requested before the run produced; applied once it does. */
+  private pendingAbort: string | undefined;
 
   constructor(options: ChatTurnRunOptions) {
     this.options = options;
@@ -115,14 +229,16 @@ export class ChatTurnRun {
       abortController: abortControllerFromSignal(deadlineSignal),
       deadlineSignal,
     };
+    this.ownership = options.ownership ?? processChatTurnOwnership;
+    this.ownership.adopt(this);
   }
 
   get execution(): ChatTurnExecution {
     return this.options.owner.execution;
   }
 
-  /** Resolves once the run's outcome is stored. */
-  get settled(): Promise<undefined> {
+  /** Resolves once the run is over, saying whether it stored an outcome. */
+  get settled(): Promise<ChatTurnRunEnd> {
     return this.settledResolvers.promise;
   }
 
@@ -135,14 +251,18 @@ export class ChatTurnRun {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
-    producingRuns.set(this.execution.executionId, this);
     this.state = { status: "producing", stopHeartbeat: this.startHeartbeat() };
-    return withSseHeartbeat(
+    // Building the response starts its pump, which pulls the stream first.
+    const response = withSseHeartbeat(
       toServerSentEventsResponse(output, {
         abortController: this.control.abortController,
         headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
       }),
     );
+    if (this.pendingAbort !== undefined) {
+      this.abort(this.pendingAbort);
+    }
+    return response;
   }
 
   /** Store the run's outcome through `persist`. A run settles once. */
@@ -155,6 +275,7 @@ export class ChatTurnRun {
     this.state.stopHeartbeat();
     try {
       await persist();
+      this.stored = true;
     } finally {
       this.release();
     }
@@ -185,6 +306,8 @@ export class ChatTurnRun {
     });
     if (Result.isError(failure)) {
       captureError(failure.error, { threadId: owner.threadId });
+    } else {
+      this.stored = true;
     }
     if (status !== "handed-over") {
       return;
@@ -201,8 +324,8 @@ export class ChatTurnRun {
     this.release();
   }
 
-  /** Stop the run as the user's cancel; resolves once its outcome is stored. */
-  stop(): Promise<undefined> {
+  /** Stop the run as the user's cancel; resolves once it is over. */
+  stop(): Promise<ChatTurnRunEnd> {
     this.abortForStop();
     return this.settled;
   }
@@ -211,7 +334,7 @@ export class ChatTurnRun {
    * End the run because its process is going away: it stores what it has as
    * `owner-lost` and resolves once that is stored.
    */
-  relinquish(): Promise<undefined> {
+  relinquish(): Promise<ChatTurnRunEnd> {
     this.abort(CHAT_TURN_OWNER_LOST_REASON);
     return this.settled;
   }
@@ -224,7 +347,16 @@ export class ChatTurnRun {
     this.abort(RUN_CANCEL_REASON);
   }
 
+  /**
+   * Cut the run short with `reason`. A run not yet producing keeps the reason
+   * until it produces: the response's pump never reads a stream whose
+   * controller is already aborted, so the run would never store its outcome.
+   */
   private abort(reason: string): void {
+    if (this.state.status === "handed-over") {
+      this.pendingAbort ??= reason;
+      return;
+    }
     const { abortController } = this.control;
     if (!abortController.signal.aborted) {
       abortController.abort(reason);
@@ -304,24 +436,20 @@ export class ChatTurnRun {
       this.state.stopHeartbeat();
     }
     this.state = { status: "settled" };
-    producingRuns.delete(this.execution.executionId);
-    this.settledResolvers.resolve(undefined);
+    this.ownership.release(this);
+    this.settledResolvers.resolve(this.stored ? "stored" : "unstored");
   }
 }
 
 /**
- * Stop the run `executionId` names if this process produces it. Resolves once
- * the run has stored its outcome; null when another process owns the run.
+ * Stop the run `executionId` names if this process owns it. Resolves once the
+ * run is over; null when another process owns the run.
  */
 export const stopLocalChatTurnRun = (
   executionId: string,
-): Promise<undefined> | null => producingRuns.get(executionId)?.stop() ?? null;
+): Promise<ChatTurnRunEnd> | null =>
+  processChatTurnOwnership.run(executionId)?.stop() ?? null;
 
-/**
- * End every run this process produces as `owner-lost`, for a shutdown: each
- * stores what it has, so none waits out its lease. Resolves once all are
- * stored.
- */
-export const relinquishChatTurnRuns = async (): Promise<void> => {
-  await Promise.all([...producingRuns.values()].map((run) => run.relinquish()));
-};
+/** Give up every chat turn this process owns; see `relinquish`. */
+export const relinquishChatTurnRuns = async (): Promise<ChatTurnRunEnd> =>
+  await processChatTurnOwnership.relinquish();

@@ -12,14 +12,15 @@ import {
   insertChatTurnAcceptanceOnTx,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
+  CHAT_TURN_RUN_LEASE_MS,
   settleChatTurnOnTx,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   CHAT_TURN_OWNER_LOST_REASON,
+  ChatTurnOwnership,
   ChatTurnRun,
-  relinquishChatTurnRuns,
 } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -41,6 +42,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+/** Another member of the same organization, who cannot read the first's turns. */
+let otherMember: Member;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 beforeAll(async () => {
@@ -52,6 +55,15 @@ beforeAll(async () => {
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     ),
   );
+  otherMember = {
+    safeDb: toSafeDbMock(
+      asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+      ),
+    ),
+    userId: ids.userA2,
+    workspaceId: ids.wsA2,
+  };
 });
 
 afterAll(async () => {
@@ -72,7 +84,14 @@ const noAudit: AuditRecorder = async () => {
   await Promise.resolve();
 };
 
-const seedRunningTurn = async () => {
+type Member = {
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const seedRunningTurn = async (member?: Member) => {
+  const as = member ?? { safeDb, userId: ids.userA1, workspaceId: ids.wsA1 };
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
@@ -80,25 +99,25 @@ const seedRunningTurn = async () => {
     id: threadId,
     organizationId: ids.orgA,
     title: "Run ownership test",
-    userId: ids.userA1,
-    workspaceId: ids.wsA1,
+    userId: as.userId,
+    workspaceId: as.workspaceId,
   });
   const acceptance = createChatTurnAcceptance({
     organizationId: ids.orgA,
     threadId,
-    userId: ids.userA1,
+    userId: as.userId,
     userMessageId,
-    workspaceId: ids.wsA1,
+    workspaceId: as.workspaceId,
   });
   unwrap(
-    await safeDb(async (tx) => {
+    await as.safeDb(async (tx) => {
       await tx.insert(chatMessages).values({
         content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
         id: userMessageId,
         role: "user",
         threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
+        userId: as.userId,
+        workspaceId: as.workspaceId,
       });
       await insertChatTurnAcceptanceOnTx({ acceptance, tx });
     }),
@@ -109,10 +128,10 @@ const seedRunningTurn = async () => {
       incomingMessageId: userMessageId,
       incomingMessageRole: "user",
       organizationId: ids.orgA,
-      safeDb,
+      safeDb: as.safeDb,
       threadId,
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
+      userId: as.userId,
+      workspaceId: as.workspaceId,
     }),
   );
   return {
@@ -138,16 +157,22 @@ const cutShortOutcome = (reason: unknown): ChatTurnOutcome =>
 const produceUntilCut = ({
   execution,
   heartbeat,
+  ownership = new ChatTurnOwnership(),
+  persist,
   threadId,
 }: {
   execution: ChatTurnExecution;
   heartbeat: { intervalMs: number; renewEvery: number };
+  ownership?: ChatTurnOwnership;
+  /** Stores the cut; the turn's own settlement by default. */
+  persist?: () => Promise<void>;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
     heartbeat,
+    ownership,
     owner: {
       execution,
       owningAssistantMessage: undefined,
@@ -166,19 +191,22 @@ const produceUntilCut = ({
         signal.addEventListener("abort", resolve, { once: true });
       });
     }
-    await run.settle(async () => {
-      stored.settlement = unwrap(
-        await safeDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: cutShortOutcome(signal.reason),
-              tx,
-            }),
-        ),
-      );
-    });
+    await run.settle(
+      persist ??
+        (async () => {
+          stored.settlement = unwrap(
+            await safeDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  assistantMessageId: null,
+                  execution,
+                  outcome: cutShortOutcome(signal.reason),
+                  tx,
+                }),
+            ),
+          );
+        }),
+    );
   };
   const response = run.produce(output());
   return { response, run, stored };
@@ -290,21 +318,82 @@ describe("a producing run", () => {
     expect(run.control.abortController.signal.aborted).toBe(false);
   });
 
-  test("stores what it has as owner-lost when its process shuts down", async () => {
+  test("stores what it has as owner-lost when its process gives up its turns", async () => {
     const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
     const { response, stored } = produceUntilCut({
       execution,
       heartbeat: { intervalMs: 60_000, renewEvery: 4 },
+      ownership,
       threadId,
     });
 
-    await relinquishChatTurnRuns();
+    expect(await ownership.relinquish()).toBe("stored");
 
     expect(stored.settlement).toBe("settled");
     expect(await readTurn(execution.id)).toMatchObject({
       interruptionReason: "owner-lost",
       status: "interrupted",
     });
+    await response.body?.cancel();
+  });
+
+  test("gives a turn still in preflight the short lease, and cuts short the run it starts", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const releaseClaim = ownership.holdClaim({ execution, safeDb });
+    // The claim's lease covers preflight: well past the run lease.
+    const claimedLease = (await readTurn(execution.id)).leaseExpiresAt;
+    expect(claimedLease?.getTime() ?? 0).toBeGreaterThan(
+      Date.now() + CHAT_TURN_RUN_LEASE_MS * 2,
+    );
+
+    const relinquished = ownership.relinquish();
+    for (let poll = 0; poll < 400; poll += 1) {
+      const { leaseExpiresAt } = await readTurn(execution.id);
+      if ((leaseExpiresAt?.getTime() ?? 0) < (claimedLease?.getTime() ?? 0)) {
+        break;
+      }
+      await Bun.sleep(5);
+    }
+    expect(
+      (await readTurn(execution.id)).leaseExpiresAt?.getTime() ?? 0,
+    ).toBeLessThanOrEqual(Date.now() + CHAT_TURN_RUN_LEASE_MS);
+
+    // The send hands its turn to a run, as `startRun` does: run first.
+    const { response, run } = produceUntilCut({
+      execution,
+      heartbeat: { intervalMs: 60_000, renewEvery: 4 },
+      ownership,
+      threadId,
+    });
+    releaseClaim();
+
+    expect(await relinquished).toBe("stored");
+    expect(run.control.abortController.signal.reason).toBe(
+      CHAT_TURN_OWNER_LOST_REASON,
+    );
+    expect(await readTurn(execution.id)).toMatchObject({
+      interruptionReason: "owner-lost",
+      status: "interrupted",
+    });
+    await response.body?.cancel();
+  });
+
+  test("reports a run that could not store its outcome", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const { response } = produceUntilCut({
+      execution,
+      heartbeat: { intervalMs: 60_000, renewEvery: 4 },
+      ownership,
+      persist: async () => {
+        await Promise.reject(new Error("The database is unavailable"));
+      },
+      threadId,
+    });
+
+    expect(await ownership.relinquish()).toBe("unstored");
     await response.body?.cancel();
   });
 });
@@ -344,6 +433,18 @@ describe("a run id", () => {
       ),
     ).toBe("run-taken");
     expect((await readTurn(second.execution.id)).runId).toBeNull();
+
+    // A turn the caller cannot read holds its id just the same.
+    const hidden = await seedRunningTurn(otherMember);
+    expect(
+      unwrap(
+        await startChatTurnRun({
+          execution: hidden.execution,
+          runId,
+          safeDb: otherMember.safeDb,
+        }),
+      ),
+    ).toBe("run-taken");
 
     unwrap(
       await safeDb(

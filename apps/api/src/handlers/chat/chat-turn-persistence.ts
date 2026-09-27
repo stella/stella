@@ -1,5 +1,4 @@
-import type { Result } from "better-result";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   desc,
@@ -8,7 +7,6 @@ import {
   isNotNull,
   isNull,
   lte,
-  ne,
   sql,
 } from "drizzle-orm";
 
@@ -43,6 +41,7 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 /** Maximum time a metered provider call may run before the server aborts it. */
 export const CHAT_METERED_PROVIDER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1114,12 +1113,16 @@ export const renewChatTurnExecutionLease = async ({
 /** How starting a run went: its standing, or its id already names a turn. */
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 
+/** The index that makes a run id name one turn in its organization. */
+const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+
 /**
  * Start the run `runId` for a claimed execution, immediately before provider
  * dispatch: bind the client-minted run id to the turn and start the run's
  * lease, in one conditional write. The renewal, not the earlier claim, makes
  * the owner's lease start when its run does, whatever preflight took. A run id
- * that already names another turn of the organization is refused.
+ * that already names another turn of the organization is refused by the
+ * unique index, which sees turns this caller cannot read and settles a race.
  */
 export const startChatTurnRun = async ({
   execution,
@@ -1129,40 +1132,28 @@ export const startChatTurnRun = async ({
   execution: ChatTurnExecution;
   runId: string;
   safeDb: SafeDb;
-}): Promise<Result<ChatTurnRunStart, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    const owned = (
-      await tx
-        .select({ organizationId: chatTurns.organizationId })
-        .from(chatTurns)
-        .where(ownedByExecution(execution))
-        .limit(1)
-    ).at(0);
-    if (owned === undefined) {
-      return "lost";
-    }
-    const bound = await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.organizationId, owned.organizationId),
-          eq(chatTurns.runId, runId),
-          ne(chatTurns.id, execution.id),
-        ),
-      )
-      .limit(1);
-    if (bound.length > 0) {
-      return "run-taken";
-    }
+}): Promise<Result<ChatTurnRunStart, SafeDbError>> => {
+  const started = await safeDb(async (tx) => {
     // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
-    const started = await tx
+    const rows = await tx
       .update(chatTurns)
       .set({ leaseExpiresAt: nextChatTurnRunLeaseExpiry(), runId })
       .where(ownedByExecution(execution))
       .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-    return standingOf(started.at(0));
+    return standingOf(rows.at(0));
   });
+  if (
+    Result.isError(started) &&
+    isPgConstraintError(
+      started.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      CHAT_TURN_RUN_ID_INDEX,
+    )
+  ) {
+    return Result.ok("run-taken");
+  }
+  return started;
+};
 
 /**
  * Where an execution stands with its turn: still owning it, owning it with a
