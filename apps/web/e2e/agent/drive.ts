@@ -122,7 +122,7 @@ const openSession = async (options: DriveOptions): Promise<Session> => {
                 Reflect.set(window, `${binding}Flag`, true);
                 const notify: unknown = Reflect.get(window, binding);
                 if (typeof notify === "function") {
-                  notify();
+                  Reflect.apply(notify, window, []);
                 }
               },
               { capture: true },
@@ -353,7 +353,7 @@ const isDriveScript = (
 const run = async (scriptPath: string, options: DriveOptions) => {
   const absolute = path.resolve(process.cwd(), scriptPath);
   const imported: unknown = await import(pathToFileURL(absolute).href);
-  const script =
+  const script: unknown =
     typeof imported === "object" && imported !== null
       ? Reflect.get(imported, "default")
       : undefined;
@@ -392,7 +392,8 @@ const run = async (scriptPath: string, options: DriveOptions) => {
       webUrl: WEB_URL,
     }).then(
       () => null,
-      (error: unknown) => error,
+      (error: unknown) =>
+        error instanceof Error ? error : new Error(String(error)),
     );
     findings = await tracked.finish();
     findings.navigationProblems.push(...stepProblems);
@@ -406,7 +407,7 @@ const run = async (scriptPath: string, options: DriveOptions) => {
         screenshotPath: screenshot,
       });
       findings.navigationProblems.push(
-        `script failed: ${scriptResult instanceof Error ? scriptResult.message : String(scriptResult)} (${screenshot})`,
+        `script failed: ${scriptResult.message} (${screenshot})`,
       );
     }
     await context.close();
