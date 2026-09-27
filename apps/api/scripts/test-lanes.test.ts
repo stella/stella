@@ -202,7 +202,7 @@ describe("runInLanes", () => {
     expect(run.maxConcurrentHeavy).toBe(1);
   });
 
-  test("runs every batch after a failure and reports outcomes in start order", async () => {
+  test("with several lanes, runs every batch after a failure and reports outcomes in start order", async () => {
     const exitCodes: Record<string, number> = { a: 0, b: 3, c: 0, d: 7 };
     const outcomes = await runInLanes({
       batches: ["a", "b", "c", "d"].map((name) =>
@@ -236,7 +236,7 @@ describe("runInLanes", () => {
         batch(TEST_BATCH_KIND.db, "broken"),
         batch(TEST_BATCH_KIND.db, "fine"),
       ],
-      lanes: 1,
+      lanes: 2,
       runBatch: async ({ name }) => {
         ran.push(name);
         if (name === "broken") {
@@ -253,6 +253,46 @@ describe("runInLanes", () => {
     expect(printedErrors).toBe(1);
     expect(ran).toEqual(["broken", "fine"]);
     expect(outcomes.map(({ exitCode }) => exitCode)).toEqual([1, 0]);
+    expect(laneRunExitCode(outcomes)).toBe(1);
+  });
+
+  test("a single lane stops at the first failure and leaves the rest unstarted", async () => {
+    const ran: string[] = [];
+    const outcomes = await runInLanes({
+      batches: ["a", "b", "c"].map((name) =>
+        batch(TEST_BATCH_KIND.regular, name),
+      ),
+      lanes: 1,
+      runBatch: async ({ name }) => {
+        ran.push(name);
+        return name === "b" ? 4 : 0;
+      },
+    });
+
+    expect(ran).toEqual(["a", "b"]);
+    expect(outcomes.map(({ exitCode }) => exitCode)).toEqual([0, 4, null]);
+    expect(laneRunExitCode(outcomes)).toBe(4);
+  });
+
+  test("an aborted run starts nothing new, lets running batches finish, and never passes", async () => {
+    const run = controlledRun();
+    const shutdown = new AbortController();
+    const done = runInLanes({
+      batches: ["a", "b", "c"].map((name) => batch(TEST_BATCH_KIND.db, name)),
+      lanes: 2,
+      runBatch: run.runBatch,
+      signal: shutdown.signal,
+    });
+    await Bun.sleep(0);
+
+    expect(run.started).toEqual(["a", "b"]);
+    shutdown.abort();
+    await run.settle("a");
+    await run.settle("b");
+
+    const outcomes = await done;
+    expect(run.started).toEqual(["a", "b"]);
+    expect(outcomes.map(({ exitCode }) => exitCode)).toEqual([0, 0, null]);
     expect(laneRunExitCode(outcomes)).toBe(1);
   });
 

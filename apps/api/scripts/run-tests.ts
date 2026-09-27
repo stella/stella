@@ -272,6 +272,74 @@ for (const { source, testPath } of classifiedTests) {
 // literal here keeps the runner from importing the whole API schema graph.
 const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
+// Once batches run, runner output goes through the stdout/stderr streams, not
+// console: a stream queues what a full pipe cannot take yet and the process
+// stays alive until the queue is written, while a direct console write to a
+// full pipe can be cut short. The batch phase never calls process.exit(),
+// which would drop the queue.
+const print = (text: string) => {
+  process.stdout.write(`${text}\n`);
+};
+const printError = (text: string) => {
+  process.stderr.write(`${text}\n`);
+};
+
+// Every child process the runner started and has not reaped yet. An interrupt
+// stops them and waits for them before the run ends, because the `exit` hook
+// below then deletes the snapshot file they may still be reading.
+const liveChildren = new Set<Bun.Subprocess>();
+const runnerShutdown = new AbortController();
+const CHILD_STOP_GRACE_MS = 10_000;
+
+const awaitChild = async (child: Bun.Subprocess): Promise<number> => {
+  liveChildren.add(child);
+  try {
+    return await child.exited;
+  } finally {
+    liveChildren.delete(child);
+  }
+};
+
+const stopLiveChildren = async (signal: NodeJS.Signals): Promise<void> => {
+  const children = [...liveChildren];
+  for (const child of children) {
+    child.kill(signal);
+  }
+  const escalation = setTimeout(() => {
+    for (const child of children) {
+      child.kill("SIGKILL");
+    }
+  }, CHILD_STOP_GRACE_MS);
+  try {
+    await Promise.all(children.map(async (child) => await child.exited));
+  } finally {
+    clearTimeout(escalation);
+  }
+};
+
+// The handler never exits by itself: aborting stops new batches, the running
+// ones end once signalled, and the run then finishes through its normal path,
+// which prints the summary and removes the snapshot in the `exit` hook. A
+// second signal skips the grace period.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    if (runnerShutdown.signal.aborted) {
+      for (const child of liveChildren) {
+        child.kill("SIGKILL");
+      }
+      return;
+    }
+    printError(
+      `${signal} received; stopping ${liveChildren.size} running test ` +
+        "process(es) before cleanup ...",
+    );
+    runnerShutdown.abort();
+    stopLiveChildren(signal).catch((error: unknown) => {
+      printError(`Stopping the test processes failed: ${String(error)}`);
+    });
+  });
+}
+
 const buildTestDbSnapshot = async (): Promise<string> => {
   const snapshotPath = path.join(
     tmpdir(),
@@ -279,16 +347,12 @@ const buildTestDbSnapshot = async (): Promise<string> => {
   );
   console.log("Building the PGlite test-database snapshot ...");
   // Registered before the build so a failed build's partial file is also
-  // removed; `exit` does not fire on signals, so cover those explicitly.
-  const cleanupSnapshot = () => {
+  // removed.
+  process.on("exit", () => {
     rmSync(snapshotPath, { force: true });
-  };
-  process.on("exit", cleanupSnapshot);
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      cleanupSnapshot();
-      process.exit(1);
-    });
+  });
+  if (runnerShutdown.signal.aborted) {
+    process.exit(1);
   }
   const builder = Bun.spawn({
     cmd: [
@@ -301,7 +365,7 @@ const buildTestDbSnapshot = async (): Promise<string> => {
     stdout: "inherit",
     stderr: "inherit",
   });
-  const builderExitCode = await builder.exited;
+  const builderExitCode = await awaitChild(builder);
   if (builderExitCode !== 0) {
     console.error("PGlite snapshot build failed; aborting the test run.");
     process.exit(builderExitCode);
@@ -420,10 +484,10 @@ type BatchLog = {
 
 const streamingLog: BatchLog = {
   err: (line) => {
-    console.error(line);
+    printError(line);
   },
   out: (line) => {
-    console.log(line);
+    print(line);
   },
 };
 
@@ -452,7 +516,7 @@ const spawnStreaming = async (command: string[]): Promise<ChildResult> => {
     stdout: "inherit",
     stderr: "inherit",
   });
-  const exitCode = await child.exited;
+  const exitCode = await awaitChild(child);
   return { exitCode, usage: child.resourceUsage() };
 };
 
@@ -471,11 +535,11 @@ const spawnCollected = async (
   // Both streams feed one list in arrival order, so a test's own stdout lines
   // stay next to the reporter's stderr lines around them.
   const parts: string[] = [];
-  await Promise.all([
+  const [exitCode] = await Promise.all([
+    awaitChild(child),
     collectStream(child.stdout, parts),
     collectStream(child.stderr, parts),
   ]);
-  const exitCode = await child.exited;
   log.out(parts.join("").trimEnd());
   return { exitCode, usage: child.resourceUsage() };
 };
@@ -554,11 +618,11 @@ const runBufferedTests = async (batch: PlannedTestBatch): Promise<number> => {
     bufferedLog.err(`${batch.label} could not run: ${String(error)}`);
     return 1;
   } finally {
-    process.stdout.write(`${lines.join("\n")}\n`);
+    print(lines.join("\n"));
   }
 };
 
-console.log(
+print(
   `Running ${plannedBatches.length} API test batches in ${testLanes} ` +
     `lane${testLanes === 1 ? "" : "s"}`,
 );
@@ -570,16 +634,23 @@ const outcomes = await runInLanes({
     bufferBatchOutput
       ? await runBufferedTests(batch)
       : await runTests(batch, streamingLog),
+  signal: runnerShutdown.signal,
 });
 const runSeconds = ((performance.now() - runStartedAt) / 1000).toFixed(1);
-const failedOutcomes = outcomes.filter(({ exitCode }) => exitCode !== 0);
-console.log(
-  `Ran ${outcomes.length} API test batches in ${runSeconds}s ` +
-    `(${testLanes} lane${testLanes === 1 ? "" : "s"}); ` +
-    `${failedOutcomes.length} failed`,
+const failedOutcomes = outcomes.filter(
+  ({ exitCode }) => exitCode !== null && exitCode !== 0,
 );
+const unstartedCount = outcomes.filter(
+  ({ exitCode }) => exitCode === null,
+).length;
+print(
+  `Ran ${outcomes.length - unstartedCount} of ${outcomes.length} API test ` +
+    `batches in ${runSeconds}s (${testLanes} lane${testLanes === 1 ? "" : "s"}); ${failedOutcomes.length} failed${unstartedCount > 0 ? `, ${unstartedCount} not started` : ""}`,
+);
+// On stdout with the batch blocks, so it cannot overtake one that is still
+// queued for a slow reader.
 if (failedOutcomes.length > 0) {
-  console.error(
+  print(
     [
       "Failed API test batches:",
       ...failedOutcomes.map(
@@ -589,4 +660,4 @@ if (failedOutcomes.length > 0) {
     ].join("\n"),
   );
 }
-process.exit(laneRunExitCode(outcomes));
+process.exitCode = laneRunExitCode(outcomes);

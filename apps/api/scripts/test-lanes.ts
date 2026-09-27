@@ -93,7 +93,8 @@ export const orderBatchesForLanes = <TBatch extends LaneBatch>(
 
 export type LaneOutcome<TBatch> = {
   readonly batch: TBatch;
-  readonly exitCode: number;
+  /** `null` when the batch never started: see `runInLanes`. */
+  readonly exitCode: number | null;
 };
 
 type RunInLanesOptions<TBatch extends LaneBatch> = {
@@ -102,25 +103,31 @@ type RunInLanesOptions<TBatch extends LaneBatch> = {
   lanes: number;
   /** Resolves with the batch's exit code; a rejection counts as exit 1. */
   runBatch: (batch: TBatch) => Promise<number>;
+  /** Once aborted, no further batch starts; running ones finish. */
+  signal?: AbortSignal | undefined;
 };
 
 /**
- * Run every batch with at most `lanes` in flight and at most one exclusive
- * batch among them. A failure never stops the remaining batches, so one run
- * reports every failing batch; outcomes are returned in start order regardless
- * of completion order.
+ * Run the batches with at most `lanes` in flight and at most one exclusive
+ * batch among them. With several lanes a failure never stops the remaining
+ * batches, so one run reports every failing batch. A single lane stops at the
+ * first failure instead, the quick feedback a serial local run wants. Outcomes
+ * come back in start order regardless of completion order.
  */
 export const runInLanes = async <TBatch extends LaneBatch>({
   batches,
   lanes,
   runBatch,
+  signal,
 }: RunInLanesOptions<TBatch>): Promise<LaneOutcome<TBatch>[]> => {
   if (!Number.isInteger(lanes) || lanes < 1) {
     panic("test lane count must be a positive integer");
   }
 
-  const exitCodes: (number | undefined)[] = batches.map(() => undefined);
+  const stopAtFirstFailure = lanes === 1;
+  const exitCodes: (number | null)[] = batches.map(() => null);
   const pending = batches.map((batch, index) => ({ batch, index }));
+  let failed = false;
   let exclusiveRunning = false;
   // Lanes that find only exclusive batches left while one is running park
   // here until a batch settles.
@@ -143,7 +150,11 @@ export const runInLanes = async <TBatch extends LaneBatch>({
   };
 
   const runLane = async (): Promise<void> => {
-    if (pending.length === 0) {
+    if (
+      pending.length === 0 ||
+      signal?.aborted === true ||
+      (stopAtFirstFailure && failed)
+    ) {
       return;
     }
     const nextPosition = pending.findIndex(
@@ -163,7 +174,9 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     }
     const exclusive = isExclusiveTestBatch(next.batch.kind);
     exclusiveRunning ||= exclusive;
-    exitCodes[next.index] = await runBatchSafely(next.batch);
+    const exitCode = await runBatchSafely(next.batch);
+    exitCodes[next.index] = exitCode;
+    failed ||= exitCode !== 0;
     if (exclusive) {
       exclusiveRunning = false;
     }
@@ -180,11 +193,22 @@ export const runInLanes = async <TBatch extends LaneBatch>({
 
   return batches.map((batch, index) => ({
     batch,
-    exitCode: exitCodes.at(index) ?? panic(`test batch ${index} never settled`),
+    exitCode: exitCodes.at(index) ?? null,
   }));
 };
 
-/** The run's exit code: the first failing batch's, in start order. */
+/**
+ * The run's exit code: the first failing batch's, in start order. A run that
+ * left batches unstarted without a failure was interrupted, never a pass.
+ */
 export const laneRunExitCode = (
   outcomes: readonly LaneOutcome<unknown>[],
-): number => outcomes.find(({ exitCode }) => exitCode !== 0)?.exitCode ?? 0;
+): number => {
+  const failureExitCode = outcomes
+    .map(({ exitCode }) => exitCode)
+    .find((exitCode) => exitCode !== null && exitCode !== 0);
+  if (failureExitCode !== undefined && failureExitCode !== null) {
+    return failureExitCode;
+  }
+  return outcomes.some(({ exitCode }) => exitCode === null) ? 1 : 0;
+};
