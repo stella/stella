@@ -132,6 +132,9 @@ afterAll(async () => {
   await testDb
     .delete(organization)
     .where(inArray(organization.id, [organizationId]));
+  // The user outlives its organization; later suites in a shared batch
+  // must not see it.
+  await testDb.delete(user).where(inArray(user.id, [userId]));
   await releaseTestDb();
 });
 
