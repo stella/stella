@@ -2422,54 +2422,53 @@ export const createSendMessage = (
                         message: "Failed to persist assistant turn",
                         cause: persistResult.error,
                       });
-                    } else {
-                      const { outcome: storedOutcome, persistencePlan } =
-                        persistResult.value;
-                      const messagesAfterAssistantPersist =
-                        applyAssistantPersistencePlan({
-                          messages: latestMessagePlan.messages,
-                          persistencePlan,
-                        });
-                      if (
-                        storedOutcome.type === "completed" &&
-                        messagesAfterAssistantPersist !== null &&
-                        body.sendMode !== CHAT_SEND_MODE.anonymized
-                      ) {
-                        await markChatCompactionDue({
-                          chatModelOverride,
-                          messages: messagesAfterAssistantPersist,
+                    }
+                    const { outcome: storedOutcome, persistencePlan } =
+                      persistResult.value;
+                    const messagesAfterAssistantPersist =
+                      applyAssistantPersistencePlan({
+                        messages: latestMessagePlan.messages,
+                        persistencePlan,
+                      });
+                    if (
+                      storedOutcome.type === "completed" &&
+                      messagesAfterAssistantPersist !== null &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      await markChatCompactionDue({
+                        chatModelOverride,
+                        messages: messagesAfterAssistantPersist,
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        reasoningEffort: chatReasoningEffort,
+                        safeDb,
+                        threadId: body.threadId,
+                      });
+                    }
+
+                    if (
+                      storedOutcome.type === "completed" &&
+                      thread.type === "created" &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      detached(
+                        generateThreadTitle({
+                          initialTitle: initialThreadTitle,
+                          messages: [
+                            parsedMessage.message,
+                            resolvedResponseMessage,
+                          ],
                           organizationId: session.activeOrganizationId,
                           orgAIConfig,
-                          reasoningEffort: chatReasoningEffort,
+                          promptCachingEnabled,
+                          recordAuditEvent,
                           safeDb,
                           threadId: body.threadId,
-                        });
-                      }
-
-                      if (
-                        storedOutcome.type === "completed" &&
-                        thread.type === "created" &&
-                        body.sendMode !== CHAT_SEND_MODE.anonymized
-                      ) {
-                        detached(
-                          generateThreadTitle({
-                            initialTitle: initialThreadTitle,
-                            messages: [
-                              parsedMessage.message,
-                              resolvedResponseMessage,
-                            ],
-                            organizationId: session.activeOrganizationId,
-                            orgAIConfig,
-                            promptCachingEnabled,
-                            recordAuditEvent,
-                            safeDb,
-                            threadId: body.threadId,
-                            threadWorkspaceId: workspaceId,
-                            userId: user.id,
-                          }),
-                          "send-message.generate-thread-title",
-                        );
-                      }
+                          threadWorkspaceId: workspaceId,
+                          userId: user.id,
+                        }),
+                        "send-message.generate-thread-title",
+                      );
                     }
                   },
                   orgAIConfig,
