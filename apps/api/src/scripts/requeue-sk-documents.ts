@@ -71,6 +71,7 @@ console.log(`parked=${await countParkedDocuments(ingestionDb, sourceId)}`);
 if (requeueLimit !== undefined) {
   let requeued = 0;
   while (requeued < requeueLimit) {
+    // db-await-in-loop: page loop; each call requeues one bounded batch and the loop stops when a batch moves nothing
     const moved = await requeueParkedDocuments({
       scopedDb: ingestionDb,
       sourceId,
