@@ -271,7 +271,7 @@ export const installPgliteAgentSkillRevisionTrigger = async (
 
 const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260926170000_pdf_signing_sessions",
+  "20260927090000_pdf_signing_sessions",
   "migration.sql",
 );
 
