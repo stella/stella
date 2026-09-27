@@ -50,6 +50,26 @@ describe("decision text fields", () => {
     });
   });
 
+  test("read punctuation, filler tokens and repeats as a placeholder", () => {
+    for (const filler of ["-", "—", " … ", "(...)", "N/A", "null", "xxx"]) {
+      expect(sourceTextField(ADAPTER_KEYS.CZ_NSS, filler)).toEqual({
+        type: "absent",
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      });
+    }
+  });
+
+  test("keep short and non-Latin publisher text", () => {
+    const headnote =
+      "Soud nemůže zamítnout návrh jen proto, že navrhovatel neoznačil důkaz.";
+    for (const text of [headnote, "A", "§ 5", "判決", "Суд", "٣"]) {
+      expect(sourceTextField(ADAPTER_KEYS.CZ_NSS, text)).toEqual({
+        type: "present",
+        text,
+      });
+    }
+  });
+
   test("store absence as the existing nullable representation", () => {
     const absent = absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED);
 
