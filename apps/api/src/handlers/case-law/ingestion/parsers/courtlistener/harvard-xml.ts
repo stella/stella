@@ -192,7 +192,10 @@ export const parseHarvardXml = ({
   // well-formedness check or any walk can recurse through it.
   const $ = cheerio.load(body, { xml: true });
   const [root] = $.root().toArray();
-  const limit = root === undefined ? "DOM_NODES" : spendDomNodes(budget, root);
+  if (root === undefined) {
+    return { status: "over-limit", limit: "DOM_NODES" };
+  }
+  const limit = spendDomNodes(budget, root);
   if (limit !== null) {
     return { status: "over-limit", limit };
   }

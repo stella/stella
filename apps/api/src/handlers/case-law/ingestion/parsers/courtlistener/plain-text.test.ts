@@ -12,8 +12,8 @@ const rawText = (block: Block): string =>
   "inlines" in block ? plainTextOf(block.inlines) : block.plainText;
 
 const blocksOf = (parsed: FormatParse | null): Block[] => {
-  if (parsed === null || parsed.status !== "parsed") {
-    throw new Error(`expected a parse, got ${parsed?.status ?? "html"}`);
+  if (parsed?.status !== "parsed") {
+    throw new Error(`expected a parse, got ${parsed?.status ?? "none"}`);
   }
   return parsed.text.units.flatMap(({ blocks }) => [...blocks]);
 };
@@ -133,7 +133,7 @@ describe("preformatted bodies", () => {
       "See Werb v. D'Alessandro, 606 A.2d 117, 119 (Del. 1992).",
     ]);
     expect(
-      parsed.status === "parsed" ? parsed.text.counts.publisherLinks : null,
+      parsed?.status === "parsed" ? parsed.text.counts.publisherLinks : null,
     ).toBe(1);
   });
 

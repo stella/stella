@@ -7,7 +7,6 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import type { DecisionJudgeInput } from "@stll/api-contract/case-law-judges";
 import {
   resolveUsCourt,
   type UsCourtResolution,
@@ -28,7 +27,10 @@ import {
 
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { canonicalDecisionDate } from "@/api/lib/dates";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
+import {
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type DecisionJudgeInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import { courtListenerRawHash, encodeCourtListenerRaw } from "./raw";

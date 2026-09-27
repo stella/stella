@@ -187,9 +187,10 @@ test("the importer participates in conformance and replay but has no crawl capab
   expect(registration?.capability).toBe("import");
   expect(registration?.source.reparseStoredRaw).toBe(reparseStoredRaw);
   expect(getAdapter(COURTLISTENER_IMPORT_KEY)).toBeUndefined();
-  expect(
-    listAdapters().some(({ key }) => key === COURTLISTENER_IMPORT_KEY),
-  ).toBe(false);
+  const crawlAdapterKeys: readonly string[] = listAdapters().map(
+    ({ key }) => key,
+  );
+  expect(crawlAdapterKeys).not.toContain(COURTLISTENER_IMPORT_KEY);
   expect(registration?.source).not.toHaveProperty("fetchPage");
   expect(registration?.source).not.toHaveProperty("reconciliation");
 });
@@ -208,8 +209,5 @@ test("parser scope defects remain distinct from missing or unsupported source te
       reason: "no-usable-text",
       opinions: [],
     }),
-  ).toBe("no-usable-text");
-  expect(
-    courtListenerTextRejectionReason({ status: "unsupported", opinions: [] }),
   ).toBe("no-usable-text");
 });

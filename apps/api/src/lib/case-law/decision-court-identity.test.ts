@@ -79,8 +79,11 @@ test("a directory court id is exact, accepted, and agrees with the stored name",
   // A court the directory rejects stays outside the jurisdiction.
   for (const courtId of US_REJECTED_COURT_IDS) {
     const entry = resolveUsCourt(courtId);
+    if (entry.type !== "rejected") {
+      throw new Error(`Expected rejected court: ${courtId}`);
+    }
     expect(rejectionOf({ country: "USA", court: SCOTUS_NAME, courtId })).toBe(
-      entry.type === "rejected" ? entry.reason : "accepted",
+      entry.reason,
     );
   }
   expect(US_REJECTED_COURT_IDS.length).toBeGreaterThan(0);

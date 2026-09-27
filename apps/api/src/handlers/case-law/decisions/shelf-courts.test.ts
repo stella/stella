@@ -96,6 +96,7 @@ const shelfOf = (courts: readonly string[], buckets: FacetBucket[]) =>
   selectShelfCourts({
     counts: courtDocketSizes({ courts, buckets }),
     entries: entriesFor("CZE"),
+    country: "CZE",
     limit: 4,
   }).map((shelfCourt) => shelfCourt.court);
 

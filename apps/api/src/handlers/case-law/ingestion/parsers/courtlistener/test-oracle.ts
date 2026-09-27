@@ -245,10 +245,9 @@ const htmlWords = (
     }
     const next = source[opening + 1];
     const tagStart = next !== undefined && /[a-zA-Z!?]/u.test(next);
+    const afterSlash = source[opening + 2];
     const closingTagStart =
-      next === "/" &&
-      source[opening + 2] !== undefined &&
-      /[a-zA-Z]/u.test(source[opening + 2]);
+      next === "/" && afterSlash !== undefined && /[a-zA-Z]/u.test(afterSlash);
     if (!tagStart && !closingTagStart) {
       emit(opening, opening + 1);
       cursor = opening + 1;

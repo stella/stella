@@ -351,9 +351,14 @@ describe("footnote parts", () => {
         ],
         plainText: "Data",
       },
-      ...noteBlocks([{ type: "footnote", label: "5", noteId: "n5" }]).map(
-        (block) => ({ ...block, id: "b2", anchorId: "b-2" }),
-      ),
+      {
+        id: "b2",
+        anchorId: "b-2",
+        type: "paragraph",
+        note: { type: "footnote", label: "5", noteId: "n5" },
+        inlines: [{ type: "text", text: "Note" }],
+        plainText: "Note",
+      },
     ];
     const { headIds, backJumpAnchorByLastId } = footnoteParts(blocks);
 

@@ -128,7 +128,7 @@ const readOrderWording = (body: string) => {
     .normalize("NFC")
     .replace(/\s+/gu, " ")
     .trim();
-  const length = [...text].length;
+  const length = Array.from(text).length;
   const short = length > 0 && length <= SHORT_ORDER_MAX_CHARACTERS;
   return {
     length,

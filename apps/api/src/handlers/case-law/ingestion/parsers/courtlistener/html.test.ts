@@ -259,6 +259,9 @@ test("keeps a table inside a real CourtListener footnote in the same note", () =
   if (table?.type !== "table") {
     throw new Error("expected the note's table");
   }
+  if (table.note === undefined) {
+    throw new Error("expected the table note");
+  }
   expect(table.note).toEqual({
     type: "footnote",
     label: "5",

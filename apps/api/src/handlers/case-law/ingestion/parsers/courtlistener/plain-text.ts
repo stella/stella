@@ -232,8 +232,10 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
     return null;
   }
   const [root] = $.root().toArray();
-  const limit =
-    root === undefined ? "DOM_NODES" : spendDomNodes(input.budget, root);
+  if (root === undefined) {
+    return { status: "over-limit", limit: "DOM_NODES" };
+  }
+  const limit = spendDomNodes(input.budget, root);
   if (limit !== null) {
     return { status: "over-limit", limit };
   }

@@ -127,7 +127,9 @@ describe("orders are decisions of their own class", () => {
   test("a body past the short-order bound is never an order by wording", () => {
     const body = "Certiorari denied. ".repeat(40);
 
-    expect([...body.trim()].length).toBeGreaterThan(SHORT_ORDER_MAX_CHARACTERS);
+    expect(Array.from(body.trim()).length).toBeGreaterThan(
+      SHORT_ORDER_MAX_CHARACTERS,
+    );
     expect(classify(["010combined"], parsed(body)).kind).toBe("unclassified");
   });
 

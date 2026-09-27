@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isDocumentAst } from "@stll/legal-ast/document-ast";
+import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import { classifyCourtListenerDecision } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/order-classification";
@@ -56,9 +56,14 @@ const parsed = (outcome: CourtListenerTextOutcome) => {
   return outcome;
 };
 
-const asDocument = (blocks: readonly Block[]) => ({
+const asDocument = (blocks: readonly Block[]): DocumentAst => ({
   version: 1,
-  source: { system: "courtlistener", documentId: "", webUrl: "", printUrl: "" },
+  source: {
+    system: "courtlistener",
+    documentId: "",
+    webUrl: "",
+    printUrl: "",
+  },
   metadata: {
     caseNumber: null,
     ecli: null,
@@ -158,9 +163,14 @@ describe("which column becomes an opinion's text", () => {
         composeCourtListenerText(mutated(cluster, columns)),
       );
       const [report] = outcome.opinions;
-      expect(`${report?.format}/${report?.structure}`).toBe(winner);
+      if (report === undefined) {
+        throw new Error("expected an opinion report");
+      }
+      expect(`${report.format ?? "none"}/${report.structure ?? "none"}`).toBe(
+        winner,
+      );
       expect(
-        report?.attempts.map(
+        report.attempts.map(
           ({ format, reason, structure }) => `${format}/${structure}:${reason}`,
         ),
       ).toEqual([...refused]);

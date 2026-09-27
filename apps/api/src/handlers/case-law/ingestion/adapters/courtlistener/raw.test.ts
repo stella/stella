@@ -190,7 +190,7 @@ describe("the stored CourtListener raw", () => {
       { raw: encodeSourceRawEnvelope({ "PRIVILEGED-PART": "{}" }) },
       "unexpected-part",
     ],
-  ])("rejects %s with a typed reason", (_name, override, reason) => {
+  ] as const)("rejects %s with a typed reason", (_name, override, reason) => {
     const decoded = decodeCourtListenerRaw({
       raw: encodeCourtListenerRaw(admitted(courtListenerRecord())),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

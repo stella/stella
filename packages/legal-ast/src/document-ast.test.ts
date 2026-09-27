@@ -657,9 +657,12 @@ describe("table cell spans and header cells", () => {
   });
 
   test("keeps a footnote table's membership across the wire round trip", () => {
-    const ast = cellAst({ plainText: "Rok" });
+    const ast = parseDocumentAst(cellAst({ plainText: "Rok" }));
+    if (ast === null) {
+      throw new Error("expected a document AST");
+    }
     const block = ast.blocks[0];
-    if (block === undefined) {
+    if (block?.type !== "table") {
       throw new Error("expected a table block");
     }
     const noted = {
@@ -670,7 +673,7 @@ describe("table cell spans and header cells", () => {
           note: { type: "footnote", label: "5", noteId: "fn-5" },
         },
       ],
-    };
+    } satisfies DocumentAst;
 
     expect(isDocumentAst(noted)).toBe(true);
     expect(parseDocumentAst(JSON.stringify(noted))).toEqual(noted);

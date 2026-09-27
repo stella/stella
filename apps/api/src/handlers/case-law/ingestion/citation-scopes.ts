@@ -20,6 +20,11 @@ const CITATION_SCOPE_DEFECTS = {
 type CitationScopeDefect =
   (typeof CITATION_SCOPE_DEFECTS)[keyof typeof CITATION_SCOPE_DEFECTS];
 
+const CITATION_SCOPE_BOUNDARIES: ReadonlySet<string> = new Set([
+  "proven",
+  "unproven",
+]);
+
 export class CitationScopesRejectedError extends TaggedError(
   "CitationScopesRejectedError",
 )<{
@@ -62,7 +67,7 @@ export const indexCitationScopes = (
   >();
   const opinions = new Set<string>();
   for (const { blockIds, boundaries, opinionId } of scopes) {
-    if (boundaries !== "proven" && boundaries !== "unproven") {
+    if (!CITATION_SCOPE_BOUNDARIES.has(boundaries)) {
       return rejected(CITATION_SCOPE_DEFECTS.INVALID_BOUNDARIES, opinionId);
     }
     if (opinions.has(opinionId)) {

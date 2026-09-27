@@ -138,9 +138,9 @@ export const walkInlines = (
         // A page label can own the only separator between its neighbours.
         // Preserve its boundary whitespace, but never split a word it bisects.
         const printed = $(child).text();
-        const leading = printed.match(/^\s+/u)?.at(0) ?? "";
+        const leading = /^\s+/u.exec(printed)?.at(0) ?? "";
         const trailing =
-          printed.slice(leading.length).match(/\s+$/u)?.at(0) ?? "";
+          /\s+$/u.exec(printed.slice(leading.length))?.at(0) ?? "";
         appendTextInline(inlines, leading, anonymized);
         inlines.push(anchor);
         appendTextInline(inlines, trailing, anonymized);

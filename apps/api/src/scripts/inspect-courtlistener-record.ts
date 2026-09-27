@@ -84,12 +84,13 @@ const rawReadBack = (plan: CourtListenerDecisionPlan) => {
     raw: plan.sourceRaw,
     contentType: plan.sourceRawContentType,
   });
-  const readmitted = Result.isError(decoded)
-    ? decoded
-    : admitCourtListenerRecord(decoded.value);
-  const rawHashStable =
-    Result.isOk(readmitted) &&
-    courtListenerRawHash(readmitted.value.record) === plan.rawHash;
+  let rawHashStable = false;
+  if (Result.isOk(decoded)) {
+    const readmitted = admitCourtListenerRecord(decoded.value);
+    rawHashStable =
+      Result.isOk(readmitted) &&
+      courtListenerRawHash(readmitted.value.record) === plan.rawHash;
+  }
   return { undeclaredFields, missingParts, rawHashStable };
 };
 

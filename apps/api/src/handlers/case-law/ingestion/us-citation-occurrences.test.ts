@@ -1114,8 +1114,8 @@ describe("occurrences (properties)", () => {
             paragraph("two", "Id. Brown, supra."),
           ];
           const targets = targetsOf(blocks, [
-            { opinionId: first, blockIds: ["one"] },
-            { opinionId: second, blockIds: ["two"] },
+            { opinionId: first, blockIds: ["one"], boundaries: "proven" },
+            { opinionId: second, blockIds: ["two"], boundaries: "proven" },
           ]);
           expect(targets.slice(1).map(([, target]) => target)).toEqual([
             { status: "unresolved", reason: "missing-antecedent" },

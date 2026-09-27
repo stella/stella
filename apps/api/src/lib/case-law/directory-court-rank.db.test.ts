@@ -91,7 +91,9 @@ test("both Postgres searches rank a United States decision by its court id's tie
   // SAFETY: the owner handle has the read surface the public reader has.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite owner handle stands in for the public read transaction
   const tx = db as unknown as CaseLawPublicReadTransaction;
-  const courtIdOf = new Map(decisions.map(({ courtId, id }) => [id, courtId]));
+  const courtIdOf = new Map(
+    decisions.map(({ courtId, id }) => [String(id), courtId]),
+  );
   const scored = (rows: Record<string, unknown>[], scoreColumn: string) =>
     rows.map((row) => ({
       courtId: courtIdOf.get(String(row["decision_id"])),

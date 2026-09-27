@@ -17,7 +17,15 @@ import {
 
 /** Everything a rejection carries, as a log line or ledger row would. */
 const serialized = (rejection: CourtListenerRecordRejectedError): string =>
-  JSON.stringify({ ...rejection, message: rejection.message });
+  JSON.stringify({
+    message: rejection.message,
+    reason: rejection.reason,
+    sourceRecordKey: rejection.sourceRecordKey,
+    clusterId: rejection.clusterId,
+    diagnostics: rejection.diagnostics,
+    omittedDiagnostics: rejection.omittedDiagnostics,
+    opinionIds: rejection.opinionIds,
+  });
 
 const rejectionOf = (input: unknown) => {
   const admitted = admitCourtListenerRecord(input);

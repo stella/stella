@@ -306,8 +306,7 @@ const appendSections = (
         block.role === "panel" ||
         block.role === "parties" ||
         block.role === "front-matter" ||
-        block.role === "case-number" ||
-        block.role === "counsel"
+        block.role === "case-number"
       ) {
         type = "header";
       } else if (block.role === "history") {

@@ -45,8 +45,6 @@ export const courtListenerTextRejectionReason = (
       return outcome.reason;
     case "scope-defect":
       return COURTLISTENER_REJECTION_REASON.SCOPE_DEFECT;
-    case "unsupported":
-      return COURTLISTENER_REJECTION_REASON.NO_USABLE_TEXT;
     default:
       outcome satisfies never;
       return panic("Unhandled CourtListener text rejection");

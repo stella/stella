@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { COURTLISTENER_TEXT_FORMATS } from "../../parsers/courtlistener/select";
 import { mapCourtListenerRecord } from "./map";
 import {
@@ -64,32 +66,42 @@ const record = () =>
 
 export const courtListenerConformanceFixture = () => {
   const input = record();
-  const rowValues = (
+  const rawFieldValues: Record<string, string | string[]> = {};
+  const addRowValues = (
     prefix: string,
     rows: readonly Readonly<Record<string, string>>[],
-  ) =>
-    Object.keys(rows.at(0) ?? {}).map(
-      (column) =>
-        [`${prefix}.${column}`, rows.map((row) => row[column])] as const,
-    );
-  const rawFieldValues = Object.fromEntries([
-    ...Object.entries(input.cluster).map(
-      ([column, value]) => [`cluster.${column}`, value] as const,
-    ),
-    ...Object.entries(input.docket).map(
-      ([column, value]) => [`docket.${column}`, value] as const,
-    ),
-    ...Object.entries(input.court).map(
-      ([column, value]) => [`court.${column}`, value] as const,
-    ),
-    ...rowValues("opinions[]", input.opinions),
-    ...rowValues("citations[]", input.citations),
-    ...(input.judgeRelations.status === "complete"
-      ? rowValues("people[]", input.judgeRelations.people)
-      : []),
-  ]);
+  ) => {
+    const first = rows.at(0);
+    if (first === undefined) {
+      panic(`Missing CourtListener conformance rows: ${prefix}`);
+    }
+    for (const column of Object.keys(first)) {
+      rawFieldValues[`${prefix}.${column}`] = rows.map((row) => {
+        const value = row[column];
+        return (
+          value ??
+          panic(`Missing CourtListener conformance column: ${prefix}.${column}`)
+        );
+      });
+    }
+  };
+  for (const [column, value] of Object.entries(input.cluster)) {
+    rawFieldValues[`cluster.${column}`] = value;
+  }
+  for (const [column, value] of Object.entries(input.docket)) {
+    rawFieldValues[`docket.${column}`] = value;
+  }
+  for (const [column, value] of Object.entries(input.court)) {
+    rawFieldValues[`court.${column}`] = value;
+  }
+  addRowValues("opinions[]", input.opinions);
+  addRowValues("citations[]", input.citations);
+  if (input.judgeRelations.status === "complete") {
+    addRowValues("people[]", input.judgeRelations.people);
+  }
   return {
-    buildDecision: async () => mapCourtListenerRecord(input).unwrap(),
+    buildDecision: async () =>
+      await Promise.resolve(mapCourtListenerRecord(input).unwrap()),
     rawFieldValues,
   };
 };
