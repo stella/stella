@@ -207,6 +207,27 @@ const isRead = (
   return reference?.isRead() ?? false;
 };
 
+const isMemberRead = (node: AstNode): boolean => {
+  const parent = node.parent;
+  if (!isAstNode(parent)) {
+    return true;
+  }
+  if (parent.type === "AssignmentExpression" && parent.left === node) {
+    return parent.operator !== "=";
+  }
+  if (
+    (parent.type === "ForInStatement" || parent.type === "ForOfStatement") &&
+    parent.left === node
+  ) {
+    return false;
+  }
+  return !(
+    parent.type === "UnaryExpression" &&
+    parent.operator === "delete" &&
+    parent.argument === node
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "request-lifetime" },
   rules: {
@@ -262,6 +283,7 @@ export default eslintCompatPlugin({
               !isAstNode(node) ||
               node.computed ||
               !isIdentifier(node.property, REQUEST) ||
+              !isMemberRead(node) ||
               insideProbeDeclaration(node)
             ) {
               return;

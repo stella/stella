@@ -98,4 +98,19 @@ describe.serial("request-lifetime confine-request-reads", () => {
       ),
     ).toEqual([2]);
   });
+
+  test("reports member reads but accepts write-only member targets", async () => {
+    expect(
+      await lint(
+        lines(
+          "export const send = (ctx: { request: Request }, next: Request, others: Request[]) => {",
+          "  ctx.request = next;",
+          "  for (ctx.request of others) {}",
+          "  delete ctx.request;",
+          "  return ctx.request.signal;",
+          "};",
+        ),
+      ),
+    ).toEqual([5]);
+  });
 });
