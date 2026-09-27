@@ -1519,9 +1519,8 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     test("reads a person subject and a localized birth date", async () => {
-      const runEntityCheck = mock(
-        async (): ReturnType<typeof runEntityCheckForTest> =>
-          Result.ok(clearOutcome),
+      const runEntityCheck = mock<typeof runEntityCheckForTest>(async () =>
+        Result.ok(clearOutcome),
       );
       await callWith(runEntityCheck, {
         check: "cz-insolvency",
