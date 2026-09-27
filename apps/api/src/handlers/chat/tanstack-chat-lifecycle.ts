@@ -18,6 +18,8 @@ import type {
 } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { runFinishedOutcomeOf } from "@/api/lib/chat/tanstack-chat-runtime";
+
 /**
  * Full middleware-surface canary. This intentionally covers nonterminal hooks
  * too: any upstream middleware addition/removal forces an explicit Stella
@@ -43,6 +45,7 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   optionalRequires: "configuration",
   provides: "configuration",
   requires: "configuration",
+  routedSubagentPersistence: "configuration",
   sandbox: "nonterminal",
   setup: "nonterminal",
 } as const satisfies Record<
@@ -145,9 +148,9 @@ const TANSTACK_STREAM_EVENT_LIFECYCLE = {
 
 export const tanStackStreamEventLifecycle = (
   chunk: StreamChunk,
-): "completed" | "content" | "failed" | "started" | "waiting" => {
+): "cancelled" | "completed" | "content" | "failed" | "started" | "waiting" => {
   if (chunk.type === EventType.RUN_FINISHED) {
-    return chunk.outcome?.type === "interrupt" ? "waiting" : "completed";
+    return runFinishedOutcomeOf(chunk);
   }
   return TANSTACK_STREAM_EVENT_LIFECYCLE[chunk.type];
 };

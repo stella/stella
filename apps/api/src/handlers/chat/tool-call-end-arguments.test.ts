@@ -1,5 +1,5 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { StreamChunk, Tool, UIMessage } from "@tanstack/ai";
+import type { AdapterYieldChunk, Tool, UIMessage } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { expect, test } from "bun:test";
@@ -21,7 +21,9 @@ const isToolCallPart = (
   part: UIMessage["parts"][number],
 ): part is ToolCallPart => part.type === "tool-call";
 
-const persistToolCallPart = (chunks: readonly StreamChunk[]): ToolCallPart => {
+const persistToolCallPart = (
+  chunks: readonly AdapterYieldChunk[],
+): ToolCallPart => {
   const captured: { message: UIMessage | null } = { message: null };
   const processor = new StreamProcessor({
     events: {
@@ -259,7 +261,7 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
     },
   });
 
-  const chunks: StreamChunk[] = [];
+  const chunks: AdapterYieldChunk[] = [];
   for await (const chunk of adapter.chatStream({
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "List my matters." }],

@@ -47,6 +47,7 @@ import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-co
 import {
   finishReasonOf,
   generateChatObject,
+  runFinishedOutcomeOf,
   streamChatChunks,
   streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -375,7 +376,10 @@ export const collectTanStackTextRun = async (
     if (chunk.type === EventType.RUN_FINISHED) {
       // A tool loop runs several times inside one call; the last finish is
       // the one that produced the answer being returned.
-      run.finish = { kind: "finished", reason: finishReasonOf(chunk) };
+      run.finish =
+        runFinishedOutcomeOf(chunk) === "cancelled"
+          ? { kind: "unfinished" }
+          : { kind: "finished", reason: finishReasonOf(chunk) };
       continue;
     }
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {

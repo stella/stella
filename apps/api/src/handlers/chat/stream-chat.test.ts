@@ -7,6 +7,7 @@ import {
   toolDefinition,
 } from "@tanstack/ai";
 import type {
+  AdapterYieldChunk,
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
@@ -280,7 +281,7 @@ const createScriptedAdapter = (
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     // Provider adapters open a text message only when text arrives; a
     // tool-only iteration (Gemini, OpenAI Responses) carries no
     // TEXT_MESSAGE_START, so only the first scripted turn emits one.
@@ -291,7 +292,7 @@ const createScriptedAdapter = (
         role: "assistant",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     }
     yield {
       type: EventType.TOOL_CALL_START,
@@ -299,20 +300,20 @@ const createScriptedAdapter = (
       toolCallName: toolName,
       parentMessageId: messageId,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_ARGS,
       toolCallId: callId,
       delta: argumentsText,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: callId,
       ...(input === undefined ? {} : { input }),
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -321,7 +322,7 @@ const createScriptedAdapter = (
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -352,27 +353,27 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_START,
       messageId,
       role: "assistant",
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_CONTENT,
       messageId,
       delta: text,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_END,
       messageId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -381,7 +382,7 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -489,7 +490,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
           code: "aborted",
           model,
           timestamp,
-        } satisfies StreamChunk;
+        } satisfies AdapterYieldChunk;
         return;
       }
       yield {
@@ -498,26 +499,26 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         threadId: resolvedThreadId,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_START,
         toolCallId: "call-1",
         toolCallName: "run-code",
         parentMessageId: "provider-message-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_ARGS,
         toolCallId: "call-1",
         delta: '{"source":"1 + 1"}',
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_END,
         toolCallId: "call-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
@@ -525,7 +526,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         finishReason: "tool_calls",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     },
     structuredOutput: () => {
       throw new Error("Structured output is not part of this fixture");

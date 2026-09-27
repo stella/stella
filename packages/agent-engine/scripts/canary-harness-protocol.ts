@@ -46,7 +46,15 @@ export const createCanaryHarnessObservation = (): CanaryHarnessObservation => ({
  * stream. Keep diagnostic output bounded so an arbitrary tool payload cannot
  * be published in the protected workflow log.
  */
-const finishResultShape = (content: string): string => {
+type ToolCallResultContent = Extract<
+  CanaryHarnessChunk,
+  { type: EventType.TOOL_CALL_RESULT }
+>["content"];
+
+const finishResultShape = (content: ToolCallResultContent): string => {
+  if (typeof content !== "string") {
+    return "content-parts";
+  }
   if (content === "") {
     return "empty";
   }
@@ -73,6 +81,28 @@ const finishResultShape = (content: string): string => {
     return "json-scalar";
   } catch {
     return "text";
+  }
+};
+
+type RunOutcomeType = NonNullable<
+  Extract<CanaryHarnessChunk, { type: EventType.RUN_FINISHED }>["outcome"]
+>["type"];
+
+/** Why a run that ended with `outcome` fails the canary; a missing outcome is a success. */
+const runOutcomeFailure = (
+  outcome: RunOutcomeType | undefined,
+): string | undefined => {
+  switch (outcome) {
+    case undefined:
+    case "success":
+      return undefined;
+    case "interrupt":
+      return "canary harness run was interrupted";
+    case "cancelled":
+      return "canary harness run was cancelled";
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled run outcome: ${String(outcome)}`);
   }
 };
 
@@ -105,12 +135,10 @@ export const consumeCanaryHarnessChunk = (
         };
       }
       return;
-    case EventType.RUN_FINISHED:
-      if (chunk.outcome?.type === "interrupt") {
-        observation.runStatus = {
-          status: "failed",
-          message: "canary harness run was interrupted",
-        };
+    case EventType.RUN_FINISHED: {
+      const outcomeFailure = runOutcomeFailure(chunk.outcome?.type);
+      if (outcomeFailure !== undefined) {
+        observation.runStatus = { status: "failed", message: outcomeFailure };
         return;
       }
       if (
@@ -125,6 +153,7 @@ export const consumeCanaryHarnessChunk = (
       }
       observation.runStatus = { status: "finished" };
       return;
+    }
     case EventType.RUN_STARTED:
       if (observation.hasStarted) {
         observation.runStatus = {
