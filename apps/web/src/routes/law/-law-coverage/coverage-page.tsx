@@ -51,6 +51,7 @@ import {
   type CaseLawCoverageSource,
   type CaseLawMeasuredCompleteness,
   type CaseLawSourceCompleteness,
+  coverageGlobeFrame,
   orderCoverageCountriesByName,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
@@ -282,15 +283,6 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
 /** The disc's side, beside the legend and the number. */
 const GLOBE_SIZE = 280;
 
-/** Zoomed on Central Europe; the disc clip hides the cropped rim. */
-const GLOBE_SCALE = 1.6;
-
-/** The longitude the sphere holds, so every capital faces the reader. */
-const EUROPE_LONGITUDE = 17;
-
-/** Leaned so Central Europe sits at the centre of the disc. */
-const EUROPE_TILT = 0.85;
-
 /** One pin per capital; the legend beside the globe carries the figures. */
 const CAPITAL_MARKER_SIZE = 0.05;
 
@@ -306,16 +298,17 @@ const CAPITAL_BY_JURISDICTION = {
   HUN: [47.5, 19.04],
   POL: [52.23, 21.01],
   SVK: [48.15, 17.11],
+  USA: [38.89, -77],
 } as const satisfies Record<CaseLawJurisdiction, readonly [number, number]>;
 
 /**
  * Each jurisdiction's colour, on the pin and in the legend, taken from its
  * flag: the EU's blue, the Czech red, the Slovak blue, the Hungarian green,
- * the Polish and Austrian reds. Flags in this region are red, white and blue,
- * so the reds cannot be told apart by colour alone; the legend's names and
- * the capitals' places on the sphere carry the identity where the hue does
- * not. Fixed per jurisdiction, so a country keeps its colour when another
- * arrives.
+ * the Polish and Austrian reds, the United States' navy. Most of these flags
+ * are red, white and blue, so the reds cannot be told apart by colour alone;
+ * the legend's names and the capitals' places on the sphere carry the
+ * identity where the hue does not. Fixed per jurisdiction, so a country keeps
+ * its colour when another arrives.
  */
 const COLOR_BY_JURISDICTION = {
   AUT: "#ed2939",
@@ -324,6 +317,7 @@ const COLOR_BY_JURISDICTION = {
   HUN: "#477050",
   POL: "#dc143c",
   SVK: "#0b4ea2",
+  USA: "#0a3161",
 } as const satisfies Record<CaseLawJurisdiction, string>;
 
 /**
@@ -380,17 +374,21 @@ const CoverageGlobe = ({
     location: [...CAPITAL_BY_JURISDICTION[country.country]],
     size: CAPITAL_MARKER_SIZE,
   }));
+  // Every capital faces the reader, whichever jurisdictions the figures carry.
+  const frame = coverageGlobeFrame(
+    countries.map((country) => CAPITAL_BY_JURISDICTION[country.country]),
+  );
 
   return (
     <>
       <Globe
         className="overflow-hidden rounded-full"
-        focusLongitude={EUROPE_LONGITUDE}
+        focusLongitude={frame.longitude}
         label={t("caseLaw.coverage.globeLabel")}
         markers={markers}
-        scale={GLOBE_SCALE}
+        scale={frame.scale}
         size={GLOBE_SIZE}
-        tilt={EUROPE_TILT}
+        tilt={frame.tilt}
       />
       <ul className="flex flex-col gap-1.5 text-sm">
         {countries.map((country) => (

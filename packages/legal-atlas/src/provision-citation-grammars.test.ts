@@ -31,6 +31,7 @@ const FIXTURES = {
   HUN: null,
   POL: null,
   SVK: null,
+  USA: null,
 } as const satisfies Record<CaseLawJurisdiction, GrammarFixture | null>;
 
 const czech = PROVISION_CITATION_GRAMMARS.CZE;
