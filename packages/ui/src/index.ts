@@ -78,3 +78,4 @@ export * from "./review/review-diff-text";
 export * from "./review/review-out-of-date-notice";
 export * from "./review/review-severity-dot";
 export * from "./review/review-status-badge";
+export * from "./review/text-mark";
