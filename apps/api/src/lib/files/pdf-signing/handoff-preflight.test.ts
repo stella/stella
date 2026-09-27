@@ -106,12 +106,26 @@ describe("text a stamp can draw", () => {
     );
   });
 
-  test("falls back to English labels for a script it cannot shape", async () => {
-    const stamp = await placedStamp({
+  test("keeps right-to-left labels, and their direction, now that it shapes them", async () => {
+    const labels = {
       date: "التاريخ",
       location: "المكان",
       reason: "السبب",
       signedBy: "موقّع رقميًا من",
+    };
+    const stamp = await placedStamp(labels);
+
+    const drawn = await drawableStamp({ location: null, reason: null, stamp });
+    expect(Result.isOk(drawn) && drawn.value.labels).toEqual(labels);
+    expect(Result.isOk(drawn) && drawn.value.direction).toBe("rtl");
+  });
+
+  test("falls back to English labels for a script it cannot shape", async () => {
+    const stamp = await placedStamp({
+      date: "தேதி",
+      location: "இடம்",
+      reason: "காரணம்",
+      signedBy: "டிஜிட்டல் கையொப்பமிட்டவர்",
     });
 
     const drawn = await drawableStamp({ location: null, reason: null, stamp });
@@ -121,10 +135,32 @@ describe("text a stamp can draw", () => {
     expect(Result.isOk(drawn) && drawn.value.direction).toBe("ltr");
   });
 
+  test("draws the scripts its fonts shape", async () => {
+    const stamp = await placedStamp(ENGLISH_STAMP_LABELS);
+
+    for (const text of [
+      "عقد البيع",
+      "הסכם מכר",
+      "契約書",
+      "매매 계약",
+      "अनुबंध",
+      "ข้อตกลง",
+    ]) {
+      const drawn = await drawableStamp({
+        location: text,
+        reason: null,
+        stamp,
+      });
+      expect(Result.isOk(drawn)).toBe(true);
+    }
+  });
+
   test("refuses a reason or location it would draw wrongly or not at all", async () => {
     const stamp = await placedStamp(ENGLISH_STAMP_LABELS);
 
-    for (const text of ["عقد البيع", "契約書", "ข้อตกลง"]) {
+    // Scripts that need shaping the fonts do not carry, and a character no
+    // font has.
+    for (const text of ["ஒப்பந்தம்", "চুক্তি", "កិច្ចសន្យា", "𓀀"]) {
       const drawn = await drawableStamp({
         location: null,
         reason: text,

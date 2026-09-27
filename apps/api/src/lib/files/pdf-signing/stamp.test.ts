@@ -275,38 +275,19 @@ const signWithStamp = async (
   return { applied, first, placed, second };
 };
 
-/** Glyph ids in `<hex> Tj` operands, mapped through a ToUnicode CMap. */
-const decodeShownText = (content: string, cmap: string) => {
-  const unicode = new Map<number, string>();
+/** A ToUnicode CMap's `bfchar` entries: CID to text. */
+const parseToUnicode = (cmap: string) => {
   const utf16 = (hex: string) =>
-    String.fromCodePoint(
-      ...(hex.match(/.{4}/gu) ?? []).map((unit) => Number.parseInt(unit, 16)),
-    );
-  const sections = (name: string) =>
-    [...cmap.matchAll(new RegExp(`begin${name}([\\s\\S]*?)end${name}`, "gu"))]
-      .map(([, body]) => body ?? "")
-      .join("\n");
-  for (const [, gid, value] of sections("bfchar").matchAll(
-    /<([\da-f]+)>\s*<([\da-f]+)>/giu,
-  )) {
-    unicode.set(Number.parseInt(gid ?? "", 16), utf16(value ?? ""));
-  }
-  for (const [, from, to, value] of sections("bfrange").matchAll(
-    /<([\da-f]+)>\s*<([\da-f]+)>\s*<([\da-f]+)>/giu,
-  )) {
-    const first = Number.parseInt(from ?? "", 16);
-    const base = Number.parseInt(value ?? "", 16);
-    for (let gid = first; gid <= Number.parseInt(to ?? "", 16); gid += 1) {
-      unicode.set(gid, String.fromCodePoint(base + gid - first));
+    new TextDecoder("utf-16be").decode(Buffer.from(hex, "hex"));
+  const unicode = new Map<number, string>();
+  for (const [, body] of cmap.matchAll(/beginbfchar([\s\S]*?)endbfchar/gu)) {
+    for (const [, cid, value] of (body ?? "").matchAll(
+      /<([\da-f]+)>\s*<([\da-f]*)>/giu,
+    )) {
+      unicode.set(Number.parseInt(cid ?? "", 16), utf16(value ?? ""));
     }
   }
-  return [...content.matchAll(/<([\da-f]+)>\s*Tj/giu)]
-    .map(([, hex]) =>
-      (hex?.match(/.{4}/gu) ?? [])
-        .map((gid) => unicode.get(Number.parseInt(gid, 16)) ?? "�")
-        .join(""),
-    )
-    .join("\n");
+  return unicode;
 };
 
 /** The stamp widget on page 1 of `bytes`, and its appearance stream. */
@@ -325,7 +306,114 @@ const readStamp = async (bytes: Uint8Array) => {
   const appearanceRef = widget?.getDict("AP", resolve)?.get("N");
   const appearance =
     appearanceRef instanceof PdfRef ? pdf.getObject(appearanceRef) : undefined;
-  return { appearance, appearanceRef, page, pdf, widget };
+  if (
+    !(appearance instanceof PdfStream) ||
+    !(appearanceRef instanceof PdfRef)
+  ) {
+    throw new Error("no stamp appearance");
+  }
+  return { appearance, appearanceRef, page, pdf, resolve, widget };
+};
+
+/**
+ * The appearance's text, row by row, the way an extractor that honours
+ * /ActualText reads it: glyphs through their font's ToUnicode map, and a
+ * marked span's /ActualText in place of the glyphs inside it. Glyphs come
+ * in drawing order, so a left-to-right row reads in logical order.
+ */
+const readStampRows = async (bytes: Uint8Array) => {
+  const { appearance, pdf, resolve } = await readStamp(bytes);
+  const fonts = appearance
+    .getDict("Resources", resolve)
+    ?.getDict("Font", resolve);
+  const toUnicode = new Map<string, Map<number, string>>();
+  for (const [{ value: name }, ref] of fonts ?? []) {
+    const font = ref instanceof PdfRef ? pdf.getObject(ref) : ref;
+    const cmapRef = font instanceof PdfDict ? font.get("ToUnicode") : undefined;
+    const cmap = cmapRef instanceof PdfRef ? pdf.getObject(cmapRef) : undefined;
+    if (!(cmap instanceof PdfStream)) {
+      throw new Error(`font ${name} has no ToUnicode map`);
+    }
+    toUnicode.set(
+      name,
+      parseToUnicode(new TextDecoder().decode(cmap.getDecodedData())),
+    );
+  }
+  const rows = new Map<string, string>();
+  let font = "";
+  let row = "";
+  let actualText: string | null = null;
+  for (const line of new TextDecoder()
+    .decode(appearance.getDecodedData())
+    .split("\n")) {
+    const fontMatch = /^\/(\w+) [\d.]+ Tf$/u.exec(line);
+    const matrix = /^1 0 0 1 [\d.-]+ ([\d.-]+) Tm$/u.exec(line);
+    const span = /^\/Span << \/ActualText <FEFF([\dA-F]*)> >> BDC$/u.exec(line);
+    if (fontMatch) {
+      font = fontMatch[1] ?? "";
+    } else if (matrix) {
+      row = matrix[1] ?? "";
+    } else if (span) {
+      actualText = new TextDecoder("utf-16be").decode(
+        Buffer.from(span[1] ?? "", "hex"),
+      );
+    } else if (line === "EMC") {
+      rows.set(row, (rows.get(row) ?? "") + (actualText ?? ""));
+      actualText = null;
+    } else if (line.endsWith("TJ") && actualText === null) {
+      const unicode = toUnicode.get(font);
+      const glyphs = [...line.matchAll(/<([\dA-F]{4})>/gu)].map(
+        ([, cid]) => unicode?.get(Number.parseInt(cid ?? "", 16)) ?? "\uFFFD",
+      );
+      rows.set(row, (rows.get(row) ?? "") + glyphs.join(""));
+    }
+  }
+  return [...rows.values()];
+};
+
+/** Invisible characters an extractor may emit between glyphs. */
+const withoutInvisibles = (text: string) =>
+  text.replaceAll(/\p{Default_Ignorable_Code_Point}/gu, "");
+
+/**
+ * The words pdf.js extracts from the stamp, drawn onto its page: the text
+ * layer a browser viewer builds. pdf.js reads glyphs through ToUnicode only
+ * (it ignores /ActualText), in visual order, and reorders right-to-left
+ * text itself.
+ */
+const pdfJsWords = async (bytes: Uint8Array) => {
+  const { appearanceRef, page, pdf } = await readStamp(bytes);
+  if (!page) {
+    throw new Error("no page");
+  }
+  page.dict.set(
+    "Resources",
+    PdfDict.of({ XObject: PdfDict.of({ Stamp: appearanceRef }) }),
+  );
+  page.dict.set(
+    "Contents",
+    pdf.context.registry.register(
+      new PdfStream(new PdfDict(), new TextEncoder().encode("/Stamp Do")),
+    ),
+  );
+  page.dict.delete("Annots");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loading = pdfjs.getDocument({ data: await pdf.save(), verbosity: 0 });
+  const content = await (
+    await (await loading.promise).getPage(1)
+  ).getTextContent();
+  const text = content.items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  await loading.destroy();
+  return new Set(
+    withoutInvisibles(text)
+      .split(/\s+/u)
+      // pdf.js moves a colon to the other side of a word in a line it reads
+      // as right to left; the word itself is what has to survive.
+      .map((word) => word.replaceAll(/\p{P}/gu, ""))
+      .filter((word) => word !== ""),
+  );
 };
 
 describe("signing with a visible stamp", () => {
@@ -335,11 +423,25 @@ describe("signing with a visible stamp", () => {
     expect(second.digestHex).toBe(first.digestHex);
   });
 
+  test("both phases prepare byte-identical input for shaped scripts", async () => {
+    // Phase 2 only returns a signature over phase 1's digest, so signing at
+    // all proves the two stamps, fonts and subsets were the same bytes.
+    const { applied, first, second } = await signWithStamp(0, "محمد عبد الله", {
+      box: { x: 0.1, y: 0.1, width: 400 / 600, height: 120 / 800 },
+      location: "東京 서울 กรุงเทพ",
+      reason: "अनुबंध דוד כהן",
+    });
+
+    expect(second.digestHex).toBe(first.digestHex);
+    const integrity = await readSignatureIntegrity(applied.bytes);
+    expect(integrity.every(({ digestMatches }) => digestMatches)).toBe(true);
+  });
+
   test.each([0, 90, 270] as const)(
     "lands the stamp where it was placed on a page turned by %d",
     async (rotation) => {
       const { applied, placed } = await signWithStamp(rotation);
-      const { appearance, widget } = await readStamp(applied.bytes);
+      const { widget } = await readStamp(applied.bytes);
 
       const rect = widget
         ?.getArray("Rect")
@@ -348,16 +450,18 @@ describe("signing with a visible stamp", () => {
           entry instanceof PdfNumber ? entry.value : Number.NaN,
         );
       expect(rect).toEqual([...placed.rect]);
-      expect(appearance).toBeInstanceOf(PdfStream);
     },
   );
 
-  test("refuses, before any digest, a name it would draw as blanks or misordered", async () => {
-    for (const name of ["山田太郎", "محمد علي"]) {
+  test("refuses, before any digest, a name in a script it cannot shape or draw", async () => {
+    for (const name of ["முருகன்", "\u{13000}"]) {
       const refused = await signWithStamp(0, name).catch(
         (error: unknown) => error,
       );
       expect(refused).toBeInstanceOf(PdfSigningStampError);
+      expect(PdfSigningStampError.is(refused) && refused.reason).toBe(
+        "unrenderable",
+      );
     }
   });
 
@@ -373,32 +477,17 @@ describe("signing with a visible stamp", () => {
       location,
       reason,
     });
-    const { appearance, page, pdf } = await readStamp(applied.bytes);
-    if (!(appearance instanceof PdfStream) || !page) {
-      throw new Error("no stamp appearance");
-    }
-    const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
-    const font = appearance
-      .getDict("Resources", resolve)
-      ?.getDict("Font", resolve)
-      ?.getDict("F1", resolve);
-    const toUnicode = font?.get("ToUnicode");
-    const cmap =
-      toUnicode instanceof PdfRef ? pdf.getObject(toUnicode) : undefined;
-    if (!(cmap instanceof PdfStream)) {
-      throw new Error("no ToUnicode map");
-    }
-    const content = new TextDecoder().decode(appearance.getDecodedData());
-    const text = decodeShownText(
-      content,
-      new TextDecoder().decode(cmap.getDecodedData()),
-    ).replaceAll("\n", " ");
+    const { appearance } = await readStamp(applied.bytes);
+    const text = withoutInvisibles(
+      (await readStampRows(applied.bytes)).join(" "),
+    );
 
     // Every word is there, wrapped over rows, none clipped away.
     expect(text.replaceAll(/\s+/gu, " ")).toContain(name);
     expect(text.replaceAll(/\s+/gu, "")).toContain(
       reason.replaceAll(/\s+/gu, ""),
     );
+    const content = new TextDecoder().decode(appearance.getDecodedData());
     const fontSize = Number(/\/F1 ([\d.]+) Tf/u.exec(content)?.[1]);
     expect(fontSize).toBeGreaterThanOrEqual(6);
   });
@@ -423,17 +512,7 @@ describe("signing with a visible stamp", () => {
 
   test("the stamp's text is the signer's name in an embedded Unicode font", async () => {
     const { applied } = await signWithStamp(0);
-    const { appearance, appearanceRef, page, pdf } = await readStamp(
-      applied.bytes,
-    );
-    if (
-      !(appearance instanceof PdfStream) ||
-      !(appearanceRef instanceof PdfRef) ||
-      !page
-    ) {
-      throw new Error("no stamp appearance");
-    }
-    const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
+    const { appearance, resolve } = await readStamp(applied.bytes);
     const font = appearance
       .getDict("Resources", resolve)
       ?.getDict("Font", resolve)
@@ -448,21 +527,52 @@ describe("signing with a visible stamp", () => {
         descriptor.getDict("FontDescriptor", resolve)?.has("FontFile2"),
     ).toBe(true);
 
-    // Read the drawn text back the way a text extractor does: the glyph ids
-    // the appearance shows, through the font's ToUnicode map.
-    const toUnicode = font?.get("ToUnicode");
-    const cmapStream =
-      toUnicode instanceof PdfRef ? pdf.getObject(toUnicode) : undefined;
-    if (!(cmapStream instanceof PdfStream)) {
-      throw new Error("the stamp's font has no ToUnicode map");
-    }
-    const text = decodeShownText(
-      new TextDecoder().decode(appearance.getDecodedData()),
-      new TextDecoder().decode(cmapStream.getDecodedData()),
-    );
+    const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
+    expect(rows).toEqual([
+      "Digitálně podepsal Jiří Čermák",
+      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Místo: Brno",
+    ]);
+  });
 
-    expect(text).toContain("Jiří Čermák");
-    expect(text).toContain("2026-06-01 14:00:00 +02:00");
-    expect(text).toContain("Brno");
+  test("reads back every script exactly where /ActualText is honoured", async () => {
+    const { applied } = await signWithStamp(0, "Jiří Čermák", {
+      box: { x: 0.1, y: 0.1, width: 400 / 600, height: 120 / 800 },
+      location: "नई दिल्ली · กรุงเทพ · 東京 · 서울",
+      reason: "Приложение Ελληνικά",
+    });
+
+    const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
+    expect(rows).toEqual([
+      "Digitálně podepsal Jiří Čermák",
+      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Důvod: Приложение Ελληνικά",
+      "Místo: नई दिल्ली · กรุงเทพ · 東京 · 서울",
+    ]);
+  });
+
+  test("a browser's text layer finds every right-to-left word whole", async () => {
+    const { applied } = await signWithStamp(0, "محمد عبد الله", {
+      box: { x: 0.1, y: 0.1, width: 400 / 600, height: 120 / 800 },
+      location: "תל אביב",
+      reason: "דוד כהן 2026",
+    });
+
+    const words = await pdfJsWords(applied.bytes);
+    for (const word of [
+      "محمد",
+      "عبد",
+      "الله",
+      "דוד",
+      "כהן",
+      "2026",
+      "תל",
+      "אביב",
+      "Digitálně",
+      "podepsal",
+      "Místo",
+    ]) {
+      expect(words).toContain(word);
+    }
   });
 });

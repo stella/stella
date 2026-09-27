@@ -14,7 +14,6 @@
  * files the runtime resolves is the contract.
  */
 
-import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import path from "node:path";
 
@@ -27,9 +26,11 @@ import { validateIco } from "@stll/business-registries/ares";
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
 import {
-  loadStampFont,
-  loadStampFontLicense,
+  loadStampFontLicenses,
+  loadStampFonts,
 } from "@/api/lib/files/pdf-signing/stamp-font";
+import { layoutStampRow } from "@/api/lib/files/pdf-signing/stamp-layout";
+import { stampTextCheck } from "@/api/lib/files/pdf-signing/stamp-text";
 import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 import {
   RUNTIME_WORKER_FILES,
@@ -175,15 +176,32 @@ await probe("stdnum native binding", () => {
   }
 });
 
-// Visible signature stamps draw with an embedded font the compiled binary
-// carries as an asset, together with its licence.
-await probe("signature stamp font", async () => {
-  const font = PDF.create().embedFont(await loadStampFont());
-  if (!font.canEncode("Čř")) {
-    panic("the stamp font cannot draw the scripts it is chosen for");
+// Visible signature stamps draw with embedded fonts and shape with an
+// embedded WebAssembly shaper, all carried by the compiled binary as
+// assets, together with the fonts' licences.
+await probe("signature stamp fonts and shaper", async () => {
+  const fonts = await loadStampFonts();
+  if (
+    !stampTextCheck(fonts).canDraw("Čř \u0645\u062D\u0645\u062F \u6771\u4EAC")
+  ) {
+    panic("the stamp fonts cannot draw the scripts they are chosen for");
   }
-  if ((await loadStampFontLicense()).length === 0) {
-    panic("the stamp font's licence is missing");
+  const row = layoutStampRow({
+    direction: "rtl",
+    fonts,
+    text: "\u0628\u0628\u0628",
+  });
+  const glyphs = new Set(
+    row.runs.flatMap(({ glyphs: shaped }) =>
+      shaped.map(({ glyphId }) => glyphId),
+    ),
+  );
+  if (glyphs.size !== 3) {
+    panic("the stamp shaper did not join Arabic letters");
+  }
+  const licenses = await loadStampFontLicenses();
+  if (licenses.some((license) => license.length === 0)) {
+    panic("a stamp font's licence is missing");
   }
 });
 
