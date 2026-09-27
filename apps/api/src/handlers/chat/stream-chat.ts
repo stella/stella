@@ -1607,6 +1607,24 @@ const restoreInterruptedToolCallInputs = (
   };
 };
 
+const isRunFinishedOutcome = (
+  lifecycle: ReturnType<typeof tanStackStreamEventLifecycle>,
+): boolean => {
+  switch (lifecycle) {
+    case "completed":
+    case "waiting":
+    case "cancelled":
+      return true;
+    case "content":
+    case "failed":
+    case "started":
+      return false;
+    default:
+      lifecycle satisfies never;
+      return panic(`Unhandled TanStack stream lifecycle: ${String(lifecycle)}`);
+  }
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1761,11 +1779,7 @@ export const processServerChatStream = async function* ({
           ? normalizeRunErrorChunk(sourceChunk)
           : sourceChunk;
       const lifecycle = tanStackStreamEventLifecycle(chunk);
-      if (
-        lifecycle === "completed" ||
-        lifecycle === "waiting" ||
-        lifecycle === "cancelled"
-      ) {
+      if (isRunFinishedOutcome(lifecycle)) {
         runCancelled ||= lifecycle === "cancelled";
         if (chunk.type !== EventType.RUN_FINISHED) {
           panic("Unhandled TanStack completed stream event");
