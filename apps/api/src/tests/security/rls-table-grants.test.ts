@@ -91,6 +91,13 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_statute_citation_memberships",
   "case_law_statute_citation_counts",
   "case_law_statute_citation_count_state",
+  // Per-decision provision-citation state and revisions: request code reads
+  // them; owner-run database functions and the extraction writers own every
+  // mutation.
+  "case_law_provision_scope_transitions",
+  "case_law_provision_extraction_revisions_registry",
+  "case_law_provision_extraction_revisions",
+  "case_law_provision_extractions",
   // Publisher-stated decision identifiers: global legal data read by public
   // case-law projections, written only by ingestion and the bounded backfill.
   "case_law_decision_identifiers",
@@ -167,6 +174,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "legislation_work_changes",
   "account_deletion_effect_chunks",
   "entity_deletion_effect_chunks",
+  // Provision extraction scopes: admission is read only through the owner-run
+  // case_law_provision_extraction_in_scope, so no role reads the table.
+  "case_law_provision_extraction_scopes",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's
   // identity. Written only through the owner connection in

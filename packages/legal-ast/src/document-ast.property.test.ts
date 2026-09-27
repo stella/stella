@@ -29,6 +29,7 @@ import type {
 } from "./document-ast.js";
 import { hasInlineChildren } from "./inline.js";
 import type { Inline } from "./inline.js";
+import { projectionDigest, projectionPieces } from "./projection-digest.js";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
@@ -301,6 +302,31 @@ describe("wire round trip (properties)", () => {
         expect(parseDocumentAst(JSON.stringify(wire))).toEqual(ast);
       }),
       config(300),
+    );
+  });
+
+  /**
+   * Stored provision spans are offsets into each piece's text, certified
+   * by the projection digest. The read path sends the wire form and the
+   * reader parses it back, so that trip must leave every piece's text and
+   * the digest as they were.
+   */
+  test("preserves every piece's text and the projection digest", async () => {
+    await fc.assert(
+      fc.asyncProperty(documentAst, async (ast) => {
+        const served = parseDocumentAst(
+          JSON.stringify(omitDerivablePlainText(ast)),
+        );
+        expect(served).not.toBeNull();
+        if (served === null) {
+          return;
+        }
+        expect(projectionPieces(served)).toEqual(projectionPieces(ast));
+        expect(await projectionDigest(served)).toBe(
+          await projectionDigest(ast),
+        );
+      }),
+      config(200),
     );
   });
 });
