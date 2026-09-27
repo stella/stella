@@ -1,18 +1,12 @@
 /**
- * Test support: the recorded opinion fixtures, and a text-conservation oracle
- * that shares no code with the parsers.
- *
- * The oracle reads a column's words through a different DOM (slimdom for
- * XML, cheerio's HTML text for preformatted bodies, the raw string for plain
- * text) and drops only the declared removals: printed page labels and note
- * backlinks. A parse conserves its source when both word multisets agree,
- * which proves no word lost and no paragraph repeated.
+ * Test support for recorded opinion fixtures and a text-conservation oracle.
+ * HTML is read by a lexical source walk; fixture tests declare excluded source
+ * spans explicitly, without inferring publisher furniture from production rules.
  */
 
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
-import { isTag, isText } from "domhandler";
-import type { AnyNode, Element } from "domhandler";
+import { decodeHTML } from "entities";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
@@ -137,10 +131,13 @@ const xmlText = (node: slimdom.Node): string => {
 const words = (text: string): string[] =>
   text.split(/\s+/u).filter((word) => word !== "");
 
+const NO_EXCLUDED_SPANS = { excludedSpans: [] } as const;
+
 /** The words a reader of `source` sees, per the structure it holds. */
 export const sourceWords = (
   structure: TextStructure,
   source: string,
+  options: { excludedSpans: readonly SourceSpan[] } = NO_EXCLUDED_SPANS,
 ): string[] => {
   switch (structure) {
     case "xml":
@@ -157,7 +154,7 @@ export const sourceWords = (
       return words($.root().text());
     }
     case "html":
-      return htmlWords(source);
+      return htmlWords(source, options.excludedSpans);
     case "plain":
       return words(source);
     default: {
@@ -181,6 +178,7 @@ const HTML_BLOCKS = new Set([
   "dl",
   "dt",
   "footer",
+  // CourtListener uses <h> for block headings, including adjacent siblings.
   "h",
   "h1",
   "h2",
@@ -203,84 +201,118 @@ const HTML_BLOCKS = new Set([
   "ul",
 ]);
 
-const isPageMarker = (element: Element): boolean => {
-  const classes = (element.attribs["class"] ?? "").split(/\s+/u);
-  return (
-    element.name.toLowerCase() === "page-number" ||
-    (element.name.toLowerCase() === "span" &&
-      classes.includes("star-pagination")) ||
-    (element.name.toLowerCase() === "a" && classes.includes("page-label"))
-  );
-};
+export type SourceSpan = Readonly<{ start: number; end: number }>;
 
-const isNoteContainer = (element: Element): boolean => {
-  const name = element.name.toLowerCase();
-  if (name === "footnote" || name === "footnote_body") {
-    return true;
-  }
-  const classes = (element.attribs["class"] ?? "").split(/\s+/u);
-  if (name === "div" && classes.includes("footnote")) {
-    return true;
-  }
-  const id = element.attribs["id"] ?? "";
-  if (name !== "div" || !id.startsWith("fn_")) {
-    return false;
-  }
-  let parent = element.parent;
-  while (parent !== null) {
-    if (
-      isTag(parent) &&
-      parent.name.toLowerCase() === "div" &&
-      (parent.attribs["class"] ?? "").split(/\s+/u).includes("footnotes")
-    ) {
-      return true;
+/** A deliberately small lexical walk: it knows HTML token boundaries, not publisher semantics. */
+const htmlWords = (
+  source: string,
+  excludedSpans: readonly SourceSpan[],
+): string[] => {
+  const visible: string[] = [];
+  let cursor = 0;
+  let suppressedTag: string | null = null;
+  const emit = (start: number, end: number): void => {
+    if (suppressedTag !== null) {
+      return;
     }
-    parent = parent.parent;
-  }
-  return false;
-};
-
-/** An independent DOM walk that drops only the printed page labels and note backlinks. */
-const htmlWords = (source: string): string[] => {
-  const $ = cheerio.load(source);
-  const body = $("body").first();
-  if (body.length === 0) {
-    return [];
-  }
-  const notes = $("*").toArray().filter(isTag).filter(isNoteContainer);
-  for (const marker of $("*").toArray().filter(isTag).filter(isPageMarker)) {
-    $(marker).remove();
-  }
-  for (const note of notes) {
-    for (const anchor of $(note).find("a").toArray()) {
-      const href = anchor.attribs["href"] ?? "";
-      const classes = (anchor.attribs["class"] ?? "").split(/\s+/u);
-      if (
-        classes.includes("footnote") ||
-        href.startsWith("#ref-") ||
-        href.startsWith("#fnr_")
-      ) {
-        $(anchor).remove();
+    const spans = excludedSpans
+      .filter((span) => span.start < end && span.end > start)
+      .toSorted((left, right) => left.start - right.start);
+    let position = start;
+    for (const span of spans) {
+      const excludedStart = Math.max(position, span.start);
+      if (excludedStart > position) {
+        visible.push(decodeHTML(source.slice(position, excludedStart)));
       }
+      visible.push(" ");
+      position = Math.max(position, Math.min(end, span.end));
+    }
+    if (position < end) {
+      visible.push(decodeHTML(source.slice(position, end)));
+    }
+  };
+  while (cursor < source.length) {
+    const opening = source.indexOf("<", cursor);
+    const textEnd = opening === -1 ? source.length : opening;
+    if (textEnd > cursor) {
+      emit(cursor, textEnd);
+    }
+    if (opening === -1) {
+      break;
+    }
+    if (source.startsWith("<!--", opening)) {
+      const commentEnd = source.indexOf("-->", opening + 4);
+      cursor = commentEnd === -1 ? source.length : commentEnd + 3;
+      continue;
+    }
+    const next = source[opening + 1];
+    const tagStart = next !== undefined && /[a-zA-Z!?]/u.test(next);
+    const afterSlash = source[opening + 2];
+    const closingTagStart =
+      next === "/" && afterSlash !== undefined && /[a-zA-Z]/u.test(afterSlash);
+    if (!tagStart && !closingTagStart) {
+      emit(opening, opening + 1);
+      cursor = opening + 1;
+      continue;
+    }
+    const close = findTagEnd(source, opening + 1);
+    if (close < 0) {
+      emit(opening, opening + 1);
+      cursor = opening + 1;
+      continue;
+    }
+    const raw = source.slice(opening + 1, close);
+    const prefix = raw.trimStart();
+    const closing = prefix.startsWith("/");
+    const name = /^([a-zA-Z][\w:-]*)/u
+      .exec((closing ? prefix.slice(1) : prefix).trimStart())
+      ?.at(1)
+      ?.toLowerCase();
+    cursor = close + 1;
+    if (name === undefined) {
+      continue;
+    }
+    if (suppressedTag !== null) {
+      if (closing && name === suppressedTag) {
+        suppressedTag = null;
+      }
+      continue;
+    }
+    if (
+      name === "script" ||
+      name === "style" ||
+      name === "title" ||
+      name === "template"
+    ) {
+      if (!closing && !/\/\s*$/u.test(raw)) {
+        suppressedTag = name;
+      }
+      continue;
+    }
+    if (HTML_BLOCKS.has(name)) {
+      visible.push(" ");
     }
   }
+  return words(visible.join(""));
+};
 
-  const visible = (node: AnyNode): string => {
-    if (isText(node)) {
-      return node.data;
+const findTagEnd = (source: string, from: number): number => {
+  let quote: string | null = null;
+  for (let index = from; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
     }
-    if (!isTag(node)) {
-      return "";
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === ">") {
+      return index;
     }
-    const name = node.name.toLowerCase();
-    if (name === "script" || name === "style") {
-      return "";
-    }
-    const children = node.children.map(visible).join("");
-    return HTML_BLOCKS.has(name) ? ` ${children} ` : children;
-  };
-
-  return words(body.contents().toArray().map(visible).join(""));
+  }
+  return -1;
 };
 
 /**

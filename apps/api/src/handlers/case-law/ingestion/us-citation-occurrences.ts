@@ -151,7 +151,8 @@ const runsOf = (
     const known = opinionId !== null;
     const boundaries = membership?.boundaries ?? null;
     const noteId =
-      block.type === "paragraph" && block.note !== undefined
+      (block.type === "paragraph" || block.type === "table") &&
+      block.note !== undefined
         ? (block.note.noteId ?? block.id)
         : null;
     const scopeKey = known ? `opinion:${opinionId}` : `block:${block.id}`;
@@ -180,7 +181,7 @@ const runsOf = (
               ...shared,
               cell: { row, column },
               inlines: cell.inlines,
-              registryKey: `${scopeKey}\u0000cell:${block.id}:${String(row)}:${String(column)}`,
+              registryKey: `${scopeKey}${noteKey}\u0000cell:${block.id}:${String(row)}:${String(column)}`,
             });
           }
         }

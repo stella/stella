@@ -111,6 +111,38 @@ describe("walkInlines", () => {
     expect(inlinesToPlainText(walk(html))).toBe("Shrin*114ers and");
   });
 
+  test("page markers retain their boundary whitespace without separating split words", () => {
+    for (const before of ["", " ", "\n", "\u00a0"]) {
+      for (const after of ["", " ", "\n", "\u00a0"]) {
+        const inlines = walk(`left<span>${before}*2${after}</span>right`, {
+          pageAnchor: () => ({ type: "page-anchor", label: "2" }),
+        });
+        expect(inlinesToPlainText(inlines)).toBe(`left${before}${after}right`);
+      }
+    }
+  });
+
+  test("keeps the page boundary space in a recorded opinion heading", () => {
+    const html = readFileSync(
+      new URL(
+        "courtlistener/__fixtures__/html/heading-4696496-discussion-ii.html",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    const $ = cheerio.load(html);
+    const inlines = walkInlines($, $("h").first(), {
+      pageAnchor: (element) =>
+        element.attribs["number"] === "6"
+          ? { type: "page-anchor", label: "6" }
+          : undefined,
+    });
+    expect(inlines).toEqual([
+      { type: "page-anchor", label: "6" },
+      { type: "text", text: "  II. DISCUSSION" },
+    ]);
+  });
+
   test("non-anonymized and anonymized text do not merge together", () => {
     const inlines = walk("plain<span class='anon-block'>secret</span>");
     expect(inlines).toEqual([
