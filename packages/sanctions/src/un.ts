@@ -282,13 +282,13 @@ const FORMAT: XmlListFormat = {
  * Parses the UN Security Council consolidated list (XML) from a byte stream,
  * e.g. `Bun.file(path).stream()` or a fetch response body.
  */
-export const parseUnList = (
+export const parseUnList = async (
   input: AsyncIterable<Uint8Array>,
 ): Promise<Result<ParsedList, SanctionsListParseError>> =>
-  parseXmlList(FORMAT, input);
+  await parseXmlList(FORMAT, input);
 
 /** Reads the edition stamp at the start of a UN list and stops there. */
-export const readUnListVersion = (
+export const readUnListVersion = async (
   input: AsyncIterable<Uint8Array>,
 ): Promise<Result<ListVersion, SanctionsListParseError>> =>
-  readXmlListVersion(FORMAT, input);
+  await readXmlListVersion(FORMAT, input);

@@ -237,7 +237,7 @@ const entry = (
     return Result.err(
       invalidValue(
         SOURCE,
-        `entry ${sourceId} has subject type "${subjectCode}"`,
+        `entry ${sourceId} has subject type "${subjectCode ?? ""}"`,
       ),
     );
   }
@@ -361,13 +361,13 @@ const FORMAT: XmlListFormat = {
  * Parses the EU consolidated financial sanctions list (XML schema 1.1) from a
  * byte stream, e.g. `Bun.file(path).stream()` or a fetch response body.
  */
-export const parseEuList = (
+export const parseEuList = async (
   input: AsyncIterable<Uint8Array>,
 ): Promise<Result<ParsedList, SanctionsListParseError>> =>
-  parseXmlList(FORMAT, input);
+  await parseXmlList(FORMAT, input);
 
 /** Reads the edition stamp at the start of an EU list and stops there. */
-export const readEuListVersion = (
+export const readEuListVersion = async (
   input: AsyncIterable<Uint8Array>,
 ): Promise<Result<ListVersion, SanctionsListParseError>> =>
-  readXmlListVersion(FORMAT, input);
+  await readXmlListVersion(FORMAT, input);

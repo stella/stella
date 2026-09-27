@@ -34,8 +34,9 @@ describe("screening evaluation sample", () => {
       seed: SAMPLE_SEED,
       perCategory: SAMPLE_PER_CATEGORY,
     });
-    // `toEqual` skips the fields JSON drops (undefined), so the two compare.
-    expect(regenerated).toEqual(sample);
+    // The sample is the generator's JSON output, so compare in that form: it
+    // drops undefined fields and keeps the imported file's literal types out.
+    expect(JSON.stringify(regenerated)).toBe(JSON.stringify(sample));
   });
 
   test("keeps recall and precision at the default cutoff", () => {

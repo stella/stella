@@ -113,7 +113,7 @@ describe("UN consolidated list parser", () => {
     for (const [from, to] of [
       ["INDIVIDUAL>", "PERSON>"],
       ["ENTITY>", "ORGANISATION>"],
-    ]) {
+    ] as const) {
       // Renames one record, opening and closing tag, among valid ones.
       const renamed = source
         .replace(`<${from}`, () => `<${to}`)

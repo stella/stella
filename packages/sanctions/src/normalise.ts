@@ -151,7 +151,7 @@ const LEGAL_FORM_ABBREVIATIONS = [
 // Liability Company - Free Zone") go whole in any spelling. Longest first, so
 // "joint stock company" goes whole rather than leaving "joint stock" behind.
 const LEGAL_FORMS: readonly (readonly string[])[] = [
-  ...LEGAL_FORM_ABBREVIATIONS.flatMap((form) => [[form], [...form]]),
+  ...LEGAL_FORM_ABBREVIATIONS.flatMap((form) => [[form], Array.from(form)]),
   ["co"],
   ["company"],
   ["corp"],

@@ -96,10 +96,13 @@ const emptyVocabulary = (): Vocabulary => ({
 });
 
 const bigrams = (text: string): Set<string> => {
-  const chars = ["^", ...text, "$"];
+  const chars = ["^", ...Array.from(text), "$"];
   const grams = new Set<string>();
-  for (let index = 1; index < chars.length; index += 1) {
-    grams.add(`${chars[index - 1]}${chars[index]}`);
+  for (const [index, char] of chars.entries()) {
+    const previous = chars[index - 1];
+    if (previous !== undefined) {
+      grams.add(`${previous}${char}`);
+    }
   }
   return grams;
 };
@@ -113,7 +116,7 @@ const intern = (vocabulary: Vocabulary, text: string): number => {
   }
   const id = vocabulary.strings.length;
   const grams = bigrams(text);
-  const length = [...text].length;
+  const length = Array.from(text).length;
   vocabulary.strings.push(text);
   vocabulary.lengths.push(length);
   vocabulary.gramCounts.push(grams.size);
@@ -225,7 +228,7 @@ const similarStrings = (
   if (exact !== undefined) {
     similar.set(exact, 1);
   }
-  const length = [...text].length;
+  const length = Array.from(text).length;
   const budget = editBudget(length);
   if (budget === 0) {
     return similar;
@@ -277,7 +280,7 @@ type PreparedQuery = {
   units: readonly QueryUnit[];
 };
 
-const isInitial = (token: NameToken) => [...token.raw].length === 1;
+const isInitial = (token: NameToken) => Array.from(token.raw).length === 1;
 
 const unit = (
   index: NameIndex,
@@ -309,8 +312,8 @@ const prepareQuery = (
       );
     }
   }
-  const weights = tokens.map((token, position) => {
-    if (initials[position]) {
+  const weights = initials.map((initial, position) => {
+    if (initial) {
       return INITIAL_WEIGHT;
     }
     const single = units.find(

@@ -68,7 +68,7 @@ const parseCsv = (
   let field = "";
   let quoted = false;
   for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
+    const char = text.charAt(index);
     if (quoted) {
       if (char !== '"') {
         field += char;
@@ -120,7 +120,13 @@ const czechDate = (value: string): Result<string, SanctionsListParseError> => {
       invalidValue(SOURCE, `"${value}" is not a DD.MM.YYYY date`),
     );
   }
-  const iso = `${match[3]}-${match[2]?.padStart(2, "0")}-${match[1]?.padStart(2, "0")}`;
+  const [, day, month, year] = match;
+  if (day === undefined || month === undefined || year === undefined) {
+    return Result.err(
+      invalidValue(SOURCE, `"${value}" is not a DD.MM.YYYY date`),
+    );
+  }
+  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   return parseIsoDate(SOURCE, iso).map(() => iso);
 };
 
@@ -238,7 +244,16 @@ export const readCzListVersion = (
       ),
     );
   }
-  const publishedAt = `${edition[1]}-${edition[2]}-${edition[3]}`;
+  const [, year, month, day] = edition;
+  if (year === undefined || month === undefined || day === undefined) {
+    return Result.err(
+      missingField(
+        SOURCE,
+        `"${fileNameOrUrl}" does not end in a YYYY_MM_DD.csv edition date`,
+      ),
+    );
+  }
+  const publishedAt = `${year}-${month}-${day}`;
   const version: ListVersion = {
     source: SOURCE,
     publishedAt,

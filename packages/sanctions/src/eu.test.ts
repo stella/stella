@@ -15,8 +15,8 @@ async function* chunks(bytes: Uint8Array, size: number) {
   }
 }
 
-const parseText = (xml: string) =>
-  parseEuList(chunks(encoder.encode(xml), 4096));
+const parseText = async (xml: string) =>
+  await parseEuList(chunks(encoder.encode(xml), 4096));
 
 const entryById = async (sourceId: string) => {
   const parsed = (await parseEuList(Bun.file(FIXTURE).stream())).unwrap();

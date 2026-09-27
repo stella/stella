@@ -80,7 +80,12 @@ const quantile = (share: number) =>
   ).toFixed(1);
 
 console.log(
-  `${lists.map((list) => `${list.version.source} ${list.version.publishedAt}: ${list.entries.length} entries`).join("; ")}`,
+  lists
+    .map(
+      (list) =>
+        `${list.version.source} ${list.version.publishedAt}: ${list.entries.length} entries`,
+    )
+    .join("; "),
 );
 console.log(
   `index: ${index.names.aliases.length} names, ${index.names.folded.strings.length} folded strings, built in ${buildMilliseconds.toFixed(0)} ms`,

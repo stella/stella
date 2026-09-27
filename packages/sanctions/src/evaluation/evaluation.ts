@@ -204,7 +204,7 @@ const typo = (draw: Random, name: string): string | null => {
   }
   const { word, index } = target;
   const at = 1 + Math.floor(draw() * (word.length - 2));
-  const letter = pick(draw, [...LETTERS]) ?? "a";
+  const letter = pick(draw, Array.from(LETTERS)) ?? "a";
   const edits = [
     word.slice(0, at) + letter + word.slice(at + 1),
     word.slice(0, at) + word.slice(at + 1),
@@ -412,7 +412,7 @@ export const generateCases = (
   const common = (withBirthDate: boolean) => {
     let made = 0;
     while (made < perCategory) {
-      const name = `${pick(draw, FIRST_NAMES)} ${pick(draw, SURNAMES)}`;
+      const name = `${pick(draw, FIRST_NAMES) ?? ""} ${pick(draw, SURNAMES) ?? ""}`;
       if (listedKeys.has(nameKey(name, "person"))) {
         continue;
       }
