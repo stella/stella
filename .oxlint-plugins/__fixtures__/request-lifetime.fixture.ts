@@ -15,6 +15,7 @@ const preflight = async ({
     if (isClientConnectionAborted()) {
       return Result.err("gone" as const);
     }
+    await Promise.resolve();
     yield* Result.ok(undefined);
     return Result.ok("ready" as const);
   });
