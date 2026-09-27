@@ -888,8 +888,8 @@ const main = (args: readonly string[]): number => {
     case "check-delta":
       return runDelta(parsed.file);
     default: {
-      parsed.mode satisfies never;
-      return panic(`Unhandled mode: ${String(parsed.mode)}`);
+      parsed satisfies never;
+      return panic(`Unhandled mode: ${JSON.stringify(parsed)}`);
     }
   }
 };
