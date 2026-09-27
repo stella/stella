@@ -429,20 +429,26 @@ const up = async (root: string, args: readonly string[]) => {
 
 const down = async (root: string) => {
   const runtime = readDevRuntime(root);
-  if (runtime === null || !isRunnerProcess(runtime.pid)) {
+  // A runner still starting has no runtime file yet, only its starting pid.
+  const pid =
+    runtime !== null && isRunnerProcess(runtime.pid)
+      ? runtime.pid
+      : readStartingPid(root);
+  if (pid === null) {
     console.log("No stack is running for this checkout.");
     return;
   }
   // The runner stops its children and its Docker project on SIGTERM; volumes
   // (and so the seeded database) survive for the next `up`.
-  process.kill(runtime.pid, "SIGTERM");
+  process.kill(pid, "SIGTERM");
   const deadline = Date.now() + DOWN_TIMEOUT_MS;
-  while (isProcessAlive(runtime.pid)) {
+  while (isProcessAlive(pid)) {
     if (Date.now() > deadline) {
-      fail(`Runner ${String(runtime.pid)} is still running after SIGTERM`);
+      fail(`Runner ${String(pid)} is still running after SIGTERM`);
     }
     await Bun.sleep(POLL_INTERVAL_MS);
   }
+  rmSync(devStatePath(root, STARTING_FILE), { force: true });
   console.log("Stopped.");
 };
 
