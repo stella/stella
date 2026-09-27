@@ -1,7 +1,7 @@
 import type { RegisteredRouter, RouterState } from "@tanstack/react-router";
 
 import { toLanguageCode } from "@stll/locales";
-import type { UiLocale } from "@stll/locales";
+import type { TextDirection, UiLocale } from "@stll/locales";
 
 type PageMatch = RouterState<RegisteredRouter["routeTree"]>["matches"][number];
 
@@ -18,18 +18,20 @@ export const pageDocumentLanguage = (
     return null;
   }
 
-  switch (leaf.routeId) {
-    case "/law/$country/cases/$court/$slug":
-    case "/law/$country/cases/$court/$language/$slug":
-      return leaf.loaderData?.language ?? null;
-    case "/law/$country/statutes/$slug/":
-    case "/law/$country/statutes/$slug/v/$version": {
-      const data = leaf.loaderData;
-      return data ? (data.statute ?? data.work).language : null;
-    }
-    default:
-      return null;
+  if (
+    leaf.routeId === "/law/$country/cases/$court/$slug" ||
+    leaf.routeId === "/law/$country/cases/$court/$language/$slug"
+  ) {
+    return leaf.loaderData?.language ?? null;
   }
+  if (
+    leaf.routeId === "/law/$country/statutes/$slug/" ||
+    leaf.routeId === "/law/$country/statutes/$slug/v/$version"
+  ) {
+    const data = leaf.loaderData;
+    return data ? (data.statute ?? data.work).language : null;
+  }
+  return null;
 };
 
 type ResolveDocumentLanguageInput = {
@@ -47,3 +49,18 @@ export const resolveDocumentLanguage = ({
 }: ResolveDocumentLanguageInput): string =>
   (documentLanguage === null ? null : toLanguageCode(documentLanguage)) ??
   interfaceLocale;
+
+type DocumentLanguageAttributes = {
+  dir: TextDirection;
+  lang: string;
+};
+
+/** Write the page language onto the live root element (browser only). */
+export const applyDocumentLanguage = ({
+  dir,
+  lang,
+}: DocumentLanguageAttributes): void => {
+  const root = document.documentElement;
+  root.lang = lang;
+  root.dir = dir;
+};

@@ -25,6 +25,7 @@ import "@/fonts.css";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import {
+  applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/lib/document-language";
@@ -114,8 +115,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     if (!hasLoadedOnce) {
       return;
     }
-    document.documentElement.lang = lang;
-    document.documentElement.dir = dir;
+    applyDocumentLanguage({ dir, lang });
   }, [dir, hasLoadedOnce, lang]);
 
   return (
