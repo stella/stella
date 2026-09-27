@@ -655,7 +655,7 @@ if (failedOutcomes.length > 0) {
       "Failed API test batches:",
       ...failedOutcomes.map(
         ({ batch, exitCode }) =>
-          `  ${batch.label} (exit ${exitCode}):\n    ${batch.testFiles.join("\n    ")}`,
+          `  ${batch.label} (exit ${String(exitCode)}):\n    ${batch.testFiles.join("\n    ")}`,
       ),
     ].join("\n"),
   );

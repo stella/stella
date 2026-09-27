@@ -166,7 +166,8 @@ export const runInLanes = async <TBatch extends LaneBatch>({
       await new Promise<void>((resolve) => {
         parkedLanes.push(resolve);
       });
-      return await runLane();
+      await runLane();
+      return;
     }
     const [next] = pending.splice(nextPosition, 1);
     if (next === undefined) {
@@ -181,7 +182,7 @@ export const runInLanes = async <TBatch extends LaneBatch>({
       exclusiveRunning = false;
     }
     wakeParkedLanes();
-    return await runLane();
+    await runLane();
   };
 
   await Promise.all(
