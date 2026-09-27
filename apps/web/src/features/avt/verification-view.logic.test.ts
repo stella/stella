@@ -6,6 +6,7 @@ import {
   groupClaimsIntoPassages,
   passageReadingOrder,
   proseReadingOrder,
+  selectClaimPresentation,
   segmentProse,
   segmentProseBlock,
   spanPresentation,
@@ -135,6 +136,48 @@ describe("stored statement text", () => {
       "page one",
     );
     expect(proseReadingOrder(prose)).toEqual([onPage.id]);
+  });
+
+  test("falls back to passages when overlapping spans omit a claim", () => {
+    const outer = claim(5, 0, 7);
+    const nested = claim(6, 2, 4);
+    const claims = [outer, nested];
+    const prose = segmentProse([block], claims);
+    const proseOrder = proseReadingOrder(prose);
+
+    expect(proseOrder).toHaveLength(1);
+    expect(proseOrder).not.toContain(nested.id);
+
+    const presentation = selectClaimPresentation([block], claims);
+
+    expect(presentation.type).toBe("passages");
+    expect(presentation.readingOrder.toSorted()).toEqual(
+      claims.map((item) => item.id).toSorted(),
+    );
+  });
+
+  test("falls back to passages when a claim anchor has no stored block", () => {
+    const anchoredElsewhere = makeClaim({
+      suffix: 8,
+      verdict: supported(),
+      anchor: { type: "docx-block", blockId: "missing", start: 0, end: 5 },
+    });
+    const prose = segmentProse([block], [anchoredElsewhere]);
+
+    expect(proseReadingOrder(prose)).toEqual([]);
+
+    const presentation = selectClaimPresentation([block], [anchoredElsewhere]);
+
+    expect(presentation.type).toBe("passages");
+    expect(presentation.readingOrder).toEqual([anchoredElsewhere.id]);
+  });
+
+  test("keeps prose when every claim is represented", () => {
+    const represented = claim(9, 7, 10);
+    const presentation = selectClaimPresentation([block], [represented]);
+
+    expect(presentation.type).toBe("prose");
+    expect(presentation.readingOrder).toEqual([represented.id]);
   });
 });
 

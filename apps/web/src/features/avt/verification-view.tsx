@@ -49,10 +49,7 @@ import {
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
 import {
-  groupClaimsIntoPassages,
-  passageReadingOrder,
-  proseReadingOrder,
-  segmentProse,
+  selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -88,10 +85,8 @@ export const VerificationView = ({
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const contested = contestedFactIds(run.evidence.facts);
   const factsById = evidenceFactsById(run.evidence);
-  const passages = groupClaimsIntoPassages(claims);
-  const prose = segmentProse(run.blocks, claims);
-  const readingOrder =
-    prose.length > 0 ? proseReadingOrder(prose) : passageReadingOrder(passages);
+  const presentation = selectClaimPresentation(run.blocks, claims);
+  const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
   const routineIds = routineUnsettledClaimIds(run.claims, contested);
 
@@ -260,8 +255,8 @@ export const VerificationView = ({
           )}
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4 p-5">
-              {prose.length > 0
-                ? prose.map((block) => (
+              {presentation.type === "prose"
+                ? presentation.blocks.map((block) => (
                     <div className="space-y-1" key={block.ordinal}>
                       {block.pageNumber !== null && (
                         <div className="text-muted-foreground text-2xs font-medium">
@@ -271,16 +266,12 @@ export const VerificationView = ({
                         </div>
                       )}
                       <p
-                        className="font-serif text-base leading-relaxed whitespace-pre-wrap text-pretty"
+                        className="font-serif text-base leading-relaxed text-pretty whitespace-pre-wrap"
                         dir="auto"
                       >
-                        {block.segments.map((segment, index) => {
+                        {block.segments.map((segment) => {
                           if (segment.type === "plain") {
-                            return (
-                              <React.Fragment key={index}>
-                                {segment.text}
-                              </React.Fragment>
-                            );
+                            return segment.text;
                           }
                           const claim = segment.claim;
                           const { dim, highlight } = spanPresentation({
@@ -304,7 +295,7 @@ export const VerificationView = ({
                       </p>
                     </div>
                   ))
-                : passages.map((passage) => (
+                : presentation.passages.map((passage) => (
                     <div className="space-y-1" key={passage.key}>
                       {passage.pageNumber !== null && (
                         <div className="text-muted-foreground text-2xs font-medium">

@@ -138,8 +138,7 @@ export const segmentProseBlock = (
       (a, b) =>
         a.anchor.start - b.anchor.start ||
         b.anchor.end - a.anchor.end ||
-        a.position - b.position ||
-        a.id.localeCompare(b.id),
+        a.position - b.position,
     );
   let cursor = 0;
   for (const claim of anchored) {
@@ -180,3 +179,39 @@ export const proseReadingOrder = (
       segment.type === "claim" ? [segment.claim.id] : [],
     ),
   );
+
+export type ClaimPresentation =
+  | {
+      type: "prose";
+      blocks: ProseBlock[];
+      readingOrder: VerificationClaim["id"][];
+    }
+  | {
+      type: "passages";
+      passages: ClaimPassage[];
+      readingOrder: VerificationClaim["id"][];
+    };
+
+/** Use segmented source text only when it preserves every claim. */
+export const selectClaimPresentation = (
+  blocks: readonly VerificationBlock[],
+  claims: readonly VerificationClaim[],
+): ClaimPresentation => {
+  const prose = segmentProse(blocks, claims);
+  const proseOrder = proseReadingOrder(prose);
+  const proseClaimIds = new Set(proseOrder);
+  if (
+    prose.length > 0 &&
+    proseClaimIds.size === claims.length &&
+    claims.every((claim) => proseClaimIds.has(claim.id))
+  ) {
+    return { type: "prose", blocks: prose, readingOrder: proseOrder };
+  }
+
+  const passages = groupClaimsIntoPassages(claims);
+  return {
+    type: "passages",
+    passages,
+    readingOrder: passageReadingOrder(passages),
+  };
+};

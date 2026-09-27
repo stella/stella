@@ -1,16 +1,17 @@
 import { and, eq } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legalListClaims,
   legalListVerificationBlocks,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { insertInChunks } from "@/api/lib/db/bulk-write";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 
 type CompleteVerificationRunArgs = {
-  tx: Transaction;
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "update" | "insert">;
   runId: SafeId<"legalListVerificationRun">;
   workspaceId: SafeId<"workspace">;
   blocks: readonly VerificationBlock[];
@@ -41,35 +42,39 @@ export const completeVerificationRun = async ({
     return;
   }
 
-  // audit: skip — engine output of a run audited at creation.
-  await tx
-    .insert(legalListVerificationBlocks)
-    .values(
-      blocks.map((block, ordinal) => ({
-        runId,
-        workspaceId,
-        ordinal,
-        blockId: block.id,
-        kind: block.source.type,
-        pageNumber:
-          block.source.type === "pdf-page" ? block.source.pageNumber : null,
-        text: block.text,
-      })),
-    )
-    .onConflictDoNothing({
-      target: [
-        legalListVerificationBlocks.runId,
-        legalListVerificationBlocks.ordinal,
-      ],
-    });
-
-  if (claims.length > 0) {
-    // audit: skip — engine output of a run audited at creation.
-    await tx
-      .insert(legalListClaims)
-      .values([...claims])
-      .onConflictDoNothing({
-        target: [legalListClaims.runId, legalListClaims.position],
-      });
-  }
+  const blockRows = blocks.map((block, ordinal) => ({
+    runId,
+    workspaceId,
+    ordinal,
+    blockId: block.id,
+    kind: block.source.type,
+    pageNumber:
+      block.source.type === "pdf-page" ? block.source.pageNumber : null,
+    text: block.text,
+  }));
+  await insertInChunks(
+    blockRows,
+    async (batch) =>
+      // audit: skip — engine output of a run audited at creation.
+      await tx
+        .insert(legalListVerificationBlocks)
+        .values(batch)
+        .onConflictDoNothing({
+          target: [
+            legalListVerificationBlocks.runId,
+            legalListVerificationBlocks.ordinal,
+          ],
+        }),
+  );
+  await insertInChunks(
+    claims,
+    async (batch) =>
+      // audit: skip — engine output of a run audited at creation.
+      await tx
+        .insert(legalListClaims)
+        .values(batch)
+        .onConflictDoNothing({
+          target: [legalListClaims.runId, legalListClaims.position],
+        }),
+  );
 };

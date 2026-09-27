@@ -33,7 +33,7 @@ export const serializeClaimReview = (review: ClaimReview) => ({
 });
 
 type ReadClaimReviewsArgs = {
-  tx: Transaction;
+  tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
   /** Narrow to these claims; omitted reads every claim of the run. */
@@ -149,7 +149,7 @@ const toClaimVerdict = ({
 };
 
 type ReadVerificationRunArgs = {
-  tx: Transaction;
+  tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
 };
