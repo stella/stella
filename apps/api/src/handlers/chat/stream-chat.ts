@@ -65,6 +65,8 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
@@ -536,7 +538,11 @@ export const streamChat = async ({
     resume: preparedResume,
     safeDb,
     surfaces: {
-      messages: preparedMessageList,
+      // The provider's copy only: persistence keeps the stored parts.
+      messages: guardProviderHistory({
+        messages: preparedMessageList,
+        workspaceIds: tenantWorkspaceIds,
+      }),
       system: guardedSystem,
       tenantWorkspaceIds,
       tools: modelTools,
@@ -896,7 +902,9 @@ type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
  * the model without failing typecheck.
  */
 export type GuardedChatSurfaces = {
-  messages: GuardedModelMessages<ChatMessage[]>;
+  /** Minted by `guardProviderHistory`: guarded, with every call answered
+   *  right after its step. */
+  messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
   /**
    * The guard's own input, carried alongside its output because the surfaces

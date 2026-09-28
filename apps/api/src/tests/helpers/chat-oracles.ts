@@ -54,6 +54,9 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every model request of a thread begins with the whole prompt of the
+   *  one before it, so the provider's prompt cache holds. */
+  providerPrefixStable: "chat.provider.prefix-stable",
   /** Once a turn is over, every later model call of the thread is handed
    *  each of its tool results the same way (up to key order): a request
    *  reads the earlier turns as stored, as the next one will. */

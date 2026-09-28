@@ -661,6 +661,34 @@
       "oracle": "chat.wire.snapshot-served"
     },
     {
+      "id": "approval-answer-in-its-step",
+      "fix": "#4020",
+      "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "stays answered right after its step when the model asks for a call after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "approval-answer-in-its-step-dispatched",
+      "fix": "#4020",
+      "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
+      "replace": "      messages,",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "keeps a denial ahead of the approved call it was answered with"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
       "id": "interrupted-closes-cut-off-calls",
       "fix": "#3994",
       "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
