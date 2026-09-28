@@ -110,7 +110,7 @@ export const PdfSignPlacement = ({
       labels: {
         date: t("common.date"),
         location: t("workspaces.files.pdfSigning.stampLocation"),
-        reason: t("workspaces.files.pdfSigning.stampReason"),
+        reason: t("common.reason"),
         signedBy: t("workspaces.files.pdfSigning.stampSignedBy"),
       },
       pageIndex: placement.pageIndex,

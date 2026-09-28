@@ -60,6 +60,13 @@ const migrationStatements = readFileSync(
 const migrationOwnerPolicies = migrationStatements.filter((statement) =>
   statement.includes('CREATE POLICY "correspondence_owner_offboarding_'),
 );
+const inboundMigrationStatements = readFileSync(
+  new URL(
+    "../../../../drizzle/20260928150200_inbound_token_lookup/migration.sql",
+    import.meta.url,
+  ),
+  "utf-8",
+).split("--> statement-breakpoint");
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -666,19 +673,28 @@ describe("correspondence offboarding", () => {
     },
   );
   test.each(["schema", "migration"] as const)(
-    "owner lookup policies follow table ownership and exclude ordinary roles (%s)",
+    "delivery token limits owner address lookup while erasure retains owner approval lookup (%s)",
     async (policySource) => {
       try {
         await testDb.transaction(async (tx) => {
           const addressId = createSafeId<"matterInboundAddress">();
+          const otherAddressId = createSafeId<"matterInboundAddress">();
           const senderId = createSafeId<"correspondenceAllowedSender">();
           const scopeId = createSafeId<"correspondenceAllowedSenderMatter">();
-          await tx.insert(matterInboundAddresses).values({
-            id: addressId,
-            organizationId: ids.orgA,
-            workspaceId: ids.wsA2,
-            token: addressId,
-          });
+          await tx.insert(matterInboundAddresses).values([
+            {
+              id: addressId,
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              token: addressId,
+            },
+            {
+              id: otherAddressId,
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA1,
+              token: otherAddressId,
+            },
+          ]);
           await tx.insert(correspondenceAllowedSenders).values({
             id: senderId,
             organizationId: ids.orgA,
@@ -715,35 +731,97 @@ describe("correspondence offboarding", () => {
             await tx.execute(
               sql`GRANT SELECT ON ${table} TO correspondence_lookup_reader_probe`,
             );
-            if (policySource === "migration") {
-              const policies = getTableConfig(table).policies.filter(
-                ({ name }) => name.endsWith("_owner_lookup"),
-              );
-              expect(policies).toHaveLength(1);
-              for (const policy of policies) {
-                const statements = migrationStatements.filter((statement) =>
-                  statement.includes(`CREATE POLICY "${policy.name}"`),
-                );
-                expect(statements).toHaveLength(1);
-                await tx.execute(
-                  sql`DROP POLICY ${sql.identifier(policy.name)} ON ${table}`,
-                );
-                for (const statement of statements) {
-                  await tx.execute(sql.raw(statement));
-                }
-              }
+          }
+          if (policySource === "schema") {
+            expect(
+              getTableConfig(matterInboundAddresses).policies.filter(
+                ({ name }) =>
+                  name === "matter_inbound_addresses_owner_token_lookup",
+              ),
+            ).toHaveLength(1);
+            expect(
+              getTableConfig(correspondenceAllowedSenders).policies.filter(
+                ({ name }) =>
+                  name === "correspondence_allowed_senders_owner_lookup",
+              ),
+            ).toHaveLength(1);
+            expect(
+              getTableConfig(
+                correspondenceAllowedSenderMatters,
+              ).policies.filter(({ name }) => name.endsWith("_owner_lookup")),
+            ).toHaveLength(0);
+          } else {
+            const coreLookups = migrationStatements.filter(
+              (statement) =>
+                statement.includes(
+                  'CREATE POLICY "matter_inbound_addresses_owner_lookup"',
+                ) ||
+                statement.includes(
+                  'CREATE POLICY "correspondence_allowed_senders_owner_lookup"',
+                ) ||
+                statement.includes(
+                  'CREATE POLICY "correspondence_allowed_sender_matters_owner_lookup"',
+                ),
+            );
+            expect(coreLookups).toHaveLength(3);
+            await tx.execute(
+              sql`DROP POLICY matter_inbound_addresses_owner_token_lookup ON matter_inbound_addresses`,
+            );
+            await tx.execute(
+              sql`DROP POLICY correspondence_allowed_senders_owner_lookup ON correspondence_allowed_senders`,
+            );
+            for (const statement of coreLookups) {
+              await tx.execute(sql.raw(statement));
+            }
+            const inboundLookups = inboundMigrationStatements.filter(
+              (statement) =>
+                statement.includes(
+                  'CREATE POLICY "matter_inbound_addresses_owner_token_lookup"',
+                ) ||
+                statement.includes(
+                  'DROP POLICY "matter_inbound_addresses_owner_lookup"',
+                ) ||
+                statement.includes(
+                  'DROP POLICY "correspondence_allowed_sender_matters_owner_lookup"',
+                ),
+            );
+            expect(inboundLookups).toHaveLength(3);
+            for (const statement of inboundLookups) {
+              await tx.execute(sql.raw(statement));
             }
           }
           await tx.execute(
             sql`SET LOCAL ROLE correspondence_lookup_owner_probe`,
           );
-          for (const { table, id } of lookups) {
+          const addresses = async () =>
+            await tx
+              .select({ id: matterInboundAddresses.id })
+              .from(matterInboundAddresses)
+              .where(
+                inArray(matterInboundAddresses.id, [addressId, otherAddressId]),
+              );
+          expect(await addresses()).toEqual([]);
+          expect(
+            await tx
+              .select({ id: correspondenceAllowedSenders.id })
+              .from(correspondenceAllowedSenders)
+              .where(eq(correspondenceAllowedSenders.id, senderId)),
+          ).toEqual([{ id: senderId }]);
+          await tx.execute(
+            sql`SELECT set_config('app.inbound_token', ${createSafeId<"matterInboundAddress">()}, true)`,
+          );
+          expect(await addresses()).toEqual([]);
+          await tx.execute(
+            sql`SELECT set_config('app.inbound_token', ${addressId}, true)`,
+          );
+          expect(await addresses()).toEqual([{ id: addressId }]);
+          for (const { table, id } of lookups.slice(2)) {
             expect(
               await tx
                 .select({ id: table.id })
                 .from(table)
                 .where(eq(table.id, id)),
-            ).toEqual([{ id }]);
+            ).toEqual([]);
           }
           for (const role of ["stella", "correspondence_lookup_reader_probe"]) {
             await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(role)}`);
