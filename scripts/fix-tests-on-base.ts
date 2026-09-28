@@ -10,7 +10,9 @@
 // fixture, a snapshot, a test helper) is restored to the merge base, and a
 // file the pull request adds is removed. At least one changed test case must
 // then fail. A test file that cannot even load on base (it imports a module
-// the pull request adds) counts as failing, reported separately.
+// the pull request adds) counts as failing, reported separately. A run that
+// fails only outside every test (a hook, the runner, a memory limit) is not
+// evidence: no changed test reached the fault.
 //
 // A test case counts as changed when the diff touches the lines from its
 // declaration to the next test or describe declaration. When a modified file's
@@ -58,11 +60,20 @@ const TEST_SUPPORT_DIRECTORIES = new Set([
 ]);
 
 /**
+ * Test-only helper modules named by file rather than directory, as the lint
+ * configuration's test carve-outs name them: a `test-utils.ts` beside the
+ * code it supports is test-only wherever it sits.
+ */
+const TEST_SUPPORT_FILE =
+  /(?:^|\/|\.)(?:test-utils|test-helpers?|fixtures?)\.[cm]?[jt]sx?$/u;
+
+/**
  * A file that belongs to the tests rather than the code under test, so it
  * keeps the pull request's version on the base tree.
  */
 export const isTestSide = (file: string): boolean =>
   TEST_FILE.test(file) ||
+  TEST_SUPPORT_FILE.test(file) ||
   file
     .split("/")
     .slice(0, -1)
@@ -402,18 +413,22 @@ export type Verdict = {
   readonly failingOnBase: readonly { file: string; name: string }[];
   /** Changed cases that pass on base. */
   readonly passingOnBase: readonly { file: string; name: string }[];
+  /** Files whose run failed only outside every test: no evidence either way. */
+  readonly inconclusive: readonly string[];
 };
 
 export const decideVerdict = (outcomes: readonly FileOutcome[]): Verdict => {
   const failingOnBase: { file: string; name: string }[] = [];
   const passingOnBase: { file: string; name: string }[] = [];
-  let fileFailed = false;
+  const inconclusive: string[] = [];
+  let didNotLoad = false;
   for (const outcome of outcomes) {
-    if (outcome.kind !== "ran") {
-      fileFailed = true;
-    }
     if (outcome.kind === "did-not-load") {
+      didNotLoad = true;
       continue;
+    }
+    if (outcome.kind === "errored") {
+      inconclusive.push(outcome.file);
     }
     for (const { changed, name, status } of outcome.cases) {
       if (!changed || status === "skip") {
@@ -426,9 +441,10 @@ export const decideVerdict = (outcomes: readonly FileOutcome[]): Verdict => {
     }
   }
   return {
-    pass: fileFailed || failingOnBase.length > 0,
+    pass: didNotLoad || failingOnBase.length > 0,
     failingOnBase,
     passingOnBase,
+    inconclusive,
   };
 };
 
@@ -448,7 +464,7 @@ const describeOutcome = (outcome: FileOutcome): string[] => {
   const changed = outcome.cases.filter((testCase) => testCase.changed);
   const header =
     outcome.kind === "errored"
-      ? `  ${outcome.file}: exited ${outcome.exitCode} on base outside any test (counts as failing): ${outcome.detail}`
+      ? `  ${outcome.file}: exited ${outcome.exitCode} on base outside any test (not evidence): ${outcome.detail}`
       : `  ${outcome.file}: ${changed.length} of ${outcome.cases.length} tests changed`;
   return [
     header,
@@ -490,6 +506,11 @@ export const formatReport = ({
     "  fix: make a test reach the fixed behaviour, or, when no test can, add a line",
     "  `test-on-base: skip <reason>` to the pull request body and re-run the job.",
   );
+  if (verdict.inconclusive.length > 0) {
+    lines.push(
+      `  failed outside every test on base, so inconclusive: ${verdict.inconclusive.join(", ")}; see the log above.`,
+    );
+  }
   return lines;
 };
 

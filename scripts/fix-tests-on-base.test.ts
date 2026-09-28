@@ -136,6 +136,9 @@ describe("what stays at the pull request's version on the base tree", () => {
     "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/nsoud/decision.html",
     "apps/web/src/components/chat/__fixtures__/recorded-conversations/drop.gen.json",
     "packages/ui/src/kanban/fixtures/board.ts",
+    "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
+    "apps/web/src/features/chat/test-helpers.ts",
+    ".oxlint-plugins/__fixtures__/no-ambient-nondeterminism.fixture.ts",
   ])("keeps %p", (file) => {
     expect(isTestSide(file)).toBe(true);
   });
@@ -145,6 +148,8 @@ describe("what stays at the pull request's version on the base tree", () => {
     "apps/api/scripts/chat-mutation-matrix.json",
     "apps/api/src/lib/test-timeouts-policy.ts",
     "packages/ai/src/tests.ts",
+    "apps/api/src/lib/fixture-loader.ts",
+    "packages/cli/src/testing.ts",
   ])("puts %p back to base", (file) => {
     expect(isTestSide(file)).toBe(false);
   });
@@ -259,6 +264,7 @@ describe("the verdict", () => {
       pass: true,
       failingOnBase: [{ file: API_TEST, name: "t9" }],
       passingOnBase: [],
+      inconclusive: [],
     });
   });
 
@@ -278,6 +284,7 @@ describe("the verdict", () => {
       pass: false,
       failingOnBase: [],
       passingOnBase: [{ file: API_TEST, name: "t9" }],
+      inconclusive: [],
     });
     const report = formatReport({
       outcomes: [outcome],
@@ -301,7 +308,7 @@ describe("the verdict", () => {
     expect(decideVerdict([outcome]).pass).toBe(false);
   });
 
-  test("a run that fails outside every test counts as failing on base", () => {
+  test("a run that fails only outside every test is not evidence", () => {
     const outcome = classifyRun({
       file: API_TEST,
       run: {
@@ -313,7 +320,21 @@ describe("the verdict", () => {
       newFile: true,
     });
     expect(outcome.kind).toBe("errored");
-    expect(decideVerdict([outcome]).pass).toBe(true);
+    const verdict = decideVerdict([outcome]);
+    expect(verdict).toEqual({
+      pass: false,
+      failingOnBase: [],
+      passingOnBase: [{ file: API_TEST, name: "t3" }],
+      inconclusive: [API_TEST],
+    });
+    expect(
+      formatReport({
+        outcomes: [outcome],
+        verdict,
+        unchecked: [],
+        markerWithoutReason: false,
+      }).join("\n"),
+    ).toContain(`inconclusive: ${  API_TEST}`);
   });
 
   test("a skipped changed case is neither evidence nor a failure", () => {
@@ -328,6 +349,7 @@ describe("the verdict", () => {
       pass: false,
       failingOnBase: [],
       passingOnBase: [],
+      inconclusive: [],
     });
   });
 });
