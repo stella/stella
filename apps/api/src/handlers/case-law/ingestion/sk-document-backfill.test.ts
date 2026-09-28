@@ -90,24 +90,59 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
 const bunNetworkError = (code: string): TypeError =>
   Object.assign(new TypeError(`${code} fetching the document`), { code });
 
+/** A body that errors after its first bytes, as a dropped download does. */
+const brokenBody = (error: unknown): ReadableStream<Uint8Array> =>
+  new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(new Uint8Array([0x25, 0x50]));
+      controller.error(error);
+    },
+  });
+
+/**
+ * Statuses that answer for the publisher or this client, not for the one
+ * document requested: every 5xx, credentials, a refused client, and a
+ * request for less traffic.
+ */
+const isPublisherWideStatus = (status: number): boolean =>
+  status >= 500 || [401, 403, 407, 408, 429].includes(status);
+
 describe("one document's download", () => {
-  test("every refusal but not-found and slow-down is that document's own failure", async () => {
-    // A throw backs the whole walk off, so only an answer about every
-    // document may throw. Swept over every non-OK status rather than a
-    // few examples: one status wrongly thrown is enough to let a handful
-    // of refused documents hold the queue.
-    for (let status = 400; status < 600; status += 1) {
-      if (status === 404 || status === 410 || status === 429) {
-        continue;
-      }
-      const result = await download(
-        async () => await Promise.resolve(new Response(null, { status })),
+  test("no status is the document's own failure unless it is a client error about the request", async () => {
+    // A throw backs the whole walk off; a `failed` result costs only this
+    // document's attempt. Swept over every status a response can carry, so
+    // an outage (5xx) or a refused client can never spend the attempts of
+    // every document it touches.
+    for (let status = 300; status < 600; status += 1) {
+      const outcome = await rejectionOf(
+        download(
+          async () => await Promise.resolve(new Response(null, { status })),
+        ),
       );
 
-      expect(result).toEqual({
-        type: "failed",
-        failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
-        detail: `http-${status}`,
+      if (status === 404 || status === 410) {
+        expect({ status, outcome }).toEqual({
+          status,
+          outcome: { resolved: { type: "absent" } },
+        });
+        continue;
+      }
+      if (status >= 400 && !isPublisherWideStatus(status)) {
+        expect({ status, outcome }).toEqual({
+          status,
+          outcome: {
+            resolved: {
+              type: "failed",
+              failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+              detail: `http-${status}`,
+            },
+          },
+        });
+        continue;
+      }
+      expect({ status, thrown: outcome instanceof AdapterFetchError }).toEqual({
+        status,
+        thrown: true,
       });
     }
   });
@@ -122,42 +157,32 @@ describe("one document's download", () => {
     }
   });
 
-  test("a publisher asking the walk to slow down throws, so the walk backs off", async () => {
-    const result = download(
-      async () => await Promise.resolve(new Response(null, { status: 429 })),
-    );
-
-    expect(await rejectionOf(result)).toBeInstanceOf(AdapterFetchError);
-  });
-
-  test("a connection that fails for this document is its own failure", async () => {
-    for (const code of [
-      "ECONNRESET",
-      "ConnectionRefused",
-      "UnexpectedRedirect",
+  test("a download that never got an answer throws, so the walk backs off", async () => {
+    // Refused, reset, redirected or timed out before a response: the
+    // publisher's state, not the document's, as far as this download can
+    // tell. The gate's own failure throws the same way.
+    for (const failure of [
+      bunNetworkError("ECONNRESET"),
+      bunNetworkError("ConnectionRefused"),
+      bunNetworkError("UnexpectedRedirect"),
+      new DOMException("The operation timed out.", "TimeoutError"),
+      new Error("gate unavailable"),
     ]) {
-      const result = await download(async () => {
-        throw bunNetworkError(code);
+      const result = download(async () => {
+        throw failure;
       });
 
-      expect(result).toEqual({
-        type: "failed",
-        failure: DOCUMENT_FETCH_FAILURE.NETWORK,
-        detail: `TypeError:${code}`,
-      });
+      expect(await rejectionOf(result)).toBe(failure);
     }
   });
 
   test("a body cut off mid-download is that document's own failure", async () => {
-    const result = await download(async () => {
-      const body = new ReadableStream<Uint8Array>({
-        start: (controller) => {
-          controller.enqueue(new Uint8Array([0x25, 0x50]));
-          controller.error(bunNetworkError("ECONNRESET"));
-        },
-      });
-      return await Promise.resolve(new Response(body));
-    });
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(brokenBody(bunNetworkError("ECONNRESET"))),
+        ),
+    );
 
     expect(result).toEqual({
       type: "failed",
@@ -166,10 +191,17 @@ describe("one document's download", () => {
     });
   });
 
-  test("a download that runs out of time is that document's own failure", async () => {
-    const result = await download(async () => {
-      throw new DOMException("The operation timed out.", "TimeoutError");
-    });
+  test("a body that runs out of time is that document's own failure", async () => {
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(
+            brokenBody(
+              new DOMException("The operation timed out.", "TimeoutError"),
+            ),
+          ),
+        ),
+    );
 
     expect(result).toEqual({
       type: "failed",
@@ -178,13 +210,13 @@ describe("one document's download", () => {
     });
   });
 
-  test("a failure that is not the download's own still throws", async () => {
-    // The publisher gate's store failing, or a programming error, is
-    // not something retrying this one document can fix.
-    const failure = new Error("gate unavailable");
-    const result = download(async () => {
-      throw failure;
-    });
+  test("a body failure that is not the download's own still throws", async () => {
+    // An abort on drain, or a programming error, is not something
+    // retrying this one document can fix.
+    const failure = new Error("stream consumer failed");
+    const result = download(
+      async () => await Promise.resolve(new Response(brokenBody(failure))),
+    );
 
     expect(await rejectionOf(result)).toBe(failure);
   });

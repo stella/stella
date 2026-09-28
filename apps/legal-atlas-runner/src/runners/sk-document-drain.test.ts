@@ -74,7 +74,7 @@ const OUTCOMES = {
   deferred: {
     status: "deferred",
     failure: "publisher-status",
-    detail: "http-503",
+    detail: "http-400",
   },
   parked: {
     status: "parked",

@@ -147,12 +147,13 @@ export type SkDocumentDrainOptions = {
  *   drained backlog stops asking the database every half second. Any
  *   document found resets it.
  * - a throw doubles its delay towards the failure ceiling. The unit
- *   throws only for what affects every document: an unreachable
- *   database, or the publisher asking the walk to slow down. A document
- *   the source keeps refusing is an outcome, bounded by its own cooldown
- *   in the queue; backing the whole walk off for it would let a few such
- *   documents at the head of the queue hold everything behind them.
- *   Errors never break the loop.
+ *   throws only for what may affect every document: an unreachable
+ *   database, a publisher that is down, refusing this client or asking
+ *   the walk to slow down, and a parse failure not attributed to the
+ *   bytes. A document the source refuses on its own account is an
+ *   outcome, bounded by its own cooldown in the queue; backing the whole
+ *   walk off for it would let a few such documents at the head of the
+ *   queue hold everything behind them. Errors never break the loop.
  */
 export const runSkDocumentDrain = async ({
   fetchDocument,

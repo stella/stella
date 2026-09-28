@@ -301,7 +301,12 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/bad.pdf",
       });
 
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const pending = await loadPendingDocuments(scopedDb, 100);
       expect(pending.map((row) => row.id)).not.toContain(id);
@@ -328,7 +333,12 @@ if (!databaseUrl || !runPostgresTests) {
         sourceObservationOrder: 7n,
       });
 
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -389,7 +399,12 @@ if (!databaseUrl || !runPostgresTests) {
         },
         scopedDb,
       });
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -749,13 +764,13 @@ if (!databaseUrl || !runPostgresTests) {
         const outcome = await fetchWith(
           id,
           async () =>
-            await Promise.resolve(new Response(null, { status: 503 })),
+            await Promise.resolve(new Response(null, { status: 400 })),
         );
 
         expect(outcome).toEqual({
           status: "deferred",
           failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
-          detail: "http-503",
+          detail: "http-400",
         });
         const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
         expect(onlyThese(queue, [id])).toEqual([]);
@@ -767,9 +782,23 @@ if (!databaseUrl || !runPostgresTests) {
           MAX_DOCUMENT_FETCH_ATTEMPTS - 1,
         );
 
-        const outcome = await fetchWith(id, async () => {
-          throw Object.assign(new TypeError("reset"), { code: "ECONNRESET" });
-        });
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(
+                new ReadableStream<Uint8Array>({
+                  start: (controller) => {
+                    controller.error(
+                      Object.assign(new TypeError("reset"), {
+                        code: "ECONNRESET",
+                      }),
+                    );
+                  },
+                }),
+              ),
+            ),
+        );
 
         expect(outcome).toEqual({
           status: "parked",
