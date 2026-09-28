@@ -72,6 +72,10 @@ import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
+  describeMissingSkillTools,
+  filterSkillsWithAvailableTools,
+} from "@/api/lib/agent-skills/required-tools";
+import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   listAvailableChatSkillMetadata,
@@ -469,6 +473,12 @@ type BuildChatSystemPromptProps = {
    */
   contextMatterIds: SafeId<"workspace">[];
   memberRole?: { role: string } | undefined;
+  /**
+   * The tool names this turn offers. A skill that requires a tool outside
+   * them is left out of the catalog, so the model is never offered a skill
+   * it cannot finish.
+   */
+  offeredToolNamesForSkills: () => ReadonlySet<string>;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -635,6 +645,7 @@ export const buildChatSystemPromptParts = async ({
   activeTemplate,
   contextMatterIds,
   memberRole,
+  offeredToolNamesForSkills,
   organizationId,
   practiceJurisdictions,
   refRegistry,
@@ -647,16 +658,19 @@ export const buildChatSystemPromptParts = async ({
   Result<ChatPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const skillMetadata =
-      organizationId && userId
-        ? yield* Result.await(
-            listAvailableChatSkillMetadata({
-              organizationId,
-              safeDb,
-              userId,
-            }),
-          )
-        : [];
+    const skillMetadata = filterSkillsWithAvailableTools({
+      offeredToolNames: offeredToolNamesForSkills,
+      skills:
+        organizationId && userId
+          ? yield* Result.await(
+              listAvailableChatSkillMetadata({
+                organizationId,
+                safeDb,
+                userId,
+              }),
+            )
+          : [],
+    });
     const activeSkillContext =
       organizationId && userId
         ? yield* Result.await(
@@ -720,7 +734,15 @@ export const buildChatSystemPromptParts = async ({
       }),
     );
     const externalSection = buildActiveExternalSection({ activeExternal });
-    const activeSkillSection = buildActiveSkillSection(activeSkillContext);
+    const activeSkillSection = buildActiveSkillSection(
+      activeSkillContext,
+      activeSkillContext === null ||
+        activeSkillContext.requiredTools.length === 0
+        ? []
+        : activeSkillContext.requiredTools.filter(
+            (name) => !offeredToolNamesForSkills().has(name),
+          ),
+    );
     const matterScopeSection =
       workspaceId === null
         ? buildContextMatterScopeSection({
@@ -2539,7 +2561,7 @@ export const buildRequestedSkillsSection = ({
   }
   if (unavailable.length > 0) {
     sections.push(
-      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this chat (removed, disabled, or not shared with the user): ${unavailable
+      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this chat (removed, disabled, not shared with the user, or needing a tool this chat does not have): ${unavailable
         .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
         .join(
           ", ",
@@ -2551,6 +2573,8 @@ export const buildRequestedSkillsSection = ({
 
 export const buildActiveSkillSection = (
   activeSkillContext: ActiveChatSkillContext | null,
+  /** Required tools of the active skill that this turn does not offer. */
+  missingRequiredTools: readonly string[] = [],
 ): string => {
   if (!activeSkillContext) {
     return "";
@@ -2611,6 +2635,15 @@ export const buildActiveSkillSection = (
     )}${version}`,
     'When the user says "this skill", "the current skill", "its files", or "SKILL.md", they mean this active skill. Do not propose unrelated skill names.',
     editability,
+    ...(missingRequiredTools.length === 0
+      ? []
+      : [
+          `This skill cannot run in this chat. ${describeMissingSkillTools(
+            missingRequiredTools.map((name) =>
+              sanitizePromptLine({ maxLength: 80, text: name }),
+            ),
+          )} If the user asks you to run it, say so in one sentence; you can still help them read or edit it.`,
+        ]),
     resources,
     `${bodyHeading}\n${sanitizePromptBlock({
       maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,

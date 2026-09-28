@@ -884,6 +884,7 @@
       "apiKey": "API atslēga",
       "none": "Nav jāiestata"
     },
+    "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",

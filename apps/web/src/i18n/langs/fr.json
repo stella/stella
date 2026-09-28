@@ -884,6 +884,7 @@
       "apiKey": "Clé API",
       "none": "Aucune configuration"
     },
+    "skillNeedsUnavailableTools": "Non proposée dans les conversations. Elle nécessite un outil qui n'y est pas disponible : {tools}",
     "toolNames": {
       "anonymize": "Anonymiser",
       "createDocx": "Créer un DOCX",

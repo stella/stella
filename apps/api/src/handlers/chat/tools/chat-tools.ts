@@ -292,7 +292,7 @@ type BuiltInChatToolPolicyName =
   | keyof BuiltInChatTools
   | CurrentSkillEditToolName;
 
-type GetChatToolsProps = {
+export type GetChatToolsProps = {
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
   memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;

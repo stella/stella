@@ -884,6 +884,7 @@
       "apiKey": "Klucz API",
       "none": "Bez konfiguracji"
     },
+    "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",

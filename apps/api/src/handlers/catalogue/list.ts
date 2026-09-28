@@ -22,6 +22,7 @@ import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
+import { resolveCallerChatSkillAvailability } from "@/api/handlers/skills/chat-availability";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -116,7 +117,15 @@ type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
 
 const listCatalogue = createSafeRootHandler(
   config,
-  async function* ({ memberRole, safeDb, session, user }) {
+  async function* ({
+    getAccessibleWorkspaces,
+    memberRole,
+    orgAIConfig,
+    safeDb,
+    scopedDb,
+    session,
+    user,
+  }) {
     const entries = loadCatalogue().filter(
       (entry) =>
         env.FEATURE_PUBLIC_TOOLS ||
@@ -167,6 +176,7 @@ const listCatalogue = createSafeRootHandler(
                   slug: agentSkills.slug,
                   scope: agentSkills.scope,
                   enabled: agentSkills.enabled,
+                  metadata: agentSkills.metadata,
                   origin: agentSkills.origin,
                   userId: agentSkills.userId,
                 })
@@ -197,6 +207,7 @@ const listCatalogue = createSafeRootHandler(
             name: agentSkills.name,
             description: agentSkills.description,
             license: agentSkills.license,
+            metadata: agentSkills.metadata,
           })
           .from(agentSkills)
           .where(
@@ -421,8 +432,32 @@ const listCatalogue = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
     });
 
+    // Whether chat offers each installed skill, so the page can say why a
+    // skill it lists does not appear in the chat menus.
+    const chatAvailability = yield* Result.await(
+      resolveCallerChatSkillAvailability({
+        context: {
+          getAccessibleWorkspaces,
+          memberRole,
+          organizationId: session.activeOrganizationId,
+          orgAIConfig,
+          safeDb,
+          scopedDb,
+          userId: user.id,
+        },
+        skills: [...visibleSkillRows, ...customSkillRows],
+      }),
+    );
+
     return Result.ok({
-      entries: response,
+      entries: response.map((entry) =>
+        Object.assign(entry, {
+          chatAvailability:
+            entry.kind === "skill" && entry.chatSkillId !== null
+              ? (chatAvailability.get(entry.chatSkillId) ?? null)
+              : null,
+        }),
+      ),
       practiceJurisdictions,
     });
   },

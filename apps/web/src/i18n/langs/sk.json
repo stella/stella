@@ -884,6 +884,7 @@
       "apiKey": "API kľúč",
       "none": "Bez nastavenia"
     },
+    "skillNeedsUnavailableTools": "V chate sa neponúka. Potrebuje nástroj, ktorý tam nie je k dispozícii: {tools}",
     "toolNames": {
       "anonymize": "Anonymizovať",
       "createDocx": "Vytvoriť DOCX",

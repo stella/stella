@@ -805,6 +805,14 @@ const CatalogueEntryRow = ({
         contextActions={contextActions}
         display={toRowDisplay(entry)}
         focused={focused}
+        notice={
+          entry.kind === "skill" &&
+          entry.chatAvailability?.status === "unavailable"
+            ? t("catalogue.skillNeedsUnavailableTools", {
+                tools: entry.chatAvailability.missingTools.join(", "),
+              })
+            : undefined
+        }
         onFocus={onFocus}
       />
       {confirmDialog}

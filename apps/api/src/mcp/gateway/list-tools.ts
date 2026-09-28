@@ -23,11 +23,14 @@ import {
 } from "@/api/mcp/gateway/skills";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
+  hasGrantedScope,
+  isStaticToolVisibleToRole,
+  listOfferedStaticMcpToolDefinitions,
+} from "@/api/mcp/gateway/static-tool-visibility";
+import {
   getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
-  listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
-import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
@@ -35,9 +38,7 @@ import type {
   McpToolInputSchema,
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
-  ToolScope,
 } from "@/api/mcp/tool-types";
-import { enumProp } from "@/api/mcp/tool-utils";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
 // connect-time instructions apply the same predicate without importing the
@@ -105,85 +106,6 @@ const externalMcpToolAccess = ({
         destructiveBehavior: { type: "upstream" },
       };
 
-const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
-
-/**
- * A session that cannot confirm is not offered tools that always need
- * confirmation. Discriminator tools stay listed: their other actions run
- * without it, and dispatch refuses only the confirmation-gated ones.
- */
-const isStaticToolAvailableToConfirmation = (
-  context: McpRequestContext,
-  definition: McpToolDefinition,
-): boolean => {
-  if (context.toolConfirmation !== TOOL_CONFIRMATION.unavailable) {
-    return true;
-  }
-  const behavior = definition.destructiveBehavior?.type;
-  return behavior !== "always" && behavior !== "outbound";
-};
-
-const isStaticToolVisibleToRole = (
-  context: McpRequestContext,
-  definition: McpToolDefinition,
-): boolean => {
-  if (definition.isVisibleToMemberRole === undefined) {
-    return true;
-  }
-
-  return definition.isVisibleToMemberRole(context.memberRole);
-};
-
-/**
- * Narrow the `lookup_business_registry` tool's `registry` enum to the
- * registries this org can actually reach (`context.enabledRegistrySlugs`,
- * resolved once at context bootstrap), and drop the tool entirely when none
- * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
- * advertise a registry whose call cannot execute — the same defect the chat
- * tool already avoids. Applied only to the default surface; the
- * anonymized projection stays tenant-neutral and is never narrowed.
- *
- * `enabledRegistrySlugs === undefined` means the set was not resolved (a
- * synthetic/test context, or a bootstrap settings-read fault): leave the full
- * enum advertised and let the call-time gate stay the backstop.
- */
-const narrowBusinessRegistryTool = (
-  context: McpRequestContext,
-  definitions: McpToolDefinition[],
-): McpToolDefinition[] => {
-  const enabledSlugs = context.enabledRegistrySlugs;
-  if (enabledSlugs === undefined) {
-    return definitions;
-  }
-
-  const index = definitions.findIndex(
-    (definition) => definition.name === LOOKUP_BUSINESS_REGISTRY_TOOL_NAME,
-  );
-  const definition = definitions[index];
-  if (definition === undefined) {
-    return definitions;
-  }
-
-  if (enabledSlugs.length === 0) {
-    return definitions.filter((_definition, i) => i !== index);
-  }
-
-  return definitions.map((current, i) =>
-    i === index
-      ? {
-          ...definition,
-          inputSchema: {
-            ...definition.inputSchema,
-            properties: {
-              ...definition.inputSchema.properties,
-              registry: enumProp("Business register to query", enabledSlugs),
-            },
-          },
-        }
-      : current,
-  );
-};
-
 export const listGatewayMcpToolDefinitions = async ({
   context,
   mode,
@@ -193,26 +115,16 @@ export const listGatewayMcpToolDefinitions = async ({
   mode: McpMode;
   scopes?: readonly string[];
 }): Promise<McpToolDefinition[]> => {
-  // Visibility is keyed to the primary scope only. Compound tools must remain
-  // discoverable when an additional grant is missing so MCP clients can call
-  // them and receive the complete OAuth recovery hint. The CLI independently
-  // retains baked compound commands across scoped registry refreshes, keeping
-  // its local all-scopes preflight reachable when the primary grant is absent.
-  const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
-    (definition) =>
-      hasGrantedScope(scopes, definition.scope) &&
-      isMcpToolFeatureEnabled(definition.feature) &&
-      isStaticToolVisibleToRole(context, definition) &&
-      isStaticToolAvailableToConfirmation(context, definition),
-  );
-  // Every restricted surface is a pure static projection. Per-org registry
-  // narrowing and dynamic connector/skill discovery run only on the default
-  // surface, so a restricted client never discovers a tool its dispatcher
-  // rejects and never receives tenant-specific connector metadata.
+  const definitions = [
+    ...listOfferedStaticMcpToolDefinitions({ context, mode, scopes }),
+  ];
+  // Every restricted surface is a pure static projection. Dynamic
+  // connector/skill discovery runs only on the default surface, so a
+  // restricted client never discovers a tool its dispatcher rejects and never
+  // receives tenant-specific connector metadata.
   if (mode !== "default") {
-    return staticDefinitions;
+    return definitions;
   }
-  const definitions = narrowBusinessRegistryTool(context, staticDefinitions);
 
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
@@ -221,7 +133,7 @@ export const listGatewayMcpToolDefinitions = async ({
   }
 
   if (hasGrantedScope(scopes, "stella:skills")) {
-    for (const skill of await loadVisibleSkillTools({ context })) {
+    for (const skill of await loadVisibleSkillTools({ context, scopes })) {
       definitions.push(skillToolDefinition(skill));
     }
   }
@@ -303,7 +215,7 @@ export const externalToolDefinition = ({
  * policy.
  */
 export const skillToolDefinition = (
-  skill: ResolvedSkillTool,
+  skill: Pick<ResolvedSkillTool, "description" | "displayName" | "exposedName">,
 ): McpToolDefinition => ({
   access: "read",
   annotations: {
@@ -490,8 +402,3 @@ const externalToolDescription = ({
   description && description.trim().length > 0
     ? `${connectorDisplayName}: ${description}`
     : `Tool from ${connectorDisplayName}`;
-
-const hasGrantedScope = (
-  grantedScopes: readonly string[] | undefined,
-  scope: ToolScope,
-): boolean => grantedScopes === undefined || grantedScopes.includes(scope);

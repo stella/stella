@@ -887,6 +887,7 @@ type Messages = {
       "apiKey": "API key";
       "none": "No setup";
     };
+    "skillNeedsUnavailableTools": "Not offered in chat. It needs a tool that isn't available there: {tools}";
     "toolNames": {
       "anonymize": "Anonymise";
       "createDocx": "Create DOCX";

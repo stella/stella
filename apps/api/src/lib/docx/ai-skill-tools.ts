@@ -19,6 +19,7 @@ import { Result } from "better-result";
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { filterSkillsWithAvailableTools } from "@/api/lib/agent-skills/required-tools";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
@@ -47,18 +48,24 @@ export const maybeSkillTools = async (
   if (ctx === undefined || extractSkillRefSlugs(prompt).length === 0) {
     return Result.ok(undefined);
   }
-  const skills = await listAvailableChatSkillMetadata(ctx);
-  if (Result.isError(skills)) {
-    return Result.err(skills.error);
+  const listed = await listAvailableChatSkillMetadata(ctx);
+  if (Result.isError(listed)) {
+    return Result.err(listed.error);
   }
-  if (skills.value.length === 0) {
+  // A one-shot generator offers no tool besides the skill reads, so a skill
+  // that requires any tool cannot finish here and is not offered.
+  const skills = filterSkillsWithAvailableTools({
+    offeredToolNames: () => new Set(),
+    skills: listed.value,
+  });
+  if (skills.length === 0) {
     return Result.ok(undefined);
   }
   return Result.ok(
     createSkillTools({
       organizationId: ctx.organizationId,
       safeDb: ctx.safeDb,
-      skills: skills.value,
+      skills,
       userId: ctx.userId,
     }),
   );

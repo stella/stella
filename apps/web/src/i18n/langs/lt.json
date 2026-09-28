@@ -884,6 +884,7 @@
       "apiKey": "API raktas",
       "none": "Nereikia nustatyti"
     },
+    "skillNeedsUnavailableTools": "Pokalbyje nesiūloma. Reikia įrankio, kuris ten nepasiekiamas: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuoti",
       "createDocx": "Sukurti DOCX",

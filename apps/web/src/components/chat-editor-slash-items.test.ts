@@ -61,6 +61,7 @@ describe("buildChatSlashItems", () => {
         {
           installed: [
             {
+              chatAvailability: { status: "available" },
               description: "First page.",
               enabled: true,
               id: "installed-1",
@@ -73,6 +74,7 @@ describe("buildChatSlashItems", () => {
         {
           installed: [
             {
+              chatAvailability: { status: "available" },
               description: "Second page.",
               enabled: true,
               id: "installed-2",
@@ -214,6 +216,7 @@ describe("buildChatSlashItems", () => {
         {
           installed: [
             {
+              chatAvailability: { status: "available" },
               description: "Same skill that backs /summarize.",
               enabled: true,
               id: "summarize-default",
@@ -239,6 +242,39 @@ describe("buildChatSlashItems", () => {
         },
       },
     ]);
+  });
+
+  test("omits skills whose required tools the chat does not have", () => {
+    const pages = [
+      {
+        installed: [
+          skillRow({ id: "offered", slug: "offered" }),
+          skillRow({
+            chatAvailability: "unavailable",
+            id: "playbook-builder",
+            slug: "playbook-builder",
+          }),
+          skillRow({
+            body: "Build a playbook.",
+            chatAvailability: "unavailable",
+            command: "playbook",
+            id: "playbook-command",
+            slug: "playbook-command",
+          }),
+        ],
+      },
+    ];
+
+    const items = buildChatSlashItems({
+      shortcuts: commandShortcutRowsFromSkillPages(pages),
+      skillPages: pages,
+    });
+
+    expect(
+      items.map((item) =>
+        item.kind === "skill" ? item.skill.slug : item.kind,
+      ),
+    ).toEqual(["offered"]);
   });
 
   test("omits disabled installed skills", () => {
@@ -297,6 +333,7 @@ describe("skillPagesForChips", () => {
 
 type SkillRowInput = {
   body?: string | null;
+  chatAvailability?: "available" | "unavailable";
   command?: string | null;
   description?: string;
   enabled?: boolean;
@@ -308,6 +345,7 @@ type SkillRowInput = {
 
 const skillRow = ({
   body,
+  chatAvailability = "available",
   command,
   description = "Skill description.",
   enabled = true,
@@ -318,6 +356,7 @@ const skillRow = ({
 }: SkillRowInput) => ({
   ...(body === undefined ? {} : { body }),
   ...(command === undefined ? {} : { command }),
+  chatAvailability: { status: chatAvailability },
   description,
   enabled,
   id,

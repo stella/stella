@@ -74,18 +74,19 @@ const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>(["list_matters"]);
  * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
  * chat projectability per tool.
  */
-const chatProjectableReadToolNames = (): readonly RegistryReadToolName[] => {
-  const names: RegistryReadToolName[] = [];
-  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "read") {
-      continue;
+export const chatProjectableReadToolNames =
+  (): readonly RegistryReadToolName[] => {
+    const names: RegistryReadToolName[] = [];
+    for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+      if (definition.access !== "read") {
+        continue;
+      }
+      if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+        names.push(definition.name);
+      }
     }
-    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
-      names.push(definition.name);
-    }
-  }
-  return names;
-};
+    return names;
+  };
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to

@@ -884,6 +884,7 @@
       "apiKey": "مفتاح API",
       "none": "بدون إعداد"
     },
+    "skillNeedsUnavailableTools": "غير معروضة في الدردشة. تحتاج إلى أداة غير متوفرة هناك: {tools}",
     "toolNames": {
       "anonymize": "إخفاء الهوية",
       "createDocx": "إنشاء DOCX",

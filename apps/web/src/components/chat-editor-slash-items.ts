@@ -16,6 +16,11 @@ type SlashShortcutRow = Pick<
 
 type SlashSkillRow = {
   body?: string | null;
+  /**
+   * The server's decision whether a chat can offer this skill: one that
+   * needs a tool the chat lacks is `unavailable` and never offered here.
+   */
+  chatAvailability: { status: "available" | "unavailable" };
   description: string;
   enabled: boolean;
   id: string;
@@ -129,7 +134,13 @@ export const commandShortcutRowsFromSkillPages = (
     : [];
 
   for (const row of installedRows) {
-    if (!row.enabled || !row.command || row.body === null || !row.body) {
+    if (
+      !row.enabled ||
+      !isOfferedInChat(row) ||
+      !row.command ||
+      row.body === null ||
+      !row.body
+    ) {
       continue;
     }
     rows.push({
@@ -162,8 +173,11 @@ const getChatVisibleInstalledSkillRows = (
     .slice(0, AGENT_SKILLS_CHAT_METADATA_MAX);
   // Command-bearing installed skills are surfaced as prompt slash
   // items by the commandSkills feed; drop them from the skill-chip
-  // list so the same skill doesn't appear twice in the menu.
-  const chatMetadataRows = chatVisibleEnabled.filter((row) => !row.command);
+  // list so the same skill doesn't appear twice in the menu. A skill the
+  // chat cannot finish is dropped after the cap, as the backend does.
+  const chatMetadataRows = chatVisibleEnabled.filter(
+    (row) => !row.command && isOfferedInChat(row),
+  );
 
   for (const row of chatMetadataRows) {
     if (seenSlugs.has(row.slug)) {
@@ -175,6 +189,9 @@ const getChatVisibleInstalledSkillRows = (
 
   return visibleRows;
 };
+
+const isOfferedInChat = (row: SlashSkillRow): boolean =>
+  row.chatAvailability.status === "available";
 
 const compareChatInstalledSkillRows = (
   left: SlashSkillRow,

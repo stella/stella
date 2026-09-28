@@ -34,6 +34,7 @@ describe("getToolDetailPayload", () => {
 
 const skillEntry = (overrides: Partial<CatalogueSkill>): CatalogueSkill => ({
   author: "Stella",
+  chatAvailability: null,
   chatSkillId: null,
   cost: "free",
   description: "Review skill.",

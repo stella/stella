@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
+
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -68,9 +70,11 @@ const createSelectBuilder = (rows: readonly SkillRow[]) => {
 
 const createContext = ({
   dbError,
+  grantedScopes,
   rows = [],
 }: {
   dbError?: DatabaseError;
+  grantedScopes?: readonly string[];
   rows?: readonly SkillRow[];
 } = {}): McpRequestContext => {
   const tx = { select: () => createSelectBuilder(rows) };
@@ -82,6 +86,8 @@ const createContext = ({
   };
 
   return asTestRaw<McpRequestContext>({
+    grantedScopes,
+    memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),
     recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
     safeDb,
@@ -211,6 +217,54 @@ describe("MCP gateway skill tools", () => {
 
     expect(resolved?.name).toBe("beta");
     expect(resolved?.exposedName).toBe("skill__beta");
+  });
+
+  test("lists a skill only to a session offered every tool it requires", async () => {
+    const rows = [
+      skillRow({ slug: "plain" }),
+      skillRow({
+        metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "save_playbook" },
+        slug: "playbook-builder",
+      }),
+    ];
+    const context = createContext({ rows });
+
+    const writer = await loadVisibleSkillTools({
+      context,
+      scopes: ["stella:skills", "stella:knowledge_write"],
+    });
+    const reader = await loadVisibleSkillTools({
+      context,
+      scopes: ["stella:skills"],
+    });
+
+    expect(writer.map((tool) => tool.exposedName)).toEqual([
+      "skill__plain",
+      "skill__playbook-builder",
+    ]);
+    expect(reader.map((tool) => tool.exposedName)).toEqual(["skill__plain"]);
+  });
+
+  test("resolveSkillTool still finds a hidden skill, marked with what it lacks", async () => {
+    const context = createContext({
+      grantedScopes: ["stella:skills"],
+      rows: [
+        skillRow({
+          metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "save_playbook" },
+          slug: "playbook-builder",
+        }),
+      ],
+    });
+
+    const resolved = await resolveSkillTool({
+      context,
+      toolName: "skill__playbook-builder",
+    });
+
+    expect(resolved?.availability).toEqual({
+      status: "unavailable",
+      missingTools: ["save_playbook"],
+    });
   });
 
   test("resolveSkillTool returns null for an unknown exposed name", async () => {
