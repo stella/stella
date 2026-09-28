@@ -24,7 +24,9 @@ const SCRIPT_PATH = "scripts/check-standalone-lockfiles.ts";
 const ROOT_LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
 const DEPENDABOT = ".github/dependabot.yml";
-const BUN_LOCKFILES = new Set(["bun.lock", "bun.lockb"]);
+const TEXT_BUN_LOCKFILE = "bun.lock";
+/** Binary: its packages cannot be read, so the excludes net cannot be checked. */
+const BINARY_BUN_LOCKFILE = "bun.lockb";
 const FOREIGN_LOCKFILES = new Set([
   "npm-shrinkwrap.json",
   "package-lock.json",
@@ -186,9 +188,11 @@ const readInstallPolicy = (source: string): InstallPolicy => {
   };
 };
 
+const normalizeQuotes = (value: string): string =>
+  value.replaceAll(/^["']|["']$/gu, "");
+
 const normalizeDir = (value: string): string =>
-  value
-    .replaceAll(/^["']|["']$/gu, "")
+  normalizeQuotes(value)
     .replace(/^\.\//u, "")
     .replace(/^\//u, "")
     .replace(/\/+$/u, "")
@@ -225,21 +229,32 @@ const readDependabot = (source: string): DependabotBunUpdate[] => {
 
 const INSTALL_SUBCOMMANDS = new Set(["ci", "i", "install"]);
 
+const resolveDir = (base: string, relative: string): string =>
+  normalizeDir(
+    path.posix.join(base === "" ? "." : base, normalizeQuotes(relative)),
+  );
+
 /**
  * Finds `bun install`/`bun i`/`bun ci` in one line of shell. The target is the
- * `--cwd` value, else the directory of a `cd` earlier on the line, else the
- * repository root.
+ * `--cwd` value, else the directory of a `cd` earlier on the line, else
+ * `baseDir` (a workflow step's working directory, or the repository root).
+ * Grouping such as `(cd dir && bun install)` is read through, not skipped.
  */
 export const parseInstallCommands = (
   line: string,
   source: string,
+  baseDir = "",
 ): InstallCommand[] => {
   const commands: InstallCommand[] = [];
-  let cdDir = "";
+  let cdDir = baseDir;
   for (const segment of line.split(/&&|\|\||[;|]/u)) {
-    const tokens = segment.trim().split(/\s+/u).filter(Boolean);
+    const tokens = segment
+      .replaceAll(/\$\(|[(){}`]/gu, " ")
+      .trim()
+      .split(/\s+/u)
+      .filter(Boolean);
     if (tokens[0] === "cd" && tokens[1] !== undefined) {
-      cdDir = normalizeDir(tokens[1]);
+      cdDir = resolveDir(cdDir, tokens[1]);
       continue;
     }
     const bunIndex = tokens.findIndex(
@@ -266,7 +281,7 @@ export const parseInstallCommands = (
       continue;
     }
     commands.push({
-      dir: cwd === undefined ? cdDir : normalizeDir(cwd),
+      dir: cwd === undefined ? cdDir : resolveDir(cdDir, cwd),
       frozen:
         subcommand === "ci" ||
         rest.some(
@@ -285,6 +300,105 @@ const isInstallSource = (file: string): boolean =>
   file.endsWith(".sh") ||
   (file.startsWith(".github/") && /\.ya?ml$/u.test(file));
 
+type RunBlock = {
+  readonly baseDir: string;
+  readonly run: string;
+  readonly source: string;
+};
+
+const workingDirectory = (value: unknown): string | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const run = value["run"];
+  if (!isRecord(run)) {
+    return undefined;
+  }
+  const dir = run["working-directory"];
+  return typeof dir === "string" ? dir : undefined;
+};
+
+const stepRunBlocks = (
+  steps: unknown,
+  baseDir: string,
+  source: string,
+): RunBlock[] =>
+  Array.isArray(steps)
+    ? steps.flatMap((step: unknown, index) => {
+        if (!isRecord(step) || typeof step["run"] !== "string") {
+          return [];
+        }
+        const dir = step["working-directory"];
+        const name =
+          typeof step["name"] === "string" ? step["name"] : `#${index + 1}`;
+        return [
+          {
+            baseDir: typeof dir === "string" ? resolveDir("", dir) : baseDir,
+            run: step["run"],
+            source: `${source} step "${name}"`,
+          },
+        ];
+      })
+    : [];
+
+/**
+ * The `run` scripts of a workflow or composite action, each with the working
+ * directory its step, job or workflow defaults set.
+ */
+const workflowRunBlocks = (
+  text: string,
+  file: string,
+): RunBlock[] | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = Bun.YAML.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const workflowDir = resolveDir(
+    "",
+    workingDirectory(parsed["defaults"]) ?? "",
+  );
+  const blocks: RunBlock[] = [];
+  const jobs = parsed["jobs"];
+  if (isRecord(jobs)) {
+    for (const [jobName, job] of Object.entries(jobs)) {
+      if (!isRecord(job)) {
+        continue;
+      }
+      const jobDir = workingDirectory(job["defaults"]);
+      blocks.push(
+        ...stepRunBlocks(
+          job["steps"],
+          jobDir === undefined ? workflowDir : resolveDir("", jobDir),
+          `${file} job "${jobName}"`,
+        ),
+      );
+    }
+  }
+  const runs = parsed["runs"];
+  if (isRecord(runs)) {
+    blocks.push(...stepRunBlocks(runs["steps"], "", file));
+  }
+  return blocks;
+};
+
+const shellLines = (
+  text: string,
+  source: (line: number) => string,
+  baseDir: string,
+) =>
+  text
+    .split("\n")
+    .flatMap((line, index) =>
+      line.trimStart().startsWith("#")
+        ? []
+        : parseInstallCommands(line, source(index + 1), baseDir),
+    );
+
 const readInstallCommands = (
   root: string,
   trackedFiles: readonly string[],
@@ -302,16 +416,18 @@ const readInstallCommands = (
           )
         : [];
     }
-    return text
-      .split("\n")
-      .flatMap((line, index) =>
-        line.trimStart().startsWith("#")
-          ? []
-          : parseInstallCommands(line, `${file}:${index + 1}`),
-      );
+    const blocks = file.startsWith(".github/")
+      ? workflowRunBlocks(text, file)
+      : undefined;
+    if (blocks === undefined) {
+      return shellLines(text, (line) => `${file}:${line}`, "");
+    }
+    return blocks.flatMap((block) =>
+      shellLines(block.run, () => block.source, block.baseDir),
+    );
   });
 
-/** Package names a text `bun.lock` resolves. A binary `bun.lockb` yields none. */
+/** Package names a text `bun.lock` resolves. */
 const readLockedPackages = (lockfile: string): Set<string> =>
   new Set(
     [...lockfile.matchAll(/\["((?:@[^/"]+\/)?[^@"]+)@[^"]*"/gu)].map(
@@ -382,9 +498,17 @@ export const checkStandaloneLockfiles = ({
       continue;
     }
 
+    if (base === BINARY_BUN_LOCKFILE) {
+      errors.push(
+        `${file}: a binary Bun lockfile cannot be checked against the quarantine ` +
+          `excludes. Convert it to a text ${TEXT_BUN_LOCKFILE} (\`bun install --save-text-lockfile\`) ` +
+          `and delete it, ${allowHint}.`,
+      );
+      continue;
+    }
     if (
       FOREIGN_LOCKFILES.has(base) ||
-      (BUN_LOCKFILES.has(base) && dir === "")
+      (base === TEXT_BUN_LOCKFILE && dir === "")
     ) {
       errors.push(
         `${file}: this lockfile bypasses the repository's release-age quarantine ` +
@@ -393,7 +517,7 @@ export const checkStandaloneLockfiles = ({
       );
       continue;
     }
-    if (!BUN_LOCKFILES.has(base)) {
+    if (base !== TEXT_BUN_LOCKFILE) {
       continue;
     }
 
@@ -405,10 +529,9 @@ export const checkStandaloneLockfiles = ({
       dependabot,
       dir,
       installs,
-      lockedPackages:
-        base === "bun.lock"
-          ? readLockedPackages(readFileSync(path.join(root, file), "utf-8"))
-          : new Set(),
+      lockedPackages: readLockedPackages(
+        readFileSync(path.join(root, file), "utf-8"),
+      ),
       root: rootWithAge,
     };
     const missing = SAFETY_NETS.flatMap((net) => {

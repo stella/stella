@@ -220,10 +220,60 @@ describe("standalone lockfile guard", () => {
     },
   );
 
-  test("fails a second Bun lockfile at the root", () => {
-    const result = checkStandaloneLockfiles(fixture({ "bun.lockb": "" }));
+  test.each(["bun.lockb", "tools/docs/bun.lockb"])(
+    "fails a binary lockfile at %s, whose packages cannot be checked",
+    (lockfile) => {
+      const result = checkStandaloneLockfiles(
+        fixture({ ...covered, [lockfile]: "" }),
+      );
 
-    expect(result.errors[0]).toStartWith("bun.lockb: this lockfile bypasses");
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toStartWith(
+        `${lockfile}: a binary Bun lockfile cannot be checked`,
+      );
+    },
+  );
+
+  test("fails an unfrozen install in a workflow step's working directory", () => {
+    const result = checkStandaloneLockfiles(
+      fixture({
+        ...covered,
+        ".github/workflows/docs.yml": `
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install docs
+        working-directory: tools/docs
+        run: bun install
+`,
+      }),
+    );
+
+    expect(result.errors[0]).toContain(
+      'installed without --frozen-lockfile in .github/workflows/docs.yml job "docs" step "Install docs"',
+    );
+  });
+
+  test("resolves a job's default working directory", () => {
+    const result = checkStandaloneLockfiles(
+      fixture({
+        ...covered,
+        ".github/workflows/docs.yml": `
+jobs:
+  docs:
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - run: cd docs && bun install
+`,
+      }),
+    );
+
+    expect(result.errors[0]).toContain(
+      'installed without --frozen-lockfile in .github/workflows/docs.yml job "docs" step "#1"',
+    );
   });
 
   test("passes an allowlisted lockfile", () => {
@@ -265,6 +315,9 @@ describe("install command parsing", () => {
     ["cd tools/docs && bun ci", "tools/docs", true],
     ["bash scripts/retry.sh bun install --frozen-lockfile", "", true],
     ["bun i", "", false],
+    ["(cd tools/docs && bun install)", "tools/docs", false],
+    ["{ cd tools && bun install --cwd docs; }", "tools/docs", false],
+    ['echo "$(bun --cwd tools/docs ci)"', "tools/docs", true],
   ])("%s", (line, dir, frozen) => {
     expect(parseInstallCommands(line, "fixture")).toEqual([
       { dir, frozen, source: "fixture" },
