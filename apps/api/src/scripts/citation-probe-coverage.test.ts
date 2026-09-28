@@ -49,4 +49,14 @@ describe("citation probe coverage", () => {
     const covered = citationCoverage(extracted);
     expect(covered("č. j. KSCB 26INS/8270/2018-45")).toBe(true);
   });
+
+  test("a prefixed candidate is covered by its unprefixed extraction", () => {
+    const extracted = extractedTexts(
+      "podle nálezu sp. zn. II. ÚS 123/45 ze dne",
+    );
+    expect(extracted).toEqual(["II. ÚS 123/45"]);
+    const covered = citationCoverage(extracted);
+    expect(covered("sp. zn. II. ÚS 123/45")).toBe(true);
+    expect(covered("sp. zn. II. ÚS 123/46")).toBe(false);
+  });
 });

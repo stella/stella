@@ -176,6 +176,38 @@ describe("createBackgroundAuditRecorder", () => {
     });
   });
 
+  test("categorizes correspondence as matter correspondence activity", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+
+    await recorder(tx, {
+      action: AUDIT_ACTION.CREATE,
+      metadata: { subject: "Court filing" },
+      resourceId: "correspondence-1",
+      resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
+    });
+
+    expect(inserted[0]).toMatchObject({
+      activityCategory: "correspondence",
+      resourceType: "correspondence",
+    });
+  });
+
   test("categorizes deleted task entities from the persisted diff", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({

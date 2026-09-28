@@ -783,3 +783,80 @@ export const formatDecisionDocket = (docket: ParsedDecisionDocket): string =>
 /** Stable comparison form shared by all declared docket grammars. */
 export const canonicalDecisionDocket = (docket: ParsedDecisionDocket): string =>
   docket.canonical;
+
+/**
+ * A Roman numeral from one to thirty-nine, the range publishers number a
+ * ruling's parts or a docket's sibling documents in. Spelled out rather than
+ * `[ivxl]+`, which would read a word made of those letters as a numeral.
+ */
+const ROMAN_PART_NUMERAL_SOURCE = String.raw`(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3})`;
+
+/**
+ * What a publisher can leave glued to the end of a docket without changing
+ * which case it names: punctuation, dashes, symbols and whitespace, with at
+ * most standalone Roman part numerals between them (`- II.`, `.`, ` -`).
+ * It opens on a separator, so a cut never lands inside a token, and it
+ * carries no digit and no other letter, so a sheet number (`-33`) or a word
+ * is never stripped.
+ */
+const DOCKET_JUNK_TAIL_RE = new RegExp(
+  String.raw`^[\s\p{P}\p{S}](?:[\s\p{P}\p{S}]|(?<![\p{L}\p{N}])${ROMAN_PART_NUMERAL_SOURCE}(?![\p{L}\p{N}]))*$`,
+  "iu",
+);
+
+/** How a stored docket reads under its jurisdiction's grammar. */
+export type StoredDecisionDocket =
+  /** The docket parses as written. */
+  | { readonly type: "canonical"; readonly caseNumber: string }
+  /**
+   * The docket parses once a tail the grammar has no place for is removed.
+   * `caseNumber` is the docket without it; `removed` is what was cut.
+   */
+  | {
+      readonly type: "trimmed";
+      readonly caseNumber: string;
+      readonly removed: string;
+    }
+  /** Neither the docket nor any docket inside it parses. */
+  | { readonly type: "unparsed" }
+  /** The jurisdiction declares no docket grammar to read it by. */
+  | { readonly type: "ungoverned" };
+
+/**
+ * Read a stored docket against its jurisdiction's grammar, cutting a trailing
+ * tail the grammar has no place for when that is what keeps it from parsing.
+ *
+ * A docket that parses as written is returned unchanged, so a grammar that
+ * accepts a trailing mark (a Hungarian docket's closing dot) keeps it. The
+ * cut is the shortest one that leaves a docket the grammar accepts, and only
+ * a tail of separators and Roman part numerals is ever cut
+ * (`DOCKET_JUNK_TAIL_RE`). Language-blind: nothing here reads a word.
+ */
+export const storedDecisionDocketOf = (
+  raw: string,
+  jurisdiction: string,
+): StoredDecisionDocket => {
+  const grammar = decisionDocketGrammarForJurisdiction(jurisdiction);
+  if (grammar === null) {
+    return { type: "ungoverned" };
+  }
+  if (grammar.parse(raw) !== null) {
+    return { type: "canonical", caseNumber: raw };
+  }
+  const folded = foldDecisionIdentifierInput(raw);
+  for (let cut = folded.length - 1; cut > 0; cut -= 1) {
+    const tail = folded.slice(cut);
+    if (!DOCKET_JUNK_TAIL_RE.test(tail)) {
+      continue;
+    }
+    const caseNumber = folded.slice(0, cut).trim();
+    if (caseNumber.length > 0 && grammar.parse(caseNumber) !== null) {
+      return {
+        type: "trimmed",
+        caseNumber,
+        removed: folded.slice(caseNumber.length),
+      };
+    }
+  }
+  return { type: "unparsed" };
+};
