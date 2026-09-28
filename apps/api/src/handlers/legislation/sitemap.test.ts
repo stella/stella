@@ -13,6 +13,7 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { refreshStatuteSitemapShards } from "@/api/lib/legislation/sitemap-shard-refresh";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -24,6 +25,7 @@ import {
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let legislationDb: LegislationReadDb;
+let refreshDb: Parameters<typeof refreshStatuteSitemapShards>[0];
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
@@ -56,6 +58,10 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     const db = drizzle({ client });
+    // SAFETY: the embedded database implements the root handle's select and
+    // transaction surface used by the refresh.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test handle stands in for the root pool
+    refreshDb = db as unknown as typeof refreshDb;
     await db.execute(sql.raw("SET TIME ZONE 'UTC'"));
 
     await db.insert(legislationSources).values([
@@ -238,6 +244,12 @@ test("the buckets partition a jurisdiction's Works exactly once", async () => {
 });
 
 test("the shard index lists one all-bucket shard per jurisdiction", async () => {
+  expect(await listStatuteSitemapShardsHandler(legislationDb)).toMatchObject({
+    items: [],
+  });
+  expect(await refreshStatuteSitemapShards(refreshDb)).toMatchObject({
+    shards: 1,
+  });
   const shards = await listStatuteSitemapShardsHandler(legislationDb);
   if (!("items" in shards)) {
     panic("Expected a statute sitemap shard index.");

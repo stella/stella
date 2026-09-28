@@ -217,6 +217,19 @@ export const legislationDocuments = p.pgTable(
       .index("legislation_documents_sitemap_bucket_idx")
       .on(t.country, statuteSitemapBucket(t.eli), t.eli)
       .where(isNotNull(t.slug)),
+    p
+      .index("legislation_documents_sitemap_refresh_idx")
+      .on(
+        t.country,
+        t.sourceId,
+        t.eli,
+        t.language,
+        t.versionValidFrom,
+        t.id,
+        t.slug,
+        t.updatedAt,
+      )
+      .where(isNotNull(t.slug)),
     // The point-in-time read seeks a Work by its identifier and takes the
     // latest window that opened on or before the requested date, so the
     // access path has to carry the language and the opening as well.
@@ -295,6 +308,31 @@ export const legislationDocuments = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
     ...corpusSampleReaderPolicies(),
+  ],
+);
+
+/** Public statute sitemap index, replaced as one snapshot by the scheduler. */
+export const statuteSitemapShards = p.pgTable(
+  "statute_sitemap_shards",
+  {
+    country: p.varchar({ length: 3 }).notNull(),
+    bucket: p.varchar({ length: 3 }).notNull(),
+    total: p.integer().notNull(),
+    lastmod: p.varchar({ length: 10 }).notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "statute_sitemap_shards_pkey",
+      columns: [t.country, t.bucket],
+    }),
+    p.check("statute_sitemap_shards_total_positive", sql`${t.total} > 0`),
+    p.pgPolicy("statute_sitemap_shard_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...publicLawReaderPolicies(),
   ],
 );
 
