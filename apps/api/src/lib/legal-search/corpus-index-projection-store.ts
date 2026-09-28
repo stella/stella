@@ -790,8 +790,8 @@ type AbandonCorpusProjectionAppendOptions = {
 };
 
 export const CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT = 5;
-export const CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT = 2;
-export const CORPUS_PROJECTION_APPEND_TRANSIENT_ATTEMPT_LIMIT = 10;
+const CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT = 2;
+const CORPUS_PROJECTION_APPEND_TRANSIENT_ATTEMPT_LIMIT = 10;
 export const CORPUS_PROJECTION_APPEND_RETRY_BASE_MS = 5000;
 export const CORPUS_PROJECTION_APPEND_RETRY_CAP_MS = 5 * 60_000;
 
@@ -847,8 +847,7 @@ const isStillDesiredProjection = (
   state: typeof corpusIndexProjectionStates.$inferSelect | undefined,
   intent: typeof corpusIndexProjectionIntents.$inferSelect,
 ): state is typeof corpusIndexProjectionStates.$inferSelect =>
-  state !== undefined &&
-  state.desiredAction === "upsert" &&
+  state?.desiredAction === "upsert" &&
   state.desiredEpoch === intent.epoch &&
   state.desiredFingerprint === intent.fingerprint &&
   state.desiredIndexId === intent.indexId;

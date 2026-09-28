@@ -232,7 +232,7 @@ test("a planner-rejected cap-plus-one revision is persisted as blocked", async (
     }),
   );
   if (descriptor.action !== "upsert") {
-    return panic("Seeded legislation row is not projectable");
+    panic("Seeded legislation row is not projectable");
   }
   await db.insert(corpusIndexProjectionStates).values({
     family: TARGET.family,
@@ -264,7 +264,7 @@ test("a planner-rejected cap-plus-one revision is persisted as blocked", async (
     )
   ).at(0);
   if (lease === undefined) {
-    return panic("Expected cap-plus-one revision reservation");
+    panic("Expected cap-plus-one revision reservation");
   }
 
   const plan = planCorpusProjectionAppendRequests([
@@ -283,7 +283,7 @@ test("a planner-rejected cap-plus-one revision is persisted as blocked", async (
   ]);
   expect(plan.isErr()).toBe(true);
   if (plan.isOk()) {
-    return panic("Cap-plus-one revision unexpectedly planned");
+    panic("Cap-plus-one revision unexpectedly planned");
   }
   expect(plan.error.code).toBe("revision_too_large");
 
