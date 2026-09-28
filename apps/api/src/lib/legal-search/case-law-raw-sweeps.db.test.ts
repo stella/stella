@@ -122,15 +122,15 @@ test(
 test(
   "migration indexes match the schema-built source indexes",
   async () => {
-    for (const [directory, indexName] of [
-      [
-        "20260928160000_case_law_live_legacy_raw_source_idx",
-        "case_law_decisions_live_legacy_raw_source_idx",
-      ],
-      [
-        "20260928160100_case_law_source_id_page_idx",
-        "case_law_decisions_source_id_page_idx",
-      ],
+    for (const { directory, indexName } of [
+      {
+        directory: "20260928160000_case_law_live_legacy_raw_source_idx",
+        indexName: "case_law_decisions_live_legacy_raw_source_idx",
+      },
+      {
+        directory: "20260928160100_case_law_source_id_page_idx",
+        indexName: "case_law_decisions_source_id_page_idx",
+      },
     ]) {
       const migration = readFileSync(
         nodePath.resolve(
@@ -144,10 +144,10 @@ test(
       const create = migration
         .split("--> statement-breakpoint")
         .find((part) =>
-          part.includes(`CREATE INDEX CONCURRENTLY "${indexName}"`),
+          part.includes(`CREATE INDEX CONCURRENTLY "${String(indexName)}"`),
         );
       if (create === undefined) {
-        panic(`Migration has no CREATE INDEX for ${indexName}.`);
+        panic(`Migration has no CREATE INDEX for ${String(indexName)}.`);
       }
       const copyName = `${indexName}_migration`;
       await client.query(

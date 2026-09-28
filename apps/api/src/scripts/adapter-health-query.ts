@@ -159,7 +159,9 @@ export const readAdapterHealthMetrics = async ({
   let indexed = 0;
   let citationTotal = 0;
   let citationResolved = 0;
-  const fields = new Map(CHECKED_FIELDS.map((field) => [field, 0] as const));
+  const fields = new Map<string, number>(
+    CHECKED_FIELDS.map((field) => [field, 0]),
+  );
 
   while (true) {
     // db-await-in-loop: each keyset statement aggregates one bounded source page

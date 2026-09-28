@@ -766,7 +766,6 @@
     "apps/api/src/mcp/document-tools.ts": 1,
     "apps/api/src/mcp/server-core.ts": 1,
     "apps/api/src/mcp/template-tools.ts": 1,
-    "apps/api/src/scripts/adapter-health.ts": 1,
     "apps/api/src/scripts/better-auth-migration-audit.logic.ts": 1,
     "apps/api/src/scripts/better-auth-sign-in-replay.ts": 1,
     "apps/collab/src/server.ts": 1,
