@@ -1,0 +1,39 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`under-cap legislation fixture corpus keeps its v2 wire documents 1`] = `
+[
+  [
+    {
+      "document_id": "0198e331-e578-7000-8000-000000000004",
+      "document_type": "act",
+      "effective_date": "2014-01-01",
+      "eli": "eli/cz/sb/2012/89",
+      "is_opening": true,
+      "jurisdiction": "CZE",
+      "language": "cs",
+      "projection_revision": "0198e331-e578-7000-8000-000000000001",
+      "source": "0198e331-e578-7000-8000-000000000005",
+      "status": "current",
+      "text": "§ 1 Předmět úpravy",
+      "title": "Občanský zákoník",
+      "version_valid_from": "2014-01-01",
+    },
+  ],
+  [
+    {
+      "document_id": "0198e331-e578-7000-8000-000000000006",
+      "document_type": "act",
+      "eli": "eli/cz/sb/2012/89",
+      "is_opening": true,
+      "jurisdiction": "CZE",
+      "language": "cs",
+      "projection_revision": "0198e331-e578-7000-8000-000000000001",
+      "source": "0198e331-e578-7000-8000-000000000005",
+      "status": "current",
+      "text": "Článek 1, § 2, القانون",
+      "title": "Act / Zákon / قانون",
+      "version_valid_to": "2025-01-01",
+    },
+  ],
+]
+`;

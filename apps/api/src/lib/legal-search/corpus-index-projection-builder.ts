@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { Buffer } from "node:buffer";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
@@ -8,7 +9,11 @@ import {
   publisherSummaryOf,
   type PublisherSummaryInput,
 } from "@/api/lib/case-law/publisher-summary";
-import { chunkDocument } from "@/api/lib/corpus-index/chunking";
+import {
+  chunkDocument,
+  chunkLegislationDocument,
+  ChunkBudgetError,
+} from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -22,8 +27,10 @@ import {
   type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
+import { LIMITS } from "@/api/lib/limits";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -246,29 +253,109 @@ type BuildLegislationV2Options = ProjectionBuildBase & {
   input: LegislationV2ProjectionInput;
 };
 
+/** Engine document cap with room for indexing metadata. */
+export const LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES =
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES;
+const LEGISLATION_WHOLE_REQUEST_MAX_BYTES = Math.min(
+  LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES,
+  LIMITS.corpusIndexIngestMaxBytes - 1,
+);
+
+type LegislationWholeDocumentOptions = {
+  input: LegislationV2ProjectionInput;
+  text: string;
+  revision: ProjectionRevision;
+};
+
+const legislationWholeDocument = ({
+  input,
+  text,
+  revision,
+}: LegislationWholeDocumentOptions): LegislationV2ProjectionDocument => ({
+  ...sharedFields(input, revision),
+  title: input.title,
+  text,
+  is_opening: true,
+  status: input.status,
+  eli: input.eli,
+  ...(input.effectiveDate === null
+    ? {}
+    : { effective_date: input.effectiveDate }),
+  ...(input.versionValidFrom === null
+    ? {}
+    : { version_valid_from: input.versionValidFrom }),
+  ...(input.versionValidTo === null
+    ? {}
+    : { version_valid_to: input.versionValidTo }),
+});
+
+export const legislationV2NeedsPassages = (
+  options: LegislationWholeDocumentOptions,
+): boolean =>
+  Buffer.byteLength(
+    JSON.stringify(legislationWholeDocument(options)),
+    "utf-8",
+  ) > LEGISLATION_WHOLE_REQUEST_MAX_BYTES;
+
 export const buildLegislationV2ProjectionDocuments = ({
   input,
   payload,
   revision,
-}: BuildLegislationV2Options): [LegislationV2ProjectionDocument] => [
-  {
-    ...sharedFields(input, revision),
-    title: input.title,
+}: BuildLegislationV2Options): LegislationV2ProjectionDocument[] => {
+  if (
+    Buffer.byteLength(payload.text, "utf-8") >
+    LIMITS.corpusPayloadMaxDecompressedBytes
+  ) {
+    throw new ChunkBudgetError({
+      message: "Legislation text exceeds the projection ceiling",
+    });
+  }
+  const document = legislationWholeDocument({
+    input,
     text: payload.text,
-    is_opening: true,
-    status: input.status,
-    eli: input.eli,
-    ...(input.effectiveDate === null
-      ? {}
-      : { effective_date: input.effectiveDate }),
-    ...(input.versionValidFrom === null
-      ? {}
-      : { version_valid_from: input.versionValidFrom }),
-    ...(input.versionValidTo === null
-      ? {}
-      : { version_valid_to: input.versionValidTo }),
-  },
-];
+    revision,
+  });
+  if (
+    Buffer.byteLength(JSON.stringify(document), "utf-8") <=
+    LEGISLATION_WHOLE_REQUEST_MAX_BYTES
+  ) {
+    return [document];
+  }
+  const chunks = chunkLegislationDocument({
+    ast: hasUsableAst(payload.ast) ? payload.ast : null,
+    fallbackText: payload.text,
+  });
+  const passages: LegislationV2ProjectionDocument[] = [];
+  for (const { seq, text } of chunks) {
+    const passage = {
+      ...sharedFields(input, revision),
+      text,
+      is_opening: seq === 0,
+      ...(seq === 0 ? { title: input.title } : {}),
+      status: input.status,
+      eli: input.eli,
+      ...(input.effectiveDate === null
+        ? {}
+        : { effective_date: input.effectiveDate }),
+      ...(input.versionValidFrom === null
+        ? {}
+        : { version_valid_from: input.versionValidFrom }),
+      ...(input.versionValidTo === null
+        ? {}
+        : { version_valid_to: input.versionValidTo }),
+    } satisfies LegislationV2ProjectionDocument;
+    if (
+      Buffer.byteLength(JSON.stringify(passage), "utf-8") + 1 >
+      LIMITS.corpusIndexIngestMaxBytes
+    ) {
+      throw new ChunkBudgetError({
+        message: "Legislation passage exceeds the ingest request ceiling",
+      });
+    }
+    passages.push(passage);
+  }
+  return passages;
+};
 
 export const buildCorpusProjectionDocuments = (
   options: BuildCorpusProjectionDocumentsOptions,

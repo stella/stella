@@ -5,8 +5,8 @@ import { settleBoth, splitIngestRequests } from "@/api/lib/corpus-index/core";
 /**
  * A batch is sized in rows, but a passage family turns one row into as many
  * documents as it has passages, so the NDJSON body a batch serializes to is
- * not bounded by the row count. These tests pin the byte bound and the row
- * boundary it must never cut across.
+ * not bounded by the row count. These tests pin the byte bound and document
+ * order when a row spans multiple requests.
  */
 
 const utf8Bytes = (value: string): number => Buffer.byteLength(value, "utf-8");
@@ -71,35 +71,32 @@ describe("splitIngestRequests", () => {
     }
   });
 
-  test("a row is never cut across two requests", () => {
+  test("an oversized row is split across bounded requests with row metadata on each part", () => {
     const group = [builtRow("a", 20, "x".repeat(100)), builtRow("b", 1, "x")];
 
     const requests = splitIngestRequests(group, 500);
 
+    expect(requests.length).toBeGreaterThan(2);
     for (const { entries, ndjson } of requests) {
-      const documentIds = new Set(
-        ndjson.split("\n").map((line) => {
-          const doc: Record<string, unknown> = JSON.parse(line);
-          return String(doc["document_id"]);
-        }),
-      );
-      // A row split across requests could be marked indexed while half its
-      // passages were still missing from the index.
-      expect([...documentIds].toSorted()).toEqual(
-        entries.map(({ row }) => row.id).toSorted(),
+      expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(500);
+      const ndjsonDocs = ndjson.split("\n").map((line) => JSON.parse(line));
+      expect(entries.flatMap(({ docs }) => docs)).toEqual(ndjsonDocs);
+      expect(entries.map(({ row }) => row.id)).toContain(
+        ndjsonDocs[0]?.document_id,
       );
     }
+    expect(ingestedIds(requests)).toEqual([
+      ...Array.from({ length: 20 }, (_, seq) => `a:${seq}`),
+      "b:0",
+    ]);
   });
 
-  test("a single oversized row is sent whole rather than cut", () => {
-    const group = [builtRow("huge", 40, "x".repeat(500))];
+  test("a single document larger than the budget fails explicitly", () => {
+    const group = [builtRow("huge", 1, "x".repeat(500))];
 
-    const requests = splitIngestRequests(group, 100);
-
-    // Keeping the row's mark honest outweighs the budget here; one court
-    // decision bounds the overshoot.
-    expect(requests).toHaveLength(1);
-    expect(requests.at(0)?.ndjson.split("\n")).toHaveLength(40);
+    expect(() => splitIngestRequests(group, 100)).toThrow(
+      "exceeding the 100-byte request limit",
+    );
   });
 
   test("the budget counts UTF-8 bytes, not code units", () => {
@@ -114,6 +111,12 @@ describe("splitIngestRequests", () => {
 
   test("an empty group produces no requests", () => {
     expect(splitIngestRequests([], 1000)).toEqual([]);
+  });
+
+  test("a row without documents is rejected before building a request", () => {
+    expect(() =>
+      splitIngestRequests([{ row: { id: "empty" }, docs: [] }], 1000),
+    ).toThrow("An ingest row has no documents");
   });
 });
 

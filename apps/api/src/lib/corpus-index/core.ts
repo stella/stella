@@ -1,3 +1,4 @@
+import { panic, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
 /**
@@ -16,6 +17,10 @@ export type IngestRequest<TRow> = {
   ndjson: string;
 };
 
+class IngestDocumentTooLargeError extends TaggedError(
+  "IngestDocumentTooLargeError",
+)<{ message: string }> {}
+
 /**
  * Split an index group into byte-bounded ingest requests.
  *
@@ -25,13 +30,9 @@ export type IngestRequest<TRow> = {
  * magnitude larger than the same batch of short ones. The whole body is held
  * in memory and sent as one request, so the bound has to be bytes.
  *
- * Splits only at row boundaries. Ingest appends per document with no
- * cross-document transaction, so splitting is safe for the engine — but the
- * caller records a row as applied once its documents land, and a row cut
- * across two requests could be recorded while half its passages are missing. A
- * single row that exceeds the budget on its own therefore still goes in one
- * request: sending it whole is the only shape that keeps that record honest,
- * and it is bounded by the size of one court decision.
+ * Splits at document boundaries, including within a row. The request metadata
+ * retains the row for each part so callers can track all requests contributing
+ * to that row.
  */
 export const splitIngestRequests = <TRow>(
   group: readonly BuiltRow<TRow>[],
@@ -42,38 +43,53 @@ export const splitIngestRequests = <TRow>(
   let lines: string[] = [];
   let bytes = 0;
 
+  const flush = () => {
+    if (lines.length === 0) {
+      return;
+    }
+    requests.push({ entries, ndjson: lines.join("\n") });
+    entries = [];
+    lines = [];
+    bytes = 0;
+  };
+
   for (const entry of group) {
-    const rowLines = entry.docs.map((doc) => JSON.stringify(doc));
-    // Measured in UTF-8 bytes, not code units: legal text is mostly non-ASCII
-    // outside English, where `.length` under-counts the wire size by up to 3x.
-    const rowBytes = rowLines.reduce(
-      (total, line) => total + Buffer.byteLength(line, "utf-8") + 1,
-      0,
-    );
-    if (entries.length > 0 && bytes + rowBytes > maxBytes) {
-      requests.push({ entries, ndjson: lines.join("\n") });
-      entries = [];
-      lines = [];
-      bytes = 0;
+    if (entry.docs.length === 0) {
+      return panic("An ingest row has no documents");
     }
-    entries.push(entry);
-    for (const line of rowLines) {
+
+    let partDocs: Record<string, unknown>[] = [];
+    for (const doc of entry.docs) {
+      const line = JSON.stringify(doc);
+      // Measure UTF-8 bytes: legal text is often non-ASCII.
+      const lineBytes = Buffer.byteLength(line, "utf-8");
+      if (lineBytes > maxBytes) {
+        throw new IngestDocumentTooLargeError({
+          message: `An ingest document is ${lineBytes} bytes, exceeding the ${maxBytes}-byte request limit`,
+        });
+      }
+      const separatorBytes = lines.length === 0 ? 0 : 1;
+      if (bytes + separatorBytes + lineBytes > maxBytes) {
+        flush();
+        partDocs = [];
+      }
+      if (partDocs.length === 0) {
+        entries.push({ row: entry.row, docs: partDocs });
+      }
+      partDocs.push(doc);
       lines.push(line);
+      bytes += (lines.length === 1 ? 0 : 1) + lineBytes;
     }
-    bytes += rowBytes;
   }
 
-  if (entries.length > 0) {
-    requests.push({ entries, ndjson: lines.join("\n") });
-  }
+  flush();
   return requests;
 };
 
 /**
- * Canonical payload one row contributes to the index. `ast` is loaded only by
- * families that project one document per passage and is `null` everywhere
- * else, so a family that indexes whole documents never pays for a second
- * object read.
+ * Canonical payload one row contributes to the index. The AST is loaded for
+ * case-law passages and oversized legislation; whole legislation documents
+ * avoid a second object read.
  */
 export type CorpusDocumentPayload = {
   text: string;

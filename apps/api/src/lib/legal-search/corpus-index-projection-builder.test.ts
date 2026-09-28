@@ -15,6 +15,7 @@ import type {
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -94,6 +95,9 @@ test("case-law v5 emits exact attempt identity and one opening passage", () => {
   });
   for (const [index, document] of documents.entries()) {
     expect(document.projection_revision).toBe(REVISION);
+    expect(
+      Buffer.byteLength(JSON.stringify(document), "utf-8") + 1,
+    ).toBeLessThanOrEqual(LIMITS.corpusIndexIngestMaxBytes);
     expect("title" in document).toBe(index === 0);
     expect("decision_year" in document).toBe(index === 0);
     expect(
@@ -143,8 +147,77 @@ test("legislation v2 emits one strict pointer-free document", () => {
     },
   ]);
   expect(
-    Object.keys(documents[0]).every((key) =>
+    Object.keys(documents.at(0) ?? {}).every((key) =>
       manifestFields("legislation_v2").has(key),
+    ),
+  ).toBe(true);
+});
+
+test("under-cap legislation fixture corpus keeps its v2 wire documents", () => {
+  const fixtures = [
+    { input: LEGISLATION_INPUT, text: "§ 1 Předmět úpravy" },
+    {
+      input: {
+        ...LEGISLATION_INPUT,
+        documentId: "0198e331-e578-7000-8000-000000000006",
+        title: "Act / Zákon / قانون",
+        effectiveDate: null,
+        versionValidFrom: null,
+        versionValidTo: "2025-01-01",
+      } satisfies LegislationV2ProjectionInput,
+      text: "Článek 1, § 2, القانون",
+    },
+  ];
+  const documents = fixtures.map(({ input, text }) =>
+    buildLegislationV2ProjectionDocuments({
+      input,
+      payload: { text, ast: null },
+      revision: REVISION,
+    }),
+  );
+  expect(documents).toMatchSnapshot();
+});
+
+test("oversized legislation becomes exact consecutive v2 passages", () => {
+  const text = Array.from(
+    { length: 12 },
+    (_, index) => `§ ${index + 1}\n${"ustanovení řádu ".repeat(55_000)}`,
+  ).join("\n\n");
+  const documents = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(1);
+  expect(documents.map(({ text: passage }) => passage).join("")).toBe(text);
+  expect(documents.filter(({ is_opening }) => is_opening)).toHaveLength(1);
+  for (const [index, document] of documents.entries()) {
+    expect("title" in document).toBe(index === 0);
+    expect(document.document_id).toBe(LEGISLATION_INPUT.documentId);
+    expect(document.projection_revision).toBe(REVISION);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("legislation_v2").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("legislation above the request budget splits below the engine cap", () => {
+  const text = "x".repeat(LIMITS.corpusIndexIngestMaxBytes + 1024);
+  const documents = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+
+  expect(documents.length).toBeGreaterThan(1);
+  expect(documents.map(({ text: passage }) => passage).join("")).toBe(text);
+  expect(
+    documents.every(
+      (document) =>
+        Buffer.byteLength(JSON.stringify(document), "utf-8") + 1 <=
+        LIMITS.corpusIndexIngestMaxBytes,
     ),
   ).toBe(true);
 });
