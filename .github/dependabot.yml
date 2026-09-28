@@ -350,6 +350,11 @@ updates:
       - dependency-name: "react-native-screens"
         update-types:
           - "version-update:semver-minor"
+      # Expo SDK 57 requires react-native 0.86.x (`expo doctor` fails on
+      # 0.87). Remove this guard when the SDK upgrade moves react-native.
+      - dependency-name: "react-native"
+        update-types:
+          - "version-update:semver-minor"
     commit-message:
       prefix: "chore"
     reviewers:
