@@ -3,6 +3,8 @@
  * Shared by the list's source panel and the anchor facts of a verification.
  */
 
+import type { ReactNode } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
@@ -24,10 +26,12 @@ type SourceLocatorLabelProps = {
   documentName?: string | null;
 };
 
+// Annotated, not inferred: React 19's `ReactNode` admits a promise, so
+// `t.rich`'s inferred return reads as a maybe-async function.
 export const SourceLocatorLabel = ({
   locator,
   documentName = null,
-}: SourceLocatorLabelProps) => {
+}: SourceLocatorLabelProps): ReactNode => {
   const t = useTranslations();
   const format = useFormatter();
   const name = documentName ?? t("common.document");
