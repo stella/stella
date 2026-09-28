@@ -7,7 +7,7 @@ import type {
 } from "@stll/api-contract/correspondence";
 
 import type { TranslationKey } from "@/i18n/types";
-import { api } from "@/lib/api";
+import { correspondenceApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
@@ -44,7 +44,7 @@ export const correspondenceDropsOptions = (workspaceId: string) =>
       pageParam,
       signal,
     }): Promise<CorrespondenceDropsPage> => {
-      const response = await api
+      const response = await correspondenceApi
         .workspaces({ workspaceId })
         .correspondence.drops.get({
           query: {
