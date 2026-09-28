@@ -6,6 +6,7 @@ import {
   parseSkillFile,
   readDocumentedChatReads,
   readExcludedChatTools,
+  readSkillDisplayName,
   SkillFileError,
 } from "./loader";
 import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
@@ -434,6 +435,29 @@ describe("shipped built-in skills", () => {
       );
     },
   );
+
+  // Menus show the title; the slug stays the identifier. A shipped skill
+  // with no title of its own would show its slug to every user.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s carries a readable title apart from its slug",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(readSkillDisplayName(skill)).not.toBe(skill.name);
+    },
+  );
+
+  test("a skill without a title is shown under its name", () => {
+    expect(
+      readSkillDisplayName({ metadata: { other: "x" }, name: "plain-skill" }),
+    ).toBe("plain-skill");
+    expect(
+      readSkillDisplayName({
+        metadata: { "stella-display-name": "  " },
+        name: "plain-skill",
+      }),
+    ).toBe("plain-skill");
+  });
 
   test("the metadata list names every shipped skill", () => {
     expect(listSkillMetadata().map(({ name }) => name)).toEqual(

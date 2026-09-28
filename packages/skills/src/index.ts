@@ -11,7 +11,9 @@ export {
   parseSkillFile,
   readDocumentedChatReads,
   readExcludedChatTools,
+  readSkillDisplayName,
   readSkillResource,
+  SKILL_DISPLAY_NAME_METADATA_KEY,
 } from "./loader";
 export type { SkillMetadata, SkillResource, StellaSkill } from "./loader";
 export {

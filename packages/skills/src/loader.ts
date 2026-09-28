@@ -33,6 +33,13 @@ export type StellaSkill = SkillMetadata & {
 export const CHAT_EXCLUDED_TOOLS_METADATA_KEY = "stella-chat-excluded-tools";
 export const CHAT_DOCUMENTED_READS_METADATA_KEY =
   "stella-chat-documented-reads";
+/**
+ * Frontmatter `metadata` key holding the title a shipped skill is shown under.
+ * `name` is the skill's slug, the identifier every tool and ref uses, so the
+ * title lives beside it, as an installed skill's row keeps its name apart
+ * from its slug.
+ */
+export const SKILL_DISPLAY_NAME_METADATA_KEY = "stella-display-name";
 
 const RESOURCE_EXTENSIONS = [
   ".csv",
@@ -276,6 +283,15 @@ const readMetadataNameList = (
     return [];
   }
   return [...new Set(value.split(/\s+/u).filter((name) => name.length > 0))];
+};
+
+/** The title a shipped skill is shown under; its `name` when it has none. */
+export const readSkillDisplayName = ({
+  metadata,
+  name,
+}: Pick<SkillMetadata, "metadata" | "name">): string => {
+  const displayName = metadata?.[SKILL_DISPLAY_NAME_METADATA_KEY]?.trim();
+  return displayName === undefined || displayName === "" ? name : displayName;
 };
 
 /** Chat tool names a skill excludes from the turns it is active in. */

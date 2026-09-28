@@ -2,6 +2,7 @@
 name: playbook-builder
 description: Build a contract review playbook with the user, position by position, from their past executed contracts, an interview, and market-standard defaults. Use when the user wants to create, draft, or extend a playbook.
 metadata:
+  stella-display-name: Build a playbook
   stella-required-tools: save_playbook
   stella-chat-excluded-tools: spawn_subagents
   stella-chat-documented-reads: list_documents search_across_matters read_content_across_matters

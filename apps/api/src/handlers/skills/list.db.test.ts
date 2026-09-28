@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { listSkillMetadata } from "@stll/skills";
+import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
 
 import { skillHandlerContext } from "@/api/tests/helpers/agent-skill-db";
 import {
@@ -43,6 +43,10 @@ describe("listing skills", () => {
 
     expect(result.builtIn.map(({ slug }) => slug)).toEqual(
       listSkillMetadata().map(({ name }) => name),
+    );
+    // A built-in is shown under its title; its slug stays the identifier.
+    expect(result.builtIn.map(({ name }) => name)).toEqual(
+      listSkillMetadata().map(readSkillDisplayName),
     );
     for (const skill of result.builtIn) {
       expect(skill).toMatchObject({

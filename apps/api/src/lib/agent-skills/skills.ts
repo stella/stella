@@ -7,6 +7,7 @@ import {
   loadSkill,
   readDocumentedChatReads,
   readExcludedChatTools,
+  readSkillDisplayName,
   readSkillRequiredTools,
   readSkillResource,
 } from "@stll/skills";
@@ -183,7 +184,7 @@ export const resolveActiveSkillContext = async ({
   return Result.ok({
     body: skill.body,
     description: skill.description,
-    displayName: skill.name,
+    displayName: readSkillDisplayName(skill),
     documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: false,
     excludedChatTools: readExcludedChatTools(skill.metadata),
@@ -766,7 +767,7 @@ const resolveSkillPrecedence = (
     seen.add(skill.name);
     skills.push({
       ...skill,
-      displayName: skill.name,
+      displayName: readSkillDisplayName(skill),
       source: CHAT_SKILL_SOURCE.builtIn,
     });
   }

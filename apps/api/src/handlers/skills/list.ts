@@ -3,7 +3,11 @@ import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { isOrganizationManagementRole } from "@stll/permissions";
-import { listSkillMetadata, listSkillResources } from "@stll/skills";
+import {
+  listSkillMetadata,
+  listSkillResources,
+  readSkillDisplayName,
+} from "@stll/skills";
 
 import {
   agentSkills,
@@ -185,7 +189,7 @@ const listSkills = createSafeRootHandler(
         scope: "built-in" as const,
         origin: "built-in" as const,
         slug: skill.name,
-        name: skill.name,
+        name: readSkillDisplayName(skill),
         description: skill.description,
         version: skill.version,
         license: skill.license ?? null,
