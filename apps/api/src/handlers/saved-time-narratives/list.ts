@@ -13,9 +13,35 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
 
 import { toSavedTimeNarrativeItem } from "./schema";
+
+type SavedTimeNarrativeRow = typeof savedTimeNarratives.$inferSelect;
+
+const UNPROJECTED_SAVED_TIME_NARRATIVE_COLUMNS = [
+  // Both ownership fields are implied by the active organization and user.
+  "organizationId",
+  "userId",
+] as const satisfies readonly (keyof SavedTimeNarrativeRow)[];
+
+type MissingSavedTimeNarrativeColumn = UnprojectedColumns<
+  SavedTimeNarrativeRow,
+  ReturnType<typeof toSavedTimeNarrativeItem>,
+  (typeof UNPROJECTED_SAVED_TIME_NARRATIVE_COLUMNS)[number]
+>;
+type UnexpectedSavedTimeNarrativeColumn = UnbackedProjectionKeys<
+  SavedTimeNarrativeRow,
+  ReturnType<typeof toSavedTimeNarrativeItem>,
+  (typeof UNPROJECTED_SAVED_TIME_NARRATIVE_COLUMNS)[number]
+>;
+
+true satisfies MissingSavedTimeNarrativeColumn extends never ? true : never;
+true satisfies UnexpectedSavedTimeNarrativeColumn extends never ? true : never;
 
 const config = {
   description:
