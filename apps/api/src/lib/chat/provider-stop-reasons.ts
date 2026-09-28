@@ -351,6 +351,7 @@ const decidedTerminal = ({
   answered,
   calledTools,
   chunk,
+  leftCalls,
   outcome,
   reason,
   run,
@@ -360,6 +361,8 @@ const decidedTerminal = ({
   answered: boolean;
   calledTools: boolean;
   chunk: TerminalChunk;
+  /** The step called a tool, in either stream shape. */
+  leftCalls: boolean;
   outcome: StopOutcome;
   reason: string | null;
   run: { runId: string; threadId: string } | undefined;
@@ -412,8 +415,9 @@ const decidedTerminal = ({
     case "unrecognized": {
       // A reason the provider added since its SDK: the answer the user saw
       // stands, but a step that wrote nothing, or left calls to run, has no
-      // answer to stand on.
-      if (!answered || calledTools) {
+      // answer to stand on, and a stop the adapter reported as a failure
+      // (an incomplete response) stays one.
+      if (!answered || leftCalls || chunk.type === EventType.RUN_ERROR) {
         return failed(
           "The provider ended the response with a stop reason it does not document.",
         );
@@ -456,6 +460,7 @@ export const withDecidedStopReasons = async function* (
   let run: { runId: string; threadId: string } | undefined;
   let answered = false;
   let calledTools = false;
+  let leftCalls = false;
   for await (const chunk of chunks) {
     if (chunk.type === EventType.RUN_STARTED) {
       run = { runId: chunk.runId, threadId: chunk.threadId };
@@ -463,6 +468,11 @@ export const withDecidedStopReasons = async function* (
     if (chunk.type === EventType.TOOL_CALL_START) {
       calledTools = true;
     }
+    // The shorthand shape never enters the thread as a call, but the model
+    // still asked for one.
+    leftCalls ||=
+      chunk.type === EventType.TOOL_CALL_START ||
+      chunk.type === EventType.TOOL_CALL_CHUNK;
     answered ||= writesVisibleOutput(chunk);
     if (
       chunk.type !== EventType.RUN_FINISHED &&
@@ -484,6 +494,7 @@ export const withDecidedStopReasons = async function* (
       answered,
       calledTools,
       chunk,
+      leftCalls,
       outcome,
       reason,
       run,

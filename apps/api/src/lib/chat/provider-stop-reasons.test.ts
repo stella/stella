@@ -126,6 +126,13 @@ const reasoning: StreamChunk = {
   timestamp: 1,
 };
 const blankDelta: StreamChunk = { ...delta, delta: " \n" };
+const toolCallChunk: StreamChunk = {
+  type: EventType.TOOL_CALL_CHUNK,
+  toolCallId: "call",
+  toolCallName: "mcp__external__delete",
+  delta: '{"name":"draft"}',
+  timestamp: 1,
+};
 
 /** Each step shape, and whether an unlisted stop ending it finishes. */
 const UNLISTED_STEPS = {
@@ -138,6 +145,10 @@ const UNLISTED_STEPS = {
   },
   "wrote text and called a tool": {
     chunks: [started, delta, toolCall],
+    ending: "error:unknown",
+  },
+  "wrote text and called a tool in the shorthand shape": {
+    chunks: [started, delta, toolCallChunk],
     ending: "error:unknown",
   },
 } as const satisfies Record<
@@ -315,7 +326,7 @@ describe("a stop reason no table lists", () => {
     expect(JSON.stringify(chunks.at(-1))).not.toContain(UNLISTED);
   });
 
-  test("finishes an answer the adapter reported as a failure", async () => {
+  test("keeps a failure the adapter reported, answer or not", async () => {
     const reported: StreamChunk = {
       type: EventType.RUN_ERROR,
       message: "The response is incomplete.",
@@ -324,18 +335,20 @@ describe("a stop reason no table lists", () => {
       error: { message: "The response is incomplete.", code: "incomplete" },
       metadata: { providerStopReason: UNLISTED },
     };
-    expect(endingOf(await decide("openai", [started, delta, reported]))).toBe(
-      "finished:stop",
-    );
+    const kept: StreamChunk = {
+      type: EventType.RUN_ERROR,
+      message: "The response is incomplete.",
+      code: "incomplete",
+      timestamp: 1,
+      error: { message: "The response is incomplete.", code: "incomplete" },
+    };
+    expect(
+      await decide("openai", [started, delta, reported]),
+      JSON.stringify({ oracle: CHAT_ORACLE.providerWireFinish }),
+    ).toEqual([started, delta, kept]);
     expect(await decide("openai", [started, reported])).toEqual([
       started,
-      {
-        type: EventType.RUN_ERROR,
-        message: "The response is incomplete.",
-        code: "incomplete",
-        timestamp: 1,
-        error: { message: "The response is incomplete.", code: "incomplete" },
-      },
+      kept,
     ]);
   });
 
