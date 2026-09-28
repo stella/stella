@@ -1,8 +1,16 @@
 import { EventType } from "@tanstack/ai";
-import type { AdapterYieldChunk, AnyTextAdapter } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  ModelMessage,
+} from "@tanstack/ai";
+import { Result } from "better-result";
+
+import { stableStringify } from "@stll/stable-stringify";
 
 import { mockStructuredData } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
+import { toJsonValue } from "@/api/lib/json-value";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import {
   ScriptedProviderError,
@@ -31,6 +39,9 @@ import type {
 export type ScriptedRun = readonly ScriptedTurn[];
 
 type ScriptedProviderFindings = {
+  /** Tool results a model call was handed that differ from the one an
+   *  earlier call of the thread was handed for the same tool call. */
+  changedToolResults: unknown[];
   /** Provider calls for a scripted thread after its scripts ran out. */
   unscriptedCalls: string[];
   /** Scripts no request consumed. */
@@ -40,6 +51,8 @@ type ScriptedProviderFindings = {
 const SIDE_CALL_TEXT = "Scripted side answer";
 
 type ThreadScripts = {
+  /** See `ScriptedProviderFindings`. */
+  changedToolResults: unknown[];
   /** The provider options of every model call the thread made, in order. */
   modelOptions: unknown[];
   /** Resolves the current `stalled` promise and arms the next one. */
@@ -52,17 +65,22 @@ type ThreadScripts = {
   requests: ProviderRequest[];
   /** Resolves once a request on the thread reaches a stalling turn. */
   stalled: Promise<undefined>;
+  /** Per tool call id: the result the first model call that held one was
+   *  handed. */
+  toolResults: Map<string, string>;
   unscriptedCalls: string[];
 };
 
 const newThreadScripts = (): ThreadScripts => {
   const scripts: ThreadScripts = {
+    changedToolResults: [],
     modelOptions: [],
     onStall: () => undefined,
     produced: [],
     queue: [],
     requests: [],
     stalled: Promise.resolve(undefined),
+    toolResults: new Map(),
     unscriptedCalls: [],
   };
   const arm = () => {
@@ -75,6 +93,51 @@ const newThreadScripts = (): ThreadScripts => {
   };
   arm();
   return scripts;
+};
+
+/**
+ * A tool result's content, its JSON in canonical key order: storing a result
+ * reorders its keys (jsonb), which does not change what it says.
+ */
+const resultIdentity = (content: ModelMessage["content"]): string => {
+  if (typeof content !== "string") {
+    return stableStringify(toJsonValue(content));
+  }
+  const parsed = Result.try((): unknown => JSON.parse(content));
+  return Result.isOk(parsed)
+    ? stableStringify(toJsonValue(parsed.value))
+    : stableStringify(content);
+};
+
+/**
+ * Records each tool result of an earlier turn that `messages` hands the
+ * model, and a finding for one that differs from what an earlier model call
+ * of the thread was handed: once a turn is over, every later request shows
+ * the model its calls the same way. The current turn's own calls, after the
+ * latest user message, are left out: a run may hand the model a result it
+ * then fails to store, and the thread keeps what it stored.
+ */
+const recordToolResults = (
+  scripts: ThreadScripts,
+  messages: readonly ModelMessage[],
+): void => {
+  const currentTurn = messages.findLastIndex(({ role }) => role === "user");
+  for (const message of messages.slice(0, Math.max(currentTurn, 0))) {
+    if (message.role !== "tool" || message.toolCallId === undefined) {
+      continue;
+    }
+    const handed = resultIdentity(message.content);
+    const first = scripts.toolResults.get(message.toolCallId);
+    if (first === undefined) {
+      scripts.toolResults.set(message.toolCallId, handed);
+    } else if (first !== handed) {
+      scripts.changedToolResults.push({
+        first,
+        later: handed,
+        toolCallId: message.toolCallId,
+      });
+    }
+  }
 };
 
 const threads = new Map<string, ThreadScripts>();
@@ -123,6 +186,9 @@ const adapter: AnyTextAdapter = {
       // As handed over: the engine goes on to change its own list.
       messages: structuredClone(messages),
     });
+    if (scripts !== undefined) {
+      recordToolResults(scripts, messages);
+    }
     if (
       threadId === undefined ||
       runId === undefined ||
@@ -239,6 +305,7 @@ export const installScriptedProvider = () => {
         .splice(0)
         .map((run) => JSON.stringify(run));
       return {
+        changedToolResults: scripts.changedToolResults.splice(0),
         unconsumedScripts,
         unscriptedCalls: scripts.unscriptedCalls.splice(0),
       };

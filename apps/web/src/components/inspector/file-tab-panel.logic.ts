@@ -8,6 +8,7 @@ import {
   getNativeOfficeViewerFormat,
   isEmailFile,
   isMarkdownFile,
+  PDF_MIME,
 } from "@/lib/consts";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 
@@ -98,6 +99,7 @@ export const getFileTabDisplayState = ({
     isMarkdownDisplay: nativePreviewKind === "markdown",
     isNativeDocxDisplay,
     isOfficeDisplay: nativePreviewKind === "office",
+    isPdfDisplay: tab.mimeType === PDF_MIME,
     requiresPdfMeasurement:
       !isNativeDocxDisplay && nativePreviewKind !== "office",
     needsPropertyResolution:

@@ -106,7 +106,13 @@ const replayedModel = (): HarnessModel => ({
   },
   takeFindings: () => {
     const { unconsumed, unexpected } = replay.takeFindings();
-    return { unconsumedScripts: unconsumed, unscriptedCalls: unexpected };
+    // What the model is handed goes over the wire to a recorded answer, so
+    // the scripted provider's record of it has no counterpart here.
+    return {
+      changedToolResults: [],
+      unconsumedScripts: unconsumed,
+      unscriptedCalls: unexpected,
+    };
   },
   // The bodies the adapter sent, in its provider's wire format.
   takeRequests: () => replay.takeRequests(),

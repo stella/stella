@@ -30,6 +30,9 @@ import {
   accountDeletionRequests,
   agentSkills,
   chatThreads,
+  correspondence,
+  correspondenceAllowedSenders,
+  correspondenceFilers,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
@@ -39,6 +42,7 @@ import {
   folioCollabRooms,
   mcpOAuthState,
   mcpUserConnections,
+  pdfSigningSessions,
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
@@ -76,6 +80,10 @@ import {
   consumeInBatches,
   createS3DeletionEffectChunks,
 } from "@/api/lib/destructive-effect-chunks";
+import {
+  clearCorrespondenceAssignmentsForOffboarding,
+  eraseCorrespondenceActorDisplays,
+} from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -283,7 +291,7 @@ export const clearWorkspaceLeadRole = async (
 
 export type ReassignActiveTaskAssignmentsParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   deletionRequestId: SafeId<"accountDeletionRequest">;
   reassignments:
     | readonly {
@@ -343,6 +351,9 @@ export const selectActiveTaskAssignments = async (
     .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
 export const REASSIGN_ACTIVE_TASKS_TABLES = [
+  correspondence,
+  correspondenceFilers,
+  correspondenceAllowedSenders,
   taskAssignees,
   workObligations,
   member,
@@ -369,6 +380,13 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
+  // Assignment validation locks organization membership before matter
+  // membership. Match that order before deleting either membership.
+  await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(eq(member.userId, currentUserId))
+    .for("update");
   // Delegation locks a requested workspace membership before locking its
   // obligation. Hold the departing user's membership rows first so a
   // concurrent delegation either lands before this cleanup and is cleared,
@@ -538,7 +556,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     }
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       updates.map((item) => {
         const assignment = assignmentByEntityId.get(item.entityId);
         if (!assignment) {
@@ -677,7 +695,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     );
     await recordAccountDeletionAuditEvents(
       tx,
-      brandPersistedUserId(currentUserId),
+      currentUserId,
       ownedMutableWork.map((work) => {
         const nextOwnerUserId =
           obligationOwnerByEntityId.get(work.entityId) ?? null;
@@ -709,6 +727,15 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       }),
     );
   }
+
+  // Account deletion anonymizes the user row, so the assignee FK's SET NULL
+  // never fires. Historical filer and approver references remain intact.
+  await clearCorrespondenceAssignmentsForOffboarding({
+    tx,
+    userId: currentUserId,
+    scope: { type: "account" },
+  });
+  await eraseCorrespondenceActorDisplays({ tx, userId: currentUserId });
 
   await tx.delete(member).where(eq(member.userId, currentUserId));
   await tx
@@ -891,6 +918,27 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
   await tx
     .delete(desktopEditSessions)
     .where(eq(desktopEditSessions.createdBy, currentUserId));
+};
+
+const DELETE_PDF_SIGNING_SESSIONS_TABLES = [
+  pdfSigningSessions,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 7. PDF signing exchanges (cascade on createdBy → user.id, which never
+ * fires because the user row is soft-deleted).
+ *
+ * These rows hold the signer's certificate, so they are personal data rather
+ * than a workflow trace: they are deleted outright instead of anonymized.
+ * Nothing of theirs lives in object storage.
+ */
+export const deletePdfSigningSessions = async (
+  tx: Transaction,
+  currentUserId: string,
+): Promise<void> => {
+  await tx
+    .delete(pdfSigningSessions)
+    .where(eq(pdfSigningSessions.createdBy, currentUserId));
 };
 
 export type DeletePendingUploadsParams = {
@@ -1183,6 +1231,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...REASSIGN_ACTIVE_TASKS_TABLES,
   ...RESET_FOLIO_COLLAB_USER_STATE_TABLES,
   ...DELETE_DESKTOP_EDIT_SESSIONS_TABLES,
+  ...DELETE_PDF_SIGNING_SESSIONS_TABLES,
   ...DELETE_PENDING_UPLOADS_TABLES,
   ...DELETE_FILE_COMPARISON_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,

@@ -19,7 +19,6 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
-  canaryToolProbeIterationLimit,
   canaryToolProbeModelOptions,
   CanaryCredentialRejectedError,
   CanaryError,
@@ -372,27 +371,20 @@ describe("AI provider canary tool contract", () => {
     });
   });
 
-  test("forces the deterministic Anthropic round trip through the declared tool", () => {
+  test("leaves Anthropic tool choice to the model", () => {
     // SAFETY: this fixture exercises only the provider/model-options branch;
     // the adapter is never invoked.
     const model = {
       adapter: createProbeFinishAdapter("stop"),
       keySource: "instance",
-      modelId: "claude-opus-5",
+      modelId: "claude-opus-5-5",
       modelOptions: { temperature: 0 },
       provider: "anthropic",
     } as ResolvedTanStackTextModel;
 
-    expect(
-      canaryToolProbeModelOptions({
-        model,
-        requiredToolName: "canary_round_trip",
-      }),
-    ).toMatchObject({
-      tool_choice: { name: "canary_round_trip", type: "tool" },
-    });
-    expect(canaryToolProbeIterationLimit("canary_round_trip")).toBe(1);
-    expect(canaryToolProbeIterationLimit(undefined)).toBe(2);
+    expect(canaryToolProbeModelOptions({ model })).not.toHaveProperty(
+      "tool_choice",
+    );
   });
 });
 

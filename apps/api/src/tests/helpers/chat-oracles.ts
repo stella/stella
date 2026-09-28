@@ -19,6 +19,10 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A thread an earlier release stored loads on the current code, serves
+   *  every message, part and answer it held, and keeps them once continued;
+   *  and what the current code stores has a fixture. */
+  persistedPastReleaseLoads: "chat.persisted.past-release-loads",
   /** A turn's run does not depend on the request that started it: once the
    *  handler hands its response back, nothing reads the request, and its end
    *  cuts no turn short whose response is read to the end. */
@@ -55,6 +59,13 @@ export const CHAT_ORACLE = {
    *  not hold; each signed thinking block stays, once and in order, first on
    *  the message holding the calls it was produced with. */
   providerTranscriptSettled: "chat.provider.transcript-settled",
+  /** Every model request of a thread begins with the whole prompt of the
+   *  one before it, so the provider's prompt cache holds. */
+  providerPrefixStable: "chat.provider.prefix-stable",
+  /** Once a turn is over, every later model call of the thread is handed
+   *  each of its tool results the same way (up to key order): a request
+   *  reads the earlier turns as stored, as the next one will. */
+  providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",
@@ -92,13 +103,18 @@ export const CHAT_ORACLE = {
   /** Each tool call ends once with input that satisfies the tool's
    *  declared schema. */
   providerWireToolInput: "chat.provider-wire.tool-input",
-  /** A finished run reports its token usage. */
+  /** A finished run reports its token usage, and a failed one the usage the
+   *  provider reported before it failed. */
   providerWireUsage: "chat.provider-wire.usage",
   /** A provider failure reaches the run error with its message and
    *  classification. */
   providerWireError: "chat.provider-wire.error",
   /** A cancelled run ends promptly, unfinished, with no further request. */
   providerWireCancel: "chat.provider-wire.cancel",
+  /** Every request the adapter sends is the one its cassette pins: the
+   *  protocol headers, and the body with its key order, minus the prompt
+   *  text. */
+  providerWireRequestShape: "chat.provider-wire.request-shape",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

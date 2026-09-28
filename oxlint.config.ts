@@ -27,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -258,6 +262,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
+  ]),
+  fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
+    "no-direct-pdf-save/no-direct-pdf-save",
   ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
@@ -498,6 +505,40 @@ const apiPortableSafeIdBrandingImport = {
   message:
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
+
+// The model factory builds every provider text adapter and holds its stream
+// to the provider stream contract (one terminal event, last; a cut-off stream
+// is a run error). An adapter built anywhere else skips that contract, so the
+// runtime entry points of the adapter packages, and of the adapter subclass
+// the factory builds, belong to the factory; type-only imports stay allowed.
+export const API_PROVIDER_ADAPTER_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-anthropic/byok",
+  "@tanstack/ai-anthropic/vertex",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-bedrock/byok",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-gemini/byok",
+  "@tanstack/ai-gemini/experimental",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-mistral/adapters/text",
+  "@tanstack/ai-mistral/byok",
+  "@tanstack/ai-mistral/vertex",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openai/byok",
+  "@tanstack/ai-openai/compatible",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-openrouter/byok",
+  "@tanstack/openai-base",
+] as const;
+
+const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Build provider adapters through createTanStackTextAdapterFactory in '@/api/lib/tanstack-ai-models', which holds their streams to the provider stream contract.",
+}));
 
 // pragmatic-drag-and-drop's element adapter keeps exactly one live drop
 // target, and one draggable, per element behind a private WeakMap registry:
@@ -1160,6 +1201,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
+    "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -1172,6 +1214,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
@@ -3254,6 +3297,16 @@ export default defineConfig({
       },
     },
     {
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/sql-perf.fixture.ts"],
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
@@ -3491,6 +3544,7 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+        "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
     },
     {
@@ -3636,6 +3690,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3692,6 +3747,7 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3707,6 +3763,28 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The model factory and the adapter subclass it builds are the provider
+      // adapters' owners. Only that restriction is lifted.
+      files: [
+        "apps/api/src/lib/tanstack-ai-models.ts",
+        "apps/api/src/lib/stella-openrouter-text-adapter.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3990,6 +4068,7 @@ export default defineConfig({
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
@@ -4099,6 +4178,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -4175,6 +4255,7 @@ export default defineConfig({
         "apps/api/src/handlers/auth/ui-routes.ts",
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
         "apps/api/src/handlers/feedback/routes.ts",
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",

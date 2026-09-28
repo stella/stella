@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
-import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 import {
@@ -7,6 +8,7 @@ import {
   fields,
   legalListColumns,
   legalListFactDetails,
+  legalListItemSources,
   legalListItems,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -42,13 +44,17 @@ const config = {
     "position, description, and review status, plus the values it holds for " +
     "the properties the list binds as columns. A fact item also carries its " +
     "evidential detail (date and precision, evidence kind, medium, " +
-    "confidence, interpretation note, scoring), null until it is set.",
+    "confidence, interpretation note, scoring), null until it is set, and " +
+    "its first source (document id, document name, locator), null when it " +
+    "has none.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
+
+const sourceDocument = alias(entities, "source_document");
 
 type ItemCursor = { position: string; id: SafeId<"entity"> };
 
@@ -103,6 +109,37 @@ const readListItems = createSafeHandler(
           return null;
         }
 
+        // The oldest source that still stands, as a verification pins them
+        // (`lib/lists/verification/evidence.ts`): one index probe per item.
+        const firstSource = tx
+          .select({
+            documentId: legalListItemSources.sourceEntityId,
+            documentName: sourceDocument.name,
+            locator: legalListItemSources.locator,
+          })
+          .from(legalListItemSources)
+          .innerJoin(
+            sourceDocument,
+            and(
+              eq(sourceDocument.id, legalListItemSources.sourceEntityId),
+              eq(sourceDocument.workspaceId, legalListItemSources.workspaceId),
+            ),
+          )
+          .where(
+            and(
+              eq(legalListItemSources.workspaceId, workspaceId),
+              eq(legalListItemSources.itemEntityId, legalListItems.entityId),
+              eq(legalListItemSources.listId, legalListItems.listId),
+              ne(legalListItemSources.verificationStatus, "rejected"),
+            ),
+          )
+          .orderBy(
+            asc(legalListItemSources.createdAt),
+            asc(legalListItemSources.id),
+          )
+          .limit(1)
+          .as("first_source");
+
         const [rows, columns] = await Promise.all([
           tx
             .select({
@@ -129,6 +166,11 @@ const readListItems = createSafeHandler(
                 interpretationNote: legalListFactDetails.interpretationNote,
                 scoring: legalListFactDetails.scoring,
               },
+              firstSource: {
+                documentId: firstSource.documentId,
+                documentName: firstSource.documentName,
+                locator: firstSource.locator,
+              },
             })
             .from(legalListItems)
             .innerJoin(
@@ -148,6 +190,7 @@ const readListItems = createSafeHandler(
                 eq(legalListFactDetails.workspaceId, workspaceId),
               ),
             )
+            .leftJoinLateral(firstSource, sql`true`)
             .where(and(...conditions))
             .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
             .limit(limit + 1),

@@ -8,7 +8,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CLIENT_ANSWERABLE_TOOL_CALL_STATE,
-  findUnsettledToolCallsForOutcome,
+  findUnsettledStoredToolCalls,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnStatus } from "@/api/handlers/chat/chat-turn-state";
@@ -108,9 +108,11 @@ export const findUnownedPendingInteractions = async ({
 
 /**
  * Persisted-thread invariant: each assistant message outside a live turn keeps
- * only the open tool calls the way its turn ended allows, by the same rule
- * production reports when a turn settles. A message no turn owns is held to
- * the completed-turn rule. Returns the violations; a sound thread returns [].
+ * only the open tool calls the way its turn ended allows, by the stored rule
+ * production's settlement meets (`findUnsettledStoredToolCalls`). A message
+ * no turn owns is held to the completed-turn rule, which a cut-short turn
+ * (whose row names no message) meets too. Returns the violations; a sound
+ * thread returns [].
  */
 const findUnsettledToolCalls = async ({
   db,
@@ -146,7 +148,7 @@ const findUnsettledToolCalls = async ({
     if (LIVE_TURN_STATUS[status]) {
       return [];
     }
-    return findUnsettledToolCallsForOutcome({
+    return findUnsettledStoredToolCalls({
       outcome: SETTLED_TURN_OUTCOME[status],
       parts: chatMessageFromPersisted(row).parts,
     }).map(({ state, toolCallId }) => ({

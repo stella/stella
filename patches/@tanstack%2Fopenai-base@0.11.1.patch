@@ -1,13 +1,24 @@
-Backport of TanStack/ai#1494 (issue #1447): a Responses stream that ends
-without a terminal event reports a RUN_ERROR with code incomplete-stream
-instead of an invented RUN_FINISHED.
-Remove when @tanstack/openai-base >= 0.12.0 is installed.
+1. Backport of TanStack/ai#1494 (issue #1447): a Responses stream that ends
+   without a terminal event reports a RUN_ERROR with code incomplete-stream
+   instead of an invented RUN_FINISHED. Remove with @tanstack/openai-base
+   >= 0.12.0.
+2. The RUN_ERROR for response.incomplete carries the response's usage, so a
+   reply cut off at max_output_tokens still reports what it spent. Upstream
+   PR to be opened; remove when released.
 
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 07021945c7ddb267ba9a822ebbc900ad8b3333ca..46322928a74db7bafb8ee34fab737d5382bb317c 100644
+index 07021945c7ddb267ba9a822ebbc900ad8b3333ca..60a98eec9f6a28a664204b65b5cb2f683bafea29 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -1172,13 +1172,19 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+@@ -768,6 +768,7 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 						timestamp: Date.now(),
+ 						message: errorMessage,
+ 						...errorCode !== void 0 && { code: errorCode },
++						...chunk.response.usage && { usage: buildResponsesUsage(chunk.response.usage) },
+ 						error: {
+ 							message: errorMessage,
+ 							...errorCode !== void 0 && { code: errorCode }
+@@ -1172,13 +1173,19 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
  					model: model || options.model,
  					timestamp: Date.now()
  				};

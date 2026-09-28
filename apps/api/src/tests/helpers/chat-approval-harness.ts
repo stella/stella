@@ -1004,7 +1004,7 @@ export const createApprovalHarness = ({
       reloadView(threadId),
       findPersistedViolations(threadId),
     ]);
-    const { unconsumedScripts, unscriptedCalls } =
+    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
       provider.takeFindings(threadId);
     const requests = clientFindings.splice(0);
     const refusals = requests.filter(
@@ -1029,6 +1029,7 @@ export const createApprovalHarness = ({
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
       ...findTranscriptViolations(provider.takeRequests(threadId)),
+      ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [
         ...(expectsError ? [] : errors),
         ...(expectsError && errors.length === 0
@@ -1084,12 +1085,15 @@ export const createApprovalHarness = ({
    * approval goes through `openWebClient` instead.
    */
   const approveContext = ({
+    approved = true,
     call,
     interruptedRunId,
     messageId,
     parts,
     threadId,
   }: {
+    /** Deny the call instead. */
+    approved?: boolean | undefined;
     call: ApprovalCall;
     interruptedRunId: string;
     messageId: SafeId<"chatMessage">;
@@ -1103,7 +1107,7 @@ export const createApprovalHarness = ({
           part.type === "tool-call" && part.id === call.id
             ? {
                 ...call,
-                approval: { ...call.approval, approved: true },
+                approval: { ...call.approval, approved },
                 state: "approval-responded",
               }
             : part,
@@ -1115,7 +1119,7 @@ export const createApprovalHarness = ({
         items: [
           {
             interruptId: call.approval.id,
-            payload: { approved: true },
+            payload: { approved },
             status: "resolved",
           },
         ],

@@ -139,9 +139,14 @@ export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "running",
 ] as const satisfies readonly VerificationRunStatus[];
 
+export const VERIFICATION_PIPELINE_VERSION = 2;
+
 export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;
   sourceEntityVersionId: SafeId<"entityVersion">;
+  /** The document's name when the run started. Absent on runs pinned before
+   *  names were recorded; readers fall back to the document's current name. */
+  sourceName?: string;
   locator: LegalListSourceLocator;
   quote: string | null;
 };
@@ -212,6 +217,8 @@ export const VERIFICATION_LIMITS = {
   CLAIM_TEXT_MAX: 4000,
   /** The engine writes at most this many claims for one document. */
   CLAIMS_PER_RUN_MAX: 2000,
+  /** Persisted text blocks one run may contain; ordinal fits a smallint. */
+  BLOCKS_PER_RUN_MAX: 32_767,
   /** Reviewer actions one claim may accumulate; bounds a run's review read. */
   REVIEW_EVENTS_PER_CLAIM_MAX: 200,
   /** Facts one run is checked against; every grading call carries them all. */
@@ -220,6 +227,7 @@ export const VERIFICATION_LIMITS = {
   SOURCES_PER_FACT_MAX: 5,
   /** Documents one latest-verification read may name. */
   LATEST_READ_DOCUMENTS_MAX: 200,
-  /** Characters of a fact's text or a source quote pinned on a run. */
+  /** Characters of a fact's text, a source quote or a source's document
+   *  name pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
 } as const;

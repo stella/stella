@@ -74,9 +74,11 @@ type ReadCourtNamesOptions = {
  *
  * Join-free by design: source policy is applied by the shelf statement that
  * follows, which drops a court whose public rows are none; the cap on shown
- * courts is taken after that, so a withheld court cannot hold a slot.
+ * courts is taken after that, so a withheld court cannot hold a slot. The
+ * agent court-filter reader uses the same list as its vocabulary: it maps a
+ * spelling onto a stored court, and the search it feeds applies the policy.
  */
-const readCourtNames = async ({
+export const readCourtNames = async ({
   caseLawDb,
   country,
 }: ReadCourtNamesOptions): Promise<string[]> => {

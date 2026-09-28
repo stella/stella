@@ -76,6 +76,7 @@ import {
   useStatuteColumnPreferences,
   useStatuteFind,
 } from "@/features/statutes/use-statute-table";
+import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -277,15 +278,15 @@ export const Route = createFileRoute("/law/$country/statutes/")({
     return { statutes: shownStatutes(pages, deps.page) };
   },
   head: ({ loaderData, match, params }) => {
+    const t = getTranslator();
     const title = pageTitle("statutes.title");
-    const description =
-      "Public database of consolidated statutes, indexable by act and version.";
+    const description = t("statutes.description");
     const path = createStatutesIndexPath(params.country, match.search);
 
     return createPublicLawHead({
       description,
       jsonLd: createLegalCollectionJsonLd({
-        aboutName: "Statutes",
+        t,
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
         kind: "statutes",
