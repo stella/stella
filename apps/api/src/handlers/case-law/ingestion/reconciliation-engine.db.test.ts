@@ -1436,6 +1436,9 @@ type SeedDecisionInput = {
   sourceDocumentId: string | null;
   isListingOnly: boolean;
   contentHash?: string | null | undefined;
+  textS3Key?: string | null | undefined;
+  normalizedS3Key?: string | null | undefined;
+  astS3Key?: string | null | undefined;
   fulltext?: string | null | undefined;
   sourceHash?: string | null | undefined;
   sourceRawS3Key?: string | null | undefined;
@@ -1446,6 +1449,9 @@ type SeedDecisionInput = {
 const seedDecision = async ({
   caseNumber,
   contentHash,
+  textS3Key,
+  normalizedS3Key,
+  astS3Key,
   fulltext,
   isListingOnly,
   sourceDocumentId,
@@ -1464,6 +1470,9 @@ const seedDecision = async ({
     language: FIXTURE_LANGUAGE,
     metadata: { ...storedMetadata(isListingOnly), ...stated },
     contentHash,
+    textS3Key,
+    normalizedS3Key,
+    astS3Key,
     fulltext,
     sourceHash,
     sourceRawS3Key,
@@ -1675,6 +1684,66 @@ test.each(["unlinked", "linked elsewhere"] as const)(
   },
 );
 
+test("a listing-only textless supplement row stays held", async () => {
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const [listingOnly, normal] = listedDocumentIds();
+  await seedSupplement({
+    sourceId,
+    sourceDocumentId: listingOnly,
+    judgmentId: null,
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: FIXTURE_CASE_NUMBERS[0],
+    sourceDocumentId: listingOnly,
+    isListingOnly: true,
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: FIXTURE_CASE_NUMBERS[1],
+    sourceDocumentId: normal,
+    isListingOnly: false,
+  });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 2, parked: 0 },
+  });
+  expect(builds).toEqual([]);
+});
+
+test("an incomplete corpus pointer tuple does not hold a supplement row", async () => {
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  const [missing, normal] = listedDocumentIds();
+  await seedSupplement({
+    sourceId,
+    sourceDocumentId: missing,
+    judgmentId: null,
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: FIXTURE_CASE_NUMBERS[0],
+    sourceDocumentId: missing,
+    isListingOnly: false,
+    contentHash: "f".repeat(64),
+    textS3Key: "corpus/text",
+  });
+  await seedDecision({
+    sourceId,
+    caseNumber: FIXTURE_CASE_NUMBERS[1],
+    sourceDocumentId: normal,
+    isListingOnly: false,
+  });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+});
+
 test.each(["inline", "corpus"] as const)(
   "an unlinked supplement with a stored %s document stays held",
   async (storage) => {
@@ -1693,6 +1762,9 @@ test.each(["inline", "corpus"] as const)(
       isListingOnly: false,
       fulltext: storage === "inline" ? "stored decision text" : null,
       contentHash: storage === "corpus" ? "f".repeat(64) : null,
+      textS3Key: storage === "corpus" ? "corpus/text" : null,
+      normalizedS3Key: storage === "corpus" ? "corpus/sections" : null,
+      astS3Key: storage === "corpus" ? "corpus/ast" : null,
     });
     await seedDecision({
       sourceId,

@@ -488,13 +488,41 @@ test("a matching source hash refreshes a row whose stored document was removed",
   expect(restored.textKey).toBe(first.textKey);
 });
 
+test("a matching source hash restores sections-only content", async () => {
+  const caseNumber = "30 Cdo 304/2024";
+  const document = {
+    ...withDocument(caseNumber, "sections-only"),
+    fulltext: undefined,
+    sections: [{ index: 0, type: "ruling", title: null, text: PRECEDENT }],
+  } satisfies IngestionResult;
+  await ingest(document, canonical);
+  const first = await storedRow(caseNumber);
+  expect(first.contentHash).not.toBeNull();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    })
+    .where(sql`${caseLawDecisions.id} = ${first.id}::uuid`);
+
+  const refreshed = await ingest(document, canonical);
+  const restored = await storedRow(caseNumber);
+  expect(restored.observationOrder).toBe(String(refreshed));
+  expect(restored.contentHash).toBe(first.contentHash);
+  expect(restored.textKey).toBe(first.textKey);
+});
+
 test.each([
   ["canonical", canonical],
   ["postgres-only", postgresOnly],
 ] as const)(
   "a matching source hash still skips stored text (%s)",
   async (mode, corpus) => {
-    const caseNumber = "30 Cdo 302/2024";
+    const caseNumber =
+      mode === "postgres-only" ? "30 Cdo 303/2024" : "30 Cdo 302/2024";
     const document = withDocument(caseNumber, "same-page");
     await ingest(document, corpus);
     const first = await storedRow(caseNumber);

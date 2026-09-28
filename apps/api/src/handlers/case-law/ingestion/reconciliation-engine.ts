@@ -397,9 +397,11 @@ type HeldDocumentIdsOptions = {
  * Which of these publisher document ids this source already holds, placed
  * where it belongs: a decision row of its own, or a supplement its judgment's
  * document holds in its current version with no standalone row left beside
- * it. A merged supplement with no standalone row is held. An unmerged
- * supplement with a textless, unmarked standalone row is listed again; its
- * judgment's write or the row's absorption may still need to finish.
+ * it. A merged supplement with no standalone row is held; one with an
+ * unabsorbed, unredacted standalone row is listed again for absorption. A
+ * supplement stored but not placed, with no held standalone row, is listed
+ * again. So is an unmerged supplement with a textless, unmarked, unredacted
+ * standalone row that was not intentionally stored as listing-only.
  *
  * An absorbed or redacted row counts as held whatever `requireDetail` says:
  * that is what took its detail, and a walk has nothing to place there.
@@ -419,6 +421,7 @@ const selectHeldDocumentIds = async (
         hasDetail:
           detail === undefined ? sql<boolean>`true` : sql<boolean>`${detail}`,
         hasStoredDocument: rowHoldsDocument,
+        hasStoredDetail: sql<boolean>`${storedObservationHasDetail(caseLawDecisions.metadata)}`,
         // Taken out of the corpus by absorption or by a takedown: either
         // way settled, and nothing a listing walk could place again.
         settled: sql<boolean>`${decisionAbsorptionSql(caseLawDecisions.metadata)} is not null or ${caseLawDecisions.redactedAt} is not null`,
@@ -475,6 +478,7 @@ const selectHeldDocumentIds = async (
       row !== undefined &&
       supplementState === "unmerged" &&
       !row.settled &&
+      row.hasStoredDetail &&
       !row.hasStoredDocument
     ) {
       return false;
@@ -1135,6 +1139,22 @@ const ingestListedItem = async ({
         });
         if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${placed.reason}`);
+          return;
+        }
+        // A judgment can be unreadable and return COMPLETE without writing
+        // the standalone row. Keep such an item on the retry schedule.
+        const heldAfter = await selectHeldIdentityKeys(scopedDb, {
+          sourceId,
+          identities: [item.identity],
+          requireDetail: reconciliation.heldRequiresDetail === true,
+          heldWithoutDetail: reconciliation.heldWithoutDetail,
+          rowRules: {
+            withoutDocument: reconciliation.heldWithoutDocument,
+            recheck: reconciliation.recheckHeld,
+          },
+        });
+        if (!heldAfter.has(item.identityKey)) {
+          await park("supplement-still-unheld");
           return;
         }
         summary.written += 1;

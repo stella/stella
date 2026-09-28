@@ -16,7 +16,10 @@ import type { SQL } from "drizzle-orm";
 import { caseLawDecisions } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import {
+  EMPTY_CORPUS_CONTENT_HASHES,
+  storedCorpusWriteIsCompleteSql,
+} from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * A jsonb array's length, or 0 for anything that is not an array.
@@ -28,7 +31,13 @@ const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
 
 type DecisionPayloadColumns = Pick<
   typeof caseLawDecisions,
-  "fulltext" | "documentAst" | "sections" | "contentHash"
+  | "fulltext"
+  | "documentAst"
+  | "sections"
+  | "contentHash"
+  | "textS3Key"
+  | "normalizedS3Key"
+  | "astS3Key"
 >;
 
 /**
@@ -57,7 +66,7 @@ export const rowHoldsDocumentFor = (
 ): SQL<boolean> => sql<boolean>`(
   ${pgPayloadCarriesDocumentFor(table)}
   or (
-    ${table.contentHash} is not null
+    ${storedCorpusWriteIsCompleteSql(table)}
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
