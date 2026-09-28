@@ -267,7 +267,7 @@ const trackStreamFailure = (body: ReadableStream<Uint8Array>) => {
         const next = await Result.tryPromise(() => reader.read());
         if (next.isErr()) {
           failed = true;
-          throw next.error;
+          return;
         }
         if (next.value.done) {
           return;
