@@ -1,10 +1,15 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSitemapShards,
+  caseLawSources,
+} from "@/api/db/schema";
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
@@ -16,9 +21,10 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import {
   refreshCaseLawSitemapShards,
-  sitemapBucketCountsQuery,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
+  sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
+import type { SitemapRefreshPhase } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
@@ -41,6 +47,10 @@ const removableId = createSafeId<"caseLawDecision">();
 /** One month past the split threshold, so the refresh lists it by bucket. */
 const BULK_MONTH_DECISIONS = SITEMAP_SHARD_SPLIT_THRESHOLD + 100;
 const NEWEST_UPDATE = new Date("2024-07-02T09:30:00.000Z");
+/** Undated decisions beyond the first, so the undated walk spans pages too. */
+const EXTRA_UNDATED_DECISIONS = 30;
+/** Small enough that both walks, dated and undated, take several pages. */
+const SMALL_PAGE_SIZE = 7;
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
@@ -105,6 +115,9 @@ beforeAll(async () => {
       id: removableId,
     }),
     decision({ caseNumber: "4 Cdo 4/undated" }),
+    ...Array.from({ length: EXTRA_UNDATED_DECISIONS }, (_, index) =>
+      decision({ caseNumber: `${index + 1} Nd ${index + 1}/undated` }),
+    ),
     // Not published: the publisher listed it and never served the document.
     decision({
       caseNumber: "5 Cdo 5/2019",
@@ -242,32 +255,128 @@ const planLines = (explained: unknown): string[] => {
   });
 };
 
+const snapshot = async () =>
+  await db
+    .select()
+    .from(caseLawSitemapShards)
+    .orderBy(
+      asc(caseLawSitemapShards.country),
+      asc(caseLawSitemapShards.year),
+      asc(caseLawSitemapShards.month),
+      asc(caseLawSitemapShards.bucket),
+    );
+
 test(
-  "the refresh count reads the decisions index alone, never the decision rows",
+  "a refresh walked in many small pages writes the same snapshot as one large page",
   async () => {
-    const { sql: text, params } = sitemapBucketCountsQuery(refreshDb).toSQL();
-
-    // Vacuumed so the visibility map is set, as it is for most of a settled
-    // corpus; the plan then shows whether the index can answer on its own.
-    await client.query("VACUUM ANALYZE case_law_decisions");
-    const plan = await client.transaction(async (tx) => {
-      // The seeded table is small enough that reading it whole, or through a
-      // narrower index plus the heap, can still win on cost. Scans are off
-      // and every page is priced the same, so the plan is chosen by pages
-      // touched, as it is on a corpus of millions: the covering index alone
-      // wins only if it can answer the count without the decision rows.
-      await tx.query("SET LOCAL enable_seqscan = off");
-      await tx.query("SET LOCAL enable_bitmapscan = off");
-      await tx.query("SET LOCAL seq_page_cost = 1000");
-      await tx.query("SET LOCAL random_page_cost = 1000");
-      return planLines(
-        await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
-      ).join("\n");
+    const whole = await refreshCaseLawSitemapShards(refreshDb, {
+      pageSize: 1_000_000,
     });
+    const wholeSnapshot = await snapshot();
 
-    expect(plan).toMatch(
-      /Index Only Scan using case_law_decisions_sitemap_shard_idx on case_law_decisions/u,
+    const paged = await refreshCaseLawSitemapShards(refreshDb, {
+      pageSize: SMALL_PAGE_SIZE,
+    });
+    // Both walks cross page boundaries: the dated one inside the split month,
+    // the undated one inside its single month.
+    expect(paged.pages).toBeGreaterThan(
+      (BULK_MONTH_DECISIONS + EXTRA_UNDATED_DECISIONS) / SMALL_PAGE_SIZE,
+    );
+    expect(paged).toMatchObject({
+      largestShard: whole.largestShard,
+      shards: whole.shards,
+    });
+    expect(await snapshot()).toEqual(wholeSnapshot);
+    expect(wholeSnapshot.find((shard) => shard.year === "undated")?.total).toBe(
+      1 + EXTRA_UNDATED_DECISIONS,
     );
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test(
+  "an aborted refresh leaves the previous snapshot in place",
+  async () => {
+    const before = await snapshot();
+    const aborted = new AbortController();
+    aborted.abort();
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.caseNumber, "1 Cdo 1/2020"));
+    expect(
+      refreshCaseLawSitemapShards(refreshDb, { signal: aborted.signal }),
+    ).rejects.toThrow("SchedulerAborted");
+    expect(await snapshot()).toEqual(before);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+const pagePlan = async (phase: SitemapRefreshPhase): Promise<string> => {
+  // A resumed page, so the plan covers the row comparison on the index keys.
+  const [resumeFrom] = await db
+    .select({
+      decisionDate: caseLawDecisions.decisionDate,
+      id: caseLawDecisions.id,
+      sourceId: caseLawDecisions.sourceId,
+      updatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`,
+    })
+    .from(caseLawDecisions)
+    .where(
+      phase === "dated"
+        ? sql`${caseLawDecisions.decisionDate} IS NOT NULL`
+        : sql`${caseLawDecisions.decisionDate} IS NULL`,
+    )
+    .limit(1);
+  if (!resumeFrom) {
+    return panic("Expected a decision to resume the page from.");
+  }
+  const { sql: text, params } = new PgDialect().sqlToQuery(
+    sitemapRefreshPageSql({
+      country: "CZE",
+      cursor: resumeFrom,
+      pageSize: SMALL_PAGE_SIZE,
+      phase,
+    }),
+  );
+
+  // Vacuumed so the visibility map is set, as it is for most of a settled
+  // corpus; the plan then shows whether the index can answer on its own.
+  await client.query("VACUUM ANALYZE case_law_decisions");
+  return await client.transaction(async (tx) => {
+    // The seeded table is small enough that reading it whole, or through a
+    // narrower index plus the heap, can still win on cost. Scans are off
+    // and every page is priced the same, so the plan is chosen by pages
+    // touched, as it is on a corpus of millions: the covering index alone
+    // wins only if it can answer the page without the decision rows.
+    await tx.query("SET LOCAL enable_seqscan = off");
+    await tx.query("SET LOCAL enable_bitmapscan = off");
+    await tx.query("SET LOCAL seq_page_cost = 1000");
+    await tx.query("SET LOCAL random_page_cost = 1000");
+    return planLines(
+      await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
+    ).join("\n");
+  });
+};
+
+for (const phase of ["dated", "undated"] as const) {
+  test(
+    `a ${phase} refresh page is a bounded range of the sitemap index alone`,
+    async () => {
+      const plan = await pagePlan(phase);
+
+      expect(plan).toMatch(
+        /Index Only Scan using case_law_decisions_sitemap_shard_idx on case_law_decisions/u,
+      );
+      // The resume point and the country are where the index read starts,
+      // not a filter over everything before it, and the limit stops it: the
+      // index order is the page order, so nothing is sorted first.
+      const scan = plan.slice(plan.indexOf("Index Only Scan"));
+      expect(scan).toMatch(/Index Cond: \(\(country = .*\) AND \(ROW\(/u);
+      expect(plan).toMatch(/Limit/u);
+      expect(plan.slice(0, plan.indexOf("Index Only Scan"))).not.toMatch(
+        /Sort Key: case_law_decisions/u,
+      );
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+}
