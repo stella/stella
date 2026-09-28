@@ -745,6 +745,10 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // The upstream rule treats String#slice like Array#slice and can turn
+    // substring checks into single-character Set membership under --fix.
+    // It has no fix-only option.
+    "unicorn/prefer-set-has": "off",
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
     // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
