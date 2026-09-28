@@ -680,8 +680,8 @@
       "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
       "status": "active",
       "file": "src/handlers/chat/provider-history.ts",
-      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
-      "replace": "      messages,",
+      "search": "      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),",
+      "replace": "      messages: withoutRepeatedCalls(messages),",
       "scenario": {
         "file": "src/handlers/chat/approval-answer-order.test.ts",
         "test": "keeps a denial ahead of the approved call it was answered with"
@@ -769,6 +769,20 @@
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "replays each step's signed thinking on its own step"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-repeated-call-sent-once",
+      "fix": "#4006",
+      "behaviour": "A tool call a stored thread repeats in later messages is sent to the provider once, in the first message holding it.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "    if (repeated.size === 0) {",
+      "replace": "    if (repeated.size >= 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
       },
       "oracle": "chat.provider.transcript-settled"
     }

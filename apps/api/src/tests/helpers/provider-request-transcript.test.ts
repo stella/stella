@@ -262,7 +262,7 @@ describe("a request's tool calls and results pair up", () => {
       ],
     };
     expect(problemsOf({ body: extra, format: "gemini" })).toEqual([
-      "a tool result follows no call of the message before it",
+      "a tool call has more than one result",
     ]);
   });
 
