@@ -3848,7 +3848,7 @@ export type WebRoutes = {
             currency: Tbe0400fa4c;
             notes: Tbe0400fa4c;
             color: Tbe0400fa4c;
-            organizationId: T35ac07d7a8;
+            organizationId: Tb1d68817ba;
             prefix: Tbe0400fa4c;
             middleName: Tbe0400fa4c;
             suffix: Tbe0400fa4c;
@@ -4107,7 +4107,7 @@ export type WebRoutes = {
               currency: Tbe0400fa4c;
               notes: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: T35ac07d7a8;
+              organizationId: Tb1d68817ba;
               prefix: Tbe0400fa4c;
               middleName: Tbe0400fa4c;
               suffix: Tbe0400fa4c;
@@ -8366,7 +8366,7 @@ export type WebRoutes = {
                 invoiceNumber: string;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
-                organizationId: T35ac07d7a8;
+                organizationId: Tb1d68817ba;
                 timeEntries: Array<{
                   status: T61747391b1;
                   id: T094c3ba654;
@@ -10197,7 +10197,7 @@ export type WebRoutes = {
               connectors: Array<{
                 id: Ta10437f406;
                 slug: string;
-                organizationId: (null | T35ac07d7a8);
+                organizationId: (null | Tb1d68817ba);
                 displayName: string;
                 description: string;
                 url: string;
@@ -16825,7 +16825,6 @@ export type WebRoutes = {
               postalCode: Tbe0400fa4c;
               city: Tbe0400fa4c;
               registrationId: Tbe0400fa4c;
-              organizationId: T35ac07d7a8;
               accountNumber: Tbe0400fa4c;
               legalName: string;
               vatId: Tbe0400fa4c;
@@ -16834,7 +16833,6 @@ export type WebRoutes = {
               defaultCurrency: string;
               footerNotes: Tbe0400fa4c;
               isDefault: Tfddd645dc8;
-              archivedAt: Tdf2b0d1150;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -27413,7 +27411,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: T35ac07d7a8;
+                organizationId: Tb1d68817ba;
                 contact: (null | {
                   type: T1dacb02040;
                   id: Tbf83a7d346;
@@ -27464,7 +27462,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: T35ac07d7a8;
+                organizationId: Tb1d68817ba;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -27972,7 +27970,7 @@ export type WebRoutes = {
               createdAt: string;
               billingReference: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: T35ac07d7a8;
+              organizationId: Tb1d68817ba;
               clientId: Tb411b93636;
               leadUserId: Tbe0400fa4c;
               stampedVersionCount: number;
@@ -34349,10 +34347,6 @@ type T3582432480 = {
   output?: unknown;
 } & T4d73965770;
 
-type T35ac07d7a8 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "organization";
-};
-
 type T367a10cc51 = {
   readonly input: T466db84340;
   readonly output: T27875dbd24;
@@ -37887,6 +37881,10 @@ type Tb165f0f166 = {
     publishedOn: string;
     withdrawnOn: Tbe0400fa4c;
   }>;
+};
+
+type Tb1d68817ba = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "organization";
 };
 
 type Tb2028981db = {
