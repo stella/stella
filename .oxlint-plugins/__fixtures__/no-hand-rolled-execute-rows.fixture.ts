@@ -8,11 +8,14 @@
 import { Result } from "better-result";
 
 declare const tx: { execute: (query: string) => Promise<unknown> };
-declare const pglite: {
+declare const pgliteDb: {
   execute: (query: string) => Promise<{ rows: unknown[] }>;
 };
 declare const tool: {
   execute: (input: unknown, options: unknown) => Promise<unknown>;
+};
+declare const oneArgumentTool: {
+  execute: (input: unknown) => Promise<{ rows: unknown }>;
 };
 declare const executedRows: (result: unknown) => unknown[];
 declare const isRecord: (value: unknown) => value is Record<string, unknown>;
@@ -31,12 +34,12 @@ const hasRows = isRecord(result) && "rows" in result;
 
 // A driver whose result type carries `rows`: inline, bound, destructured.
 // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: inline execute rows read
-const inline = (await pglite.execute(query)).rows;
-const typed = await pglite.execute(query);
+const inline = (await pgliteDb.execute(query)).rows;
+const typed = await pgliteDb.execute(query);
 // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: Reflect rows read
 const reflectedRows: unknown = Reflect.get(typed, "rows");
 // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: destructured rows
-const { rows: destructured } = await pglite.execute(query);
+const { rows: destructured } = await pgliteDb.execute(query);
 
 // The success value of a Result wrapping the execute call.
 const queried = await Result.tryPromise({
@@ -65,6 +68,10 @@ const owned = executedRows(await tx.execute(query)).at(0);
 const toolOutput = await tool.execute({}, {});
 const toolIsList = Array.isArray(toolOutput);
 
+// Nor is a one-argument `execute` on a receiver that is not a database handle
+// and given no `sql` query.
+const toolRows = (await oneArgumentTool.execute({})).rows;
+
 // A `rows` field of a value never tested as an array.
 const tableRows = Array.isArray(table.rows) ? table.rows : [];
 
@@ -84,5 +91,6 @@ export {
   shadowed,
   tableRows,
   toolIsList,
+  toolRows,
   wrapped,
 };

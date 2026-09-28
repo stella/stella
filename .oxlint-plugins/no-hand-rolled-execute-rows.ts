@@ -16,13 +16,15 @@
 //   const rowsOf = (result: unknown) =>
 //     Array.isArray(result) ? result : isRecord(result) ? result["rows"] : [];
 //
-// A value is an `execute` result by visible provenance: a one-argument call to
-// any `<receiver>.execute(query)` (Drizzle's signature; a tool's
-// `execute(input, options)` takes two), through `await`, type assertions, a
-// `const` (or never-reassigned `let`) bound to one, and the `.value` of a
-// `Result.tryPromise` / `Result.try` whose callback returns one. Bindings are
-// resolved through scope analysis, so a shadowing name does not inherit
-// provenance.
+// A value is an `execute` result by visible provenance: a one-argument
+// `<receiver>.execute(query)` (Drizzle's signature) whose query is a `sql`
+// template or `sql.*(...)` call, directly or through a stable binding, or
+// whose receiver is named as a database handle (`db`, `tx`, `rootDb`,
+// `this.db`, `getDb()`); a tool's `execute(input)` is neither. Provenance
+// follows `await`, type assertions, a `const` (or never-reassigned `let`)
+// bound to one, and the `.value` of a `Result.tryPromise` / `Result.try` whose
+// callback returns one. Bindings are resolved through scope analysis, so a
+// shadowing name does not inherit provenance.
 //
 // Accepted:
 //   executedRows(await tx.execute(query)).at(0)
@@ -42,6 +44,7 @@ import {
   type AstNode,
   getPropertyName,
   isAstNode,
+  isIdentifier,
   isIdentifierReference,
   isMemberAccess,
   isStringLiteral,
@@ -53,14 +56,46 @@ import {
 } from "./utils.ts";
 
 const ROWS = "rows";
+const SQL = "sql";
 
-const isExecuteCall = (node: AstNode): boolean => {
-  const callee = unwrapExpression(node.callee);
+const DATABASE_HANDLE_NAME =
+  /^(?:db|tx|trx|database|transaction|savepoint)$|(?:Db|Tx|Trx|Database|Transaction)$/;
+
+// The name a receiver is known by: `db`, `this.db`, `getDb()`.
+const receiverName = (node: unknown): string | null => {
+  const receiver = unwrapExpression(node);
+  if (receiver === null) {
+    return null;
+  }
+  switch (receiver.type) {
+    case "Identifier":
+      return getPropertyName(receiver);
+    case "MemberExpression":
+      return memberPropertyName(receiver);
+    case "CallExpression":
+      return receiverName(receiver.callee);
+    case "AwaitExpression":
+      return receiverName(receiver.argument);
+    default:
+      return null;
+  }
+};
+
+const isDatabaseHandle = (node: unknown): boolean => {
+  const name = receiverName(node);
+  return name !== null && DATABASE_HANDLE_NAME.test(name);
+};
+
+// A `sql` template (`sql<T>` too) or a `sql.raw(...)` / `sql.join(...)` call.
+const isSqlBuilder = (node: AstNode): boolean => {
+  if (node.type === "TaggedTemplateExpression") {
+    return isIdentifier(unwrapExpression(node.tag), SQL);
+  }
+  const callee = node.type === "CallExpression" ? node.callee : null;
   return (
-    callee?.type === "MemberExpression" &&
-    memberPropertyName(callee) === "execute" &&
-    Array.isArray(node.arguments) &&
-    node.arguments.length === 1
+    isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    isIdentifier(callee.object, SQL)
   );
 };
 
@@ -167,6 +202,35 @@ export default eslintCompatPlugin({
           return variable === null ? null : stableInitializer(variable);
         };
 
+        const isSqlQuery = (node: unknown, visited: Set<unknown>): boolean => {
+          const current = unwrapExpression(node);
+          if (current === null || visited.has(current)) {
+            return false;
+          }
+          visited.add(current);
+          if (isSqlBuilder(current)) {
+            return true;
+          }
+          const initializer = resolvedInitializer(current);
+          return initializer !== null && isSqlQuery(initializer, visited);
+        };
+
+        const isExecuteCall = (node: AstNode): boolean => {
+          const callee = unwrapExpression(node.callee);
+          if (
+            callee?.type !== "MemberExpression" ||
+            memberPropertyName(callee) !== "execute" ||
+            !Array.isArray(node.arguments) ||
+            node.arguments.length !== 1
+          ) {
+            return false;
+          }
+          return (
+            isDatabaseHandle(callee.object) ||
+            isSqlQuery(node.arguments.at(0), new Set())
+          );
+        };
+
         // A `Result` whose success value is an execute result.
         const isWrappedExecute = (
           node: unknown,
@@ -257,7 +321,7 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
-            if (memberPropertyName(node) === ROWS) {
+            if (isAstNode(node) && memberPropertyName(node) === ROWS) {
               checkRowsRead(node, node.object);
             }
           },

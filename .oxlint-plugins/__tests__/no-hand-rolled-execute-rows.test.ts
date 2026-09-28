@@ -44,6 +44,20 @@ describe.serial("no-hand-rolled-execute-rows", () => {
     ).toEqual([3, 8, 12]);
   });
 
+  test("recognises any receiver given a sql query", async () => {
+    expect(
+      await lint([
+        "const a = await client.execute(sql`SELECT 1`);",
+        "const b = Array.isArray(a);",
+        "const statement = sql.raw(text);",
+        "const c = (await pool.execute(statement)).rows;",
+        "const d = (await this.db.execute(query)).rows;",
+        "const e = (await getDb().execute(query)).rows;",
+        "",
+      ]),
+    ).toEqual([2, 4, 5, 6]);
+  });
+
   test("reports a binding tested both as an array and for rows", async () => {
     expect(
       await lint([
@@ -90,6 +104,8 @@ describe.serial("no-hand-rolled-execute-rows", () => {
         "const owned = executedRows(await tx.execute(query)).at(0);",
         "const output = await tool.execute(input, options);",
         "const list = Array.isArray(output);",
+        "const called = await tool.execute(args);",
+        "const calledRows = called.rows;",
         "const cells = Array.isArray(table.rows) ? table.rows : [];",
         'const listed = isRecord(listing) && Array.isArray(listing["rows"]);',
         "const result = await tx.execute(query);",
