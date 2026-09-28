@@ -37,7 +37,7 @@ const DEFAULT_CHUNKING: Chunking = { every: SLICE_BYTES };
 
 /** The end offset of each read of a `length`-byte body cut by `chunking`,
  *  the last read's included. */
-export const readEnds = (length: number, chunking: Chunking): number[] => {
+const readEnds = (length: number, chunking: Chunking): number[] => {
   if ("every" in chunking) {
     if (!Number.isSafeInteger(chunking.every) || chunking.every < 1) {
       return panic(`A read is at least one byte, not ${chunking.every}`);

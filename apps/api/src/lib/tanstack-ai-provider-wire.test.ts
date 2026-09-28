@@ -4,6 +4,8 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { env } from "@/api/env";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
@@ -266,7 +268,7 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
         await expectSame({ at });
       },
     ),
-    { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
+    propertyConfig({ numRuns: SPLIT_RUNS, seed: SPLIT_SEED }),
   );
 };
 

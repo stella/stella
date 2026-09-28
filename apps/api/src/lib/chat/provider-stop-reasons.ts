@@ -140,7 +140,7 @@ export const PROVIDER_STOP_REASONS: Readonly<
 
 /** The outcome of `reason` from `provider`: `null` is a stream that ended
  *  without one, and a reason the SDK does not know is not a success. */
-export const stopOutcomeOf = (
+const stopOutcomeOf = (
   provider: TanStackAIProvider,
   reason: string | null,
 ): StopOutcome => {
