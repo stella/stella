@@ -648,7 +648,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "lookup"],
             toolName: "lookup_case_law",
             description:
-              "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs.",
+              "Resolve case references to decisions: docket numbers as the courts write them and ECLIs.",
             flags: [
               {
                 flag: "--identifiers",
