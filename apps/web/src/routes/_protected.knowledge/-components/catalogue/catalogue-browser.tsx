@@ -708,7 +708,7 @@ const CatalogueEntryRow = ({
   const chatUnavailableSkills = useChatUnavailableSkills(organizationId);
   const chatMissingTools =
     entry.kind === "skill" && entry.chatSkillId !== null
-      ? chatUnavailableSkills.get(entry.chatSkillId)
+      ? chatUnavailableSkills?.get(entry.chatSkillId)
       : undefined;
   const uninstall = useUninstallEntry(entry, organizationId);
   const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({

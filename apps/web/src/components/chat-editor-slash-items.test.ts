@@ -286,6 +286,30 @@ describe("buildChatSlashItems", () => {
     ).toEqual(["offered"]);
   });
 
+  test("offers no skill before chat's availability is known", () => {
+    const pages = [
+      {
+        installed: [
+          skillRow({ id: "plain", slug: "plain" }),
+          skillRow({
+            body: "Summarise.",
+            command: "summarize",
+            id: "summarize",
+            slug: "summarize",
+          }),
+        ],
+      },
+    ];
+
+    expect(
+      buildChatSlashItems({
+        shortcuts: commandShortcutRowsFromSkillPages(pages, undefined),
+        skillPages: pages,
+        unavailableSkillIds: undefined,
+      }),
+    ).toEqual([]);
+  });
+
   test("omits disabled installed skills", () => {
     const items = buildChatSlashItems({
       unavailableSkillIds: NONE_UNAVAILABLE,

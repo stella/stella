@@ -72,9 +72,16 @@ export const skillPagesForChips = (
 /**
  * Ids of the skills chat cannot offer, as the server decided them
  * (`chatUnavailableSkillsOptions`): a skill that needs a tool chat lacks is
- * never offered in a menu.
+ * never offered in a menu. `undefined` until the server has answered: no
+ * skill is offered before then, so none that chat cannot finish slips in.
  */
-export type UnavailableSkillIds = ReadonlySet<string>;
+export type UnavailableSkillIds = ReadonlySet<string> | undefined;
+
+const isOfferedInChat = (
+  skillId: string,
+  unavailableSkillIds: UnavailableSkillIds,
+): boolean =>
+  unavailableSkillIds !== undefined && !unavailableSkillIds.has(skillId);
 
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
@@ -142,7 +149,7 @@ export const commandShortcutRowsFromSkillPages = (
   for (const row of installedRows) {
     if (
       !row.enabled ||
-      unavailableSkillIds.has(row.id) ||
+      !isOfferedInChat(row.id, unavailableSkillIds) ||
       !row.command ||
       row.body === null ||
       !row.body
@@ -183,7 +190,7 @@ const getChatVisibleInstalledSkillRows = (
   // list so the same skill doesn't appear twice in the menu. A skill the
   // chat cannot finish is dropped after the cap, as the backend does.
   const chatMetadataRows = chatVisibleEnabled.filter(
-    (row) => !row.command && !unavailableSkillIds.has(row.id),
+    (row) => !row.command && isOfferedInChat(row.id, unavailableSkillIds),
   );
 
   for (const row of chatMetadataRows) {
