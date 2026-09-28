@@ -5922,7 +5922,7 @@ export type WebRoutes = {
                 sortOrder: Tbe0400fa4c;
                 duplicateSourceEntityId: Tf058fe611e;
                 lastEditedBy: Tbe0400fa4c;
-                currentVersionId: T7c969d14ec;
+                currentVersionId: T9021211256;
                 docSequence: T588d0ee653;
                 occurredAt: Tdf2b0d1150;
                 remindAt: Tdf2b0d1150;
@@ -6019,6 +6019,17 @@ export type WebRoutes = {
                     granularity: ("word" | "character");
                     baseTrackedChanges: T922e475469;
                     targetTrackedChanges: T922e475469;
+                  } | {
+                    kind: "signature";
+                    baseVersionId: string;
+                    certificateSha256Hex: string;
+                    signingTime: string;
+                    level: ("B-B" | "B-T" | "B-LT");
+                    timestampAuthorityUrl: Tbe0400fa4c;
+                    warnings: Array<{
+                      code: string;
+                      message: string;
+                    }>;
                   } | {
                     kind: "sharepoint";
                     driveId: string;
@@ -10090,7 +10101,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T69368dbf79;
+              200: T346b54ceed;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -14489,6 +14500,51 @@ export type WebRoutes = {
                 expected?: string;
               };
             };
+          };
+        };
+      };
+    };
+    "pdf-signing-handoffs": {
+      redeem: {
+        post: {
+          body: (null | {
+            handoffToken?: unknown;
+          });
+          params: T5e3ac29766;
+          query: unknown;
+          headers: unknown;
+          response: {
+            200: {
+              apiBaseUrl: string;
+              documentName: string;
+              expiresAt: string;
+              sessionId: T613c5cabbb;
+              sessionToken: string;
+              stampPageNumber: T588d0ee653;
+              versionNumber: number;
+              workspaceName: string;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: T9a51b7d2bc;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
@@ -23679,6 +23735,7 @@ export type WebRoutes = {
                       sources: ReadonlyArray<{
                         sourceEntityId: Tf742ada503;
                         sourceEntityVersionId: Tb86085a330;
+                        sourceName?: string;
                         locator: Tb14bbccf94;
                         quote: Tbe0400fa4c;
                       }>;
@@ -23692,6 +23749,13 @@ export type WebRoutes = {
                   createdAt: string;
                   startedAt: Tbe0400fa4c;
                   finishedAt: Tbe0400fa4c;
+                  blocks: Array<{
+                    ordinal: number;
+                    blockId: string;
+                    kind: ("docx-block" | "pdf-page");
+                    pageNumber: T588d0ee653;
+                    text: string;
+                  }>;
                   claims: Array<{
                     id: T06a9543aed;
                     position: number;
@@ -23990,6 +24054,11 @@ export type WebRoutes = {
                       medium: Tbe0400fa4c;
                       interpretationNote: Tbe0400fa4c;
                       scoring: Tad12f531bb;
+                    });
+                    firstSource: (null | {
+                      documentId: Tf742ada503;
+                      documentName: string;
+                      locator: Tb14bbccf94;
                     });
                   } & {
                     customFields: Array<{
@@ -24339,6 +24408,131 @@ export type WebRoutes = {
           500: T9a51b7d2bc;
           502: T9a51b7d2bc;
           503: T9a51b7d2bc;
+        };
+      };
+    };
+    "pdf-signing-sessions": {
+      ":sessionId": {
+        certificate: {
+          post: {
+            body: (null | {
+              sessionToken?: unknown;
+              certificate?: unknown;
+              certificateChain?: unknown;
+            });
+            params: T066db31a61;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                digestAlgorithm: "SHA-256";
+                digestHex: string;
+                signatureAlgorithm: ("RSASSA-PKCS1-v1_5" | "ECDSA");
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":sessionId": {
+        signature: {
+          post: {
+            body: (null | {
+              signature?: unknown;
+              sessionToken?: unknown;
+            });
+            params: T066db31a61;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                versionId: Tb86085a330;
+                versionNumber: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":sessionId": {
+        cancel: {
+          post: {
+            body: (null | {
+              reason?: unknown;
+              sessionToken?: unknown;
+            });
+            params: T066db31a61;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: {
+                status: "cancelled";
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
         };
       };
     };
@@ -25122,6 +25316,66 @@ export type WebRoutes = {
             };
           };
         };
+        "pdf-signing-handoffs": {
+          post: {
+            body: {
+              location?: string;
+              reason?: string;
+              stamp?: {
+                direction: ("ltr" | "rtl");
+                box: {
+                  height: number;
+                  width: number;
+                  x: number;
+                  y: number;
+                };
+                timeZone: string;
+                labels: {
+                  location: string;
+                  date: string;
+                  reason: string;
+                  signedBy: string;
+                };
+                pageIndex: number;
+              };
+              entityId: Tf742ada503;
+              propertyId: T173eec1550;
+            };
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                deepLinkUrl: string;
+                expiresAt: string;
+                sessionId: T613c5cabbb;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T98724a80a4;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
         "create-from-legal-source": {
           post: {
             body: {
@@ -25807,6 +26061,75 @@ export type WebRoutes = {
             };
           };
         };
+        "pdf-signing-sessions": {
+          ":sessionId": {
+            get: {
+              body: Record<never, never>;
+              params: Tf3d65063d4;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: T8402f88e6b;
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        } & {
+          ":sessionId": {
+            cancel: {
+              post: {
+                body: Record<never, never>;
+                params: Tf3d65063d4;
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: T8402f88e6b;
+                  400: T9a51b7d2bc;
+                  401: T9a51b7d2bc;
+                  402: T9a51b7d2bc;
+                  403: Tddfcdef857;
+                  404: T98724a80a4;
+                  409: T9a51b7d2bc;
+                  413: T9a51b7d2bc;
+                  422: (T9a51b7d2bc | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: T9a51b7d2bc;
+                  429: T9a51b7d2bc;
+                  500: T9a51b7d2bc;
+                  502: T9a51b7d2bc;
+                  503: T9a51b7d2bc;
+                };
+              };
+            };
+          };
+        };
         zip: {
           ":entityId": {
             get: {
@@ -25900,7 +26223,7 @@ export type WebRoutes = {
                     entityId: Tf742ada503;
                     entityName: string;
                     kind: T884a45faa8;
-                    currentVersionId: T7c969d14ec;
+                    currentVersionId: T9021211256;
                     versions: Array<{
                       id: Tb86085a330;
                       versionNumber: number;
@@ -25909,7 +26232,7 @@ export type WebRoutes = {
                       description: Tbe0400fa4c;
                       diffWordsAdded: T588d0ee653;
                       diffWordsRemoved: T588d0ee653;
-                      sourceKind: (null | "upload" | "desktop-edit" | "collaboration" | "comparison" | "sharepoint");
+                      sourceKind: (null | "upload" | "desktop-edit" | "collaboration" | "comparison" | "signature" | "sharepoint");
                       createdAt: string;
                       author: (null | {
                         id: string;
@@ -28877,7 +29200,7 @@ export type WebRoutes = {
                       entityId: Tf742ada503;
                       fileFieldId: T6993bee61f;
                       entityVersionId: Tb86085a330;
-                      outputEntityVersionId: T7c969d14ec;
+                      outputEntityVersionId: T9021211256;
                       sourceLang: string;
                       targetLang: string;
                       total: number;
@@ -32158,6 +32481,10 @@ type T05cba4d570 = {
 
 type T06588da39f = "reference" | "tiers";
 
+type T066db31a61 = {
+  sessionId?: string;
+};
+
 type T06a9543aed = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListClaim";
 };
@@ -33540,6 +33867,74 @@ type T34252d475f = {
   viewId: T7e10a0d884;
 };
 
+type T346b54ceed = {
+  documentAst: (null | {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: undefined | "decision-title" | "section-heading";
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      note?: undefined | T1d6100d20a;
+      listDepth?: undefined | 1 | 2 | 3 | 4;
+      number?: undefined | number;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: undefined | "related-proceedings" | "metadata-table";
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: undefined | number;
+        rowSpan?: undefined | number;
+        header?: undefined | true;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: undefined | string;
+      width?: undefined | number;
+      height?: undefined | number;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4);
+  fulltext: Tbe0400fa4c;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  id: Tfc8a750351;
+};
+
 type T346ea860b1 = {
   readonly type: "contact";
   readonly id: stll_api_contract_SafeId<"contact">;
@@ -34654,6 +35049,10 @@ type T60e51917c9 = null | stll_conditions_CompareNode | stll_conditions_Predicat
 
 type T6124e792aa = null | Array<T3c3fa57c15>;
 
+type T613c5cabbb = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "pdfSigningSession";
+};
+
 type T61747391b1 = "draft" | "approved" | "billed" | "written_off";
 
 type T61a314e9df = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
@@ -35275,74 +35674,6 @@ type T69193eb0dc = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateLookupFormat";
 };
 
-type T69368dbf79 = {
-  documentAst: (null | {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T1d6100d20a;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4);
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
-};
-
 type T6947d07557 = {
   type: "tool-call";
   id: string;
@@ -35826,8 +36157,6 @@ type T7c5bb3a7e5 = {
   }>;
 };
 
-type T7c969d14ec = null | Tb86085a330;
-
 type T7cacacdd34 = {
   status: "disconnected";
   reason: string;
@@ -35971,6 +36300,14 @@ type T823941dec3 = {
 };
 
 type T83854980c8 = 1 | 2 | 3 | 4 | 5 | 6;
+
+type T8402f88e6b = {
+  closeReason: (null | "expired" | "user_cancelled" | "base_version_diverged" | "digest_mismatch" | "unsupported_platform" | "certificate_rejected" | "certificate_revoked" | "certified_document" | "signature_invalid" | "signing_failed" | "stamp_overflow" | "stamp_unrenderable" | "would_break_signatures");
+  expiresAt: string;
+  finalizedVersionId: T9021211256;
+  finalizedVersionNumber: T588d0ee653;
+  status: ("open" | "cancelled" | "finalized" | "expired");
+};
 
 type T8436dc75f2 = {
   folderRef: string;
@@ -36291,6 +36628,8 @@ type T8fd3506feb = {
 type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
+
+type T9021211256 = null | Tb86085a330;
 
 type T908548b020 = {
   type: "tool-call";
@@ -36737,7 +37076,7 @@ type Ta0e1c4f807 = T12163e1f6a | {
       number?: undefined | number;
       type: "paragraph";
       id: string;
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       anchorId: string;
       note?: undefined | T1d6100d20a;
       inlines: Array<Ta4c2166933>;
@@ -36749,9 +37088,9 @@ type Ta0e1c4f807 = T12163e1f6a | {
       src: string;
       id: string;
       anchorId: string;
-      alt?: undefined | string;
-      width?: undefined | number;
       height?: undefined | number;
+      width?: undefined | number;
+      alt?: undefined | string;
     } & {
       plainText?: undefined | string;
     } | {
@@ -37104,7 +37443,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "included" | "held";
 
-type Tada6067f00 = T69368dbf79 | T279717e2be;
+type Tada6067f00 = T346b54ceed | T279717e2be;
 
 type Tae4c134ba8 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
 
@@ -38734,6 +39073,11 @@ type Tf26698434e = {
 type Tf31e28edee = "error" | "warning";
 
 type Tf346142984 = "api-key" | "user-agent";
+
+type Tf3d65063d4 = {
+  workspaceId: T8d02a37b3f;
+  sessionId: T613c5cabbb;
+};
 
 type Tf3de223e07 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateRecipe";
