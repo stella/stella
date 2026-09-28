@@ -52,7 +52,7 @@ CREATE TABLE "number_series_allocations" (
 	"document_type" text NOT NULL,
 	"number" varchar(64) NOT NULL,
 	"issued_at" timestamptz NOT NULL,
-	CONSTRAINT "number_series_allocations_organization_id_document_type_number_pk" PRIMARY KEY("organization_id","document_type","number"),
+	CONSTRAINT "number_series_allocations_number_pk" PRIMARY KEY("organization_id","document_type","number"),
 	CONSTRAINT "number_series_allocations_document_type_check" CHECK ("document_type" IN ('invoice', 'advance', 'credit_note'))
 );--> statement-breakpoint
 ALTER TABLE "number_series_allocations" ADD CONSTRAINT "number_series_allocations_series_org_fk" FOREIGN KEY ("organization_id","series_id") REFERENCES "public"."number_series"("organization_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

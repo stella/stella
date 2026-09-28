@@ -114,4 +114,9 @@ export const toNumberPatternScopeKey = ({
   now,
   timeZone,
 }: NumberPatternScopeKeyOptions): string =>
-  renderMatterReferencePattern({ now, pattern, sequence: "", timeZone });
+  renderMatterReferencePattern({
+    now,
+    pattern,
+    sequence: "",
+    ...(timeZone === undefined ? {} : { timeZone }),
+  });

@@ -398,6 +398,7 @@ export const numberSeriesAllocations = p.pgTable(
   },
   (table) => [
     p.primaryKey({
+      name: "number_series_allocations_number_pk",
       columns: [table.organizationId, table.documentType, table.number],
     }),
     p

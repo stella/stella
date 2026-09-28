@@ -95,5 +95,5 @@ export const renderMatterReference = ({
     now,
     pattern,
     sequence: String(seq).padStart(padding, "0"),
-    timeZone,
+    timeZone: timeZone ?? Temporal.Now.timeZoneId(),
   });
