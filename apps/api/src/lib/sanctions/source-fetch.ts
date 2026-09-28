@@ -178,6 +178,7 @@ const headersFor = ({
 
 const fetchBytes = async ({
   maxBytes,
+  signal,
   source,
   url,
   userAgent,
@@ -185,6 +186,7 @@ const fetchBytes = async ({
 }: {
   accept?: string | undefined;
   maxBytes: number;
+  signal: AbortSignal;
   source: SanctionsSource;
   url: string;
   userAgent?: string | undefined;
@@ -193,6 +195,7 @@ const fetchBytes = async ({
     url,
     maxBytes,
     timeoutMs: REQUEST_TIMEOUT_MS,
+    signal,
     headers: headersFor({ accept, userAgent }),
   });
   if (response.isErr()) {
@@ -258,13 +261,24 @@ const fetchStream = async ({
 const trackStreamFailure = (body: ReadableStream<Uint8Array>) => {
   let failed = false;
   const chunks = async function* () {
+    const reader = body.getReader();
     try {
-      for await (const chunk of body) {
-        yield chunk;
+      while (true) {
+        const next = await Result.tryPromise(() => reader.read());
+        if (next.isErr()) {
+          failed = true;
+          throw next.error;
+        }
+        if (next.value.done) {
+          return;
+        }
+        yield next.value.value;
       }
-    } catch (error) {
-      failed = true;
-      throw error;
+    } finally {
+      await reader.cancel().catch(() => {
+        failed = true;
+      });
+      reader.releaseLock();
     }
   };
   return { chunks: chunks(), failed: () => failed };
@@ -291,6 +305,7 @@ const loadMarkerOnce = async (
       let downloadUrl = options.euXmlUrlOverride;
       if (downloadUrl === undefined) {
         const metadataBytes = await fetchBytes({
+          signal: options.signal,
           source,
           url: SANCTIONS_SOURCE_CONFIG.eu.markerUrl,
           maxBytes: METADATA_MAX_BYTES,
@@ -333,7 +348,7 @@ const loadMarkerOnce = async (
       }
       const body = trackStreamFailure(response.value);
       const version = await readEuListVersion(body.chunks);
-      return version.isOk()
+      return version.isOk() && !body.failed()
         ? Result.ok({ source, version: version.value, downloadUrl })
         : Result.err(
             refreshError(
@@ -357,7 +372,7 @@ const loadMarkerOnce = async (
       }
       const body = trackStreamFailure(response.value);
       const version = await readUnListVersion(body.chunks);
-      return version.isOk()
+      return version.isOk() && !body.failed()
         ? Result.ok({ source, version: version.value, downloadUrl })
         : Result.err(
             refreshError(
@@ -368,6 +383,7 @@ const loadMarkerOnce = async (
     }
     case "cz": {
       const page = await fetchBytes({
+        signal: options.signal,
         source,
         url: SANCTIONS_SOURCE_CONFIG.cz.markerUrl,
         maxBytes: METADATA_MAX_BYTES,
@@ -439,6 +455,7 @@ const loadEditionOnce = async (
 ): Promise<Result<FetchedEdition, SanctionsRefreshError>> => {
   if (marker.source === "cz") {
     const downloaded = await fetchBytes({
+      signal: options.signal,
       source: marker.source,
       url: marker.downloadUrl,
       maxBytes: LIST_MAX_BYTES,
@@ -488,7 +505,7 @@ const loadEditionOnce = async (
     marker.source === "eu"
       ? await parseEuList(hashed())
       : await parseUnList(hashed());
-  return parsed.isOk()
+  return parsed.isOk() && !body.failed()
     ? Result.ok({ parsed: parsed.value, contentHash: hash.digest("hex") })
     : Result.err(
         refreshError(

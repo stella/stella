@@ -193,15 +193,17 @@ export const sanctionsEditionEntries = p.pgTable(
       .notNull()
       .references(() => sanctionsEditions.id, { onDelete: "restrict" }),
     sourceEntryId: p.text("source_entry_id").notNull(),
-    contentHash: p
-      .text("content_hash")
-      .notNull()
-      .references(() => sanctionsEntryPayloads.contentHash, {
-        onDelete: "restrict",
-      }),
+    contentHash: p.text("content_hash").notNull(),
   },
   (table) => [
     p.primaryKey({ columns: [table.editionId, table.sourceEntryId] }),
+    p
+      .foreignKey({
+        name: "sanctions_edition_entries_payload_fk",
+        columns: [table.contentHash],
+        foreignColumns: [sanctionsEntryPayloads.contentHash],
+      })
+      .onDelete("restrict"),
     p.index("sanctions_edition_entries_content_hash_idx").on(table.contentHash),
     ...globalCaseLawPolicies(),
   ],

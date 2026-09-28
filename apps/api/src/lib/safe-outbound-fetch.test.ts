@@ -124,6 +124,28 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("aborts a byte response that stops sending its body", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("partial");
+      },
+      async (port) => {
+        const controller = new AbortController();
+        const pending = fetchWithResolvedAddress({
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          signal: controller.signal,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/stalled`),
+        });
+        setTimeout(() => controller.abort(), 10);
+        const result = await pending;
+        expect(Result.isError(result)).toBe(true);
+      },
+    );
+  });
+
   test("returns streaming responses before the server closes the body", async () => {
     await withHttpServer(
       (_request, response) => {
@@ -417,6 +439,23 @@ describe("validateOutboundFetchTarget", () => {
       throw new Error("Expected DNS validation to time out");
     }
     expect(result.error.message).toBe("Request timed out");
+  });
+
+  test("aborts while DNS resolution is pending", async () => {
+    const controller = new AbortController();
+    const pending = validateOutboundFetchTarget(
+      "https://example.com/skill.md",
+      {
+        resolveAddresses: async () =>
+          await new Promise(() => {
+            // The abort must settle validation while DNS is still pending.
+          }),
+        signal: controller.signal,
+        timeoutMs: 1000,
+      },
+    );
+    controller.abort();
+    expect(Result.isError(await pending)).toBe(true);
   });
 
   test("rejects an IP-literal private host before any DNS lookup", async () => {

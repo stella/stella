@@ -104,8 +104,9 @@ CREATE TABLE "sanctions_entry_payloads" (
 CREATE TABLE "sanctions_edition_entries" (
   "edition_id" uuid NOT NULL REFERENCES "sanctions_editions"("id") ON DELETE restrict,
   "source_entry_id" text NOT NULL,
-  "content_hash" text NOT NULL REFERENCES "sanctions_entry_payloads"("content_hash") ON DELETE restrict,
-  CONSTRAINT "sanctions_edition_entries_pkey" PRIMARY KEY("edition_id", "source_entry_id")
+  "content_hash" text NOT NULL,
+  CONSTRAINT "sanctions_edition_entries_pkey" PRIMARY KEY("edition_id", "source_entry_id"),
+  CONSTRAINT "sanctions_edition_entries_payload_fk" FOREIGN KEY ("content_hash") REFERENCES "sanctions_entry_payloads"("content_hash") ON DELETE restrict
 );--> statement-breakpoint
 CREATE INDEX "sanctions_edition_entries_content_hash_idx"
   ON "sanctions_edition_entries" ("content_hash");--> statement-breakpoint

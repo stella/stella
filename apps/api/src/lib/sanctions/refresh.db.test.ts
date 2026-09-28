@@ -383,3 +383,47 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test(
+  "holds a publisher rollback to a historical ready edition without rewriting its audit state",
+  async () => {
+    const parsed = list("2026-07-23");
+    const [activeBefore] = await db
+      .select({ id: sanctionsSources.activeEditionId })
+      .from(sanctionsSources)
+      .where(eq(sanctionsSources.id, "cz"));
+    const [historical] = await db
+      .select({ id: sanctionsEditions.id })
+      .from(sanctionsEditions)
+      .where(eq(sanctionsEditions.markerKey, markerKey(parsed)));
+    if (!activeBefore?.id || !historical) {
+      return panic("Missing historical sanctions edition test fixture");
+    }
+    const outcome = await refreshSanctionsSource({
+      db: scopedDb,
+      source: "cz",
+      signal: new AbortController().signal,
+      fetchMarker: markerFor(parsed),
+      fetchEdition: async () =>
+        Result.ok({ parsed, contentHash: CONTENT_HASH }),
+    });
+    expect(outcome).toEqual({
+      status: "held",
+      source: "cz",
+      code: "replacement-stale",
+    });
+    const [source] = await db
+      .select()
+      .from(sanctionsSources)
+      .where(eq(sanctionsSources.id, "cz"));
+    const [edition] = await db
+      .select()
+      .from(sanctionsEditions)
+      .where(eq(sanctionsEditions.id, historical.id));
+    expect(source?.activeEditionId).toBe(activeBefore.id);
+    expect(source?.heldEditionId).toBe(historical.id);
+    expect(source?.heldGuardCode).toBe("stale");
+    expect(edition?.state).toBe("ready");
+  },
+  DB_TEST_TIMEOUT_MS,
+);

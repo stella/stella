@@ -123,6 +123,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Global reference editions are read by request code and written by ingestion.
+  "sanctions_sources",
+  "sanctions_editions",
+  "sanctions_entry_payloads",
+  "sanctions_edition_entries",
 ]);
 
 // Request transactions append names alongside chat messages and read them on

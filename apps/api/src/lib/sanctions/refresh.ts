@@ -261,9 +261,21 @@ const recordRejectedReplacement = async ({
             ),
           )
           .limit(1);
-    if (edition?.state !== "rejected") {
+    if (!edition) {
       return panic("Rejected sanctions edition was not visible");
     }
+    if (edition.state === "staging") {
+      await tx
+        .update(sanctionsEditions)
+        .set({
+          state: "rejected",
+          guardCode,
+          previousEntryCount: previous?.entryCount ?? null,
+        })
+        .where(eq(sanctionsEditions.id, edition.id));
+    }
+    // A publisher rollback can identify an edition that was ready before a
+    // newer one replaced it. Keep that historical ready edition intact.
     const now = new Date();
     await tx
       .update(sanctionsSources)

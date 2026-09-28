@@ -81,6 +81,7 @@ export const fetchWithResolvedAddress = async ({
   maxBytes,
   method = "GET",
   redirect = "error",
+  signal,
   timeoutMs,
   url,
 }: {
@@ -90,6 +91,7 @@ export const fetchWithResolvedAddress = async ({
   maxBytes: number;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
+  signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
@@ -162,10 +164,12 @@ export const fetchWithResolvedAddress = async ({
               chunks.push(chunk);
             });
             response.on("error", (cause) => {
+              signal?.removeEventListener("abort", abort);
               clearTimeout(timeout);
               reject(cause);
             });
             response.on("end", () => {
+              signal?.removeEventListener("abort", abort);
               clearTimeout(timeout);
               resolve({
                 body: concatChunks(chunks, total),
@@ -182,9 +186,27 @@ export const fetchWithResolvedAddress = async ({
           );
         }, timeoutMs);
 
+        const abort = () => {
+          request.destroy(abortReasonToError(signal?.reason));
+        };
+        if (signal?.aborted) {
+          const error = abortReasonToError(signal.reason);
+          clearTimeout(timeout);
+          request.destroy(error);
+          reject(error);
+          return;
+        }
+        signal?.addEventListener("abort", abort, { once: true });
+
         request.on("error", (cause) => {
+          signal?.removeEventListener("abort", abort);
           clearTimeout(timeout);
           reject(cause);
+        });
+
+        request.on("close", () => {
+          signal?.removeEventListener("abort", abort);
+          clearTimeout(timeout);
         });
 
         if (bodyBytes) {
@@ -592,10 +614,12 @@ export const validateOutboundFetchTarget = async (
   {
     protocolPolicy = OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY,
     resolveAddresses = resolvePublicAddresses,
+    signal,
     timeoutMs = 0,
   }: {
     protocolPolicy?: OutboundProtocolPolicy;
     resolveAddresses?: ResolveOutboundAddresses;
+    signal?: AbortSignal;
     timeoutMs?: number;
   } = {},
 ): Promise<Result<OutboundFetchTarget, SafeOutboundFetchError>> => {
@@ -608,7 +632,7 @@ export const validateOutboundFetchTarget = async (
     try: async () =>
       await withTimeout(
         async () => await resolveAddresses(parsed.value.hostname),
-        { label: "outbound DNS resolution", timeoutMs },
+        { label: "outbound DNS resolution", signal, timeoutMs },
       ),
     catch: (cause) => {
       if (TimeoutError.is(cause)) {
@@ -643,6 +667,7 @@ export const safeOutboundFetchBytes = async ({
   maxBytes,
   method,
   redirect,
+  signal,
   timeoutMs,
   url,
 }: {
@@ -651,11 +676,12 @@ export const safeOutboundFetchBytes = async ({
   maxBytes: number;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
+  signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: string | URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  const target = await validateOutboundFetchTarget(url, { timeoutMs });
+  const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
   }
@@ -674,6 +700,7 @@ export const safeOutboundFetchBytes = async ({
     maxBytes,
     method,
     redirect,
+    signal,
     timeoutMs: remainingTimeoutMs,
     url: target.value.url,
   });
@@ -699,7 +726,7 @@ export const safeOutboundFetchStream = async ({
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  const target = await validateOutboundFetchTarget(url, { timeoutMs });
+  const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
   }
