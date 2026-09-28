@@ -324,6 +324,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
   ]),
+  fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
+    "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
+  ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
   ]),
@@ -1229,6 +1232,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
+    "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
@@ -3854,6 +3858,22 @@ export default defineConfig({
       ],
       rules: {
         "no-unbounded-response-body/no-unbounded-response-body": "error",
+      },
+    },
+    {
+      // `execute` answers in the driver's shape (rows, or PGlite's `{ rows }`),
+      // so rows are read through the one reader that handles both and panics
+      // on a third. Tests read PGlite results directly, knowing the driver.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/scripts/**/*.test.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/tests/**",
+        "apps/api/src/lib/db/executed-rows.ts",
+      ],
+      rules: {
+        "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows": "error",
       },
     },
     {
