@@ -88,7 +88,7 @@ import {
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import {
-  KEEPS_PARTIAL_TOOL_INPUT,
+  CUT_SHORT_OUTCOME,
   settleHistoryForRun,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
@@ -2374,7 +2374,7 @@ export const createSendMessage = (
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
                   onFinish: async ({ outcome, responseMessage }) => {
                     const validatedToolParts = validateToolCallParts({
-                      allowPartialInput: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
+                      allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
                       message: responseMessage,
                       tools: streamingTools,
                     });

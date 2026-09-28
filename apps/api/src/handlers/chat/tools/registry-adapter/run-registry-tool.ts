@@ -1,8 +1,12 @@
 import { panic, Result } from "better-result";
 
-import { projectForChat } from "@/api/lib/chat/projection-schema";
+import {
+  containsRawUuid,
+  projectForChat,
+} from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
@@ -127,6 +131,26 @@ export type RunRegistryReadToolProps = {
   refRegistry: ChatRefRegistry;
 };
 
+/** The key the boundary's input notes ride under beside a read's payload. */
+const CHAT_INPUT_NOTES_KEY = "inputRead";
+
+/**
+ * The boundary's "read X as Y" notes, beside the projected payload, so the
+ * model learns which value the server acted on (a clamped limit, a year read
+ * as a date bound, a short ELI). A note quoting a raw UUID is left out: the
+ * input side was already dehydrated from refs, and no tenant UUID may reach
+ * the model.
+ */
+const withChatInputNotes = (
+  payload: unknown,
+  notes: readonly string[],
+): unknown => {
+  const safe = [...new Set(notes)].filter((note) => !containsRawUuid(note));
+  return safe.length === 0 || !isRecord(payload)
+    ? payload
+    : { ...payload, [CHAT_INPUT_NOTES_KEY]: safe };
+};
+
 /**
  * Run one read-only MCP registry tool as a chat tool.
  *
@@ -139,6 +163,7 @@ export type RunRegistryReadToolProps = {
  * 4. Project a typed error into a `ChatToolError`; otherwise project the typed
  *    payload for chat in a single schema-driven pass
  *    (`projectForChat`: strict parse, strip, ref hydration, UUID invariant).
+ * 5. Carry the boundary's input notes beside the projected payload.
  */
 export const runRegistryReadTool = async ({
   toolName,
@@ -174,6 +199,7 @@ export const runRegistryReadTool = async ({
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: staticDefinition.access,
     schema: staticDefinition.inputSchema,
     value: dehydrated.value.args,
   });
@@ -206,7 +232,7 @@ export const runRegistryReadTool = async ({
   // classified — fails closed before it can reach the model), then strip,
   // ref hydration, and the fail-closed "no tenant UUID reaches the model"
   // invariant in the same walk. Failures carry only paths to telemetry.
-  return projectForChat({
+  const projected = projectForChat({
     dehydration: dehydrated.value,
     payload: finished.data,
     refRegistry,
@@ -214,4 +240,7 @@ export const runRegistryReadTool = async ({
     source: "run-registry-tool",
     toolName,
   });
+  return Result.isError(projected)
+    ? projected
+    : Result.ok(withChatInputNotes(projected.value, normalized.notes));
 };

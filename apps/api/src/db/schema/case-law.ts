@@ -865,6 +865,12 @@ export const caseLawDecisionIdentifiers = p.pgTable(
         length: DECISION_IDENTIFIER_MAX_LENGTH,
       })
       .notNull(),
+    /**
+     * When the identifier was declared an alias of the decision (the spelling
+     * of a record retired into it) rather than derived from its observation.
+     * A refresh re-derives observed identifiers and keeps declared ones.
+     */
+    declaredAt: timestamptz("declared_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [

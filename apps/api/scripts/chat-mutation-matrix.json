@@ -467,14 +467,14 @@
     {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
-      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error, also from an adapter that reports no terminal event of its own.",
       "status": "active",
       "file": "src/lib/chat/provider-stream-contract.ts",
       "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
       "replace": "if (false) {\n    yield runError(options.model, {",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "anthropic early-eof"
+        "test": "a cut-off stream an adapter leaves unended"
       },
       "oracle": "chat.provider-wire.one-terminal"
     },
@@ -509,7 +509,7 @@
     {
       "id": "run-continues-stored-thread",
       "fix": "#3885",
-      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it.",
+      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it, so it reads a replaced call the way every later request does.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
       "search": "message.id === supersededMessage.id",
@@ -518,7 +518,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider.results-stable"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -596,13 +596,13 @@
       "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
       "status": "active",
       "file": "src/handlers/chat/chat-message-persistence.ts",
-      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "search": "  isCutShortOutcome(outcome)\n    ? cutShortAssistantMessage({ message, outcome })\n    : settleTerminalAssistantMessage(message, outcome);",
       "replace": "  settleTerminalAssistantMessage(message, outcome);",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops an answer while it streams (before-tool-end)"
       },
-      "oracle": "chat.persisted.pending-owned"
+      "oracle": "chat.persisted.calls-settled"
     },
     {
       "id": "run-independent-of-request",
@@ -631,6 +631,34 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "interrupted-closes-cut-off-calls",
+      "fix": "#3994",
+      "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  isCutShortOutcome(outcome)\n",
+      "replace": "  outcome.type === \"cancelled\"\n",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (before-tool-end)"
+      },
+      "oracle": "chat.persisted.calls-settled"
+    },
+    {
+      "id": "waits-only-on-handed-out-interrupts",
+      "fix": "#3994",
+      "behaviour": "A run waits on the user only for a call among the interrupts it handed out, never for a server call cut off before it ran.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    interruptToolCallIds.has(toolCallId),",
+      "replace": "    interruptToolCallIds.size >= 0 || toolCallId === \"\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
+      },
+      "oracle": "chat.ledger.pending"
     }
   ]
 }

@@ -6,6 +6,8 @@ import {
 } from "@stll/api-contract/search";
 
 import {
+  AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+  AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
 } from "@/api/lib/case-law/search-warnings";
@@ -109,6 +111,16 @@ describe("warning code census", () => {
       expect(warning.code).toBe(code);
       // A hint that only restates the message is a dead end; every one of
       // these names a call to make or a filter to drop.
+      expect(warning.hint.length).toBeGreaterThan(0);
+      expect(warning.hint).not.toBe(warning.message);
+      expect(warning.message.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("every agent-only code's producer emits that code, and says what to do", () => {
+    for (const code of AGENT_CASE_LAW_SEARCH_WARNING_CODES) {
+      const warning = AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS[code]();
+      expect(warning.code).toBe(code);
       expect(warning.hint.length).toBeGreaterThan(0);
       expect(warning.hint).not.toBe(warning.message);
       expect(warning.message.endsWith(".")).toBe(true);

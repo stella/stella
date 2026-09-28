@@ -220,6 +220,7 @@ export const runRegistryWriteTool = async (
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: "write",
     exactProperties: ["confirm", "validate_only"],
     schema: staticDefinition.inputSchema,
     value: dehydrated.value.args,
