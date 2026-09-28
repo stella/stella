@@ -19,6 +19,9 @@ export const LIBRARY_PACKAGE_ORDER = [
   "workspace-model",
   "workspace-ui",
   "stable-stringify",
+  "time",
+  "text-normalize",
+  "agent-input",
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;
