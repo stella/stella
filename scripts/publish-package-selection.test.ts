@@ -29,7 +29,8 @@ const workspaceDependencies = async (
 
 describe("publish package selection", () => {
   test("publishes exactly the packages the release policy gates", () => {
-    expect(ALL_PACKAGE_ORDER.toSorted()).toEqual([
+    const order: readonly string[] = ALL_PACKAGE_ORDER;
+    expect(order.toSorted()).toEqual([
       ...publishedPackageNames(loadChangesetPolicy().releasePaths),
     ]);
   });
