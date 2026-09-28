@@ -518,11 +518,9 @@ describe("legislation writer identity", () => {
     expect(a.id).not.toBe(b.id);
     expect([a2.id, b2.id]).toEqual([a.id, b.id]);
     const rows = await rowsOf(act);
-    expect(rows.map(({ id, title }) => [id, title]).toSorted()).toEqual(
-      [
-        [a.id, "Consolidated, revised"],
-        [b.id, "As promulgated, revised"],
-      ].toSorted(),
-    );
+    const titleOf = new Map(rows.map(({ id, title }) => [id, title]));
+    expect(rows).toHaveLength(2);
+    expect(titleOf.get(a.id)).toBe("Consolidated, revised");
+    expect(titleOf.get(b.id)).toBe("As promulgated, revised");
   });
 });

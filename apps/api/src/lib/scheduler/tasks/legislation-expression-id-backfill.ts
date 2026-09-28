@@ -60,7 +60,7 @@ const backfillCursor = (
  * every pass, until a writer or an operator settles it: nothing is left
  * behind silently.
  */
-export const EXPRESSION_ID_SKIP_REASONS = [
+const EXPRESSION_ID_SKIP_REASONS = [
   /** Its source declares no namespace yet. */
   "no-namespace",
   /** It stores no version IRI; its writer has to supply the id. */
@@ -71,18 +71,17 @@ export const EXPRESSION_ID_SKIP_REASONS = [
   "ambiguous-id",
 ] as const;
 
-export type ExpressionIdSkipReason =
-  (typeof EXPRESSION_ID_SKIP_REASONS)[number];
+type ExpressionIdSkipReason = (typeof EXPRESSION_ID_SKIP_REASONS)[number];
 
 const isSkipReason = (value: unknown): value is ExpressionIdSkipReason =>
   EXPRESSION_ID_SKIP_REASONS.some((reason) => reason === value);
 
-export type ExpressionIdSkip = {
+type ExpressionIdSkip = {
   reason: ExpressionIdSkipReason;
   documentId: SafeId<"legislationDocument">;
 };
 
-export type ExpressionIdPage =
+type ExpressionIdPage =
   | {
       type: "page";
       last: SafeId<"legislationDocument">;
@@ -118,7 +117,7 @@ const LOGGED_SKIP_IDS = 20;
  * or could equally claim, that id (the duplicate is left for the census rather
  * than guessed at).
  */
-export const claimExpressionIdPageTx = async (
+const claimExpressionIdPageTx = async (
   tx: Transaction,
   cursor: ExpressionIdCursor,
   pageRows: number = DEFAULT_BOUNDS.pageRows,
