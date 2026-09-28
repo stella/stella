@@ -162,12 +162,15 @@ const PULL_REQUEST_STATES = ["OPEN", "CLOSED", "MERGED"] as const;
 const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
 
 type PullRequestSnapshot = {
+  id: string;
   number: number;
+  title: string;
+  isCrossRepository: boolean;
   baseRefName: string;
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
-  handoff: ReturnType<typeof readMergeHandoff>;
+  handoff: MergeHandoff;
   headSha: string;
 };
 
@@ -488,6 +491,11 @@ type GitHubGateway = {
   // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
   armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
+  // Adds the pull request at the front of the queue; returns its position.
+  enqueueWithJump: (input: {
+    pullRequestId: string;
+    expectedHeadSha: string;
+  }) => number;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -529,6 +537,57 @@ export const readMergeHandoff = (raw: Record<string, unknown>) => {
     } as const;
   }
   return { status: "pending" } as const;
+};
+
+type MergeHandoff = ReturnType<typeof readMergeHandoff>;
+
+const RELEASE_TITLE_PREFIX = "chore: release v";
+
+/**
+ * A release pull request goes to the front of the merge queue: every pull
+ * request that lands between the cut and the release's merge can invalidate
+ * the cut. Recognized as in release-pr.yml's gate: a ready pull request from
+ * this repository whose title starts with "chore: release v".
+ */
+export const isReleasePullRequest = (
+  pullRequest: Pick<
+    PullRequestSnapshot,
+    "title" | "isDraft" | "isCrossRepository"
+  >,
+): boolean =>
+  pullRequest.title.startsWith(RELEASE_TITLE_PREFIX) &&
+  !pullRequest.isDraft &&
+  !pullRequest.isCrossRepository;
+
+export type MergeWhenReadyAction =
+  | { kind: "arm" }
+  | { kind: "enqueue-jump" }
+  | { kind: "already-armed"; enabledAt: string }
+  | { kind: "already-queued"; entryId: string };
+
+/**
+ * What a passing merge bar does on a merge-queue branch. A jump enqueues
+ * directly at the front, superseding an armed auto-merge (which would enqueue
+ * at the back). A pull request already in the queue keeps its place: moving
+ * it means dequeuing it first.
+ */
+export const mergeWhenReadyAction = ({
+  handoff,
+  jump,
+}: {
+  handoff: MergeHandoff;
+  jump: boolean;
+}): MergeWhenReadyAction => {
+  if (handoff.status === "queued") {
+    return { kind: "already-queued", entryId: handoff.entryId };
+  }
+  if (jump) {
+    return { kind: "enqueue-jump" };
+  }
+  if (handoff.status === "armed") {
+    return { kind: "already-armed", enabledAt: handoff.enabledAt };
+  }
+  return { kind: "arm" };
 };
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
@@ -636,7 +695,8 @@ const createGhGateway = ({
           `query=query($owner:String!, $name:String!, $number:Int!) {
             repository(owner:$owner, name:$name) {
               pullRequest(number:$number) {
-                number state isDraft mergeable headRefOid baseRefName
+                id number title isCrossRepository
+                state isDraft mergeable headRefOid baseRefName
                 autoMergeRequest { enabledAt }
                 mergeQueueEntry { id }
               }
@@ -663,7 +723,10 @@ const createGhGateway = ({
         panic("Expected numeric field `number` in gh response");
       }
       return {
+        id: readString(raw, "id"),
         number,
+        title: readString(raw, "title"),
+        isCrossRepository: readBoolean(raw, "isCrossRepository"),
         baseRefName: readString(raw, "baseRefName"),
         state: readMember(
           PULL_REQUEST_STATES,
@@ -877,6 +940,43 @@ const createGhGateway = ({
         ],
         "write",
       ).trim(),
+
+    enqueueWithJump: ({ pullRequestId, expectedHeadSha }) => {
+      const response = readRecord(
+        JSON.parse(
+          runGh(
+            [
+              "api",
+              "graphql",
+              "-f",
+              `query=mutation($id:ID!, $sha:GitObjectID!) {
+                enqueuePullRequest(input:{
+                  pullRequestId:$id, expectedHeadOid:$sha, jump:true
+                }) { mergeQueueEntry { position } }
+              }`,
+              "-f",
+              `id=${pullRequestId}`,
+              "-f",
+              `sha=${expectedHeadSha}`,
+            ],
+            "write",
+          ),
+        ),
+        "enqueue response",
+      );
+      const entry = readRecord(
+        readRecord(
+          readRecord(response["data"], "data")["enqueuePullRequest"],
+          "enqueuePullRequest",
+        )["mergeQueueEntry"],
+        "mergeQueueEntry",
+      );
+      const position = entry["position"];
+      if (typeof position !== "number") {
+        return panic("Expected numeric merge queue position");
+      }
+      return position;
+    },
   };
 };
 
@@ -886,12 +986,15 @@ type MergeBarOptions = {
   pullNumber: number;
   repo: string;
   dryRun: boolean;
+  // Enqueue at the front of the queue. Release pull requests always jump.
+  jump: boolean;
 };
 
 const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
   let repo = DEFAULT_REPO;
   let dryRun = false;
+  let jump = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -902,6 +1005,10 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     }
     if (argument === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (argument === "--jump") {
+      jump = true;
       continue;
     }
     if (argument === undefined || argument.startsWith("--")) {
@@ -917,7 +1024,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(
       `Expected exactly one PR number, got ${positional.length}. ` +
         "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--dry-run]",
+        "[--dry-run] [--jump]",
     );
   }
   const rawNumber = positional[0] ?? panic("unreachable: length checked above");
@@ -929,7 +1036,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(`PR number must be a positive integer, got: ${rawNumber}`);
   }
 
-  return { pullNumber, repo, dryRun };
+  return { pullNumber, repo, dryRun, jump };
 };
 
 const formatVerdict = (verdict: MergeBarVerdict): string =>
@@ -1020,31 +1127,50 @@ if (import.meta.main) {
       break;
     }
     case "merge-when-ready": {
-      switch (pullRequest.handoff.status) {
-        case "queued":
-          console.log(`\nverdict: QUEUED — ${pullRequest.handoff.entryId}`);
-          break;
-        case "armed":
+      const jump = options.jump || isReleasePullRequest(pullRequest);
+      const action = mergeWhenReadyAction({
+        handoff: pullRequest.handoff,
+        jump,
+      });
+      switch (action.kind) {
+        case "already-queued":
           console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${pullRequest.handoff.enabledAt}`,
+            `\nverdict: QUEUED — ${action.entryId}${jump
+                ? "; it keeps its place (dequeue it first to move it to the front)"
+                : ""}`,
           );
           break;
-        case "pending":
+        case "already-armed":
+          console.log(
+            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
+          );
           break;
+        case "enqueue-jump": {
+          const position = gateway.enqueueWithJump({
+            pullRequestId: pullRequest.id,
+            expectedHeadSha: snapshot.headShaBeforeMerge,
+          });
+          console.log(
+            `\nverdict: QUEUED AT THE FRONT — ${snapshot.headShaBeforeMerge} ` +
+              `is at position ${position}${ 
+              options.jump ? "" : " (release pull request)"}`,
+          );
+          break;
+        }
+        case "arm": {
+          const outcome = gateway.armMergeWhenReady({
+            expectedHeadSha: snapshot.headShaBeforeMerge,
+          });
+          console.log(
+            `\nverdict: ARMED — ${outcome}; the queue merges ` +
+              `${snapshot.headShaBeforeMerge} once its checks pass`,
+          );
+          break;
+        }
         default:
-          pullRequest.handoff satisfies never;
-          panic("Unhandled merge handoff state");
+          action satisfies never;
+          panic("Unhandled merge-when-ready action");
       }
-      if (pullRequest.handoff.status !== "pending") {
-        break;
-      }
-      const outcome = gateway.armMergeWhenReady({
-        expectedHeadSha: snapshot.headShaBeforeMerge,
-      });
-      console.log(
-        `\nverdict: ARMED — ${outcome}; the queue merges ` +
-          `${snapshot.headShaBeforeMerge} once its checks pass`,
-      );
       break;
     }
     default:

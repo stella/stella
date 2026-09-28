@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 
 import {
   evaluateMergeBar,
+  isReleasePullRequest,
   mergeBarRepositoryPolicy,
+  mergeWhenReadyAction,
   readMergeHandoff,
   type MergeBarSnapshot,
 } from "./merge-bar";
@@ -34,7 +36,10 @@ describe("merge handoff state", () => {
       data: {
         repository: {
           pullRequest: {
+            id: "PR_fixture",
             number: 123,
+            title: "fix: something",
+            isCrossRepository: false,
             state: "OPEN",
             isDraft: false,
             mergeable: "MERGEABLE",
@@ -100,7 +105,10 @@ esac
       data: {
         repository: {
           pullRequest: {
+            id: "PR_fixture",
             number: 123,
+            title: "fix: something",
+            isCrossRepository: false,
             state: "OPEN",
             isDraft: false,
             mergeable: "UNKNOWN",
@@ -181,7 +189,10 @@ const passingSnapshot = (
   overrides: Partial<MergeBarSnapshot> = {},
 ): MergeBarSnapshot => ({
   pullRequest: {
+    id: "PR_fixture",
     number: 2137,
+    title: "fix: something",
+    isCrossRepository: false,
     baseRefName: "main",
     state: "OPEN",
     isDraft: false,
@@ -650,5 +661,59 @@ describe("merge bar", () => {
       "required-check",
       "review-threads",
     ]);
+  });
+});
+
+describe("release pull requests jump the merge queue", () => {
+  test("recognizes a ready same-repository release pull request", () => {
+    const release = {
+      title: "chore: release v0.9.40",
+      isDraft: false,
+      isCrossRepository: false,
+    };
+    expect(isReleasePullRequest(release)).toBe(true);
+    expect(isReleasePullRequest({ ...release, isDraft: true })).toBe(false);
+    expect(isReleasePullRequest({ ...release, isCrossRepository: true })).toBe(
+      false,
+    );
+    expect(
+      isReleasePullRequest({ ...release, title: "chore: version packages" }),
+    ).toBe(false);
+    expect(
+      isReleasePullRequest({ ...release, title: "fix: chore: release v1" }),
+    ).toBe(false);
+  });
+
+  test("a jump enqueues at the front, even over an armed auto-merge", () => {
+    expect(
+      mergeWhenReadyAction({ handoff: { status: "pending" }, jump: true }),
+    ).toEqual({ kind: "enqueue-jump" });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
+        jump: true,
+      }),
+    ).toEqual({ kind: "enqueue-jump" });
+  });
+
+  test("a queued pull request keeps its place", () => {
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "queued", entryId: "MQE_1" },
+        jump: true,
+      }),
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1" });
+  });
+
+  test("without a jump, arming is unchanged", () => {
+    expect(
+      mergeWhenReadyAction({ handoff: { status: "pending" }, jump: false }),
+    ).toEqual({ kind: "arm" });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
+        jump: false,
+      }),
+    ).toEqual({ kind: "already-armed", enabledAt: "2026-09-28T09:00:00Z" });
   });
 });
