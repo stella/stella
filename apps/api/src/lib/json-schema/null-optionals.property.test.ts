@@ -224,6 +224,65 @@ const undeclaredNullsRefused = (schema: unknown): unknown => {
   return refusing;
 };
 
+type Path = readonly (number | string)[];
+
+/** Where `sent` spells a field `value` leaves out as null. */
+const spelledNullPaths = (
+  value: unknown,
+  sent: unknown,
+  path: Path = [],
+): Path[] => {
+  if (isUnknownArray(value) && isUnknownArray(sent)) {
+    return value.flatMap((entry, index) =>
+      spelledNullPaths(entry, sent[index], [...path, index]),
+    );
+  }
+  if (!isRecord(value) || !isRecord(sent)) {
+    return [];
+  }
+  return Object.entries(sent).flatMap(([key, entry]) => {
+    if (key in value) {
+      return spelledNullPaths(value[key], entry, [...path, key]);
+    }
+    return entry === null ? [[...path, key]] : [];
+  });
+};
+
+/** `value` with a null set at `path`. */
+const withNullAt = (value: unknown, path: Path): unknown => {
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    return null;
+  }
+  if (isUnknownArray(value) && typeof head === "number") {
+    return value.map((entry, index) =>
+      index === head ? withNullAt(entry, rest) : entry,
+    );
+  }
+  const record = isRecord(value) ? value : {};
+  return { ...record, [head]: withNullAt(record[head], rest) };
+};
+
+/**
+ * The input `sent` reads back as: `value`, plus each spelled null that a
+ * branch declaring its field takes. Each null is judged on its own, as the
+ * reader does, since sibling branches may each declare a different one.
+ */
+const expectedReading = (
+  schema: Schema,
+  value: unknown,
+  sent: unknown,
+): unknown => {
+  const declared = undeclaredNullsRefused(schema);
+  let reading = value;
+  for (const path of spelledNullPaths(value, sent)) {
+    if (ajv.validate(declared, withNullAt(value, path))) {
+      reading = withNullAt(reading, path);
+    }
+  }
+  return reading;
+};
+
 const hasUnion = (schema: Schema): boolean =>
   JSON.stringify(schema).includes('"anyOf"');
 
@@ -250,12 +309,12 @@ test(
         );
         // Whatever the widened schema lets the model send reads back as the
         // declared input it stands for; one a union already declares (a
-        // sibling branch declaring the field and taking null there) is read
-        // as itself. An open sibling that merely tolerates an undeclared
+        // sibling branch declaring the field and taking null there) keeps
+        // that null. An open sibling that merely tolerates an undeclared
         // field does not make its null a value.
         if (ajv.validate(widened, sent)) {
           expect(withModelPlaceholdersOmitted(schema, sent)).toEqual(
-            ajv.validate(undeclaredNullsRefused(schema), sent) ? sent : value,
+            expectedReading(schema, value, sent),
           );
         }
         // Outside unions, where a branch may require what a sibling leaves

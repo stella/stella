@@ -124,6 +124,27 @@ describe("a model's placeholder in an optional field", () => {
     });
   });
 
+  test("each null is kept by a branch declaring its own field", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: { x: { type: "string" }, y: { type: "string" } },
+        },
+        {
+          anyOf: [
+            { type: "object", properties: { x: { type: ["string", "null"] } } },
+            { type: "object", properties: { y: { type: ["string", "null"] } } },
+          ],
+        },
+      ],
+    };
+    expect(withModelPlaceholdersOmitted(union, { x: null, y: null })).toEqual({
+      x: null,
+      y: null,
+    });
+  });
+
   test("an array under a union reads its items' placeholders", () => {
     const union = {
       anyOf: [
