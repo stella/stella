@@ -122,13 +122,14 @@ jobs:
 
           git diff --check -- bun.lock package.json
 
+      # The GitHub App writes the commit; its synchronize event is excluded above.
       - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
           commit-message: "chore: autofix Dependabot Bun update"
 
   regenerate-scope:
-    name: Scope derived-file regeneration
+    name: Scope autofixes
     # Same-repository pull requests only: the generators run the pull
     # request's own code, and the result lands on that pull request's branch,
     # which its author can already push to. Fork and Dependabot pull requests
@@ -137,6 +138,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
       && github.event.pull_request.user.login != 'dependabot[bot]'
       && github.actor != 'dependabot[bot]'
+      && github.actor != 'autofix-ci[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -188,9 +190,9 @@ jobs:
           fi
 
   regenerate-derived-files:
-    name: Regenerate derived files
+    name: Autofix changed files
     needs: regenerate-scope
-    if: needs.regenerate-scope.outputs.run == 'true'
+    if: needs.regenerate-scope.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -200,9 +202,23 @@ jobs:
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
+
+      - name: Record changed paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
+            exit 1
+          fi
+          git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -221,11 +237,40 @@ jobs:
           cp apps/web/.env.example apps/web/.env
 
       - name: Regenerate selected files
+        if: needs.regenerate-scope.outputs.run == 'true'
         env:
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
         run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
 
-      - name: Restrict regenerated changes
+      - name: Fix changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          format_paths=()
+          lint_paths=()
+          for path in "${changed[@]}"; do
+            [[ -f "$path" && ! -L "$path" ]] || continue
+            format_paths+=("./$path")
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
+              lint_paths+=("./$path")
+            fi
+          done
+
+          if (( ${#lint_paths[@]} > 0 )); then
+            # --fix applies safe fixes only. CI's lint job reports anything left.
+            lint_status=0
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
+            if (( lint_status > 1 )); then
+              exit "$lint_status"
+            fi
+          fi
+          if (( ${#format_paths[@]} > 0 )); then
+            bun run format:guard
+            bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+          fi
+
+      - name: Restrict autofix changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
@@ -234,27 +279,32 @@ jobs:
           set -euo pipefail
 
           if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
-            echo "::error::Regeneration moved HEAD away from $HEAD_SHA."
+            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
             exit 1
           fi
 
+          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           excludes=()
+          for path in "${changed[@]}"; do
+            excludes+=(":(exclude,literal)$path")
+          done
           for path in "${generated[@]}"; do
+            [[ -n "$path" ]] || continue
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
           done
 
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Regeneration changed files outside the generated paths."
+            echo "::error::Autofix changed files outside the changed and generated paths."
             git status --short
             exit 1
           fi
 
           git status --short
 
-      - name: Push regenerated files
+      - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
-          commit-message: "chore: regenerate derived files"
+          commit-message: "chore: autofix files"

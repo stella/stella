@@ -184,14 +184,14 @@ describe("Dependabot Bun autofix boundary", () => {
   });
 });
 
-describe("derived-file regeneration boundary", () => {
+describe("changed-file autofix boundary", () => {
   const jobOf = (workflow: string): string => {
     const start = workflow.indexOf("  regenerate-scope:");
     expect(start).toBeGreaterThanOrEqual(0);
     return workflow.slice(start);
   };
 
-  test("regenerates only same-repository pull requests and hands off only generated paths", async () => {
+  test("autofixes only same-repository pull requests through the app", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
 
     expect(job).toContain(
@@ -205,8 +205,8 @@ describe("derived-file regeneration boundary", () => {
     expect(job).toContain('NPM_TOKEN: ""');
     expect(job).not.toContain("secrets.");
 
-    const restrictionStep = job.indexOf("- name: Restrict regenerated changes");
-    const pushStep = job.indexOf("- name: Push regenerated files");
+    const restrictionStep = job.indexOf("- name: Restrict autofix changes");
+    const pushStep = job.indexOf("- name: Push autofixes");
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
     expect(pushStep).toBeGreaterThan(restrictionStep);
     expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
@@ -217,7 +217,7 @@ describe("derived-file regeneration boundary", () => {
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
-    const restrictionStep = job.indexOf("- name: Restrict regenerated changes");
+    const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const fetchStep = job.indexOf("- name: Fetch changed paths");
     const checkoutStep = job.indexOf("- name: Checkout pull request head");
     const planStep = job.indexOf("- name: Match generator inputs");
@@ -244,7 +244,7 @@ describe("derived-file regeneration boundary", () => {
     expect(job.slice(fetchStep, planStep)).toContain("GH_TOKEN:");
     expect(job.slice(planStep, runStep)).not.toContain("GH_TOKEN:");
     expect(
-      job.slice(restrictionStep, job.indexOf("- name: Push regenerated files")),
+      job.slice(restrictionStep, job.indexOf("- name: Push autofixes")),
     ).not.toContain("bun ");
     expect(job).toContain(
       'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
@@ -326,13 +326,60 @@ describe("derived-file regeneration boundary", () => {
     }
   });
 
-  test("skips pull requests that touch no generator input", async () => {
+  test("runs safe fixes for changed files without a selected generator", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
+    const scopeStep = job.indexOf("- name: Match generator inputs");
+    const changedStep = job.indexOf("- name: Record changed paths");
+    const generatorStep = job.indexOf("- name: Regenerate selected files");
+    const fixStep = job.indexOf("- name: Fix changed files");
+    const restrictionStep = job.indexOf("- name: Restrict autofix changes");
+    const pushStep = job.indexOf("- name: Push autofixes");
+    const fix = job.slice(fixStep, restrictionStep);
+
     expect(job).toContain("needs: regenerate-scope");
-    expect(job).toContain("if: needs.regenerate-scope.outputs.run == 'true'");
+    expect(job).toContain("if: needs.regenerate-scope.result == 'success'");
+    expect(job).toContain("github.actor != 'autofix-ci[bot]'");
+    expect(job.slice(generatorStep, fixStep)).toContain(
+      "if: needs.regenerate-scope.outputs.run == 'true'",
+    );
     expect(job).toContain("scripts/autofix-plan.ts plan");
     expect(job).toContain("scripts/autofix-plan.ts plan --all");
     // A capped file list regenerates rather than skipping.
     expect(job).toContain("-ge 3000");
+    expect(changedStep).toBeGreaterThan(scopeStep);
+    expect(generatorStep).toBeGreaterThan(changedStep);
+    expect(fixStep).toBeGreaterThan(generatorStep);
+    expect(restrictionStep).toBeGreaterThan(fixStep);
+    expect(pushStep).toBeGreaterThan(restrictionStep);
+
+    expect(job).toContain(
+      'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
+    );
+    expect(fix).toContain(
+      "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
+    );
+    expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
+    expect(fix).toContain(
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
+    );
+    expect(fix).toContain("lint_status > 1");
+    expect(fix).toContain(
+      `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
+    );
+    for (const unsafe of [
+      "--fix-suggestions",
+      "--fix-dangerously",
+      "--type-aware",
+    ]) {
+      expect(fix).not.toContain(unsafe);
+    }
+    expect(job.slice(restrictionStep, pushStep)).toContain(
+      'excludes+=(":(exclude,literal)$path")',
+    );
+    expect(job).not.toContain("git commit");
+    expect(job).not.toContain("git push");
+    expect(job).toContain(
+      "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a",
+    );
   });
 });

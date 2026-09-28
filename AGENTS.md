@@ -299,6 +299,10 @@ pull request screenshots. See the `dev` skill.
 Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
 
+CI autofix formats changed files, applies safe lint fixes, and regenerates
+selected outputs on same-repository pull requests. Local formatting and
+generator runs are optional.
+
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
 hand-picking individual checks. For changes confined to documentation or skill
