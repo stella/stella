@@ -29,6 +29,7 @@ import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
   agentSkills,
+  aiMemories,
   chatThreads,
   correspondence,
   correspondenceAllowedSenders,
@@ -1122,13 +1123,41 @@ export const deleteChatThreadsAndFileLinks = async (
   await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
 };
 
+export const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
+  aiMemories,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 11. Assistant memory. The user row is soft-deleted, so the FK cascade on
+ * `user_id` and the set-null on `created_by` never fire: remove personal
+ * memories and the suggestions only this user could review, and clear their
+ * attribution on memories others already rely on.
+ */
+export const deletePersonalAiMemories = async (
+  tx: Transaction,
+  currentUserId: string,
+): Promise<void> => {
+  const userId = brandPersistedUserId(currentUserId);
+
+  await tx.delete(aiMemories).where(eq(aiMemories.userId, userId));
+  await tx
+    .delete(aiMemories)
+    .where(
+      and(eq(aiMemories.createdBy, userId), eq(aiMemories.status, "suggested")),
+    );
+  await tx
+    .update(aiMemories)
+    .set({ createdBy: null })
+    .where(eq(aiMemories.createdBy, userId));
+};
+
 export const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
   workspaceViewTemplates,
   agentSkills,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 11. Personal workspace view templates and agent skills.
+ * 12. Personal workspace view templates and agent skills.
  */
 export const deletePersonalWorkspaceViewTemplatesAndAgentSkills = async (
   tx: Transaction,
@@ -1145,7 +1174,7 @@ export const DELETE_BILLING_RATES_TABLES = [
 ] as const satisfies readonly PgTable[];
 
 /**
- * 12. Personal billing rates.
+ * 13. Personal billing rates.
  */
 export const deletePersonalBillingRates = async (
   tx: Transaction,
@@ -1236,6 +1265,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_FILE_COMPARISON_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,
   ...DELETE_CHAT_THREADS_TABLES,
+  ...DELETE_PERSONAL_AI_MEMORIES_TABLES,
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
 ] as const satisfies readonly PgTable[];

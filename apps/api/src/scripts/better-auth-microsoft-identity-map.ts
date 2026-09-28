@@ -22,6 +22,7 @@ import { open, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -109,20 +110,7 @@ const readSources = async (database: ReturnType<typeof drizzle>) => {
   if (Result.isError(queried)) {
     return queried;
   }
-  let rows: unknown[] | null = null;
-  if (Array.isArray(queried.value)) {
-    rows = queried.value;
-  } else if (isRecord(queried.value) && Array.isArray(queried.value["rows"])) {
-    rows = queried.value["rows"];
-  }
-  if (rows === null) {
-    return Result.err(
-      new BetterAuthMicrosoftIdentityMapCommandError({
-        code: "database-query-failed",
-        message: "Microsoft identity query returned invalid data",
-      }),
-    );
-  }
+  const rows = executedRows(queried.value);
 
   const sources: BetterAuthMicrosoftIdentitySource[] = [];
   for (const row of rows) {

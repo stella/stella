@@ -28,6 +28,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "ocr:fetch-models": "bun src/scripts/fetch-ocr-models.ts",
+    "canary:native-image": "bun --env-file=.env.example scripts/ai-native-image-canary.ts",
     "canary:ai-provider": "bun --env-file=.env.example scripts/ai-provider-canary.ts",
     "canary:ai-provider:cassette": "bun --env-file=.env.example scripts/ai-provider-cassette-probe.ts",
     "record:provider-cassettes": "bun --env-file=.env.example scripts/record-provider-cassettes.ts",
@@ -160,6 +161,7 @@
     "ip-address": "^10.7.2",
     "jose": "^6.2.12",
     "jszip": "catalog:",
+    "mailauth": "5.0.3",
     "nodemailer": "^10.0.10",
     "onnxruntime-node": "1.30.0",
     "pkijs": "3.4.0",
@@ -169,6 +171,7 @@
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
     "ssf": "catalog:",
+    "tldts": "7.4.13",
     "valibot": "catalog:"
   },
   "devDependencies": {
