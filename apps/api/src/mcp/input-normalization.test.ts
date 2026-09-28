@@ -8,6 +8,7 @@ import {
 describe("agent input dispatch normalization", () => {
   test("runs null omission before declared normalization", () => {
     const result = normalizeInputAtBoundary({
+      access: "read",
       path: "body",
       schema: {
         type: "object",
@@ -27,6 +28,7 @@ describe("agent input dispatch normalization", () => {
   test("keeps security control booleans exact", () => {
     expect(
       normalizeObjectInputAtBoundary({
+        access: "write",
         exactProperties: ["confirm", "validate_only"],
         schema: {
           type: "object",
@@ -54,6 +56,7 @@ describe("agent input dispatch normalization", () => {
 
   test("omits optional nulls inside pattern-backed object values", () => {
     const result = normalizeInputAtBoundary({
+      access: "read",
       schema: {
         type: "object",
         patternProperties: {
@@ -87,6 +90,7 @@ describe("agent input dispatch normalization", () => {
       required: ["mode", ...Object.keys(extra)],
     });
     const result = normalizeInputAtBoundary({
+      access: "read",
       schema: {
         type: "object",
         properties: {
@@ -122,6 +126,7 @@ describe("agent input dispatch normalization", () => {
   test("maps ambiguity to structured field issues and accepted formats", () => {
     expect(
       normalizeInputAtBoundary({
+        access: "read",
         schema: {
           type: "object",
           properties: { due: { type: "string", format: "date" } },

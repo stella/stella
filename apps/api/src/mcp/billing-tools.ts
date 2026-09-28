@@ -57,6 +57,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -68,7 +69,6 @@ import {
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -587,12 +587,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined) {
     boundary = decodeTimeEntryPageCursor(input.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: input.cursor });
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
@@ -1302,12 +1297,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   const cursor =
     input.cursor === undefined ? null : invoicePageCursor.decode(input.cursor);
   if (input.cursor !== undefined && cursor === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor: input.cursor });
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
 

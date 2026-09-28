@@ -625,7 +625,6 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
     "apps/web/src/routes/law/cases/index.tsx": 1,
-    "packages/agent-input/src/schema.ts": 1,
     "packages/business-registries/src/denue/client.ts": 1,
     "packages/cli/src/generate-route-map.ts": 1,
     "packages/cli/src/input-contract-help.ts": 1,

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type * as v from "valibot";
 
 import {
+  AGENT_INPUT_NORMALIZATION_KIND,
   agentInputNormalizationMetadata,
   type AgentInputNormalizationAnnotation,
 } from "@stll/agent-input";
@@ -111,10 +112,72 @@ const annotateSchemaPath = ({
     : found;
 };
 
-const applyInputNormalizationPlan = (
+/**
+ * Kinds a property's name declares on every tool, so a new tool inherits them
+ * instead of opting in:
+ *
+ * - `limit` is a page size: a server limit, not a meaning. A caller asking for
+ *   500 rows where a page holds 100 wants the most there is, so the value is
+ *   clamped with a note rather than refused.
+ * - `date_from` / `date_to` are the ends of a range: a bare year or month
+ *   names its first day on the start and its last on the end, and an
+ *   open-ended sentinel (`0001-01-01`, `9999-12-31`) reads as no bound.
+ *
+ * A tool's own plan for the same property wins.
+ */
+const CONVENTIONAL_PROPERTY_NORMALIZATION = [
+  {
+    property: "limit",
+    applies: (schema: Record<string, unknown>) =>
+      typeof schema["maximum"] === "number",
+    annotation: { kind: AGENT_INPUT_NORMALIZATION_KIND.number, range: "clamp" },
+  },
+  {
+    property: "date_from",
+    applies: (schema: Record<string, unknown>) => schema["format"] === "date",
+    annotation: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
+  },
+  {
+    property: "date_to",
+    applies: (schema: Record<string, unknown>) => schema["format"] === "date",
+    annotation: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "end" },
+  },
+] as const satisfies readonly {
+  property: string;
+  applies: (schema: Record<string, unknown>) => boolean;
+  annotation: AgentInputNormalizationAnnotation;
+}[];
+
+/** The plan with the conventional kinds added for the properties carrying them. */
+const withConventionalNormalization = (
   schema: McpToolInputSchema,
   plan: Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined,
+): Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined => {
+  const conventional = CONVENTIONAL_PROPERTY_NORMALIZATION.filter((rule) => {
+    const property = schema.properties?.[rule.property];
+    return (
+      plan?.[rule.property] === undefined &&
+      isSchemaRecord(property) &&
+      rule.applies(property)
+    );
+  });
+  return conventional.length === 0
+    ? plan
+    : {
+        ...plan,
+        ...Object.fromEntries(
+          conventional.map((rule) => [rule.property, rule.annotation]),
+        ),
+      };
+};
+
+const applyInputNormalizationPlan = (
+  schema: McpToolInputSchema,
+  explicitPlan:
+    | Readonly<Record<string, AgentInputNormalizationAnnotation>>
+    | undefined,
 ): McpToolInputSchema => {
+  const plan = withConventionalNormalization(schema, explicitPlan);
   if (plan === undefined) {
     return schema;
   }
@@ -725,8 +788,8 @@ export const defineMcpToolInput = <
 >(
   inputSchemaSource: TSchema,
 ): { inputSchema: McpToolInputSchema; inputSchemaSource: TSchema } => ({
-  inputSchema: deriveMcpInputSchema(
-    inputSchemaSource.advertisedSchema,
+  inputSchema: applyInputNormalizationPlan(
+    deriveMcpInputSchema(inputSchemaSource.advertisedSchema, undefined),
     undefined,
   ),
   inputSchemaSource,

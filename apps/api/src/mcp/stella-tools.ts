@@ -57,6 +57,7 @@ import {
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import { withFacetValues } from "@/api/lib/case-law/search-warnings";
 import {
   type AssertNoExtraFields,
   type LIST_MATTERS_DETAIL_PROJECTION,
@@ -100,6 +101,7 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
@@ -126,9 +128,11 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   buildCaseLawDecisionAppUrl,
   countryInputSchema,
   countryNormalization,
+  FILTER_NORMALIZATION,
   cursorInput,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
@@ -599,6 +603,9 @@ const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 /** Named because the country ask names the call to change; a census test binds
  *  this to the tool's own `name` so a rename cannot leave a stale hint. */
 const SEARCH_CASE_LAW_TOOL = "search_case_law";
+
+/** What the engine answers for a cursor it cannot decode. */
+const INVALID_CURSOR_MESSAGE = "Invalid cursor";
 const LOOKUP_CASE_LAW_TOOL = "lookup_case_law";
 const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
 
@@ -908,6 +915,9 @@ export const STELLA_TOOL_DEFINITIONS = [
         admitted: PUBLIC_CASE_LAW_COUNTRIES,
         tool: SEARCH_CASE_LAW_TOOL,
       }),
+      court: FILTER_NORMALIZATION,
+      language: FILTER_NORMALIZATION,
+      decision_type: FILTER_NORMALIZATION,
     },
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -1175,12 +1185,7 @@ const handleListMattersTool: TypedMcpToolHandler<
   if (cursor !== undefined) {
     const decoded = decodeMatterPageCursor(cursor);
     if (decoded === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor, tool: "list_matters" });
     }
     boundaryId = decoded;
   }
@@ -1399,12 +1404,7 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   // provider treats a malformed cursor as no cursor and silently returns the
   // first page, which would duplicate hits or loop a paginating client.
   if (cursor !== undefined && decodeCursor(cursor) === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor, tool: "search_across_matters" });
   }
 
   const result = await (
@@ -1856,9 +1856,13 @@ const resolveCaseLawSearchCursors = ({
   }
   const parts = decodePaginationCursor(cursor);
   if (parts === null) {
+    // One query pages on the engine's own cursor, which the engine decodes.
+    // Several page on this envelope, and a string that is not one was never
+    // issued for them: it is an unreadable cursor, not a cursor for a
+    // different number of queries.
     return queryCount === 1
       ? { type: "cursors", cursors: [cursor] }
-      : { type: "count_mismatch", encoded: 1 };
+      : { type: "invalid" };
   }
   if (
     !parts.every(
@@ -1871,6 +1875,56 @@ const resolveCaseLawSearchCursors = ({
   return parts.length === queryCount
     ? { type: "cursors", cursors: parts }
     : { type: "count_mismatch", encoded: parts.length };
+};
+
+/**
+ * The values each filter the request set could have taken, from a page's own
+ * facets: each facet counts its dimension under the other filters, so these
+ * are the values that would have matched. Named on an empty page so the next
+ * call picks one rather than guessing another.
+ */
+const facetValuesForFilters = ({
+  facets,
+  filters,
+}: {
+  facets: SearchCaseLawSuccess["facets"];
+  filters: {
+    court: string | undefined;
+    decisionType: string | undefined;
+    language: string | undefined;
+  };
+}): { filter: string; values: string[] }[] => {
+  if (facets === null) {
+    return [];
+  }
+  return [
+    ...(filters.court === undefined
+      ? []
+      : [
+          {
+            filter: "court",
+            values: facets.court.flatMap((tier) =>
+              tier.courts.map((bucket) => bucket.value),
+            ),
+          },
+        ]),
+    ...(filters.decisionType === undefined
+      ? []
+      : [
+          {
+            filter: "decision_type",
+            values: facets.decisionType.map((bucket) => bucket.value),
+          },
+        ]),
+    ...(filters.language === undefined
+      ? []
+      : [
+          {
+            filter: "language",
+            values: facets.language.map((bucket) => bucket.value),
+          },
+        ]),
+  ];
 };
 
 /** One query's page, or the mark of a query whose page had already ended. */
@@ -1912,11 +1966,9 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queryCount: queries.length,
   });
   if (resolved.type === "invalid") {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous search_case_law call, or omit it for the first page.",
+    return invalidCursorResult({
+      cursor: cursor ?? "",
+      tool: SEARCH_CASE_LAW_TOOL,
     });
   }
   if (resolved.type === "count_mismatch") {
@@ -1932,6 +1984,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       hint: `Send the same ${String(resolved.encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
     });
   }
+
+  // A court filter is read onto a stored court before any query runs, so
+  // every phrasing and every continuation of this call narrows the same way.
+  const { court: courtFilter, warnings: filterWarnings } =
+    await resolveCourtFilter({ context, country: publicCountry, court });
 
   // `limit` bounds the MERGED page, so each query is asked for its share of
   // it and every hit a query returns is emitted. Slicing the merge instead
@@ -1958,7 +2015,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       query,
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
-      ...(court === undefined ? {} : { court }),
+      ...(courtFilter === undefined ? {} : { court: courtFilter }),
       country: publicCountry,
       ...(language === undefined ? {} : { language }),
       ...(decisionType === undefined ? {} : { decisionType }),
@@ -2004,6 +2061,12 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       continue;
     }
     const resultMessage = handlerResultMessage(outcome.result);
+    if (resultMessage === INVALID_CURSOR_MESSAGE) {
+      return invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: SEARCH_CASE_LAW_TOOL,
+      });
+    }
     if (resultMessage) {
       return errorResult(resultMessage);
     }
@@ -2042,12 +2105,25 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       // carries no warning about a page. What it required is still what it
       // required on the page that exhausted it, which is why `queryUsed`
       // comes from the interpretation rather than from the phrasing as sent.
-      return { query, queryUsed: interpretation.queryUsed, warnings: [] };
+      return {
+        query,
+        queryUsed: interpretation.queryUsed,
+        warnings: filterWarnings,
+      };
     }
+    const values = facetValuesForFilters({
+      facets: outcome.page.facets,
+      filters: { court: courtFilter, decisionType, language },
+    });
     return {
       query,
       queryUsed: outcome.page.queryUsed,
-      warnings: outcome.page.warnings,
+      warnings: [
+        ...filterWarnings,
+        ...outcome.page.warnings.map((warning) =>
+          withFacetValues(warning, values),
+        ),
+      ],
     };
   });
 
@@ -2303,11 +2379,9 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
 
   const offsets = decodeDecisionCursor(cursor);
   if (offsets === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    return invalidCursorResult({
+      cursor: cursor ?? "",
+      tool: "read_case_law_decision",
     });
   }
 
@@ -2646,11 +2720,9 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     );
   }
   if (read.type === "invalid_cursor") {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous read_case_law_citations call, or omit it for the first page.",
+    return invalidCursorResult({
+      cursor: cursor ?? "",
+      tool: "read_case_law_citations",
     });
   }
 

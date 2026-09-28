@@ -14,6 +14,7 @@ import {
   AGENT_INPUT_NORMALIZATION_KEY,
   AGENT_INPUT_NORMALIZATION_KIND,
   agentInputNormalizationGuidance,
+  agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
@@ -169,7 +170,7 @@ const CITING_DECISION_ID = "00000000-0000-4000-8000-0000000d0002";
 /** A consolidated statute and an older consolidation of the same work. */
 const STATUTE_ID = "00000000-0000-4000-8000-000000021001";
 const STATUTE_PRIOR_ID = "00000000-0000-4000-8000-000000021002";
-const STATUTE_ELI = "/eli/cz/sb/2012/89";
+const STATUTE_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";
 const STATUTE_TITLE = "89/2012 Sb., obcansky zakonik";
 const PROVISION_ANCHOR = "par_1729";
 /** A document entity, used where a tool is handed one in place of a task. */
@@ -865,6 +866,15 @@ const createRecordAuditEventMock = () =>
     mock(async () => undefined),
   );
 
+/** The court spellings a Czech corpus stores, as the court filter reads them. */
+const STORED_CZ_COURTS = [
+  "Krajský soud v Brně",
+  "Krajský soud v Ostravě",
+  "Nejvyšší soud",
+  "Nejvyšší správní soud",
+  "Ústavní soud",
+] as const;
+
 const createContext = ({
   accessibleWorkspaceIds = [WORKSPACE_ID],
   archivedWorkspaceIds = [],
@@ -915,6 +925,7 @@ const createContext = ({
     readWorkspaceHandler: readWorkspaceHandlerMock,
     readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
     searchDecisionsHandler: searchDecisionsHandlerMock,
+    readCaseLawCourtNames: async () => STORED_CZ_COURTS,
     searchLegislationHandler: searchLegislationHandlerMock,
     resolveStatuteExpression: resolveStatuteExpressionMock,
     resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
@@ -933,6 +944,36 @@ const createContext = ({
  * same guidance the schema emits so this test cannot pin wording the model is
  * no longer shown.
  */
+/**
+ * An advertised property as the factory emits it once a kind is bound: the
+ * marker dispatch reads, and the guidance appended to its description. Built
+ * from the same metadata function, so these tests pin the binding and not
+ * the wording.
+ */
+// Keeps the annotation's literal type: the widened annotation union carries
+// the country branch's readonly list, which the JSON schema type refuses.
+const withKind = <
+  TProperty extends { description: string },
+  TAnnotation extends Exclude<
+    Parameters<typeof agentInputNormalizationMetadata>[0],
+    { kind: typeof AGENT_INPUT_NORMALIZATION_KIND.country }
+  >,
+>(
+  property: TProperty,
+  annotation: TAnnotation,
+) => ({
+  ...property,
+  [AGENT_INPUT_NORMALIZATION_KEY]: annotation,
+  description: agentInputNormalizationMetadata(annotation, property.description)
+    .description,
+});
+
+const FILTER_KIND = { kind: AGENT_INPUT_NORMALIZATION_KIND.filter } as const;
+const PAGE_SIZE_KIND = {
+  kind: AGENT_INPUT_NORMALIZATION_KIND.number,
+  range: "clamp",
+} as const;
+
 const COUNTRY_INPUT_GUIDANCE = agentInputNormalizationGuidance({
   kind: AGENT_INPUT_NORMALIZATION_KIND.country,
   country: { spelling: "alpha-3" },
@@ -1047,13 +1088,16 @@ describe("OpenAI-compatible MCP tools", () => {
           minItems: 1,
           maxItems: 5,
         },
-        limit: {
-          type: "integer",
-          description:
-            "Merged-page size, split evenly across the queries (at least one hit each)",
-          minimum: 1,
-          maximum: 20,
-        },
+        limit: withKind(
+          {
+            type: "integer",
+            description:
+              "Merged-page size, split evenly across the queries (at least one hit each)",
+            minimum: 1,
+            maximum: 20,
+          },
+          PAGE_SIZE_KIND,
+        ),
         cursor: {
           type: "string",
           description:
@@ -1065,12 +1109,15 @@ describe("OpenAI-compatible MCP tools", () => {
           // rejecting it is what makes the factory read it as absent.
           minLength: 1,
         },
-        court: {
-          type: "string",
-          description: "Filter by court name",
-          maxLength: 512,
-          minLength: 1,
-        },
+        court: withKind(
+          {
+            type: "string",
+            description: "Filter by court name",
+            maxLength: 512,
+            minLength: 1,
+          },
+          FILTER_KIND,
+        ),
         country: {
           type: "string",
           description: `Required corpus country. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
@@ -1086,35 +1133,47 @@ describe("OpenAI-compatible MCP tools", () => {
             },
           },
         },
-        language: {
-          type: "string",
-          description: "Filter by language code",
-          maxLength: 8,
-          minLength: 1,
-        },
-        decision_type: {
-          type: "string",
-          description: "Filter by decision type",
-          maxLength: 128,
-          minLength: 1,
-        },
+        language: withKind(
+          {
+            type: "string",
+            description: "Filter by language code",
+            maxLength: 8,
+            minLength: 1,
+          },
+          FILTER_KIND,
+        ),
+        decision_type: withKind(
+          {
+            type: "string",
+            description: "Filter by decision type",
+            maxLength: 128,
+            minLength: 1,
+          },
+          FILTER_KIND,
+        ),
         source_id: {
           type: "string",
           format: "uuid",
           description: "Filter by source ID",
         },
-        date_from: {
-          type: "string",
-          format: "date",
-          description: "Filter decisions from this ISO date (YYYY-MM-DD)",
-          maxLength: 10,
-        },
-        date_to: {
-          type: "string",
-          format: "date",
-          description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
-          maxLength: 10,
-        },
+        date_from: withKind(
+          {
+            type: "string",
+            format: "date",
+            description: "Filter decisions from this ISO date (YYYY-MM-DD)",
+            maxLength: 10,
+          },
+          { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
+        ),
+        date_to: withKind(
+          {
+            type: "string",
+            format: "date",
+            description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
+            maxLength: 10,
+          },
+          { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "end" },
+        ),
         sort: {
           type: "string",
           enum: [...SEARCH_SORTS],
@@ -1151,12 +1210,15 @@ describe("OpenAI-compatible MCP tools", () => {
           description:
             "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
         },
-        limit: {
-          type: "integer",
-          description: "Citations per page; defaults to 20, at most 50.",
-          minimum: 1,
-          maximum: LIMITS.caseLawDecisionCitationPageSize,
-        },
+        limit: withKind(
+          {
+            type: "integer",
+            description: "Citations per page; defaults to 20, at most 50.",
+            minimum: 1,
+            maximum: LIMITS.caseLawDecisionCitationPageSize,
+          },
+          PAGE_SIZE_KIND,
+        ),
         cursor: {
           type: "string",
           description:
@@ -2824,7 +2886,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        cursor: "not-a-cursor",
+        // Inside the class the encoders emit, so it reaches the decoder.
+        cursor: "bm90LWEtY3Vyc29y",
         decision_id: DECISION_ID,
         direction: "cited_by",
       },
@@ -2835,10 +2898,16 @@ describe("OpenAI-compatible MCP tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["issues"]).toEqual([
-      { path: "cursor", message: "Invalid cursor" },
+      {
+        path: "cursor",
+        message:
+          '"bm90LWEtY3Vyc29y" is not a cursor read_case_law_citations issued.',
+      },
     ]);
+    // A cursor that does not decode is never restarted at page one: the hint
+    // names the restart, so the caller knows its position is lost.
     expect(error["hint"]).toBe(
-      "Pass the 'cursor' verbatim as returned by a previous read_case_law_citations call, or omit it for the first page.",
+      "This cursor does not decode, so the position it held is lost. Call read_case_law_citations again without cursor to start from the first page, or pass nextCursor exactly as the previous response returned it.",
     );
   });
 
@@ -2887,12 +2956,17 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
     });
-    expect(schema?.properties?.["limit"]).toEqual({
-      type: "integer",
-      minimum: 1,
-      maximum: LIMITS.caseLawSearchPageSizeMax,
-      description: "Max results to return; defaults to 10.",
-    });
+    expect(schema?.properties?.["limit"]).toEqual(
+      withKind(
+        {
+          type: "integer",
+          minimum: 1,
+          maximum: LIMITS.caseLawSearchPageSizeMax,
+          description: "Max results to return; defaults to 10.",
+        },
+        PAGE_SIZE_KIND,
+      ),
+    );
     expect(schema?.["additionalProperties"]).toBe(false);
     // The corpus search has no as-of filter, so it must not advertise one:
     // a point-in-time question is answered by read_statute.
@@ -2934,13 +3008,19 @@ describe("OpenAI-compatible MCP tools", () => {
           items: {
             type: "object",
             properties: {
-              eli: {
-                type: "string",
-                minLength: 1,
-                maxLength: 512,
-                description:
-                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
-              },
+              eli: withKind(
+                {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                },
+                {
+                  kind: AGENT_INPUT_NORMALIZATION_KIND.eli,
+                  invalidValueDisposition: "handler-owned",
+                },
+              ),
               anchor: {
                 type: "string",
                 minLength: 1,
@@ -2983,12 +3063,17 @@ describe("OpenAI-compatible MCP tools", () => {
     const schema = historyTool?.inputSchema;
 
     expect(schema?.required).toEqual(["eli", "anchor"]);
-    expect(schema?.properties?.["limit"]).toEqual({
-      type: "integer",
-      minimum: 1,
-      maximum: LIMITS.legislationProvisionHistoryPageSizeMax,
-      description: `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
-    });
+    expect(schema?.properties?.["limit"]).toEqual(
+      withKind(
+        {
+          type: "integer",
+          minimum: 1,
+          maximum: LIMITS.legislationProvisionHistoryPageSizeMax,
+          description: `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
+        },
+        PAGE_SIZE_KIND,
+      ),
+    );
     expect(schema?.["additionalProperties"]).toBe(false);
   });
 
@@ -3155,7 +3240,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_statute tells an unknown act apart from a date the corpus does not cover", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
     const unknown = await handleMcpToolCall({
-      args: { eli: "/eli/cz/sb/9999/1" },
+      args: { eli: "https://www.e-sbirka.cz/eli/cz/sb/9999/1" },
       context: createContext(),
       toolName: "read_statute",
     });
@@ -3238,7 +3323,7 @@ describe("OpenAI-compatible MCP tools", () => {
           { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
           { anchor: "par_9999", eli: STATUTE_ELI },
           { anchor: PROVISION_ANCHOR, as_of: "1990-01-01", eli: STATUTE_ELI },
-          { anchor: "par_1", eli: "/eli/cz/sb/9999/1" },
+          { anchor: "par_1", eli: "https://www.e-sbirka.cz/eli/cz/sb/9999/1" },
           // The same address as the first entry: it must be answered again
           // without resolving or re-reading the consolidation.
           { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
@@ -3594,10 +3679,274 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "source_id",
-        message: 'Invalid UUID: Received "not-a-uuid"',
+        message: '"not-a-uuid" is not an id.',
       },
     ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Inputs agents actually sent on a full-property client, kept verbatim: a
+   * placeholder in every filter, an all-zero id, an open-ended date range and
+   * a first-call cursor. Each is read as the absence it stands for, so the
+   * search runs unfiltered instead of answering nothing, and the reading is
+   * reported beside the result.
+   */
+  describe("search_case_law reads a full-property client's placeholders", () => {
+    const searchedBody = (): Record<string, unknown> => {
+      const body = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);
+      if (!isRecord(body)) {
+        throw new Error("expected the search to run");
+      }
+      return body;
+    };
+
+    const inputNotes = (
+      result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+    ): string =>
+      result.content
+        .flatMap((item) => (item.type === "text" ? [item.text] : []))
+        .filter((text) => text.startsWith("Input read:"))
+        .join(" ");
+
+    const searchWarnings = (
+      result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+    ): { code: string; message: string; hint: string }[] => {
+      const payload = parseToolPayload(result);
+      if (!isRecord(payload) || !Array.isArray(payload["searches"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["searches"].flatMap((search: unknown) =>
+        isRecord(search) && Array.isArray(search["warnings"])
+          ? search["warnings"]
+          : [],
+      );
+    };
+
+    beforeEach(() => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        facets: null,
+        hits: [],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+        queryUsed: "promlčení náhrady škody",
+        warnings: [],
+      });
+    });
+
+    test("placeholder filters, a zero id and open bounds narrow nothing", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["promlčení náhrady škody"],
+          limit: 10,
+          cursor: " ",
+          court: " ",
+          country: "CZE",
+          language: "-",
+          decision_type: "all",
+          source_id: "00000000-0000-0000-0000-000000000000",
+          date_from: "0001-01-01",
+          date_to: "9999-12-31",
+          sort: "relevance",
+          strict: false,
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBeUndefined();
+      const body = searchedBody();
+      for (const filter of [
+        "court",
+        "language",
+        "decisionType",
+        "sourceId",
+        "dateFrom",
+        "dateTo",
+        "cursor",
+      ]) {
+        expect(body[filter]).toBeUndefined();
+      }
+      expect(inputNotes(result)).toContain(
+        '"00000000-0000-0000-0000-000000000000"',
+      );
+    });
+
+    test("a documentation example id is a placeholder too", async () => {
+      await handleMcpToolCall({
+        args: {
+          queries: ["hospodářská soutěž"],
+          country: "CZE",
+          source_id: "123e4567-e89b-12d3-a456-426614174000",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["sourceId"]).toBeUndefined();
+    });
+
+    test.each([
+      ["Constitutional Court", "Ústavní soud"],
+      ["Ústavní soud České republiky", "Ústavní soud"],
+      ["NS", "Nejvyšší soud"],
+      ["nejvyssi spravni soud", "Nejvyšší správní soud"],
+      ["Supreme Administrative Court", "Nejvyšší správní soud"],
+    ])("court %p is read as the stored %p", async (court, stored) => {
+      const result = await handleMcpToolCall({
+        args: { queries: ["spravedlivý proces"], country: "CZE", court },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["court"]).toBe(stored);
+      expect(searchWarnings(result)).toContainEqual(
+        expect.objectContaining({ code: "filter_read" }),
+      );
+    });
+
+    test.each([
+      ["Česká republika", "Ústavní soud"],
+      ["Krajský soud", "Krajský soud v Brně"],
+    ])(
+      "court %p names no single court, so it is dropped and the courts are named",
+      async (court, named) => {
+        const result = await handleMcpToolCall({
+          args: { queries: ["smluvní pokuta"], country: "CZE", court },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+
+        expect(result.isError).toBeUndefined();
+        expect(searchedBody()["court"]).toBeUndefined();
+        const dropped = searchWarnings(result).find(
+          (warning) => warning.code === "filter_dropped",
+        );
+        expect(dropped?.hint).toContain(named);
+      },
+    );
+
+    test("a stored court with no hits keeps its filter and names the courts that have them", async () => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        facets: {
+          court: [
+            {
+              tierLabel: "supreme",
+              courts: [{ count: 3, label: null, value: "Nejvyšší soud" }],
+            },
+          ],
+          year: [],
+          decisionType: [],
+          source: [],
+          language: [],
+        },
+        hits: [],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+        queryUsed: "smluvní pokuta",
+        warnings: [
+          {
+            code: "no_hits_filtered",
+            message:
+              "Nothing matched under the filters this search narrowed with: court.",
+            hint: "Drop or widen that filter and search again; the same words may match outside it.",
+          },
+        ],
+      });
+
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["smluvní pokuta"],
+          country: "CZE",
+          court: "Ústavní soud",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["court"]).toBe("Ústavní soud");
+      const empty = searchWarnings(result).find(
+        (warning) => warning.code === "no_hits_filtered",
+      );
+      expect(empty?.hint).toContain('"Nejvyšší soud"');
+    });
+
+    test("a page size past the maximum is clamped, with a note", async () => {
+      const result = await handleMcpToolCall({
+        args: { queries: ["smluvní pokuta"], country: "CZE", limit: "500" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["limit"]).toBe(LIMITS.mcpSearchPageSizeMax);
+      expect(inputNotes(result)).toContain(String(LIMITS.mcpSearchPageSizeMax));
+    });
+
+    test("a bare year or month bounds the range to its first and last day", async () => {
+      await handleMcpToolCall({
+        args: {
+          queries: ["smluvní pokuta"],
+          country: "CZE",
+          date_from: "2020",
+          date_to: "2021-02",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["dateFrom"]).toBe("2020-01-01");
+      expect(searchedBody()["dateTo"]).toBe("2021-02-28");
+    });
+
+    test("one phrasing sent as a string is a one-phrasing call", async () => {
+      await handleMcpToolCall({
+        args: { queries: "smluvní pokuta, moderace", country: "CZE" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      // Free text is never split on its commas.
+      expect(searchedBody()["query"]).toBe("smluvní pokuta, moderace");
+    });
+
+    test("an invented cursor on a later call asks for a restart instead of restarting", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["smluvní pokuta", "moderace smluvní pokuty"],
+          country: "CZE",
+          cursor: "W251bNull",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      const error = validationEnvelope(result);
+      expect(error["code"]).toBe("validation_error");
+      expect(error["hint"]).toContain(
+        "Call search_case_law again without cursor",
+      );
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+    });
+  });
+
+  test.each([
+    ["/eli/cz/sb/2012/89"],
+    ["eli/cz/sb/2012/89"],
+    ["https://e-sbirka.cz/eli/cz/sb/2012/89/"],
+    ["/eli/cz/sb/89/2012"],
+    ["89/2012 Sb."],
+  ])("read_statute reads the ELI %p as the canonical one", async (eli) => {
+    resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
+
+    await handleMcpToolCall({
+      args: { eli },
+      context: createContext(),
+      toolName: "read_statute",
+    });
+
+    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(0)).toMatchObject({
+      eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    });
   });
 
   // Recognising a country and admitting it are two answers. A country the

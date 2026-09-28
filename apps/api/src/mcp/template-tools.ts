@@ -128,6 +128,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
@@ -922,12 +923,7 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   if (requestedCursor !== undefined) {
     const decoded = decodeTemplatePageCursor(requestedCursor);
     if (decoded === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: requestedCursor });
     }
     boundaryId = decoded;
   }
