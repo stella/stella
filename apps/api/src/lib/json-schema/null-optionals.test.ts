@@ -177,6 +177,84 @@ describe("a model's placeholder in an optional field", () => {
     ).toEqual([]);
   });
 
+  // A sibling branch the value cannot fit must not keep a null the fitting
+  // branch refuses, whichever constraint rules it out.
+  const refusesUnfitSibling = (
+    union: unknown,
+    sent: unknown,
+    expected: unknown,
+  ) => {
+    const read = withModelPlaceholdersOmitted(union, sent);
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, expected) ? [] : [{ read }],
+      ),
+    ).toEqual([]);
+  };
+  const fitting = {
+    type: "object",
+    properties: { flag: { type: "integer" }, d: { type: "string" } },
+  };
+
+  test("a sibling branch whose constant the value does not equal keeps no null", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          fitting,
+          {
+            type: "object",
+            const: { flag: 2, d: null },
+            properties: { flag: {}, d: { type: ["string", "null"] } },
+          },
+        ],
+      },
+      { flag: 1, d: null },
+      { flag: 1 },
+    );
+  });
+
+  test("a closed sibling branch whose patterns do not name a field keeps no null", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          fitting,
+          {
+            type: "object",
+            properties: { d: { type: ["string", "null"] } },
+            patternProperties: { "^x_": {} },
+            additionalProperties: false,
+          },
+        ],
+      },
+      { flag: 1, d: null },
+      { flag: 1 },
+    );
+  });
+
+  test("an array member too short for the array keeps no null in its items", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          {
+            type: "array",
+            items: { type: "object", properties: { b: { type: "integer" } } },
+          },
+          {
+            type: "array",
+            maxItems: 1,
+            items: {
+              type: "object",
+              properties: { b: { type: ["integer", "null"] } },
+            },
+          },
+        ],
+      },
+      [{ b: null }, { b: 2 }],
+      [{}, { b: 2 }],
+    );
+  });
+
   test("a null one array member's items declare stays, though a sibling member's refuse it", () => {
     const union = {
       anyOf: [

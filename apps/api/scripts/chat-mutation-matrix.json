@@ -423,6 +423,48 @@
       "oracle": "chat.provider-wire.tool-input"
     },
     {
+      "id": "tool-input-union-branch-const-applies-whole",
+      "fix": "maintenance",
+      "behaviour": "A union branch whose object constant the tool input does not equal is not one it fits, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "    return isDeepStrictEqual(schema[\"const\"], value);",
+      "replace": "    return typeof value === \"object\" || schema[\"const\"] === value;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a sibling branch whose constant the value does not equal keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-patterns-name-fields",
+      "fix": "maintenance",
+      "behaviour": "A closed union branch with patternProperties refuses a field no pattern names, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  if (matched) {",
+      "replace": "  if (matched || isRecord(patternProperties)) {",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a closed sibling branch whose patterns do not name a field keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-array-member-fits-array",
+      "fix": "maintenance",
+      "behaviour": "Only union array members that take the whole array lend their item schemas to reading its placeholders.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const fitting = members.filter((member) => shapeTakes(member, value));",
+      "replace": "  const fitting = members;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "an array member too short for the array keeps no null in its items"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
       "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
