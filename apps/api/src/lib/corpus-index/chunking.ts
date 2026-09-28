@@ -1,4 +1,5 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
+import { Buffer } from "node:buffer";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -401,3 +402,246 @@ export const chunkDocument = ({
 /** Joins a heading path into the single string the index stores. */
 export const formatHeadingPath = (headingPath: readonly string[]): string =>
   headingPath.join(" > ");
+
+/** Legislation passages leave room for metadata and JSON escaping in an ingest line. */
+export const LEGISLATION_PASSAGE_TEXT_MAX_BYTES = 1024 * 1024;
+
+type LegislationBoundary = {
+  offset: number;
+  headingLevel: number | null;
+  headingPath: string[];
+};
+
+const legislationAstBoundaries = (
+  text: string,
+  ast: DocumentAst | null,
+): Generator<LegislationBoundary, undefined> | null => {
+  if (
+    ast === null ||
+    ast.blocks.length === 0 ||
+    ast.blocks.length > MAX_CHUNK_BLOCKS
+  ) {
+    return null;
+  }
+  const blocks = ast.blocks;
+  let cursor = 0;
+  for (const block of blocks) {
+    if (!isChunkableBlock(block)) {
+      return null;
+    }
+    if (block.plainText.length === 0) {
+      continue;
+    }
+    const offset = text.indexOf(block.plainText, cursor);
+    if (offset === -1) {
+      // The stored text is authoritative. An AST with different normalization
+      // cannot supply safe offsets into it.
+      return null;
+    }
+    cursor = offset + block.plainText.length;
+  }
+  const generate = function* (): Generator<LegislationBoundary, undefined> {
+    const headings = createHeadingStack();
+    let boundaryCursor = 0;
+    for (const block of blocks) {
+      if (block.plainText.length === 0) {
+        continue;
+      }
+      const offset = text.indexOf(block.plainText, boundaryCursor);
+      if (block.type === "heading") {
+        headings.push(block.level, block.plainText);
+      }
+      if (offset > 0) {
+        yield {
+          offset,
+          headingLevel: block.type === "heading" ? block.level : null,
+          headingPath: block.type === "heading" ? headings.path() : [],
+        };
+      }
+      boundaryCursor = offset + block.plainText.length;
+    }
+  };
+  return generate();
+};
+
+function* legislationTextBoundaries(
+  text: string,
+): Generator<LegislationBoundary, undefined> {
+  for (const match of text.matchAll(/\n[ \t]*\n/gu)) {
+    const offset = match.index + match[0].length;
+    if (offset < text.length) {
+      yield { offset, headingLevel: null, headingPath: [] };
+    }
+  }
+}
+
+const utf8WindowEnd = (
+  text: string,
+  start: number,
+  maxBytes: number,
+): number => {
+  let low = start + 1;
+  // UTF-16 code units are a lower bound on UTF-8 bytes, so adding the byte
+  // budget gives a safe upper bound on this passage's candidate window.
+  let high = Math.min(text.length, start + maxBytes);
+  let end = start;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (Buffer.byteLength(text.slice(start, mid), "utf-8") <= maxBytes) {
+      end = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  if (
+    end < text.length &&
+    end > start &&
+    /[\uD800-\uDBFF]/u.test(text[end - 1] ?? "")
+  ) {
+    end -= 1;
+  }
+  return end;
+};
+
+const legislationSoftCut = (
+  text: string,
+  start: number,
+  end: number,
+): number => {
+  const window = text.slice(start, end);
+  const blank = /\n[ \t]*\n/gu;
+  let lastBlank = 0;
+  for (const match of window.matchAll(blank)) {
+    lastBlank = match.index + match[0].length;
+  }
+  if (lastBlank > 0) {
+    return start + lastBlank;
+  }
+  const line = window.lastIndexOf("\n");
+  if (line !== -1) {
+    return start + line + 1;
+  }
+  for (let offset = window.length - 1; offset > 0; offset -= 1) {
+    if (/\s/u.test(window[offset] ?? "")) {
+      return start + offset + 1;
+    }
+  }
+  return end;
+};
+
+/**
+ * Split an oversized act version without changing a byte of its canonical
+ * text. AST headings provide preferred cut positions; plain text supplies
+ * paragraph cuts when the AST is absent or cannot align with stored text.
+ */
+export const chunkLegislationDocument = ({
+  ast,
+  fallbackText,
+}: ChunkDocumentInput): CorpusChunk[] => {
+  if (fallbackText.length === 0) {
+    return [{ seq: 0, text: "", anchorId: null, headingPath: [] }];
+  }
+  const boundarySource =
+    legislationAstBoundaries(fallbackText, ast) ??
+    legislationTextBoundaries(fallbackText);
+  const boundaries = boundarySource[Symbol.iterator]();
+  let nextBoundary = boundaries.next();
+  let pendingBoundaries: LegislationBoundary[] = [];
+  let pendingBoundaryIndex = 0;
+  const chunks: CorpusChunk[] = [];
+  let start = 0;
+  let headingPath: string[] = [];
+  while (start < fallbackText.length) {
+    const windowEnd = utf8WindowEnd(
+      fallbackText,
+      start,
+      LEGISLATION_PASSAGE_TEXT_MAX_BYTES,
+    );
+    if (windowEnd <= start) {
+      return panic("Legislation passage cannot fit one UTF-8 character");
+    }
+    let end = windowEnd;
+    let headingPathAfterCut = headingPath;
+    if (windowEnd < fallbackText.length) {
+      let scannedOffset = start;
+      let scannedBytes = 0;
+      let latestBoundary: LegislationBoundary | undefined;
+      let preferredHeading: LegislationBoundary | undefined;
+      const scannedBoundaries = pendingBoundaries.slice(pendingBoundaryIndex);
+      pendingBoundaryIndex = 0;
+      while (!nextBoundary.done && nextBoundary.value.offset <= windowEnd) {
+        scannedBoundaries.push(nextBoundary.value);
+        nextBoundary = boundaries.next();
+      }
+      for (const boundary of scannedBoundaries) {
+        if (boundary.offset > start) {
+          scannedBytes += Buffer.byteLength(
+            fallbackText.slice(scannedOffset, boundary.offset),
+            "utf-8",
+          );
+          scannedOffset = boundary.offset;
+          if (scannedBytes >= LEGISLATION_PASSAGE_TEXT_MAX_BYTES / 2) {
+            if (boundary.headingLevel === null) {
+              latestBoundary = boundary;
+            } else if (
+              preferredHeading === undefined ||
+              boundary.headingLevel <=
+                (preferredHeading.headingLevel ?? Infinity)
+            ) {
+              preferredHeading = boundary;
+            }
+          }
+        }
+      }
+      if (preferredHeading !== undefined) {
+        end = preferredHeading.offset;
+      } else if (latestBoundary !== undefined) {
+        end = latestBoundary.offset;
+      } else {
+        end = legislationSoftCut(fallbackText, start, windowEnd);
+      }
+      for (const boundary of scannedBoundaries) {
+        if (boundary.offset > end) {
+          break;
+        }
+        if (boundary.headingLevel !== null) {
+          headingPathAfterCut = boundary.headingPath;
+        }
+      }
+      pendingBoundaries = scannedBoundaries.filter(
+        (boundary) => boundary.offset > end,
+      );
+    }
+    chunks.push({
+      seq: chunks.length,
+      text: fallbackText.slice(start, end),
+      anchorId: null,
+      headingPath,
+    });
+    start = end;
+    headingPath = headingPathAfterCut;
+    while (
+      (pendingBoundaries.at(pendingBoundaryIndex)?.offset ?? Infinity) <=
+        start ||
+      (pendingBoundaryIndex >= pendingBoundaries.length &&
+        !nextBoundary.done &&
+        nextBoundary.value.offset <= start)
+    ) {
+      const boundary =
+        pendingBoundaryIndex < pendingBoundaries.length
+          ? pendingBoundaries[pendingBoundaryIndex++]
+          : nextBoundary.value;
+      if (boundary === undefined) {
+        break;
+      }
+      if (boundary.headingLevel !== null) {
+        headingPath = boundary.headingPath;
+      }
+      if (pendingBoundaryIndex >= pendingBoundaries.length) {
+        nextBoundary = boundaries.next();
+      }
+    }
+  }
+  return chunks;
+};

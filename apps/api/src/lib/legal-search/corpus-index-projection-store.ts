@@ -793,6 +793,90 @@ export const startCorpusProjectionAppendBatchTx = async (
   });
 };
 
+/** A multipart revision owns the same lease throughout its sequential requests. */
+export const startCorpusProjectionMultipartAppendTx = async (
+  tx: Transaction,
+  lease: CorpusProjectionIntentLease,
+): Promise<CorpusProjectionAppendStart["status"]> => {
+  const status =
+    (await startCorpusProjectionAppendBatchTx(tx, { leases: [lease] })).at(0)
+      ?.status ?? "lease_lost";
+  if (status !== "started") {
+    return status;
+  }
+  await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      leaseExpiresAt: sql<Date>`clock_timestamp() + ${CORPUS_PROJECTION_LEASE_MAX_MS} * interval '1 millisecond'`,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, lease.intentId),
+        eq(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+        eq(corpusIndexProjectionIntents.status, "append_started"),
+      ),
+    );
+  return "started";
+};
+
+/** Refresh the unknown-outcome fence immediately before a later physical part. */
+export const continueCorpusProjectionAppendPartTx = async (
+  tx: Transaction,
+  lease: CorpusProjectionIntentLease,
+): Promise<"started" | "lease_lost"> => {
+  await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    lease.family,
+    lease.generation,
+  );
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, lease.family),
+        eq(corpusIndexProjectionStates.generation, lease.generation),
+        eq(corpusIndexProjectionStates.entityId, lease.entityId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, lease.intentId))
+    .limit(1)
+    .for("update");
+  const transitionAt = await readPostgresClock(tx);
+  const continued = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      appendStartedAt: transitionAt,
+      leaseExpiresAt: sql<Date>`clock_timestamp() + ${CORPUS_PROJECTION_LEASE_MAX_MS} * interval '1 millisecond'`,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, lease.intentId),
+        eq(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+        eq(corpusIndexProjectionIntents.status, "append_started"),
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} > ${transitionAt}::timestamptz`,
+        sql`EXISTS (
+          SELECT 1 FROM ${corpusIndexProjectionStates} state
+          WHERE state.family = ${corpusIndexProjectionIntents.family}
+            AND state.generation = ${corpusIndexProjectionIntents.generation}
+            AND state.entity_id = ${corpusIndexProjectionIntents.entityId}
+            AND state.desired_action = 'upsert'
+            AND state.desired_epoch = ${corpusIndexProjectionIntents.epoch}
+            AND state.desired_fingerprint = ${corpusIndexProjectionIntents.fingerprint}
+            AND state.desired_index_id = ${corpusIndexProjectionIntents.indexId}
+        )`,
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  return continued.length === 1 ? "started" : "lease_lost";
+};
+
 type AbandonCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;

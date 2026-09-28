@@ -648,21 +648,35 @@ const MAX_IDENTITY_CAUSE_DEPTH = 5;
 const MAX_CAUSE_ATTRIBUTE_DEPTH = 3;
 
 /**
- * `pgErrorFields`: the outermost SQLSTATE by shape, plus every schema
- * identifier the chain carries. Schema identifiers name database objects,
- * never row data; `detail`, `hint`, `where` and `query` are never read.
+ * Postgres SQLSTATE and Bun driver code from anywhere in the cause chain,
+ * plus schema identifiers. These name code or database objects, never row
+ * data; `detail`, `hint`, `where` and `query` are never read.
  */
 export const pgIdentityFields = ({
   nodes,
 }: FailureEvidence): Record<string, string> => {
-  const pgNodes = nodes.filter((node) => node.sqlState !== undefined);
-  const outermost = pgNodes.at(0);
-  if (outermost?.sqlState === undefined) {
+  const pgNodes = nodes.filter(
+    (node) => node.pgProvenance || node.sqlState !== undefined,
+  );
+  if (pgNodes.length === 0) {
     return {};
   }
-  const fields: Record<string, string> = {
-    "error.cause.pg_code": outermost.sqlState,
-  };
+  const fields: Record<string, string> = {};
+  const sqlState = pgNodes.find(
+    (node) => node.sqlState !== undefined,
+  )?.sqlState;
+  if (sqlState !== undefined) {
+    fields["error.cause.pg_code"] = sqlState;
+  }
+  const driverCode = pgNodes.find(
+    (node) =>
+      node.pgProvenance &&
+      node.code !== undefined &&
+      /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u.test(node.code),
+  )?.code;
+  if (driverCode !== undefined) {
+    fields["error.cause.pg_driver_code"] = driverCode;
+  }
   for (const node of pgNodes) {
     for (const property of PG_IDENTIFIER_PROPERTIES) {
       const identifier = node.pgIdentifiers[property];
@@ -678,8 +692,8 @@ export const pgIdentityFields = ({
  * The grouping and suppression identity's inputs, byte-compatible with the
  * fields every capture has shipped: class, stable code, top frame, the
  * deepest Error cause's class and frame, and the pg fields. A non-Error is
- * `UnknownError` alone. The one deliberate difference is the frame origin
- * filter: a frame outside this build's paths is reported as `""`.
+ * `UnknownError` alone. Bun's driver code is added from wrapped causes; the
+ * frame origin filter blanks a frame outside this build's paths.
  */
 export const identityFields = (
   evidence: FailureEvidence,
@@ -711,7 +725,7 @@ export const identityFields = (
 
 /**
  * `errorSystemFields`: the level-zero type, code, errno and syscall, and the
- * direct cause's type and code.
+ * direct cause's type and code, plus Postgres code and SQLSTATE at any depth.
  */
 export const systemFields = (
   evidence: FailureEvidence,
@@ -747,7 +761,7 @@ export const systemFields = (
       fields["error.cause.code"] = causeCode;
     }
   }
-  return fields;
+  return { ...fields, ...pgIdentityFields(evidence) };
 };
 
 /**

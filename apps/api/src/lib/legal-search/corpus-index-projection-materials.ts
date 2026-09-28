@@ -45,7 +45,7 @@ export type CorpusProjectionMaterial =
       family: "legislation";
       manifest: Extract<CorpusIndexManifest, { family: "legislation" }>;
       input: ReturnType<typeof legislationProjectionInputFromCanonical>;
-      astS3Key: null;
+      astS3Key: string | null;
     });
 
 export type CorpusProjectionMaterialRejection = {
@@ -337,6 +337,7 @@ const readLegislationMaterials = async (
       eli: legislationDocuments.eli,
       projectionEpoch: legislationDocuments.projectionEpoch,
       textS3Key: legislationDocuments.textS3Key,
+      astS3Key: legislationDocuments.astS3Key,
       sourceDescriptor: legislationSources.descriptor,
     })
     .from(legislationDocuments)
@@ -356,7 +357,7 @@ const readLegislationMaterials = async (
         manifest,
         input,
         textS3Key,
-        astS3Key: null,
+        astS3Key: row.astS3Key,
       }),
     };
   });

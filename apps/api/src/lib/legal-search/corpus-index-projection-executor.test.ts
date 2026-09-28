@@ -163,6 +163,48 @@ test("append tails flush before crossing the physical request budget", () => {
   ).toEqual(["cs-2"]);
 });
 
+test("a multipart revision flushes alone between ordinary revisions", () => {
+  const entries = [
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "first",
+      ndjsonBytes: 5,
+      leaseExpiresAtMs: 300_000,
+      parts: ["first"],
+    },
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "multipart-first",
+      ndjsonBytes: 15,
+      leaseExpiresAtMs: 300_000,
+      parts: ["multipart-first", "multipart-second"],
+    },
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "last",
+      ndjsonBytes: 4,
+      leaseExpiresAtMs: 300_000,
+      parts: ["last"],
+    },
+  ];
+  const advanced = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries,
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(
+    advanced.flush.map(({ entries: requestEntries }) =>
+      requestEntries.map(({ ndjson }) => ndjson),
+    ),
+  ).toEqual([["first"], ["multipart-first"]]);
+  expect(
+    advanced.tails
+      .get("legislation_v2_cze")
+      ?.entries.map(({ ndjson }) => ndjson),
+  ).toEqual(["last"]);
+});
+
 test("the commit mode picks the ingest the request runs through", async () => {
   const calls: string[] = [];
   const client = {

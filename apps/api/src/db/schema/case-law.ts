@@ -2740,6 +2740,9 @@ export const caseLawIngestionEvents = p.pgTable(
   (t) => [
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
+    p
+      .index("case_law_ingestion_events_source_finished_idx")
+      .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
   ],
 );

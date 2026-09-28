@@ -689,6 +689,15 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
+      - name: Standalone lockfile guard
+        # Bun reads only the installing directory's bunfig.toml, so a lockfile
+        # outside the root workspace skips the root's release-age quarantine,
+        # and an npm, Yarn or pnpm lockfile skips it entirely. Needs no
+        # dependency install.
+        run: |
+          bun test scripts/check-standalone-lockfiles.test.ts
+          bun scripts/check-standalone-lockfiles.ts
+
       # Must follow Setup Bun so the shims land ahead of the real binary. This
       # job installs the whole workspace from the lockfile, so a malicious
       # package anywhere in the graph is caught here and blocks the PR.
