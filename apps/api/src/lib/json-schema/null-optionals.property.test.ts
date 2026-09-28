@@ -190,6 +190,40 @@ const widenedSchema = (schema: Schema): Schema => {
   return widened;
 };
 
+const NOT_NULL: Schema = { not: { type: "null" } };
+
+/**
+ * `schema` with every open object refusing a null in a field it does not
+ * declare. An open union branch takes any extra field, a null included,
+ * without declaring it; only a branch that declares the field and takes null
+ * there makes a null a value rather than a spelling of "not set".
+ */
+const undeclaredNullsRefused = (schema: unknown): unknown => {
+  if (isUnknownArray(schema)) {
+    return schema.map(undeclaredNullsRefused);
+  }
+  if (!isRecord(schema)) {
+    return schema;
+  }
+  const refusing: Schema = Object.fromEntries(
+    Object.entries(schema).map(([keyword, entry]) => [
+      keyword,
+      keyword === "properties" && isRecord(entry)
+        ? Object.fromEntries(
+            Object.entries(entry).map(([name, property]) => [
+              name,
+              undeclaredNullsRefused(property),
+            ]),
+          )
+        : undeclaredNullsRefused(entry),
+    ]),
+  );
+  if (isRecord(schema["properties"]) && !("additionalProperties" in schema)) {
+    refusing["additionalProperties"] = NOT_NULL;
+  }
+  return refusing;
+};
+
 const hasUnion = (schema: Schema): boolean =>
   JSON.stringify(schema).includes('"anyOf"');
 
@@ -216,10 +250,12 @@ test(
         );
         // Whatever the widened schema lets the model send reads back as the
         // declared input it stands for; one a union already declares (a
-        // sibling branch taking null there) is read as itself.
+        // sibling branch declaring the field and taking null there) is read
+        // as itself. An open sibling that merely tolerates an undeclared
+        // field does not make its null a value.
         if (ajv.validate(widened, sent)) {
           expect(withModelPlaceholdersOmitted(schema, sent)).toEqual(
-            ajv.validate(schema, sent) ? sent : value,
+            ajv.validate(undeclaredNullsRefused(schema), sent) ? sent : value,
           );
         }
         // Outside unions, where a branch may require what a sibling leaves

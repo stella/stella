@@ -102,6 +102,28 @@ describe("a model's placeholder in an optional field", () => {
     });
   });
 
+  test("a null is omitted where an open sibling branch only tolerates the field", () => {
+    // The sibling takes any extra field without declaring it, so its
+    // tolerance does not make the null a value.
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            a: { type: "array", items: { type: "string" } },
+            d: { type: "array", items: { type: "integer" } },
+          },
+          required: ["a"],
+          additionalProperties: false,
+        },
+        { type: "object", properties: { b: { type: ["string", "null"] } } },
+      ],
+    };
+    expect(withModelPlaceholdersOmitted(union, { a: [], d: null })).toEqual({
+      a: [],
+    });
+  });
+
   test("an array under a union reads its items' placeholders", () => {
     const union = {
       anyOf: [
