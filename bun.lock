@@ -814,6 +814,21 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/invoicing": {
+      "name": "@stll/invoicing",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/money": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
+        "tsdown": "catalog:",
+      },
+    },
     "packages/legal-ast": {
       "name": "@stll/legal-ast",
       "version": "0.0.0",
@@ -2826,6 +2841,8 @@
     "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.1.4", "", { "os": "win32", "cpu": "x64" }, "sha512-lMVPBhmtQOixYgAROOTtdQmSjnYtpoXChwgma52f9hUqY0W2ycVCK223jm/PfuIYwtQMns39P8O6S5bLmHmGZA=="],
 
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
+
+    "@stll/invoicing": ["@stll/invoicing@workspace:packages/invoicing"],
 
     "@stll/landing": ["@stll/landing@workspace:apps/landing"],
 

@@ -778,6 +778,17 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "invoice-document",
+    capability:
+      "Invoice, advance, and credit note totals and Czech payment payloads",
+    owner: ["packages/invoicing/"],
+    summary:
+      "The package rounds VAT per line, sums document and rate totals in " +
+      "branded minor units, and returns SPAYD text for payable documents. " +
+      "QR matrix rendering remains with callers.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "text-folding",
     capability: "Diacritic and ASCII folding for search and slugs",
     owner: ["packages/text-normalize/"],
