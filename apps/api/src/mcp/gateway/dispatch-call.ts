@@ -87,10 +87,12 @@ const unavailableSkillResult = ({
   const missingScopes = [
     ...new Set(
       missingTools.flatMap((name) => {
-        const scope = getStaticMcpToolDefinition(name)?.scope;
-        return scope === undefined || grantedScopes.includes(scope)
+        const definition = getStaticMcpToolDefinition(name);
+        return definition === undefined
           ? []
-          : [scope];
+          : [definition.scope, ...(definition.additionalScopes ?? [])].filter(
+              (scope) => !grantedScopes.includes(scope),
+            );
       }),
     ),
   ];

@@ -683,10 +683,20 @@ export const buildChatSystemPromptParts = async ({
             }),
           )
         : null;
-    const promptSkillMetadata = mergeActiveSkillMetadata({
-      activeSkillContext,
-      skillMetadata,
-    });
+    const activeSkillMissingTools =
+      activeSkillContext === null ||
+      activeSkillContext.requiredTools.length === 0
+        ? []
+        : activeSkillContext.requiredTools.filter(
+            (name) => !offeredToolNamesForSkills().has(name),
+          );
+    // An active skill this turn cannot run keeps its read and edit context
+    // (the active-skill section) but stays out of the runnable catalog, so
+    // neither `load-skill` nor a skill reference can start it.
+    const promptSkillMetadata =
+      activeSkillMissingTools.length === 0
+        ? mergeActiveSkillMetadata({ activeSkillContext, skillMetadata })
+        : skillMetadata;
 
     // The "safe" half is built by the workspace / global builders:
     // brand voice, skill catalog, jurisdiction labels, workspace
@@ -736,12 +746,7 @@ export const buildChatSystemPromptParts = async ({
     const externalSection = buildActiveExternalSection({ activeExternal });
     const activeSkillSection = buildActiveSkillSection(
       activeSkillContext,
-      activeSkillContext === null ||
-        activeSkillContext.requiredTools.length === 0
-        ? []
-        : activeSkillContext.requiredTools.filter(
-            (name) => !offeredToolNamesForSkills().has(name),
-          ),
+      activeSkillMissingTools,
     );
     const matterScopeSection =
       workspaceId === null

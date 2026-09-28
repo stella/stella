@@ -26,7 +26,10 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
-import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
+import {
+  hasGrantedScope,
+  listOfferedStaticMcpToolDefinitions,
+} from "@/api/mcp/gateway/static-tool-visibility";
 
 const AVAILABLE: SkillToolAvailability = {
   status: SKILL_TOOL_AVAILABILITY_STATUS.available,
@@ -73,12 +76,18 @@ const loadSkillTools = async ({
     );
   }
 
+  // `tools/list` keeps a compound tool discoverable on its primary scope
+  // alone; a skill can use it only with every scope it needs.
   const offeredToolNames = new Set(
     listOfferedStaticMcpToolDefinitions({
       context,
       mode: "default",
       scopes,
-    }).map(({ name }) => name),
+    }).flatMap(({ additionalScopes = [], name }) =>
+      additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
+        ? [name]
+        : [],
+    ),
   );
   return exposed.map((skill) =>
     Object.assign(skill, {

@@ -156,15 +156,18 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
 };
 
 const createContext = ({
+  activeSkill,
   auditEvents,
   message,
   threadId,
 }: {
+  activeSkill?: { skillId: SafeId<"agentSkill">; skillName: string };
   auditEvents: AuditEvent[];
   message: ChatSendRequest["message"];
   threadId: SafeId<"chatThread">;
 }): SendMessageCtx => {
   const forwardedProps = {
+    ...(activeSkill === undefined ? {} : { activeSkill }),
     contextMatterIds: [],
     message,
     runId: `run-${message.id}`,
@@ -299,5 +302,38 @@ describe("explicit skill references in a user message", () => {
     expect(
       auditEvents.filter((event) => event.resourceId === needsToolSkillId),
     ).toEqual([]);
+  });
+
+  test("an active skill this chat cannot run keeps its context but is not runnable", async () => {
+    const threadId = await seedThread();
+    streamChatMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        activeSkill: { skillId: needsToolSkillId, skillName: NEEDS_TOOL_SLUG },
+        auditEvents: [],
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: "Help me improve this skill.", type: "text" }],
+          role: "user",
+        },
+        threadId,
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    const call = asTestRaw<
+      { systemSafe?: string; systemUntrusted?: string }[][]
+    >(streamChatMock.mock.calls)
+      .at(0)
+      ?.at(0);
+    const systemPrompt = `${call?.systemSafe ?? ""}${call?.systemUntrusted ?? ""}`;
+    expect(systemPrompt).toContain("ACTIVE SKILL CONTEXT");
+    expect(systemPrompt).toContain("This skill cannot run in this chat.");
+    expect(systemPrompt).toContain("use-browser");
+    expect(systemPrompt).toContain("Skill picked from the composer.");
+    expect(systemPrompt).not.toContain(
+      "Skill that cannot finish without the browser tool.",
+    );
   });
 });

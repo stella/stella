@@ -32,6 +32,7 @@ import uploadSkill from "./upload";
 const RUN = Bun.randomUUIDv7().slice(-10);
 const PLAIN_SLUG = `plain-${RUN}`;
 const PLAYBOOK_SLUG = `playbook-builder-${RUN}`;
+const DOCUMENT_SLUG = `redline-${RUN}`;
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -53,6 +54,10 @@ beforeAll(async () => {
   for (const [slug, metadata] of [
     [PLAIN_SLUG, {}],
     [PLAYBOOK_SLUG, { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "save_playbook" }],
+    [
+      DOCUMENT_SLUG,
+      { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "read_document suggest_changes" },
+    ],
   ] as const) {
     const id = toSafeId<"agentSkill">(Bun.randomUUIDv7());
     seededSkillIds.push(id);
@@ -131,6 +136,8 @@ describe("skills offered in chat", () => {
     );
 
     expect(bySlug.get(PLAIN_SLUG)).toEqual({ status: "available" });
+    // Offered where a document is open, so the shared menus keep it.
+    expect(bySlug.get(DOCUMENT_SLUG)).toEqual({ status: "available" });
     expect(bySlug.get(PLAYBOOK_SLUG)).toEqual({
       status: "unavailable",
       missingTools: ["save_playbook"],

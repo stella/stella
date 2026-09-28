@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 
+import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  CHAT_EDIT_APPLY_MODE,
+} from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { roles } from "@stll/permissions";
 
@@ -41,11 +45,14 @@ const AVAILABLE: SkillToolAvailability = {
 };
 
 /**
- * The tools a new chat of this caller offers: the organization's native-tool
- * settings, web-search and business-register reach, and every matter the
- * caller can use, in the default (non-anonymized) mode with no document open.
- * A chat that narrows this at send time (anonymized mode, a tool scope) is
- * decided again by the turn, over its own tool set.
+ * The tools the widest chat this caller can open offers: the organization's
+ * native-tool settings, web-search and business-register reach, every matter
+ * the caller can use, a matter open, a document open in the editor and the
+ * browser extension connected, in the default (non-anonymized) mode. The
+ * shared menus answer for every composer, so a skill is hidden there only
+ * when no chat of this caller could finish it; a chat narrower than this
+ * (no document open, web search off, anonymized, a tool scope) decides again
+ * over its own tool set when the message is sent, and says why it cannot.
  */
 const loadNewChatToolNames = async ({
   getAccessibleWorkspaces,
@@ -90,6 +97,8 @@ const loadNewChatToolNames = async ({
   const usableWorkspaces = workspaces.filter(
     (workspace) => workspace.status !== "deleting",
   );
+  const openMatterId =
+    usableWorkspaces.find(({ status }) => status === "active")?.id ?? null;
 
   return Result.ok(
     chatToolNamesForSkills({
@@ -102,20 +111,24 @@ const loadNewChatToolNames = async ({
       disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
         settings.value,
       ),
+      browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
       docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
+      // The editor's review queue registers the document edit tool whenever
+      // a document is open, whichever apply mode the chat later picks.
+      editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+      hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
       memberRole: memberRole.role,
       organizationId,
       orgAIConfig,
       pastChatScope: resolvePastChatScope({
         contextMatterIds: [],
-        threadWorkspaceId: null,
+        threadWorkspaceId: openMatterId,
       }),
       pinServerValidatedWorkspaceId: () => false,
       refRegistry: createChatRefRegistry(),
       registryDispatch,
-      requestWorkspaceId: null,
+      requestWorkspaceId: openMatterId,
       safeDb,
       scopedDb,
       thirdPartyBoundary: { type: "raw" },
@@ -129,7 +142,7 @@ const loadNewChatToolNames = async ({
       // deployment, organization and provider gates still apply.
       webSearchEnabled: true,
       webSearchProviders,
-      workspaceId: null,
+      workspaceId: openMatterId,
       workspaceStatusById: new Map(
         usableWorkspaces.map(({ id, status }) => [id, status]),
       ),

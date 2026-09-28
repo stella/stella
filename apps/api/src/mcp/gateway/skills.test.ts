@@ -245,6 +245,31 @@ describe("MCP gateway skill tools", () => {
     expect(reader.map((tool) => tool.exposedName)).toEqual(["skill__plain"]);
   });
 
+  test("a compound tool counts only with every scope it needs", async () => {
+    const context = createContext({
+      rows: [
+        skillRow({
+          metadata: {
+            [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "save_filled_template",
+          },
+          slug: "fill-a-template",
+        }),
+      ],
+    });
+
+    const withoutTemplates = await loadVisibleSkillTools({
+      context,
+      scopes: ["stella:skills", "stella:documents_write"],
+    });
+    const withTemplates = await loadVisibleSkillTools({
+      context,
+      scopes: ["stella:skills", "stella:documents_write", "stella:templates"],
+    });
+
+    expect(withoutTemplates).toEqual([]);
+    expect(withTemplates.map((tool) => tool.name)).toEqual(["fill-a-template"]);
+  });
+
   test("resolveSkillTool still finds a hidden skill, marked with what it lacks", async () => {
     const context = createContext({
       grantedScopes: ["stella:skills"],
