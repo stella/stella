@@ -18,6 +18,8 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { MenuSection } from "@stll/ui/menu-section";
+import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
@@ -425,7 +427,10 @@ export const SearchResultItem = ({
         )}
         {hit.headline && (
           <p
-            className="text-muted-foreground [&_mark]:bg-highlight [&_mark]:text-highlight-foreground mt-0.5 line-clamp-2 text-xs font-normal [&_mark]:font-medium"
+            className={cn(
+              "text-muted-foreground mt-0.5 line-clamp-2 text-xs font-normal",
+              SEARCH_HIT_DESCENDANT_MARK_CLASS,
+            )}
             dangerouslySetInnerHTML={{
               // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the global search mappers
               __html: hit.headline,

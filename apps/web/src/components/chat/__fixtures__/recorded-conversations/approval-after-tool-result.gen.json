@@ -1036,8 +1036,9 @@
                 "role": "assistant",
                 "parts": [
                   {
-                    "type": "thinking",
                     "content": "Two lists to compare",
+                    "stepId": "provider-message-2-reasoning-j0kmht",
+                    "type": "thinking",
                     "signature": "signature-thinking-00000000-0000-7000-8000-000000000005"
                   },
                   {
@@ -1161,8 +1162,9 @@
                 "role": "assistant",
                 "parts": [
                   {
-                    "type": "thinking",
                     "content": "Two lists to compare",
+                    "stepId": "provider-message-2-reasoning-j0kmht",
+                    "type": "thinking",
                     "signature": "signature-thinking-00000000-0000-7000-8000-000000000005"
                   },
                   {
@@ -1956,8 +1958,9 @@
                 "role": "assistant",
                 "parts": [
                   {
-                    "type": "thinking",
                     "content": "Two lists to compare",
+                    "stepId": "00000000-0000-7000-8000-000000000003-reasoning-j0kmht",
+                    "type": "thinking",
                     "signature": "signature-thinking-00000000-0000-7000-8000-000000000005"
                   },
                   {
@@ -2110,8 +2113,9 @@
                 "role": "assistant",
                 "parts": [
                   {
-                    "type": "thinking",
                     "content": "Two lists to compare",
+                    "stepId": "00000000-0000-7000-8000-000000000003-reasoning-j0kmht",
+                    "type": "thinking",
                     "signature": "signature-thinking-00000000-0000-7000-8000-000000000005"
                   },
                   {

@@ -29,7 +29,10 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
-import { WIRE_TOOL_NAME } from "@/api/tests/helpers/provider-wire-cassette";
+import {
+  providerWireCassetteSchema,
+  WIRE_TOOL_NAME,
+} from "@/api/tests/helpers/provider-wire-cassette";
 import type {
   ProviderWireCassette,
   ProviderWireProvider,
@@ -38,6 +41,7 @@ import type {
 } from "@/api/tests/helpers/provider-wire-cassette";
 import { encodeAwsEventStreamMessage } from "@/api/tests/helpers/provider-wire-replay";
 import type {
+  Chunking,
   ProviderWireReplay,
   ProviderWireReplayFindings,
   ReplayedRequest,
@@ -83,6 +87,7 @@ export const SCENARIO_PROMPTS = {
   "server-error": TEXT_PROMPT,
   "malformed-chunk": TEXT_PROMPT,
   "early-eof": TEXT_PROMPT,
+  "unusable-stop": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
 
 /** A provider's own wording for a scenario, where the shared prompt records
@@ -825,18 +830,21 @@ export const findRequestShapeDrift = ({
 export const replayWireScenario = async ({
   cancelAfterFirstDelta,
   cassette,
+  chunking,
   replay,
 }: {
   cancelAfterFirstDelta?: boolean | undefined;
   cassette: ProviderWireCassette;
+  /** Where the bodies are cut into reads; the replay's default otherwise. */
+  chunking?: Chunking | undefined;
   replay: ProviderWireReplay;
 }) => {
-  replay.serve(
-    cassette,
-    cancelAfterFirstDelta === true
+  replay.serve(cassette, {
+    chunking,
+    ...(cancelAfterFirstDelta === true
       ? { holdAfterBytes: holdPoint(cassette) }
-      : {},
-  );
+      : {}),
+  });
   const request = {
     apiKey: "cassette-replay-no-credentials",
     model: cassette.model,
@@ -879,4 +887,102 @@ const holdPoint = (cassette: ProviderWireCassette): number => {
       ? text.length
       : marker + separator.index + separator[0].length;
   return new TextEncoder().encode(text.slice(0, end)).length;
+};
+
+// --- Reads split anywhere ---------------------------------------------------
+
+/**
+ * Words the split replay spells in multi-byte UTF-8 (two, three and four
+ * bytes a character), in answer text and in tool arguments, so a one-byte
+ * read lands inside each kind of character. Every text answer in the corpus
+ * starts with "The"; the others reach the words a provider did not split
+ * into separate deltas.
+ */
+const MULTIBYTE_SPELLINGS = [
+  ["The", "Thé ✓ 🎞"],
+  ["cassette", "kazetě"],
+  ["draft", "návrh 📄"],
+] as const;
+
+const spelledMultibyte = (text: string): string => {
+  let spelled = text;
+  for (const [word, multibyte] of MULTIBYTE_SPELLINGS) {
+    spelled = spelled.replaceAll(word, () => multibyte);
+  }
+  return spelled;
+};
+
+/** `cassette` with those words spelled in multi-byte characters wherever
+ *  its bodies carry them. */
+export const withMultibyteText = (
+  cassette: ProviderWireCassette,
+): ProviderWireCassette =>
+  v.parse(
+    providerWireCassetteSchema,
+    JSON.parse(spelledMultibyte(JSON.stringify(cassette))),
+  );
+
+/** Event fields that carry an id an adapter generates per run. */
+const isGeneratedIdField = (key: string): boolean =>
+  key.endsWith("Id") || key === "stepName";
+
+/** `run` as the split replay compares it: no timestamps, and each generated
+ *  id replaced by its order of first appearance. */
+const comparableRun = (run: WireRun) => {
+  const ids = new Map<string, string>();
+  const events = run.chunks.map((chunk): string =>
+    JSON.stringify(chunk, (key, value: unknown) => {
+      if (key === "timestamp") {
+        return undefined;
+      }
+      if (isGeneratedIdField(key) && typeof value === "string") {
+        const known = ids.get(value) ?? `id-${String(ids.size + 1)}`;
+        ids.set(value, known);
+        return known;
+      }
+      return value;
+    }),
+  );
+  return {
+    events,
+    ending: {
+      overdue: run.overdue === true,
+      thrown: run.thrown === undefined ? null : Bun.inspect(run.thrown),
+    },
+  };
+};
+
+/**
+ * Every way `split` (the run over bodies cut into reads by `chunking`)
+ * differs from `whole` (the run over each body in one read): the first event
+ * that differs, and how the run ended.
+ */
+export const findWireSplitViolations = ({
+  chunking,
+  split,
+  whole,
+}: {
+  chunking: Chunking;
+  split: WireRun;
+  whole: WireRun;
+}): OracleViolation[] => {
+  const expected = comparableRun(whole);
+  const got = comparableRun(split);
+  const findings: unknown[] = [];
+  const differs = Array.from(
+    { length: Math.max(expected.events.length, got.events.length) },
+    (_, index) => index,
+  ).find((index) => expected.events[index] !== got.events[index]);
+  if (differs !== undefined) {
+    findings.push({
+      chunking,
+      event: differs,
+      expected: expected.events[differs] ?? null,
+      got: got.events[differs] ?? null,
+    });
+  }
+  if (JSON.stringify(expected.ending) !== JSON.stringify(got.ending)) {
+    findings.push({ chunking, expected: expected.ending, got: got.ending });
+  }
+  return violationsOf(CHAT_ORACLE.providerWireSplit, findings);
 };

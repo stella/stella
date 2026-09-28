@@ -1,5 +1,5 @@
-//! The platform-independent half: what an identity looks like once it has
-//! left Security.framework, and how it is named.
+//! What an identity looks like once it has left the platform's certificate
+//! store, how it is named, and how a platform signer fails.
 
 use std::fmt;
 
@@ -14,7 +14,13 @@ use crate::spki::key_type_from_certificate;
 /// enough to read.
 const FALLBACK_LABEL_LENGTH: usize = 16;
 
-/// The signature algorithms a PDF signer can pair a keychain key with.
+/// What the platform keeps its certificates in, as the log names it.
+#[cfg(target_os = "windows")]
+const STORE: &str = "the certificate store";
+#[cfg(not(target_os = "windows"))]
+const STORE: &str = "the keychain";
+
+/// The signature algorithms a PDF signer can pair a stored key with.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SigningKeyType {
   Rsa,
@@ -32,10 +38,10 @@ impl SigningKeyType {
   }
 }
 
-/// A certificate in the keychain whose private key is available for signing.
+/// A stored certificate whose private key is available for signing.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SigningIdentity {
-  /// SHA-256 of the leaf certificate's DER, lowercase hex. The keychain's own
+  /// SHA-256 of the leaf certificate's DER, lowercase hex. A store's own
   /// handles are process-local and its ordering is not stable, so the
   /// fingerprint is what travels to the dialog and comes back to sign with.
   pub id: String,
@@ -54,20 +60,20 @@ pub struct SigningIdentity {
   pub key_type: SigningKeyType,
 }
 
-/// A failure from the keychain. `code` is what the user is told; `detail` is
-/// the keychain's own description, for the log only.
+/// A failure from the platform's store. `code` is what the user is told;
+/// `detail` is the store's own description, for the log only.
 #[derive(Debug)]
 pub enum SigningError {
-  /// Signing needs Security.framework; this build does not run on macOS.
+  /// This build has no signer for the platform it runs on.
   UnsupportedPlatform,
-  /// The keychain could not be searched at all.
+  /// The store could not be searched at all.
   KeychainUnavailable {
     code: SigningErrorCode,
     detail: String,
   },
-  /// No identity in the keychain has this fingerprint any more.
+  /// No identity in the store has this fingerprint any more.
   IdentityNotFound,
-  /// The keychain refused to sign: a denied consent prompt, a locked
+  /// The store refused to sign: a denied consent or PIN prompt, a locked
   /// keychain, a removed smart card.
   SignatureFailed {
     code: SigningErrorCode,
@@ -93,22 +99,18 @@ impl fmt::Display for SigningError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::UnsupportedPlatform => {
-        f.write_str("PDF signing is available on macOS only")
+        f.write_str("PDF signing is not available on this platform")
       }
       Self::KeychainUnavailable { code, detail } => {
-        write!(
-          f,
-          "the keychain could not be read ({}): {detail}",
-          code.as_str()
-        )
+        write!(f, "{STORE} could not be read ({}): {detail}", code.as_str())
       }
       Self::IdentityNotFound => {
-        f.write_str("the selected certificate is no longer in the keychain")
+        write!(f, "the selected certificate is no longer in {STORE}")
       }
       Self::SignatureFailed { code, detail } => {
         write!(
           f,
-          "the keychain did not sign the document ({}): {detail}",
+          "{STORE} did not sign the document ({}): {detail}",
           code.as_str()
         )
       }
@@ -119,7 +121,8 @@ impl fmt::Display for SigningError {
 impl std::error::Error for SigningError {}
 
 /// The identity's stable name: the fingerprint of its leaf certificate.
-pub(crate) fn certificate_fingerprint(certificate_der: &[u8]) -> String {
+#[must_use]
+pub fn certificate_fingerprint(certificate_der: &[u8]) -> String {
   hex::encode(Sha256::digest(certificate_der))
 }
 
@@ -134,10 +137,17 @@ pub(crate) fn identity_label(subject_summary: &str, fingerprint: &str) -> String
   trimmed.to_string()
 }
 
-/// The picker's entry for a keychain certificate, or `None` when it cannot
-/// sign a document at `now` (Unix seconds): see [`crate::list_identities`].
-/// Everything comes from the certificate's own bytes.
-pub(crate) fn signing_identity(
+/// The picker's entry for a stored certificate, or `None` when it cannot sign
+/// a document at `now` (Unix seconds). Left out: a key type that is neither
+/// RSA nor EC (no PDF signature algorithm pairs with it), a certificate
+/// outside its validity window, one whose KeyUsage permits neither
+/// digitalSignature nor nonRepudiation, and one whose extended key usages are
+/// all for something else (servers, login, code, VPN endpoints).
+///
+/// Everything comes from the certificate's own bytes, so every platform
+/// applies the same rules. `chain_der` runs only for a certificate that is
+/// offered: building a chain is store work.
+pub fn signing_identity(
   certificate_der: Vec<u8>,
   subject_summary: &str,
   chain_der: impl FnOnce() -> Vec<Vec<u8>>,
@@ -158,6 +168,17 @@ pub(crate) fn signing_identity(
     certificate_der,
     key_type,
   })
+}
+
+/// The current time as the filter reads it: Unix seconds, clamped rather
+/// than failing on a clock before 1970 or past `i64`.
+#[must_use]
+pub fn unix_now() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_or(0, |elapsed| {
+      i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+    })
 }
 
 #[cfg(test)]
@@ -205,7 +226,7 @@ mod tests {
     assert!(offered.is_none());
     assert!(
       !built,
-      "chain building is keychain work; skip it when filtered"
+      "chain building is store work; skip it when filtered"
     );
   }
 
@@ -244,16 +265,17 @@ mod tests {
     assert_eq!(SigningKeyType::Ec.signature_algorithm(), "ECDSA");
   }
 
-  #[cfg(not(target_os = "macos"))]
+  #[cfg(not(target_os = "windows"))]
   #[test]
-  fn reports_the_platform_limit_off_macos() {
-    assert!(matches!(
-      crate::list_identities(),
-      Err(SigningError::UnsupportedPlatform)
-    ));
-    assert!(matches!(
-      crate::sign_digest("", &[0; 32], SigningKeyType::Rsa),
-      Err(SigningError::UnsupportedPlatform)
-    ));
+  fn keeps_the_keychain_wording_where_the_keychain_signs() {
+    let failed = SigningError::SignatureFailed {
+      code: SigningErrorCode::Cancelled,
+      detail: "denied".to_string(),
+    };
+    assert_eq!(
+      failed.to_string(),
+      "the keychain did not sign the document (cancelled): denied"
+    );
+    assert_eq!(failed.code(), SigningErrorCode::Cancelled);
   }
 }

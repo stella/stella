@@ -22,9 +22,37 @@ class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
 const PROVIDER_HOST =
   /^(?:api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|api\.mistral\.ai|openrouter\.ai|bedrock-runtime\.[a-z0-9-]+\.amazonaws\.com(?:\.cassette\.invalid)?)$/u;
 
-/** Bodies go out in slices this long, so parsers see events split across
- *  reads (and multi-byte characters split across slices). */
+/** Bodies go out in slices this long by default, so parsers see events
+ *  split across reads. */
 const SLICE_BYTES = 61;
+
+/**
+ * Where a body is cut into reads: every `every` bytes, or at the byte
+ * offsets in `at` (offsets outside the body are ignored). One-byte reads cut
+ * inside every multi-byte character, every `data:` line and every CRLF.
+ */
+export type Chunking = { every: number } | { at: readonly number[] };
+
+const DEFAULT_CHUNKING: Chunking = { every: SLICE_BYTES };
+
+/** The end offset of each read of a `length`-byte body cut by `chunking`,
+ *  the last read's included. */
+const readEnds = (length: number, chunking: Chunking): number[] => {
+  if ("every" in chunking) {
+    if (!Number.isSafeInteger(chunking.every) || chunking.every < 1) {
+      return panic(`A read is at least one byte, not ${chunking.every}`);
+    }
+    const ends: number[] = [];
+    for (let end = chunking.every; end < length; end += chunking.every) {
+      ends.push(end);
+    }
+    return [...ends, length];
+  }
+  const cuts = [...new Set(chunking.at)]
+    .filter((offset) => offset > 0 && offset < length)
+    .toSorted((left, right) => left - right);
+  return [...cuts, length];
+};
 
 // --- AWS event stream framing ---------------------------------------------
 
@@ -155,6 +183,8 @@ const abortError = () =>
   new DOMException("The operation was aborted.", "AbortError");
 
 type ServeOptions = {
+  /** Where every body is cut into reads; `SLICE_BYTES` apart by default. */
+  chunking?: Chunking | undefined;
   /** Holds the first exchange's body open after this many bytes until the
    *  request is aborted, the way a model that stops talking does. */
   holdAfterBytes?: number | undefined;
@@ -238,9 +268,11 @@ const responseFor = (
   exchange: ProviderWireExchange,
   signal: AbortSignal | null,
   holdAfterBytes: number | undefined,
+  chunking: Chunking = DEFAULT_CHUNKING,
 ): Response => {
   const bytes = bodyBytesOf(exchange.response.body);
   const limit = holdAfterBytes ?? bytes.length;
+  const ends = readEnds(bytes.length, chunking);
   let offset = 0;
   let onAbort: (() => void) | undefined;
   const body = new ReadableStream<Uint8Array>({
@@ -291,7 +323,10 @@ const responseFor = (
         controller.close();
         return;
       }
-      const end = Math.min(offset + SLICE_BYTES, limit);
+      const end = Math.min(
+        ends.find((candidate) => candidate > offset) ?? bytes.length,
+        limit,
+      );
       controller.enqueue(bytes.slice(offset, end));
       offset = end;
     },
@@ -363,7 +398,7 @@ export const installProviderWireReplay = () => {
         path,
         url: url.toString(),
       });
-      return responseFor(sideAnswer, signal, undefined);
+      return responseFor(sideAnswer, signal, undefined, options.chunking);
     }
     // A repeated exchange answers every retry until a request asks for
     // something else.
@@ -403,6 +438,7 @@ export const installProviderWireReplay = () => {
       current.index === 0 && current.entry.served === 1
         ? options.holdAfterBytes
         : undefined,
+      options.chunking,
     );
   };
 

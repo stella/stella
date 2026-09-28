@@ -587,6 +587,8 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
 
     steps:
       - name: Checkout
@@ -801,6 +803,42 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
+
+      # The other half of that guard: while a release pull request is open, the
+      # queue holds a pull request adding a CLI changeset until the release has
+      # merged, so the release is never the one ejected. A pull request run
+      # only warns.
+      - name: Release CLI changeset hold
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Read the release state here, right before the decision: a release
+          # opened while this run was queued must still hold the pull request.
+          number="$PULL_REQUEST_NUMBER"
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
+              exit 1
+            fi
+            number="${BASH_REMATCH[1]}"
+          fi
+          state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+          open_other=$(sed -n 's/^open_other=//p' <<<"$state")
+          current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
+          bun scripts/check-release-cli-changeset-hold.ts \
+            --base "origin/$BASE_REF" \
+            --event "$EVENT_NAME" \
+            --open-releases "$open_other" \
+            --is-release "$current_is_release"
 
       - name: CLI contract changeset guard
         if: >-
@@ -1345,7 +1383,9 @@ jobs:
         run: |
           bun test scripts/check-api-deployment.test.ts
           bun test scripts/check-staging-deploy-decision.test.ts
+          bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
+          bash scripts/release-pull-requests.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
@@ -3200,7 +3240,8 @@ jobs:
   # libraries a Linux clippy run would require. Windows builds the
   # test binaries but does not execute them: hosted Windows currently
   # exits before the Rust test harness starts with a native entrypoint
-  # error in the Tauri-linked binary. macOS executes the test suite.
+  # error in the Tauri-linked binary. The signer crates link no Tauri,
+  # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
     name: Desktop Rust (${{ matrix.os }})
@@ -3224,6 +3265,10 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+    env:
+      # Names the signer test certificates, unique per run so a rerun on a
+      # reused machine never meets a previous run's.
+      STELLA_SIGNING_FIXTURE_PREFIX: stella-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout
@@ -3255,6 +3300,54 @@ jobs:
       - name: Build test binaries
         if: matrix.os == 'windows'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+
+      # The signer crates link no Tauri, so their tests do run here: against
+      # throwaway certificates in the runner's own current-user store, one
+      # per case the listing must keep or leave out.
+      - name: Install signing test certificates
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
+          $store = 'Cert:\CurrentUser\My'
+          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
+          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
+          $common = @{
+            CertStoreLocation = $store
+            Type = 'Custom'
+            Provider = 'Microsoft Software Key Storage Provider'
+            KeyExportPolicy = 'NonExportable'
+            NotAfter = (Get-Date).AddDays(2)
+          }
+          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
+          $expired = $common.Clone()
+          $expired.NotBefore = (Get-Date).AddDays(-10)
+          $expired.NotAfter = (Get-Date).AddDays(-1)
+          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          # Keep only the public half of this one: a certificate whose key is gone.
+          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
+          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
+          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
+          Remove-Item -Path $keyed.PSPath -DeleteKey
+          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+
+      - name: Test signer against the certificate store
+        if: matrix.os == 'windows'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+
+      - name: Remove signing test certificates
+        if: always() && matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
+            ForEach-Object {
+              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
+            }
 
       - name: Smoke native desktop transport against hosted API
         if: matrix.os == 'macos'

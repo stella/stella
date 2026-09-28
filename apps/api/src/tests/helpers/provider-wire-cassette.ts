@@ -59,6 +59,10 @@ export const PROVIDER_WIRE_SCENARIOS = {
   "malformed-chunk": { outcome: "error", recordable: false },
   /** A stream that stops before its terminal event. */
   "early-eof": { outcome: "either", recordable: false },
+  /** The provider ends the response with a stop reason no answer stands
+   *  on: a paused turn, a tool call it could not form, a failure
+   *  mid-response. */
+  "unusable-stop": { outcome: "error", recordable: false },
 } as const satisfies Record<
   string,
   { outcome: "either" | "error" | "finished"; recordable: boolean }
