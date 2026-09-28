@@ -1,4 +1,5 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import { Buffer } from "node:buffer";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
@@ -8,7 +9,11 @@ import {
   publisherSummaryOf,
   type PublisherSummaryInput,
 } from "@/api/lib/case-law/publisher-summary";
-import { chunkDocument } from "@/api/lib/corpus-index/chunking";
+import {
+  chunkDocument,
+  chunkLegislationDocument,
+  ChunkBudgetError,
+} from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -22,8 +27,13 @@ import {
   type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import {
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
+import { LIMITS } from "@/api/lib/limits";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -246,40 +256,157 @@ type BuildLegislationV2Options = ProjectionBuildBase & {
   input: LegislationV2ProjectionInput;
 };
 
+/** Engine document cap with room for indexing metadata. */
+export const LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES =
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES;
+
+type LegislationWholeDocumentOptions = {
+  input: LegislationV2ProjectionInput;
+  text: string;
+  revision: ProjectionRevision;
+};
+
+const legislationWholeDocument = ({
+  input,
+  text,
+  revision,
+}: LegislationWholeDocumentOptions): LegislationV2ProjectionDocument => ({
+  ...sharedFields(input, revision),
+  title: input.title,
+  text,
+  is_opening: true,
+  status: input.status,
+  eli: input.eli,
+  ...(input.effectiveDate === null
+    ? {}
+    : { effective_date: input.effectiveDate }),
+  ...(input.versionValidFrom === null
+    ? {}
+    : { version_valid_from: input.versionValidFrom }),
+  ...(input.versionValidTo === null
+    ? {}
+    : { version_valid_to: input.versionValidTo }),
+});
+
+export const legislationV2NeedsPassages = (
+  options: LegislationWholeDocumentOptions,
+): boolean => {
+  if (
+    Buffer.byteLength(options.text, "utf-8") >
+    LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES
+  ) {
+    return true;
+  }
+  return (
+    Buffer.byteLength(
+      JSON.stringify(legislationWholeDocument(options)),
+      "utf-8",
+    ) > LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES
+  );
+};
+
 export const buildLegislationV2ProjectionDocuments = ({
   input,
   payload,
   revision,
-}: BuildLegislationV2Options): [LegislationV2ProjectionDocument] => [
-  {
-    ...sharedFields(input, revision),
-    title: input.title,
+}: BuildLegislationV2Options): Result<
+  LegislationV2ProjectionDocument[],
+  ChunkBudgetError
+> => {
+  const textBytes = Buffer.byteLength(payload.text, "utf-8");
+  if (textBytes > LIMITS.corpusPayloadMaxDecompressedBytes) {
+    return Result.err(
+      new ChunkBudgetError({
+        message: "Legislation text exceeds the projection ceiling",
+      }),
+    );
+  }
+  const document = legislationWholeDocument({
+    input,
     text: payload.text,
-    is_opening: true,
-    status: input.status,
-    eli: input.eli,
-    ...(input.effectiveDate === null
-      ? {}
-      : { effective_date: input.effectiveDate }),
-    ...(input.versionValidFrom === null
-      ? {}
-      : { version_valid_from: input.versionValidFrom }),
-    ...(input.versionValidTo === null
-      ? {}
-      : { version_valid_to: input.versionValidTo }),
-  },
-];
+    revision,
+  });
+  if (
+    textBytes <= LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES &&
+    Buffer.byteLength(JSON.stringify(document), "utf-8") <=
+      LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES
+  ) {
+    return Result.ok([document]);
+  }
+  const chunks = Result.try({
+    try: () =>
+      chunkLegislationDocument({
+        ast: hasUsableAst(payload.ast) ? payload.ast : null,
+        fallbackText: payload.text,
+      }),
+    catch: (cause: unknown) => cause,
+  });
+  if (chunks.isErr()) {
+    if (chunks.error instanceof ChunkBudgetError) {
+      return Result.err(chunks.error);
+    }
+    return panic("Legislation chunker failed unexpectedly");
+  }
+  const passages: LegislationV2ProjectionDocument[] = [];
+  let revisionBytes = 0;
+  for (const { seq, text } of chunks.value) {
+    const passage = {
+      ...sharedFields(input, revision),
+      text,
+      is_opening: seq === 0,
+      ...(seq === 0 ? { title: input.title } : {}),
+      status: input.status,
+      eli: input.eli,
+      ...(input.effectiveDate === null
+        ? {}
+        : { effective_date: input.effectiveDate }),
+      ...(input.versionValidFrom === null
+        ? {}
+        : { version_valid_from: input.versionValidFrom }),
+      ...(input.versionValidTo === null
+        ? {}
+        : { version_valid_to: input.versionValidTo }),
+    } satisfies LegislationV2ProjectionDocument;
+    const lineBytes = Buffer.byteLength(JSON.stringify(passage), "utf-8");
+    if (lineBytes > LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES) {
+      return Result.err(
+        new ChunkBudgetError({
+          message: "Legislation passage exceeds the single-document ceiling",
+        }),
+      );
+    }
+    revisionBytes += lineBytes + 1;
+    if (revisionBytes > CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES) {
+      return Result.err(
+        new ChunkBudgetError({
+          message: "Legislation revision exceeds the append safety ceiling",
+        }),
+      );
+    }
+    passages.push(passage);
+  }
+  return Result.ok(passages);
+};
 
 export const buildCorpusProjectionDocuments = (
   options: BuildCorpusProjectionDocumentsOptions,
-): Record<string, unknown>[] => {
+): Result<Record<string, unknown>[], ChunkBudgetError> => {
   switch (options.family) {
     case "case_law":
-      return buildCaseLawProjectionDocuments({
-        manifest: options.manifest,
-        input: options.input,
-        payload: options.payload,
-        revision: options.revision,
+      return Result.try({
+        try: () =>
+          buildCaseLawProjectionDocuments({
+            manifest: options.manifest,
+            input: options.input,
+            payload: options.payload,
+            revision: options.revision,
+          }),
+        catch: (cause: unknown) => {
+          if (cause instanceof ChunkBudgetError) {
+            return cause;
+          }
+          return panic("Case-law projection builder failed unexpectedly");
+        },
       });
     case "legislation":
       return buildLegislationV2ProjectionDocuments({
