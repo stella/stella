@@ -8,10 +8,12 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
+import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -41,7 +43,8 @@ const timerStart = createSafeHandler(
       "creating a draft time entry dated today in the timezoneId you pass " +
       "and optionally attached to a work item. The user's effective rate is " +
       "resolved at start and an entry with no resolvable rate is recorded as " +
-      "non-billable. Refused when the user already has a running timer.",
+      "non-billable. A narrative is required when the organization's time " +
+      "policy requires one. Refused when the user already has a running timer.",
     permissions: { timeEntry: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: timerStartBodySchema,
@@ -53,12 +56,30 @@ const timerStart = createSafeHandler(
     user,
     body,
     recordAuditEvent,
+    memberRole,
   }) {
     const now = new Date();
     const todayStr = yield* formatTodayInTimeZone({
       timezoneId: body.timezoneId,
       now,
     });
+
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const violation = getTimePolicyViolation({
+      policy,
+      dateWorked: todayStr,
+      today: todayStr,
+      canApprove: canApproveTimeEntries(memberRole),
+      narrative: body.narrative ?? "",
+    });
+    if (violation) {
+      return Result.err(violation);
+    }
 
     // Validate the optional work context belongs to this matter.
     const workItemId = body.workItemId;

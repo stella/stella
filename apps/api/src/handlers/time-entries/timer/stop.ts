@@ -6,10 +6,16 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
+import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  getTimePolicyViolation,
+  readTimePolicy,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStop = createSafeHandler(
   {
@@ -21,7 +27,21 @@ const timerStop = createSafeHandler(
     permissions: { timeEntry: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
   },
-  async function* ({ safeDb, user, workspaceId, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    memberRole,
+    recordAuditEvent,
+  }) {
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const now = new Date();
     const stoppedEntry = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
@@ -30,6 +50,9 @@ const timerStop = createSafeHandler(
         const [activeEntry] = await tx
           .select({
             id: timeEntries.id,
+            dateWorked: timeEntries.dateWorked,
+            timezoneId: timeEntries.timezoneId,
+            narrative: timeEntries.narrative,
             timerStartedAt: timeEntries.timerStartedAt,
           })
           .from(timeEntries)
@@ -49,11 +72,31 @@ const timerStop = createSafeHandler(
           return null;
         }
 
-        const now = new Date();
+        const todayResult = formatTodayInTimeZone({
+          timezoneId: activeEntry.timezoneId,
+          now,
+        });
+        if (Result.isError(todayResult)) {
+          return { type: "violation" as const, error: todayResult.error };
+        }
+        const violation = getTimePolicyViolation({
+          policy,
+          dateWorked: activeEntry.dateWorked,
+          today: todayResult.value,
+          canApprove: canApproveTimeEntries(memberRole),
+          narrative: activeEntry.narrative,
+        });
+        if (violation) {
+          return { type: "violation" as const, error: violation };
+        }
+
         const startedAt = activeEntry.timerStartedAt;
         const elapsedMs = now.getTime() - startedAt.getTime();
         const rawMinutes = Math.max(1, Math.round(elapsedMs / 60_000));
-        const billedMinutes = roundToBillingIncrement(rawMinutes);
+        const billedMinutes = roundToBillingIncrement(
+          rawMinutes,
+          policy.timeMinimumUnitMinutes,
+        );
 
         await tx
           .update(timeEntries)
@@ -88,6 +131,7 @@ const timerStop = createSafeHandler(
         });
 
         return {
+          type: "stopped" as const,
           id: activeEntry.id,
           durationMinutes: rawMinutes,
           billedMinutes,
@@ -101,7 +145,15 @@ const timerStop = createSafeHandler(
       );
     }
 
-    return Result.ok(stoppedEntry);
+    if (stoppedEntry.type === "violation") {
+      return Result.err(stoppedEntry.error);
+    }
+
+    return Result.ok({
+      id: stoppedEntry.id,
+      durationMinutes: stoppedEntry.durationMinutes,
+      billedMinutes: stoppedEntry.billedMinutes,
+    });
   },
 );
 

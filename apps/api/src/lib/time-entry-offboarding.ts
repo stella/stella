@@ -7,7 +7,11 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  DEFAULT_TIME_POLICY,
+  getTimePeriodLockError,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -72,6 +76,7 @@ export const closeRemovedMemberActiveTimer = async ({
       ? await tx
           .select({
             billedMinutes: timeEntries.billedMinutes,
+            dateWorked: timeEntries.dateWorked,
             durationMinutes: timeEntries.durationMinutes,
             id: timeEntries.id,
             timerStartedAt: timeEntries.timerStartedAt,
@@ -91,12 +96,35 @@ export const closeRemovedMemberActiveTimer = async ({
       : [];
 
     if (timer?.timerStartedAt) {
+      const settings = await tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: organizationId } },
+        columns: {
+          timeMinimumUnitMinutes: true,
+          timeLockedThroughMonth: true,
+        },
+      });
+      // Member removal already happened before this hook. Keep a locked timer
+      // intact for an administrator to resolve after the period is unlocked.
+      if (
+        getTimePeriodLockError(
+          { ...DEFAULT_TIME_POLICY, ...settings },
+          timer.dateWorked,
+        )
+      ) {
+        return;
+      }
+      const minimumUnitMinutes =
+        settings?.timeMinimumUnitMinutes ??
+        DEFAULT_TIME_POLICY.timeMinimumUnitMinutes;
       const now = new Date();
       const durationMinutes = Math.max(
         1,
         Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
       );
-      const billedMinutes = roundToBillingIncrement(durationMinutes);
+      const billedMinutes = roundToBillingIncrement(
+        durationMinutes,
+        minimumUnitMinutes,
+      );
       await tx
         .update(timeEntries)
         .set({

@@ -64,6 +64,10 @@ export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =
   "off" as const satisfies DocumentProcessingMode;
 
+export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
+export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
+export const DEFAULT_TIME_NARRATIVE_REQUIRED = true;
+
 const DOCUMENT_PROCESSING_MODE_SQL_VALUES = DOCUMENT_PROCESSING_MODES.map(
   (mode) => sql.raw(`'${mode}'`),
 );
@@ -171,6 +175,19 @@ export const organizationSettings = p.pgTable(
       .integer("matter_number_padding")
       .notNull()
       .default(3),
+    timeMinimumUnitMinutes: p
+      .integer("time_minimum_unit_minutes")
+      .notNull()
+      .default(DEFAULT_TIME_MINIMUM_UNIT_MINUTES),
+    timeEditWindowDays: p
+      .integer("time_edit_window_days")
+      .notNull()
+      .default(DEFAULT_TIME_EDIT_WINDOW_DAYS),
+    timeLockedThroughMonth: p.date("time_locked_through_month"),
+    timeNarrativeRequired: p
+      .boolean("time_narrative_required")
+      .notNull()
+      .default(DEFAULT_TIME_NARRATIVE_REQUIRED),
     documentStampEnabled: p
       .boolean("document_stamp_enabled")
       .notNull()
@@ -277,6 +294,18 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_time_minimum_unit_check",
+      sql`${table.timeMinimumUnitMinutes} > 0 AND 60 % ${table.timeMinimumUnitMinutes} = 0`,
+    ),
+    p.check(
+      "organization_settings_time_edit_window_check",
+      sql`${table.timeEditWindowDays} >= 0`,
+    ),
+    p.check(
+      "organization_settings_time_locked_month_check",
+      sql`${table.timeLockedThroughMonth} IS NULL OR EXTRACT(MONTH FROM ${table.timeLockedThroughMonth} + 1) <> EXTRACT(MONTH FROM ${table.timeLockedThroughMonth})`,
+    ),
     p.check(
       "organization_settings_document_processing_mode_check",
       sql`${table.documentProcessingMode} IN (${sql.join(DOCUMENT_PROCESSING_MODE_SQL_VALUES, sql`, `)})`,

@@ -726,6 +726,46 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      time_minimum_unit_minutes: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(60),
+          v.description(
+            "Minimum time increment in minutes; must divide 60 (update_org_settings)",
+          ),
+        ),
+      ),
+      time_edit_window_days: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.description(
+            "Days a timekeeper may edit an entry (update_org_settings)",
+          ),
+        ),
+      ),
+      time_locked_through_month: v.optional(
+        v.nullable(
+          v.pipe(
+            v.string(),
+            v.isoDate(),
+            v.description(
+              "Last day of the latest locked month, or null to unlock (update_org_settings)",
+            ),
+          ),
+        ),
+      ),
+      time_narrative_required: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Require a narrative on time entries (update_org_settings)",
+          ),
+        ),
+      ),
       // The CLI's --yes flow injects `confirm: true` for the destructive
       // remove_member subcommand; the strictObject would otherwise reject it.
       // Other actions accept but ignore it.
@@ -767,14 +807,22 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["matter_number_padding"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
+        ["time_minimum_unit_minutes"],
+        ["time_edit_window_days"],
+        ["time_locked_through_month"],
+        ["time_narrative_required"],
       ],
       (i) =>
         i.action === "update_org_settings" ||
         (i.matter_number_pattern === undefined &&
           i.matter_number_padding === undefined &&
           i.prompt_caching_enabled === undefined &&
-          i.document_processing_mode === undefined),
-      "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
+          i.document_processing_mode === undefined &&
+          i.time_minimum_unit_minutes === undefined &&
+          i.time_edit_window_days === undefined &&
+          i.time_locked_through_month === undefined &&
+          i.time_narrative_required === undefined),
+      "Settings fields apply only to update_org_settings",
     ),
     // matter_id/user_id are meaningless for an org-settings update.
     v.partialCheck(
@@ -792,13 +840,21 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["matter_number_padding"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
+        ["time_minimum_unit_minutes"],
+        ["time_edit_window_days"],
+        ["time_locked_through_month"],
+        ["time_narrative_required"],
       ],
       (i) =>
         i.action !== "update_org_settings" ||
         i.matter_number_pattern !== undefined ||
         i.matter_number_padding !== undefined ||
         i.prompt_caching_enabled !== undefined ||
-        i.document_processing_mode !== undefined,
+        i.document_processing_mode !== undefined ||
+        i.time_minimum_unit_minutes !== undefined ||
+        i.time_edit_window_days !== undefined ||
+        i.time_locked_through_month !== undefined ||
+        i.time_narrative_required !== undefined,
       "Provide at least one setting to change for update_org_settings",
     ),
     // The matter-number pattern and padding are a unit (mirrors the backing).
@@ -816,7 +872,7 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, and document processing. Manage provider " +
+    "numbering, prompt caching, document processing, and time policy. Manage provider " +
     "secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
@@ -966,6 +1022,18 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.document_processing_mode === undefined
           ? {}
           : { documentProcessingMode: input.document_processing_mode }),
+        ...(input.time_minimum_unit_minutes === undefined
+          ? {}
+          : { timeMinimumUnitMinutes: input.time_minimum_unit_minutes }),
+        ...(input.time_edit_window_days === undefined
+          ? {}
+          : { timeEditWindowDays: input.time_edit_window_days }),
+        ...(input.time_locked_through_month === undefined
+          ? {}
+          : { timeLockedThroughMonth: input.time_locked_through_month }),
+        ...(input.time_narrative_required === undefined
+          ? {}
+          : { timeNarrativeRequired: input.time_narrative_required }),
       },
     }),
   );

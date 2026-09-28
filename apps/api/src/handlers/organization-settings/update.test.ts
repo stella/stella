@@ -14,6 +14,118 @@ import { updateOrganizationSettingsHandler } from "./update";
 const organizationId = toSafeId<"organization">("org_test");
 
 describe("updateOrganizationSettingsHandler", () => {
+  test("rejects increments that do not divide an hour", async () => {
+    const result = await Result.gen(() =>
+      updateOrganizationSettingsHandler({
+        body: { timeMinimumUnitMinutes: 7 },
+        organizationId,
+        recordAuditEvent: async () => {},
+        safeDb: async () => {
+          throw new Error("Invalid policy reached the database");
+        },
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 400 });
+    }
+  });
+
+  test("rejects a lock date inside an open month", async () => {
+    const result = await Result.gen(() =>
+      updateOrganizationSettingsHandler({
+        body: { timeLockedThroughMonth: "2026-02-27" },
+        organizationId,
+        recordAuditEvent: async () => {},
+        safeDb: async () => {
+          throw new Error("Invalid policy reached the database");
+        },
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 400 });
+    }
+  });
+
+  test("persists policy fields and audits prior values", async () => {
+    let insertCount = 0;
+    let updateSet: Record<string, unknown> | undefined;
+    let auditEvent: Parameters<AuditRecorder>[1] | undefined;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  timeMinimumUnitMinutes: 6,
+                  timeEditWindowDays: 90,
+                  timeLockedThroughMonth: "2025-12-31",
+                  timeNarrativeRequired: true,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          insertCount += 1;
+          return insertCount === 1
+            ? { onConflictDoNothing: async () => {} }
+            : {
+                onConflictDoUpdate: async ({
+                  set,
+                }: {
+                  set: Record<string, unknown>;
+                }) => {
+                  updateSet = set;
+                },
+              };
+        },
+      }),
+    });
+    const result = await Result.gen(() =>
+      updateOrganizationSettingsHandler({
+        body: {
+          timeMinimumUnitMinutes: 15,
+          timeEditWindowDays: 30,
+          timeLockedThroughMonth: null,
+          timeNarrativeRequired: false,
+        },
+        organizationId,
+        recordAuditEvent: async (_tx, event) => {
+          auditEvent = event;
+        },
+        safeDb: async (operation) => Result.ok(await operation(tx)),
+      }),
+    );
+
+    expect(result).toEqual(
+      Result.ok({
+        timeMinimumUnitMinutes: 15,
+        timeEditWindowDays: 30,
+        timeLockedThroughMonth: null,
+        timeNarrativeRequired: false,
+      }),
+    );
+    expect(updateSet).toMatchObject({
+      timeMinimumUnitMinutes: 15,
+      timeEditWindowDays: 30,
+      timeLockedThroughMonth: null,
+      timeNarrativeRequired: false,
+    });
+    expect(auditEvent?.changes).toMatchObject({
+      timeMinimumUnitMinutes: { old: 6, new: 15 },
+      timeEditWindowDays: { old: 90, new: 30 },
+      timeLockedThroughMonth: { old: "2025-12-31", new: null },
+      timeNarrativeRequired: { old: true, new: false },
+    });
+  });
+
   test("persists an OCR policy mode and records the transition", async () => {
     let auditEvent: Parameters<AuditRecorder>[1] | undefined;
     let insertCount = 0;

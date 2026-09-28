@@ -3,10 +3,15 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { parsePlainDate, Temporal } from "@stll/time";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   DOCUMENT_PROCESSING_MODE,
   DEFAULT_DOCUMENT_PROCESSING_MODE,
+  DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  DEFAULT_TIME_NARRATIVE_REQUIRED,
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
@@ -32,13 +37,17 @@ const updateOrganizationSettingsBodySchema = t.Object({
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
+  timeMinimumUnitMinutes: t.Optional(t.Integer({ minimum: 1, maximum: 60 })),
+  timeEditWindowDays: t.Optional(t.Integer({ minimum: 0 })),
+  timeLockedThroughMonth: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  timeNarrativeRequired: t.Optional(t.Boolean()),
 });
 
 const config = {
   description:
     "Change the organization's general settings: document processing mode, " +
-    "matter-number pattern and padding, prompt caching, and memory " +
-    "extraction. Only the fields you pass are written and the matter-number " +
+    "matter-number pattern and padding, prompt caching, memory " +
+    "extraction, and time policy. Only the fields you pass are written and the matter-number " +
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
     "Practice jurisdictions are set through " +
@@ -54,6 +63,78 @@ export type UpdateOrganizationSettingsProps = {
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateOrganizationSettingsBodySchema>;
 };
+
+type UpdateBody = UpdateOrganizationSettingsProps["body"];
+type ExistingTimePolicy = Pick<
+  typeof organizationSettings.$inferSelect,
+  | "timeMinimumUnitMinutes"
+  | "timeEditWindowDays"
+  | "timeLockedThroughMonth"
+  | "timeNarrativeRequired"
+>;
+
+const timePolicyValues = (body: UpdateBody) => ({
+  ...(body.timeMinimumUnitMinutes !== undefined
+    ? { timeMinimumUnitMinutes: body.timeMinimumUnitMinutes }
+    : {}),
+  ...(body.timeEditWindowDays !== undefined
+    ? { timeEditWindowDays: body.timeEditWindowDays }
+    : {}),
+  ...(body.timeLockedThroughMonth !== undefined
+    ? { timeLockedThroughMonth: body.timeLockedThroughMonth }
+    : {}),
+  ...(body.timeNarrativeRequired !== undefined
+    ? { timeNarrativeRequired: body.timeNarrativeRequired }
+    : {}),
+});
+
+const timePolicyAuditChanges = (
+  body: UpdateBody,
+  existing: ExistingTimePolicy | undefined,
+) => ({
+  ...(body.timeMinimumUnitMinutes !== undefined &&
+  body.timeMinimumUnitMinutes !==
+    (existing?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES)
+    ? {
+        timeMinimumUnitMinutes: {
+          old:
+            existing?.timeMinimumUnitMinutes ??
+            DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+          new: body.timeMinimumUnitMinutes,
+        },
+      }
+    : {}),
+  ...(body.timeEditWindowDays !== undefined &&
+  body.timeEditWindowDays !==
+    (existing?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS)
+    ? {
+        timeEditWindowDays: {
+          old: existing?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
+          new: body.timeEditWindowDays,
+        },
+      }
+    : {}),
+  ...(body.timeLockedThroughMonth !== undefined &&
+  body.timeLockedThroughMonth !== (existing?.timeLockedThroughMonth ?? null)
+    ? {
+        timeLockedThroughMonth: {
+          old: existing?.timeLockedThroughMonth ?? null,
+          new: body.timeLockedThroughMonth,
+        },
+      }
+    : {}),
+  ...(body.timeNarrativeRequired !== undefined &&
+  body.timeNarrativeRequired !==
+    (existing?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED)
+    ? {
+        timeNarrativeRequired: {
+          old:
+            existing?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+          new: body.timeNarrativeRequired,
+        },
+      }
+    : {}),
+});
 
 // Shared org-settings update logic reused by the HTTP handler and the
 // `manage_organization` MCP tool, so both emit the identical audit event and
@@ -94,6 +175,42 @@ export const updateOrganizationSettingsHandler = async function* ({
     }
   }
 
+  if (
+    body.timeMinimumUnitMinutes !== undefined &&
+    (body.timeMinimumUnitMinutes < 1 || 60 % body.timeMinimumUnitMinutes !== 0)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_time_minimum_unit",
+        message: "timeMinimumUnitMinutes must be a positive divisor of 60",
+      }),
+    );
+  }
+
+  if (body.timeLockedThroughMonth) {
+    const lockedThrough = parsePlainDate(body.timeLockedThroughMonth);
+    if (
+      lockedThrough === null ||
+      lockedThrough.day !== lockedThrough.daysInMonth ||
+      Temporal.PlainDate.compare(
+        lockedThrough,
+        Temporal.Now.plainDateISO("UTC"),
+      ) >= 0
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          code: "invalid_time_locked_month",
+          message:
+            "timeLockedThroughMonth must be the last day of a closed month",
+        }),
+      );
+    }
+  }
+
+  const timePolicyUpdate = timePolicyValues(body);
+
   const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
       // Only touch optional settings when the body carries them; omission
@@ -103,10 +220,12 @@ export const updateOrganizationSettingsHandler = async function* ({
         body.documentProcessingMode !== undefined;
       const wantsMemoryExtractionUpdate =
         body.memoryExtractionEnabled !== undefined;
+      const wantsTimePolicyUpdate = Object.keys(timePolicyUpdate).length > 0;
       const needsSerializedSettingsRead =
         wantsPromptCachingUpdate ||
         wantsDocumentProcessingUpdate ||
-        wantsMemoryExtractionUpdate;
+        wantsMemoryExtractionUpdate ||
+        wantsTimePolicyUpdate;
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -139,6 +258,12 @@ export const updateOrganizationSettingsHandler = async function* ({
               memoryExtractionEnabled:
                 organizationSettings.memoryExtractionEnabled,
               promptCachingEnabled: organizationSettings.promptCachingEnabled,
+              timeMinimumUnitMinutes:
+                organizationSettings.timeMinimumUnitMinutes,
+              timeEditWindowDays: organizationSettings.timeEditWindowDays,
+              timeLockedThroughMonth:
+                organizationSettings.timeLockedThroughMonth,
+              timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
             })
             .from(organizationSettings)
             .where(eq(organizationSettings.organizationId, organizationId))
@@ -204,6 +329,7 @@ export const updateOrganizationSettingsHandler = async function* ({
                   : {}),
               }
             : {}),
+          ...timePolicyUpdate,
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -228,6 +354,7 @@ export const updateOrganizationSettingsHandler = async function* ({
                     : {}),
                 }
               : {}),
+            ...timePolicyUpdate,
             updatedAt: new Date(),
           },
         });
@@ -281,6 +408,7 @@ export const updateOrganizationSettingsHandler = async function* ({
                 },
               }
             : {}),
+          ...timePolicyAuditChanges(body, existing),
         },
       });
       return { type: "updated" } as const;
@@ -312,6 +440,7 @@ export const updateOrganizationSettingsHandler = async function* ({
     ...(body.memoryExtractionEnabled !== undefined
       ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
       : {}),
+    ...timePolicyUpdate,
   });
 };
 

@@ -746,7 +746,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       narrative: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
+          v.minLength(0),
           v.maxLength(10_000),
           v.description("Description of the work; required when creating"),
         ),
@@ -889,6 +889,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         organizationId: context.organizationId,
         workspaceId,
         userId: context.userId,
+        memberRole: { role: context.memberRole },
         recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
         body: {
           ...(input.entity_id === undefined

@@ -2491,6 +2491,10 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(v.number()),
+  timeEditWindowDays: v.optional(v.number()),
+  timeLockedThroughMonth: v.optional(v.nullable(v.string())),
+  timeNarrativeRequired: v.optional(v.boolean()),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([
