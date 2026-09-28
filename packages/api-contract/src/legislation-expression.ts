@@ -34,12 +34,10 @@ export type LegislationWindowDisposition =
   (typeof LEGISLATION_WINDOW_DISPOSITIONS)[number];
 
 /**
- * Why a version carries its disposition, by disposition. An effective version
- * normally carries no basis; `successor-derived-end` marks one whose end was
- * taken from the next version because the stated end could not be placed.
+ * Why a version that is not effective carries its disposition. An effective
+ * version carries no basis: its window is the publisher's, never inferred.
  */
 export const LEGISLATION_WINDOW_DISPOSITION_BASES = {
-  effective: ["successor-derived-end"],
   "never-in-force": ["publisher-flag", "replaced-same-day"],
   "invalid-window": ["zero-length-window", "reversed", "missing-start"],
   withdrawn: [
@@ -47,7 +45,10 @@ export const LEGISLATION_WINDOW_DISPOSITION_BASES = {
     "listed-not-stored",
     "deferred-promulgated",
   ],
-} as const satisfies Record<LegislationWindowDisposition, readonly string[]>;
+} as const satisfies Record<
+  Exclude<LegislationWindowDisposition, "effective">,
+  readonly string[]
+>;
 
 export type LegislationWindowDispositionBasis =
-  (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)[LegislationWindowDisposition][number];
+  (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)[keyof typeof LEGISLATION_WINDOW_DISPOSITION_BASES][number];

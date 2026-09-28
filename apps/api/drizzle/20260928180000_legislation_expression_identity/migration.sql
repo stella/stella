@@ -187,7 +187,8 @@ ALTER TABLE "legislation_documents"
   CHECK ("window_disposition" IN ('effective','never-in-force','invalid-window','withdrawn'))
   NOT VALID;--> statement-breakpoint
 
--- Every disposition but effective names its basis. The IS NOT NULL is not
+-- An effective row carries no basis: its window is the publisher's, never
+-- inferred. Every other disposition names its basis. The IS NOT NULL is not
 -- redundant: a CHECK passes on NULL, and `NULL IN (...)` is NULL.
 -- stella-migration-safety: reviewed drop-constraint - Drops only the
 -- constraint the next statement re-adds, so a retried migration re-enters the
@@ -197,7 +198,7 @@ ALTER TABLE "legislation_documents"
 ALTER TABLE "legislation_documents"
   ADD CONSTRAINT "legislation_documents_window_disposition_basis_pairing"
   CHECK (
-    (window_disposition = 'effective' AND (window_disposition_basis IS NULL OR window_disposition_basis IN ('successor-derived-end')))
+    (window_disposition = 'effective' AND window_disposition_basis IS NULL)
     OR (window_disposition = 'never-in-force' AND (window_disposition_basis IS NOT NULL AND window_disposition_basis IN ('publisher-flag','replaced-same-day')))
     OR (window_disposition = 'invalid-window' AND (window_disposition_basis IS NOT NULL AND window_disposition_basis IN ('zero-length-window','reversed','missing-start')))
     OR (window_disposition = 'withdrawn' AND (window_disposition_basis IS NOT NULL AND window_disposition_basis IN ('publisher-unlisted','listed-not-stored','deferred-promulgated')))

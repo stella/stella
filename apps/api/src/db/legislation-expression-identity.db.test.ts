@@ -115,8 +115,18 @@ describe("legislation expression identity columns", () => {
         WHERE id = ${DOCUMENT_ID}
       `);
     }
-    for (const disposition of LEGISLATION_WINDOW_DISPOSITIONS) {
-      for (const basis of LEGISLATION_WINDOW_DISPOSITION_BASES[disposition]) {
+    // Every disposition but effective names a basis.
+    expect(
+      Object.keys(LEGISLATION_WINDOW_DISPOSITION_BASES).toSorted(),
+    ).toEqual(
+      LEGISLATION_WINDOW_DISPOSITIONS.filter(
+        (disposition) => disposition !== "effective",
+      ).toSorted(),
+    );
+    for (const [disposition, bases] of Object.entries(
+      LEGISLATION_WINDOW_DISPOSITION_BASES,
+    )) {
+      for (const basis of bases) {
         await db.execute(sql`
           UPDATE legislation_documents
           SET window_disposition = ${disposition},
@@ -140,6 +150,10 @@ describe("legislation expression identity columns", () => {
     [
       "an effective row with another disposition's basis",
       sql`window_disposition_basis = 'reversed'`,
+    ],
+    [
+      "an effective row with an inferred end",
+      sql`window_disposition_basis = 'successor-derived-end'`,
     ],
     [
       "a never-in-force row with no basis",

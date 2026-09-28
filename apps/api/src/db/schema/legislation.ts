@@ -57,19 +57,20 @@ const sqlValues = (values: readonly string[]) =>
   );
 
 /**
- * Disposition and basis, paired: an effective version carries no basis unless
- * its end was taken from its successor, and every other disposition names why.
+ * Disposition and basis, paired: an effective version carries no basis, and
+ * every other disposition names why. The IS NOT NULL is not redundant: a
+ * CHECK passes on NULL, and `NULL IN (…)` is NULL.
  */
 const WINDOW_DISPOSITION_BASIS_PAIRING = sql.join(
-  Object.entries(LEGISLATION_WINDOW_DISPOSITION_BASES).map(
-    ([disposition, bases]) =>
-      sql`(window_disposition = ${sql.raw(`'${disposition}'`)} AND (${sql.raw(
-        disposition === "effective"
-          ? "window_disposition_basis IS NULL OR "
-          : // A CHECK passes on NULL, and `NULL IN (…)` is NULL.
-            "window_disposition_basis IS NOT NULL AND ",
-      )}window_disposition_basis IN (${sqlValues(bases)})))`,
-  ),
+  [
+    sql.raw(
+      "(window_disposition = 'effective' AND window_disposition_basis IS NULL)",
+    ),
+    ...Object.entries(LEGISLATION_WINDOW_DISPOSITION_BASES).map(
+      ([disposition, bases]) =>
+        sql`(window_disposition = ${sql.raw(`'${disposition}'`)} AND (window_disposition_basis IS NOT NULL AND window_disposition_basis IN (${sqlValues(bases)})))`,
+    ),
+  ],
   sql.raw(" OR "),
 );
 
