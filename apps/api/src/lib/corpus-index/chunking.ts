@@ -415,7 +415,7 @@ type LegislationBoundary = {
 const legislationAstBoundaries = (
   text: string,
   ast: DocumentAst | null,
-): Generator<LegislationBoundary> | null => {
+): Generator<LegislationBoundary, undefined> | null => {
   if (
     ast === null ||
     ast.blocks.length === 0 ||
@@ -440,7 +440,7 @@ const legislationAstBoundaries = (
     }
     cursor = offset + block.plainText.length;
   }
-  const generate = function* (): Generator<LegislationBoundary> {
+  const generate = function* (): Generator<LegislationBoundary, undefined> {
     const headings = createHeadingStack();
     let boundaryCursor = 0;
     for (const block of blocks) {
@@ -466,7 +466,7 @@ const legislationAstBoundaries = (
 
 function* legislationTextBoundaries(
   text: string,
-): Generator<LegislationBoundary> {
+): Generator<LegislationBoundary, undefined> {
   for (const match of text.matchAll(/\n[ \t]*\n/gu)) {
     const offset = match.index + match[0].length;
     if (offset < text.length) {
