@@ -227,6 +227,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   case_law_research_column: "court",
+  correspondence: "correspondence",
   bilingual_translation_run: "automation",
   document_translation_run: "automation",
   document_review_run: "documents",
