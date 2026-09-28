@@ -4,10 +4,11 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { BASELINE_PATHS } from "./baseline-paths";
 import { analyzeSqlPerf } from "./sql-perf-detector";
 import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
 
-export const SQL_PERF_BASELINE_PATH = ".oxlint-plugins/sql-perf-baseline.json";
+export const SQL_PERF_BASELINE_PATH = BASELINE_PATHS.sqlPerf;
 const SOURCE_GLOBS = SQL_PERF_LINT_FILES;
 
 export type SqlPerfCounts = Record<string, number>;
