@@ -1790,6 +1790,7 @@
       "title": "Egyéni mezők",
       "value": "Mező értéke"
     },
+    "datePrecision": "Dátum pontossága",
     "deleteContact": "Ügyfél törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
@@ -1826,15 +1827,20 @@
       "billingAddressPostalCode": "Irányítószám",
       "billingAddressState": "Megye/tartomány",
       "color": "Szín",
+      "dateOfBirth": "Születési dátum",
+      "day": "Nap",
       "defaultHourlyRate": "Alapértelmezett óradíj",
       "firstName": "Keresztnév",
       "lastName": "Vezetéknév",
       "middleName": "Középső név",
+      "month": "Hónap",
+      "nationalities": "Állampolgárságok",
       "paymentTermDays": "Fizetési határidő (nap)",
       "prefix": "Előtag",
       "registrationNumber": "Cégjegyzékszám",
       "suffix": "Utótag",
-      "taxId": "Adószám"
+      "taxId": "Adószám",
+      "year": "Év"
     },
     "filterOrganizations": "Szervezetek",
     "filterPersons": "Személyek",
@@ -1917,11 +1923,13 @@
       "title": "Kapcsolatok importálása",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
     },
+    "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
     "mattersAsClient": "Ügyek ügyfélként",
     "newContact": "Új ügyfél",
     "noContactsDescription": "Hozza létre első ügyfelét, hogy ügyekhez rendelhesse.",
     "noContactsFound": "Nem található ügyfél",
     "noMattersAsClient": "Ez a kontakt nem ügyfél egyetlen ügyben sem.",
+    "personalDetails": "Személyes adatok",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Otthoni",
@@ -1929,7 +1937,14 @@
       "office": "Iroda",
       "other": "Egyéb"
     },
+    "precision": {
+      "day": "Teljes dátum",
+      "month": "Hónap és év",
+      "year": "Csak év"
+    },
+    "saved": "A kapcsolati adatok mentve.",
     "search": "Kapcsolatok keresése...",
+    "searchCountries": "Országok keresése",
     "title": "Ügyfelek",
     "type": {
       "organization": "Szervezet",

@@ -1790,6 +1790,7 @@
       "title": "الحقول المخصصة",
       "value": "قيمة الحقل"
     },
+    "datePrecision": "دقة التاريخ",
     "deleteContact": "حذف العميل",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -1826,15 +1827,20 @@
       "billingAddressPostalCode": "الرمز البريدي",
       "billingAddressState": "الولاية",
       "color": "اللون",
+      "dateOfBirth": "تاريخ الميلاد",
+      "day": "اليوم",
       "defaultHourlyRate": "السعر الافتراضي للساعة",
       "firstName": "الاسم الأول",
       "lastName": "اسم العائلة",
       "middleName": "الاسم الأوسط",
+      "month": "الشهر",
+      "nationalities": "الجنسيات",
       "paymentTermDays": "شروط الدفع (بالأيام)",
       "prefix": "اللقب",
       "registrationNumber": "رقم التسجيل",
       "suffix": "اللاحقة",
-      "taxId": "الرقم الضريبي"
+      "taxId": "الرقم الضريبي",
+      "year": "السنة"
     },
     "filterOrganizations": "المؤسسات",
     "filterPersons": "الأشخاص",
@@ -1917,11 +1923,13 @@
       "title": "استيراد جهات الاتصال",
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
     },
+    "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
     "mattersAsClient": "الملفات القانونية بصفة عميل",
     "newContact": "جهة اتصال جديدة",
     "noContactsDescription": "أنشئ أول جهة اتصال لك للبدء بربطها بالملفات القانونية.",
     "noContactsFound": "لم يُعثر على أي جهات اتصال",
     "noMattersAsClient": "جهة الاتصال هذه ليست عميلاً في أي ملف قانوني.",
+    "personalDetails": "التفاصيل الشخصية",
     "phoneTypes": {
       "fax": "فاكس",
       "home": "المنزل",
@@ -1929,7 +1937,14 @@
       "office": "المكتب",
       "other": "أخرى"
     },
+    "precision": {
+      "day": "التاريخ الكامل",
+      "month": "الشهر والسنة",
+      "year": "السنة فقط"
+    },
+    "saved": "تم حفظ بيانات جهة الاتصال.",
     "search": "البحث في جهات الاتصال...",
+    "searchCountries": "ابحث عن البلدان",
     "title": "العملاء",
     "type": {
       "organization": "مؤسسة",

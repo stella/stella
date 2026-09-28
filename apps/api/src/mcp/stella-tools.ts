@@ -38,6 +38,7 @@ import {
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
+import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import {
   identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
@@ -2790,6 +2791,10 @@ const handleReadContactTool: TypedMcpToolHandler<
         organizationName: true,
         emails: true,
         phones: true,
+        dateOfBirthYear: true,
+        dateOfBirthMonth: true,
+        dateOfBirthDay: true,
+        nationalityCodes: true,
       },
     }),
   );
@@ -2812,6 +2817,8 @@ const handleReadContactTool: TypedMcpToolHandler<
     // number fields are anonymized in place below.
     emails: arrayOrEmpty(contact.emails),
     phones: arrayOrEmpty(contact.phones),
+    dateOfBirth: dateOfBirthFromColumns(contact),
+    nationalityCodes: contact.nationalityCodes,
   } satisfies v.InferInput<typeof READ_CONTACT_PROJECTION>;
 
   const textFields = runTextFieldSpecs(
@@ -2819,7 +2826,15 @@ const handleReadContactTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return {
+    egress: "structured",
+    payload,
+    textFields,
+    redactInAnonymized: () => {
+      payload.dateOfBirth = null;
+      payload.nationalityCodes = [];
+    },
+  };
 };
 
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<

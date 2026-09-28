@@ -14,6 +14,13 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import {
+  dateOfBirthFromColumns,
+  dateOfBirthSchema,
+  dateOfBirthToColumns,
+  nationalityCodesSchema,
+  validatePersonDetails,
+} from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -36,6 +43,8 @@ const updateContactBodySchema = t.Object({
   middleName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   lastName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   suffix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
+  dateOfBirth: t.Optional(t.Nullable(dateOfBirthSchema)),
+  nationalityCodes: t.Optional(t.Nullable(nationalityCodesSchema)),
   organizationName: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
   displayName: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
   notes: t.Optional(t.Nullable(t.String())),
@@ -114,102 +123,102 @@ export const updateContactHandler = async function* ({
     }
   }
 
-  const { defaultHourlyRate, metadata, ...rest } = body;
+  const {
+    defaultHourlyRate,
+    metadata,
+    dateOfBirth,
+    nationalityCodes,
+    ...rest
+  } = body;
 
-  let metadataUpdate = {};
-  if (metadata !== undefined) {
-    const existingRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ metadata: contacts.metadata })
-          .from(contacts)
-          .where(
-            and(
-              eq(contacts.id, contactId),
-              eq(contacts.organizationId, organizationId),
-            ),
-          )
-          .limit(1),
-      ),
-    );
-    const existing = existingRows.at(0);
-
-    if (!existing) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Contact not found",
-        }),
-      );
-    }
-
-    metadataUpdate = {
-      metadata: mergeContactMetadata(existing.metadata, metadata),
-    };
-  }
-
-  const updates = {
-    ...pickDefined(rest, [
-      "type",
-      "prefix",
-      "firstName",
-      "middleName",
-      "lastName",
-      "suffix",
-      "organizationName",
-      "displayName",
-      "notes",
-      "emails",
-      "phones",
-      "addresses",
-      "color",
-      "tags",
-      "registrationNumber",
-      "taxId",
-      "bankAccounts",
-      "billingAddress",
-      "currency",
-      "paymentTermDays",
-      "originatingAttorneyId",
-      "responsibleAttorneyId",
-    ]),
-    ...metadataUpdate,
-    ...(defaultHourlyRate === undefined
-      ? {}
-      : {
-          defaultHourlyRate:
-            defaultHourlyRate === null ? null : cents(defaultHourlyRate),
-        }),
-  };
-
-  if (Object.keys(updates).length === 0) {
-    const existingRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ id: contacts.id })
-          .from(contacts)
-          .where(
-            and(
-              eq(contacts.id, contactId),
-              eq(contacts.organizationId, organizationId),
-            ),
-          )
-          .limit(1),
-      ),
-    );
-    const existing = existingRows.at(0);
-
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Contact not found" }),
-      );
-    }
-
-    return Result.ok(existing);
-  }
-
-  const updatedRows = yield* Result.await(
+  const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const existingRows = await tx
+        .select({
+          id: contacts.id,
+          type: contacts.type,
+          metadata: contacts.metadata,
+          dateOfBirthYear: contacts.dateOfBirthYear,
+          dateOfBirthMonth: contacts.dateOfBirthMonth,
+          dateOfBirthDay: contacts.dateOfBirthDay,
+          nationalityCodes: contacts.nationalityCodes,
+        })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            eq(contacts.organizationId, organizationId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const existing = existingRows.at(0);
+      if (!existing) {
+        return { kind: "not_found" as const };
+      }
+
+      const error = validatePersonDetails({
+        type: body.type ?? existing.type,
+        dateOfBirth:
+          dateOfBirth === undefined
+            ? dateOfBirthFromColumns(existing)
+            : dateOfBirth,
+        nationalityCodes:
+          nationalityCodes === undefined
+            ? existing.nationalityCodes
+            : nationalityCodes,
+      });
+      if (error) {
+        return { kind: "invalid" as const, error };
+      }
+
+      const updates = {
+        ...pickDefined(rest, [
+          "type",
+          "prefix",
+          "firstName",
+          "middleName",
+          "lastName",
+          "suffix",
+          "organizationName",
+          "displayName",
+          "notes",
+          "emails",
+          "phones",
+          "addresses",
+          "color",
+          "tags",
+          "registrationNumber",
+          "taxId",
+          "bankAccounts",
+          "billingAddress",
+          "currency",
+          "paymentTermDays",
+          "originatingAttorneyId",
+          "responsibleAttorneyId",
+        ]),
+        ...(metadata === undefined
+          ? {}
+          : { metadata: mergeContactMetadata(existing.metadata, metadata) }),
+        ...(dateOfBirth === undefined ? {} : dateOfBirthToColumns(dateOfBirth)),
+        ...(nationalityCodes === undefined
+          ? {}
+          : { nationalityCodes: nationalityCodes ?? [] }),
+        ...(defaultHourlyRate === undefined
+          ? {}
+          : {
+              defaultHourlyRate:
+                defaultHourlyRate === null ? null : cents(defaultHourlyRate),
+            }),
+      };
+      if (Object.keys(updates).length === 0) {
+        return {
+          kind: "updated" as const,
+          row: { id: existing.id },
+          changed: false,
+        };
+      }
+
       const rows = await tx
         .update(contacts)
         .set(updates)
@@ -220,32 +229,38 @@ export const updateContactHandler = async function* ({
           ),
         )
         .returning({ id: contacts.id });
-
-      if (rows.length > 0) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-          resourceId: contactId,
-          workspaceId: null,
-          changes: { fields: { old: null, new: Object.keys(updates) } },
-        });
-        await enqueueContactSearchRepairs(tx, [contactId]);
+      const row = rows.at(0);
+      if (!row) {
+        return { kind: "not_found" as const };
       }
 
-      return rows;
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+        resourceId: contactId,
+        workspaceId: null,
+        changes: { fields: { old: null, new: Object.keys(updates) } },
+      });
+      await enqueueContactSearchRepairs(tx, [contactId]);
+      return { kind: "updated" as const, row, changed: true };
     }),
   );
-  const updated = updatedRows.at(0);
 
-  if (!updated) {
+  if (outcome.kind === "not_found") {
     return Result.err(
       new HandlerError({ status: 404, message: "Contact not found" }),
     );
   }
+  if (outcome.kind === "invalid") {
+    return Result.err(outcome.error);
+  }
+  if (!outcome.changed) {
+    return Result.ok(outcome.row);
+  }
 
   flushContactSearchRepairs([contactId]).catch(captureError);
 
-  return Result.ok(updated);
+  return Result.ok(outcome.row);
 };
 
 const updateContactById = createSafeRootHandler(

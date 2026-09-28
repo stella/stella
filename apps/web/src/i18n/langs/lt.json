@@ -1790,6 +1790,7 @@
       "title": "Pasirinktiniai laukai",
       "value": "Lauko reikšmė"
     },
+    "datePrecision": "Datos tikslumas",
     "deleteContact": "Ištrinti klientą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
@@ -1826,15 +1827,20 @@
       "billingAddressPostalCode": "Pašto kodas",
       "billingAddressState": "Valstija / regionas",
       "color": "Spalva",
+      "dateOfBirth": "Gimimo data",
+      "day": "Diena",
       "defaultHourlyRate": "Numatytasis valandinis tarifas",
       "firstName": "Vardas",
       "lastName": "Pavardė",
       "middleName": "Antras vardas",
+      "month": "Mėnuo",
+      "nationalities": "Pilietybės",
       "paymentTermDays": "Mokėjimo terminas (dienos)",
       "prefix": "Priešdėlis",
       "registrationNumber": "Registracijos numeris",
       "suffix": "Priesaga",
-      "taxId": "PVM mokėtojo kodas"
+      "taxId": "PVM mokėtojo kodas",
+      "year": "Metai"
     },
     "filterOrganizations": "Organizacijos",
     "filterPersons": "Asmenys",
@@ -1917,11 +1923,13 @@
       "title": "Kontaktų importavimas",
       "validateFailed": "Nepavyko patikrinti šių kontaktų."
     },
+    "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
     "mattersAsClient": "Bylos kaip klientas",
     "newContact": "Naujas klientas",
     "noContactsDescription": "Sukurkite pirmąjį klientą ir pradėkite jį susieti su bylomis.",
     "noContactsFound": "Klientų nerasta",
     "noMattersAsClient": "Šis kontaktas nėra klientas jokioje byloje.",
+    "personalDetails": "Asmens duomenys",
     "phoneTypes": {
       "fax": "Faksas",
       "home": "Namai",
@@ -1929,7 +1937,14 @@
       "office": "Biuras",
       "other": "Kitas"
     },
+    "precision": {
+      "day": "Visa data",
+      "month": "Mėnuo ir metai",
+      "year": "Tik metai"
+    },
+    "saved": "Kontaktiniai duomenys išsaugoti.",
     "search": "Ieškoti kontaktų...",
+    "searchCountries": "Ieškoti šalių",
     "title": "Klientai",
     "type": {
       "organization": "Organizacija",

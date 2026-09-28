@@ -55,6 +55,10 @@ export const contacts = p.pgTable(
     middleName: p.varchar("middle_name", { length: 256 }),
     lastName: p.varchar("last_name", { length: 256 }),
     suffix: p.varchar({ length: 32 }),
+    dateOfBirthYear: p.integer("date_of_birth_year"),
+    dateOfBirthMonth: p.integer("date_of_birth_month"),
+    dateOfBirthDay: p.integer("date_of_birth_day"),
+    nationalityCodes: p.text("nationality_codes").array().notNull().default([]),
 
     // Organization fields (null for persons)
     organizationName: p.varchar("organization_name", {
@@ -129,6 +133,18 @@ export const contacts = p.pgTable(
         "gin",
         sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
       ),
+    p.check(
+      "contacts_person_details_check",
+      sql`(${table.type} = 'person' OR (${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL AND cardinality(${table.nationalityCodes}) = 0))`,
+    ),
+    p.check(
+      "contacts_date_of_birth_check",
+      sql`(${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL) OR (${table.dateOfBirthYear} BETWEEN 1000 AND 9999 AND (${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthMonth} BETWEEN 1 AND 12 AND (${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthDay} BETWEEN 1 AND CASE WHEN ${table.dateOfBirthMonth} = 2 THEN CASE WHEN mod(${table.dateOfBirthYear}, 400) = 0 OR (mod(${table.dateOfBirthYear}, 4) = 0 AND mod(${table.dateOfBirthYear}, 100) <> 0) THEN 29 ELSE 28 END WHEN ${table.dateOfBirthMonth} IN (4, 6, 9, 11) THEN 30 ELSE 31 END)))`,
+    ),
+    p.check(
+      "contacts_nationality_codes_check",
+      sql`array_position(${table.nationalityCodes}, NULL) IS NULL AND (cardinality(${table.nationalityCodes}) = 0 OR array_to_string(${table.nationalityCodes}, ',') ~ '^([A-Z]{2})(,[A-Z]{2})*$')`,
+    ),
     ...orgPolicies(),
   ],
 );

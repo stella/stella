@@ -19,6 +19,7 @@ import {
   type ContactImportTaxIdScheme,
   type ContactType,
 } from "@stll/api-contract";
+import { isCountryCode } from "@stll/country-codes";
 
 import type {
   ContactAddress,
@@ -28,6 +29,8 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
+import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
+import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -87,6 +90,8 @@ export type ContactImportCandidate = {
   tags?: string[] | undefined;
   registrationNumber?: string | undefined;
   taxId?: string | undefined;
+  dateOfBirth?: DateOfBirth | undefined;
+  nationalityCodes?: string[] | undefined;
   metadata?: ContactMetadata | undefined;
 };
 
@@ -200,6 +205,8 @@ const FIELD_ALIASES = {
     "ico",
   ],
   tax_id: ["taxid", "vatid", "vatnumber", "dic", "cpf", "cnpj", "cpfcnpj"],
+  date_of_birth: ["dateofbirth", "birthdate", "dob"],
+  nationality_codes: ["nationalitycodes", "nationalities"],
 } as const satisfies Record<ContactImportField, readonly string[]>;
 
 /**
@@ -213,8 +220,8 @@ export type ContactImportSuggestedTarget =
 /**
  * Where each label of a `Label: value` vocabulary lands. The five identity
  * labels a Brazilian procuração carries (RG, nationality, marital status,
- * civil union, occupation) have no first-class contact field, so they become
- * custom fields under their own label rather than being forced into `notes`.
+ * civil union, occupation) retain their raw text as custom fields. In
+ * particular, free-text nationality cannot be safely inferred as ISO codes.
  */
 const LABELED_FIELD_DESTINATION = {
   display_name: "display_name",
@@ -587,6 +594,46 @@ const valueOrUndefined = (value: string | undefined): string | undefined => {
   return trimmed || undefined;
 };
 
+const parseImportDateOfBirth = (value: string): DateOfBirth | null => {
+  const match = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/u.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  if (year < 1000) {
+    return null;
+  }
+  if (match[2] === undefined) {
+    return { precision: "year", year };
+  }
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) {
+    return null;
+  }
+  if (match[3] === undefined) {
+    return { precision: "month", year, month };
+  }
+  const dateOfBirth = {
+    precision: "day",
+    year,
+    month,
+    day: Number(match[3]),
+  } as const;
+  return dateOfBirth.day >= 1 && isValidDateOfBirth(dateOfBirth)
+    ? dateOfBirth
+    : null;
+};
+
+const parseImportNationalityCodes = (value: string): string[] | null => {
+  const parsed = Result.try((): unknown => JSON.parse(value));
+  return !Result.isError(parsed) &&
+    Array.isArray(parsed.value) &&
+    parsed.value.every(isCountryCode) &&
+    new Set(parsed.value).size === parsed.value.length
+    ? parsed.value
+    : null;
+};
+
 const typeFromValue = (value: string | undefined): ContactType | undefined => {
   const token = normalizeToken(value ?? "");
   if (
@@ -662,6 +709,8 @@ const FIELD_MAX_LENGTH = {
   tags: CONTACT_IMPORT_TAGS_CELL_LIMIT,
   registration_number: 64,
   tax_id: 64,
+  date_of_birth: 10,
+  nationality_codes: CONTACT_IMPORT_TAGS_CELL_LIMIT,
 } as const satisfies Record<ContactImportField, number>;
 
 /**
@@ -690,7 +739,10 @@ const CANDIDATE_FIELD_VALUE = {
   registration_number: ({ registrationNumber }) => registrationNumber,
   tax_id: ({ taxId }) => taxId,
 } as const satisfies Record<
-  Exclude<ContactImportField, "tags" | "type">,
+  Exclude<
+    ContactImportField,
+    "tags" | "type" | "date_of_birth" | "nationality_codes"
+  >,
   (candidate: ContactImportCandidate) => string | undefined
 >;
 
@@ -747,6 +799,24 @@ export const validateContactImportCandidate = ({
 
   if (!candidate.displayName) {
     report(CONTACT_IMPORT_ISSUE_CODE.DISPLAY_NAME_REQUIRED, "display_name");
+  }
+  if (
+    candidate.dateOfBirth &&
+    (candidate.type !== "person" || !isValidDateOfBirth(candidate.dateOfBirth))
+  ) {
+    report(CONTACT_IMPORT_ISSUE_CODE.INVALID_DATE_OF_BIRTH, "date_of_birth");
+  }
+  if (
+    candidate.nationalityCodes &&
+    (candidate.type !== "person" ||
+      !candidate.nationalityCodes.every(isCountryCode) ||
+      new Set(candidate.nationalityCodes).size !==
+        candidate.nationalityCodes.length)
+  ) {
+    report(
+      CONTACT_IMPORT_ISSUE_CODE.INVALID_NATIONALITY_CODES,
+      "nationality_codes",
+    );
   }
 
   if (candidate.emails?.some(({ address }) => !v.is(emailSchema, address))) {
@@ -999,6 +1069,30 @@ export const previewContactImport = ({
         rowNumber,
       });
     }
+    const birthDateCell = valueOrUndefined(values.get("date_of_birth"));
+    const dateOfBirth = birthDateCell
+      ? parseImportDateOfBirth(birthDateCell)
+      : undefined;
+    if (birthDateCell && !dateOfBirth) {
+      issues.push({
+        code: CONTACT_IMPORT_ISSUE_CODE.INVALID_DATE_OF_BIRTH,
+        field: "date_of_birth",
+        rowNumber,
+      });
+    }
+    const nationalityCodesCell = valueOrUndefined(
+      values.get("nationality_codes"),
+    );
+    const nationalityCodes = nationalityCodesCell
+      ? parseImportNationalityCodes(nationalityCodesCell)
+      : undefined;
+    if (nationalityCodesCell && !nationalityCodes) {
+      issues.push({
+        code: CONTACT_IMPORT_ISSUE_CODE.INVALID_NATIONALITY_CODES,
+        field: "nationality_codes",
+        rowNumber,
+      });
+    }
 
     const customFields: ContactCustomField[] = [];
     for (const { id, label, sourceIndex } of customFieldColumns) {
@@ -1044,6 +1138,8 @@ export const previewContactImport = ({
       tags,
       registrationNumber: valueOrUndefined(values.get("registration_number")),
       taxId,
+      ...(dateOfBirth ? { dateOfBirth } : {}),
+      ...(nationalityCodes ? { nationalityCodes } : {}),
       metadata: customFields.length > 0 ? { customFields } : undefined,
     };
 

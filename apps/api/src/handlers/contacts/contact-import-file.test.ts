@@ -461,6 +461,36 @@ describe("brazilian tax id scheme", () => {
 });
 
 describe("candidate validation", () => {
+  test("rejects invalid calendar dates and unrecognized or repeated nationalities per row", () => {
+    const invalidDate = validateContactImportCandidate({
+      candidate: {
+        type: "person",
+        displayName: "Jane",
+        dateOfBirth: { precision: "day", year: 1900, month: 2, day: 29 },
+      },
+      taxIdScheme: "none",
+      rowNumber: 2,
+    });
+    expect(invalidDate.issues).toContainEqual({
+      code: "invalid_date_of_birth",
+      field: "date_of_birth",
+      rowNumber: 2,
+    });
+    const invalidCodes = validateContactImportCandidate({
+      candidate: {
+        type: "person",
+        displayName: "Jane",
+        nationalityCodes: ["CZ", "CZ", "ZZ"],
+      },
+      taxIdScheme: "none",
+      rowNumber: 3,
+    });
+    expect(invalidCodes.issues).toContainEqual({
+      code: "invalid_nationality_codes",
+      field: "nationality_codes",
+      rowNumber: 3,
+    });
+  });
   const candidate = (
     overrides: Partial<ContactImportCandidate> = {},
   ): ContactImportCandidate => ({

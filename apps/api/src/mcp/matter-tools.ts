@@ -17,6 +17,10 @@ import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-r
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
+import {
+  MAX_CONTACT_NATIONALITY_CODES,
+  validatePersonDetails,
+} from "@/api/handlers/contacts/person-details";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
@@ -702,6 +706,65 @@ const saveContactArgsSchema = nullAsAbsent(
           v.description("Free-text notes; pass null to clear"),
         ),
       ),
+      date_of_birth: v.optional(
+        v.nullable(
+          v.variant("precision", [
+            v.strictObject({
+              precision: v.literal("year"),
+              year: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1000),
+                v.maxValue(9999),
+              ),
+            }),
+            v.strictObject({
+              precision: v.literal("month"),
+              year: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1000),
+                v.maxValue(9999),
+              ),
+              month: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1),
+                v.maxValue(12),
+              ),
+            }),
+            v.strictObject({
+              precision: v.literal("day"),
+              year: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1000),
+                v.maxValue(9999),
+              ),
+              month: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1),
+                v.maxValue(12),
+              ),
+              day: v.pipe(
+                v.number(),
+                v.integer(),
+                v.minValue(1),
+                v.maxValue(31),
+              ),
+            }),
+          ]),
+        ),
+      ),
+      nationality_codes: v.optional(
+        v.nullable(
+          v.pipe(
+            v.array(v.pipe(v.string(), v.regex(/^[A-Z]{2}$/u))),
+            v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
+          ),
+        ),
+      ),
     }),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
@@ -740,6 +803,8 @@ const saveContactArgsSchema = nullAsAbsent(
         ["last_name"],
         ["organization_name"],
         ["notes"],
+        ["date_of_birth"],
+        ["nationality_codes"],
       ],
       (i) =>
         i.contact_id === undefined ||
@@ -748,7 +813,9 @@ const saveContactArgsSchema = nullAsAbsent(
         i.first_name !== undefined ||
         i.last_name !== undefined ||
         i.organization_name !== undefined ||
-        i.notes !== undefined,
+        i.notes !== undefined ||
+        i.date_of_birth !== undefined ||
+        i.nationality_codes !== undefined,
       "Provide at least one field to change",
     ),
   ),
@@ -773,6 +840,14 @@ const handleSaveContactTool: TypedMcpToolHandler<
       return panic("save_contact create branch reached without type");
     }
     const displayName = deriveContactDisplayName(input);
+    const detailsError = validatePersonDetails({
+      type,
+      dateOfBirth: input.date_of_birth,
+      nationalityCodes: input.nationality_codes,
+    });
+    if (detailsError) {
+      return errorResult(detailsError.message);
+    }
     const created = await Result.gen(() =>
       createContactHandler({
         safeDb: context.safeDb,
@@ -796,6 +871,13 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.notes === undefined || input.notes === null
             ? {}
             : { notes: input.notes }),
+          ...(input.date_of_birth === null || input.date_of_birth === undefined
+            ? {}
+            : { dateOfBirth: input.date_of_birth }),
+          ...(input.nationality_codes === null ||
+          input.nationality_codes === undefined
+            ? {}
+            : { nationalityCodes: input.nationality_codes }),
         },
       }),
     );
@@ -831,6 +913,12 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ? {}
           : { organizationName: input.organization_name }),
         ...(input.notes === undefined ? {} : { notes: input.notes }),
+        ...(input.date_of_birth === undefined
+          ? {}
+          : { dateOfBirth: input.date_of_birth }),
+        ...(input.nationality_codes === undefined
+          ? {}
+          : { nationalityCodes: input.nationality_codes }),
       },
     }),
   );

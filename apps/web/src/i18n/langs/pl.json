@@ -1790,6 +1790,7 @@
       "title": "Pola niestandardowe",
       "value": "Wartość pola"
     },
+    "datePrecision": "Dokładność daty",
     "deleteContact": "Usuń klienta",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
@@ -1826,15 +1827,20 @@
       "billingAddressPostalCode": "Kod pocztowy",
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
+      "dateOfBirth": "Data urodzenia",
+      "day": "Dzień",
       "defaultHourlyRate": "Domyślna stawka godzinowa",
       "firstName": "Imię",
       "lastName": "Nazwisko",
       "middleName": "Drugie imię",
+      "month": "Miesiąc",
+      "nationalities": "Obywatelstwa",
       "paymentTermDays": "Termin płatności (dni)",
       "prefix": "Prefiks",
       "registrationNumber": "Numer KRS",
       "suffix": "Sufiks",
-      "taxId": "NIP"
+      "taxId": "NIP",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
@@ -1917,11 +1923,13 @@
       "title": "Import kontaktów",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów."
     },
+    "invalidDateOfBirth": "Wprowadź prawidłową datę urodzenia.",
     "mattersAsClient": "Sprawy jako klient",
     "newContact": "Nowy klient",
     "noContactsDescription": "Utwórz pierwszego klienta, aby zacząć przypisywać go do spraw.",
     "noContactsFound": "Nie znaleziono klientów",
     "noMattersAsClient": "Ten kontakt nie jest klientem w żadnej sprawie.",
+    "personalDetails": "Dane osobowe",
     "phoneTypes": {
       "fax": "Faks",
       "home": "Domowy",
@@ -1929,7 +1937,14 @@
       "office": "Biurowy",
       "other": "Inny"
     },
+    "precision": {
+      "day": "Pełna data",
+      "month": "Miesiąc i rok",
+      "year": "Tylko rok"
+    },
+    "saved": "Zapisano dane kontaktu.",
     "search": "Szukaj kontaktów...",
+    "searchCountries": "Szukaj krajów",
     "title": "Klienci",
     "type": {
       "organization": "Organizacja",

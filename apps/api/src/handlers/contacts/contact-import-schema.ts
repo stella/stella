@@ -87,6 +87,34 @@ export const contactImportCandidateSchema = t.Object({
   tags: t.Optional(t.Array(draftText, { maxItems: DRAFT_LIST_MAX_ITEMS })),
   registrationNumber: optionalDraftText,
   taxId: optionalDraftText,
+  dateOfBirth: t.Optional(
+    t.Union([
+      t.Object(
+        { precision: t.Literal("year"), year: t.Integer() },
+        { additionalProperties: false },
+      ),
+      t.Object(
+        {
+          precision: t.Literal("month"),
+          year: t.Integer(),
+          month: t.Integer(),
+        },
+        { additionalProperties: false },
+      ),
+      t.Object(
+        {
+          precision: t.Literal("day"),
+          year: t.Integer(),
+          month: t.Integer(),
+          day: t.Integer(),
+        },
+        { additionalProperties: false },
+      ),
+    ]),
+  ),
+  nationalityCodes: t.Optional(
+    t.Array(draftText, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+  ),
   metadata: t.Optional(
     t.Object({
       customFields: t.Optional(

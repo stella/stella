@@ -707,7 +707,7 @@ describe("MCP anonymization canary corpus", () => {
   const contactCanary = canaryTestsFor("read_contact");
 
   contactCanary(
-    "read_contact anonymizes name, org, email, and phone fields",
+    "read_contact anonymizes text and redacts structured personal fields",
     async (tool) => {
       const displayNameSeed = mkSeed(tool, 0);
       const firstNameSeed = mkSeed(tool, 1);
@@ -722,6 +722,10 @@ describe("MCP anonymization canary corpus", () => {
               id: "00000000-0000-4000-8000-0000000c0001",
               type: "person",
               displayName: displayNameSeed,
+              dateOfBirthYear: 1984,
+              dateOfBirthMonth: 3,
+              dateOfBirthDay: 12,
+              nationalityCodes: ["JP"],
               firstName: firstNameSeed,
               lastName: lastNameSeed,
               organizationName: organizationNameSeed,
@@ -749,6 +753,10 @@ describe("MCP anonymization canary corpus", () => {
       ];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
+      expect(result.structuredContent).toMatchObject({
+        dateOfBirth: null,
+        nationalityCodes: [],
+      });
     },
   );
 

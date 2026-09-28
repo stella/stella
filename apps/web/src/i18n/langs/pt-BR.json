@@ -1790,6 +1790,7 @@
       "title": "Campos personalizados",
       "value": "Valor do campo"
     },
+    "datePrecision": "Precisão da data",
     "deleteContact": "Excluir cliente",
     "deleteContactBlockedByMatters": "Este contato ainda está atribuído como cliente em casos. Reatribua ou exclua esses casos antes de excluir o contato.",
     "deleteContactConfirmDescription": "Tem certeza de que deseja excluir este contato? Esta ação não pode ser desfeita.",
@@ -1826,15 +1827,20 @@
       "billingAddressPostalCode": "Código postal",
       "billingAddressState": "Estado",
       "color": "Cor",
+      "dateOfBirth": "Data de nascimento",
+      "day": "Dia",
       "defaultHourlyRate": "Taxa horária padrão",
       "firstName": "Primeiro nome",
       "lastName": "Sobrenome",
       "middleName": "Nome do meio",
+      "month": "Mês",
+      "nationalities": "Nacionalidades",
       "paymentTermDays": "Condições de pagamento (dias)",
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufixo",
-      "taxId": "CPF/CNPJ"
+      "taxId": "CPF/CNPJ",
+      "year": "Ano"
     },
     "filterOrganizations": "Organizações",
     "filterPersons": "Pessoas",
@@ -1917,11 +1923,13 @@
       "title": "Importar contatos",
       "validateFailed": "Não foi possível verificar estes contatos."
     },
+    "invalidDateOfBirth": "Insira uma data de nascimento válida.",
     "mattersAsClient": "Casos como cliente",
     "newContact": "Novo contato",
     "noContactsDescription": "Crie seu primeiro contato para começar a vinculá-los aos casos.",
     "noContactsFound": "Nenhum contato encontrado",
     "noMattersAsClient": "Este contato não é cliente em nenhum caso.",
+    "personalDetails": "Dados pessoais",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Residencial",
@@ -1929,7 +1937,14 @@
       "office": "Escritório",
       "other": "Outro"
     },
+    "precision": {
+      "day": "Data completa",
+      "month": "Mês e ano",
+      "year": "Somente o ano"
+    },
+    "saved": "Os dados do contato foram salvos.",
     "search": "Pesquisar contatos...",
+    "searchCountries": "Buscar países",
     "title": "Clientes",
     "type": {
       "organization": "Organização",
