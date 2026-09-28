@@ -20,18 +20,17 @@ import {
  *   # how many are parked (the default; writes nothing)
  *   bun run src/scripts/requeue-sk-documents.ts
  *
- *   # requeue at most 5000 of them
+ *   # requeue at most 5000 of them; run again for more
  *   bun run src/scripts/requeue-sk-documents.ts --requeue 5000
  *
  * Not a scheduled job: a deliberate operation under an operator who reads
  * the report.
  */
 
-const USAGE =
-  "Usage: bun run src/scripts/requeue-sk-documents.ts [--requeue <n>]";
+/** Rows one run requeues at most, so its single statement stays bounded. */
+const MAX_REQUEUE = 5000;
 
-/** Rows one requeue statement touches, so no transaction grows unbounded. */
-const REQUEUE_BATCH_SIZE = 500;
+const USAGE = `Usage: bun run src/scripts/requeue-sk-documents.ts [--requeue <n>], n <= ${MAX_REQUEUE}`;
 
 const parseRequeueLimit = (argv: readonly string[]): number | undefined => {
   if (argv.length === 0) {
@@ -43,7 +42,7 @@ const parseRequeueLimit = (argv: readonly string[]): number | undefined => {
     value === undefined ||
     rest.length > 0 ||
     !/^[1-9]\d*$/u.test(value) ||
-    !Number.isSafeInteger(Number(value))
+    Number(value) > MAX_REQUEUE
   ) {
     console.error(USAGE);
     process.exit(1);
@@ -69,19 +68,11 @@ if (sourceId === undefined) {
 console.log(`parked=${await countParkedDocuments(ingestionDb, sourceId)}`);
 
 if (requeueLimit !== undefined) {
-  let requeued = 0;
-  while (requeued < requeueLimit) {
-    // db-await-in-loop: page loop; each call requeues one bounded batch and the loop stops when a batch moves nothing
-    const moved = await requeueParkedDocuments({
-      scopedDb: ingestionDb,
-      sourceId,
-      limit: Math.min(REQUEUE_BATCH_SIZE, requeueLimit - requeued),
-    });
-    if (moved === 0) {
-      break;
-    }
-    requeued += moved;
-  }
+  const requeued = await requeueParkedDocuments({
+    scopedDb: ingestionDb,
+    sourceId,
+    limit: requeueLimit,
+  });
   console.log(`requeued=${requeued}`);
 }
 

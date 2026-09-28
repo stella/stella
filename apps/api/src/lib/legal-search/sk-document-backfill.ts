@@ -1189,7 +1189,7 @@ export type RequeueParkedDocumentsOptions = {
  * The attempt count is what parks a decision, so resetting it is the whole
  * requeue; the last attempt's timestamp stays, so a requeued decision still
  * waits out one base cooldown rather than arriving at the head of the queue
- * in a burst. Returns how many were requeued, so a caller loops until zero.
+ * in a burst. Returns how many were requeued.
  */
 export const requeueParkedDocuments = async ({
   limit,
