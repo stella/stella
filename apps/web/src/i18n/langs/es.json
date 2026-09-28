@@ -1062,6 +1062,10 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "mockModel": {
+      "description": "Respuestas predefinidas del modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",

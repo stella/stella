@@ -1062,6 +1062,10 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "mockModel": {
+      "description": "Respostas prontas do modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",

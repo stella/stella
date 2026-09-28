@@ -1062,6 +1062,10 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "mockModel": {
+      "description": "Előre megírt válaszok a helyi szimulált modelltől",
+      "label": "Szimulált AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",

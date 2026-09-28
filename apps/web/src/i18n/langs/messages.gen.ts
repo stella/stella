@@ -1065,6 +1065,10 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "mockModel": {
+      "description": "Canned replies from the local mock model";
+      "label": "Mock AI";
+    };
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";

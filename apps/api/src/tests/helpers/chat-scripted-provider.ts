@@ -216,7 +216,8 @@ export const installScriptedProvider = () => {
     registered = true;
   }
   const previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = true;
+  // "force": the scripts answer even a request made with an organization key.
+  env.USE_MOCK_AI = "force";
   const owned = new Set<string>();
 
   const scriptsOf = (threadId: string): ThreadScripts => {

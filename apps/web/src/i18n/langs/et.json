@@ -1062,6 +1062,10 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "mockModel": {
+      "description": "Valmisvastused kohalikult simuleeritud mudelilt",
+      "label": "Simuleeritud AI"
+    },
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",

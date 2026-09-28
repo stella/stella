@@ -17,6 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
+import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -45,7 +46,9 @@ const {
   isAllowedBYOKModel,
   isAllowedBYOKModelForRole,
   isDeferredServiceTierAvailableForRole,
+  isMockTextAdapter,
   isTanStackAIProviderSupported,
+  mockAnswersForOrganization,
   modelAcceptsPdfDocumentInput,
   modelAcceptsStreamingToolUse,
   modelAcceptsTextualDocumentInput,
@@ -960,6 +963,71 @@ describe("tanStackModelOptionsForRole", () => {
     });
 
     expect(options).toEqual({});
+  });
+});
+
+describe("who answers while the local mock is on", () => {
+  // The scripted provider registers through the mock seam and switches it on;
+  // each case then picks the mock mode it exercises.
+  const answeredBy = ({
+    mode,
+    orgConfig,
+  }: {
+    mode: boolean | "force";
+    orgConfig: OrgAIConfig | null;
+  }) => {
+    const provider = installScriptedProvider();
+    env.USE_MOCK_AI = mode;
+    try {
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
+        organizationId: orgId,
+      });
+      return {
+        adapter: isMockTextAdapter(model.adapter) ? "mock" : model.adapter.name,
+        keySource: model.keySource,
+        organizationMocked: mockAnswersForOrganization(orgConfig),
+      };
+    } finally {
+      provider.restore();
+    }
+  };
+
+  test("an organization key answers for real instead of the mock", () => {
+    expect(
+      answeredBy({ mode: true, orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mistral",
+      keySource: "byok",
+      organizationMocked: false,
+    });
+  });
+
+  test("the mock answers where no organization key is configured", () => {
+    expect(answeredBy({ mode: true, orgConfig: null })).toEqual({
+      adapter: "mock",
+      keySource: "instance",
+      organizationMocked: true,
+    });
+  });
+
+  test("force keeps an organization key on the mock", () => {
+    expect(
+      answeredBy({ mode: "force", orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mock",
+      keySource: "byok",
+      organizationMocked: true,
+    });
+  });
+
+  test("with the mock off, an organization key answers for real", () => {
+    expect(
+      answeredBy({ mode: false, orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mistral",
+      keySource: "byok",
+      organizationMocked: false,
+    });
   });
 });
 

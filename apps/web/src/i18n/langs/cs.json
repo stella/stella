@@ -1062,6 +1062,10 @@
       "loadError": "Nepodařilo se načíst položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "mockModel": {
+      "description": "Předpřipravené odpovědi místního simulovaného modelu",
+      "label": "Simulovaná AI"
+    },
     "modelSelector": {
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",

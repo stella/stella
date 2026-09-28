@@ -1062,6 +1062,10 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "mockModel": {
+      "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
+      "label": "Simulierte KI"
+    },
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",

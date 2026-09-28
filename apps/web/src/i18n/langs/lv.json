@@ -1062,6 +1062,10 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "mockModel": {
+      "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
+      "label": "Simulēts AI"
+    },
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",

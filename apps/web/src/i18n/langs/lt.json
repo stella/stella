@@ -1062,6 +1062,10 @@
       "loadError": "Nepavyko įkelti elementų"
     },
     "messageTimestampToday": "Šiandien, {time}",
+    "mockModel": {
+      "description": "Iš anksto paruošti vietinio imituojamo modelio atsakymai",
+      "label": "Imituojamas DI"
+    },
     "modelSelector": {
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",

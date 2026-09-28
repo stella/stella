@@ -1062,6 +1062,10 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "mockModel": {
+      "description": "ردود ثابتة من النموذج التجريبي المحلي",
+      "label": "ذكاء اصطناعي تجريبي"
+    },
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",

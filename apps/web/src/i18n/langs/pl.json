@@ -1062,6 +1062,10 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "mockModel": {
+      "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
+      "label": "Symulowane AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
