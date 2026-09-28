@@ -6,37 +6,52 @@
 //! pointer comes from a live Security.framework object and is read under the
 //! get rule, so nothing outlives the dictionary it was read from).
 //!
-//! Signing is macOS-only. Off macOS the crate holds the data types and every
-//! entry point reports [`SigningError::UnsupportedPlatform`], so callers keep
-//! one code path and one place that names the platform limit.
+//! Which certificates may sign, and the codes a failure is named by, live in
+//! `stella-desktop-signing-core`, shared with every other platform.
+//!
+//! Signing is macOS-only. Off macOS every entry point reports
+//! [`SigningError::UnsupportedPlatform`], so callers keep one code path and
+//! one place that names the platform limit.
 //!
 //! The private key is never exported: `sign_digest` hands the digest to the
 //! keychain, which signs inside the Security daemon (or the Secure Enclave, or
 //! a smart card). macOS asks the user for consent the first time a given
 //! binary uses a given key.
 
-// Off macOS nothing calls the pieces that build an identity, but they still
-// compile and their tests still run there: the DER walker is
-// platform-independent, and it would lose two thirds of its CI coverage if it
-// were gated away.
+// Off macOS nothing classifies a Security.framework error, but the table
+// still compiles and its tests still run there.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
-mod certificate;
 mod failure;
-mod identity;
 #[cfg(target_os = "macos")]
 mod macos;
-mod spki;
 
-pub use failure::SigningErrorCode;
-pub use identity::{SigningError, SigningIdentity, SigningKeyType};
+pub use stella_desktop_signing_core::{
+  Signer, SigningError, SigningErrorCode, SigningIdentity, SigningKeyType,
+};
+
+/// The macOS keychain as a [`Signer`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct KeychainSigner;
+
+impl Signer for KeychainSigner {
+  fn list_identities(&self) -> Result<Vec<SigningIdentity>, SigningError> {
+    list_identities()
+  }
+
+  fn sign_digest(
+    &self,
+    identity_id: &str,
+    digest: &[u8; 32],
+    key_type: SigningKeyType,
+  ) -> Result<Vec<u8>, SigningError> {
+    sign_digest(identity_id, digest, key_type)
+  }
+}
 
 /// Every keychain identity (certificate plus private key) that can sign a
-/// document now, in keychain order. Left out: a key type that is neither RSA
-/// nor EC (no PDF signature algorithm pairs with it), a certificate outside
-/// its validity window, one whose KeyUsage permits neither digitalSignature
-/// nor nonRepudiation, and one whose extended key usages are all for
-/// something else (servers, login, code, VPN endpoints).
+/// document now, in keychain order, filtered by
+/// [`stella_desktop_signing_core::signing_identity`].
 ///
 /// Reading identities never touches key material, so this does not prompt.
 #[cfg(target_os = "macos")]
@@ -71,4 +86,22 @@ pub fn sign_digest(
   _key_type: SigningKeyType,
 ) -> Result<Vec<u8>, SigningError> {
   Err(SigningError::UnsupportedPlatform)
+}
+
+#[cfg(test)]
+mod tests {
+  #[cfg(not(target_os = "macos"))]
+  #[test]
+  fn reports_the_platform_limit_off_macos() {
+    use super::*;
+
+    assert!(matches!(
+      list_identities(),
+      Err(SigningError::UnsupportedPlatform)
+    ));
+    assert!(matches!(
+      sign_digest("", &[0; 32], SigningKeyType::Rsa),
+      Err(SigningError::UnsupportedPlatform)
+    ));
+  }
 }
