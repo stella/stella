@@ -298,6 +298,11 @@ run_quarantine_exclude_guard() {
   bun scripts/check-stll-quarantine-excludes.ts
 }
 
+run_standalone_lockfile_guard() {
+  bun test scripts/check-standalone-lockfiles.test.ts || return 1
+  bun run check:standalone-lockfiles
+}
+
 run_test() {
   # Not --affected: a suite that reads files outside its own package also needs
   # the packages its turbo.json test inputs name, and `--affected --filter=X`
@@ -320,6 +325,7 @@ run_step "Package scaffolder self-test" bun test scripts/new-package.test.ts
 run_step "Dependabot group guard" bun test scripts/dependabot-grouping.test.ts
 run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace-versions.ts
 run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
+run_step "Standalone lockfile guard" run_standalone_lockfile_guard
 run_step "Policy evidence" bun run policies:check
 run_step "Marketing content evidence" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \
