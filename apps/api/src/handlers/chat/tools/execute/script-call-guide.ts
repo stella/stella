@@ -72,7 +72,7 @@ const MAX_SUGGESTIONS = 3;
  * one of its own variables as a misspelled function.
  */
 const nearMissBudget = (candidate: string): number =>
-  Math.max(1, Math.floor(toolNameKey(candidate).length / 4));
+  Math.max(1, Math.floor(toolNameKey(candidate).length / 5));
 
 type ScriptCallIndex = {
   catalog: ScriptCallCatalog;

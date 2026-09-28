@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   buildScriptCallGuide,
   classifyScriptName,
@@ -128,6 +130,7 @@ describe("a read called without its prefix or in another case", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 });
@@ -145,6 +148,10 @@ describe("a misspelled name", () => {
     expect(messageFor("save_playbok")).toBe(
       "`save_playbok` is not defined. Did you mean `save_playbook` (a direct tool: call it outside execute_typescript)?",
     );
+  });
+
+  test("does not offer a function with another verb as a typo of it", () => {
+    expect(classifyScriptName("create_document", CATALOG).kind).toBe("unknown");
   });
 
   test("lists up to three names when several are equally close", () => {

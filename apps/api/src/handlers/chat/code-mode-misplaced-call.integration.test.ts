@@ -112,7 +112,7 @@ describe("a script that calls a direct tool", () => {
       ]);
       await client.sendUserMessage(Bun.randomUUIDv7(), "Save an NDA playbook");
       await client.settle();
-      await harness.expectSoundWebClient({ client, harness, threadId });
+      await harness.expectSoundWebClient({ client, threadId });
 
       const script = await storedCall(harness, threadId, "call-script");
       expect(
@@ -130,7 +130,7 @@ describe("a script that calls a direct tool", () => {
       ]);
       await client.approve("call-save", true);
       await client.settle();
-      await harness.expectSoundWebClient({ client, harness, threadId });
+      await harness.expectSoundWebClient({ client, threadId });
 
       const save = await storedCall(harness, threadId, "call-save");
       expect(save.output).toBeDefined();

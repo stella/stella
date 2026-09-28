@@ -462,6 +462,12 @@ type GetChatToolsProps = {
    */
   delegationDepth?: number | undefined;
   /**
+   * Narrows the finished tool set before it is returned (a subagent's
+   * projection). Applied here rather than by the caller so what a code-mode
+   * script is told it can call directly is the set the loop really holds.
+   */
+  projectToolSet?: ((tools: ChatToolMap) => ChatToolMap) | undefined;
+  /**
    * Which DOCX-edit review mode this turn uses; defaults to
    * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
    * tracked changes by default). Picks which `suggest_changes` variant is
@@ -1022,15 +1028,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const subagentTools = areSubagentToolsRegistered({ delegationDepth })
     ? createSpawnSubagentsTool({
         buildSubagentToolset: (proposalSink) =>
-          projectToolMapForSubagent(
-            getChatTools({
-              ...props,
-              browserClient: undefined,
-              hasActiveDocxEditClient: false,
-              delegationDepth: delegationDepth + 1,
-            }),
-            proposalSink,
-          ),
+          getChatTools({
+            ...props,
+            browserClient: undefined,
+            hasActiveDocxEditClient: false,
+            delegationDepth: delegationDepth + 1,
+            projectToolSet: (tools) =>
+              projectToolMapForSubagent(tools, proposalSink),
+          }),
         organizationId,
         orgAIConfig,
         safeDb,
@@ -1042,7 +1047,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       })
     : {};
 
-  const tools = applyChatToolPolicies({
+  const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
       ...orgTools,
@@ -1070,6 +1075,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...subagentTools,
     },
   });
+  const tools = props.projectToolSet?.(registered) ?? registered;
   scriptCallTools = {
     directTools: Object.keys(tools),
     unavailableReasons: new Map([
@@ -1084,6 +1090,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
             (name) => [name, "web research is off for this chat"] as const,
           )),
+      ...Object.keys(registered)
+        .filter((name) => !(name in tools))
+        .map((name) => [name, "subagents cannot call it"] as const),
     ]),
   };
   return tools;
