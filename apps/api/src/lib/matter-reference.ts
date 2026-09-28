@@ -1,7 +1,7 @@
 import {
   toNumberPatternScopeKey,
   validateNumberPattern,
-} from "@/api/lib/number-pattern";
+} from "@/api/lib/billing/number-pattern";
 
 export const validatePattern = (pattern: string, padding: number) =>
   validateNumberPattern({ pattern, padding, sequenceDigitsBudget: 6 });

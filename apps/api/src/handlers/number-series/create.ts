@@ -6,11 +6,11 @@ import { createNumberSeriesBody } from "@/api/handlers/number-series/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
   validateNumberPattern,
-} from "@/api/lib/number-pattern";
+} from "@/api/lib/billing/number-pattern";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description: "Create a document number series in the active organization.",

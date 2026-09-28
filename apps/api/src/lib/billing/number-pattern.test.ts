@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 
 import { renderMatterReference } from "@stll/api-contract";
 
-import { validatePattern } from "@/api/lib/matter-reference";
 import {
   MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
   toNumberPatternScopeKey,
   validateNumberPattern,
-} from "@/api/lib/number-pattern";
+} from "@/api/lib/billing/number-pattern";
+import { validatePattern } from "@/api/lib/matter-reference";
 
 describe("document number pattern", () => {
   test("reserves the ten digits a counter can render without changing matter validation", () => {

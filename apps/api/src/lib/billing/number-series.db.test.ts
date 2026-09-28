@@ -19,9 +19,9 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createNumberSeries from "@/api/handlers/number-series/create";
 import updateNumberSeries from "@/api/handlers/number-series/update";
+import { allocateNumber } from "@/api/lib/billing/number-series";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateNumber } from "@/api/lib/number-series";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

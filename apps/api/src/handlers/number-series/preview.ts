@@ -8,8 +8,8 @@ import { numberSeriesAllocations, numberSeriesCounters } from "@/api/db/schema";
 import { numberSeriesParams } from "@/api/handlers/number-series/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { toNumberPatternScopeKey } from "@/api/lib/number-pattern";
 
 const config = {
   description:

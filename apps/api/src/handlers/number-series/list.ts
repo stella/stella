@@ -10,7 +10,45 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedNumberSeriesId } from "@/api/lib/safe-id-boundaries";
+
+type NumberSeriesRow = typeof numberSeries.$inferSelect;
+
+const UNPROJECTED_NUMBER_SERIES_COLUMNS = [
+  // Tenant scope is fixed by the active organization and archived rows are excluded.
+  "organizationId",
+  "archivedAt",
+] as const satisfies readonly (keyof NumberSeriesRow)[];
+
+const NUMBER_SERIES_LIST_COLUMNS = {
+  id: numberSeries.id,
+  documentType: numberSeries.documentType,
+  name: numberSeries.name,
+  pattern: numberSeries.pattern,
+  padding: numberSeries.padding,
+  sellerProfileId: numberSeries.sellerProfileId,
+  isDefault: numberSeries.isDefault,
+  createdAt: numberSeries.createdAt,
+  updatedAt: numberSeries.updatedAt,
+};
+
+type MissingNumberSeriesListColumn = UnprojectedColumns<
+  NumberSeriesRow,
+  typeof NUMBER_SERIES_LIST_COLUMNS,
+  (typeof UNPROJECTED_NUMBER_SERIES_COLUMNS)[number]
+>;
+type UnexpectedNumberSeriesListColumn = UnbackedProjectionKeys<
+  NumberSeriesRow,
+  typeof NUMBER_SERIES_LIST_COLUMNS,
+  (typeof UNPROJECTED_NUMBER_SERIES_COLUMNS)[number]
+>;
+
+true satisfies MissingNumberSeriesListColumn extends never ? true : never;
+true satisfies UnexpectedNumberSeriesListColumn extends never ? true : never;
 
 const config = {
   description: "List active document number series in the active organization.",
@@ -58,15 +96,7 @@ export default createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            id: numberSeries.id,
-            documentType: numberSeries.documentType,
-            name: numberSeries.name,
-            pattern: numberSeries.pattern,
-            padding: numberSeries.padding,
-            sellerProfileId: numberSeries.sellerProfileId,
-            isDefault: numberSeries.isDefault,
-            createdAt: numberSeries.createdAt,
-            updatedAt: numberSeries.updatedAt,
+            ...NUMBER_SERIES_LIST_COLUMNS,
             createdAtCursor: cursorCodec.cursorValue.as("created_at_cursor"),
           })
           .from(numberSeries)

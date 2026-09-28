@@ -9,9 +9,9 @@ import {
   numberSeriesAllocations,
   numberSeriesCounters,
 } from "@/api/db/schema";
+import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { toNumberPatternScopeKey } from "@/api/lib/number-pattern";
 
 export const allocateNumber = async (
   tx: Transaction,
