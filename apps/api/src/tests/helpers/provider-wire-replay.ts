@@ -205,10 +205,9 @@ export const effectiveRequest = (
   input: string | URL | Request,
   init: RequestInit | undefined,
 ): Request =>
-  new Request(
-    input instanceof Request ? input.clone() : input.toString(),
-    init,
-  );
+  input instanceof Request
+    ? new Request(input.clone(), init)
+    : new Request(input.toString(), init);
 
 const readRequest = async (
   input: string | URL | Request,
