@@ -243,14 +243,19 @@ describe("skill tool output contract", () => {
 describe("built-in skill tools", () => {
   // The second organization has no skill rows, so every built-in is served
   // unshadowed there.
-  const builtInContext = () =>
-    createContext({ organizationId: ids.orgB, userId: ids.userB1 });
+  // A skill is offered only beside the tools it requires, so the caller holds
+  // the scope of each built-in's required tools too.
+  const builtInScopes = ["stella:skills", "stella:knowledge_write"];
+  const builtInContext = (): McpRequestContext => ({
+    ...createContext({ organizationId: ids.orgB, userId: ids.userB1 }),
+    grantedScopes: builtInScopes,
+  });
 
   test.each(listSkillMetadata().map(({ name }) => name))(
     "%s is listed and served with no stored row, within the contract",
     async (name) => {
       const listed = (
-        await listMcpTools(builtInContext(), "default", ["stella:skills"])
+        await listMcpTools(builtInContext(), "default", builtInScopes)
       ).find((tool) => tool.name === namespaceSkillToolName(name));
       if (listed === undefined) {
         throw new Error(`expected built-in skill ${name} to be listed`);
