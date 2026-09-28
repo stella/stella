@@ -372,7 +372,7 @@ describe("a stop reason no table lists", () => {
         (properties) =>
           properties["error.class"] === "UnrecognizedProviderStopReasonError",
       );
-    expect(reported.map((properties) => properties["provider"])).toEqual([
+    expect(reported.map((properties) => properties["source"])).toEqual([
       provider,
     ]);
     expect(JSON.stringify(reported)).not.toContain(UNLISTED);

@@ -19,9 +19,11 @@ import type OpenAI from "openai";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
-import { captureError } from "@/api/lib/analytics/capture";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { UnrecognizedProviderStopReasonError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 // What a provider's stated reason for ending a response means for the run.
@@ -179,16 +181,24 @@ export const UNRECOGNIZED_STOP_REASON = "unknown";
 /** The longest provider value a log line carries. */
 const LOGGED_REASON_MAX = 64;
 
+const UNRECOGNIZED_STOP_REASON_SINK = failureSink({
+  event: "chat.provider_stop_reason.unrecognized",
+  expected: [],
+});
+
 /** Report a stop reason no table lists, so the table gets it. */
 const reportUnrecognizedStopReason = (
   provider: TanStackAIProvider,
   reason: string,
 ): void => {
-  captureError(
+  observeFailure(
     new UnrecognizedProviderStopReasonError({
       message: `A ${provider} response ended with a stop reason no table lists`,
     }),
-    { feature: "chat.provider_stop_reason", provider },
+    {
+      sink: UNRECOGNIZED_STOP_REASON_SINK,
+      ctx: { feature: "chat.provider_stop_reason", source: provider },
+    },
   );
   logger.warn("chat.provider_stop_reason_unrecognized", {
     provider,
@@ -283,7 +293,7 @@ export const refuseTurnPausingRequest = (
     return;
   }
   const enabled =
-    (options.tools ?? []).map(pausingToolKind).find(Boolean) ??
+    arrayOrEmpty(options.tools).map(pausingToolKind).find(Boolean) ??
     pausingContextEdit(options.modelOptions);
   if (enabled !== undefined) {
     panic(
