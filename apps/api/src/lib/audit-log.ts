@@ -275,6 +275,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   report_export: "other",
   rate_table: "other",
   saved_search: "other",
+  seller_profile: "other",
   style_set: "other",
   template: "other",
   template_lookup_format: "other",

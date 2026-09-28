@@ -137,6 +137,7 @@ export type SafeIdType =
   | "rateEntry"
   | "rateTable"
   | "savedSearch"
+  | "sellerProfile"
   | "reportExport"
   | "schedulerJobRun"
   | "sharepointConnection"
