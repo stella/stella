@@ -15,7 +15,12 @@ import type {
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
+import { env } from "@/api/env";
 import { detached } from "@/api/lib/analytics/capture";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import {
   isMcpSession,
@@ -730,12 +735,39 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      return await handleMcpToolCall({
-        args: toolRequest.params.arguments ?? {},
-        context,
-        mode,
-        toolName,
-      });
+      const run = async () =>
+        await handleMcpToolCall({
+          args: toolRequest.params.arguments ?? {},
+          context,
+          mode,
+          toolName,
+        });
+      if (!env.FEATURE_ACTION_ADMISSION) {
+        return await run();
+      }
+
+      try {
+        return await withActionAdmission({
+          enabled: true,
+          organizationId: context.organizationId,
+          userId: context.userId,
+          run,
+        });
+      } catch (error) {
+        if (!ActionAdmissionError.is(error)) {
+          throw error;
+        }
+        if (error.reason === "busy") {
+          return mcpStructuredErrorResult({
+            code: "rate_limited",
+            message: "Concurrent action limit reached",
+            hint: "Wait for an active action to finish, then retry this call.",
+            retryable: true,
+          });
+        }
+        captureError(error, { phase: "action-admission", source: "mcp" });
+        return retryableToolErrorResult(mode);
+      }
     });
 
     return server;
