@@ -121,9 +121,7 @@ const readInstallTable = (bunfig: string): object | undefined => {
  * `[install] minimumReleaseAge` in seconds, as Bun reads it; undefined when
  * the file sets none, which leaves installs from its directory unquarantined.
  */
-export const readMinimumReleaseAgeSeconds = (
-  bunfig: string,
-): number | undefined => {
+const readMinimumReleaseAgeSeconds = (bunfig: string): number | undefined => {
   const install = readInstallTable(bunfig);
   if (install === undefined || !("minimumReleaseAge" in install)) {
     return undefined;
@@ -133,7 +131,7 @@ export const readMinimumReleaseAgeSeconds = (
 };
 
 /** The names Bun exempts from the release-age gate: exact matches only. */
-export const readExcludes = (bunfig: string): Set<string> => {
+const readExcludes = (bunfig: string): Set<string> => {
   const install = readInstallTable(bunfig);
   if (install === undefined) {
     return new Set();
@@ -147,6 +145,22 @@ export const readExcludes = (bunfig: string): Set<string> => {
   }
   return new Set(excludes.filter((name) => typeof name === "string"));
 };
+
+export type InstallPolicy = {
+  readonly excludes: ReadonlySet<string>;
+  /** Seconds; undefined when the file leaves its directory unquarantined. */
+  readonly minimumReleaseAge: number | undefined;
+};
+
+/**
+ * What a bunfig.toml sets for the release-age gate. Every guard that asks
+ * whether a directory is quarantined, or which names it exempts, reads it
+ * through here, so no two of them can disagree about it.
+ */
+export const readInstallPolicy = (bunfig: string): InstallPolicy => ({
+  excludes: readExcludes(bunfig),
+  minimumReleaseAge: readMinimumReleaseAgeSeconds(bunfig),
+});
 
 const excludeDeclaration = (line: string): string | undefined =>
   /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];

@@ -40,8 +40,7 @@ import path from "node:path";
 
 import { parseBunLockText } from "./bun-lock-text";
 import {
-  readExcludes,
-  readMinimumReleaseAgeSeconds,
+  readInstallPolicy,
   readTemporaryExcludes,
 } from "./check-stll-quarantine-excludes";
 
@@ -169,14 +168,14 @@ const readReleaseAgePolicy = (
   if (bunfigText === undefined) {
     return undefined;
   }
-  const minimumReleaseAgeSeconds = readMinimumReleaseAgeSeconds(bunfigText);
-  if (minimumReleaseAgeSeconds === undefined) {
+  const { excludes, minimumReleaseAge } = readInstallPolicy(bunfigText);
+  if (minimumReleaseAge === undefined) {
     return undefined;
   }
   return {
     bunfigPath,
-    excludes: readExcludes(bunfigText),
-    minimumReleaseAgeSeconds,
+    excludes,
+    minimumReleaseAgeSeconds: minimumReleaseAge,
     temporaryExpiries: new Map(
       readTemporaryExcludes(bunfigText).entries.map(({ expiresAt, name }) => [
         name,
@@ -388,7 +387,9 @@ export const checkLockfileReleaseAges = async ({
         `${lockfile.path} adds ${String(added.length)} pin(s) but no release-age ` +
           `quarantine governs it: Bun reads ${BUNFIG_NAME} only from the ` +
           `directory it installs in, and ${bunfigPath} sets no ` +
-          `[install] minimumReleaseAge. Add one.`,
+          `[install] minimumReleaseAge. Add one; ` +
+          `scripts/check-standalone-lockfiles.ts lists what else a standalone ` +
+          `lockfile needs.`,
       );
       continue;
     }

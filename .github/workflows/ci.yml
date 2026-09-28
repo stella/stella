@@ -393,7 +393,7 @@ jobs:
             # cleared the release-age quarantine: a frozen install never
             # checks. Also runs when the check itself changes.
             case "$file" in
-              bun.lock|*/bun.lock|scripts/check-lockfile-release-ages.ts|scripts/check-stll-quarantine-excludes.ts|scripts/bun-lock-text.ts)
+              bun.lock|*/bun.lock|scripts/check-lockfile-release-ages.ts|scripts/check-lockfile-release-ages.test.ts|scripts/check-stll-quarantine-excludes.ts|scripts/bun-lock-text.ts)
                 lockfile_ages_required=true
                 ;;
             esac
@@ -711,6 +711,23 @@ jobs:
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
 
+      - name: Lockfile release-age guard
+        # Bun applies the release-age quarantine only while it resolves
+        # versions; a frozen install takes whatever bun.lock pins. This looks
+        # up the publish time of each pin new against the merge base, in every
+        # tracked lockfile, and fails one the governing bunfig.toml would not
+        # yet admit (its excludes honoured). A registry failure fails it too.
+        # Runs before the install, so a quarantined pin never executes here,
+        # and again on the queued tree, whose base may govern it differently.
+        if: >-
+          github.event_name != 'workflow_dispatch'
+          && needs.ci-plan.outputs.lockfile_ages_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          bun test scripts/check-lockfile-release-ages.test.ts
+          bun scripts/check-lockfile-release-ages.ts --base "$BASE_SHA"
+
       # Must follow Setup Bun so the shims land ahead of the real binary. This
       # job installs the whole workspace from the lockfile, so a malicious
       # package anywhere in the graph is caught here and blocks the PR.
@@ -783,22 +800,6 @@ jobs:
         run: |
           bun test scripts/check-stll-quarantine-excludes.test.ts
           bun scripts/check-stll-quarantine-excludes.ts
-
-      - name: Lockfile release-age guard
-        # Bun applies the release-age quarantine only while it resolves
-        # versions; a frozen install takes whatever bun.lock pins. This looks
-        # up the publish time of each pin new against the merge base, in every
-        # tracked lockfile, and fails one the governing bunfig.toml would not
-        # yet admit (its excludes honoured). A registry failure fails it too.
-        # Pull requests only: the merge queue lands what they checked.
-        if: >-
-          github.event_name == 'pull_request'
-          && needs.ci-plan.outputs.lockfile_ages_required == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          bun test scripts/check-lockfile-release-ages.test.ts
-          bun scripts/check-lockfile-release-ages.ts --base "$BASE_SHA"
 
       - name: Policy evidence
         run: bun run policies:check

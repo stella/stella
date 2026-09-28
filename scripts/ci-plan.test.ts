@@ -244,6 +244,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     ".claude/mcp/bun.lock",
     "tools/nested/bun.lock",
     "scripts/check-lockfile-release-ages.ts",
+    "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-stll-quarantine-excludes.ts",
   ]) {
     expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
