@@ -67,6 +67,9 @@
         "src/server.ts!",
         "src/runtime.ts!",
         "vite.config.ts",
+        // The generated route tree is ignored; this route owns billing dialogs
+        // loaded by the router and must remain in Knip's usage graph.
+        "src/routes/_protected.workspaces/$workspaceId/timesheets.tsx",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
         "e2e/**/*.spec.ts",

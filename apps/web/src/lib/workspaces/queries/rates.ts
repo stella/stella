@@ -5,7 +5,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ratesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-export const ratesKeys = {
+const ratesKeys = {
   all: ratesQueryRoot,
   tables: (workspaceId: string) => [...ratesKeys.all(workspaceId), "tables"],
   entries: (workspaceId: string, rateTableId: string) => [
