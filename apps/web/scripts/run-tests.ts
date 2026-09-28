@@ -38,8 +38,9 @@ for (const run of runs) {
     cwd: WEB_ROOT_PATH,
     stdio: ["inherit", "inherit", "inherit"],
   });
-  if (child.exitCode !== 0) {
+  if (!child.success) {
     console.error(`The ${run.label} tests failed.`);
-    process.exit(child.exitCode ?? 1);
+    // A run killed by a signal has no positive exit code of its own.
+    process.exit(child.exitCode > 0 ? child.exitCode : 1);
   }
 }
