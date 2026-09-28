@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { lookup } from "node:dns/promises";
 import { request as requestHttp } from "node:http";
-import type { IncomingMessage } from "node:http";
+import type { ClientRequest, IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
 import { isIP } from "node:net";
 import type { LookupFunction, TcpSocketConnectOpts } from "node:net";
@@ -45,6 +45,50 @@ export type SafeOutboundFetchStreamResponse = {
   headers: Headers;
   ok: boolean;
   status: number;
+};
+
+type RequestGuards = {
+  clearHeaderTimeout: () => void;
+  cleanup: () => void;
+};
+
+const attachRequestGuards = ({
+  reject,
+  request,
+  signal,
+  timeoutMs,
+}: {
+  reject: (reason?: unknown) => void;
+  request: ClientRequest;
+  signal: AbortSignal | undefined;
+  timeoutMs: number;
+}): RequestGuards | null => {
+  const timeout = setTimeout(() => {
+    request.destroy(
+      new SafeOutboundFetchError({ message: "Request timed out" }),
+    );
+  }, timeoutMs);
+  const abort = () => {
+    request.destroy(abortReasonToError(signal?.reason));
+  };
+  const cleanup = () => {
+    signal?.removeEventListener("abort", abort);
+    clearTimeout(timeout);
+  };
+  if (signal?.aborted) {
+    const error = abortReasonToError(signal.reason);
+    clearTimeout(timeout);
+    request.destroy(error);
+    reject(error);
+    return null;
+  }
+  signal?.addEventListener("abort", abort, { once: true });
+  request.on("error", (cause) => {
+    cleanup();
+    reject(cause);
+  });
+  request.on("close", cleanup);
+  return { clearHeaderTimeout: () => clearTimeout(timeout), cleanup };
 };
 
 type SafeOutboundRedirectMode = "error" | "manual";
@@ -115,6 +159,7 @@ export const fetchWithResolvedAddress = async ({
       await new Promise<SafeOutboundFetchResponse>((resolve, reject) => {
         const requestHeaders = new Headers(headers);
         const bodyBytes = bodyToBytes(body);
+        let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {
           requestHeaders.set("Content-Length", String(bodyBytes.byteLength));
         }
@@ -140,7 +185,7 @@ export const fetchWithResolvedAddress = async ({
 
             if (status >= 300 && status < 400 && redirect === "error") {
               response.resume();
-              clearTimeout(timeout);
+              guards?.cleanup();
               reject(
                 new SafeOutboundFetchError({
                   message: "Redirects are not allowed",
@@ -164,13 +209,11 @@ export const fetchWithResolvedAddress = async ({
               chunks.push(chunk);
             });
             response.on("error", (cause) => {
-              signal?.removeEventListener("abort", abort);
-              clearTimeout(timeout);
+              guards?.cleanup();
               reject(cause);
             });
             response.on("end", () => {
-              signal?.removeEventListener("abort", abort);
-              clearTimeout(timeout);
+              guards?.cleanup();
               resolve({
                 body: concatChunks(chunks, total),
                 headers: responseHeaders,
@@ -180,34 +223,10 @@ export const fetchWithResolvedAddress = async ({
             });
           },
         );
-        const timeout = setTimeout(() => {
-          request.destroy(
-            new SafeOutboundFetchError({ message: "Request timed out" }),
-          );
-        }, timeoutMs);
-
-        const abort = () => {
-          request.destroy(abortReasonToError(signal?.reason));
-        };
-        if (signal?.aborted) {
-          const error = abortReasonToError(signal.reason);
-          clearTimeout(timeout);
-          request.destroy(error);
-          reject(error);
+        guards = attachRequestGuards({ reject, request, signal, timeoutMs });
+        if (guards === null) {
           return;
         }
-        signal?.addEventListener("abort", abort, { once: true });
-
-        request.on("error", (cause) => {
-          signal?.removeEventListener("abort", abort);
-          clearTimeout(timeout);
-          reject(cause);
-        });
-
-        request.on("close", () => {
-          signal?.removeEventListener("abort", abort);
-          clearTimeout(timeout);
-        });
 
         if (bodyBytes) {
           request.write(bodyBytes);
@@ -265,6 +284,7 @@ export const fetchStreamWithResolvedAddress = async ({
       await new Promise<SafeOutboundFetchStreamResponse>((resolve, reject) => {
         const requestHeaders = new Headers(headers);
         const bodyBytes = bodyToBytes(body);
+        let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {
           requestHeaders.set("Content-Length", String(bodyBytes.byteLength));
         }
@@ -285,7 +305,7 @@ export const fetchStreamWithResolvedAddress = async ({
             servername: url.hostname,
           },
           (response) => {
-            clearTimeout(timeout);
+            guards?.clearHeaderTimeout();
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
 
@@ -311,34 +331,10 @@ export const fetchStreamWithResolvedAddress = async ({
             });
           },
         );
-        const timeout = setTimeout(() => {
-          request.destroy(
-            new SafeOutboundFetchError({ message: "Request timed out" }),
-          );
-        }, timeoutMs);
-
-        const abort = () => {
-          request.destroy(abortReasonToError(signal?.reason));
-        };
-        if (signal?.aborted) {
-          const error = abortReasonToError(signal.reason);
-          clearTimeout(timeout);
-          request.destroy(error);
-          reject(error);
+        guards = attachRequestGuards({ reject, request, signal, timeoutMs });
+        if (guards === null) {
           return;
         }
-        signal?.addEventListener("abort", abort, { once: true });
-
-        request.on("error", (cause) => {
-          signal?.removeEventListener("abort", abort);
-          clearTimeout(timeout);
-          reject(cause);
-        });
-
-        request.on("close", () => {
-          signal?.removeEventListener("abort", abort);
-          clearTimeout(timeout);
-        });
 
         if (bodyBytes) {
           request.write(bodyBytes);
@@ -619,7 +615,7 @@ export const validateOutboundFetchTarget = async (
   }: {
     protocolPolicy?: OutboundProtocolPolicy;
     resolveAddresses?: ResolveOutboundAddresses;
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
     timeoutMs?: number;
   } = {},
 ): Promise<Result<OutboundFetchTarget, SafeOutboundFetchError>> => {

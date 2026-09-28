@@ -12,7 +12,7 @@ import {
 
 const UN_FIXTURE = path.join(
   import.meta.dir,
-  "../../../../../packages/sanctions/src/fixtures/un.xml",
+  "../../../../../../packages/sanctions/src/fixtures/un.xml",
 );
 
 const euMetadata = (downloadUrl: string) => ({
@@ -49,7 +49,9 @@ describe("publisher download discovery", () => {
       ),
     );
     expect(found.isErr()).toBe(true);
-    expect(found.error.message).not.toContain("private");
+    if (found.isErr()) {
+      expect(found.error.message).not.toContain("private");
+    }
   });
 
   test("selects the latest dated CSV from the Czech ministry page", () => {
@@ -97,7 +99,9 @@ describe("streaming list downloads", () => {
     );
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe("fetch-failed");
+    if (result.isErr()) {
+      expect(result.error.code).toBe("fetch-failed");
+    }
     expect(attempts).toBe(3);
   });
 
@@ -132,7 +136,9 @@ describe("streaming list downloads", () => {
     );
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe("fetch-failed");
+    if (result.isErr()) {
+      expect(result.error.code).toBe("fetch-failed");
+    }
     expect(attempts).toBe(3);
   });
 });

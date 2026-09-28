@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 
 import { envBase } from "@/api/env-base";
-import { readSanctionsFreshness } from "@/api/lib/sanctions/freshness";
-import { getSanctionsIngestionDb } from "@/api/lib/sanctions/ingestion-db";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import { getSanctionsIngestionDb } from "@/api/lib/lists/sanctions/ingestion-db";
 import {
   recordUnexpectedSanctionsFailure,
   refreshSanctionsSource,
-} from "@/api/lib/sanctions/refresh";
-import { sanctionsSourceIds } from "@/api/lib/sanctions/source-config";
+} from "@/api/lib/lists/sanctions/refresh";
+import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const REFRESH_SANCTIONS_SOURCES_TASK =
@@ -18,10 +18,14 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
   signal,
 }) => {
   const db = getSanctionsIngestionDb();
-  for (const source of sanctionsSourceIds()) {
+  const sources = sanctionsSourceIds();
+  const refreshNextSource = async (index: number): Promise<void> => {
+    const source = sources.at(index);
+    if (source === undefined) {
+      return;
+    }
     signal.throwIfAborted();
     const startedAt = new Date();
-    // db-await-in-loop: publisher-aware sequential fetches bound memory and network use; every source records its own terminal refresh outcome.
     const attempt = await Result.tryPromise(
       async () =>
         await refreshSanctionsSource({
@@ -38,7 +42,6 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
         "sanctions.source": source,
         "sanctions.failure_code": "unexpected-error",
       });
-      // db-await-in-loop: each source records its own crash after the failed attempt; the next source must still run.
       const recorded = await Result.tryPromise(
         async () =>
           await recordUnexpectedSanctionsFailure({ db, source, startedAt }),
@@ -48,7 +51,8 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
           "sanctions.source": source,
         });
       }
-      continue;
+      await refreshNextSource(index + 1);
+      return;
     }
     const outcome = attempt.value;
     signal.throwIfAborted();
@@ -62,7 +66,9 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
         "sanctions.failure_code": outcome.code,
       }),
     });
-  }
+    await refreshNextSource(index + 1);
+  };
+  await refreshNextSource(0);
 
   signal.throwIfAborted();
   const freshness = await readSanctionsFreshness({ db });
@@ -70,9 +76,13 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
     if (source.status === "unavailable" || source.annotation !== null) {
       logger.warn("scheduler.sanctions_source_status", {
         "sanctions.source": source.source,
-        "sanctions.reason": source.reason,
-        "sanctions.annotation": source.annotation?.type ?? null,
-        "sanctions.held_code": source.heldUpdate?.code ?? null,
+        ...(source.reason !== null && { "sanctions.reason": source.reason }),
+        ...(source.annotation !== null && {
+          "sanctions.annotation": source.annotation.type,
+        }),
+        ...(source.heldUpdate !== null && {
+          "sanctions.held_code": source.heldUpdate.code,
+        }),
       });
     }
   }

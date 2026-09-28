@@ -1,5 +1,6 @@
 import type { SanctionsEntry } from "@stll/sanctions";
 
+import type { AnyPgColumn } from "./common";
 import {
   globalCaseLawPolicies,
   jsonb,
@@ -113,7 +114,9 @@ export const sanctionsEditions = p.pgTable(
     sourceId: p
       .text("source_id")
       .notNull()
-      .references(() => sanctionsSources.id, { onDelete: "restrict" }),
+      .references((): AnyPgColumn => sanctionsSources.id, {
+        onDelete: "restrict",
+      }),
     markerKey: p.text("marker_key").notNull(),
     publishedAt: p.text("published_at").notNull(),
     fileId: p.text("file_id"),

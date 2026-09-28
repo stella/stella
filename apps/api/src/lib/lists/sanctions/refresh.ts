@@ -20,15 +20,15 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/sanctions/source-config";
+import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchSanctionsEdition,
   fetchSanctionsMarker,
-} from "@/api/lib/sanctions/source-fetch";
+} from "@/api/lib/lists/sanctions/source-fetch";
 import type {
   FetchedEdition,
   FetchedMarker,
-} from "@/api/lib/sanctions/source-fetch";
+} from "@/api/lib/lists/sanctions/source-fetch";
 
 const ENTRY_BATCH_SIZE = 500;
 const MAX_SOURCE_ENTRY_ID_LENGTH = 512;
@@ -363,11 +363,14 @@ const activateStagedEdition = async ({
       .limit(expectedEntries.length + 1);
     const matches =
       storedEntries.length === expectedEntries.length &&
-      storedEntries.every(
-        (stored, index) =>
-          stored.sourceEntryId === expectedEntries[index]?.sourceEntryId &&
-          stored.contentHash === expectedEntries[index]?.contentHash,
-      );
+      storedEntries.every((stored, index) => {
+        const expected = expectedEntries.at(index);
+        return (
+          expected !== undefined &&
+          stored.sourceEntryId === expected.sourceEntryId &&
+          stored.contentHash === expected.contentHash
+        );
+      });
     if (!matches) {
       const now = new Date();
       await tx
@@ -544,16 +547,11 @@ const stageAcceptedEdition = async ({
       return 0;
     });
 
-  for (
-    let start = 0;
-    start < expectedEntries.length;
-    start += ENTRY_BATCH_SIZE
-  ) {
-    if (signal.aborted) {
-      return { status: "aborted", source };
+  const persistNextBatch = async (start: number): Promise<void> => {
+    if (start >= expectedEntries.length || signal.aborted) {
+      return;
     }
     const batch = expectedEntries.slice(start, start + ENTRY_BATCH_SIZE);
-    // db-await-in-loop: each bounded batch persists before the next; retry fills the same edition by stable source-entry id.
     await db(async (tx) => {
       await tx
         .insert(sanctionsEntryPayloads)
@@ -575,7 +573,9 @@ const stageAcceptedEdition = async ({
         )
         .onConflictDoNothing();
     });
-  }
+    await persistNextBatch(start + ENTRY_BATCH_SIZE);
+  };
+  await persistNextBatch(0);
   if (signal.aborted) {
     return { status: "aborted", source };
   }
@@ -630,8 +630,9 @@ const fetchCurrentEdition = async ({
   fetchMarker,
   fetchEdition,
 }: FetchCurrentOptions): Promise<CurrentEditionResult> => {
+  const isAborted = () => fetchOptions.signal.aborted;
   const firstMarker = await fetchMarker(source, fetchOptions);
-  if (fetchOptions.signal.aborted) {
+  if (isAborted()) {
     return { status: "aborted" };
   }
   if (firstMarker.isErr()) {
@@ -651,7 +652,7 @@ const fetchCurrentEdition = async ({
   }
 
   let edition = await fetchEdition(marker, fetchOptions);
-  if (fetchOptions.signal.aborted) {
+  if (isAborted()) {
     return { status: "aborted" };
   }
   if (edition.isErr()) {
@@ -663,7 +664,7 @@ const fetchCurrentEdition = async ({
     stableStringify(marker.version)
   ) {
     const nextMarker = await fetchMarker(source, fetchOptions);
-    if (fetchOptions.signal.aborted) {
+    if (isAborted()) {
       return { status: "aborted" };
     }
     if (nextMarker.isErr()) {
@@ -687,7 +688,7 @@ const fetchCurrentEdition = async ({
       return { status: "unchanged" };
     }
     edition = await fetchEdition(marker, fetchOptions);
-    if (fetchOptions.signal.aborted) {
+    if (isAborted()) {
       return { status: "aborted" };
     }
     if (edition.isErr()) {

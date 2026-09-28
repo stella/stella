@@ -15,12 +15,12 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
-import { readSanctionsFreshness } from "@/api/lib/sanctions/freshness";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
   refreshSanctionsSource,
   SANCTIONS_PARSER_VERSION,
-} from "@/api/lib/sanctions/refresh";
-import { SanctionsRefreshError } from "@/api/lib/sanctions/source-fetch";
+} from "@/api/lib/lists/sanctions/refresh";
+import { SanctionsRefreshError } from "@/api/lib/lists/sanctions/source-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -219,7 +219,7 @@ test(
     });
     expect(rows.at(0)?.activeEditionId).not.toBeNull();
 
-    await expect(
+    expect(
       db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella`);
         await tx.insert(sanctionsSources).values({
@@ -345,7 +345,7 @@ test(
       })
       .returning({ id: sanctionsEditions.id });
     if (!stage || !payload) {
-      return panic("Missing sanctions test fixture");
+      panic("Missing sanctions test fixture");
     }
     await db.insert(sanctionsEditionEntries).values({
       editionId: stage.id,
@@ -397,7 +397,7 @@ test(
       .from(sanctionsEditions)
       .where(eq(sanctionsEditions.markerKey, markerKey(parsed)));
     if (!activeBefore?.id || !historical) {
-      return panic("Missing historical sanctions edition test fixture");
+      panic("Missing historical sanctions edition test fixture");
     }
     const outcome = await refreshSanctionsSource({
       db: scopedDb,

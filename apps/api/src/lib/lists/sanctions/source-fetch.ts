@@ -12,13 +12,12 @@ import {
 } from "@stll/sanctions";
 import type { ListVersion, ParsedList, SanctionsSource } from "@stll/sanctions";
 
-import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { captureError } from "@/api/lib/analytics/capture";
+import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
+import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   safeOutboundFetchBytes,
   safeOutboundFetchStream,
 } from "@/api/lib/safe-outbound-fetch";
-import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/sanctions/source-config";
 
 const METADATA_MAX_BYTES = 1_000_000;
 const LIST_MAX_BYTES = 64_000_000;
@@ -238,13 +237,11 @@ const fetchStream = async ({
     return Result.err(refreshError(source, "fetch-failed"));
   }
   if (!response.value.ok) {
-    const discarded = await Result.tryPromise(() =>
-      response.value.body.cancel(),
+    const discarded = await Result.tryPromise(
+      async () => await response.value.body.cancel(),
     );
     if (discarded.isErr()) {
-      captureError(refreshError(source, "fetch-failed"), {
-        context: { "sanctions.source": source },
-      });
+      return Result.err(refreshError(source, "fetch-failed"));
     }
     return Result.err(
       refreshError(
@@ -264,7 +261,7 @@ const trackStreamFailure = (body: ReadableStream<Uint8Array>) => {
     const reader = body.getReader();
     try {
       while (true) {
-        const next = await Result.tryPromise(() => reader.read());
+        const next = await Result.tryPromise(async () => await reader.read());
         if (next.isErr()) {
           failed = true;
           return;

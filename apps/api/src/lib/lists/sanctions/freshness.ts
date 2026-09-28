@@ -8,7 +8,7 @@ import { sanctionsEditions, sanctionsSources } from "@/api/db/schema";
 import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
-} from "@/api/lib/sanctions/source-config";
+} from "@/api/lib/lists/sanctions/source-config";
 
 type FailureCode = NonNullable<
   typeof sanctionsSources.$inferSelect.lastFailureCode
