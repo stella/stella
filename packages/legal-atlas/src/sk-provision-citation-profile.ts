@@ -11,7 +11,7 @@
  * reason the alias table is profile data and not a shared dictionary.
  */
 
-import { succession } from "./provision-citation-profile";
+import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
   WorkIdentifier,
@@ -169,14 +169,16 @@ export const SK_PROFILE = {
       ],
       ...CRIMINAL_PROCEDURE_SUCCESSION,
     }),
-    // 40/1964 Zb. replaced the 1950 code on 1 April 1964.
-    ...succession({
+    // 141/1950 Zb. took effect on 1 January 1951; 40/1964 Zb. replaced it on
+    // 1 April 1964.
+    ...priorWindowed({
       spellings: [
         "Občiansky zákonník",
         "Občianskeho zákonníka",
         "Občianskom zákonníku",
       ],
       older: zb(141, 1950),
+      olderFrom: "1951-01-01",
       newer: zb(40, 1964),
       on: "1964-04-01",
     }),
