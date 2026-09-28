@@ -2,8 +2,10 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- Operator-seeded member bound of a usage policy. Null = the policy sets none.
+-- The check is validated by the following migration, outside this DDL
+-- transaction.
 ALTER TABLE "usage_policies" ADD COLUMN "max_members" integer;--> statement-breakpoint
-ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_max_members_positive" CHECK (max_members IS NULL OR max_members > 0);--> statement-breakpoint
+ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_max_members_positive" CHECK (max_members IS NULL OR max_members > 0) NOT VALID;--> statement-breakpoint
 
 -- How many members an organization may hold, or null when nothing bounds it.
 -- Only an organization whose recorded access state is not
