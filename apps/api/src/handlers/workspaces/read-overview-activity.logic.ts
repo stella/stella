@@ -116,6 +116,7 @@ export const parseFieldAuditResourceId = (
 export type ActivityTargetSource =
   | "automation"
   | "court"
+  | "correspondence"
   | "documentReviewRun"
   | "entity"
   | "entityVersion"
@@ -149,6 +150,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   statute_annotation: "court",
   // Organization-scoped, so never part of one matter's activity.
   case_law_research_column: null,
+  correspondence: "correspondence",
   bilingual_translation_run: "translationRun",
   document_translation_run: "translationRun",
   document_review_run: "documentReviewRun",
@@ -260,6 +262,7 @@ export const VISIBLE_ACTIVITY_ACTIONS = Object.values(
 export type LegacyActivityCategory =
   | "automation"
   | "court"
+  | "correspondence"
   | "documents"
   | "matter"
   | "tasks"
@@ -294,6 +297,9 @@ export const legacyActivityCategory = (
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
     return "court";
+  }
+  if (resourceType === AUDIT_RESOURCE_TYPE.CORRESPONDENCE) {
+    return "correspondence";
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
     return workspaceTeamEvent ? "team" : "matter";

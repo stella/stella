@@ -158,6 +158,9 @@ export const envApiServerSchema = {
     ),
   ),
   EMAIL_PROVIDER: v.optional(v.picklist(["ses", "smtp"])),
+  INBOUND_MAIL_DOMAIN: v.optional(
+    v.pipe(v.string(), v.regex(/^[a-z0-9.-]+\.[a-z]{2,}$/u)),
+  ),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
