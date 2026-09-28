@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
 /**
@@ -41,7 +41,7 @@ export const splitIngestRequests = <TRow>(
   group: readonly BuiltRow<TRow>[],
   maxBytes: number,
   { maxSingleDocumentBytes = maxBytes }: SplitIngestRequestOptions = {},
-): IngestRequest<TRow>[] => {
+): Result<IngestRequest<TRow>[], IngestDocumentTooLargeError> => {
   const requests: IngestRequest<TRow>[] = [];
   let entries: BuiltRow<TRow>[] = [];
   let lines: string[] = [];
@@ -68,9 +68,11 @@ export const splitIngestRequests = <TRow>(
       // Measure UTF-8 bytes: legal text is often non-ASCII.
       const lineBytes = Buffer.byteLength(line, "utf-8");
       if (lineBytes > maxSingleDocumentBytes) {
-        throw new IngestDocumentTooLargeError({
-          message: `An ingest document is ${lineBytes} bytes, exceeding the ${maxSingleDocumentBytes}-byte document limit`,
-        });
+        return Result.err(
+          new IngestDocumentTooLargeError({
+            message: `An ingest document is ${lineBytes} bytes, exceeding the ${maxSingleDocumentBytes}-byte document limit`,
+          }),
+        );
       }
       const separatorBytes = lines.length === 0 ? 0 : 1;
       if (bytes + separatorBytes + lineBytes > maxBytes) {
@@ -87,7 +89,7 @@ export const splitIngestRequests = <TRow>(
   }
 
   flush();
-  return requests;
+  return Result.ok(requests);
 };
 
 /**

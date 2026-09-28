@@ -190,8 +190,15 @@ export const planCorpusProjectionAppendRequests = (
         CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
     },
   );
+  if (requests.isErr()) {
+    return invalidAppend(
+      "revision_too_large",
+      requests.error.message,
+      revisions,
+    );
+  }
   return Result.ok(
-    requests.map(({ entries: requestEntries, ndjson }) => ({
+    requests.value.map(({ entries: requestEntries, ndjson }) => ({
       entries: requestEntries.map(({ row }) => row),
       ndjson,
     })),

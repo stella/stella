@@ -559,9 +559,7 @@ export const chunkLegislationDocument = ({
       LEGISLATION_PASSAGE_TEXT_MAX_BYTES,
     );
     if (windowEnd <= start) {
-      throw new ChunkBudgetError({
-        message: "Legislation passage cannot fit one UTF-8 character",
-      });
+      return panic("Legislation passage cannot fit one UTF-8 character");
     }
     let end = windowEnd;
     let headingPathAfterCut = headingPath;

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { settleBoth, splitIngestRequests } from "@/api/lib/corpus-index/core";
+import {
+  settleBoth,
+  splitIngestRequests,
+  type IngestRequest,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * A batch is sized in rows, but a passage family turns one row into as many
@@ -20,7 +24,7 @@ const builtRow = (id: string, passages: number, filler: string) => ({
   })),
 });
 
-const ingestedIds = (requests: ReturnType<typeof splitIngestRequests>) =>
+const ingestedIds = (requests: IngestRequest<unknown>[]) =>
   requests.flatMap(({ ndjson }) =>
     ndjson.split("\n").map((line) => {
       const doc: Record<string, unknown> = JSON.parse(line);
@@ -32,7 +36,7 @@ describe("splitIngestRequests", () => {
   test("a group that fits stays one request", () => {
     const group = [builtRow("a", 3, "x"), builtRow("b", 2, "x")];
 
-    const requests = splitIngestRequests(group, 1_000_000);
+    const requests = splitIngestRequests(group, 1_000_000).unwrap();
 
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.entries).toHaveLength(2);
@@ -46,7 +50,7 @@ describe("splitIngestRequests", () => {
       builtRow("c", 4, "x".repeat(400)),
     ];
 
-    const requests = splitIngestRequests(group, 2000);
+    const requests = splitIngestRequests(group, 2000).unwrap();
 
     expect(requests.length).toBeGreaterThan(1);
     // No document dropped, none duplicated, document order preserved — the
@@ -66,7 +70,7 @@ describe("splitIngestRequests", () => {
     );
     const maxBytes = 4000;
 
-    for (const { ndjson } of splitIngestRequests(group, maxBytes)) {
+    for (const { ndjson } of splitIngestRequests(group, maxBytes).unwrap()) {
       expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(maxBytes);
     }
   });
@@ -74,7 +78,7 @@ describe("splitIngestRequests", () => {
   test("an oversized row is split across bounded requests with row metadata on each part", () => {
     const group = [builtRow("a", 20, "x".repeat(100)), builtRow("b", 1, "x")];
 
-    const requests = splitIngestRequests(group, 500);
+    const requests = splitIngestRequests(group, 500).unwrap();
 
     expect(requests.length).toBeGreaterThan(2);
     for (const { entries, ndjson } of requests) {
@@ -94,9 +98,13 @@ describe("splitIngestRequests", () => {
   test("a single document larger than the budget fails explicitly", () => {
     const group = [builtRow("huge", 1, "x".repeat(500))];
 
-    expect(() => splitIngestRequests(group, 100)).toThrow(
-      "exceeding the 100-byte document limit",
-    );
+    const outcome = splitIngestRequests(group, 100);
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error.message).toContain(
+        "exceeding the 100-byte document limit",
+      );
+    }
   });
 
   test("a larger allowed document occupies its own request", () => {
@@ -108,7 +116,7 @@ describe("splitIngestRequests", () => {
     ];
     const requests = splitIngestRequests(group, 100, {
       maxSingleDocumentBytes: 200,
-    });
+    }).unwrap();
 
     expect(
       requests.map(({ entries }) => entries.map(({ row }) => row.id)),
@@ -121,14 +129,14 @@ describe("splitIngestRequests", () => {
     // Czech/Slovak/Arabic legal text is multi-byte; sizing on `.length` would
     // under-count the wire body by up to 3x and defeat the bound.
     const group = [builtRow("cz", 1, "ř".repeat(300))];
-    const [request] = splitIngestRequests(group, 1_000_000);
+    const [request] = splitIngestRequests(group, 1_000_000).unwrap();
     const ndjson = request?.ndjson ?? "";
 
     expect(utf8Bytes(ndjson)).toBeGreaterThan(ndjson.length);
   });
 
   test("an empty group produces no requests", () => {
-    expect(splitIngestRequests([], 1000)).toEqual([]);
+    expect(splitIngestRequests([], 1000).unwrap()).toEqual([]);
   });
 
   test("a row without documents is rejected before building a request", () => {
