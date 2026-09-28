@@ -1638,6 +1638,59 @@ const interruptToolCallIdsOf = (
     ),
   );
 
+/**
+ * How a run whose source drained ended. A cut run that handed out no
+ * interaction is cut short; a client-resolved call whose input never finished
+ * (no TOOL_CALL_END) cannot be answered by any client, so the turn fails
+ * instead of waiting.
+ */
+const drainedRunOutcome = ({
+  abortSignal,
+  deadlineSignal,
+  finalRunFinishedChunks,
+  responseMessage,
+  runCancelled,
+  toolCallsWithCompleteInput,
+}: {
+  abortSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+  finalRunFinishedChunks: readonly PublicStreamChunk[];
+  responseMessage: ChatMessage | null;
+  runCancelled: boolean;
+  toolCallsWithCompleteInput: ReadonlySet<string>;
+}): ChatTurnOutcome => {
+  const awaitingUserInteraction = findHandedOutInteraction({
+    interruptToolCallIds: interruptToolCallIdsOf(finalRunFinishedChunks),
+    message: responseMessage,
+  });
+  if (
+    (abortSignal.aborted || runCancelled) &&
+    awaitingUserInteraction === null
+  ) {
+    // A cancelled run drains like a finished one. TanStack's agent loop
+    // checks its cancellation before it reads each adapter chunk, so the
+    // terminal `RUN_ERROR` the adapter yields for the aborted provider
+    // request is dropped rather than forwarded, and this generator sees a
+    // source that simply ended. Grading that silence as a completion
+    // persists a turn with no answer and no reason; the signal is what says
+    // the turn was cut, and which signal says why. A finish whose outcome is
+    // `cancelled` says the same.
+    return chatCutShortOutcome({ abortSignal, deadlineSignal });
+  }
+  const openInteraction = getAwaitingUserInteraction(responseMessage);
+  if (
+    openInteraction !== null &&
+    awaitsCompleteInput(openInteraction) &&
+    !toolCallsWithCompleteInput.has(openInteraction.toolCallId)
+  ) {
+    return { type: "failed", error: "unknown" };
+  }
+  if (awaitingUserInteraction !== null) {
+    return { type: "awaiting-user", interaction: awaitingUserInteraction };
+  }
+  return { type: "completed" };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1847,42 +1900,14 @@ export const processServerChatStream = async function* ({
     // is what ends the message; it is the same call the SDK makes when it
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
-    const responseMessage = getResponseMessage();
-    const awaitingUserInteraction = findHandedOutInteraction({
-      interruptToolCallIds: interruptToolCallIdsOf(finalRunFinishedChunks),
-      message: responseMessage,
+    const outcome = drainedRunOutcome({
+      abortSignal,
+      deadlineSignal,
+      finalRunFinishedChunks,
+      responseMessage: getResponseMessage(),
+      runCancelled,
+      toolCallsWithCompleteInput,
     });
-    // A client-resolved call whose input never finished (no TOOL_CALL_END)
-    // cannot be answered by any client, so the turn fails instead of waiting.
-    const openInteraction = getAwaitingUserInteraction(responseMessage);
-    const incompleteClientInteraction =
-      openInteraction !== null &&
-      awaitsCompleteInput(openInteraction) &&
-      !toolCallsWithCompleteInput.has(openInteraction.toolCallId);
-    let outcome: ChatTurnOutcome;
-    if (
-      (abortSignal.aborted || runCancelled) &&
-      awaitingUserInteraction === null
-    ) {
-      // A cancelled run drains like a finished one. TanStack's agent loop
-      // checks its cancellation before it reads each adapter chunk, so the
-      // terminal `RUN_ERROR` the adapter yields for the aborted provider
-      // request is dropped rather than forwarded, and this generator sees a
-      // source that simply ended. Grading that silence as a completion
-      // persists a turn with no answer and no reason; the signal is what says
-      // the turn was cut, and which signal says why. A finish whose outcome is
-      // `cancelled` says the same.
-      outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
-    } else if (incompleteClientInteraction) {
-      outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction !== null) {
-      outcome = {
-        type: "awaiting-user",
-        interaction: awaitingUserInteraction,
-      };
-    } else {
-      outcome = { type: "completed" };
-    }
     await terminalize({
       // A cut-short outcome flushes the pending source into the processor,
       // which has to be finalized again for that content to reach the message.
