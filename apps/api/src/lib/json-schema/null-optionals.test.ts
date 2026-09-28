@@ -90,6 +90,37 @@ describe("a model's placeholder in an optional field", () => {
     ).toEqual({ slug: "", "x-tag": null });
   });
 
+  test("a null one union branch takes stays, though a sibling branch refuses it", () => {
+    const union = {
+      anyOf: [
+        { type: "object", properties: { d: { type: ["string", "null"] } } },
+        { type: "object", properties: { d: { type: "string" } } },
+      ],
+    };
+    expect(withModelPlaceholdersOmitted(union, { d: null })).toEqual({
+      d: null,
+    });
+  });
+
+  test("an array under a union reads its items' placeholders", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { name: { type: "string" }, note: { type: "string" } },
+            required: ["name"],
+          },
+        },
+        { type: "string" },
+      ],
+    };
+    expect(
+      withModelPlaceholdersOmitted(union, [{ name: "draft", note: null }]),
+    ).toEqual([{ name: "draft" }]);
+  });
+
   test('the MCP null rule does not read "" as omitted', () => {
     expect(withNullOptionalsOmitted(schema, { name: "d", note: "" })).toEqual({
       name: "d",

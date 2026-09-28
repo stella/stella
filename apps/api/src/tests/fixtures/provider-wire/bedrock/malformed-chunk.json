@@ -164,6 +164,7 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "unknown",
+    "usageAfterFailure": "Converse reports usage in the metadata event after messageStop, past the frame that fails the run."
   }
 }

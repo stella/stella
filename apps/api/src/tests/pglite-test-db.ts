@@ -473,6 +473,11 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion
   `,
+  // Written only by the owner-run sitemap refresh; the public-law reader's
+  // column grants come from the public-law map below.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_shards" FROM stella
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `

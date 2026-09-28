@@ -35,6 +35,7 @@ import {
   resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
 } from "@/api/lib/tanstack-ai-models";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import {
   normalizeProviderPromptTokens,
@@ -69,7 +70,14 @@ type RunAnalyticsState = {
     totalTokens: number;
   };
   usageReported: boolean;
+  /** What the call that failed reported before it failed, for its
+   *  generation record. */
+  failedCallUsage: { promptTokens: number; completionTokens: number } | null;
 };
+
+/** Which model call reported the usage: one that finished, or one whose run
+ *  error carried what the provider reported before it failed. */
+type UsageSource = "failed-call" | "finished-call";
 
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
@@ -367,6 +375,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
+      failedCallUsage: null,
     };
     runs.set(ctx.runId, created);
     return created;
@@ -489,6 +498,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
           ONE_SECOND_MS,
         $ai_trace_id: config.traceId,
         feature: config.feature,
+        ...(context?.run?.failedCallUsage
+          ? {
+              $ai_input_tokens: context.run.failedCallUsage.promptTokens,
+              $ai_output_tokens: context.run.failedCallUsage.completionTokens,
+            }
+          : {}),
         ...(resolvedModelInfo
           ? {
               $ai_model: resolvedModelInfo.modelId,
@@ -561,6 +576,121 @@ export const createTanStackAIAnalyticsCallbacks = ({
     });
   };
 
+  // A fault here must never propagate into the provider stream and take
+  // the process down with it. Metering and observability are isolated so
+  // an analytics fault cannot drop a billable usage event. A bug loses
+  // that one event and reports it; it never loses the server.
+  const meterUsage = (
+    ctx: ChatMiddlewareContext,
+    usage: TokenUsage,
+    source: UsageSource,
+  ): void => {
+    const resolvedModelInfo = resolveAnalyticsModelInfo();
+    if (!resolvedModelInfo) {
+      return;
+    }
+    const run = runState(ctx);
+    const usageSnapshot = Result.try({
+      try: () => ({
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
+      }),
+      catch: (error) => error,
+    });
+    if (Result.isError(usageSnapshot)) {
+      // The payload itself is unreadable: neither side effect can use it.
+      captureTelemetryError(usageSnapshot.error, {
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      });
+      return;
+    }
+    run.outputTokens = usageSnapshot.value.completionTokens;
+    run.usage.promptTokens += usageSnapshot.value.promptTokens;
+    run.usage.completionTokens += usageSnapshot.value.completionTokens;
+    run.usage.totalTokens += usageSnapshot.value.totalTokens;
+    run.usageReported = true;
+
+    const metering = config.usageMetering;
+    if (metering) {
+      const consumptionArgs = Result.try({
+        try: () => {
+          const { uncachedInputTokens, cacheReadTokens, cacheWriteTokens } =
+            normalizeProviderPromptTokens({
+              provider: resolvedModelInfo.provider,
+              modelId: resolvedModelInfo.modelId,
+              promptTokens: usage.promptTokens,
+              cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+              cacheWriteTokens:
+                usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+            });
+          return {
+            cacheReadTokens,
+            cacheWriteTokens,
+            completionTokens: usage.completionTokens,
+            config,
+            iteration: ctx.iteration,
+            modelInfo: resolvedModelInfo,
+            runId: ctx.runId,
+            serviceTier: usageServiceTierFromModelOptions({
+              fallback: metering.serviceTier,
+              modelOptions: ctx.modelOptions,
+            }),
+            uncachedInputTokens,
+          };
+        },
+        catch: (error) => error,
+      });
+      if (Result.isError(consumptionArgs)) {
+        captureTelemetryError(consumptionArgs.error, {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        });
+      } else {
+        const consumption = recordTanStackConsumption(
+          consumptionArgs.value,
+        ).catch((error: unknown) => {
+          // A rejected deferred settles inside the stream lifecycle;
+          // capture it here so it cannot surface as an unhandled
+          // rejection there.
+          captureTelemetryError(error, {
+            organization_id: metering.organizationId,
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          });
+        });
+        ctx.defer(consumption);
+      }
+    }
+
+    // A failed call's one generation record is the failure's, which carries
+    // these counts.
+    if (source === "failed-call") {
+      run.failedCallUsage = {
+        promptTokens: usageSnapshot.value.promptTokens,
+        completionTokens: usageSnapshot.value.completionTokens,
+      };
+      return;
+    }
+    const captured = Result.try({
+      try: () =>
+        captureGeneration({
+          ctx,
+          iterationStartedAt: run.iterationStartedAt,
+          modelInfo: resolvedModelInfo,
+          usage,
+        }),
+      catch: (error) => error,
+    });
+    if (Result.isError(captured)) {
+      captureTelemetryError(captured.error, {
+        source: "analytics.tanstack_ai",
+        trace_id: config.traceId,
+      });
+    }
+  };
+
   return {
     captureError: captureGenerationError,
     usageMetering: config.usageMetering,
@@ -583,6 +713,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
       onChunk: (ctx, chunk) => {
         if (chunk.type === EventType.RUN_FINISHED) {
           runState(ctx).finishReason = finishReasonOf(chunk);
+        }
+        // TanStack reports usage for a finished model call only. A call that
+        // failed after the provider reported usage was billed as well, so its
+        // run error is metered the same way.
+        if (chunk.type === EventType.RUN_ERROR) {
+          const usage = tokenUsageFromTerminalChunk(chunk);
+          if (usage !== undefined) {
+            meterUsage(ctx, usage, "failed-call");
+          }
         }
       },
       onAfterToolCall: (ctx) => {
@@ -633,106 +772,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
           },
         });
       },
-      // A fault here must never propagate into the provider stream and take
-      // the process down with it. Metering and observability are isolated so
-      // an analytics fault cannot drop a billable usage event. A bug loses
-      // that one event and reports it; it never loses the server.
       onUsage: (ctx, usage) => {
-        const resolvedModelInfo = resolveAnalyticsModelInfo();
-        if (!resolvedModelInfo) {
-          return;
-        }
-        const run = runState(ctx);
-        const usageSnapshot = Result.try({
-          try: () => ({
-            promptTokens: usage.promptTokens,
-            completionTokens: usage.completionTokens,
-            totalTokens: usage.totalTokens,
-          }),
-          catch: (error) => error,
-        });
-        if (Result.isError(usageSnapshot)) {
-          // The payload itself is unreadable: neither side effect can use it.
-          captureTelemetryError(usageSnapshot.error, {
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
-          });
-          return;
-        }
-        run.outputTokens = usageSnapshot.value.completionTokens;
-        run.usage.promptTokens += usageSnapshot.value.promptTokens;
-        run.usage.completionTokens += usageSnapshot.value.completionTokens;
-        run.usage.totalTokens += usageSnapshot.value.totalTokens;
-        run.usageReported = true;
-
-        const metering = config.usageMetering;
-        if (metering) {
-          const consumptionArgs = Result.try({
-            try: () => {
-              const { uncachedInputTokens, cacheReadTokens, cacheWriteTokens } =
-                normalizeProviderPromptTokens({
-                  provider: resolvedModelInfo.provider,
-                  modelId: resolvedModelInfo.modelId,
-                  promptTokens: usage.promptTokens,
-                  cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-                  cacheWriteTokens:
-                    usage.promptTokensDetails?.cacheWriteTokens ?? 0,
-                });
-              return {
-                cacheReadTokens,
-                cacheWriteTokens,
-                completionTokens: usage.completionTokens,
-                config,
-                iteration: ctx.iteration,
-                modelInfo: resolvedModelInfo,
-                runId: ctx.runId,
-                serviceTier: usageServiceTierFromModelOptions({
-                  fallback: metering.serviceTier,
-                  modelOptions: ctx.modelOptions,
-                }),
-                uncachedInputTokens,
-              };
-            },
-            catch: (error) => error,
-          });
-          if (Result.isError(consumptionArgs)) {
-            captureTelemetryError(consumptionArgs.error, {
-              source: "usage.tanstack_ai",
-              trace_id: config.traceId,
-            });
-          } else {
-            const consumption = recordTanStackConsumption(
-              consumptionArgs.value,
-            ).catch((error: unknown) => {
-              // A rejected deferred settles inside the stream lifecycle;
-              // capture it here so it cannot surface as an unhandled
-              // rejection there.
-              captureTelemetryError(error, {
-                organization_id: metering.organizationId,
-                source: "usage.tanstack_ai",
-                trace_id: config.traceId,
-              });
-            });
-            ctx.defer(consumption);
-          }
-        }
-
-        const captured = Result.try({
-          try: () =>
-            captureGeneration({
-              ctx,
-              iterationStartedAt: run.iterationStartedAt,
-              modelInfo: resolvedModelInfo,
-              usage,
-            }),
-          catch: (error) => error,
-        });
-        if (Result.isError(captured)) {
-          captureTelemetryError(captured.error, {
-            source: "analytics.tanstack_ai",
-            trace_id: config.traceId,
-          });
-        }
+        meterUsage(ctx, usage, "finished-call");
       },
     },
   };

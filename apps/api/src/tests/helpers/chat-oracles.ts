@@ -87,7 +87,8 @@ export const CHAT_ORACLE = {
   /** Each tool call ends once with input that satisfies the tool's
    *  declared schema. */
   providerWireToolInput: "chat.provider-wire.tool-input",
-  /** A finished run reports its token usage. */
+  /** A finished run reports its token usage, and a failed one the usage the
+   *  provider reported before it failed. */
   providerWireUsage: "chat.provider-wire.usage",
   /** A provider failure reaches the run error with its message and
    *  classification. */

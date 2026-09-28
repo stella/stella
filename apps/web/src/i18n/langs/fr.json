@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Vérifié par rapport à {count, plural, one {# fait} other {# faits}} tels qu’ils se présentaient le {checkedAt}. Les modifications ultérieures de la liste ne changent pas cette vérification.",
       "failedTitle": "Échec de la vérification",
+      "history": {
+        "label": "Historique des vérifications",
+        "loadFailed": "Les vérifications précédentes de ce document n’ont pas pu être chargées."
+      },
       "inProgress": "Confrontation des affirmations du document aux faits de la liste…",
       "loadFailed": "Cette vérification n’a pas pu être chargée.",
       "noClaims": "Aucune affirmation n’a été trouvée dans ce document.",

@@ -1,5 +1,6 @@
 import { chat } from "@tanstack/ai";
 import type { ContentPart } from "@tanstack/ai";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
 
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -7,6 +8,12 @@ import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-ad
 class InspectableOpenRouterAdapter extends StellaOpenRouterTextAdapter {
   convertForRequest(part: ContentPart) {
     return this.convertContentPart(part);
+  }
+
+  requestFor(
+    options: Parameters<StellaOpenRouterTextAdapter["chatStream"]>[0],
+  ) {
+    return this.mapOptionsToRequest(options);
   }
 }
 
@@ -128,5 +135,42 @@ describe("OpenRouter document transport", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("OpenRouter tool schemas", () => {
+  test("an optional field also admits null on the wire; a required one does not", () => {
+    const request = adapter.requestFor({
+      logger: resolveDebugOption(false),
+      messages: [{ role: "user", content: "Delete the draft." }],
+      model: "google/gemini-2.5-flash",
+      tools: [
+        {
+          name: "delete_draft",
+          description: "Delete a draft by name.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              note: { type: "string", minLength: 1 },
+            },
+            required: ["name"],
+          },
+        },
+      ],
+    });
+    expect(request.tools).toMatchObject([
+      {
+        function: {
+          parameters: {
+            properties: {
+              name: { type: "string" },
+              note: { type: ["string", "null"], minLength: 1 },
+            },
+            required: ["name"],
+          },
+        },
+      },
+    ]);
   });
 });

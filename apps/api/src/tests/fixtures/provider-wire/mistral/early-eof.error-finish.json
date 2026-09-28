@@ -70,6 +70,11 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "provider_stream_incomplete"
+    "errorKind": "provider_stream_incomplete",
+    "usage": {
+      "promptTokens": 19,
+      "completionTokens": 16,
+      "totalTokens": 35
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
@@ -34,7 +35,7 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   await page.goto("/chat", { waitUntil: "commit" });
 
   const errorBoundary = page.getByRole("heading", {
-    name: "This page couldn’t be opened",
+    name: ROUTE_ERROR_HEADING,
   });
   await expect(errorBoundary).toHaveCount(0);
 

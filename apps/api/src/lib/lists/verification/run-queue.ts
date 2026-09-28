@@ -31,7 +31,10 @@ import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  gradedClaimType,
+} from "@/api/lib/lists/verification/claim-grade";
 import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
 import type {
@@ -363,6 +366,7 @@ const claimRows = (
       grades.get(String(position)) ?? panic("A fact claim has no grade");
     return {
       ...base,
+      type: gradedClaimType(grade),
       state: grade.state,
       score: grade.score,
       refs: grade.refs,

@@ -40,6 +40,8 @@ export type ScriptedTurn =
       code?: string | undefined;
       message: string;
       type: "error";
+      /** What the provider reported before the call failed. */
+      usage?: ScriptedTurnUsage | undefined;
     }
   | {
       /** The provider call fails before it yields anything. */
@@ -379,6 +381,7 @@ export async function* scriptedTurnChunks(
         type: EventType.RUN_ERROR,
         message: turn.message,
         ...(turn.code === undefined ? {} : { code: turn.code }),
+        ...(turn.usage === undefined ? {} : { usage: turn.usage }),
         model,
         timestamp,
       } satisfies AdapterYieldChunk;

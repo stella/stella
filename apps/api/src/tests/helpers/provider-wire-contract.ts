@@ -428,7 +428,7 @@ const toolCallsOf = (chunks: readonly StreamChunk[]): ToolCallSummary[] => {
 
 const usageProblems = (usage: TokenUsage | undefined): string[] => {
   if (usage === undefined) {
-    return ["the finished run reports no usage"];
+    return ["the run reports no usage"];
   }
   const fields = {
     completionTokens: usage.completionTokens,
@@ -443,6 +443,34 @@ const usageProblems = (usage: TokenUsage | undefined): string[] => {
     usage.totalTokens < usage.promptTokens + usage.completionTokens
   ) {
     problems.push("usage.totalTokens is below prompt + completion");
+  }
+  return problems;
+};
+
+/**
+ * A provider that reported usage before the run failed billed it: the run
+ * error carries exactly that, and no usage the wire never reported.
+ */
+const runErrorUsageProblems = (
+  expected: ProviderWireCassette["expect"]["usage"],
+  failed: RunError,
+): unknown[] => {
+  if (Array.isArray(failed.usage)) {
+    return ["the run error reports usage in the spec array form"];
+  }
+  if (expected === undefined) {
+    return failed.usage === undefined
+      ? []
+      : [{ expected: null, got: failed.usage }];
+  }
+  const problems: unknown[] = usageProblems(failed.usage);
+  if (
+    failed.usage !== undefined &&
+    (failed.usage.promptTokens !== expected.promptTokens ||
+      failed.usage.completionTokens !== expected.completionTokens ||
+      failed.usage.totalTokens !== expected.totalTokens)
+  ) {
+    problems.push({ expected, got: failed.usage });
   }
   return problems;
 };
@@ -626,6 +654,7 @@ export const findWireContractViolations = ({
     if (kind !== expected.errorKind) {
       errors.push({ expected: expected.errorKind, got: kind });
     }
+    usage.push(...runErrorUsageProblems(expected.usage, failed));
   }
 
   return [

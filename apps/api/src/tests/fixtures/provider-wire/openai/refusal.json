@@ -71,6 +71,7 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "unknown",
+    "usageAfterFailure": "The adapter ends the run at the refusal content part; response.completed reports usage after it."
   }
 }
