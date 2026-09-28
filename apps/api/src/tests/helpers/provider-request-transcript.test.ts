@@ -7,6 +7,7 @@ import {
   findTranscriptViolations,
   PROVIDER_WIRE_FORMATS,
   providerWireFormatOf,
+  signedGeminiCallsOf,
 } from "@/api/tests/helpers/provider-request-transcript";
 import type {
   ProducedStep,
@@ -231,6 +232,40 @@ describe("a request's tool calls and results pair up", () => {
     ]);
   });
 
+  test("Gemini calls without ids pair by position in each tool cycle", () => {
+    const cycle = (args: string) => [
+      {
+        parts: [{ functionCall: { args: { name: args }, name: "delete" } }],
+        role: "model",
+      },
+      {
+        parts: [{ functionResponse: { name: "delete", response: {} } }],
+        role: "user",
+      },
+    ];
+    const settled = {
+      contents: [
+        { parts: [{ text: "Delete both drafts" }], role: "user" },
+        ...cycle("first"),
+        ...cycle("second"),
+      ],
+    };
+    expect(problemsOf({ body: settled, format: "gemini" })).toEqual([]);
+
+    const extra = {
+      contents: [
+        ...settled.contents,
+        {
+          parts: [{ functionResponse: { name: "delete", response: {} } }],
+          role: "user",
+        },
+      ],
+    };
+    expect(problemsOf({ body: extra, format: "gemini" })).toEqual([
+      "a tool result follows no call of the message before it",
+    ]);
+  });
+
   test("a body the check cannot read is a finding, not a pass", () => {
     for (const format of PROVIDER_WIRE_FORMATS) {
       expect(problemsOf({ body: { unexpected: [] }, format })).not.toEqual([]);
@@ -275,6 +310,52 @@ describe("signed thinking keeps its place", () => {
         anthropicTurn([{ ...signedThinking, signature: "" }, toolUse]),
       ),
     ).toEqual(["a thinking block has no signature"]);
+  });
+
+  test("a Gemini call replayed without the signature it was produced with is a finding", () => {
+    const answer = `data: ${JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                functionCall: { args: {}, id: "a", name: "delete" },
+                thoughtSignature: "EoYCCoMC",
+              },
+            ],
+            role: "model",
+          },
+        },
+      ],
+    })}\r\n\r\n`;
+    const signedCalls = new Map(signedGeminiCallsOf(answer));
+    expect([...signedCalls]).toEqual([["a", "EoYCCoMC"]]);
+
+    const replayed = (part: Record<string, unknown>): ProviderRequest => ({
+      body: {
+        contents: [
+          { parts: [{ text: "Delete the draft" }], role: "user" },
+          {
+            parts: [
+              { functionCall: { args: {}, id: "a", name: "delete" }, ...part },
+            ],
+            role: "model",
+          },
+          {
+            parts: [
+              { functionResponse: { id: "a", name: "delete", response: {} } },
+            ],
+            role: "user",
+          },
+        ],
+      },
+      format: "gemini",
+      signedCalls,
+    });
+    expect(problemsOf(replayed({ thoughtSignature: "EoYCCoMC" }))).toEqual([]);
+    expect(problemsOf(replayed({}))).toEqual([
+      "a replayed tool call lost the thinking produced with it",
+    ]);
   });
 
   test("Bedrock reasoning without its signature is a finding", () => {

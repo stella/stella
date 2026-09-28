@@ -1,6 +1,9 @@
 import { panic, TaggedError } from "better-result";
 
-import { providerWireFormatOf } from "@/api/tests/helpers/provider-request-transcript";
+import {
+  providerWireFormatOf,
+  signedGeminiCallsOf,
+} from "@/api/tests/helpers/provider-request-transcript";
 import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
@@ -318,6 +321,8 @@ export const installProviderWireReplay = () => {
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
   const transcripts: ProviderRequest[] = [];
+  // The signed calls the conversation's served answers made so far.
+  const signedCalls = new Map<string, string>();
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -337,7 +342,11 @@ export const installProviderWireReplay = () => {
       } catch {
         // Unreadable: the transcript check reports it.
       }
-      transcripts.push({ body, format });
+      transcripts.push(
+        format === "gemini"
+          ? { body, format, signedCalls: new Map(signedCalls) }
+          : { body, format },
+      );
     }
     const refuse = (reason: string): never => {
       unexpected.push(`${method} ${url.host}${path}: ${reason}`);
@@ -402,6 +411,12 @@ export const installProviderWireReplay = () => {
       cursor += 1;
     }
     current.entry.served += 1;
+    const { body: answer } = current.entry.exchange.response;
+    if (format === "gemini" && answer.encoding === "text") {
+      for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
+        signedCalls.set(id, signature);
+      }
+    }
     requests.push({
       body: bodyText,
       exchange: current.index,

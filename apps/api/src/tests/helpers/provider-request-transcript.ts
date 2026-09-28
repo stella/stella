@@ -48,7 +48,14 @@ export type ProviderRequest =
       /** What the thread's earlier model calls produced, in order. */
       earlierSteps: readonly ProducedStep[];
     }
-  | { body: unknown; format: ProviderWireFormat };
+  | {
+      body: unknown;
+      format: ProviderWireFormat;
+      /** Per tool call id: the signature an earlier response of the
+       *  conversation sent with the call, which a request replaying the call
+       *  must send back with it (Gemini's `thoughtSignature`). */
+      signedCalls?: ReadonlyMap<string, string>;
+    };
 
 /** A request message as pairing reads it. */
 type Entry =
@@ -470,19 +477,41 @@ const projectGemini = (body: unknown): Projection => {
   const entries: Entry[] = [];
   const findings: Finding[] = [];
   // A call without an id is answered by position: the n-th response naming
-  // a tool answers the n-th call of it.
-  const idOf = (part: unknown, seen: Map<string, number>): string | null => {
+  // a tool answers the n-th call of it in the model content before. A call's
+  // stand-in id is unique across the request, and a response takes the id
+  // of the call it answers by position, or one no call has.
+  const callsSeen = new Map<string, number>();
+  let lastCalls = new Map<string, string[]>();
+  let unmatched = 0;
+  const callIdOf = (part: unknown): string | null => {
     const id = stringField(part, "id");
     const name = stringField(part, "name");
-    if (id !== null) {
+    if (name === null) {
       return id;
     }
-    if (name === null) {
-      return null;
+    const ordinal = (callsSeen.get(name) ?? 0) + 1;
+    callsSeen.set(name, ordinal);
+    const resolved = id ?? `${name}#${String(ordinal)}`;
+    lastCalls.set(name, [...(lastCalls.get(name) ?? []), resolved]);
+    return resolved;
+  };
+  const responseIdOf = (
+    part: unknown,
+    answered: Map<string, number>,
+  ): string | null => {
+    const id = stringField(part, "id");
+    const name = stringField(part, "name");
+    if (id !== null || name === null) {
+      return id;
     }
-    const ordinal = (seen.get(name) ?? 0) + 1;
-    seen.set(name, ordinal);
-    return `${name}#${String(ordinal)}`;
+    const position = answered.get(name) ?? 0;
+    answered.set(name, position + 1);
+    const call = lastCalls.get(name)?.[position];
+    if (call !== undefined) {
+      return call;
+    }
+    unmatched += 1;
+    return `${name}#unmatched-${String(unmatched)}`;
   };
   for (const [at, content] of contents.entries()) {
     const role = stringField(content, "role");
@@ -491,8 +520,8 @@ const projectGemini = (body: unknown): Projection => {
       findings.push(unreadable(at, "a content's parts"));
       continue;
     }
-    const seen = new Map<string, number>();
     if (role === "user" || role === "function") {
+      const answered = new Map<string, number>();
       let results: string[] = [];
       const flush = () => {
         if (results.length > 0) {
@@ -509,7 +538,7 @@ const projectGemini = (body: unknown): Projection => {
           entries.push({ at, role: "other" });
           continue;
         }
-        const id = idOf(response, seen);
+        const id = responseIdOf(response, answered);
         if (id === null) {
           findings.push(unreadable(at, "a function response with no name"));
         } else {
@@ -524,6 +553,7 @@ const projectGemini = (body: unknown): Projection => {
       continue;
     }
     const blocks: Parameters<typeof assistantEntry>[1][number][] = [];
+    lastCalls = new Map();
     for (const part of parts) {
       const signature: unknown = isRecord(part)
         ? part["thoughtSignature"]
@@ -536,7 +566,7 @@ const projectGemini = (body: unknown): Projection => {
       }
       const call: unknown = isRecord(part) ? part["functionCall"] : undefined;
       if (call !== undefined) {
-        const id = idOf(call, seen);
+        const id = callIdOf(call);
         if (id === null) {
           findings.push(unreadable(at, "a function call with no name"));
         } else {
@@ -726,6 +756,37 @@ const findThinkingAttachmentProblems = (
   return findings;
 };
 
+/**
+ * Each call an earlier response sent with a signature carries it again
+ * wherever the request replays the call: Gemini rejects a replayed call that
+ * lost the signature it was produced with.
+ */
+const findDroppedGeminiSignatures = (
+  body: unknown,
+  signedCalls: ReadonlyMap<string, string>,
+): Finding[] =>
+  (arrayField(body, "contents") ?? []).flatMap((content, at) =>
+    (arrayField(content, "parts") ?? []).flatMap((part): Finding[] => {
+      const call: unknown = isRecord(part) ? part["functionCall"] : undefined;
+      const id = stringField(call, "id");
+      const produced = id === null ? undefined : signedCalls.get(id);
+      if (
+        id === null ||
+        produced === undefined ||
+        stringField(part, "thoughtSignature") === produced
+      ) {
+        return [];
+      }
+      return [
+        {
+          message: at,
+          problem: "a replayed tool call lost the thinking produced with it",
+          toolCallId: id,
+        },
+      ];
+    }),
+  );
+
 /** The problems one request has, unlabeled. */
 export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
   const { entries, findings } =
@@ -738,6 +799,9 @@ export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
     ...findThinkingShapeProblems(entries),
     ...(request.format === "model-messages"
       ? findThinkingAttachmentProblems(entries, request.earlierSteps)
+      : []),
+    ...(request.format === "gemini" && request.signedCalls !== undefined
+      ? findDroppedGeminiSignatures(request.body, request.signedCalls)
       : []),
   ];
 };
@@ -756,6 +820,41 @@ export const findTranscriptViolations = (
     }
   }
   return violationsOf(CHAT_ORACLE.providerTranscriptSettled, findings);
+};
+
+/**
+ * Per tool call id, the `thoughtSignature` a Gemini answer (its streamed
+ * `data:` events) sent with the call, which the request replaying the call
+ * must send back.
+ */
+export const signedGeminiCallsOf = (answer: string): [string, string][] => {
+  const signed: [string, string][] = [];
+  const visit = (value: unknown): void => {
+    if (!Array.isArray(value) && !isRecord(value)) {
+      return;
+    }
+    const id = isRecord(value)
+      ? stringField(value["functionCall"], "id")
+      : null;
+    const signature = stringField(value, "thoughtSignature");
+    if (id !== null && signature !== null) {
+      signed.push([id, signature]);
+    }
+    for (const child of Object.values(value)) {
+      visit(child);
+    }
+  };
+  for (const line of answer.split(/\r?\n/u)) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    try {
+      visit(JSON.parse(line.slice("data:".length)));
+    } catch {
+      // Not a JSON event: nothing signed in it.
+    }
+  }
+  return signed;
 };
 
 /** The wire format a provider request to `url` is in, or null for a request
