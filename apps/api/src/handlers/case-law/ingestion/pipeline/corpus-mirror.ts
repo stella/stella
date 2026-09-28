@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -10,13 +10,15 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
-import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  pgPayloadCarriesDocument,
+  rowHoldsDocument,
+} from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  EMPTY_CORPUS_CONTENT_HASHES,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
@@ -106,19 +108,6 @@ export const settleCaseLawCorpusMirrorTx = async ({
     .returning({ id: caseLawDecisions.id });
   return settled.length > 0;
 };
-
-/**
- * SQL for "this row holds a document", in the columns or in the corpus
- * objects its hash names. The row write below carries this in its WHERE,
- * where it is evaluated with the write and cannot go stale.
- */
-export const rowHoldsDocument = sql<boolean>`(
-  ${pgPayloadCarriesDocument}
-  or (
-    ${caseLawDecisions.contentHash} is not null
-    and ${notInArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
-  )
-)`;
 
 /**
  * The columns a refresh compares against the stored row before writing them,
