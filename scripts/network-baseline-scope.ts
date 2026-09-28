@@ -120,7 +120,7 @@ const touchedRoutesInTree = (
   const nodes = new Map<string, { route: string; parent: string }>();
   const declarations = routeTree.slice(interfaceStart, interfaceEnd);
   for (const [, body] of declarations.matchAll(
-    /^ {4}'[^']+': \{([\s\S]*?)^    \}/gmu,
+    /^ {4}'[^']+': \{([\s\S]*?)^ {4}\}/gmu,
   )) {
     const route = body?.match(/fullPath: '([^']+)'/u)?.[1];
     const alias = body?.match(/preLoaderRoute: typeof (\w+)/u)?.[1];

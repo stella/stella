@@ -108,7 +108,7 @@ describe("network baseline scope", () => {
 
   test("omits a deleted route present only in the base tree", () => {
     const headRouteTree = routeTree.replace(
-      / {4}'\/_protected\/chat\/': \{[\s\S]*?^    \}\n/gmu,
+      / {4}'\/_protected\/chat\/': \{[\s\S]*?^ {4}\}\n/gmu,
       "",
     );
     expect(
