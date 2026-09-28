@@ -29,7 +29,7 @@ type EditionMarker =
 type SourceMetadata = {
   issuer: SanctionsIssuer;
   download: Download;
-  licence: Licence;
+  licence?: Licence;
   editionMarker: EditionMarker;
   access?: { kind: "query-token"; parameter: "token" };
 };
@@ -77,9 +77,6 @@ export const SANCTIONS_SOURCES = {
       kind: "dated-file",
       pageUrl: CZ_PAGE,
       fileNamePattern: CZ_FILE,
-    },
-    licence: {
-      url: "https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html",
     },
     editionMarker: {
       kind: "dated-file-name",
