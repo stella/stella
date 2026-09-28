@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 2.2.2
+
+### Patch Changes
+
+- [#3992](https://github.com/stella/stella/pull/3992) [`525b1ee`](https://github.com/stella/stella/commit/525b1ee8fb98324a8f425301aa7adc53fd20de20) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search cursor accepts the longer continuation cursors a search now issues.
+
+- [#4075](https://github.com/stella/stella/pull/4075) [`a85e17b`](https://github.com/stella/stella/commit/a85e17b17a1a7e3f550bf6d89ae8d60f175f4b69) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ingestion status reports an estimated event total
+
 ## 2.2.1
 
 ### Patch Changes
