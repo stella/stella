@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<swiss-sanctions-list list-type="whole-list" date="2026-09-04">
+  <sanctions-program ssid="20" version-date="2026-08-01">
+    <program-key lang="eng">Sample regime</program-key>
+    <program-name lang="eng">Sample ordinance</program-name>
+    <sanctions-set ssid="101" lang="eng">article 1, annexe 1</sanctions-set>
+  </sanctions-program>
+  <sanctions-program ssid="20" version-date="2026-08-01">
+    <program-key lang="eng">Sample regime</program-key>
+    <program-name lang="eng">Sample ordinance</program-name>
+    <sanctions-set ssid="102" lang="eng">article 2, annexe 2</sanctions-set>
+  </sanctions-program>
+  <target ssid="1000">
+    <sanctions-set-id>101</sanctions-set-id>
+    <sanctions-set-id>102</sanctions-set-id>
+    <individual>
+      <identity ssid="1001" main="true">
+        <name ssid="1002" name-type="primary-name" quality="good" lang="eng">
+          <name-part order="1" name-part-type="given-name"><value>Alex</value><spelling-variant lang="eng" script="Latn" spelling-variant-type="not-defined">Alek</spelling-variant><spelling-variant lang="rus" script="Cyrl" spelling-variant-type="not-defined">Алекс</spelling-variant></name-part>
+          <name-part order="2" name-part-type="family-name"><value>Example</value></name-part>
+        </name>
+        <name ssid="1003" name-type="alias" quality="low" lang="eng">
+          <name-part order="1" name-part-type="whole-name"><value>Lex Example</value></name-part>
+        </name>
+        <day-month-year ssid="1004" day="12" month="8" year="1975" calendar="Gregorian" quality="good"/>
+        <day-month-year ssid="1005" month="9" year="1975" calendar="Gregorian" quality="low"/>
+        <day-month-year ssid="1006" day="9" month="2" calendar="Gregorian" quality="good"/>
+        <nationality ssid="1007"><country iso-code="GB">United Kingdom</country></nationality>
+        <nationality ssid="1008"><country iso-code="CA">Canada</country></nationality>
+        <identification-document ssid="1009" document-type="passport"><number>P123456</number><issuer code="GB">United Kingdom</issuer></identification-document>
+        <address ssid="1010" place-id="5000" quality="good"><address-details>1 Sample Street</address-details><zip-code>AB1 2CD</zip-code></address>
+      </identity>
+      <identity ssid="1011" main="false">
+        <name ssid="1012" name-type="formerly-known-as" quality="good" lang="eng"><name-part order="1" name-part-type="whole-name"><value>Alex Former</value></name-part></name>
+      </identity>
+    </individual>
+    <modification modification-type="amended" effective-date="2026-05-01"/>
+    <modification modification-type="listed" effective-date="2025-04-15"/>
+  </target>
+  <target ssid="2000">
+    <sanctions-set-id>101</sanctions-set-id>
+    <entity><identity ssid="2001" main="true"><name ssid="2002" name-type="primary-name" quality="good" lang="eng"><name-part order="1" name-part-type="whole-name"><value>Sample Trading Ltd</value></name-part></name></identity></entity>
+    <modification modification-type="listed" effective-date="2026-01-01"/>
+  </target>
+  <target ssid="3000">
+    <sanctions-set-id>102</sanctions-set-id>
+    <object object-type="vessel"><identity ssid="3001" main="true"><name ssid="3002" name-type="primary-name" quality="good" lang="eng"><name-part order="1" name-part-type="whole-name"><value>Sample Vessel</value></name-part></name></identity></object>
+    <modification modification-type="listed" effective-date="2026-02-01"/>
+  </target>
+  <target ssid="4000">
+    <sanctions-set-id>101</sanctions-set-id>
+    <individual><identity ssid="4001" main="true"><name ssid="4002" name-type="primary-name" quality="good" lang="eng"><name-part order="1" name-part-type="whole-name"><value>Former Target</value></name-part></name></identity></individual>
+    <modification modification-type="de-listed" effective-date="2026-04-01"/>
+    <modification modification-type="listed" effective-date="2025-01-01"/>
+  </target>
+  <place ssid="5000"><location>Example City</location><area>Example Region</area><country iso-code="GB">United Kingdom</country></place>
+</swiss-sanctions-list>

@@ -27,6 +27,13 @@ describe("source edition markers", () => {
     expect(readSourceEditionMarker("eu", { body: "error page" }).isErr()).toBe(
       true,
     );
+    expect(
+      readSourceEditionMarker("ch", {
+        contentDisposition:
+          'attachment; filename="consolidated-list_2026-09-04.xml"',
+      }).unwrap().value,
+    ).toBe("2026-09-04");
+    expect(readSourceEditionMarker("ch", {}).isErr()).toBe(true);
   });
 
   test("reads the UN publication date and the newest Czech dated attachment", () => {
