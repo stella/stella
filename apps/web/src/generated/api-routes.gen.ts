@@ -17309,6 +17309,7 @@ export type WebRoutes = {
               orgConfigured: Tfddd645dc8;
               available: Tfddd645dc8;
               deferredServiceTierAvailable: Tfddd645dc8;
+              mockAnswers: Tfddd645dc8;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
