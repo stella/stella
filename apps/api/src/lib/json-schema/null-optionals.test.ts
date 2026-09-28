@@ -4,6 +4,7 @@ import {
   withModelPlaceholdersOmitted,
   withNullOptionalsOmitted,
 } from "@/api/lib/json-schema/null-optionals";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
 const schema = {
   type: "object",
@@ -143,6 +144,63 @@ describe("a model's placeholder in an optional field", () => {
       x: null,
       y: null,
     });
+  });
+
+  test("a null is omitted though a sibling branch the value cannot fit declares it", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            c: { type: "boolean" },
+            d: { type: "string", minLength: 1 },
+          },
+          required: ["c"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            c: { type: "array", items: { type: "integer" } },
+            d: { type: ["string", "null"] },
+          },
+          additionalProperties: false,
+        },
+      ],
+    };
+    const read = withModelPlaceholdersOmitted(union, { c: false, d: null });
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, { c: false }) ? [] : [{ read }],
+      ),
+    ).toEqual([]);
+  });
+
+  test("a null one array member's items declare stays, though a sibling member's refuse it", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "array",
+          items: { type: "object", properties: { b: { type: "integer" } } },
+        },
+        {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { b: { type: ["string", "null"] } },
+          },
+        },
+      ],
+    };
+    const sent = [{ b: null }];
+    const read = withModelPlaceholdersOmitted(union, sent);
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, sent) ? [] : [{ read, sent }],
+      ),
+    ).toEqual([]);
   });
 
   test("an array under a union reads its items' placeholders", () => {

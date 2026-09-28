@@ -72,15 +72,115 @@ const branchCouldMatch = (
   );
 };
 
+const jsonTypeOf = (value: unknown): string => {
+  if (value === null) {
+    return "null";
+  }
+  if (isUnknownArray(value)) {
+    return "array";
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "integer" : "number";
+  }
+  return typeof value;
+};
+
+const typeTakes = (type: unknown, value: unknown): boolean => {
+  if (type === undefined) {
+    return true;
+  }
+  const types = isUnknownArray(type) ? type : [type];
+  const valueType = jsonTypeOf(value);
+  return (
+    types.includes(valueType) ||
+    (valueType === "integer" && types.includes("number"))
+  );
+};
+
+/**
+ * Whether `value` has a shape `schema` takes: its types, enums, constants,
+ * required and closed object fields, read through unions, objects and arrays.
+ * A placeholder (null, "") fits anywhere, since it is what is being judged,
+ * and string constraints and references are left to validation.
+ */
+const shapeTakes = (schema: unknown, value: unknown): boolean => {
+  if (!isRecord(schema) || value === null || value === "") {
+    return true;
+  }
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (
+      isUnknownArray(branches) &&
+      !branches.some((branch) => shapeTakes(branch, value))
+    ) {
+      return false;
+    }
+  }
+  const enumValues = schema["enum"];
+  const isPrimitive = typeof value !== "object";
+  if (isPrimitive && isUnknownArray(enumValues)) {
+    return enumValues.includes(value);
+  }
+  if (isPrimitive && "const" in schema) {
+    return schema["const"] === value;
+  }
+  if (!typeTakes(schema["type"], value)) {
+    return false;
+  }
+  const items = schema["items"];
+  if (isUnknownArray(value)) {
+    return !isRecord(items) || value.every((entry) => shapeTakes(items, entry));
+  }
+  return !isRecord(value) || objectShapeTakes(schema, value);
+};
+
+const objectShapeTakes = (
+  schema: Record<string, unknown>,
+  value: Record<string, unknown>,
+): boolean => {
+  const required = schema["required"];
+  if (
+    isUnknownArray(required) &&
+    !required.every((name) => typeof name !== "string" || name in value)
+  ) {
+    return false;
+  }
+  const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
+  const closed =
+    schema["additionalProperties"] === false &&
+    !("patternProperties" in schema);
+  return Object.entries(value).every(([key, entry]) =>
+    key in properties
+      ? shapeTakes(properties[key], entry)
+      : !closed || entry === null || entry === "",
+  );
+};
+
 /**
  * A union node declares nothing itself: its members do. Without reading them,
  * an optional null inside a discriminated member (an array of `mode` variants)
- * reached validation and was refused.
+ * reached validation and was refused. Of the members no discriminator rules
+ * out, those whose shape takes the value are the ones it was written for; a
+ * member it cannot fit must not keep a null the fitting one refuses. When
+ * none fits (a lenient value, coerced later), every such member still counts.
  */
+const matchedBranches = new WeakMap<
+  Record<string, unknown>,
+  WeakMap<Record<string, unknown>, Record<string, unknown>[]>
+>();
+
 const matchingUnionBranches = (
   schema: Record<string, unknown>,
   value: Record<string, unknown>,
 ): Record<string, unknown>[] => {
+  const bySchema =
+    matchedBranches.get(schema) ??
+    new WeakMap<Record<string, unknown>, Record<string, unknown>[]>();
+  matchedBranches.set(schema, bySchema);
+  const known = bySchema.get(value);
+  if (known !== undefined) {
+    return known;
+  }
   const matching: Record<string, unknown>[] = [];
   for (const keyword of UNION_KEYWORDS) {
     const branches = schema[keyword];
@@ -93,7 +193,10 @@ const matchingUnionBranches = (
       }
     }
   }
-  return matching;
+  const fitting = matching.filter((branch) => shapeTakes(branch, value));
+  const matched = fitting.length > 0 ? fitting : matching;
+  bySchema.set(value, matched);
+  return matched;
 };
 
 const requiredNamesOf = (
@@ -190,6 +293,20 @@ const refusesPlaceholder = (
   );
 };
 
+/** The item schemas a union node's array members, nested ones too, declare. */
+const unionItemSchemas = (schema: Record<string, unknown>): unknown[] =>
+  UNION_KEYWORDS.flatMap((keyword) => {
+    const branches = schema[keyword];
+    return (isUnknownArray(branches) ? branches : []).flatMap((branch) => {
+      if (!isRecord(branch)) {
+        return [];
+      }
+      return branch["items"] === undefined
+        ? unionItemSchemas(branch)
+        : [branch["items"]];
+    });
+  });
+
 const omitAbsentPlaceholders = (
   schema: unknown,
   value: unknown,
@@ -202,16 +319,19 @@ const omitAbsentPlaceholders = (
   if (items !== undefined && isUnknownArray(value)) {
     return value.map((entry) => omitAbsentPlaceholders(items, entry, isAbsent));
   }
-  // An array under a union node is declared by its array members.
+  // An array under a union node is declared by its array members, whose item
+  // schemas are alternatives too: read one after another, a member refusing
+  // a null would drop it where a sibling member declares it.
   if (isUnknownArray(value)) {
-    let current: unknown = value;
-    for (const keyword of UNION_KEYWORDS) {
-      const branches = schema[keyword];
-      for (const branch of isUnknownArray(branches) ? branches : []) {
-        current = omitAbsentPlaceholders(branch, current, isAbsent);
-      }
+    const itemSchemas = unionItemSchemas(schema);
+    if (itemSchemas.length === 0) {
+      return value;
     }
-    return current;
+    const itemSchema =
+      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };
+    return value.map((entry) =>
+      omitAbsentPlaceholders(itemSchema, entry, isAbsent),
+    );
   }
   if (!isRecord(value)) {
     return value;

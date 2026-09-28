@@ -395,6 +395,34 @@
       "oracle": "chat.provider-wire.tool-input"
     },
     {
+      "id": "tool-input-array-union-items-are-alternatives",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union of arrays reads its items against the members' item schemas as alternatives, so a null one member declares is kept.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };",
+      "replace": "      itemSchemas[0];",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null one array member's items declare stays, though a sibling member's refuse it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-fits-value",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union reads its placeholders against the branches whose shape takes the value, so a branch the value cannot fit does not keep a null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const matched = fitting.length > 0 ? fitting : matching;",
+      "replace": "  const matched = matching;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null is omitted though a sibling branch the value cannot fit declares it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
       "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
