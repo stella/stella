@@ -52,3 +52,65 @@ export const LEGISLATION_WINDOW_DISPOSITION_BASES = {
 
 export type LegislationWindowDispositionBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)[keyof typeof LEGISLATION_WINDOW_DISPOSITION_BASES][number];
+
+/**
+ * The kinds whose window can answer "which text applied then". A promulgated
+ * text sits next to the consolidation that opens the same day and never
+ * answers for it.
+ */
+export const LEGISLATION_APPLICABLE_EXPRESSION_KINDS = [
+  "consolidation",
+  "unversioned",
+] as const satisfies readonly LegislationExpressionKind[];
+
+/** The one disposition whose window can answer a point-in-time read. */
+export const LEGISLATION_APPLICABLE_WINDOW_DISPOSITION =
+  "effective" as const satisfies LegislationWindowDisposition;
+
+/** The fields a version carries that decide whether it can apply at all. */
+export type LegislationExpressionEligibility = {
+  expressionKind: LegislationExpressionKind;
+  windowDisposition: LegislationWindowDisposition;
+};
+
+/**
+ * Whether a version can ever answer a point-in-time read: an effective window
+ * of an applicable kind. Every applicability decision starts here; its SQL
+ * twin in the API is built from the same two constants, so a date can never
+ * be matched against a version this says cannot apply.
+ */
+export const isEligibleLegislationExpression = ({
+  expressionKind,
+  windowDisposition,
+}: LegislationExpressionEligibility): boolean =>
+  windowDisposition === LEGISLATION_APPLICABLE_WINDOW_DISPOSITION &&
+  LEGISLATION_APPLICABLE_EXPRESSION_KINDS.some(
+    (kind) => kind === expressionKind,
+  );
+
+/**
+ * Why a point-in-time read has no answer although the Work exists and a
+ * version of it opened by the date: that version's publisher window is
+ * inconsistent (reversed, zero-length or without a start), so no text can be
+ * said to apply. Distinct from a date the corpus simply does not cover.
+ */
+export const LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT =
+  "publisher-data-inconsistent" as const;
+
+/** The machine-readable code an HTTP read answers the gap with. */
+export const LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE =
+  "publisher_window_inconsistent" as const;
+
+/** What every surface says about the gap, word for word. */
+export const LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE =
+  "No in-force reading for this date: publisher data inconsistent";
+
+/** One version whose inconsistent window leaves a date without an answer. */
+export type LegislationInconsistentVersion = {
+  id: string;
+  language: string;
+  /** The stored window, as the publisher stated it (half-open). */
+  versionValidFrom: string | null;
+  versionValidTo: string | null;
+  basis: LegislationWindowDispositionBasis | null;
+};

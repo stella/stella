@@ -3,6 +3,11 @@ import * as v from "valibot";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
+} from "@stll/api-contract/legislation-expression";
+import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
+import {
   PUBLIC_LEGISLATION_COUNTRIES,
   publicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
@@ -389,7 +394,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "par_1729-odst_1) and read_statute's `outline` lists them. Every entry " +
       "is answered separately, in input order, under `status`: `found` " +
       "carries the provision's text, while `not_found` (no such ELI), " +
-      "`uncovered_date` (no consolidation covers that day), " +
+      "`uncovered_date` (no consolidation applies that day, including where " +
+      "the publisher's own dates are inconsistent), " +
       "`provision_not_found` (that consolidation has no such anchor) and " +
       "`text_withheld` (the source bars AI use of its wording) each carry a " +
       "message. Prefer one batched call over one call per provision.",
@@ -446,6 +452,20 @@ type StatuteResolutionRefusal = Exclude<
 >;
 
 /**
+ * The versions an inconsistency names, as an agent reads them: which
+ * consolidation, the window the publisher stated, and why it cannot apply.
+ */
+const describeInconsistentVersions = (
+  versions: readonly LegislationInconsistentVersion[],
+): string =>
+  `Versions with inconsistent publisher dates: ${versions
+    .map(
+      (version) =>
+        `${legislationResourceName(version.id)} (${version.language}, stated window ${version.versionValidFrom ?? "no start"} to ${version.versionValidTo ?? "no end"}, ${version.basis ?? "no basis"})`,
+    )
+    .join("; ")}.`;
+
+/**
  * The one place a resolver refusal becomes an agent-facing next step. The two
  * refusals are different questions: a misspelled ELI is answered by a search,
  * a date the corpus does not cover by another date.
@@ -463,6 +483,11 @@ const statuteResolutionError = (
           ? "No version of this legislation is in force today"
           : `No version of this legislation was in force on ${asOf}`,
         uncoveredHint,
+      );
+    case LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT:
+      return notFoundResult(
+        LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
+        `${describeInconsistentVersions(refusal.versions)} ${uncoveredHint}`,
       );
     default:
       refusal satisfies never;
@@ -696,11 +721,17 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       truncated: window?.truncated ?? false,
       versionValidFrom: document.versionValidFrom,
       versionValidTo: document.versionValidTo,
+      expressionKind: document.expressionKind,
+      windowDisposition: document.windowDisposition,
+      windowDispositionBasis: document.windowDispositionBasis,
       versions: versionsPage.items.map((version) => ({
         documentId: version.id,
         resourceName: legislationResourceName(version.id),
         versionValidFrom: version.versionValidFrom,
         versionValidTo: version.versionValidTo,
+        expressionKind: version.expressionKind,
+        windowDisposition: version.windowDisposition,
+        windowDispositionBasis: version.windowDispositionBasis,
       })),
       ...(document.allowsDerivedAi
         ? {}
@@ -752,6 +783,14 @@ const provisionItemResult = ({
           item.as_of === undefined
             ? "No version of this legislation is in force today."
             : `No version of this legislation was in force on ${item.as_of}.`,
+        status: PROVISION_STATUS.uncoveredDate,
+      };
+    // The same next step as an uncovered date (another date, or the
+    // history), so the same status; the message says why.
+    case LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT:
+      return {
+        ...subject,
+        message: `${LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE}. ${describeInconsistentVersions(resolution.versions)}`,
         status: PROVISION_STATUS.uncoveredDate,
       };
     case "expression": {
@@ -1007,6 +1046,9 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         resourceName: legislationResourceName(item.documentId),
         versionValidFrom: item.versionValidFrom,
         versionValidTo: item.versionValidTo,
+        expressionKind: item.expressionKind,
+        windowDisposition: item.windowDisposition,
+        windowDispositionBasis: item.windowDispositionBasis,
       };
       // The same publisher permission read_statute and
       // read_statute_provisions apply, per consolidation: a Work may be

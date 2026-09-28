@@ -22,12 +22,22 @@ export const isLegislationDocumentStatus = (
 
 /**
  * Whether a listed Work still applies, read from the one wording a statute
- * listing shows per Work: the latest one that opened on or before the listing
- * date. `in-force`: that wording still applies on the date. `ended`: its
- * window closed on or before the date and no later wording opened, so the
- * Work was repealed or expired; the corpus does not say which.
+ * listing shows per Work: the latest one that can apply and opened on or
+ * before the listing date. `in-force`: that wording still applies on the
+ * date. `ended`: its window closed on or before the date and no later wording
+ * opened, so the Work was repealed or expired; the corpus does not say which.
+ *
+ * A Work none of whose versions can apply is listed by its latest version
+ * instead. `never-in-force`: the publisher states that every consolidation of
+ * it never took effect. `unknown`: anything short of that proof, such as
+ * versions whose publisher windows are inconsistent.
  */
-export const LEGISLATION_LIST_VALIDITIES = ["in-force", "ended"] as const;
+export const LEGISLATION_LIST_VALIDITIES = [
+  "in-force",
+  "ended",
+  "never-in-force",
+  "unknown",
+] as const;
 
 export type LegislationListValidity =
   (typeof LEGISLATION_LIST_VALIDITIES)[number];

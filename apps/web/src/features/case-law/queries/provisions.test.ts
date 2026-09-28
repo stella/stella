@@ -23,6 +23,8 @@ const statute = {
   title: "2/1993 Sb., Listina základních práv a svobod",
   versionValidFrom: "1993-01-01",
   versionValidTo: null,
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
 };
 
 afterEach(() => {
@@ -56,6 +58,7 @@ const mockResolve = (answer: (eli: string) => typeof statute | null) => {
             country,
             eli,
             statute: answer(eli),
+            unresolvedReason: null,
           })),
         }),
         { headers: { "Content-Type": "application/json" } },

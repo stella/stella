@@ -89,15 +89,18 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       "the consolidation in force on that day; omit it for the text in " +
       "force today. There is no as-of filter on the search, so a " +
       "point-in-time question is answered here. The reply carries the " +
-      "consolidation's `versionValidFrom`/`versionValidTo`, `versions` " +
+      "consolidation's `versionValidFrom`/`versionValidTo`, and every " +
+      "version carries `windowDisposition`: only an `effective` window is " +
+      "one the text applied in, however the dates read. `versions` " +
       `(up to ${LIMITS.legislationVersionsPageSizeDefault} of the work's ` +
       "consolidations, newest window first), `outline` (its heading " +
       `anchors, at most ${LIMITS.legislationOutlineHeadingsMax} of them ` +
       "with `outlineTruncated` when there are more) and the plain `text` " +
       "in windows: pass the returned `nextCursor` back as `cursor` to keep " +
-      "reading. An ELI the corpus does not hold and a date no " +
-      "consolidation covers are different answers, and each names its own " +
-      "next call.",
+      "reading. An ELI the corpus does not hold, a date no " +
+      "consolidation covers, and a date the publisher's own inconsistent " +
+      "dates leave without an in-force reading are different answers, and " +
+      "each names its own next call.",
   },
   {
     title: "Read the provisions you need, batched",

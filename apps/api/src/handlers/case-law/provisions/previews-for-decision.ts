@@ -116,7 +116,9 @@ const resolveWorkVersions = async (
   }
 
   const { works, versions } = await legislationDb(async (tx) => {
-    const idByWork = await resolveWorksAtDate(tx, requests);
+    // Linking follows applicable versions only: a Work a publisher
+    // inconsistency leaves unanswered at that date gets no preview.
+    const { idByKey: idByWork } = await resolveWorksAtDate(tx, requests);
 
     const ids = [...new Set(idByWork.values())];
     if (ids.length === 0) {
