@@ -213,27 +213,11 @@ export const legacyAiSdkFilePartToTanStack = (
     url: part.url,
   });
 
-/**
- * The reporter is loaded only when a conflict occurs, so this module's import
- * graph stays free of observability (the post-deploy smoke imports it without
- * the app environment).
- */
-const reportLegacyAnonRestorationConflict = (): void => {
-  import("@/api/handlers/chat/anon-restoration-conflict")
-    .then(({ reportAnonRestorationConflict }) =>
-      reportAnonRestorationConflict(),
-    )
-    .catch((error: unknown) =>
-      panic("The anonymization conflict reporter failed to load", error),
-    );
-};
-
 const normalizeLegacyMessagePartsToTanStack = (
   parts: readonly unknown[],
 ): NormalizedLegacyMessageParts => {
   const normalized: ChatPart[] = [];
   const metadata: ChatMessageMetadata = {};
-  let restorationConflicts = 0;
   for (const part of parts) {
     if (isLegacyAiSdkTextPart(part)) {
       normalized.push(legacyAiSdkTextPartToTanStack(part));
@@ -244,12 +228,12 @@ const normalizeLegacyMessagePartsToTanStack = (
       continue;
     }
     if (isLegacyAnonRestorationsPart(part)) {
-      const { conflicts, restorations } = mergeAnonRestorations(
+      // Legacy parts predate thread-wide placeholder numbering, so a repeated
+      // placeholder here is expected history, not a fault: not reported.
+      metadata.anonRestorations = mergeAnonRestorations(
         metadata.anonRestorations,
         part.data,
-      );
-      metadata.anonRestorations = restorations;
-      restorationConflicts += conflicts;
+      ).restorations;
       continue;
     }
     if (isLegacyMentionsPart(part)) {
@@ -271,9 +255,6 @@ const normalizeLegacyMessagePartsToTanStack = (
     if (isChatPart(part)) {
       normalized.push(part);
     }
-  }
-  if (restorationConflicts > 0) {
-    reportLegacyAnonRestorationConflict();
   }
   return { metadata, parts: normalized };
 };
