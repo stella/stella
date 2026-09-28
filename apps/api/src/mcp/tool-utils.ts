@@ -492,13 +492,26 @@ export const errorResult = (message: string): InternalToolErrorResult => ({
 });
 
 /**
- * Hint pointing an agent at the feedback flow after an unexpected server-side
- * failure. Kept as a shared constant so the internal-error envelope reads the
- * same wherever it is produced. It names both steps: a hint that stops at the
- * draft leaves the report sitting in the model's context, unsent.
+ * Hint for an unexpected server-side failure. Kept as a shared constant so the
+ * internal-error envelope reads the same wherever it is produced. The report
+ * step names both calls: a hint that stops at the draft leaves the report
+ * sitting in the model's context, unsent.
+ *
+ * One step per sentence: the dispatch boundary drops each sentence naming a
+ * tool the serving surface does not list (`scopeToolResultToSurface`), so a
+ * surface without the feedback tools keeps the first two: what failed, and
+ * the step every caller can still take.
  */
 export const MCP_INTERNAL_ERROR_HINT =
-  "If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
+  "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it. If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
+
+/**
+ * Hint for a backing service that is temporarily unreachable. Same
+ * sentence-per-step shape as {@link MCP_INTERNAL_ERROR_HINT}: the retry step
+ * survives on every surface, the report step only where it can be filed.
+ */
+export const MCP_UPSTREAM_UNAVAILABLE_HINT =
+  "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.";
 
 /**
  * Preserve the caller's current grants while adding every scope required by an
@@ -679,7 +692,7 @@ export const internalFailureResult = (
       return structuredErrorResult({
         code: "upstream_unavailable",
         message: error.message,
-        hint: "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.",
+        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
         retryable: true,
       });
     }

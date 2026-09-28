@@ -4653,7 +4653,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: {},
                   description:
-                    "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+                    "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
                 },
               },
             },
@@ -7679,8 +7679,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["capability", "invoke"],
             toolName: "invoke_capability",
-            description:
-              "Invoke one capability by id (from list_capabilities/describe_capability).",
+            description: "Invoke one capability by id.",
             flags: [
               {
                 flag: "--capability",
@@ -7688,7 +7687,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Capability id to invoke, as returned by list_capabilities.",
+                  "Capability id to invoke. Use an id list_capabilities returned.",
                 required: true,
               },
               {
@@ -7717,7 +7716,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Capability id to invoke, as returned by list_capabilities.",
+                    "Capability id to invoke. Use an id list_capabilities returned.",
                 },
                 input: {
                   type: "object",

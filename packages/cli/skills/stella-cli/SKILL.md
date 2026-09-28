@@ -183,7 +183,7 @@ are omitted here.
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability invoke`
-  - `--capability` — Capability id to invoke, as returned by list_capabilities. (string)
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
 - `stella capability list`

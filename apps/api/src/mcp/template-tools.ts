@@ -615,7 +615,7 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
     values: v.pipe(
       v.record(v.string(), v.unknown()),
       v.description(
-        "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+        "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
       ),
     ),
   }),
@@ -717,9 +717,10 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
     "whose whenToUse matches the request and skip any whose whenNotToUse " +
     "applies. Pass template_id to return that template's full field " +
-    "configuration, in the shape the field reference documents " +
-    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
-    "formula fields, and the configure_template_fields call to make next. " +
+    "configuration, its named conditions and formula fields. The " +
+    "configuration is in the shape configure_template_fields accepts " +
+    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries that ` +
+    "call to make next. " +
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",

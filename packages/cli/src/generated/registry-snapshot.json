@@ -6,7 +6,7 @@
       "scope": "search"
     },
     "name": "search",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes for the jurisdictions the organization practises in. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). Pass an id back to fetch verbatim.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes from every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). Pass an id back to fetch verbatim.",
     "inputSchema": {
       "type": "object",
       "required": ["query"],
@@ -999,7 +999,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1660,7 +1660,7 @@
         "values": {
           "type": "object",
           "additionalProperties": {},
-          "description": "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given."
+          "description": "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given."
         }
       }
     },
@@ -2714,7 +2714,7 @@
       "scope": "read"
     },
     "name": "lookup_business_registry",
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
     "inputSchema": {
       "type": "object",
       "required": ["registry", "query"],
@@ -4891,7 +4891,7 @@
       "confirmPassthrough": true
     },
     "name": "invoke_capability",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -4900,7 +4900,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
-          "description": "Capability id to invoke, as returned by list_capabilities."
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
           "type": "object",

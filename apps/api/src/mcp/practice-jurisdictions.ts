@@ -8,8 +8,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
  *
  * One reader for the whole MCP surface: the onboarding next step asks for them
  * when they are missing, and the OpenAI-compatible `search` (which takes a query
- * and nothing else) uses them to decide which corpus countries a query is
- * about. Two readers would be two answers to "what does this firm practise".
+ * and nothing else) uses them to rank the corpus countries it asks, never to
+ * exclude one. Two readers would be two answers to "what does this firm practise".
  *
  * The codes are ISO 3166-1 alpha-2, which is what the column stores; a corpus
  * keyed on alpha-3 converts at its own boundary.

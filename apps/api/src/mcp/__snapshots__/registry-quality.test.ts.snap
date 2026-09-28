@@ -6,7 +6,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "search",
     "scope": "stella:search",
     "access": "read",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes for the jurisdictions the organization practises in. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes from every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
@@ -1010,7 +1010,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -1723,7 +1723,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "values": {
           "type": "object",
           "additionalProperties": {},
-          "description": "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given."
+          "description": "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given."
         }
       }
     }
@@ -2839,7 +2839,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "lookup_business_registry",
     "scope": "stella:read",
     "access": "read",
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -5162,7 +5162,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "invoke_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id. Take the id from list_capabilities or describe_capability. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
       "title": "Invoke capability",
       "destructiveHint": true,
@@ -5180,7 +5180,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "capability": {
           "type": "string",
           "minLength": 1,
-          "description": "Capability id to invoke, as returned by list_capabilities."
+          "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
           "type": "object",
@@ -5924,7 +5924,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -5977,7 +5977,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "values": {
           "type": "object",
           "additionalProperties": {},
-          "description": "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given."
+          "description": "Map of field path to value. Partial is fine: the model decides on what it is given."
         }
       }
     }
@@ -6083,7 +6083,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_properties",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
+    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "annotations": {
       "title": "List properties",
       "destructiveHint": false,
@@ -6121,7 +6121,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "lookup_business_registry",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -6658,7 +6658,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the public legal corpus (case-law decisions and statutes) using the OpenAI-compatible search tool shape, over the jurisdictions the organization practises in. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim. No matter, document, contact or billing data is reachable here.",
+    "description": "Search the public legal corpus (case-law decisions and statutes) using the OpenAI-compatible search tool shape, over every jurisdiction the corpus holds, the organization's practice jurisdictions first. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim. No matter, document, contact or billing data is reachable here.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
@@ -7273,7 +7273,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "name": "read_document",
     "scope": "stella:read",
     "access": "read",
-    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
+    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history.",
     "annotations": {
       "title": "Read document",
       "destructiveHint": false,
@@ -8075,7 +8075,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
     "name": "invoke_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id. Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
       "title": "Invoke capability",
       "destructiveHint": true,
@@ -8093,7 +8093,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
         "capability": {
           "type": "string",
           "minLength": 1,
-          "description": "Capability id to invoke, as returned by list_capabilities."
+          "description": "Capability id to invoke."
         },
         "input": {
           "type": "object",

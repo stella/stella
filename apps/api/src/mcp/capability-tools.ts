@@ -1186,7 +1186,7 @@ const invokeCapabilityArgsSchema = nullAsAbsent(
       v.string(),
       v.minLength(1),
       v.description(
-        "Capability id to invoke, as returned by list_capabilities.",
+        "Capability id to invoke. Use an id list_capabilities returned.",
       ),
     ),
     input: v.optional(
@@ -1980,7 +1980,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     // Confirmation is per capability (from the catalog), so the handler applies
     // the gate from the target capability's `destructive` flag.
     description:
-      "Invoke one capability by id (from list_capabilities/describe_capability). " +
+      "Invoke one capability by id. " +
+      "Take the id from list_capabilities or describe_capability. " +
       "Pass its input under input: { body, params, query } (no other top-level " +
       "argument is accepted); matter-scoped capabilities take the target " +
       "matter as input.params.matterId. Real authority is enforced per " +
