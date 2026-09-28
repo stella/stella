@@ -90,12 +90,41 @@ const VALUE_OPTIONS = new Set([
   "--max-concurrency",
 ]);
 
+const REPORTER_OUTFILE = "--reporter-outfile";
+
+/** `results.xml` for the `dom` run becomes `results.dom.xml`. */
+const suiteOutfile = (outfile: string, label: string): string => {
+  const extension = path.extname(outfile);
+  return `${outfile.slice(0, outfile.length - extension.length)}.${label}${extension}`;
+};
+
+/**
+ * Several runs given one `--reporter-outfile` would each overwrite the
+ * previous run's report, so each run writes its own file instead.
+ */
+const withSuiteOutfiles = (runs: readonly TestRun[]): readonly TestRun[] =>
+  runs.length < 2
+    ? runs
+    : runs.map((run) => ({
+        label: run.label,
+        args: run.args.map((arg, index) => {
+          if (arg.startsWith(`${REPORTER_OUTFILE}=`)) {
+            const outfile = arg.slice(REPORTER_OUTFILE.length + 1);
+            return `${REPORTER_OUTFILE}=${suiteOutfile(outfile, run.label)}`;
+          }
+          return run.args[index - 1] === REPORTER_OUTFILE
+            ? suiteOutfile(arg, run.label)
+            : arg;
+        }),
+      }));
+
 /**
  * With no paths, the three default runs, each carrying the pass-through flags.
  * With paths, only the named files, grouped by kind; a directory expands to
  * the test files under it. An argument is a path only when it exists on disk
  * and is not the value of an option such as `-t "<name>"`; a path-like
  * argument that names nothing is reported rather than run as a filter.
+ * When more than one run is planned, a `--reporter-outfile` is split per run.
  */
 export const planTestRuns = ({
   argv,
@@ -140,10 +169,12 @@ export const planTestRuns = ({
 
   if (!namedPaths) {
     return {
-      runs: DEFAULT_RUNS.map((run) => ({
-        label: run.label,
-        args: [...run.args, ...flags],
-      })),
+      runs: withSuiteOutfiles(
+        DEFAULT_RUNS.map((run) => ({
+          label: run.label,
+          args: [...run.args, ...flags],
+        })),
+      ),
       missingPaths,
     };
   }
@@ -180,5 +211,5 @@ export const planTestRuns = ({
   ]
     .filter((run) => run.count > 0)
     .map(({ label, args }) => ({ label, args }));
-  return { runs, missingPaths };
+  return { runs: withSuiteOutfiles(runs), missingPaths };
 };

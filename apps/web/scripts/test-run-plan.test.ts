@@ -132,9 +132,45 @@ describe("planTestRuns", () => {
       runs: [],
       missingPaths: ["src/features/avt/verdcit.test.ts"],
     });
-    expect(planWithMissing(["format.test.ts", "-t", "x"]).missingPaths).toEqual(
-      ["format.test.ts"],
-    );
+    const { missingPaths } = planWithMissing(["format.test.ts", "-t", "x"]);
+    expect(missingPaths).toEqual(["format.test.ts"]);
+  });
+
+  test("gives each run its own reporter outfile", () => {
+    const runs = plan([
+      "--reporter=junit",
+      "--reporter-outfile",
+      "out/results.xml",
+    ]);
+
+    expect(runs.map((run) => run.args.at(-1))).toEqual([
+      "out/results.unit.xml",
+      "out/results.dom.xml",
+      "out/results.e2e-unit.xml",
+    ]);
+    const inline = plan(["--reporter-outfile=results.xml"]);
+    expect(inline.map((run) => run.args.at(-1))).toEqual([
+      "--reporter-outfile=results.unit.xml",
+      "--reporter-outfile=results.dom.xml",
+      "--reporter-outfile=results.e2e-unit.xml",
+    ]);
+  });
+
+  test("a single run keeps the reporter outfile as given", () => {
+    const runs = plan([
+      "src/features/avt/verdict.test.ts",
+      "--reporter-outfile=results.xml",
+    ]);
+
+    expect(runs).toEqual([
+      {
+        label: "unit",
+        args: [
+          "./src/features/avt/verdict.test.ts",
+          "--reporter-outfile=results.xml",
+        ],
+      },
+    ]);
   });
 
   test("a bare name that is not a path stays a filter", () => {
