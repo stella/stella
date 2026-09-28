@@ -715,7 +715,7 @@ export const findWireCancelViolations = ({
 /** Request headers that change what a provider does with a request. The rest
  *  (credentials, SDK versions, retry counters, invocation ids) stay out of a
  *  request's shape. */
-export const PINNED_REQUEST_HEADERS = [
+const PINNED_REQUEST_HEADERS = [
   "accept",
   "anthropic-beta",
   "anthropic-version",
@@ -773,7 +773,7 @@ export const cassettePrompt = (cassette: ProviderWireCassette): string =>
 /** A shape as it is compared and shown: headers by name, the body in the
  *  order it was written, since a strict provider generates a tool's input
  *  in its schema's property order. */
-export const requestShapeText = (shape: ProviderWireRequestShape): string =>
+const requestShapeText = (shape: ProviderWireRequestShape): string =>
   JSON.stringify(
     {
       headers: Object.fromEntries(

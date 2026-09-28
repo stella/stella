@@ -423,6 +423,20 @@
       "oracle": "chat.provider-wire.request-shape"
     },
     {
+      "id": "wire-request-shape-reads-init-headers",
+      "fix": "maintenance",
+      "behaviour": "A request's shape is read from what fetch sends, with the init's headers over the request's.",
+      "status": "active",
+      "file": "src/tests/helpers/provider-wire-replay.ts",
+      "search": "new Request(\n    input instanceof Request ? input.clone() : input.toString(),\n    init,\n  );",
+      "replace": "input instanceof Request ? input.clone() : new Request(input.toString(), init);",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "a header fetch's init overrides is the header the request is pinned by"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
       "id": "new-message-resets-interrupts",
       "fix": "#3885",
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",

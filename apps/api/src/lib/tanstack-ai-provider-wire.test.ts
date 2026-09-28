@@ -226,6 +226,34 @@ describe("provider wire corpus", () => {
     ).toHaveLength(1);
   });
 
+  test("a header fetch's init overrides is the header the request is pinned by", async () => {
+    // `fetch(request, { headers })` sends the init's headers, not the
+    // request's, so the shape must be read from what is sent.
+    const cassette = cassetteFor(cassettes, "anthropic", "text");
+    const [exchange] = cassette.exchanges;
+    if (exchange === undefined) {
+      panic("The text cassette has no exchange");
+    }
+    replay.serve(cassette);
+    const response = await fetch(
+      new Request(`https://api.anthropic.com${exchange.request.path}`, {
+        body: JSON.stringify({ model: cassette.model }),
+        headers: { "anthropic-version": "on-the-request" },
+        method: "POST",
+      }),
+      { headers: { "anthropic-version": "sent" } },
+    );
+    await response.body?.cancel();
+    const sent = replay.requests().map(({ exchange: index, headers }) => ({
+      index,
+      version: headers.get("anthropic-version"),
+    }));
+    replay.takeFindings();
+    expect(sent, JSON.stringify({ oracle: requestShape })).toEqual([
+      { index: 0, version: "sent" },
+    ]);
+  });
+
   test("a tool call ended twice is a finding", async () => {
     // The real adapter's run, with one TOOL_CALL_END repeated.
     const cassette = cassetteFor(cassettes, "openai", "tool-call");

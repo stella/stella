@@ -196,18 +196,29 @@ const requestModelOf = (url: URL, bodyText: string): string | null => {
   }
 };
 
+/**
+ * The request `fetch(input, init)` sends: `init` overrides what `input`
+ * carries, headers included. `input` is left unread, so it can still be
+ * forwarded.
+ */
+export const effectiveRequest = (
+  input: string | URL | Request,
+  init: RequestInit | undefined,
+): Request =>
+  new Request(
+    input instanceof Request ? input.clone() : input.toString(),
+    init,
+  );
+
 const readRequest = async (
   input: string | URL | Request,
   init: RequestInit | undefined,
 ) => {
-  const request =
-    input instanceof Request ? input : new Request(input.toString(), init);
+  const request = effectiveRequest(input, init);
   const url = new URL(request.url);
-  const bodyText =
-    init?.body !== undefined && init.body !== null
-      ? await new Response(init.body).text()
-      : await request.clone().text();
-  const signal = init?.signal ?? request.signal;
+  const bodyText = await request.text();
+  const signal =
+    init?.signal ?? (input instanceof Request ? input.signal : request.signal);
   return {
     bodyText,
     headers: request.headers,

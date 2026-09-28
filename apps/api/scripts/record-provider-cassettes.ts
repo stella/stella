@@ -80,6 +80,7 @@ import {
 import {
   cassetteRequestPath,
   decodeAwsEventStream,
+  effectiveRequest,
   installProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 import { matchesUnmetEntry } from "@/api/tests/helpers/provider-wire-unmet";
@@ -386,8 +387,7 @@ const installRecorder = ({
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const request =
-      input instanceof Request ? input : new Request(input.toString(), init);
+    const request = effectiveRequest(input, init);
     const url = new URL(request.url);
     if (!origins.has(url.origin)) {
       return panic(`The recorder refuses a request to ${url.origin}`);
