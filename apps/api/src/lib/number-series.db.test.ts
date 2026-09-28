@@ -10,8 +10,14 @@ import {
 import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { numberSeries, numberSeriesCounters } from "@/api/db/schema";
+import {
+  numberSeries,
+  numberSeriesAllocations,
+  numberSeriesCounters,
+  sellerProfiles,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import createNumberSeries from "@/api/handlers/number-series/create";
 import updateNumberSeries from "@/api/handlers/number-series/update";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,6 +36,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const createdSeriesIds: SafeId<"numberSeries">[] = [];
 type UpdateContext = Parameters<typeof updateNumberSeries.handler>[0];
+type CreateContext = Parameters<typeof createNumberSeries.handler>[0];
 
 const createSeries = async (
   organizationId: SafeId<"organization">,
@@ -86,7 +93,7 @@ afterAll(async () => {
 describe("number series allocation", () => {
   test("serializes allocations across transactions and resets at the period boundary", async () => {
     const seriesId = await createSeries(ids.orgA);
-    const beforeRollover = new Date("2025-12-30T12:00:00.000Z");
+    const beforeRollover = new Date("2025-12-31T23:59:00.000Z");
 
     const [first, second] = await Promise.all([
       allocateInOrg(ids.orgA, seriesId, beforeRollover),
@@ -100,7 +107,7 @@ describe("number series allocation", () => {
     const nextPeriod = await allocateInOrg(
       ids.orgA,
       seriesId,
-      new Date("2026-01-02T12:00:00.000Z"),
+      new Date("2026-01-01T00:01:00.000Z"),
     );
     expect(nextPeriod.unwrap().number).toBe("INV-2026-001");
   });
@@ -159,6 +166,62 @@ describe("number series allocation", () => {
     expect(rows.at(0)?.pattern).toBe("INV-{YYYY}-{SEQ}");
   });
 
+  test("rejects a number already allocated by another series", async () => {
+    const firstSeries = await createSeries(ids.orgA);
+    const secondSeries = await createSeries(ids.orgA);
+    const issuedAt = new Date("2027-04-15T12:00:00.000Z");
+    expect(
+      (await allocateInOrg(ids.orgA, firstSeries, issuedAt)).unwrap().number,
+    ).toBe("INV-2027-001");
+    const collision = await allocateInOrg(ids.orgA, secondSeries, issuedAt);
+    expect(Result.isError(collision)).toBe(true);
+    const receipts = await testDb
+      .select({ seriesId: numberSeriesAllocations.seriesId })
+      .from(numberSeriesAllocations)
+      .where(
+        inArray(numberSeriesAllocations.seriesId, [firstSeries, secondSeries]),
+      );
+    expect(receipts).toEqual([{ seriesId: firstSeries }]);
+  });
+
+  test("rejects a seller profile from another organization", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgB,
+      legalName: "Other organization",
+      defaultCurrency: "EUR",
+    });
+    try {
+      const context = asTestRaw<CreateContext>({
+        body: {
+          documentType: "invoice",
+          name: "Cross-org series",
+          pattern: "INV-{YYYY}-{SEQ}",
+          padding: 3,
+          sellerProfileId,
+        },
+        request: new Request("https://example.test/v1/number-series", {
+          method: "POST",
+        }),
+        route: "/v1/number-series",
+        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        session: { activeOrganizationId: ids.orgA },
+        memberRole: { role: "owner" },
+        user: { id: ids.userA1 },
+        recordAuditEvent: async () => {},
+      });
+      expect(await createNumberSeries.handler(context)).toEqual({
+        code: 404,
+        response: { message: "Seller profile not found" },
+      });
+    } finally {
+      await testDb
+        .delete(sellerProfiles)
+        .where(inArray(sellerProfiles.id, [sellerProfileId]));
+    }
+  });
+
   test("allows one default series for each document type and rejects a duplicate default", async () => {
     const defaults = await Promise.all(
       (["invoice", "advance", "credit_note"] as const).map((documentType) =>
@@ -213,5 +276,14 @@ describe("number series allocation", () => {
       new Date("2026-03-02T12:00:00.000Z"),
     );
     expect(Result.isError(otherOrgAllocation)).toBe(true);
+    const rootAllocation = await testDb.transaction(
+      async (tx) =>
+        await allocateNumber(
+          asTestRaw<Transaction>(tx),
+          orgBSeries,
+          new Date("2026-03-02T12:00:00.000Z"),
+        ),
+    );
+    expect(Result.isError(rootAllocation)).toBe(true);
   });
 });

@@ -1,6 +1,5 @@
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 SET LOCAL statement_timeout = '30s';--> statement-breakpoint
-CREATE UNIQUE INDEX "seller_profiles_org_id_uidx" ON "seller_profiles" USING btree ("organization_id","id");--> statement-breakpoint
 CREATE TABLE "number_series" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" varchar(128) NOT NULL,
@@ -18,7 +17,7 @@ CREATE TABLE "number_series" (
 	CONSTRAINT "number_series_archived_default_check" CHECK ("archived_at" IS NULL OR NOT "is_default")
 );--> statement-breakpoint
 ALTER TABLE "number_series" ADD CONSTRAINT "number_series_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "number_series" ADD CONSTRAINT "number_series_seller_profile_org_fk" FOREIGN KEY ("organization_id","seller_profile_id") REFERENCES "public"."seller_profiles"("organization_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "number_series" ADD CONSTRAINT "number_series_seller_profile_id_fk" FOREIGN KEY ("seller_profile_id") REFERENCES "public"."seller_profiles"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "number_series_org_id_uidx" ON "number_series" USING btree ("organization_id","id");--> statement-breakpoint
 CREATE INDEX "number_series_org_created_idx" ON "number_series" USING btree ("organization_id","created_at","id") WHERE "archived_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "number_series_org_type_default_uidx" ON "number_series" USING btree ("organization_id","document_type") WHERE "is_default" AND "archived_at" IS NULL;--> statement-breakpoint
@@ -46,3 +45,22 @@ CREATE POLICY "organization_select" ON "number_series_counters" AS PERMISSIVE FO
 CREATE POLICY "organization_insert" ON "number_series_counters" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_update" ON "number_series_counters" AS PERMISSIVE FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_delete" ON "number_series_counters" AS PERMISSIVE FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));
+--> statement-breakpoint
+CREATE TABLE "number_series_allocations" (
+	"organization_id" varchar(128) NOT NULL,
+	"series_id" uuid NOT NULL,
+	"document_type" text NOT NULL,
+	"number" varchar(64) NOT NULL,
+	"issued_at" timestamptz NOT NULL,
+	CONSTRAINT "number_series_allocations_organization_id_document_type_number_pk" PRIMARY KEY("organization_id","document_type","number"),
+	CONSTRAINT "number_series_allocations_document_type_check" CHECK ("document_type" IN ('invoice', 'advance', 'credit_note'))
+);--> statement-breakpoint
+ALTER TABLE "number_series_allocations" ADD CONSTRAINT "number_series_allocations_series_org_fk" FOREIGN KEY ("organization_id","series_id") REFERENCES "public"."number_series"("organization_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "number_series_allocations_series_idx" ON "number_series_allocations" USING btree ("series_id");--> statement-breakpoint
+ALTER TABLE "number_series_allocations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "number_series_allocations" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "number_series_allocations" TO "stella";--> statement-breakpoint
+CREATE POLICY "organization_select" ON "number_series_allocations" AS PERMISSIVE FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_insert" ON "number_series_allocations" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_update" ON "number_series_allocations" AS PERMISSIVE FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_delete" ON "number_series_allocations" AS PERMISSIVE FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));

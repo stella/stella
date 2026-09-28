@@ -4,7 +4,11 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { renderMatterReference } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { numberSeries, numberSeriesCounters } from "@/api/db/schema";
+import {
+  numberSeries,
+  numberSeriesAllocations,
+  numberSeriesCounters,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toNumberPatternScopeKey } from "@/api/lib/number-pattern";
@@ -18,11 +22,18 @@ export const allocateNumber = async (
     .select({
       id: numberSeries.id,
       organizationId: numberSeries.organizationId,
+      documentType: numberSeries.documentType,
       pattern: numberSeries.pattern,
       padding: numberSeries.padding,
     })
     .from(numberSeries)
-    .where(and(eq(numberSeries.id, seriesId), isNull(numberSeries.archivedAt)))
+    .where(
+      and(
+        eq(numberSeries.id, seriesId),
+        isNull(numberSeries.archivedAt),
+        sql`${numberSeries.organizationId} = current_setting('app.organization_id', true)`,
+      ),
+    )
     .for("update");
   const series = rows.at(0);
   if (!series) {
@@ -30,7 +41,11 @@ export const allocateNumber = async (
       new HandlerError({ status: 404, message: "Number series not found" }),
     );
   }
-  const periodKey = toNumberPatternScopeKey(series.pattern, issuedAt);
+  const periodKey = toNumberPatternScopeKey({
+    pattern: series.pattern,
+    now: issuedAt,
+    timeZone: "UTC",
+  });
   const counters = await tx
     .insert(numberSeriesCounters)
     .values({
@@ -45,13 +60,34 @@ export const allocateNumber = async (
     })
     .returning({ lastValue: numberSeriesCounters.lastValue });
   const counter = counters.at(0) ?? panic("Failed to increment number series");
+  const number = renderMatterReference({
+    now: issuedAt,
+    pattern: series.pattern,
+    padding: series.padding,
+    seq: counter.lastValue,
+    timeZone: "UTC",
+  });
+  const receipts = await tx
+    .insert(numberSeriesAllocations)
+    .values({
+      organizationId: series.organizationId,
+      seriesId: series.id,
+      documentType: series.documentType,
+      number,
+      issuedAt,
+    })
+    .onConflictDoNothing()
+    .returning({ number: numberSeriesAllocations.number });
+  if (receipts.length === 0) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Number already allocated in another series",
+      }),
+    );
+  }
   return Result.ok({
     seriesId: series.id,
-    number: renderMatterReference({
-      now: issuedAt,
-      pattern: series.pattern,
-      padding: series.padding,
-      seq: counter.lastValue,
-    }),
+    number,
   });
 };

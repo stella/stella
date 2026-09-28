@@ -10,7 +10,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { validateNumberPattern } from "@/api/lib/number-pattern";
+import {
+  MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
+  validateNumberPattern,
+} from "@/api/lib/number-pattern";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const EDITABLE_FIELDS = [
@@ -69,7 +72,11 @@ export default createSafeRootHandler(
         }
         const pattern = body.pattern ?? current.pattern;
         const padding = body.padding ?? current.padding;
-        const validation = validateNumberPattern(pattern, padding);
+        const validation = validateNumberPattern({
+          pattern,
+          padding,
+          sequenceDigitsBudget: MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
+        });
         if (Result.isError(validation)) {
           return {
             status: "invalid",

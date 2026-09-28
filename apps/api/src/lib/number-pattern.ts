@@ -17,6 +17,7 @@ const BRACE_CHARS = /[{}]/u;
 const MIN_PADDING = 1;
 const MAX_PADDING = 6;
 const MAX_REFERENCE_LENGTH = 64;
+export const MAX_NUMBER_SERIES_SEQUENCE_DIGITS = 10;
 
 const TOKEN_RENDERED_LENGTH = {
   "{YYYY}": 4,
@@ -28,10 +29,17 @@ const isMatterReferenceToken = (token: string): token is MatterReferenceToken =>
   MATTER_REFERENCE_TOKENS.some((recognized) => recognized === token);
 
 /** Validate a sequence pattern and its padding. */
-export const validateNumberPattern = (
-  pattern: string,
-  padding: number,
-): Result<true, PatternError> => {
+type ValidateNumberPatternOptions = {
+  pattern: string;
+  padding: number;
+  sequenceDigitsBudget: number;
+};
+
+export const validateNumberPattern = ({
+  pattern,
+  padding,
+  sequenceDigitsBudget,
+}: ValidateNumberPatternOptions): Result<true, PatternError> => {
   if (FORBIDDEN_CHARS.test(pattern)) {
     return Result.err(
       new PatternError({
@@ -79,7 +87,7 @@ export const validateNumberPattern = (
   let renderedLength = pattern.length;
   for (const token of recognizedTokens) {
     const outputLength =
-      token === "{SEQ}" ? MAX_PADDING : TOKEN_RENDERED_LENGTH[token];
+      token === "{SEQ}" ? sequenceDigitsBudget : TOKEN_RENDERED_LENGTH[token];
     renderedLength += outputLength - token.length;
   }
 
@@ -95,5 +103,15 @@ export const validateNumberPattern = (
 };
 
 /** Resolve date tokens and remove {SEQ} to derive a counter scope key. */
-export const toNumberPatternScopeKey = (pattern: string, now: Date): string =>
-  renderMatterReferencePattern({ now, pattern, sequence: "" });
+type NumberPatternScopeKeyOptions = {
+  pattern: string;
+  now: Date;
+  timeZone?: string;
+};
+
+export const toNumberPatternScopeKey = ({
+  pattern,
+  now,
+  timeZone,
+}: NumberPatternScopeKeyOptions): string =>
+  renderMatterReferencePattern({ now, pattern, sequence: "", timeZone });

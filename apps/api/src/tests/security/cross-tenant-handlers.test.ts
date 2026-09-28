@@ -26,6 +26,7 @@ import {
   fields,
   legalLists,
   legalReaderAnnotations,
+  numberSeries,
   notifications,
   savedTimeNarratives,
   savedSearches,
@@ -54,6 +55,8 @@ import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list"
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
+import getNumberSeries from "@/api/handlers/number-series/get";
+import listNumberSeries from "@/api/handlers/number-series/list";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
@@ -141,6 +144,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 );
 const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
   "22222222-2222-4222-8222-222222222258",
+);
+const numberSeriesB = toSafeId<"numberSeries">(
+  "22222222-2222-4222-8222-222222222259",
 );
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
@@ -555,6 +561,29 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, sellerProfileB),
   },
   {
+    name: "number series read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getNumberSeries, workspaceA, {
+        params: { numberSeriesId: numberSeriesB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getNumberSeries, workspaceB, {
+        params: { numberSeriesId: numberSeriesB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", numberSeriesB),
+  },
+  {
+    name: "number series list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listNumberSeries, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listNumberSeries, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, numberSeriesB),
+    expectPositive: (result) => expectPageContainsId(result, numberSeriesB),
+  },
+  {
     name: "time entry read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readTimeEntryById, workspaceA, {
@@ -846,6 +875,15 @@ beforeAll(async () => {
     organizationId: ids.orgB,
     legalName: "Seller profile B",
     defaultCurrency: "CZK",
+  });
+  await testDb.insert(numberSeries).values({
+    id: numberSeriesB,
+    organizationId: ids.orgB,
+    documentType: "invoice",
+    name: "Invoice series B",
+    pattern: "INV-{YYYY}-{SEQ}",
+    padding: 5,
+    isDefault: true,
   });
   await testDb.insert(entityVersions).values({
     id: compareTargetVersionB,

@@ -40,6 +40,7 @@ type RenderMatterReferencePatternOptions = {
   now: Date;
   pattern: string;
   sequence: string;
+  timeZone?: string;
 };
 
 /** Render every recognized token from one total token-value map. */
@@ -47,10 +48,11 @@ export const renderMatterReferencePattern = ({
   now,
   pattern,
   sequence,
+  timeZone,
 }: RenderMatterReferencePatternOptions): string => {
   const date = Temporal.Instant.fromEpochMilliseconds(
     now.getTime(),
-  ).toZonedDateTimeISO(Temporal.Now.timeZoneId());
+  ).toZonedDateTimeISO(timeZone ?? Temporal.Now.timeZoneId());
   const year = String(date.year);
   const values = {
     "{SEQ}": sequence,
@@ -71,6 +73,7 @@ type RenderMatterReferenceOptions = {
   padding: number;
   pattern: string;
   seq: number;
+  timeZone?: string;
 };
 
 /**
@@ -86,9 +89,11 @@ export const renderMatterReference = ({
   padding,
   pattern,
   seq,
+  timeZone,
 }: RenderMatterReferenceOptions): string =>
   renderMatterReferencePattern({
     now,
     pattern,
     sequence: String(seq).padStart(padding, "0"),
+    timeZone,
   });

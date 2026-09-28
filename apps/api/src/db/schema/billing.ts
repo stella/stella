@@ -284,9 +284,6 @@ export const sellerProfiles = p.pgTable(
       .uniqueIndex("seller_profiles_org_default_uidx")
       .on(table.organizationId)
       .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
-    p
-      .uniqueIndex("seller_profiles_org_id_uidx")
-      .on(table.organizationId, table.id),
     p.check(
       "seller_profiles_currency_check",
       sql`${table.defaultCurrency} ~ '^[A-Z]{3}$'`,
@@ -330,9 +327,9 @@ export const numberSeries = p.pgTable(
   (table) => [
     p
       .foreignKey({
-        columns: [table.organizationId, table.sellerProfileId],
-        foreignColumns: [sellerProfiles.organizationId, sellerProfiles.id],
-        name: "number_series_seller_profile_org_fk",
+        columns: [table.sellerProfileId],
+        foreignColumns: [sellerProfiles.id],
+        name: "number_series_seller_profile_id_fk",
       })
       .onDelete("restrict"),
     p
@@ -383,6 +380,37 @@ export const numberSeriesCounters = p.pgTable(
     p.check(
       "number_series_counters_positive_check",
       sql`${table.lastValue} > 0`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const numberSeriesAllocations = p.pgTable(
+  "number_series_allocations",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    seriesId: safeUuid<"numberSeries">("series_id").notNull(),
+    documentType: p
+      .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
+      .notNull(),
+    number: p.varchar({ length: 64 }).notNull(),
+    issuedAt: timestamptz("issued_at").notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.organizationId, table.documentType, table.number],
+    }),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.seriesId],
+        foreignColumns: [numberSeries.organizationId, numberSeries.id],
+        name: "number_series_allocations_series_org_fk",
+      })
+      .onDelete("cascade"),
+    p.index("number_series_allocations_series_idx").on(table.seriesId),
+    p.check(
+      "number_series_allocations_document_type_check",
+      sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     ...orgPolicies(),
   ],
