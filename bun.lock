@@ -428,7 +428,7 @@
         "@tiptap/pm": "^3.31.3",
         "@tiptap/react": "^3.31.3",
         "@tiptap/suggestion": "^3.31.3",
-        "@vscode/markdown-editor": "0.0.2-101",
+        "@vscode/markdown-editor": "0.0.2-108",
         "@vscode/observables": "0.1.1-0",
         "better-auth": "catalog:",
         "better-result": "catalog:",
@@ -3385,7 +3385,7 @@
 
     "@vscode/l10n": ["@vscode/l10n@0.0.18", "", {}, "sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ=="],
 
-    "@vscode/markdown-editor": ["@vscode/markdown-editor@0.0.2-101", "", { "dependencies": { "@vscode/codicons": "0.0.46-36", "@vscode/diff": "0.0.2-0", "@vscode/observables": "^0.1.1-0", "katex": "^0.16.33", "micromark": "^4.0.1", "micromark-extension-frontmatter": "^2.0.0", "micromark-extension-gfm": "^3.0.0", "micromark-extension-gfm-strikethrough": "^2.1.0", "micromark-extension-gfm-table": "^2.1.1", "micromark-extension-gfm-task-list-item": "^2.1.0", "micromark-extension-math": "^3.1.0" } }, "sha512-OXDiaJhWo6y6XWqn4C2KVikSIj3xWcHqamBpV01XBYvS4FiMHDzaQwXWbayFRlxHZfN4f8xIoH5XLqSN7GcjNA=="],
+    "@vscode/markdown-editor": ["@vscode/markdown-editor@0.0.2-108", "", { "dependencies": { "@vscode/codicons": "0.0.46-36", "@vscode/diff": "0.0.2-0", "@vscode/observables": "^0.1.1-0", "entities": "6.0.1", "katex": "^0.16.33", "micromark": "^4.0.1", "micromark-extension-frontmatter": "^2.0.0", "micromark-extension-gfm": "^3.0.0", "micromark-extension-gfm-strikethrough": "^2.1.0", "micromark-extension-gfm-table": "^2.1.1", "micromark-extension-gfm-task-list-item": "^2.1.0", "micromark-extension-math": "^3.1.0" } }, "sha512-ZQfjbhpaQJz9kRZwnL2TjizXg2QucSRzQKRqVwN04C3bPHo5b0LOsqe6plaBNrcKdz3CTIIqjJhIRX6eDcO6bA=="],
 
     "@vscode/observables": ["@vscode/observables@0.1.1-0", "", {}, "sha512-Ppl/2o6DPQdLOfJCqMyHhGutoVVOl4Xgwxqtfd6Mxl0wMnaNjwSovWNGR88UWdXJIU8RVRzS+tpPFwwiBGwD4g=="],
 
@@ -6128,6 +6128,8 @@
     "@testing-library/dom/pretty-format": ["pretty-format@27.5.1", "", { "dependencies": { "ansi-regex": "^5.0.1", "ansi-styles": "^5.0.0", "react-is": "^17.0.1" } }, "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ=="],
 
     "@vscode/emmet-helper/jsonc-parser": ["jsonc-parser@2.3.1", "", {}, "sha512-H8jvkz1O50L3dMZCsLqiuB2tA7muqbSg1AtGEkN0leAqGjsUzDJir3Zwr02BhqdcITPg3ei3mZ+HjMocAknhhg=="],
+
+    "@vscode/markdown-editor/entities": ["entities@6.0.1", "", {}, "sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g=="],
 
     "@vscode/markdown-editor/katex": ["katex@0.16.47", "", { "dependencies": { "commander": "^8.3.0" }, "bin": { "katex": "cli.js" } }, "sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg=="],
 
