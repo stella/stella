@@ -74,6 +74,13 @@ export const CORPUS_INDEX_PROJECTION_WORK_STATUSES = [
   "repair_scheduled",
   "blocked",
 ] as const;
+
+export const CORPUS_INDEX_PROJECTION_APPEND_MODES = [
+  "batchable",
+  "single",
+] as const;
+export type CorpusIndexProjectionAppendMode =
+  (typeof CORPUS_INDEX_PROJECTION_APPEND_MODES)[number];
 export type CorpusIndexProjectionWorkStatus =
   (typeof CORPUS_INDEX_PROJECTION_WORK_STATUSES)[number];
 
@@ -82,9 +89,17 @@ export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "revision_too_large",
   "append_unknown",
   "append_rejected",
+  "append_transient",
 ] as const;
 export type CorpusIndexProjectionFailureKind =
   (typeof CORPUS_INDEX_PROJECTION_FAILURE_KINDS)[number];
+
+/** Append outcomes that can schedule a retry without charging a revision. */
+export const CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS = [
+  "append_unknown",
+  "append_rejected",
+  "append_transient",
+] as const satisfies readonly CorpusIndexProjectionFailureKind[];
 
 export const CORPUS_INDEX_QUIESCENT_INTENT_STATUSES = [
   "settled",

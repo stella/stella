@@ -6,7 +6,9 @@ import {
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
+  CORPUS_INDEX_PROJECTION_APPEND_MODES,
   CORPUS_INDEX_PROJECTION_FAILURE_KINDS,
+  CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS,
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
@@ -55,6 +57,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     leaseToken: p.uuid("lease_token"),
     leaseExpiresAt: timestamptz("lease_expires_at"),
     appendStartedAt: timestamptz("append_started_at"),
+    appendRequestRevisionCount: p.integer("append_request_revision_count"),
     appendCommittedAt: timestamptz("append_committed_at"),
     expectedDocumentCount: p.integer("expected_document_count"),
     appliedAt: timestamptz("applied_at"),
@@ -220,6 +223,10 @@ export const corpusIndexProjectionIntents = p.pgTable(
       END`,
     ),
     p.check(
+      "corpus_projection_intents_append_request_count_positive",
+      sql`${t.appendRequestRevisionCount} IS NULL OR ${t.appendRequestRevisionCount} > 0`,
+    ),
+    p.check(
       "corpus_index_projection_intents_status_shape",
       sql`CASE ${t.status}
         WHEN 'reserved' THEN
@@ -349,6 +356,10 @@ export const corpusIndexProjectionStates = p.pgTable(
     workStatus: p
       .text("work_status", { enum: CORPUS_INDEX_PROJECTION_WORK_STATUSES })
       .default("eligible")
+      .notNull(),
+    appendMode: p
+      .text("append_mode", { enum: CORPUS_INDEX_PROJECTION_APPEND_MODES })
+      .default("batchable")
       .notNull(),
     retryNotBefore: timestamptz("retry_not_before"),
     failureAttempts: p.integer("failure_attempts").default(0).notNull(),
@@ -480,6 +491,10 @@ export const corpusIndexProjectionStates = p.pgTable(
       sql`${t.workStatus} IN (${sqlValues(CORPUS_INDEX_PROJECTION_WORK_STATUSES)})`,
     ),
     p.check(
+      "corpus_index_projection_states_append_mode_values",
+      sql`${t.appendMode} IN (${sqlValues(CORPUS_INDEX_PROJECTION_APPEND_MODES)})`,
+    ),
+    p.check(
       "corpus_index_projection_states_failure_kind_values",
       sql`${t.lastFailureKind} IS NULL OR ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_FAILURE_KINDS)})`,
     ),
@@ -499,7 +514,7 @@ export const corpusIndexProjectionStates = p.pgTable(
           ${t.retryNotBefore} IS NOT NULL
           AND (
             (${t.failureAttempts} = 0
-              AND ${t.lastFailureKind} = 'append_rejected'
+              AND ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
               AND ${t.lastFailureMessage} IS NOT NULL)
             OR (${t.failureAttempts} > 0
               AND ${t.lastFailureKind} IS NOT NULL

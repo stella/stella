@@ -12,6 +12,16 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
+ALTER TABLE "corpus_index_projection_intents"
+  -- squawk-ignore prefer-robust-stmts -- Validates the additive intent check outside the DDL transaction.
+  VALIDATE CONSTRAINT "corpus_projection_intents_append_request_count_positive";
+--> statement-breakpoint
+
+ALTER TABLE "corpus_index_projection_states"
+  -- squawk-ignore prefer-robust-stmts -- Validates the additive state check outside the DDL transaction.
+  VALIDATE CONSTRAINT "corpus_index_projection_states_append_mode_values";
+--> statement-breakpoint
+
 ALTER TABLE "corpus_index_projection_states"
   -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check from the preceding migration outside the DDL transaction.
   VALIDATE CONSTRAINT "corpus_index_projection_states_failure_kind_values";

@@ -53,6 +53,7 @@ import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
@@ -975,6 +976,18 @@ type ChargeExpiredAppendStatesOptions = {
   transitionAt: Date | SQL<Date>;
 };
 
+const expiredAppendTargets = (targets: readonly ExpiredAppendStateTarget[]) =>
+  or(
+    ...targets.map((row) =>
+      and(
+        eq(corpusIndexProjectionStates.entityId, row.entityId),
+        eq(corpusIndexProjectionStates.desiredEpoch, row.epoch),
+        eq(corpusIndexProjectionStates.desiredFingerprint, row.fingerprint),
+        eq(corpusIndexProjectionStates.desiredIndexId, row.indexId),
+      ),
+    ),
+  );
+
 const chargeExpiredAppendStatesTx = async (
   tx: Transaction,
   {
@@ -993,7 +1006,7 @@ const chargeExpiredAppendStatesTx = async (
       LEAST(${corpusIndexProjectionStates.failureAttempts}, 6)
     )
   )`;
-  await tx
+  const updated = await tx
     .update(corpusIndexProjectionStates)
     .set({
       workStatus: sql<"blocked" | "retry_scheduled">`CASE
@@ -1015,21 +1028,92 @@ const chargeExpiredAppendStatesTx = async (
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        or(
-          ...targets.map((row) =>
-            and(
-              eq(corpusIndexProjectionStates.entityId, row.entityId),
-              eq(corpusIndexProjectionStates.desiredEpoch, row.epoch),
-              eq(
-                corpusIndexProjectionStates.desiredFingerprint,
-                row.fingerprint,
-              ),
-              eq(corpusIndexProjectionStates.desiredIndexId, row.indexId),
-            ),
-          ),
-        ),
+        expiredAppendTargets(targets),
+      ),
+    )
+    .returning({
+      entityId: corpusIndexProjectionStates.entityId,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      workStatus: corpusIndexProjectionStates.workStatus,
+    });
+  for (const row of updated) {
+    if (row.workStatus === "blocked") {
+      logger.warn("corpus_projection.append_blocked", {
+        family,
+        generation,
+        entity: row.entityId,
+        kind: "append_unknown",
+        attempts: row.failureAttempts,
+      });
+    }
+  }
+};
+
+const deferExpiredBatchStatesTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    targets,
+    transitionAt,
+  }: ChargeExpiredAppendStatesOptions,
+): Promise<void> => {
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "retry_scheduled",
+      retryNotBefore: sql<Date>`${transitionAt}::timestamptz + ${CORPUS_PROJECTION_APPEND_RETRY_BASE_MS} * INTERVAL '1 millisecond'`,
+      appendMode: "single",
+      lastFailureKind: "append_unknown",
+      lastFailureMessage:
+        "projection batch append lease expired with unknown outcome",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        expiredAppendTargets(targets),
       ),
     );
+};
+
+const updateExpiredAppendStatesTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    targets,
+    transitionAt,
+  }: Omit<ChargeExpiredAppendStatesOptions, "targets"> & {
+    targets: readonly (ExpiredAppendStateTarget & {
+      appendRequestRevisionCount: number | null;
+    })[];
+  },
+): Promise<void> => {
+  const isolated = targets.filter(
+    ({ appendRequestRevisionCount }) => appendRequestRevisionCount === 1,
+  );
+  const batches = targets.filter(
+    ({ appendRequestRevisionCount }) => appendRequestRevisionCount !== 1,
+  );
+  if (isolated.length > 0) {
+    await chargeExpiredAppendStatesTx(tx, {
+      family,
+      generation,
+      targets: isolated,
+      transitionAt,
+    });
+  }
+  if (batches.length > 0) {
+    await deferExpiredBatchStatesTx(tx, {
+      family,
+      generation,
+      targets: batches,
+      transitionAt,
+    });
+  }
 };
 
 /**
@@ -1110,6 +1194,8 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
       fingerprint: corpusIndexProjectionIntents.fingerprint,
       indexId: corpusIndexProjectionIntents.indexId,
       appendStartedAt: corpusIndexProjectionIntents.appendStartedAt,
+      appendRequestRevisionCount:
+        corpusIndexProjectionIntents.appendRequestRevisionCount,
     })
     .from(corpusIndexProjectionIntents)
     .where(
@@ -1225,7 +1311,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
           eq(corpusIndexProjectionIntents.status, "append_started"),
         ),
       );
-    await chargeExpiredAppendStatesTx(tx, {
+    await updateExpiredAppendStatesTx(tx, {
       family,
       generation,
       targets: appendStarted,

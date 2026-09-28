@@ -19,7 +19,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 export const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
   empty: "empty",
-  blocked: "blocked",
+  knownBlocked: "known_blocked",
   pending: "pending",
   intentOutstanding: "intent_outstanding",
   /**
@@ -163,14 +163,17 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (!observation["hasState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty;
   }
-  if (observation["hasBlockedState"]) {
-    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.blocked;
-  }
   if (observation["hasPendingState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
   if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
+  }
+  // A parked entity is a terminal, visible exception to convergence. Report
+  // it after cleanup settles so callers can advance the generation while
+  // retaining the explicit repair obligation.
+  if (observation["hasBlockedState"]) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked;
   }
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
