@@ -11,6 +11,7 @@ import {
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
@@ -43,24 +44,46 @@ export const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
 /** Rows per INSERT when the new snapshot is written. */
 const SNAPSHOT_INSERT_CHUNK = 1000;
 
-type TransactionBudget = { lockTimeout: string; statementTimeout: string };
-
-/**
- * A page reads a bounded range of one index, so a statement that runs past
- * this is not making progress; it is cancelled and the next tick starts over.
- */
-const PAGE_BUDGET: TransactionBudget = {
-  lockTimeout: "5s",
-  statementTimeout: "30s",
+/** Both budgets in milliseconds. */
+export type SitemapRefreshBudget = {
+  lockTimeoutMs: number;
+  statementTimeoutMs: number;
 };
 
 /**
- * The swap deletes and rewrites a table of at most one row per index entry of
- * the sitemap, in chunks; the lock wait covers an overlapping refresh's swap.
+ * A page reads a bounded range of one index and the swap rewrites a table of
+ * at most one row per sitemap index entry, so a statement that runs past this
+ * is not making progress; it is cancelled and the next tick starts over.
  */
-const SWAP_BUDGET: TransactionBudget = {
-  lockTimeout: "30s",
-  statementTimeout: "30s",
+const MAX_STATEMENT_TIMEOUT_MS = 30_000;
+/** A page takes no lock a writer holds; waiting on one is not progress. */
+const PAGE_LOCK_TIMEOUT_MS = 5000;
+
+/**
+ * The statement and lock budgets for one pool.
+ *
+ * The pool closes a connection that has been silent for its idle timeout,
+ * and a statement that is still running sends nothing, so the pool would drop
+ * a long statement's connection mid-flight with a driver error rather than a
+ * database one. Every statement here is held under half that timeout, so the
+ * database cancels a stuck statement first and the connection survives it.
+ * The whole refresh may run far longer: only a single silent statement is
+ * bounded by the pool, and each page is its own statement.
+ */
+export const sitemapRefreshBudget = (
+  poolIdleTimeoutS: number,
+): SitemapRefreshBudget => {
+  const statementTimeoutMs =
+    poolIdleTimeoutS > 0
+      ? Math.min(
+          MAX_STATEMENT_TIMEOUT_MS,
+          Math.floor((poolIdleTimeoutS * 1000) / 2),
+        )
+      : MAX_STATEMENT_TIMEOUT_MS;
+  return {
+    lockTimeoutMs: Math.min(PAGE_LOCK_TIMEOUT_MS, statementTimeoutMs),
+    statementTimeoutMs,
+  };
 };
 
 type RefreshDb = Pick<typeof rootDb, "transaction">;
@@ -71,15 +94,21 @@ type RefreshTransaction = Parameters<
 /**
  * Both budgets, set LOCAL so they end with the transaction. Written as raw
  * statements because `SET LOCAL` takes a literal, not a bind parameter; the
- * values are this module's own constants.
+ * values are integers computed here.
  */
 const setTransactionBudget = async (
   tx: RefreshTransaction,
-  { lockTimeout, statementTimeout }: TransactionBudget,
+  { lockTimeoutMs, statementTimeoutMs }: SitemapRefreshBudget,
 ): Promise<void> => {
-  await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${lockTimeout}'`));
+  if (
+    !Number.isInteger(lockTimeoutMs) ||
+    !Number.isInteger(statementTimeoutMs)
+  ) {
+    return panic("Sitemap refresh budgets must be integer milliseconds");
+  }
+  await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${lockTimeoutMs}ms'`));
   await tx.execute(
-    sql.raw(`SET LOCAL statement_timeout = '${statementTimeout}'`),
+    sql.raw(`SET LOCAL statement_timeout = '${statementTimeoutMs}ms'`),
   );
 };
 
@@ -215,12 +244,13 @@ type PageOutcome = { cursor: SitemapRefreshCursor | null };
 
 const readPage = async (
   db: RefreshDb,
+  budget: SitemapRefreshBudget,
   months: CountryMonths,
   page: Parameters<typeof sitemapRefreshPageSql>[0],
 ): Promise<PageOutcome> => {
   const rows = await db.transaction(async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    await setTransactionBudget(tx, PAGE_BUDGET);
+    await setTransactionBudget(tx, budget);
     return executedRows(await tx.execute(sitemapRefreshPageSql(page)));
   });
   let cursor: SitemapRefreshCursor | null = null;
@@ -302,9 +332,18 @@ const shardRows = (months: CountryMonths): ShardRow[] =>
  * readers and queues a second refresh's swap behind this one, so overlapping
  * refreshes each replace the snapshot whole rather than interleaving.
  */
-const swapSnapshot = async (db: RefreshDb, rows: ShardRow[]): Promise<void> => {
+const swapSnapshot = async (
+  db: RefreshDb,
+  { statementTimeoutMs }: SitemapRefreshBudget,
+  rows: ShardRow[],
+): Promise<void> => {
   await db.transaction(async (tx) => {
-    await setTransactionBudget(tx, SWAP_BUDGET);
+    // The lock wait covers an overlapping refresh's swap, itself bounded by
+    // the same statement budget.
+    await setTransactionBudget(tx, {
+      lockTimeoutMs: statementTimeoutMs,
+      statementTimeoutMs,
+    });
     await tx.execute(
       sql`LOCK TABLE ${caseLawSitemapShards} IN SHARE ROW EXCLUSIVE MODE`,
     );
@@ -337,12 +376,19 @@ export const refreshCaseLawSitemapShards = async (
   db: RefreshDb,
   {
     pageSize = SITEMAP_REFRESH_PAGE_SIZE,
+    poolIdleTimeoutS = envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
     signal,
-  }: { pageSize?: number; signal?: AbortSignal } = {},
+  }: {
+    pageSize?: number;
+    /** The idle timeout of the pool `db` draws from; see `sitemapRefreshBudget`. */
+    poolIdleTimeoutS?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<{ largestShard: number; pages: number; shards: number }> => {
   if (!Number.isInteger(pageSize) || pageSize < 1) {
     return panic("Sitemap refresh page size must be a positive integer");
   }
+  const budget = sitemapRefreshBudget(poolIdleTimeoutS);
   const months: CountryMonths = new Map();
   let pages = 0;
   for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
@@ -353,7 +399,7 @@ export const refreshCaseLawSitemapShards = async (
           panic("SchedulerAborted");
         }
         // db-await-in-loop: each page resumes after the previous page's last index entry
-        ({ cursor } = await readPage(db, months, {
+        ({ cursor } = await readPage(db, budget, months, {
           country,
           cursor,
           pageSize,
@@ -365,7 +411,7 @@ export const refreshCaseLawSitemapShards = async (
   }
 
   const rows = shardRows(months);
-  await swapSnapshot(db, rows);
+  await swapSnapshot(db, budget, rows);
 
   let largestShard = 0;
   for (const row of rows) {

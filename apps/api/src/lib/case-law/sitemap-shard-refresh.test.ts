@@ -2,6 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -22,6 +23,7 @@ import type {
 import {
   refreshCaseLawSitemapShards,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
+  sitemapRefreshBudget,
   sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import type { SitemapRefreshPhase } from "@/api/lib/case-law/sitemap-shard-refresh";
@@ -307,6 +309,68 @@ test(
       refreshCaseLawSitemapShards(refreshDb, { signal: aborted.signal }),
     ).rejects.toThrow("SchedulerAborted");
     expect(await snapshot()).toEqual(before);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("every refresh statement is budgeted under the pool's idle timeout", () => {
+  // The pool closes a connection silent for its idle timeout, and a running
+  // statement is silent, so a statement allowed to outlast it would lose its
+  // connection mid-flight instead of being cancelled by the database.
+  for (const idleTimeoutS of [1, 5, 20, 60, 120, 900]) {
+    const { lockTimeoutMs, statementTimeoutMs } =
+      sitemapRefreshBudget(idleTimeoutS);
+    expect(statementTimeoutMs).toBeGreaterThan(0);
+    expect(statementTimeoutMs).toBeLessThanOrEqual((idleTimeoutS * 1000) / 2);
+    expect(lockTimeoutMs).toBeLessThanOrEqual(statementTimeoutMs);
+  }
+  // No pool timeout: the refresh keeps its own ceiling.
+  expect(sitemapRefreshBudget(0).statementTimeoutMs).toBe(30_000);
+});
+
+test(
+  "each refresh transaction sets its budget before it reads or writes",
+  async () => {
+    const dialect = new PgDialect();
+    const transactions: string[][] = [];
+    const recording = {
+      transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+        await db.transaction(async (tx) => {
+          const sent: string[] = [];
+          transactions.push(sent);
+          return await work(
+            new Proxy(tx, {
+              get: (target, property, receiver) =>
+                property === "execute"
+                  ? async (query: SQL) => {
+                      sent.push(dialect.sqlToQuery(query).sql.trim());
+                      return await target.execute(query);
+                    }
+                  : Reflect.get(target, property, receiver),
+            }),
+          );
+        }),
+    };
+    // SAFETY: forwards every call to the PGlite handle, recording the raw
+    // statements each transaction sends through `execute`.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- recording wrapper around the test handle
+    const recordingDb = recording as unknown as RefreshDb;
+
+    await refreshCaseLawSitemapShards(recordingDb, {
+      pageSize: SMALL_PAGE_SIZE * 10,
+      poolIdleTimeoutS: 20,
+    });
+
+    expect(transactions.length).toBeGreaterThan(2);
+    for (const sent of transactions) {
+      const budgetAt = sent.indexOf("SET LOCAL statement_timeout = '10000ms'");
+      expect(budgetAt).toBeGreaterThanOrEqual(0);
+      expect(
+        sent
+          .slice(0, budgetAt)
+          .every((statement) => statement.startsWith("SET ")),
+      ).toBe(true);
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
