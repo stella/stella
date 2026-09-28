@@ -251,12 +251,15 @@ describe("number series allocation", () => {
     });
 
     try {
-      await expect(
-        (async () =>
-          await testDb
-            .delete(sellerProfiles)
-            .where(eq(sellerProfiles.id, sellerProfileId)))(),
-      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      const deletionError = await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId))
+        .execute()
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(deletionError).toMatchObject({ cause: { code: "23503" } });
       await testDb
         .delete(organization)
         .where(eq(organization.id, organizationId));
@@ -272,16 +275,22 @@ describe("number series allocation", () => {
   });
 
   test("allows one default series for each document type and rejects a duplicate default", async () => {
-    const defaults = await Promise.all(
-      (["invoice", "advance", "credit_note"] as const).map((documentType) =>
-        createSeries(ids.orgA, { documentType, isDefault: true }),
-      ),
-    );
+    const defaults = [];
+    for (const documentType of ["invoice", "advance", "credit_note"] as const) {
+      defaults.push(
+        await createSeries(ids.orgA, { documentType, isDefault: true }),
+      );
+    }
 
     expect(defaults).toHaveLength(3);
-    await expect(
-      createSeries(ids.orgA, { documentType: "invoice", isDefault: true }),
-    ).rejects.toMatchObject({
+    const duplicateError = await createSeries(ids.orgA, {
+      documentType: "invoice",
+      isDefault: true,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(duplicateError).toMatchObject({
       cause: {
         code: "23505",
         constraint: "number_series_org_type_default_uidx",
