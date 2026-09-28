@@ -51,7 +51,10 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
-import { KEEPS_PARTIAL_TOOL_INPUT } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  answerHistoryCallsInTheirStep,
+  KEEPS_PARTIAL_TOOL_INPUT,
+} from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -1109,11 +1112,14 @@ const runChatAttempt = async function* ({
   // The one place the guard's brands are widened back to the plain types the
   // provider SDK takes: everything below this line is dispatch.
   const {
-    messages: preparedMessages,
+    messages: guardedMessages,
     system: baseSystem,
     tenantWorkspaceIds,
     tools: modelTools,
   } = surfaces;
+  // Every provider request answers each call right after its step. The
+  // answers are the SDK's own, so no guarded text changes.
+  const preparedMessages = answerHistoryCallsInTheirStep(guardedMessages);
   const caching = resolveCaching({
     promptCachingEnabled,
     role,

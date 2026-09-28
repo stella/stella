@@ -50,6 +50,9 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every model request of a thread begins with the whole prompt of the
+   *  one before it, so the provider's prompt cache holds. */
+  providerPrefixStable: "chat.provider.prefix-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",

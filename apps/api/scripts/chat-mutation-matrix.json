@@ -561,6 +561,35 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "approval-answer-in-its-step",
+      "fix": "#PR",
+      "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "stays answered right after its step when the model asks for a call after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "approval-answer-in-its-step-dispatched",
+      "fix": "#PR",
+      "behaviour": "Every chat attempt hands the provider the history with each call answered in its own step.",
+      "status": "pending",
+      "reason": "The harness checks chat.provider.prefix-stable on every conversation only once its prompt ledger lands; this scenario then kills the entry.",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "  const preparedMessages = answerHistoryCallsInTheirStep(guardedMessages);",
+      "replace": "  const preparedMessages = guardedMessages;",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "accepts an approval of the call the model asks for after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
     }
   ]
 }
