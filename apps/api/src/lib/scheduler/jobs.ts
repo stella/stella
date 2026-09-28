@@ -22,6 +22,7 @@ import {
   RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
@@ -208,6 +209,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+  },
+  {
+    description: "Recount the shards the public case-law sitemap index lists",
+    id: "caseLaw.refreshSitemapShards.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
     description: "Delete raw objects of erased or never-written decisions",

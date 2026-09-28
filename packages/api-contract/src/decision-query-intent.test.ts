@@ -190,6 +190,40 @@ describe("the hits that are the named decision", () => {
     ).toEqual([hit("G 1/2099")]);
   });
 
+  test("under its own scope a United States docket number is identity, not a sheet", () => {
+    const usa = (entry: string) =>
+      identityOf(entry, DECISION_DOCKET_GRAMMARS.USA);
+    const hits = [hit("21-123"), hit("21-456")];
+    expect(exactDecisionMatches(usa("21-123"), hits)).toEqual([hit("21-123")]);
+    expect(exactDecisionMatches(usa("No. 21-456"), hits)).toEqual([
+      hit("21-456"),
+    ]);
+    expect(exactDecisionMatches(usa("21-789"), hits)).toEqual([]);
+    expect(exactDecisionMatches(usa("10-12"), [hit("10-34")])).toEqual([]);
+    expect(
+      exactDecisionMatches(usa("No. 5"), [hit("No. 5"), hit("No. 6")]),
+    ).toEqual([hit("No. 5")]);
+    expect(
+      parseDecisionQuery("No. 21-123", {
+        grammar: DECISION_DOCKET_GRAMMARS.USA,
+      }),
+    ).toEqual({
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "USA",
+      value: "No. 21-123",
+    });
+    expect(
+      parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
+    ).toEqual({ type: "text", text: "2079" });
+  });
+
+  test("unscoped, those forms read as text, as they did before any scope declared them", () => {
+    for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
+      expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+    }
+  });
+
   test("a Polish division split across tokens keeps the same identity", () => {
     expect(
       exactDecisionMatches(identityOf("III AUa 999999/99"), [

@@ -312,7 +312,7 @@ export const withProviderStreamContract = (
     withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
-          withUniqueToolCallIds(adapter.chatStream(options), options.messages),
+          withUniqueToolCallIds(adapter.chatStream(options), options),
         ),
         options,
       ),

@@ -28,6 +28,10 @@ import {
   backfillCaseLawRedactionTombstones,
 } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import {
+  REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+  refreshCaseLawSitemapShardsTask,
+} from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
@@ -141,6 +145,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_SWEEPS_TASK]: reconcileCaseLawRawSweepsTask,
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
+  [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,

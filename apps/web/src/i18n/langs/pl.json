@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Zweryfikowano względem {count, plural, one {# faktu} few {# faktów} many {# faktów} other {# faktów}} w stanie na dzień {checkedAt}. Późniejsze zmiany na liście nie wpływają na tę weryfikację.",
       "failedTitle": "Weryfikacja nie powiodła się",
+      "history": {
+        "label": "Historia weryfikacji",
+        "loadFailed": "Nie udało się wczytać wcześniejszych weryfikacji tego dokumentu."
+      },
       "inProgress": "Sprawdzanie twierdzeń dokumentu względem faktów z listy…",
       "loadFailed": "Nie udało się wczytać tej weryfikacji.",
       "noClaims": "W tym dokumencie nie znaleziono żadnych twierdzeń.",

@@ -16,6 +16,9 @@ coverage
 # AI SDK DevTools traces (local plaintext AI interactions)
 .devtools/
 
+# Dev runner state for this checkout (runtime URLs, agent key, evidence)
+.stella-dev/
+
 # Playwright (storage-state, screenshots, traces)
 .playwright/
 playwright-report/

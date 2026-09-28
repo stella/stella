@@ -25,6 +25,7 @@ export const CASE_LAW_JURISDICTIONS = [
   "HUN",
   "POL",
   "SVK",
+  "USA",
 ] as const;
 
 export type CaseLawJurisdiction = (typeof CASE_LAW_JURISDICTIONS)[number];
@@ -55,4 +56,5 @@ export const CASE_LAW_REGION_BY_JURISDICTION = {
   HUN: "HU",
   POL: "PL",
   SVK: "SK",
+  USA: "US",
 } as const satisfies Record<CaseLawJurisdiction, string>;

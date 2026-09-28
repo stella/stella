@@ -1,8 +1,15 @@
 import type { BrowserControlResult } from "@stll/api-contract/browser-control";
 
+/** How a command runs: the chat turn it belongs to and its stop signal. */
+export type BrowserCommandRun = {
+  signal: AbortSignal;
+  turnId: string;
+};
+
 type BrowserCommandExecutor = (
   input: unknown,
   toolCallId: string,
+  run: BrowserCommandRun,
 ) => Promise<BrowserControlResult>;
 
 /** Marks a command as running; the returned callback reports how it ended. */
@@ -20,11 +27,15 @@ export const createBrowserToolExecutionCache = (
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
-  const run = async (toolCallId: string, input: unknown) => {
+  const run = async (
+    toolCallId: string,
+    input: unknown,
+    commandRun: BrowserCommandRun,
+  ) => {
     const finish = beginCommand();
     let succeeded = false;
     try {
-      const result = await execute(input, toolCallId);
+      const result = await execute(input, toolCallId, commandRun);
       succeeded = result.status === "success";
       return result;
     } finally {
@@ -33,12 +44,16 @@ export const createBrowserToolExecutionCache = (
   };
 
   return {
-    async executeOnce(toolCallId: string, input: unknown) {
+    async executeOnce(
+      toolCallId: string,
+      input: unknown,
+      commandRun: BrowserCommandRun,
+    ) {
       const existing = executions.get(toolCallId);
       if (existing) {
         return await existing;
       }
-      const execution = run(toolCallId, input);
+      const execution = run(toolCallId, input, commandRun);
       executions.set(toolCallId, execution);
       return await execution;
     },

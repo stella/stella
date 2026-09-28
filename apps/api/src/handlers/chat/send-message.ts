@@ -129,7 +129,10 @@ import {
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
-import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  createChatThirdPartyBoundary,
+  storedRestorationsOf,
+} from "@/api/handlers/chat/third-party-boundary";
 import {
   createToolReadScopeRecorder,
   recordToolReadScope,
@@ -1499,6 +1502,7 @@ const prepareValidatedIncomingMessage = async ({
       organizationId,
       scopedDb,
       sendMode: body.sendMode,
+      threadRestorations: storedRestorationsOf(thread.data.messages),
       workspaceId: workspaceId ?? undefined,
     });
 
@@ -2386,6 +2390,7 @@ export const createSendMessage = (
                   messages: chatContext.hydratedMessages,
                   latestMessageId: parsedMessage.message.id,
                   storedHistory: storedHistory.value,
+                  threadToolCallIds: threadNames.toolCallIds,
                   ...(owningAssistantMessage === undefined
                     ? {}
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
@@ -2471,54 +2476,53 @@ export const createSendMessage = (
                         message: "Failed to persist assistant turn",
                         cause: persistResult.error,
                       });
-                    } else {
-                      const { outcome: storedOutcome, persistencePlan } =
-                        persistResult.value;
-                      const messagesAfterAssistantPersist =
-                        applyAssistantPersistencePlan({
-                          messages: latestMessagePlan.messages,
-                          persistencePlan,
-                        });
-                      if (
-                        storedOutcome.type === "completed" &&
-                        messagesAfterAssistantPersist !== null &&
-                        body.sendMode !== CHAT_SEND_MODE.anonymized
-                      ) {
-                        await markChatCompactionDue({
-                          chatModelOverride,
-                          messages: messagesAfterAssistantPersist,
+                    }
+                    const { outcome: storedOutcome, persistencePlan } =
+                      persistResult.value;
+                    const messagesAfterAssistantPersist =
+                      applyAssistantPersistencePlan({
+                        messages: latestMessagePlan.messages,
+                        persistencePlan,
+                      });
+                    if (
+                      storedOutcome.type === "completed" &&
+                      messagesAfterAssistantPersist !== null &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      await markChatCompactionDue({
+                        chatModelOverride,
+                        messages: messagesAfterAssistantPersist,
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        reasoningEffort: chatReasoningEffort,
+                        safeDb,
+                        threadId: body.threadId,
+                      });
+                    }
+
+                    if (
+                      storedOutcome.type === "completed" &&
+                      thread.type === "created" &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      detached(
+                        generateThreadTitle({
+                          initialTitle: initialThreadTitle,
+                          messages: [
+                            parsedMessage.message,
+                            resolvedResponseMessage,
+                          ],
                           organizationId: session.activeOrganizationId,
                           orgAIConfig,
-                          reasoningEffort: chatReasoningEffort,
+                          promptCachingEnabled,
+                          recordAuditEvent,
                           safeDb,
                           threadId: body.threadId,
-                        });
-                      }
-
-                      if (
-                        storedOutcome.type === "completed" &&
-                        thread.type === "created" &&
-                        body.sendMode !== CHAT_SEND_MODE.anonymized
-                      ) {
-                        detached(
-                          generateThreadTitle({
-                            initialTitle: initialThreadTitle,
-                            messages: [
-                              parsedMessage.message,
-                              resolvedResponseMessage,
-                            ],
-                            organizationId: session.activeOrganizationId,
-                            orgAIConfig,
-                            promptCachingEnabled,
-                            recordAuditEvent,
-                            safeDb,
-                            threadId: body.threadId,
-                            threadWorkspaceId: workspaceId,
-                            userId: user.id,
-                          }),
-                          "send-message.generate-thread-title",
-                        );
-                      }
+                          threadWorkspaceId: workspaceId,
+                          userId: user.id,
+                        }),
+                        "send-message.generate-thread-title",
+                      );
                     }
                   },
                   orgAIConfig,

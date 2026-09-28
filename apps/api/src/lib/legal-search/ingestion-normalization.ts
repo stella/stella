@@ -143,12 +143,13 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   };
 
   // A listed document must survive a bad date, so an unusable value is
-  // dropped to null instead of failing the row.
+  // dropped to null instead of failing the row. The bounds are the
+  // jurisdiction's own.
   const boundDecisionDate = (raw: string | undefined): string | undefined => {
     if (raw === undefined) {
       return undefined;
     }
-    return canonicalDecisionDate(raw) ?? undefined;
+    return canonicalDecisionDate(raw, result.country) ?? undefined;
   };
 
   const deepSanitize = (value: unknown): unknown => {
