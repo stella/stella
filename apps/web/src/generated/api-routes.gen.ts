@@ -9651,13 +9651,9 @@ export type WebRoutes = {
                 post_claim_scopes?: Array<string>;
                 requiredFields?: Array<T81694d3f69>;
               } | {
-                readonly message: "Statute sitemap bucket shards exceed sitemap index capacity.";
-              } | {
-                readonly message: "Statute sitemap bucket rows missing for country shard.";
+                readonly message: "Statute sitemap shard count exceeds sitemap index capacity.";
               } | {
                 readonly message: "Statute sitemap bucket exceeds shard capacity.";
-              } | {
-                readonly message: "Statute sitemap shard count exceeds sitemap index capacity.";
               };
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
