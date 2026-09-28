@@ -171,6 +171,22 @@ const CZ_DOWNLOAD =
   /\/file\/\d+\/Vnitrostatni_sankcni_seznam_(\d{4})_(\d{2})_(\d{2})\.csv/gu;
 const CHECKSUM = /^[a-f\d]{40,128}$/iu;
 
+const pageText = (html: string): string => {
+  const text: string[] = [];
+  let insideTag = false;
+  for (const character of html) {
+    if (character === "<") {
+      insideTag = true;
+      text.push(" ");
+    } else if (character === ">" && insideTag) {
+      insideTag = false;
+    } else if (!insideTag) {
+      text.push(character);
+    }
+  }
+  return text.join("");
+};
+
 /** Parses the small response named by a source's editionMarker strategy. */
 export const readSourceEditionMarker = (
   source: SanctionsSource,
@@ -216,8 +232,8 @@ export const readSourceEditionMarker = (
       break;
     }
     case "publisher-page-date": {
-      const pageText = response.body?.replaceAll(/<[^>]*>/gu, " ");
-      const match = pageText === undefined ? null : UN_DATE.exec(pageText);
+      const text = response.body === undefined ? null : pageText(response.body);
+      const match = text === null ? null : UN_DATE.exec(text);
       const day = match?.[1];
       const month = UN_MONTHS.get(match?.[2] ?? "");
       const year = match?.[3];
@@ -240,10 +256,7 @@ export const readSourceEditionMarker = (
         const year = match[1];
         const month = match[2];
         const day = match[3];
-        return path === undefined ||
-          year === undefined ||
-          month === undefined ||
-          day === undefined
+        return year === undefined || month === undefined || day === undefined
           ? []
           : [{ path, publishedAt: `${year}-${month}-${day}` }];
       });

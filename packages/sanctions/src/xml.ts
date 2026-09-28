@@ -40,7 +40,7 @@ type ReadXmlOptions = {
   extent: "root" | "metadata" | "document";
   layout: XmlLayout;
   recordNames: ReadonlySet<string>;
-  metadataName?: string;
+  metadataName: string | undefined;
   onRecord: (record: XmlNode) => Result<void, SanctionsListParseError>;
 };
 
@@ -150,9 +150,21 @@ const readXml = async ({
     try: async () => {
       const decoder = new TextDecoder("utf-8", { fatal: true });
       for await (const chunk of input) {
-        parser.write(decoder.decode(chunk, { stream: true }));
-        if (done()) {
-          return;
+        const decoded = decoder.decode(chunk, { stream: true });
+        if (extent === "document") {
+          parser.write(decoded);
+          if (done()) {
+            return;
+          }
+          continue;
+        }
+        // Edition reads must stop at the SAX event, even when later XML
+        // arrives in the same transport chunk.
+        for (const character of decoded) {
+          parser.write(character);
+          if (done()) {
+            return;
+          }
         }
       }
       parser.write(decoder.decode());

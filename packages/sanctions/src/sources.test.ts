@@ -31,6 +31,11 @@ describe("source edition markers", () => {
       }).unwrap().value,
     ).toBe("2026-09-04");
     expect(
+      readSourceEditionMarker("un", {
+        body: `${"<".repeat(10_000)}<p>last updated on 4 September 2026</p>`,
+      }).unwrap().value,
+    ).toBe("2026-09-04");
+    expect(
       readSourceEditionMarker("cz", {
         body: '<a href="/file/100/Vnitrostatni_sankcni_seznam_2025_01_01.csv"></a><a href="/file/6248997/Vnitrostatni_sankcni_seznam_2026_07_23.csv">CSV</a>',
       }).unwrap(),

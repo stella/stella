@@ -207,6 +207,9 @@ const birthDate = (
 };
 
 const entityType = (value: string | null): EntityType => {
+  if (value === null) {
+    return "unknown";
+  }
   switch (value) {
     case "Individual":
       return "person";
@@ -222,6 +225,9 @@ const entityType = (value: string | null): EntityType => {
 };
 
 const aliasQuality = (value: string | null): AliasQuality => {
+  if (value === null) {
+    return "unknown";
+  }
   switch (value) {
     case "strong":
       return "strong";
@@ -242,6 +248,9 @@ const identifierKind = (label: string): IdentifierKind => {
   }
   if (/tax id|tax identification|fiscal code|vat/u.test(lower)) {
     return "tax";
+  }
+  if (lower.startsWith("digital currency address")) {
+    return "other";
   }
   if (/vessel registration identification|imo number/u.test(lower)) {
     return "imo";

@@ -246,7 +246,11 @@ const entityTypeComparison = (
   query: EntityType | undefined,
   entry: SanctionsEntry,
 ): FieldComparison => {
-  if (query === undefined) {
+  if (
+    query === undefined ||
+    query === "unknown" ||
+    entry.entityType === "unknown"
+  ) {
     return "not-compared";
   }
   return query === entry.entityType ? "match" : "mismatch";

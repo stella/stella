@@ -404,6 +404,26 @@ describe("name screening", () => {
     expect(found("Korea Samma Shipping Co")).toContain("6908678");
   });
 
+  test("does not count an unclassified listed entity as a type conflict", () => {
+    const entry = {
+      ...listedPerson("unclassified", "Jana Example"),
+      entityType: "unknown" as const,
+    };
+    const unclassifiedIndex = buildScreeningIndex([
+      { version: EXTRA_VERSION, entries: [entry] },
+    ]);
+    const result = screen(
+      unclassifiedIndex,
+      { name: "Jana Example", entityType: "person" },
+      { cutoff: 0 },
+    ).unwrap();
+    expect(result.possibleMatches[0]?.evidence.entityType).toBe("not-compared");
+    expect(result.possibleMatches[0]?.evidence.conflicts).toEqual([]);
+    expect(result.possibleMatches[0]?.score).toBe(
+      result.possibleMatches[0]?.evidence.nameScore,
+    );
+  });
+
   test("reports how many entries qualified when the limit cuts them", () => {
     const count = 25;
     const extended = buildScreeningIndex([

@@ -99,6 +99,12 @@ describe("OFAC XML lists", () => {
     expect(
       (await readOfacListVersion("us-sdn", headOnly())).unwrap().publishedAt,
     ).toBe("2026-09-23");
+    const malformedAfterMetadata = `${head}<sdnEntry><broken></sdnEntry>`;
+    expect(
+      (
+        await readOfacListVersion("us-sdn", once(malformedAfterMetadata))
+      ).unwrap().publishedAt,
+    ).toBe("2026-09-23");
     const mismatch = await parseOfacList(
       "us-sdn",
       once(
@@ -169,6 +175,26 @@ describe("OFAC XML lists", () => {
         { cutoff: DEFAULT_CUTOFF },
       ).unwrap().possibleMatches[0]?.entry.source,
     ).toBe("us-non-sdn");
+  });
+
+  test("matches OFAC digital-currency addresses while leaving metadata unmatchable", async () => {
+    const xml = (await Bun.file(SDN).text())
+      .replace(
+        "<idType>Gender</idType>",
+        "<idType>Digital Currency Address - ETH</idType>",
+      )
+      .replace(
+        "<idNumber>Male</idNumber>",
+        "<idNumber>0xAbCd123456789</idNumber>",
+      );
+    const parsed = (await parseOfacList("us-sdn", once(xml))).unwrap();
+    expect(parsed.entries[0]?.identifiers[1]?.kind).toBe("other");
+    const result = screen(
+      buildScreeningIndex([parsed]),
+      { name: "", identifiers: ["0xAbCd123456789"] },
+      { cutoff: DEFAULT_CUTOFF },
+    ).unwrap();
+    expect(result.possibleMatches[0]?.entry.sourceId).toBe("10001");
   });
 
   test("refuses implausible replacement counts and older editions for each list", async () => {
