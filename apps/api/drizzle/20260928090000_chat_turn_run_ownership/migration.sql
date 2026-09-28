@@ -10,7 +10,7 @@ ALTER TABLE "chat_turns" ADD COLUMN IF NOT EXISTS "run_id" text;
 -- shut down) ends as `owner-lost`.
 -- stella-migration-safety: reviewed drop-constraint - replaces the interruption reason CHECK with a strictly wider set in the same transaction; rollback restores the prior CHECK once no row holds 'owner-lost'
 ALTER TABLE "chat_turns"
-  DROP CONSTRAINT "chat_turns_interruption_reason_values_check";
+  DROP CONSTRAINT IF EXISTS "chat_turns_interruption_reason_values_check";
 --> statement-breakpoint
 
 ALTER TABLE "chat_turns"

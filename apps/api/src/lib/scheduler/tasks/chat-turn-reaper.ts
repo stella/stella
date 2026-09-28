@@ -47,6 +47,7 @@ export const createReapOwnerlessChatTurnsTask =
       .limit(REAP_BATCH_SIZE);
     let visited = 0;
     for (const { threadId } of expired) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can change between awaited transactions.
       if (signal.aborted) {
         break;
       }
