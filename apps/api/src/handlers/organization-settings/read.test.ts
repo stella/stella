@@ -14,6 +14,10 @@ describe("projectOrganizationSettingsRow", () => {
       ],
       promptCachingEnabled: true,
       memoryExtractionEnabled: false,
+      timeMinimumUnitMinutes: 6,
+      timeEditWindowDays: 90,
+      timeLockedThroughMonth: null,
+      timeNarrativeRequired: true,
     });
 
     expect(result.practiceJurisdictions).toEqual([
@@ -36,5 +40,14 @@ describe("projectOrganizationSettingsRow", () => {
     expect(projectOrganizationSettingsRow(null).documentProcessingMode).toBe(
       "off",
     );
+  });
+
+  test("defaults time policy when settings do not exist", () => {
+    expect(projectOrganizationSettingsRow(null)).toMatchObject({
+      timeMinimumUnitMinutes: 6,
+      timeEditWindowDays: 90,
+      timeLockedThroughMonth: null,
+      timeNarrativeRequired: true,
+    });
   });
 });

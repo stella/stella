@@ -9,6 +9,7 @@ import {
   corpusIndexProjectionStates,
   legislationSources,
 } from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   type CorpusFamily,
   parseCorpusIndexClusterForGeneration,
@@ -318,15 +319,6 @@ export const setServingCorpusIndexGenerationTx = async (
 
 const CORPUS_INDEX_GENERATION_REBUILD_MAX_BATCH_SIZE = 10_000;
 
-const rebuildRowsOf = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  return isRecord(result) && Array.isArray(result["rows"])
-    ? result["rows"]
-    : [];
-};
-
 const validateRebuildBatchSize = (limit: number): number => {
   if (
     !Number.isSafeInteger(limit) ||
@@ -409,7 +401,7 @@ export const deleteCorpusIndexGenerationProjectionBatchTx = async (
         ${target.family}, ${target.generation}, ${limit}
       )
   `);
-  const row = rebuildRowsOf(purged).at(0);
+  const row = executedRows(purged).at(0);
   if (
     !isRecord(row) ||
     typeof row["deleted_state_count"] !== "number" ||
@@ -444,7 +436,7 @@ export const completeCorpusIndexGenerationRebuildTx = async (
          AND generation = ${target.generation}
     ) AS present
   `);
-  const remainingRow = rebuildRowsOf(remaining).at(0);
+  const remainingRow = executedRows(remaining).at(0);
   if (!isRecord(remainingRow) || remainingRow["present"] !== false) {
     return panic(
       `Corpus generation rebuild state is not empty: ${target.family}/${target.generation}`,

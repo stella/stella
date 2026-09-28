@@ -6,6 +6,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -55,16 +56,6 @@ const intentScope = ({
     eq(corpusIndexProjectionIntents.family, family),
     eq(corpusIndexProjectionIntents.generation, generation),
   );
-
-const rowsOf = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
 
 /**
  * Whether any revision of the generation can still change the engine, asked
@@ -120,7 +111,7 @@ const readOutstandingCorpusProjectionIntentTx = async (
         AND ${corpusIndexProjectionStates.appliedRevision} IS NOT NULL
     ) AS "hasOutstandingIntent"
   `);
-  const observation = rowsOf(result).at(0);
+  const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
     typeof observation["hasOutstandingIntent"] !== "boolean"
@@ -159,7 +150,7 @@ export const readCorpusIndexProjectionConvergenceTx = async (
         AND ${corpusIndexProjectionNeedsWork(corpusIndexProjectionStates)}
     ) AS "hasPendingState"
   `);
-  const observation = rowsOf(result).at(0);
+  const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
     typeof observation["hasState"] !== "boolean" ||

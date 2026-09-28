@@ -1,3 +1,4 @@
+import { Panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -40,7 +41,11 @@ test("a try result is granted only when its row says so, under either driver sha
   expect(isCorpusSchemaLaneGranted([{ granted: false }])).toBe(false);
   expect(isCorpusSchemaLaneGranted([{ granted: "t" }])).toBe(false);
   expect(isCorpusSchemaLaneGranted([])).toBe(false);
-  expect(isCorpusSchemaLaneGranted(undefined)).toBe(false);
+  expect(isCorpusSchemaLaneGranted({ rows: [] })).toBe(false);
+});
+
+test("a try result in neither driver shape is a fault, not a refusal", () => {
+  expect(() => isCorpusSchemaLaneGranted(undefined)).toThrow(Panic);
 });
 
 type FakeTransaction = { execute: (query: string) => Promise<unknown> };

@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -43,15 +44,6 @@ export type ShelfCourt = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowsOf = (result: unknown): Record<string, unknown>[] => {
-  let rows: unknown = result;
-  if (!Array.isArray(result) && isRecord(result)) {
-    rows = result["rows"];
-  }
-  return Array.isArray(rows) ? rows.filter(isRecord) : [];
-};
 
 type ReadCourtNamesOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -104,10 +96,12 @@ export const readCourtNames = async ({
         WHERE court_walk.court IS NOT NULL
       `),
   );
-  return rowsOf(result).flatMap((row) => {
-    const court = row["court"];
-    return typeof court === "string" && court.length > 0 ? [court] : [];
-  });
+  return executedRows(result)
+    .filter(isRecord)
+    .flatMap((row) => {
+      const court = row["court"];
+      return typeof court === "string" && court.length > 0 ? [court] : [];
+    });
 };
 
 type CourtDocketSizesOptions = {
