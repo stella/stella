@@ -59,6 +59,14 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
+// An insert whose values can be awaited directly or chained into an upsert,
+// as the refresh path does for identifier rows.
+// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+const insertedValues = () =>
+  Object.assign(Promise.resolve(undefined), {
+    onConflictDoUpdate: async () => await Promise.resolve(undefined),
+  });
+
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
 ): IngestionResult => ({
@@ -1097,12 +1105,7 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({
-          values: () =>
-            Object.assign(Promise.resolve(undefined), {
-              onConflictDoUpdate: async () => await Promise.resolve(undefined),
-            }),
-        }),
+        insert: () => ({ values: insertedValues }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
@@ -1195,12 +1198,7 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({
-          values: () =>
-            Object.assign(Promise.resolve(undefined), {
-              onConflictDoUpdate: async () => await Promise.resolve(undefined),
-            }),
-        }),
+        insert: () => ({ values: insertedValues }),
       };
 
       inTransaction = true;
@@ -1348,12 +1346,7 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({
-          values: () =>
-            Object.assign(Promise.resolve(undefined), {
-              onConflictDoUpdate: async () => await Promise.resolve(undefined),
-            }),
-        }),
+        insert: () => ({ values: insertedValues }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
