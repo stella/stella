@@ -1,7 +1,9 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
+
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -38,6 +40,11 @@ export const listStatuteSitemapShardsHandler = async (
           total: statuteSitemapShards.total,
         })
         .from(statuteSitemapShards)
+        .where(
+          inArray(statuteSitemapShards.country, [
+            ...PUBLIC_LEGISLATION_COUNTRIES,
+          ]),
+        )
         .orderBy(
           asc(statuteSitemapShards.country),
           asc(statuteSitemapShards.bucket),
