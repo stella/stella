@@ -58,9 +58,9 @@ export const buildScreeningIndex = (
   const entries = lists.flatMap((list) => list.entries);
   const identifierEntries = new Map<string, number[]>();
   for (const [entryIndex, entry] of entries.entries()) {
-    for (const { number, status } of entry.identifiers) {
+    for (const { number, status, kind } of entry.identifiers) {
       // A document the list itself marks as false is no proof of identity.
-      if (status === "known-false") {
+      if (status === "known-false" || kind === "unknown") {
         continue;
       }
       const key = identifierKey(number);
@@ -246,7 +246,11 @@ const entityTypeComparison = (
   query: EntityType | undefined,
   entry: SanctionsEntry,
 ): FieldComparison => {
-  if (query === undefined) {
+  if (
+    query === undefined ||
+    query === "unknown" ||
+    entry.entityType === "unknown"
+  ) {
     return "not-compared";
   }
   return query === entry.entityType ? "match" : "mismatch";
@@ -266,7 +270,9 @@ const identifierComparison = ({
   if (
     query.identifiers === undefined ||
     query.identifiers.length === 0 ||
-    !entry.identifiers.some(({ status }) => status === "listed")
+    !entry.identifiers.some(
+      ({ status, kind }) => status === "listed" && kind !== "unknown",
+    )
   ) {
     return "not-compared";
   }

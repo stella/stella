@@ -61,6 +61,7 @@ jobs:
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
+      fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
@@ -187,6 +188,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -204,6 +206,7 @@ jobs:
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
+              echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
               echo "marketing_screenshots_required=true"
@@ -236,6 +239,7 @@ jobs:
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
+              echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
               echo "marketing_screenshots_required=false"
@@ -294,6 +298,20 @@ jobs:
           web_image_smoke_required=false
           windows_scripts_required=false
           version_changed=false
+          # A fix pull request that changes a test the fix-tests-on-base job
+          # can run: scripts/fix-tests-on-base.ts decides the rest.
+          fix_tests_on_base_required=false
+          fix_title_pattern='^fix(\([^)]*\))?!?:[[:space:]]'
+          if [[ "$EVENT_NAME" == "pull_request" && "$PR_TITLE" =~ $fix_title_pattern ]]; then
+            for file in "${changed_files[@]}"; do
+              case "$file" in
+                apps/api/src/*.test.ts|apps/api/src/*.test.tsx|apps/api/evals/*.test.ts|apps/api/evals/*.test.tsx|apps/api/scripts/*.test.ts|apps/api/scripts/*.test.tsx)
+                  fix_tests_on_base_required=true
+                  break
+                  ;;
+              esac
+            done
+          fi
           for file in "${changed_files[@]}"; do
             if [[ "$file" == "VERSION" ]]; then
               release_typecheck_required=true
@@ -334,8 +352,10 @@ jobs:
                 web_build_required=true
                 ;;
             esac
+            # The route-tree generator reads the web package script and config
+            # as well as the route sources; all must trigger its drift guard.
             case "$file" in
-              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/src/routeTree.gen.ts|bun.lock)
+              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|bun.lock)
                 route_tree_required=true
                 ;;
             esac
@@ -450,6 +470,7 @@ jobs:
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
+            echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "marketing_screenshots_required=$marketing_screenshots_required"
@@ -587,6 +608,8 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
 
     steps:
       - name: Checkout
@@ -802,6 +825,42 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
+      # The other half of that guard: while a release pull request is open, the
+      # queue holds a pull request adding a CLI changeset until the release has
+      # merged, so the release is never the one ejected. A pull request run
+      # only warns.
+      - name: Release CLI changeset hold
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Read the release state here, right before the decision: a release
+          # opened while this run was queued must still hold the pull request.
+          number="$PULL_REQUEST_NUMBER"
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
+              exit 1
+            fi
+            number="${BASH_REMATCH[1]}"
+          fi
+          state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+          open_other=$(sed -n 's/^open_other=//p' <<<"$state")
+          current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
+          bun scripts/check-release-cli-changeset-hold.ts \
+            --base "origin/$BASE_REF" \
+            --event "$EVENT_NAME" \
+            --open-releases "$open_other" \
+            --is-release "$current_is_release"
+
       - name: CLI contract changeset guard
         if: >-
           github.event_name == 'pull_request'
@@ -984,14 +1043,22 @@ jobs:
         # docs/module-ownership.md is rendered from the same table, so this
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
-        run: bun run check:module-ownership
+        run: bun scripts/ownership.ts --check
 
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # DESIGN.md's semantic token table and font stack are rendered from
         # packages/ui/src/styles/theme.css, so a token change that skips the
         # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
-        run: bun run check:design-tokens
+        run: bun scripts/design-tokens-doc.ts --check
+
+      - name: Generated files manifest guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
 
       - name: Suppression waiver ledger
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1333,6 +1400,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/start-runtime
           bun scripts/check-published-exports.ts packages/ui
           bun scripts/check-published-exports.ts packages/money
+          bun scripts/check-published-exports.ts packages/invoicing
           bun scripts/check-published-exports.ts packages/calculations
           bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
@@ -1345,7 +1413,9 @@ jobs:
         run: |
           bun test scripts/check-api-deployment.test.ts
           bun test scripts/check-staging-deploy-decision.test.ts
+          bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
+          bash scripts/release-pull-requests.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
@@ -2098,6 +2168,61 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
+  # A fix's tests must fail without the fix. On a fix pull request that
+  # changes an apps/api test, this puts the base source back under the pull
+  # request's tests and requires a changed test to fail there
+  # (scripts/fix-tests-on-base.ts). Pull requests only: the merge queue checks
+  # the tree that lands, not the fix's evidence. Advisory for now: the verdict
+  # shows on the step and in the job summary without failing ci-result.
+  fix-tests-on-base:
+    needs: ci-plan
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
+      && needs.ci-plan.outputs.trusted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Reads the pull request body for the skip line at run time, so an
+      # edited body applies on a re-run.
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: cp apps/api/.env.example apps/api/.env
+
+      - name: Changed tests fail on the base source
+        # Advisory until the verdicts have been reviewed on real pull
+        # requests; drop this line to make the check required.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          body_file="$RUNNER_TEMP/pull-request-body.md"
+          gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
+          # The checkout is the test merge: its first parent is the base.
+          bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
+
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
   # generic path (Eden surface, route trees, query options) lands as
@@ -2671,6 +2796,8 @@ jobs:
       - name: Start web dev server
         if: steps.e2e-stack.outputs.status == 'ready'
         run: |
+          NODE_ENV=development \
+          STELLA_LOCAL_DEV=1 \
           STELLA_API_URL=http://localhost:3001 \
           STELLA_COLLAB_MODE=single-process \
           STELLA_COLLAB_PORT=3002 \
@@ -3200,7 +3327,8 @@ jobs:
   # libraries a Linux clippy run would require. Windows builds the
   # test binaries but does not execute them: hosted Windows currently
   # exits before the Rust test harness starts with a native entrypoint
-  # error in the Tauri-linked binary. macOS executes the test suite.
+  # error in the Tauri-linked binary. The signer crates link no Tauri,
+  # so Windows runs theirs. macOS executes the test suite.
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
     name: Desktop Rust (${{ matrix.os }})
@@ -3224,6 +3352,10 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+    env:
+      # Names the signer test certificates, unique per run so a rerun on a
+      # reused machine never meets a previous run's.
+      STELLA_SIGNING_FIXTURE_PREFIX: stella-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout
@@ -3255,6 +3387,54 @@ jobs:
       - name: Build test binaries
         if: matrix.os == 'windows'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+
+      # The signer crates link no Tauri, so their tests do run here: against
+      # throwaway certificates in the runner's own current-user store, one
+      # per case the listing must keep or leave out.
+      - name: Install signing test certificates
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
+          $store = 'Cert:\CurrentUser\My'
+          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
+          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
+          $common = @{
+            CertStoreLocation = $store
+            Type = 'Custom'
+            Provider = 'Microsoft Software Key Storage Provider'
+            KeyExportPolicy = 'NonExportable'
+            NotAfter = (Get-Date).AddDays(2)
+          }
+          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
+          $expired = $common.Clone()
+          $expired.NotBefore = (Get-Date).AddDays(-10)
+          $expired.NotAfter = (Get-Date).AddDays(-1)
+          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
+          # Keep only the public half of this one: a certificate whose key is gone.
+          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
+          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
+          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
+          Remove-Item -Path $keyed.PSPath -DeleteKey
+          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+
+      - name: Test signer against the certificate store
+        if: matrix.os == 'windows'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p stella-desktop-windows-signing -p stella-desktop-signing-core --target ${{ matrix.target }} --locked -- --include-ignored
+
+      - name: Remove signing test certificates
+        if: always() && matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
+            ForEach-Object {
+              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
+            }
 
       - name: Smoke native desktop transport against hosted API
         if: matrix.os == 'macos'
@@ -3292,6 +3472,7 @@ jobs:
         code-quality,
         service-suites,
         release-typecheck,
+        fix-tests-on-base,
         typecheck-baseline,
         web-build,
         web-image-smoke,
@@ -3346,6 +3527,7 @@ jobs:
             "e2e-landing": "e2e_landing_required",
             "e2e-production-shard": "e2e_core_required",
             "e2e-vite-canary": "e2e_core_required",
+            "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
             "legal-atlas-image": "legal_atlas_image_required",
             "marketing-screenshots": "marketing_screenshots_required",

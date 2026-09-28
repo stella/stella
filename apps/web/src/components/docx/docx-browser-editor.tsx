@@ -6,14 +6,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
-import {
-  CheckCircle2Icon,
-  EyeIcon,
-  GitCommitHorizontalIcon,
-  PenLineIcon,
-  RefreshCwIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { FolioUIProvider, FormattingBar } from "@stll/folio-react";
@@ -23,6 +15,14 @@ import type {
   DocxEditorRef,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import {
+  CheckCircle2Icon,
+  EyeIcon,
+  GitCommitHorizontalIcon,
+  PenLineIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
 import {

@@ -1627,6 +1627,7 @@ type Messages = {
     "profile": "Profile";
     "properties": "Properties";
     "queued": "Queued";
+    "reason": "Reason";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1952,6 +1953,19 @@ type Messages = {
     "deliveredBy": "Delivered by <address>{sender}</address>";
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
     "deliveryAuthentication": "Delivery authentication";
+    "drops": {
+      "authenticationHint": "Ask the sender’s email administrator to configure <protocol>SPF</protocol>, <protocol>DKIM</protocol>, and <protocol>DMARC</protocol> for the sending domain.";
+      "reasons": {
+        "attachmentRejected": "Attachment rejected";
+        "authenticationFailed": "Delivery authentication failed";
+        "malformedMessage": "Message could not be read";
+        "messageTooLarge": "Message too large";
+        "revokedAddress": "Email address revoked";
+        "unauthorizedSender": "Sender not authorized";
+        "unknownRecipient": "Unknown recipient";
+      };
+      "title": "Rejected deliveries";
+    };
     "empty": "No correspondence yet.";
     "filers": "Filers";
     "forwardedBy": "Forwarded by <address>{sender}</address>";
@@ -5185,7 +5199,6 @@ type Messages = {
         "signedDescriptionNoVersion": "The signature was saved as a new version.";
         "signedTitle": "PDF signed";
         "stampLocation": "Location";
-        "stampReason": "Reason";
         "stampRejectedDescription": "The stamp could not be placed there. Place it again and retry.";
         "stampSignedBy": "Digitally signed by";
         "stampTextUnrenderableDescription": "The reason or location can't be shown in a visible stamp. Change the text or use an invisible signature.";

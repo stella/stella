@@ -42,10 +42,12 @@ type FillProps = {
   query: { format?: "docx" | "pdf" };
 };
 
-/** Serialize a usage-limit `HandlerError` to the same JSON body the framework
+/** Serialize a preflight `HandlerError` to the same JSON body the framework
  *  preflight returns (message plus the 402 usage detail), for this route's
  *  raw-Response download path. */
-const usageRejectionResponse = (error: HandlerError<402 | 500>): Response =>
+const usageRejectionResponse = (
+  error: HandlerError<402 | 403 | 500>,
+): Response =>
   new Response(
     JSON.stringify({
       message: error.message,

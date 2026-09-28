@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-import { EllipsisIcon } from "lucide-react";
-
+import { EllipsisIcon } from "../icons";
 import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { INSPECTOR_RAIL_WIDTH } from "./pane-width";

@@ -1,10 +1,10 @@
 import { useRef } from "react";
 import type { ReactNode } from "react";
 
-import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { CalendarIcon } from "@stll/ui/icons";
 import {
   KanbanCardShell,
   registerKanbanCardDrag,

@@ -19,6 +19,7 @@ import {
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -209,6 +210,7 @@ const baseContext = (userId: SafeId<"user">) => ({
   createAuditRecorder: () => async () => {},
   memberRole: { role: "owner" },
   orgAIConfig: null,
+  orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   params: { workspaceId: ids.wsA1 },
   promptCachingEnabled: false,
   recordAuditEvent: async () => {},

@@ -73,6 +73,7 @@ export const readPositionDecisionOverlay = async ({
      WHERE run.id = ${documentReviewFindings.runId}
        AND item->>'sourceId' = ${documentReviewFindings.positionId}::text
   )`;
+  // sql-perf-allow: bounded by one documentReviewRuns.id and one position per finding
   const fixReadable = sql`(
     ${documentReviewFindings.payload}->'finding'->>'standardSource' IS DISTINCT FROM 'reference'
     OR NOT EXISTS (

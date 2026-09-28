@@ -1,10 +1,10 @@
 import type { MouseEvent } from "react";
 
 import { Link } from "@tanstack/react-router";
-import { Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Maximize2Icon } from "@stll/ui/icons";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import {

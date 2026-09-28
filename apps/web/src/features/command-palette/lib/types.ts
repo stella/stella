@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ShortcutId } from "@/lib/hotkeys";

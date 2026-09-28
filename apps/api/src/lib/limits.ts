@@ -161,6 +161,8 @@ export const LIMITS = {
   styleSetsCount: 100,
   styleSetsPageSizeDefault: 50,
   styleSetsPageSizeMax: 100,
+  sellerProfilesPageSizeDefault: 50,
+  sellerProfilesPageSizeMax: 100,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   templateRecipesCount: 100,
@@ -298,7 +300,6 @@ export const LIMITS = {
   workspaceActivityPageSizeMax: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
-  billingIncrementMinutes: 6,
   /** Two activity signals closer than this belong to one suggested entry. */
   timeSuggestionMergeGapMinutes: 15,
   /** Engaged time assumed after the last observed signal of a cluster. */

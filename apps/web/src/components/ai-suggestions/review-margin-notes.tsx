@@ -18,11 +18,11 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
+import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";

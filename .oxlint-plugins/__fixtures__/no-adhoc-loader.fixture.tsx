@@ -1,7 +1,6 @@
 // Passive regression fixture for `no-adhoc-loader/no-adhoc-loader`.
 
-import { LoaderIcon } from "lucide-react";
-
+import { LoaderIcon } from "@stll/ui/icons";
 import { Loader, LoaderState } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 

@@ -234,6 +234,17 @@ export const SHADCN_LINT_RULES = {
         "transition-opacity",
       ],
       contracts: [
+        // Glyphs from `@stll/ui/icons` are plain svgs the caller sizes,
+        // colours and animates. `ignoreImports` covers a direct use; this
+        // covers a wrapper that forwards className to one (EntityKindIcon,
+        // DocumentIcon), which the wrapper analysis resolves without it. The
+        // package's own components named `…Icon` are excluded here, and a
+        // later contract (DirectionalIcon) wins over this one.
+        {
+          pattern:
+            "^(?!(?:DiscordLogo|GitHubLogo|LandingRow)Icon$)[A-Z]\\w*Icon$",
+          allow: ["*"],
+        },
         // Bidi isolation wrappers around caller text: the caller owns the
         // type and colour, the component owns only `unicode-bidi`.
         {
@@ -300,6 +311,10 @@ export const SHADCN_LINT_RULES = {
 } satisfies DummyRuleMap;
 
 export const SHADCN_LINT_SETTINGS = {
+  // The icon module re-exports lucide glyphs, which take their colour, size
+  // and motion from the caller's className like any svg; they are not
+  // design-system components with a contract of their own.
+  ignoreImports: ["^@stll/ui/icons$", "^(?:\\.\\.?/)+icons$"],
   note: "Design rules: DESIGN.md, Component Conventions.",
 } as const;
 

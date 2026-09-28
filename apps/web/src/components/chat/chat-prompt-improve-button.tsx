@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { ChevronDownIcon, Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -10,6 +9,7 @@ import {
   type ChatPromptImprovementStrategy,
 } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -163,7 +163,7 @@ export const ChatPromptImproveButton = ({
             className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
           />
         ) : (
-          <WandSparklesIcon
+          <AiActionIcon
             aria-hidden
             className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
           />

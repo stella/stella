@@ -6,7 +6,15 @@ import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecyc
 
 const identifyOrganizationGroup =
   mock<ServerAnalytics["identifyOrganizationGroup"]>();
-const seedDefaultDocumentTypes = mock(async () => await Promise.resolve());
+const calls: string[] = [];
+const recordAccessState = mock(async () => {
+  calls.push("recordAccessState");
+  await Promise.resolve();
+});
+const seedDefaultDocumentTypes = mock(async () => {
+  calls.push("seedDefaultDocumentTypes");
+  await Promise.resolve();
+});
 const seedMemberDefaults = mock<
   Parameters<typeof createOrganizationLifecycleHooks>[0]["seedMemberDefaults"]
 >(async () => await Promise.resolve());
@@ -21,13 +29,16 @@ const userId = toSafeId<"user">("member-user-1");
 
 const hooks = createOrganizationLifecycleHooks({
   analytics,
+  recordAccessState,
   seedDefaultDocumentTypes,
   seedMemberDefaults,
 });
 
 describe("organization lifecycle hooks", () => {
   beforeEach(() => {
+    calls.length = 0;
     identifyOrganizationGroup.mockClear();
+    recordAccessState.mockClear();
     seedDefaultDocumentTypes.mockClear();
     seedMemberDefaults.mockClear();
   });
@@ -44,12 +55,14 @@ describe("organization lifecycle hooks", () => {
     expect(seedMemberDefaults.mock.calls).toEqual([[member], [member]]);
   });
 
-  test("afterCreateOrganization seeds document types, then names the group", async () => {
+  test("afterCreateOrganization records the access state and seeds document types, then names the group", async () => {
     await hooks.afterCreateOrganization({
       organization: { id: orgId, name: "Acme Legal" },
     });
 
+    expect(recordAccessState).toHaveBeenCalledWith(orgId);
     expect(seedDefaultDocumentTypes).toHaveBeenCalledWith(orgId);
+    expect(calls).toEqual(["recordAccessState", "seedDefaultDocumentTypes"]);
     expect(identifyOrganizationGroup).toHaveBeenCalledTimes(1);
     expect(identifyOrganizationGroup).toHaveBeenCalledWith({
       organizationId: orgId,
@@ -62,6 +75,7 @@ describe("organization lifecycle hooks", () => {
       organization: { id: orgId, name: "Acme Legal LLP" },
     });
 
+    expect(recordAccessState).not.toHaveBeenCalled();
     expect(seedDefaultDocumentTypes).not.toHaveBeenCalled();
     expect(identifyOrganizationGroup).toHaveBeenCalledTimes(1);
     expect(identifyOrganizationGroup).toHaveBeenCalledWith({

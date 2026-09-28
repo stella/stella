@@ -9,6 +9,9 @@ import {
 } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { useFormatter, useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   BoldIcon,
   ItalicIcon,
@@ -17,10 +20,7 @@ import {
   StrikethroughIcon,
   UnderlineIcon,
   XIcon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

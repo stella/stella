@@ -704,12 +704,16 @@ const executeRun = async (
     preparedReferences.push(file);
   }
 
-  const config = await Result.tryPromise({
+  const configResult = await Result.tryPromise({
     try: async () => {
-      const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
+      const settings = await actor.scopedDb(
         async (tx) => await loadOrgAISettings(tx, actor.organizationId),
       );
-      return {
+      if (Result.isError(settings)) {
+        return Result.err(settings.error);
+      }
+      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      return Result.ok({
         orgAIConfig,
         // Resolved here, where a role without a provider is already an
         // `ai_unavailable` run rather than a failure mid-grading.
@@ -719,10 +723,11 @@ const executeRun = async (
           { organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
-      };
+      });
     },
     catch: (cause) => cause,
   });
+  const config = Result.flatten(configResult);
   if (Result.isError(config)) {
     captureError(config.error, {
       runId: actor.runId,

@@ -103,6 +103,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ownership.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+  "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",

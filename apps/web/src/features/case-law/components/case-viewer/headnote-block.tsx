@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import { SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { SparklesIcon } from "@stll/ui/icons";
 
 import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";

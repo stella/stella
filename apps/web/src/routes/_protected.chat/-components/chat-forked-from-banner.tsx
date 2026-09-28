@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { GitBranchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { GitBranchIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { ForkProvenance } from "@/features/chat/queries";

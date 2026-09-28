@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

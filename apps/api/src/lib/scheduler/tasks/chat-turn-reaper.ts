@@ -52,7 +52,6 @@ export const createReapOwnerlessChatTurnsTask =
       items: expired,
       limit: REAP_CONCURRENCY,
       operation: async ({ threadId }) => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can change between awaited transactions.
         if (signal.aborted) {
           return 0;
         }
@@ -64,9 +63,7 @@ export const createReapOwnerlessChatTurnsTask =
     });
     logger.info("scheduler.chat_turns_reaped", {
       "chatTurns.expired": expired.length,
-      "chatTurns.threadsVisited": processed.reduce(
-        (visited, count) => visited + count,
-        0,
-      ),
+      "chatTurns.threadsVisited": processed.filter((count) => count === 1)
+        .length,
     });
   };

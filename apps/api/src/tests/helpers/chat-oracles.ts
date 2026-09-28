@@ -56,6 +56,11 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every request handed to a provider answers each tool call exactly once,
+   *  right after the message making it, with no result for a call it does
+   *  not hold; each signed thinking block stays, once and in order, first on
+   *  the message holding the calls it was produced with. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
    *  one before it, so the provider's prompt cache holds. */
   providerPrefixStable: "chat.provider.prefix-stable",
@@ -93,7 +98,7 @@ export const CHAT_ORACLE = {
    *  throws. */
   providerWireOneTerminal: "chat.provider-wire.one-terminal",
   /** The run ends the way the wire did: the declared finish reason, or a
-   *  run error. */
+   *  run error; a stop reason no answer stands on never reads as one. */
   providerWireFinish: "chat.provider-wire.finish",
   /** The answer's text reaches the text deltas. */
   providerWireText: "chat.provider-wire.text",
@@ -108,6 +113,9 @@ export const CHAT_ORACLE = {
   providerWireError: "chat.provider-wire.error",
   /** A cancelled run ends promptly, unfinished, with no further request. */
   providerWireCancel: "chat.provider-wire.cancel",
+  /** A body cut into reads anywhere (inside a multi-byte character, a
+   *  `data:` line, a CRLF) yields the events the whole body does. */
+  providerWireSplit: "chat.provider-wire.split",
   /** Every request the adapter sends is the one its cassette pins: the
    *  protocol headers, and the body with its key order, minus the prompt
    *  text. */

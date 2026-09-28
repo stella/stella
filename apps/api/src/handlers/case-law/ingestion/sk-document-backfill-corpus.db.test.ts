@@ -449,7 +449,12 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       // The attempt that was overtaken, finishing with nothing to store.
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       expect(
         await db.query.caseLawDecisions.findFirst({

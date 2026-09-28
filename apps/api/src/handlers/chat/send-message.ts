@@ -17,7 +17,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -251,6 +250,7 @@ import {
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -263,7 +263,7 @@ const assertDevModelOverride = (
   if (!devModelId) {
     return Result.ok(undefined);
   }
-  if (!env.isDev) {
+  if (!isLocalDevOpen()) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -2126,6 +2126,7 @@ export const createSendMessage = (
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
+          hasReachableMatter: toolWorkspaceIds.length > 0,
           memberRole,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
@@ -2401,6 +2402,11 @@ export const createSendMessage = (
                       tools: streamingTools,
                     });
                     if (Result.isError(validatedToolParts)) {
+                      // Nothing of this turn can be stored, so it ends
+                      // failed rather than running until its lease lapses.
+                      // The error below carries the cause to the stream's
+                      // failure report.
+                      await run.fail("persistence", true);
                       throw new HandlerError({
                         status: 500,
                         message: "Generated chat tool parts are invalid",
@@ -2680,6 +2686,7 @@ type PrepareChatContextProps = {
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  hasReachableMatter: boolean;
   memberRole: { role: string };
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
@@ -2724,6 +2731,7 @@ const prepareChatContext = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  hasReachableMatter,
   memberRole,
   latestMentions,
   latestUserMessageId,
@@ -2760,6 +2768,7 @@ const prepareChatContext = async ({
         activeStatute,
         activeTemplate,
         contextMatterIds,
+        hasReachableMatter,
         memberRole,
         organizationId,
         practiceJurisdictions,

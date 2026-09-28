@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 // Free-text tag input for file extensions. @stll/ui has no dedicated tag input;

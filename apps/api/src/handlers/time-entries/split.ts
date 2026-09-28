@@ -7,12 +7,17 @@ import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durat
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  getTimePolicyViolation,
+  readTimePolicy,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const splitEntryBodySchema = t.Object({
   id: tSafeId("timeEntry"),
@@ -39,7 +44,7 @@ const splitEntry = createSafeHandler(
     access: "write",
     body: splitEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const totalPercentage = body.splits.reduce(
       (sum, s) => sum + s.percentage,
       0,
@@ -81,6 +86,26 @@ const splitEntry = createSafeHandler(
           message: "Cannot split a billed or written-off entry",
         }),
       );
+    }
+
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const today = yield* formatTodayInTimeZone({
+      timezoneId: original.timezoneId,
+    });
+    const violation = getTimePolicyViolation({
+      policy,
+      dateWorked: original.dateWorked,
+      today,
+      canApprove: true,
+      narrative: original.narrative,
+    });
+    if (violation) {
+      return Result.err(violation);
     }
 
     if (original.durationMinutes < body.splits.length) {
@@ -173,7 +198,10 @@ const splitEntry = createSafeHandler(
           if (!split || durationMinutes === undefined) {
             continue;
           }
-          const billedMinutes = roundToBillingIncrement(durationMinutes);
+          const billedMinutes = roundToBillingIncrement(
+            durationMinutes,
+            policy.timeMinimumUnitMinutes,
+          );
           const entryId = createSafeId<"timeEntry">();
 
           successorRows.push({

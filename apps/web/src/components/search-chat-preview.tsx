@@ -2,6 +2,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { PluggableList } from "unified";
 
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
+
 import {
   Message,
   MessageContent,
@@ -104,11 +106,10 @@ export const SearchChatPreview = ({
     }
 
     for (const [index, match] of matches.entries()) {
-      if (index === clampedIndex) {
-        match.dataset["active"] = "true";
-      } else {
-        delete match.dataset["active"];
-      }
+      match.className = textMarkClass({
+        ...SEARCH_HIT_MARK,
+        state: index === clampedIndex ? "active" : "rest",
+      });
     }
     const activeMatch = matches.at(clampedIndex);
     if (!activeMatch || lastScrolledMatchRef.current === activeMatch) {
@@ -148,10 +149,7 @@ export const SearchChatPreview = ({
   );
 
   return (
-    <div
-      ref={rootRef}
-      className="[&_[data-search-match]]:bg-highlight/45 [&_[data-search-match][data-active=true]]:bg-highlight/90 space-y-5 [&_[data-search-match]]:text-inherit"
-    >
+    <div ref={rootRef} className="space-y-5">
       {matchSummary.count > 0 && (
         <div className="bg-background/90 sticky top-0 z-10 ms-auto flex w-fit rounded-md border p-0.5 shadow-sm backdrop-blur">
           <SearchMatchControls

@@ -7,6 +7,9 @@
 
 import type * as React from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   BanIcon,
@@ -18,12 +21,11 @@ import {
   PenIcon,
   SplitIcon,
   XCircleIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TEXT_MARK_TONE_COLOR } from "@stll/ui/text-mark";
+import type { TextMarkTone, TextMarkVariant } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import type { SaveState } from "@/features/avt/save-state.logic";
@@ -44,7 +46,7 @@ import { useFormatter } from "@/i18n/formatting-context";
  * with itself, so it takes its own hue: the `--option-*` swatch system, set
  * through inline `style` because those are not registered as utilities.
  */
-export const RECORD_CONFLICT_VAR = "var(--option-purple)";
+export const RECORD_CONFLICT_VAR = TEXT_MARK_TONE_COLOR["option-purple"];
 export const RECORD_CONFLICT_BG_VAR = "var(--option-purple-bg)";
 export const RECORD_CONFLICT_FG_VAR = "var(--option-purple-fg)";
 
@@ -53,14 +55,12 @@ type StateColor = {
   tone: ReviewStatusTone;
   textClass: string;
   textStyle?: React.CSSProperties;
-  decorationClass: string;
-  decorationStyle?: React.CSSProperties;
-  swatchStyle: React.CSSProperties;
-  /** Background wash for a claim span that matches the active filter. */
-  highlightClass: string;
-  highlightStyle?: React.CSSProperties;
-  selectedClass: string;
-  selectedStyle?: React.CSSProperties;
+  /** How a claim in this state is marked in the document: the verdict's hue
+   *  and line. */
+  mark: { variant: TextMarkVariant; tone: TextMarkTone };
+  /** Classes the marked words take besides the mark: the verdicts that say
+   *  nothing about the claim read muted. */
+  markTextClass: string;
 };
 
 export const STATE_COLOR: Record<ClaimState, StateColor> = {
@@ -68,73 +68,57 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     icon: CheckCircle2Icon,
     tone: "success",
     textClass: "text-success",
-    decorationClass: "decoration-success",
-    swatchStyle: { backgroundColor: "var(--success)" },
-    highlightClass: "bg-success/15",
-    selectedClass: "bg-success/30 ring-1 ring-success/70",
+    mark: { variant: "underline", tone: "success" },
+    markTextClass: "",
   },
   tension: {
     icon: AlertTriangleIcon,
     tone: "warning",
     textClass: "text-warning",
-    decorationClass: "decoration-warning",
-    swatchStyle: { backgroundColor: "var(--warning)" },
-    highlightClass: "bg-warning/15",
-    selectedClass: "bg-warning/30 ring-1 ring-warning/70",
+    mark: { variant: "underline", tone: "warning" },
+    markTextClass: "",
   },
   contradicted: {
     icon: XCircleIcon,
     tone: "destructive",
     textClass: "text-destructive-foreground",
-    decorationClass: "decoration-destructive",
-    swatchStyle: { backgroundColor: "var(--destructive)" },
-    highlightClass: "bg-destructive/15",
-    selectedClass: "bg-destructive/30 ring-1 ring-destructive/70",
+    mark: { variant: "underline", tone: "destructive" },
+    markTextClass: "",
   },
   nocover: {
     icon: CircleDashedIcon,
     tone: "neutral",
     textClass: "text-muted-foreground",
-    decorationClass:
-      "text-muted-foreground decoration-muted-foreground decoration-dotted",
-    swatchStyle: { backgroundColor: "var(--muted-foreground)" },
-    highlightClass: "bg-muted-foreground/8",
-    selectedClass: "bg-muted-foreground/20 ring-1 ring-foreground-disabled",
+    mark: { variant: "dotted", tone: "muted" },
+    markTextClass: "text-muted-foreground",
   },
   recordconflict: {
     icon: SplitIcon,
     tone: "highlight",
     textClass: "",
     textStyle: { color: RECORD_CONFLICT_VAR },
-    decorationClass: "decoration-wavy",
-    decorationStyle: { textDecorationColor: RECORD_CONFLICT_VAR },
-    swatchStyle: { backgroundColor: RECORD_CONFLICT_VAR },
-    highlightClass: "",
-    highlightStyle: { backgroundColor: RECORD_CONFLICT_BG_VAR },
-    selectedClass: "ring-1 ring-[var(--option-purple)]",
-    selectedStyle: {
-      backgroundColor:
-        "color-mix(in srgb, var(--option-purple) 30%, transparent)",
-    },
+    mark: { variant: "wavy", tone: "option-purple" },
+    markTextClass: "",
   },
   notverifiable: {
     icon: BanIcon,
     tone: "neutral",
     textClass: "text-muted-foreground",
-    decorationClass:
-      "text-muted-foreground decoration-muted-foreground decoration-dotted italic",
-    swatchStyle: { backgroundColor: "var(--muted-foreground)" },
-    highlightClass: "bg-muted-foreground/8",
-    selectedClass: "bg-muted-foreground/20 ring-1 ring-foreground-disabled",
+    mark: { variant: "dotted", tone: "muted" },
+    markTextClass: "text-muted-foreground italic",
   },
 };
+
+/** A state's hue as a CSS colour, the same one its mark is drawn in. */
+export const stateHue = (state: ClaimState): string =>
+  TEXT_MARK_TONE_COLOR[STATE_COLOR[state].mark.tone];
 
 /** Small solid-colour square for a stat tile's legend. */
 export const StateSwatch = ({ state }: { state: ClaimState }) => (
   <span
     aria-hidden="true"
     className="inline-block size-2 shrink-0 rounded-xs"
-    style={STATE_COLOR[state].swatchStyle}
+    style={{ backgroundColor: stateHue(state) }}
   />
 );
 

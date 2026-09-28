@@ -5,9 +5,9 @@ import type * as React from "react";
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { cva, type VariantProps } from "class-variance-authority";
-import { SearchIcon } from "lucide-react";
 
 import { useContentDir } from "../hooks/use-content-dir";
+import { SearchIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";

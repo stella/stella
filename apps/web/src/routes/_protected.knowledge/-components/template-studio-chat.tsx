@@ -18,7 +18,6 @@ import type { RefObject } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { LoaderCircleIcon } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
@@ -58,6 +57,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import { LoaderCircleIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

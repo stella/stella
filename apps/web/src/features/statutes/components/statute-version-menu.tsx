@@ -1,7 +1,7 @@
-import { ChevronDownIcon, Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, Columns2Icon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,

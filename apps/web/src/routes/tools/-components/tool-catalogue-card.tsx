@@ -1,15 +1,15 @@
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowRightIcon,
-  BookOpenCheckIcon,
-  DatabaseIcon,
-  PlugIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowRightIcon,
+  BookOpenCheckIcon,
+  DatabaseIcon,
+  PlugIcon,
+} from "@stll/ui/icons";
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";

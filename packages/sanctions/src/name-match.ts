@@ -166,7 +166,12 @@ export const buildNameIndex = (
       }
       if (existing !== undefined) {
         // A weak alias the entry also lists as a strong one counts as strong.
-        existing.quality = quality;
+        if (
+          quality === "strong" ||
+          (quality === "unknown" && existing.quality === "weak")
+        ) {
+          existing.quality = quality;
+        }
         continue;
       }
       const alias: IndexedAlias = {

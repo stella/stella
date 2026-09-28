@@ -1,5 +1,4 @@
-import { CornerDownLeftIcon, SearchIcon } from "lucide-react";
-
+import { CornerDownLeftIcon, SearchIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 /**

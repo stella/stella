@@ -95,7 +95,10 @@ describe("timerStart (timezone validation)", () => {
     let callCount = 0;
     const safeDb = asTestRaw<TimerStartCtx["safeDb"]>(async () => {
       callCount += 1;
-      return callCount === 1 ? Result.ok(new Map()) : Result.err(databaseError);
+      if (callCount === 1) {
+        return Result.ok(undefined);
+      }
+      return callCount === 2 ? Result.ok(new Map()) : Result.err(databaseError);
     });
 
     const result = await timerStart.handler(
@@ -108,6 +111,6 @@ describe("timerStart (timezone validation)", () => {
         message: "You already have an active timer. Stop it first.",
       },
     });
-    expect(callCount).toBe(2);
+    expect(callCount).toBe(3);
   });
 });

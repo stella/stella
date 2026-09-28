@@ -61,6 +61,7 @@ import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
@@ -710,6 +711,18 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
+    p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    p
+      .index("case_law_decisions_live_legacy_raw_source_idx")
+      .on(t.sourceId, t.id)
+      .where(
+        liveCaseLawLegacyReferenceSql({
+          decisionId: t.id,
+          redactedAt: t.redactedAt,
+          sourceId: t.sourceId,
+          sourceRawS3Key: t.sourceRawS3Key,
+        }),
+      ),
     // The coverage page's week of one source's arrivals, answered from the
     // index alone. The cursor index above finds the same range and then
     // fetches every row in it to evaluate the publication gate, which reads
@@ -2110,6 +2123,56 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+export const CASE_LAW_BROWSE_FACET_KINDS = [
+  "country",
+  "court",
+  "year",
+] as const;
+const CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES = CASE_LAW_BROWSE_FACET_KINDS.map(
+  (kind) => sql`${kind}`,
+);
+
+/** Per-source browse counts, so source redistribution is checked at read time. */
+export const caseLawBrowseFacetCounts = p.pgTable(
+  "case_law_browse_facet_counts",
+  {
+    kind: p.text({ enum: CASE_LAW_BROWSE_FACET_KINDS }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    value: p.varchar({ length: 512 }).notNull(),
+    total: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_browse_facet_counts_pkey",
+      columns: [t.kind, t.country, t.sourceId, t.value],
+    }),
+    p.check("case_law_browse_facet_counts_total_positive", sql`${t.total} > 0`),
+    p.check(
+      "case_law_browse_facet_counts_kind_valid",
+      sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("case_law_browse_facet_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_browse_facet_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_browse_facet_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS browse_facet_source
+        WHERE browse_facet_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`browse_facet_source.descriptor`)}
+      )`,
+    }),
   ],
 );
 

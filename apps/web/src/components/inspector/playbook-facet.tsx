@@ -10,6 +10,18 @@ import {
 } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+import { v7 as uuidv7 } from "uuid";
+import { useShallow } from "zustand/react/shallow";
+
+import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+import type { DocxEditorRef } from "@stll/folio-react";
+import { Temporal } from "@stll/time";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { CONTROL_SIZE } from "@stll/ui/control-size";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -27,19 +39,7 @@ import {
   SearchIcon,
   StickyNoteIcon,
   XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
-import { useShallow } from "zustand/react/shallow";
-
-import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
-import type { ReviewFlag } from "@stll/api-contract";
-import type { DocxEditorRef } from "@stll/folio-react";
-import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { CONTROL_SIZE } from "@stll/ui/control-size";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InspectorHeader,

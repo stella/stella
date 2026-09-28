@@ -3,12 +3,17 @@ import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import {
   cassetteFor,
   cassetteKey,
@@ -25,11 +30,17 @@ import {
   findRequestShapeDrift,
   findWireCancelViolations,
   findWireContractViolations,
+  findWireSplitViolations,
   replayWireScenario,
   wireChatModel,
+  withMultibyteText,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import {
+  bodyBytesOf,
+  installProviderWireReplay,
+} from "@/api/tests/helpers/provider-wire-replay";
 import type {
+  Chunking,
   ProviderWireReplay,
   ReplayedRequest,
 } from "@/api/tests/helpers/provider-wire-replay";
@@ -98,6 +109,19 @@ const expectContract = (
   expect(violatedOracles(violations)).toEqual(unmet.oracles.toSorted());
 };
 
+/** The transcript check reads every request the adapter sent, and each one
+ *  is settled. */
+const expectSettledTranscripts = ({
+  requests,
+  transcripts,
+}: {
+  requests: number;
+  transcripts: readonly ProviderRequest[];
+}) => {
+  expect(transcripts).toHaveLength(requests);
+  expect(findTranscriptViolations(transcripts)).toEqual([]);
+};
+
 /** Every request the adapter sent is the one its exchange pins, shown as a
  *  diff of the two when it is not. */
 const expectPinnedRequests = (
@@ -116,19 +140,21 @@ const expectPinnedRequests = (
 };
 
 const checkCassette = async (cassette: ProviderWireCassette) => {
-  const { findings, run, sent } = await replayWireScenario({
-    cassette,
-    replay,
-  });
+  const { findings, requests, run, sent, transcripts } =
+    await replayWireScenario({
+      cassette,
+      replay,
+    });
   expectContract(
     cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
   expectPinnedRequests(cassette, sent);
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
-  const { findings, requests, run } = await replayWireScenario({
+  const { findings, requests, run, transcripts } = await replayWireScenario({
     cancelAfterFirstDelta: true,
     cassette: cassetteFor(cassettes, provider, "text"),
     replay,
@@ -137,6 +163,7 @@ const checkCancel = async (provider: ProviderWireProvider) => {
     `${provider}/cancel`,
     findWireCancelViolations({ replay: findings, requests, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
 };
 
 /** Retried failures wait out each SDK's backoff. */
@@ -293,7 +320,114 @@ describe("every adapter satisfies the wire contract", () => {
       async () => {
         await checkCassette(cassette);
       },
-      RETRY_TIMEOUT_MS,
+      propertyTestTimeout(RETRY_TIMEOUT_MS),
+    );
+  }
+});
+
+// The same cassettes with their bodies cut into reads anywhere: a one-byte
+// read at every offset, and seeded random cuts. Answer text and tool
+// arguments are spelled in multi-byte characters first, so the cuts land
+// inside characters as well as inside `data:` lines, CRLFs and event frames.
+
+/** Each body in one read: the run every split run must equal. */
+const WHOLE: Chunking = { at: [] };
+/** Fixed, so a failure reproduces; fast-check prints the cuts it shrank to. */
+const SPLIT_SEED = 20_260_927;
+const SPLIT_RUNS = 4;
+
+/** Cassettes whose answer is a stream, read in pieces by the adapter. */
+const streamed = cassettes.filter(
+  ({ exchanges }) => exchanges[0]?.response.status === 200,
+);
+
+const firstBodyOf = (cassette: ProviderWireCassette): Uint8Array => {
+  const [first] = cassette.exchanges;
+  if (first === undefined) {
+    return panic(`${cassetteKey(cassette)} has no exchange`);
+  }
+  return bodyBytesOf(first.response.body);
+};
+
+const ASCII_MAX = 0x7f;
+
+/** Whether the first body's text (an event stream's payloads, not its
+ *  binary framing) holds a character outside ASCII. */
+const hasMultibyte = (cassette: ProviderWireCassette): boolean => {
+  const body = cassette.exchanges[0]?.response.body;
+  const text =
+    body?.encoding === "aws-eventstream"
+      ? JSON.stringify(body.messages.map(({ payload }) => payload))
+      : (body?.text ?? "");
+  return Array.from(text).some(
+    (character) => (character.codePointAt(0) ?? 0) > ASCII_MAX,
+  );
+};
+
+const CR = 0x0d;
+const LF = 0x0a;
+const hasCrlf = (bytes: Uint8Array): boolean =>
+  bytes.some((byte, index) => byte === CR && bytes[index + 1] === LF);
+
+const checkSplit = async (cassette: ProviderWireCassette) => {
+  const multibyte = withMultibyteText(cassette);
+  const { run: whole } = await replayWireScenario({
+    cassette: multibyte,
+    chunking: WHOLE,
+    replay,
+  });
+  const expectSame = async (chunking: Chunking) => {
+    const { run: split } = await replayWireScenario({
+      cassette: multibyte,
+      chunking,
+      replay,
+    });
+    const violations = findWireSplitViolations({ chunking, split, whole });
+    if (violations.length > 0) {
+      panic(`A split read changes the run: ${JSON.stringify(violations)}`);
+    }
+  };
+  await expectSame({ every: 1 });
+  const length = firstBodyOf(multibyte).length;
+  await fc.assert(
+    fc.asyncProperty(
+      fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
+        minLength: 1,
+        maxLength: 48,
+      }),
+      async (at) => {
+        await expectSame({ at });
+      },
+    ),
+    propertyConfig({ numRuns: SPLIT_RUNS, seed: SPLIT_SEED }),
+  );
+};
+
+describe("every adapter reads a stream cut anywhere as it reads it whole", () => {
+  test("the cuts reach multi-byte text, multi-byte tool arguments and a CRLF", () => {
+    // Providers whose cassette the rewrite turns from ASCII to multi-byte.
+    const rewritten = (scenario: "text" | "tool-call") =>
+      PROVIDER_WIRE_PROVIDERS.filter((provider) => {
+        const cassette = cassetteFor(cassettes, provider, scenario);
+        return (
+          !hasMultibyte(cassette) && hasMultibyte(withMultibyteText(cassette))
+        );
+      });
+    expect(rewritten("text")).toEqual([...PROVIDER_WIRE_PROVIDERS]);
+    // Most providers stream arguments in fragments that split the word.
+    expect(rewritten("tool-call")).toContain("google");
+    expect(streamed.some((cassette) => hasCrlf(firstBodyOf(cassette)))).toBe(
+      true,
+    );
+  });
+
+  for (const cassette of streamed) {
+    test(
+      cassetteKey(cassette).replace("/", " "),
+      async () => {
+        await checkSplit(cassette);
+      },
+      propertyTestTimeout(RETRY_TIMEOUT_MS),
     );
   }
 });

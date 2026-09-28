@@ -1,7 +1,7 @@
-import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";

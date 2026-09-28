@@ -112,6 +112,7 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -143,6 +144,7 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
  * the column, so the sheet travels as a bind parameter; the column's CHECK
  * keeps it to digits, which carry no `LIKE` metacharacter.
  */
+// sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk
 const sheetMatchSql = sql`
   b.cited_sheet_number IS NOT NULL
   AND (
@@ -239,32 +241,6 @@ export type ResolveCitationBatchOptions = {
 const toCount = (value: unknown): number => {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
-};
-
-/**
- * `execute` yields the rows directly on the server driver and wraps them in
- * `{ rows }` under pglite. Reading only one shape silently returns zero
- * counts on the other — the statement still runs, so the miscount is
- * invisible until someone trusts the number.
- */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
-
-const firstRow = (result: unknown): unknown => {
-  if (Array.isArray(result)) {
-    return result.at(0);
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"].at(0);
-  }
-  return undefined;
 };
 
 /**
@@ -770,7 +746,7 @@ const resolveCitationBatchIn = async (
     `),
   );
 
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   if (!isRecord(row)) {
     return { ...EMPTY_COUNTS, cursor: null };
   }
@@ -829,7 +805,7 @@ export const tryResolveCitationBatch = async (
     const lockResult: unknown = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(${CITATION_GRAPH_LOCK}) AS locked`,
     );
-    const lockRow: unknown = firstRow(lockResult);
+    const lockRow = executedRows(lockResult).at(0);
     if (!isRecord(lockRow) || lockRow["locked"] !== true) {
       return null;
     }
@@ -857,7 +833,7 @@ const readCitationResolutionCursor = async (
       FROM ${caseLawCitationResolutionProgress}
      WHERE scope = ${CITATION_RESOLUTION_SCOPE.GLOBAL}
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   if (!isRecord(row)) {
     return null;
   }
@@ -918,7 +894,7 @@ export const resolveCitationsForDecision = async (
   const result: unknown = await tx.execute(
     resolutionStatement(sql`AND c.citing_decision_id = ${decisionId}::uuid`),
   );
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
 };
 
@@ -1155,7 +1131,7 @@ export const reopenCitationsForDecisionKey = async (
          + (SELECT count(*)::int FROM contested) AS reopened
   `);
 
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1260,7 +1236,7 @@ export const reopenCitationsForDecisionIdentifiers = async (
     SELECT (SELECT count(*)::int FROM revived)
          + (SELECT count(*)::int FROM contested) AS reopened
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1322,7 +1298,7 @@ export const reopenCitationsForKeys = async (
     SELECT (SELECT count(*)::int FROM revived)
          + (SELECT count(*)::int FROM contested) AS reopened
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1358,7 +1334,7 @@ export const reopenCitationsResolvedTo = async (
     )
     SELECT count(*)::int AS reopened FROM retracted
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1399,7 +1375,7 @@ export const reopenCitationsFrom = async (
     )
     SELECT count(*)::int AS reopened FROM requeued
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1438,7 +1414,7 @@ export const reopenCitations = async (
     )
     SELECT count(*)::int AS reopened FROM reopened
   `);
-  const row: unknown = firstRow(result);
+  const row = executedRows(result).at(0);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
@@ -1505,7 +1481,7 @@ export const readjudicateAmbiguousCitations = async (
                AS last_citation_id,
              (SELECT array_agg(id::text) FROM slice) AS ids
     `);
-    const pickedRow: unknown = firstRow(picked);
+    const pickedRow = executedRows(picked).at(0);
     if (!isRecord(pickedRow) || !Array.isArray(pickedRow["ids"])) {
       return { ...EMPTY_COUNTS, cursor: null };
     }
@@ -1531,7 +1507,7 @@ export const readjudicateAmbiguousCitations = async (
         )}]::uuid[])
       `),
     );
-    const row: unknown = firstRow(result);
+    const row = executedRows(result).at(0);
     return { ...(isRecord(row) ? countsOf(row) : EMPTY_COUNTS), cursor };
   });
 
@@ -1559,6 +1535,6 @@ export const countPendingCitations = async (
          citationKey: sql.raw("c.citation_key"),
        })}
     `);
-    const row: unknown = firstRow(result);
+    const row = executedRows(result).at(0);
     return isRecord(row) ? toCount(row["pending"]) : 0;
   });

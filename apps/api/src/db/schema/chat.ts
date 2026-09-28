@@ -1064,6 +1064,10 @@ export const aiMemories = p.pgTable(
       .on(table.userId, table.status)
       .where(isNotNull(table.userId)),
     p
+      .index("ai_memories_created_by_status_idx")
+      .on(table.createdBy, table.status)
+      .where(isNotNull(table.createdBy)),
+    p
       .index("ai_memories_workspace_status_idx")
       .on(table.workspaceId, table.status)
       .where(isNotNull(table.workspaceId)),

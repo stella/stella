@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { Fragment } from "react";
 
-import { EyeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { EyeIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuGroup,

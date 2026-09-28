@@ -1,6 +1,6 @@
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PlusIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";

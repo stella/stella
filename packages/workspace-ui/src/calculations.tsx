@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { CheckIcon, SigmaIcon } from "lucide-react";
 import { useFormatter, useLocale } from "use-intl";
 
 import type {
@@ -11,6 +10,7 @@ import type {
 import { runCalculation } from "@stll/calculations";
 import { type CentsAmount, formatMoneyCents } from "@stll/money";
 import { Button } from "@stll/ui/button";
+import { CheckIcon, SigmaIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

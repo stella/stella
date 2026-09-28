@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
 
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
-import { PlusIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { CalendarCell } from "@stll/ui/calendar";
+import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";

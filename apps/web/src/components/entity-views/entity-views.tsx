@@ -6,17 +6,17 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { TASK_STATUSES, VIEW_SORTS_MAX } from "@stll/api-contract";
+import { Button } from "@stll/ui/button";
 import {
   KanbanIcon,
   PencilIcon,
   PlusIcon,
   TableIcon,
   Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { TASK_STATUSES, VIEW_SORTS_MAX } from "@stll/api-contract";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,

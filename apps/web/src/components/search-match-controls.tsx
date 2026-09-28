@@ -1,7 +1,7 @@
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 
 type SearchMatchControlsProps = {
   activeIndex: number;

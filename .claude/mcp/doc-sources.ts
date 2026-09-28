@@ -392,6 +392,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .concat(
     {
       checkedAt: "2026-09-27T00:00:00.000Z",
+      dependency: "mailauth",
+      explanation:
+        "The canonical repository has no llms.txt (raw endpoint returns 404). Use the authentication API documentation at https://github.com/postalsys/mailauth directly.",
+      expiresAt: "2026-10-27T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-27T00:00:00.000Z",
+      dependency: "tldts",
+      explanation:
+        "The canonical repository has no llms.txt (raw endpoint returns 404). Use the domain parsing API documentation at https://github.com/remusao/tldts directly.",
+      expiresAt: "2026-10-27T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-27T00:00:00.000Z",
       dependency: "ajv",
       explanation:
         "https://ajv.js.org/llms.txt returns 404. Use the API reference at https://ajv.js.org/api.html and the strict-mode rules at https://ajv.js.org/strict-mode.html directly.",

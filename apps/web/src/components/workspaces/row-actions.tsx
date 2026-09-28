@@ -3,6 +3,22 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
+import { fetchWithTimeout } from "@stll/fetch";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   ArchiveIcon,
   CopyIcon,
@@ -25,23 +41,7 @@ import {
   ScanTextIcon,
   Trash2Icon,
   UploadIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
-import { fetchWithTimeout } from "@stll/fetch";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/alert-dialog";
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { openFilePicker } from "@stll/ui/file-picker";
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   Menu,

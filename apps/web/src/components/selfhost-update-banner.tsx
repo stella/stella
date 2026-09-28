@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS } from "@stll/time";
+import { ExternalLinkIcon, XIcon } from "@stll/ui/icons";
 
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
