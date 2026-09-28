@@ -115,6 +115,8 @@ const replayedModel = (): HarnessModel => ({
       unscriptedCalls: unexpected,
     };
   },
+  // The bodies the adapter sent, in its provider's wire format.
+  takeRequests: () => replay.takeRequests(),
 });
 
 /** A thread whose chat model is the one `cassette` was recorded with. */

@@ -2055,7 +2055,9 @@ describe("validateMessage", () => {
       if (!Result.isOk(result)) {
         return expect.unreachable(result.error.message);
       }
-      const expected = {
+      // A name outside the registered catalog is not a typed chat part, so
+      // the stored calls are compared as plain values.
+      const expected: unknown = {
         type: "tool-call",
         id: "tool-call-1",
         name,
@@ -2064,7 +2066,7 @@ describe("validateMessage", () => {
         output: { error },
         state: "error",
       };
-      expect(result.value[0]).toEqual(expected);
+      expect<unknown>(result.value[0]).toEqual(expected);
 
       // Stored and read back, the call still says what the model sent.
       const message = toPersistableChatMessage({
@@ -2072,7 +2074,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: result.value,
       });
-      expect(
+      expect<unknown>(
         chatMessageFromPersisted({
           content: chatMessageContentFromMessage(message),
           id: message.id,

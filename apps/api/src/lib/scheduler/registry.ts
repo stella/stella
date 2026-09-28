@@ -108,6 +108,10 @@ import {
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import {
+  REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+  refreshStatuteSitemapShardsTask,
+} from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
+import {
   RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
   reconcileStyleSetPackageCleanups,
 } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
@@ -150,6 +154,7 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
