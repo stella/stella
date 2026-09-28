@@ -1328,6 +1328,9 @@ const replaceWaiting = async (calls: CallKind[]) => {
       real,
     );
     await new ReloadPage().run(model, real);
+    // The next request reads the replaced calls as stored; the replacing
+    // turn must have read them the same way.
+    await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(model, real);
   });
 };
 
