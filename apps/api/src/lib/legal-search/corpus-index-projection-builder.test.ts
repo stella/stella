@@ -183,41 +183,45 @@ test("under-cap legislation keeps the v2 wire documents from main", () => {
     }),
   );
   expect(built.every((result) => result.isOk())).toBe(true);
-  expect(built.map((result) => (result.isOk() ? result.value : []))).toEqual([
+  expect(
+    built.map((result) => JSON.stringify(result.isOk() ? result.value : [])),
+  ).toEqual(
     [
-      {
-        document_id: "0198e331-e578-7000-8000-000000000004",
-        projection_revision: REVISION,
-        jurisdiction: "CZE",
-        source: LEGISLATION_INPUT.sourceId,
-        language: "cs",
-        document_type: "act",
-        title: "Občanský zákoník",
-        text: "§ 1 Předmět úpravy",
-        is_opening: true,
-        status: "current",
-        eli: "eli/cz/sb/2012/89",
-        effective_date: "2014-01-01",
-        version_valid_from: "2014-01-01",
-      },
-    ],
-    [
-      {
-        document_id: "0198e331-e578-7000-8000-000000000006",
-        projection_revision: REVISION,
-        jurisdiction: "CZE",
-        source: LEGISLATION_INPUT.sourceId,
-        language: "cs",
-        document_type: "act",
-        title: "Act / Zákon / قانون",
-        text: "Článek 1, § 2, القانون",
-        is_opening: true,
-        status: "current",
-        eli: "eli/cz/sb/2012/89",
-        version_valid_to: "2025-01-01",
-      },
-    ],
-  ]);
+      [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000004",
+          projection_revision: REVISION,
+          jurisdiction: "CZE",
+          source: LEGISLATION_INPUT.sourceId,
+          language: "cs",
+          document_type: "act",
+          title: "Občanský zákoník",
+          text: "§ 1 Předmět úpravy",
+          is_opening: true,
+          status: "current",
+          eli: "eli/cz/sb/2012/89",
+          effective_date: "2014-01-01",
+          version_valid_from: "2014-01-01",
+        },
+      ],
+      [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000006",
+          projection_revision: REVISION,
+          jurisdiction: "CZE",
+          source: LEGISLATION_INPUT.sourceId,
+          language: "cs",
+          document_type: "act",
+          title: "Act / Zákon / قانون",
+          text: "Článek 1, § 2, القانون",
+          is_opening: true,
+          status: "current",
+          eli: "eli/cz/sb/2012/89",
+          version_valid_to: "2025-01-01",
+        },
+      ],
+    ].map((documents) => JSON.stringify(documents)),
+  );
 });
 
 test("oversized legislation becomes exact consecutive v2 passages", () => {

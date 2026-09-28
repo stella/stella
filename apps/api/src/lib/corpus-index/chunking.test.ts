@@ -190,9 +190,12 @@ describe("chunkLegislationDocument preserves and bounds legislation", () => {
 
   test("streams dense fallback boundaries across a large source", () => {
     const source = "x\n\n".repeat(4 * 1024 * 1024);
+    const startedAt = performance.now();
     const chunks = legislationChunks(source);
+    const elapsedMs = performance.now() - startedAt;
     const texts = chunks.map(({ text }) => text);
 
+    expect(elapsedMs).toBeLessThan(20_000);
     expect(texts.join("")).toBe(source);
     expect(chunks.length).toBeGreaterThan(8);
     expectLegislationBudget(texts);
