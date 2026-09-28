@@ -921,6 +921,24 @@ const withoutShadow = (
     Object.entries(fields).filter(([key]) => !key.startsWith("failure.")),
   );
 
+const withoutNewPgDriverCode = (
+  fields: Record<string, string>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key]) => key !== "error.cause.pg_driver_code",
+    ),
+  );
+
+const withoutPgFields = (
+  fields: Record<string, string>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key]) => !key.startsWith("error.cause.pg_"),
+    ),
+  );
+
 type LegacyRow = {
   readonly name: string;
   readonly error: () => unknown;
@@ -999,15 +1017,15 @@ describe("fields stay compatible with the frozen legacy helpers", () => {
           ? { ...legacyFingerprint, "error.frame": "" }
           : legacyFingerprint;
 
-      expect(withoutShadow(errorFingerprint(error))).toEqual(
-        expectedFingerprint,
-      );
-      expect(withoutShadow(errorSystemFields(error))).toEqual(
+      expect(
+        withoutNewPgDriverCode(withoutShadow(errorFingerprint(error))),
+      ).toEqual(expectedFingerprint);
+      expect(withoutPgFields(withoutShadow(errorSystemFields(error)))).toEqual(
         legacy.errorSystemFields(error),
       );
-      expect(withoutShadow(pgErrorFields(error))).toEqual(
-        legacy.pgErrorFields(error),
-      );
+      expect(
+        withoutNewPgDriverCode(withoutShadow(pgErrorFields(error))),
+      ).toEqual(legacy.pgErrorFields(error));
       expect(withoutShadow(providerStatusFields(error))).toEqual(
         legacy.providerStatusFields(error),
       );
@@ -1039,7 +1057,9 @@ describe("fields stay compatible with the frozen legacy helpers", () => {
         expect([key, fields[key]]).toEqual([key, value]);
       }
       expect(
-        legacy.legacyErrorIdentity(withoutShadow(errorFingerprint(error))),
+        legacy.legacyErrorIdentity(
+          withoutNewPgDriverCode(withoutShadow(errorFingerprint(error))),
+        ),
       ).toBe(legacy.legacyErrorIdentity(expectedFingerprint));
     },
   );

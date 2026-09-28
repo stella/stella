@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -15,17 +16,19 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
-import { getIngestionStatus } from "@/api/handlers/case-law/ingestion/get";
+import {
+  getIngestionStatus,
+  latestIngestionEventsQuery,
+  reconciliationCountsQuery,
+} from "@/api/handlers/case-law/ingestion/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
- * The report reads every per-source figure with one grouped statement, so the
- * numbers are only right if each row lands against its own source. Two seeded
- * sources with deliberately different counts is the smallest arrangement that
- * can catch a group key going astray; a single-source fixture cannot.
+ * Two seeded sources with different counts catch a group key going astray.
  */
 
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
@@ -35,15 +38,37 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
 
 const scopedDb: ScopedDb = async (callback) =>
-  // SAFETY: pglite stands in for the transaction the handler expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await db.transaction(
+    async (tx) =>
+      // SAFETY: PGlite has the same transaction query contract as the handler.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite transaction stands in for Bun SQL
+      await callback(tx as unknown as Transaction),
+  );
 
 const busyId = createSafeId<"caseLawSource">();
 const quietId = createSafeId<"caseLawSource">();
 
-const now = Date.now();
-const minutesAgo = (minutes: number) => new Date(now - minutes * 60 * 1000);
+const FIXED_NOW = new Date("2026-09-28T12:00:00.000Z");
+const minutesAgo = (minutes: number) =>
+  new Date(FIXED_NOW.getTime() - minutes * 60 * 1000);
+const readStatus = async () =>
+  await getIngestionStatus(scopedDb, { now: FIXED_NOW });
+
+const planLines = (explained: unknown): string[] => {
+  const rows =
+    typeof explained === "object" && explained !== null && "rows" in explained
+      ? explained.rows
+      : explained;
+  if (!Array.isArray(rows)) {
+    return panic("EXPLAIN did not return plan rows");
+  }
+  return rows.map((row: unknown) => {
+    const line = isRecord(row) ? row["QUERY PLAN"] : undefined;
+    return typeof line === "string"
+      ? line
+      : panic("EXPLAIN row has no plan text");
+  });
+};
 
 const decision = (sourceId: SafeId<"caseLawSource">, ordinal: number) => ({
   sourceId,
@@ -177,10 +202,10 @@ afterAll(async () => {
 });
 
 test("per-source figures stay with their own source", async () => {
-  const status = await getIngestionStatus(scopedDb);
+  const report = await readStatus();
 
-  const busy = status.sources.find((source) => source.name === "busy source");
-  const quiet = status.sources.find((source) => source.name === "quiet source");
+  const busy = report.sources.find((source) => source.name === "busy source");
+  const quiet = report.sources.find((source) => source.name === "quiet source");
 
   expect(busy?.totalDecisions).toBe(2);
   expect(busy?.totalDecisionsAsOf).toBe(minutesAgo(90).toISOString());
@@ -196,9 +221,9 @@ test("per-source figures stay with their own source", async () => {
   expect(quiet?.failures24h).toBe(1);
 
   // One source uncounted: no fleet total rather than a short one.
-  expect(status.totalDecisions).toBeNull();
-  expect(status.totalEvents).toBe(3);
-  expect(status.failures24h).toBe(4);
+  expect(report.totalDecisions).toBeNull();
+  expect(report.estimatedTotalEvents).toBeGreaterThanOrEqual(0);
+  expect(report.failures24h).toBe(4);
 });
 
 test("the fleet total is the sum once every source is counted", async () => {
@@ -207,13 +232,13 @@ test("the fleet total is the sum once every source is counted", async () => {
     .set({ storedTotal: 1, storedTotalAsOf: minutesAgo(5) })
     .where(eq(caseLawSources.id, quietId));
 
-  const status = await getIngestionStatus(scopedDb);
+  const status = await readStatus();
 
   expect(status.totalDecisions).toBe(3);
 });
 
 test("the last event is the source's own newest run", async () => {
-  const status = await getIngestionStatus(scopedDb);
+  const status = await readStatus();
 
   const busy = status.sources.find((source) => source.name === "busy source");
   const quiet = status.sources.find((source) => source.name === "quiet source");
@@ -225,7 +250,7 @@ test("the last event is the source's own newest run", async () => {
 });
 
 test("top error types are ranked within each source", async () => {
-  const status = await getIngestionStatus(scopedDb);
+  const status = await readStatus();
 
   const busy = status.sources.find((source) => source.name === "busy source");
   const quiet = status.sources.find((source) => source.name === "quiet source");
@@ -238,7 +263,7 @@ test("top error types are ranked within each source", async () => {
 });
 
 test("reconciliation totals are grouped per source", async () => {
-  const status = await getIngestionStatus(scopedDb);
+  const status = await readStatus();
 
   const busy = status.sources.find((source) => source.name === "busy source");
   const quiet = status.sources.find((source) => source.name === "quiet source");
@@ -251,4 +276,59 @@ test("reconciliation totals are grouped per source", async () => {
     terminal: 1,
   });
   expect(quiet?.reconciliation).toBeNull();
+});
+
+test("the fleet event estimate is labelled and follows table statistics", async () => {
+  await db.execute(sql`ANALYZE case_law_ingestion_events`);
+  const report = await readStatus();
+
+  expect(report.estimatedTotalEvents).toBe(3);
+  expect(report).not.toHaveProperty("totalEvents");
+});
+
+test("latest-event and reconciliation reads use their per-source indexes", async () => {
+  await db.execute(sql`
+    INSERT INTO case_law_sources (id, adapter_key, name)
+    SELECT gen_random_uuid(), 'plan-' || i, 'plan-' || i
+    FROM generate_series(1, 50) AS i
+  `);
+  await db.execute(sql`
+    INSERT INTO case_law_ingestion_events
+      (id, source_id, status, duration_ms, started_at, finished_at)
+    SELECT gen_random_uuid(), s.id, 'completed', 1,
+      ${FIXED_NOW}::timestamptz - interval '2 minutes',
+      ${FIXED_NOW}::timestamptz - interval '1 minute' + i * interval '1 millisecond'
+    FROM case_law_sources AS s
+    CROSS JOIN generate_series(1, 30) AS i
+    WHERE s.adapter_key LIKE 'plan-%'
+  `);
+  await db.execute(sql`ANALYZE case_law_ingestion_events`);
+  await db.execute(sql`VACUUM case_law_ingestion_events`);
+
+  const plans = await scopedDb(async (tx) => {
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    await tx.execute(sql`SET LOCAL enable_bitmapscan = off`);
+    await tx.execute(sql`SET LOCAL seq_page_cost = 100`);
+    await tx.execute(sql`SET LOCAL random_page_cost = 100`);
+
+    const sources = [busyId, quietId];
+    const latest = await tx.execute(
+      sql`EXPLAIN ${latestIngestionEventsQuery(tx, sources).getSQL()}`,
+    );
+    const reconciliation = await tx.execute(
+      sql`EXPLAIN ${reconciliationCountsQuery(tx, sources).getSQL()}`,
+    );
+    return { latest, reconciliation };
+  });
+
+  const latestPlan = planLines(plans.latest).join("\n");
+  const reconciliationPlan = planLines(plans.reconciliation).join("\n");
+  expect(latestPlan).toContain(
+    "Index Only Scan using case_law_ingestion_events_source_finished_idx",
+  );
+  expect(latestPlan).toContain("Limit");
+  expect(latestPlan).not.toContain("Seq Scan on case_law_ingestion_events");
+  expect(reconciliationPlan).toContain(
+    "Index Only Scan using case_law_reconciliation_items_slice_idx",
+  );
 });

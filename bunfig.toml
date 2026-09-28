@@ -8,6 +8,9 @@ globalStore = true
 publicHoistPattern = ["*"]
 # 5-day quarantine: reject package versions published
 # less than 5 days ago to mitigate supply chain attacks.
+# Bun reads only the installing directory's bunfig.toml: a standalone lockfile
+# outside the workspaces carries its own copy of this value, which
+# scripts/check-standalone-lockfiles.ts enforces.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # Temporary third-party exceptions must carry the exact instant at which

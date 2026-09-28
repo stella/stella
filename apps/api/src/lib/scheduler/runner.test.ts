@@ -1,3 +1,4 @@
+import { SQL } from "bun";
 import {
   afterAll,
   beforeAll,
@@ -6,10 +7,11 @@ import {
   expect,
   test,
 } from "bun:test";
-import { desc, eq } from "drizzle-orm";
+import { desc, DrizzleQueryError, eq } from "drizzle-orm";
 
 import type { SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -113,6 +115,51 @@ const registryOf = (task: string, fn: SchedulerTask): SchedulerTaskRegistry =>
   new Map([[task, fn]]);
 
 const noopRegistry = registryOf("test.noop", () => {});
+
+test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () => {
+  await seedJob({ id: "idle.job", task: "test.pg-failure" });
+  await seedJob({ id: "server.job", task: "test.pg-failure" });
+  const recording = installRecordingLogger();
+  try {
+    const registry = registryOf("test.pg-failure", async ({ job }) => {
+      const driver = new SQL.PostgresError("database failure", {
+        code:
+          job.id === "idle.job"
+            ? "ERR_POSTGRES_IDLE_TIMEOUT"
+            : "ERR_POSTGRES_SERVER_ERROR",
+        ...(job.id === "server.job" ? { errno: "57014" } : {}),
+      });
+      throw new DrizzleQueryError("query failed", [], driver);
+    });
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result.failed).toBe(2);
+    const failures = recording.records.filter(
+      (record) => record.message === "scheduler.job_failed",
+    );
+    expect(failures).toHaveLength(2);
+    const idle = failures.find(
+      (record) => record.attributes?.["scheduler.job_id"] === "idle.job",
+    );
+    const server = failures.find(
+      (record) => record.attributes?.["scheduler.job_id"] === "server.job",
+    );
+    expect(idle?.attributes?.["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
+    expect(server?.attributes?.["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_SERVER_ERROR",
+    );
+    expect(server?.attributes?.["error.cause.pg_code"]).toBe("57014");
+  } finally {
+    recording.restore();
+  }
+});
 
 // Wraps a db handle so inserting a scheduler run row fires a side effect. Used to
 // abort a parent signal exactly while runJob awaits createRun(), reproducing an
