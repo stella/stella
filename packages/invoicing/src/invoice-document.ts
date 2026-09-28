@@ -1,6 +1,8 @@
+import { Result } from "better-result";
+
 import { cents, type CentsAmount } from "@stll/money";
 
-import { InvoicingInputError } from "./errors";
+import { invalidInput, type InvoicingResult } from "./errors";
 import type {
   InvoiceDocument,
   InvoiceDocumentInput,
@@ -21,10 +23,10 @@ type CalculateDocumentTotalsInput = {
 export const calculateDocumentTotals = ({
   documentType,
   lines,
-}: CalculateDocumentTotalsInput): {
+}: CalculateDocumentTotalsInput): InvoicingResult<{
   lines: InvoiceLine[];
   totals: InvoiceTotals;
-} => {
+}> => {
   const calculatedLines: InvoiceLine[] = [];
   const breakdown = new Map<string, VatBreakdownLine>();
   let netAmountMinor = cents(0);
@@ -33,14 +35,12 @@ export const calculateDocumentTotals = ({
 
   for (const line of lines) {
     if (line.netAmountMinor < 0 || !Number.isSafeInteger(line.netAmountMinor)) {
-      throw new InvoicingInputError({
-        message: "Line net amount must be a non-negative minor amount",
-      });
+      return invalidInput(
+        "Line net amount must be a non-negative minor amount",
+      );
     }
     if (!Number.isSafeInteger(line.vatRateBps) || line.vatRateBps < 0) {
-      throw new InvoicingInputError({
-        message: "VAT rate must be non-negative integer basis points",
-      });
+      return invalidInput("VAT rate must be non-negative integer basis points");
     }
 
     const sign = documentType === "credit_note" ? -1 : 1;
@@ -82,7 +82,7 @@ export const calculateDocumentTotals = ({
     }
   }
 
-  return {
+  return Result.ok({
     lines: calculatedLines,
     totals: {
       netAmountMinor,
@@ -90,20 +90,21 @@ export const calculateDocumentTotals = ({
       grossAmountMinor,
       vatBreakdown: [...breakdown.values()],
     },
-  };
+  });
 };
 
 export const createInvoiceDocument = (
   input: InvoiceDocumentInput,
-): InvoiceDocument => {
+): InvoicingResult<InvoiceDocument> => {
   if (input.lines.length === 0) {
-    throw new InvoicingInputError({
-      message: "Invoice document requires at least one line",
-    });
+    return invalidInput("Invoice document requires at least one line");
   }
 
-  const { lines, totals } = calculateDocumentTotals(input);
-  return { ...input, lines, totals };
+  const calculated = calculateDocumentTotals(input);
+  if (calculated.isErr()) {
+    return Result.err(calculated.error);
+  }
+  return Result.ok({ ...input, ...calculated.value });
 };
 
 export type CreateSingleLineDocumentInput = Omit<
@@ -120,7 +121,7 @@ export const createSingleLineDocument = ({
   netAmountMinor,
   vatRateBps,
   ...input
-}: CreateSingleLineDocumentInput): InvoiceDocument =>
+}: CreateSingleLineDocumentInput): InvoicingResult<InvoiceDocument> =>
   createInvoiceDocument({
     ...input,
     lines: [

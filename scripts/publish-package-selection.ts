@@ -15,7 +15,6 @@ export const LIBRARY_PACKAGE_ORDER = [
   "ssr-testkit",
   "ui",
   "money",
-  "invoicing",
   "calculations",
   "workspace-model",
   "workspace-ui",

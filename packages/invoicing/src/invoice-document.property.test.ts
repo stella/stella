@@ -26,11 +26,11 @@ test("line sums, rate breakdowns, and credit note reversals agree", () => {
         const invoice = calculateDocumentTotals({
           documentType: "invoice",
           lines,
-        });
+        }).unwrap();
         const credit = calculateDocumentTotals({
           documentType: "credit_note",
           lines,
-        });
+        }).unwrap();
 
         for (const amount of [
           "netAmountMinor",

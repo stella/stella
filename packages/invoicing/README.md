@@ -7,4 +7,4 @@ calculated amounts and return a typed non-payable result for payment payloads.
 
 This package produces the SPAYD text; callers render a QR matrix separately.
 
-Public API changes require a changeset.
+The package is prepared for publication after its initial registry bootstrap.

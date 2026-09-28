@@ -1,6 +1,8 @@
+import { Result } from "better-result";
+
 import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
 
-import { InvoicingInputError } from "./errors";
+import { invalidInput, type InvoicingResult } from "./errors";
 import type { InvoiceDocumentType } from "./types";
 
 export type CzechQrPaymentInput = {
@@ -29,36 +31,45 @@ export const buildCzechQrPaymentPayload = ({
   variableSymbol,
   dueDate,
   message,
-}: CzechQrPaymentInput): CzechQrPaymentResult => {
+}: CzechQrPaymentInput): InvoicingResult<CzechQrPaymentResult> => {
   if (documentType === "credit_note") {
-    return { status: "not_payable", reason: "credit_note" };
+    return Result.ok({ status: "not_payable", reason: "credit_note" });
   }
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
-    throw new InvoicingInputError({
-      message: "QR payment amount must be a positive minor amount",
-    });
+    return invalidInput("QR payment amount must be a positive minor amount");
   }
 
   const normalizedCurrency = currency.toUpperCase();
-  if (!/^[A-Z]{3}$/u.test(normalizedCurrency)) {
-    throw new InvoicingInputError({
-      message: "QR payment requires a three-letter currency code",
-    });
+  if (!Intl.supportedValuesOf("currency").includes(normalizedCurrency)) {
+    return invalidInput("QR payment requires an ISO currency code");
+  }
+
+  const account = normalizeIban(iban);
+  if (account.isErr()) {
+    return Result.err(account.error);
   }
 
   const fields = [
     "SPD",
     QR_PAYMENT_VERSION,
-    `ACC:${normalizeIban(iban)}`,
+    `ACC:${account.value}`,
     `AM:${formatMinorAmount(cents(amountMinor), normalizedCurrency)}`,
     `CC:${normalizedCurrency}`,
   ];
 
-  if (variableSymbol) {
-    fields.push(`X-VS:${sanitizeVariableSymbol(variableSymbol)}`);
+  if (variableSymbol !== undefined) {
+    const symbol = validateVariableSymbol(variableSymbol);
+    if (symbol.isErr()) {
+      return Result.err(symbol.error);
+    }
+    fields.push(`X-VS:${symbol.value}`);
   }
-  if (dueDate) {
-    fields.push(`DT:${formatDate(dueDate)}`);
+  if (dueDate !== undefined) {
+    const date = formatDate(dueDate);
+    if (date.isErr()) {
+      return Result.err(date.error);
+    }
+    fields.push(`DT:${date.value}`);
   }
   if (message) {
     const sanitizedMessage = sanitizeFieldValue(message);
@@ -67,15 +78,13 @@ export const buildCzechQrPaymentPayload = ({
     }
   }
 
-  return { status: "payable", payload: fields.join("*") };
+  return Result.ok({ status: "payable", payload: fields.join("*") });
 };
 
-const normalizeIban = (iban: string): string => {
+const normalizeIban = (iban: string): InvoicingResult<string> => {
   const normalized = iban.replaceAll(/\s/gu, "").toUpperCase();
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/u.test(normalized)) {
-    throw new InvoicingInputError({
-      message: "QR payment requires a valid IBAN",
-    });
+    return invalidInput("QR payment requires a valid IBAN");
   }
 
   const rearranged = `${normalized.slice(4)}${normalized.slice(0, 4)}`;
@@ -89,11 +98,9 @@ const normalizeIban = (iban: string): string => {
     }
   }
   if (remainder !== 1) {
-    throw new InvoicingInputError({
-      message: "QR payment requires a valid IBAN checksum",
-    });
+    return invalidInput("QR payment requires a valid IBAN checksum");
   }
-  return normalized;
+  return Result.ok(normalized);
 };
 
 const formatMinorAmount = (
@@ -109,23 +116,42 @@ const formatMinorAmount = (
   return `${amount / scale}.${String(amount % scale).padStart(digits, "0")}`;
 };
 
-const sanitizeVariableSymbol = (variableSymbol: string): string => {
-  const sanitized = variableSymbol.replaceAll(/\D/gu, "").slice(0, 10);
-  if (sanitized.length === 0) {
-    throw new InvoicingInputError({
-      message: "Variable symbol must contain at least one digit",
-    });
+const validateVariableSymbol = (
+  variableSymbol: string,
+): InvoicingResult<string> => {
+  if (!/^\d{1,10}$/u.test(variableSymbol)) {
+    return invalidInput("Variable symbol must contain 1 to 10 digits");
   }
-  return sanitized;
+  return Result.ok(variableSymbol);
 };
 
-const formatDate = (date: string): string => {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) {
-    throw new InvoicingInputError({
-      message: "QR payment due date must use YYYY-MM-DD",
-    });
+const formatDate = (date: string): InvoicingResult<string> => {
+  const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(date);
+  if (!match?.groups) {
+    return invalidInput("QR payment due date must use YYYY-MM-DD");
   }
-  return date.replaceAll("-", "");
+  const year = Number(match.groups["year"]);
+  const month = Number(match.groups["month"]);
+  const day = Number(match.groups["day"]);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ].at(month - 1);
+  if (year === 0 || daysInMonth === undefined || day < 1 || day > daysInMonth) {
+    return invalidInput("QR payment due date must be a real calendar date");
+  }
+  return Result.ok(date.replaceAll("-", ""));
 };
 
 const sanitizeFieldValue = (value: string): string => {

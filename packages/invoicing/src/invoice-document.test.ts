@@ -26,7 +26,7 @@ describe("invoice document totals", () => {
           vatTreatment: "domestic_vat",
         },
       ],
-    });
+    }).unwrap();
 
     expect(result.totals).toEqual({
       netAmountMinor: cents(2),
@@ -55,7 +55,7 @@ describe("invoice document totals", () => {
           vatTreatment: "reverse_charge",
         },
       ],
-    });
+    }).unwrap();
 
     expect(result.totals.grossAmountMinor).toBe(cents(50_000));
     expect(result.totals.vatAmountMinor).toBe(cents(0));
@@ -75,11 +75,11 @@ describe("invoice document totals", () => {
     const advance = createSingleLineDocument({
       ...input,
       documentType: "advance",
-    });
+    }).unwrap();
     const credit = createSingleLineDocument({
       ...input,
       documentType: "credit_note",
-    });
+    }).unwrap();
 
     expect(advance.totals.grossAmountMinor).toBe(cents(12_100));
     expect(credit.totals.grossAmountMinor).toBe(cents(-12_100));
@@ -87,17 +87,21 @@ describe("invoice document totals", () => {
   });
 
   test("rejects documents without lines", () => {
-    expect(() =>
-      createInvoiceDocument({
-        documentType: "invoice",
-        number: "INV-1",
-        issueDate: "2026-04-30",
-        currency: "CZK",
-        seller: { name: "Seller" },
-        buyer: { name: "Buyer" },
-        lines: [],
-      }),
-    ).toThrow("Invoice document requires at least one line");
+    const result = createInvoiceDocument({
+      documentType: "invoice",
+      number: "INV-1",
+      issueDate: "2026-04-30",
+      currency: "CZK",
+      seller: { name: "Seller" },
+      buyer: { name: "Buyer" },
+      lines: [],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        "Invoice document requires at least one line",
+      );
+    }
   });
 
   test("rejects a total that exceeds safe minor units", () => {
