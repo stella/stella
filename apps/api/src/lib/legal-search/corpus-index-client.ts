@@ -18,11 +18,29 @@ import { isRecord } from "@/api/lib/type-guards";
  * citation-authority blend happens in the rerank util, not here.
  */
 
+type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
+
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
-}> {}
+  rejection: CorpusIndexErrorRejection;
+}> {
+  constructor(input: {
+    message: string;
+    status?: number | undefined;
+    cause?: unknown;
+    rejection?: CorpusIndexErrorRejection | undefined;
+  }) {
+    super({ ...input, rejection: input.rejection ?? "unknown" });
+  }
+}
+
+/**
+ * Mirrors Quickwit's default ingest `content_length_limit`; our node config
+ * does not set this option.
+ */
+export const CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES = 10 * 1024 * 1024;
 
 const SEARCH_TIMEOUT_MS = 30_000;
 
@@ -328,7 +346,20 @@ const toCorpusIndexError = (error: unknown): CorpusIndexError =>
             ? error.message
             : "corpus index request failed",
         cause: error,
+        rejection: "unknown",
       });
+
+const rejectionForHttpStatus = (
+  status: number,
+): "definite" | "unknown" | "transient" => {
+  if (status === 400 || status === 413 || status === 422) {
+    return "definite";
+  }
+  if (status === 429 || status === 408 || status === 404) {
+    return "transient";
+  }
+  return "unknown";
+};
 
 type CorpusIndexRequest = {
   baseUrl: string;
@@ -376,6 +407,7 @@ const requestFailure = ({
       ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
       : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
     cause: error,
+    rejection: "unknown",
   });
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
@@ -393,6 +425,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
     throw new CorpusIndexError({
       message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
+      rejection: rejectionForHttpStatus(response.status),
     });
   }
   return await response.json().catch((error: unknown) => {
@@ -519,6 +552,12 @@ const ingestBatch = async ({
         rejected = parseFailures.length;
       }
       if (receiptMode === "exact-v2") {
+        if (sentDocs > 0 && ingested === 0 && rejected > 0) {
+          throw new CorpusIndexError({
+            message: `corpus index ingest rejected all ${sentDocs} documents`,
+            rejection: "definite",
+          });
+        }
         if (
           sentDocs === 0 ||
           processing !== sentDocs ||
@@ -527,6 +566,7 @@ const ingestBatch = async ({
         ) {
           throw new CorpusIndexError({
             message: `corpus index ingest receipt did not commit all ${sentDocs} documents (processing=${String(processing)}, ingested=${String(ingested)}, rejected=${String(rejectedValue)})`,
+            rejection: "unknown",
           });
         }
         return;
@@ -537,11 +577,13 @@ const ingestBatch = async ({
       if (rejected > 0) {
         throw new CorpusIndexError({
           message: `corpus index ingest rejected ${rejected} of ${sentDocs} documents`,
+          rejection: ingested === 0 ? "definite" : "unknown",
         });
       }
       if (typeof processing === "number" && processing < sentDocs) {
         throw new CorpusIndexError({
           message: `corpus index ingest accepted ${processing} of ${sentDocs} documents`,
+          rejection: "unknown",
         });
       }
     },

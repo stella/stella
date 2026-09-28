@@ -88,6 +88,34 @@ test("append tails coalesce serialized revisions across read windows", () => {
   expect(second.tails.size).toBe(0);
 });
 
+test("single append entries remain singleton requests", () => {
+  const result = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries: [
+      {
+        indexId: "case_law_v5_cs_sk",
+        ndjson: "single-1",
+        ndjsonBytes: 8,
+        leaseExpiresAtMs: 300_000,
+        appendMode: "single",
+      },
+      {
+        indexId: "case_law_v5_cs_sk",
+        ndjson: "single-2",
+        ndjsonBytes: 8,
+        leaseExpiresAtMs: 300_000,
+        appendMode: "single",
+      },
+    ],
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(
+    result.flush.map(({ entries }) => entries.map(({ ndjson }) => ndjson)),
+  ).toEqual([["single-1"], ["single-2"]]);
+  expect(result.tails.size).toBe(0);
+});
+
 test("append tails flush before their earliest lease deadline", () => {
   const result = advanceCorpusProjectionAppendTails({
     tails: new Map(),

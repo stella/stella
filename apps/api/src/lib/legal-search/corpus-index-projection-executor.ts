@@ -347,6 +347,7 @@ type PreparedProjectionEntry = {
   ndjson: string;
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
+  appendMode: CorpusProjectionIntentLease["appendMode"];
 };
 
 type PreparedProjectionFailure = {
@@ -377,6 +378,7 @@ type ProjectionAppendPart = {
   ndjson: string;
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
+  appendMode?: CorpusProjectionIntentLease["appendMode"];
 };
 
 type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
@@ -437,6 +439,7 @@ export const advanceCorpusProjectionAppendTails = <
       if (
         tail !== undefined &&
         (tail.entries.length >= CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
+          entry.appendMode === "single" ||
           tail.ndjsonBytes + entry.ndjsonBytes >
             CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES)
       ) {
@@ -445,12 +448,17 @@ export const advanceCorpusProjectionAppendTails = <
         tail = undefined;
       }
       if (tail === undefined) {
-        nextTails.set(indexId, {
+        const next = {
           indexId,
           entries: [entry],
           ndjsonBytes: entry.ndjsonBytes,
           earliestLeaseExpiresAtMs: entry.leaseExpiresAtMs,
-        });
+        };
+        if (entry.appendMode === "single") {
+          flush.push(next);
+        } else {
+          nextTails.set(indexId, next);
+        }
         continue;
       }
       tail.entries.push(entry);
@@ -546,6 +554,7 @@ const prepareProjectionEntry = (
     ndjson: request.ndjson,
     ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
     leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
+    appendMode: material.lease.appendMode,
   });
 };
 
@@ -672,13 +681,18 @@ const processPreparedRequests = async ({
     },
   );
   if (appended.isErr()) {
-    // The outcome is recorded on each intent, but the cycle summary only says
-    // "unknown"; without this line the engine's answer never reaches a log.
-    logger.warn("corpus_projection.append_unknown", {
-      indexId: request.indexId,
-      documents: started.length,
-      ...errorFingerprint(appended.error),
-    });
+    // The cycle summary groups every failed append under cleanup pending; the
+    // state row retains whether the engine rejected this exact request.
+    logger.warn(
+      appended.error.rejection === "definite"
+        ? "corpus_projection.append_rejected"
+        : "corpus_projection.append_unknown",
+      {
+        indexId: request.indexId,
+        documents: started.length,
+        ...errorFingerprint(appended.error),
+      },
+    );
     const abandoned = await runInTransaction(async (tx) => {
       const outcomes = await mapSequentially(
         started,
@@ -687,6 +701,10 @@ const processPreparedRequests = async ({
             intentId: preparedEntry.material.lease.intentId,
             leaseToken: preparedEntry.material.lease.leaseToken,
             errorMessage: appended.error.message,
+            rejection:
+              appended.error.rejection === "definite" && started.length > 1
+                ? "batch_rejection"
+                : appended.error.rejection,
           }),
       );
       return {

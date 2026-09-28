@@ -1152,6 +1152,273 @@ test("unknown append cleanup starts its barrier at append start", async () => {
   ]);
 });
 
+test("unknown append failures block after five consecutive attempts", async () => {
+  const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "retry_scheduled",
+      retryNotBefore: attemptedAt,
+      failureAttempts: 4,
+      lastFailureKind: "append_unknown",
+      lastFailureMessage: "previous unknown append failure",
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: attemptedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    panic("Expected projection lease");
+  }
+  await db.transaction(async (tx) => {
+    await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+    });
+    await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+      errorMessage: "append response was lost",
+    });
+  });
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state).toEqual({
+    workStatus: "blocked",
+    retryNotBefore: null,
+    failureAttempts: 5,
+  });
+});
+
+test("definite append rejections block after two consecutive attempts", async () => {
+  const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "retry_scheduled",
+      retryNotBefore: attemptedAt,
+      failureAttempts: 1,
+      lastFailureKind: "append_rejected",
+      lastFailureMessage: "previous definite append rejection",
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: attemptedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    panic("Expected projection lease");
+  }
+  await db.transaction(async (tx) => {
+    await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+    });
+    await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+      errorMessage: "append was rejected",
+      rejection: "definite",
+    });
+  });
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      retryNotBefore: corpusIndexProjectionStates.retryNotBefore,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state).toEqual({
+    workStatus: "blocked",
+    retryNotBefore: null,
+    failureAttempts: 2,
+  });
+});
+
+test("transient append failures do not charge failure attempts", async () => {
+  const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: attemptedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    panic("Expected projection lease");
+  }
+  await db.transaction(async (tx) => {
+    await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+    });
+    await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+      errorMessage: "temporary service failure",
+      rejection: "transient",
+    });
+  });
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state).toEqual({
+    workStatus: "retry_scheduled",
+    failureAttempts: 0,
+    lastFailureKind: null,
+  });
+});
+
+test("a changed desired epoch is not blocked by an old append failure", async () => {
+  const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: attemptedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    panic("Expected projection lease");
+  }
+  await db.transaction(async (tx) => {
+    await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+    });
+  });
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ court: "Changed desired epoch court" })
+      .where(eq(caseLawDecisions.id, DECISION_ID));
+    await advanceCorpusProjectionDesiredStateTx(asTestRaw<Transaction>(tx), {
+      family: "case_law",
+      entityId: DECISION_ID,
+    });
+  });
+  await db.transaction(async (tx) => {
+    await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+      errorMessage: "stale append response was lost",
+    });
+  });
+  const [state] = await db
+    .select({
+      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+      workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state).toEqual({
+    desiredEpoch: 2n,
+    workStatus: "eligible",
+    failureAttempts: 0,
+    lastFailureKind: null,
+  });
+});
+
+test("append abandonment locks projection state before its intent", async () => {
+  const attemptedAt = new Date("2026-08-25T12:00:00.000Z");
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        testNow: attemptedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    panic("Expected projection lease");
+  }
+  await db.transaction(async (tx) => {
+    await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+    });
+  });
+  const statements: string[] = [];
+  const loggedDb = drizzle({
+    client,
+    logger: { logQuery: (query) => statements.push(query) },
+  });
+  await loggedDb.transaction(async (tx) => {
+    await abandonCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+      intentId: lease.intentId,
+      leaseToken: lease.leaseToken,
+      testNow: attemptedAt,
+      errorMessage: "append response was lost",
+    });
+  });
+  const stateLock = statements.findIndex(
+    (query) =>
+      query.includes('from "corpus_index_projection_states"') &&
+      query.includes("for update"),
+  );
+  const intentLock = statements.findIndex(
+    (query) =>
+      query.includes('from "corpus_index_projection_intents"') &&
+      query.includes("for update"),
+  );
+  expect(stateLock).toBeGreaterThanOrEqual(0);
+  expect(intentLock).toBeGreaterThan(stateLock);
+});
+
 test("applied census rejects an incomplete multi-document revision", async () => {
   const appliedAt = new Date("2026-08-25T12:00:00.000Z");
   const leases = await db.transaction(

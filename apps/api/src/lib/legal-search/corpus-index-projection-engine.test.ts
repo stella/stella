@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -13,6 +14,7 @@ import {
   corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -24,6 +26,15 @@ const FIRST_REVISION = toSafeId<"corpusIndexProjectionIntent">(
 const SECOND_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000002",
 );
+
+test("request budget stays below the single-revision ingest cap", () => {
+  expect(CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES).toBe(
+    CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES - 512 * 1024,
+  );
+  expect(LIMITS.corpusIndexIngestMaxBytes).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  );
+});
 
 test("projection deletes select exact unique append attempts", () => {
   expect(

@@ -80,6 +80,8 @@ export type CorpusIndexProjectionWorkStatus =
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",
   "revision_too_large",
+  "append_unknown",
+  "append_rejected",
 ] as const;
 export type CorpusIndexProjectionFailureKind =
   (typeof CORPUS_INDEX_PROJECTION_FAILURE_KINDS)[number];
