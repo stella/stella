@@ -267,9 +267,9 @@ const getDecisionMetrics = async (
       const col = FIELD_COLUMN_MAP[field];
       return [
         field,
-        sql<number>`COUNT(*) FILTER (WHERE ${col} IS NOT NULL AND ${col}::text != '')`.as(
-          field,
-        ),
+        sql`COUNT(*) FILTER (WHERE ${col} IS NOT NULL AND ${col}::text != '')`
+          .mapWith(Number)
+          .as(field),
       ];
     }),
   );
@@ -278,9 +278,15 @@ const getDecisionMetrics = async (
     tx
       .select({
         total: count(),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- wall-clock cutoff, never round-tripped through the database
-        inserted: sql<number>`COUNT(*) FILTER (WHERE ${caseLawDecisions.createdAt} > ${sinceDate})`,
-        indexed: sql<number>`COUNT(*) FILTER (WHERE ${caseLawSearchDocuments.decisionId} IS NOT NULL)`,
+        inserted:
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- wall-clock cutoff, never round-tripped through the database
+          sql`COUNT(*) FILTER (WHERE ${caseLawDecisions.createdAt} > ${sinceDate})`.mapWith(
+            Number,
+          ),
+        indexed:
+          sql`COUNT(*) FILTER (WHERE ${caseLawSearchDocuments.decisionId} IS NOT NULL)`.mapWith(
+            Number,
+          ),
         ...fieldColumns,
       })
       .from(caseLawDecisions)
@@ -299,9 +305,9 @@ const getCitationStats = async (sourceId: SafeId<"caseLawSource">) => {
       .select({
         total: count(),
         resolved:
-          sql<number>`COUNT(*) FILTER (WHERE ${caseLawCitations.citedDecisionId} IS NOT NULL)`.as(
-            "resolved",
-          ),
+          sql`COUNT(*) FILTER (WHERE ${caseLawCitations.citedDecisionId} IS NOT NULL)`
+            .mapWith(Number)
+            .as("resolved"),
       })
       .from(caseLawCitations)
       .innerJoin(
