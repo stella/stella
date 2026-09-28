@@ -27,7 +27,7 @@ const query = "SELECT 1";
 const result = await tx.execute(query);
 // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: array test on a bound result
 const first = Array.isArray(result) ? result.at(0) : undefined;
-// oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: bracket rows read
+// oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows, typescript/dot-notation -- fixture: bracket rows read
 const bracketRows = isRecord(result) ? result["rows"] : [];
 // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: rows key test
 const hasRows = isRecord(result) && "rows" in result;
@@ -54,7 +54,7 @@ const rowsOf = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value;
   }
-  // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows -- fixture: both-shape sniff
+  // oxlint-disable-next-line no-hand-rolled-execute-rows/no-hand-rolled-execute-rows, typescript/dot-notation -- fixture: both-shape sniff
   return isRecord(value) ? value["rows"] : [];
 };
 
