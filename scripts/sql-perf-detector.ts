@@ -38,8 +38,12 @@ const GROUP_EXPRESSION =
 const GROUP_NON_COLUMNS =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast|text|year|month|day|from|for|as|null|true|false|now|current_date|current_timestamp)\b/giu;
 const SQL_STRING = /'(?:''|[^'])*'/gu;
-const SQL_OR_SUBQUERY =
-  /\bOR\b\s*\(*\s*(?:(?:[a-z_][\w."]*|__SQL_EXPR_\d+__)\s+)?(?:IN\s*\(\s*SELECT\b|(?:NOT\s+)?EXISTS\s*\()/giu;
+const SQL_COLUMN = String.raw`(?:[a-z_][\w."]*|__SQL_EXPR_\d+__)`;
+const SQL_ROW = String.raw`\(\s*${SQL_COLUMN}(?:\s*,\s*${SQL_COLUMN})+\s*\)`;
+const SQL_OR_SUBQUERY = new RegExp(
+  String.raw`\bOR\b\s*\(*\s*(?:(?:NOT\s+)?EXISTS\s*\(|(?:${SQL_COLUMN}|${SQL_ROW})\s*(?:(?:NOT\s+)?IN|=\s*ANY)\s*\(\s*(?:SELECT\b|__SQL_EXPR_(?<selectIndex>\d+)__))`,
+  "giu",
+);
 const S3_KEY = /(?:\b[a-z][\w]*_s3_key\b|\b[a-z][\w]*S3Key\b)/iu;
 const REASON =
   /^(?:small table\s+[a-z][\w.]*\b|index\s+[a-z][\w.]*\b|bounded by\s+\S[\s\S]*)/iu;
@@ -259,10 +263,12 @@ const hasSelectBuilder = (
     return false;
   }
   const value = resolve(expression, bindings);
-  if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
-    return /\bSELECT\b/iu.test(
-      sqlWithoutLiterals(sqlParts(file, value.template).sql),
-    );
+  if (
+    ts.isTaggedTemplateExpression(value) &&
+    isSqlTag(value) &&
+    /\bSELECT\b/iu.test(sqlWithoutLiterals(sqlParts(file, value.template).sql))
+  ) {
+    return true;
   }
   if (
     ts.isCallExpression(value) &&
@@ -299,6 +305,15 @@ const hasSubqueryOperand = (
   }
   const { imports, bindings, file } = context;
   const value = resolve(expression, bindings);
+  if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
+    const visible = sqlWithoutLiterals(sqlParts(file, value.template).sql);
+    if (
+      /\bEXISTS\s*\(/iu.test(visible) ||
+      hasSelectBuilder(value, bindings, file)
+    ) {
+      return true;
+    }
+  }
   if (ts.isCallExpression(value)) {
     const name = drizzleCallName(value, imports);
     if (name === "exists" || name === "notExists") {
@@ -750,6 +765,18 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
     for (const match of sqlWithoutLiterals(sql).matchAll(SQL_OR_SUBQUERY)) {
+      const selectIndex = match.groups?.selectIndex;
+      const selectExpression =
+        selectIndex === undefined
+          ? undefined
+          : expressions[Number(selectIndex)];
+      if (
+        selectIndex !== undefined &&
+        (selectExpression === undefined ||
+          !hasSelectBuilder(selectExpression, bindings, file))
+      ) {
+        continue;
+      }
       add("or-subquery", offsets[match.index] ?? node.getStart(file), node);
     }
     for (const match of /\bCHECK\s*\(/iu.test(sql) ? [] : sql.matchAll(LIKE)) {

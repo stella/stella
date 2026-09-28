@@ -264,8 +264,37 @@ test.each([
   "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR id IN (SELECT decision_id FROM case_law_decision_identifiers)`",
   "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR EXISTS (SELECT 1 FROM case_law_decision_identifiers)`",
   "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR NOT EXISTS (SELECT 1 FROM case_law_decision_identifiers)`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR id NOT IN (SELECT decision_id FROM case_law_decision_identifiers)`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR ${caseLawDecisions.id} IN (${tx.select({ id: identifiers.decisionId }).from(identifiers)})`",
+  "const sub = sql`SELECT decision_id FROM case_law_decision_identifiers`; sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR ${caseLawDecisions.id} IN (${sub})`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR id = ANY (SELECT decision_id FROM case_law_decision_identifiers)`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR (id, country) IN (SELECT decision_id, country FROM case_law_decision_identifiers)`",
 ])("flags SQL-text OR/subquery: %s", (source) => {
   expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
+test.each([
+  'import { eq, or, sql } from "drizzle-orm"; or(eq(table.id, id), sql`EXISTS (SELECT 1 FROM other)`);',
+  'import { eq, or, sql } from "drizzle-orm"; or(eq(table.id, id), sql`id IN (SELECT id FROM other)`);',
+  'import { eq, or, sql } from "drizzle-orm"; or(eq(table.id, id), sql`SELECT id FROM other`);',
+])("flags raw SQL subquery operands of Drizzle or(): %s", (source) => {
+  expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
+test("does not treat an interpolated value list as a subquery", () => {
+  expect(
+    kinds(
+      "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR ${caseLawDecisions.id} IN (${ids})`",
+    ),
+  ).toEqual([]);
+});
+
+test("does not treat a SQL string inside a raw operand as a subquery", () => {
+  expect(
+    kinds(
+      "import { eq, or, sql } from \"drizzle-orm\"; or(eq(table.id, id), sql`note = 'SELECT EXISTS ('`);",
+    ),
+  ).toEqual([]);
 });
 
 test("does not read OR/subquery syntax inside a SQL string or comment", () => {

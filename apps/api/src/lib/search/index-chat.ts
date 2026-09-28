@@ -433,6 +433,31 @@ type BackfillChatThreadSearchIndexOptions = {
   database?: Pick<typeof rootDb, "execute" | "select">;
 };
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller
+export const chatThreadBackfillCandidatesQuery = (cursor: string) => sql`
+  SELECT t.id
+  FROM chat_threads t
+  LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
+  LEFT JOIN LATERAL (
+    SELECT 1 AS missing
+    FROM chat_messages m
+    LEFT JOIN chat_message_search_documents md ON md.message_id = m.id
+    WHERE m.thread_id = t.id AND md.message_id IS NULL
+    LIMIT 1
+  ) mm ON TRUE
+  WHERE t.id > ${cursor}::uuid
+    AND (
+      d.thread_id IS NULL
+      -- The previous writer stored UUIDv7 passage generations. The
+      -- reserved display-metadata generation marks the current projection.
+      OR d.preview_generation IS DISTINCT FROM
+        ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
+      OR mm.missing IS NOT NULL
+    )
+  ORDER BY t.id
+  LIMIT ${BACKFILL_BATCH_SIZE}
+`;
+
 export const backfillChatThreadSearchIndex = async ({
   signal,
   database = rootDb,
@@ -445,50 +470,9 @@ export const backfillChatThreadSearchIndex = async ({
       return total;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    // Each branch's first page contains every ID it can contribute to the
-    // first page after UNION; later IDs cannot precede those already selected.
-    // oxlint-disable-next-line require-search-scope/require-search-scope -- tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller
-    const batch = await database.execute<{ id: SafeId<"chatThread"> }>(sql`
-      WITH missing_projection AS (
-        SELECT t.id
-        FROM chat_threads t
-        LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
-        WHERE t.id > ${cursor}::uuid AND d.thread_id IS NULL
-        ORDER BY t.id
-        LIMIT ${BACKFILL_BATCH_SIZE}
-      ), stale_generation AS (
-        SELECT t.id
-        FROM chat_threads t
-        JOIN chat_thread_search_documents d ON d.thread_id = t.id
-        -- The previous writer stored UUIDv7 passage generations. The
-        -- reserved display-metadata generation marks the current projection.
-        WHERE t.id > ${cursor}::uuid
-          AND d.preview_generation IS DISTINCT FROM
-            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
-        ORDER BY t.id
-        LIMIT ${BACKFILL_BATCH_SIZE}
-      ), missing_message AS (
-        SELECT t.id
-        FROM chat_threads t
-        WHERE t.id > ${cursor}::uuid
-          AND EXISTS (
-            SELECT 1
-            FROM chat_messages m
-            LEFT JOIN chat_message_search_documents md
-              ON md.message_id = m.id
-            WHERE m.thread_id = t.id AND md.message_id IS NULL
-          )
-        ORDER BY t.id
-        LIMIT ${BACKFILL_BATCH_SIZE}
-      )
-      SELECT id FROM (
-        SELECT id FROM missing_projection
-        UNION SELECT id FROM stale_generation
-        UNION SELECT id FROM missing_message
-      ) candidates
-      ORDER BY id
-      LIMIT ${BACKFILL_BATCH_SIZE}
-    `);
+    const batch = await database.execute<{ id: SafeId<"chatThread"> }>(
+      chatThreadBackfillCandidatesQuery(cursor),
+    );
 
     const last = batch.at(-1);
     if (!last) {

@@ -22,6 +22,7 @@ export const wholeAnnotationSql = ({
   and(
     eq(legalReaderAnnotations.organizationId, organizationId),
     eq(legalReaderAnnotations.userId, userId),
+    // sql-perf-allow: bounded by READER_ANNOTATION_MAX_SPANS rows per group after one primary-key lookup
     or(
       eq(legalReaderAnnotations.id, annotationId),
       and(

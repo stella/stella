@@ -57,6 +57,30 @@ export const ecliOr = or(
 // oxlint-disable-next-line sql-perf/sql-perf -- fixture: SQL text OR/subquery
 export const sqlOr = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR id IN (SELECT decision_id FROM case_law_decision_identifiers)`;
 
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: SQL text NOT IN subquery
+export const sqlNotIn = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR id NOT IN (SELECT decision_id FROM case_law_decision_identifiers)`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: interpolated select builder
+export const sqlInterpolatedIn = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR ${caseLawDecisions.id} IN (${tx.select({ id: identifiers.decisionId }).from(identifiers)})`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: SQL text ANY subquery
+export const sqlAny = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR id = ANY (SELECT decision_id FROM case_law_decision_identifiers)`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: SQL text tuple subquery
+export const sqlTupleIn = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR (id, country) IN (SELECT decision_id, country FROM case_law_decision_identifiers)`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: raw SQL EXISTS operand
+export const rawExistsOr = or(
+  eq(caseLawDecisions.id, term),
+  sql`EXISTS (SELECT 1 FROM case_law_decision_identifiers)`,
+);
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: raw SQL SELECT operand
+export const rawSelectOr = or(
+  eq(caseLawDecisions.id, term),
+  sql`id IN (SELECT decision_id FROM case_law_decision_identifiers)`,
+);
+
 // oxlint-disable-next-line sql-perf/sql-perf -- fixture: notExists operand
 export const existsOr = or(
   eq(caseLawDecisions.id, term),
