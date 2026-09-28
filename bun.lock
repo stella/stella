@@ -472,6 +472,7 @@
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tanstack/devtools-vite": "^0.8.5",
+        "@tanstack/router-generator": "1.167.38",
         "@tanstack/table-core": "9.2.4",
         "@testing-library/dom": "10.4.2",
         "@testing-library/react": "16.3.3",
