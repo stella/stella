@@ -1,6 +1,8 @@
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
+import { featureFlagSchema } from "@/api/env-base-schema";
 
 /**
  * Environment shared by the API process and document-processing worker.
@@ -30,8 +32,8 @@ export const envDocumentProcessingWorkerServerSchema = {
 
 type DocumentProcessingEnvInvariantInput = {
   contentEncryptionKey: string | undefined;
-  nodeEnv: string | undefined;
   redisUrl: string | undefined;
+  runtimeMode: RuntimeMode;
 };
 
 /**
@@ -42,14 +44,14 @@ type DocumentProcessingEnvInvariantInput = {
  */
 export const documentProcessingEnvInvariantViolation = ({
   contentEncryptionKey,
-  nodeEnv,
   redisUrl,
+  runtimeMode,
 }: DocumentProcessingEnvInvariantInput): string | null => {
   if (redisUrl === undefined) {
     return "REDIS_URL is required by the API server and the document-processing worker.";
   }
-  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !contentEncryptionKey) {
-    return "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.";
+  if (runtimeMode.mode !== RUNTIME_MODE.open && !contentEncryptionKey) {
+    return "CONTENT_ENCRYPTION_KEY is required outside local development.";
   }
   return null;
 };
