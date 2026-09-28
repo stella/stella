@@ -45,6 +45,7 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -75,6 +76,7 @@ import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
+const NO_HITS: readonly CorpusIndexHit[] = [];
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
@@ -632,21 +634,22 @@ const retrievePassages = async (
     );
     // An unready index group reads as no passages, as a failed search does.
     if (Result.isError(target)) {
-      return target;
+      return NO_HITS;
     }
     const { serving, manifest } = target.value;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
-    return await getCorpusIndexClient(serving.cluster).search({
+    const response = await getCorpusIndexClient(serving.cluster).search({
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
       maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
       sortBy: "_score",
     });
+    return Result.isError(response) ? NO_HITS : response.value.hits;
   });
-  if (Result.isError(searched) || Result.isError(searched.value)) {
+  if (Result.isError(searched)) {
     return [];
   }
-  return searched.value.value.hits.flatMap((hit) => {
+  return searched.value.flatMap((hit) => {
     const anchorId = hit["anchor_id"];
     const text = hit["text"];
     return typeof anchorId === "string" &&
