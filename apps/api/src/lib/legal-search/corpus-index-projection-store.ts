@@ -846,7 +846,7 @@ const lockProjectionFailureRowsTx = async (
 const isStillDesiredProjection = (
   state: typeof corpusIndexProjectionStates.$inferSelect | undefined,
   intent: typeof corpusIndexProjectionIntents.$inferSelect,
-): boolean =>
+): state is typeof corpusIndexProjectionStates.$inferSelect =>
   state !== undefined &&
   state.desiredAction === "upsert" &&
   state.desiredEpoch === intent.epoch &&
