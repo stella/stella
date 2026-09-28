@@ -480,7 +480,7 @@ const findSignal = (
     const run = pullRequest.checkRuns.find(
       (candidate) => candidate.name === name,
     );
-    if (run !== undefined && run.status.toUpperCase() === "COMPLETED") {
+    if (run?.status.toUpperCase() === "COMPLETED") {
       const conclusion = (run.conclusion ?? "NONE").toUpperCase();
       return conclusions.includes(conclusion)
         ? {
@@ -581,7 +581,7 @@ export const evaluatePullRequest = (
   if (threads.unresolved.length > 0) {
     return verdict(
       "failure",
-      `${plural(threads.unresolved.length, "unresolved review thread")}`,
+      plural(threads.unresolved.length, "unresolved review thread"),
     );
   }
   const blocking = reviewers.filter(
@@ -945,9 +945,10 @@ export const runToRepost = (
       newest = run;
     }
   }
+  if (latest === undefined || newest === undefined) {
+    return undefined;
+  }
   if (
-    latest === undefined ||
-    newest === undefined ||
     newest.identity === null ||
     observedTime(newest) <= observedTime(latest)
   ) {

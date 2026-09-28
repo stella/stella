@@ -884,13 +884,11 @@ export const guardedPullRequest = (
         run.snapshots.get(number)?.headSha ??
         run.eventHeads.get(number) ??
         run.gateway.readHead(number);
-      if (headSha !== undefined) {
-        publish(run, headSha, unreadableOutput(reason), {
-          kind: "pr",
-          pullRequest: number,
-          observedAt: now(),
-        });
-      }
+      publish(run, headSha, unreadableOutput(reason), {
+        kind: "pr",
+        pullRequest: number,
+        observedAt: now(),
+      });
     },
   );
 
@@ -956,7 +954,7 @@ const main = (argv: readonly string[]): void => {
     argv.filter((arg) => arg !== "--dry-run"),
     "--signal",
   );
-  const [command, target] = signal.rest;
+  const [command = "", target] = signal.rest;
   const config = parseReviewGateConfig(
     Bun.YAML.parse(readFileSync(CONFIG_PATH, "utf-8")),
   );
@@ -1028,7 +1026,7 @@ const main = (argv: readonly string[]): void => {
     }
     default: {
       fail(
-        `Unknown command ${command ?? "(none)"}; expected pr, sha, group, relay or sweep`,
+        `Unknown command "${command}"; expected pr, sha, group, relay or sweep`,
       );
     }
   }

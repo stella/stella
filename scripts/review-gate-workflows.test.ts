@@ -28,15 +28,29 @@ type Workflow = {
   >;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isWorkflow = (value: unknown): value is Workflow =>
+  isRecord(value) &&
+  typeof value["name"] === "string" &&
+  isRecord(value["on"]) &&
+  isRecord(value["jobs"]) &&
+  Object.values(value["jobs"]).every(
+    (job) => isRecord(job) && Array.isArray(job["steps"]),
+  );
+
 const readWorkflow = (file: string): Workflow => {
   const parsed: unknown = Bun.YAML.parse(
     readFileSync(path.join(WORKFLOWS, file), "utf-8"),
   );
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new TypeError(`${file} is not a mapping`);
-  }
-  return parsed as Workflow;
+  return isWorkflow(parsed)
+    ? parsed
+    : expect.unreachable(`${file} is not a workflow`);
 };
+
+const permissionLevels = (permissions: unknown): readonly unknown[] =>
+  isRecord(permissions) ? Object.values(permissions) : [];
 
 const publisher = readWorkflow("review-gate.yml");
 const relay = readWorkflow("review-gate-signal.yml");
@@ -156,12 +170,10 @@ describe("the monitor", () => {
     );
     expect(source).not.toContain("scripts/review-gate");
     for (const job of Object.values(monitor.jobs)) {
-      expect(Object.values(job.permissions as Record<string, string>)).toEqual(
+      expect(permissionLevels(job.permissions)).toEqual(
         expect.arrayContaining(["read"]),
       );
-      expect(
-        Object.values(job.permissions as Record<string, string>),
-      ).not.toContain("write");
+      expect(permissionLevels(job.permissions)).not.toContain("write");
     }
   });
 });

@@ -78,8 +78,11 @@ const snapshot = (
 });
 
 // Both reviewers reported on the current request and head.
-const reported: Partial<PullRequestSnapshot> = {
-  statuses: [{ context: "PerPush", state: "SUCCESS" }],
+const REPORTED_STATUSES: PullRequestSnapshot["statuses"] = [
+  { context: "PerPush", state: "SUCCESS" },
+];
+const reported = {
+  statuses: REPORTED_STATUSES,
   reactions: [
     {
       user: "request-bot[bot]",
@@ -114,7 +117,7 @@ const stateOf = (
 describe("reviewer wait", () => {
   test("waits for a reviewer that has not reported before its timeout", () => {
     const verdict = evaluatePullRequest(
-      snapshot({ statuses: reported.statuses }),
+      snapshot({ statuses: REPORTED_STATUSES }),
       CONFIG,
       minutesAfter(OPENED, 5),
     );
@@ -190,7 +193,7 @@ describe("reviewer wait", () => {
 
   test("passes once the timeout elapses and names the reviewer that never reported", () => {
     const verdict = evaluatePullRequest(
-      snapshot({ statuses: reported.statuses }),
+      snapshot({ statuses: REPORTED_STATUSES }),
       CONFIG,
       minutesAfter(OPENED, 15),
     );
@@ -251,7 +254,7 @@ describe("reviewer wait", () => {
   test("request scope: a review of an older commit counts, and says it does not cover later pushes", () => {
     const verdict = evaluatePullRequest(
       snapshot({
-        statuses: reported.statuses,
+        statuses: REPORTED_STATUSES,
         reviews: [
           {
             author: "request-bot",
@@ -332,7 +335,7 @@ describe("reviewer wait", () => {
   test("the wait starts when a draft becomes ready, not while it was a draft", () => {
     const ready = minutesAfter(OPENED, 120);
     const verdict = evaluatePullRequest(
-      snapshot({ statuses: reported.statuses, readyAt: ready }),
+      snapshot({ statuses: REPORTED_STATUSES, readyAt: ready }),
       CONFIG,
       minutesAfter(ready, 5),
     );
@@ -442,7 +445,7 @@ describe("skip rules", () => {
 
   test("a per-reviewer skip waives only that reviewer", () => {
     const verdict = evaluatePullRequest(
-      snapshot({ author: "dependabot", statuses: reported.statuses }),
+      snapshot({ author: "dependabot", statuses: REPORTED_STATUSES }),
       CONFIG,
       minutesAfter(OPENED, 1),
     );
@@ -535,7 +538,7 @@ describe("merge group", () => {
       now,
     );
     const waiting = evaluatePullRequest(
-      snapshot({ statuses: reported.statuses, number: 202 }),
+      snapshot({ statuses: REPORTED_STATUSES, number: 202 }),
       CONFIG,
       now,
     );
