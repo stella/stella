@@ -592,7 +592,7 @@
     },
     {
       "id": "denied-step-ends-at-its-recorded-step",
-      "fix": "#4020",
+      "fix": "#4038",
       "behaviour": "A step whose every call was denied ends where the next step's first call records a step of its own, so its answers go right after it even when no text separates the two steps.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
