@@ -1,5 +1,4 @@
 import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
-import { Result } from "better-result";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -88,18 +87,15 @@ const newThreadScripts = (): ThreadScripts => {
 };
 
 /**
- * A tool result's content, its JSON in canonical key order: storing a result
- * reorders its keys (jsonb), which does not change what it says.
+ * A tool result's content as the model reads it: text exactly as handed over
+ * (its JSON keys are sorted before any request, so a stored result reads the
+ * same as the live one), parts with their keys in canonical order, since the
+ * provider adapter writes their fields itself.
  */
-const resultIdentity = (content: ModelMessage["content"]): string => {
-  if (typeof content !== "string") {
-    return stableStringify(toJsonValue(content));
-  }
-  const parsed = Result.try((): unknown => JSON.parse(content));
-  return Result.isOk(parsed)
-    ? stableStringify(toJsonValue(parsed.value))
-    : stableStringify(content);
-};
+const resultIdentity = (content: ModelMessage["content"]): string =>
+  typeof content === "string"
+    ? JSON.stringify(content)
+    : stableStringify(toJsonValue(content));
 
 /**
  * Records each tool result of an earlier turn that `messages` hands the
