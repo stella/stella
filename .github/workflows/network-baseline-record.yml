@@ -150,13 +150,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           git fetch --no-tags origin "$BASE_SHA"
           git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          git diff --name-only "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
+          git show "$BASE_SHA:apps/web/src/routeTree.gen.ts" > "$RUNNER_TEMP/base-route-tree.gen.ts"
+          git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
           args=()
           if [[ "$ALL_ROUTES" == true ]]; then args+=(--all); fi
           bun scripts/network-baseline-scope.ts scope \
             --base "$RUNNER_TEMP/base-baseline.json" \
             --recorded apps/web/e2e/network-baseline.json \
             --changed "$RUNNER_TEMP/changed-routes" \
+            --base-route-tree "$RUNNER_TEMP/base-route-tree.gen.ts" \
             --route-tree apps/web/src/routeTree.gen.ts "${args[@]}"
           unexpected=$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)apps/web/e2e/network-baseline.json')
           untracked=$(git ls-files --others --exclude-standard)

@@ -1,4 +1,3 @@
-import { TaggedError } from "better-result";
 import { lstatSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -13,12 +12,9 @@ type BaselineEntry = {
 };
 type Baseline = Record<string, BaselineEntry>;
 
-class NetworkBaselineError extends TaggedError("NetworkBaselineError")<{
-  message: string;
-}> {}
-
 const fail = (message: string): never => {
-  throw new NetworkBaselineError({ message });
+  process.stderr.write(`${message}\n`);
+  process.exit(1);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -98,7 +94,15 @@ export const validateBaselineFile = (file: string): Baseline => {
 const routeSource = (specifier: string): string =>
   path.posix.normalize(`apps/web/src/${specifier.replace(/^\.\//u, "")}`);
 
-const sourceToRoute = (routeTree: string): Map<string, Set<string>> => {
+const normalizeSource = (source: string): string => {
+  const repoPath = source.replaceAll("\\", "/").replace(/^\.?\//u, "");
+  return repoPath.replace(/\.(tsx?|jsx?)$/u, "");
+};
+
+const touchedRoutesInTree = (
+  routeTree: string,
+  changed: Set<string>,
+): Set<string> => {
   const imports = new Map<string, string>();
   for (const match of routeTree.matchAll(
     /import\s*\{\s*Route\s+as\s+(\w+)\s*\}\s*from\s*['"](\.\/routes\/[^'"]+)['"]/gu,
@@ -108,37 +112,75 @@ const sourceToRoute = (routeTree: string): Map<string, Set<string>> => {
       imports.set(alias, routeSource(specifier));
     }
   }
-  const result = new Map<string, Set<string>>();
-  for (const match of routeTree.matchAll(
-    /fullPath:\s*['"]([^'"]+)['"][\s\S]*?preLoaderRoute:\s*typeof\s+(\w+)/gu,
-  )) {
-    const [, route, alias] = match;
-    const source = alias ? imports.get(alias) : undefined;
-    if (!route || !source) {
-      continue;
-    }
-    const routes = result.get(source) ?? new Set<string>();
-    routes.add(route);
-    result.set(source, routes);
+  const interfaceStart = routeTree.indexOf("interface FileRoutesByPath {");
+  const interfaceEnd = routeTree.indexOf("\n  }\n}", interfaceStart);
+  if (interfaceStart === -1 || interfaceEnd === -1) {
+    fail("route tree has no FileRoutesByPath interface");
   }
-  return result;
-};
+  const nodes = new Map<string, { route: string; parent: string }>();
+  const declarations = routeTree.slice(interfaceStart, interfaceEnd);
+  for (const [, body] of declarations.matchAll(
+    /^ {4}'[^']+': \{([\s\S]*?)^    \}/gmu,
+  )) {
+    const route = body?.match(/fullPath: '([^']+)'/u)?.[1];
+    const alias = body?.match(/preLoaderRoute: typeof (\w+)/u)?.[1];
+    const parent = body?.match(/parentRoute: typeof (\w+)/u)?.[1];
+    if (!route || !alias || !parent || !imports.has(alias)) {
+      fail("route tree has an incomplete FileRoutesByPath entry");
+    }
+    nodes.set(alias, { route, parent });
+  }
+  if (nodes.size === 0) {
+    fail("route tree has no FileRoutesByPath entries");
+  }
 
-const normalizeSource = (source: string): string => {
-  const repoPath = source.replaceAll("\\", "/").replace(/^\.?\//u, "");
-  return repoPath.replace(/\.(tsx?|jsx?)$/u, "");
+  const touched = new Set<string>();
+  for (const [alias, node] of nodes) {
+    let ancestorAlias = alias;
+    const seen = new Set<string>();
+    while (true) {
+      const ancestor = nodes.get(ancestorAlias);
+      if (!ancestor) {
+        fail(`route tree has an unknown parent: ${ancestorAlias}`);
+      }
+      // Parent route variables correspond to the generated import alias plus "Import".
+      const source = imports.get(ancestorAlias);
+      if (source && changed.has(normalizeSource(source))) {
+        const route = node.route.replace(/\/+$/u, "") || "/";
+        touched.add(route);
+        touched.add(`${route} target`);
+        break;
+      }
+      if (ancestor.parent === "rootRouteImport") {
+        if (changed.has("apps/web/src/routes/__root")) {
+          const route = node.route.replace(/\/+$/u, "") || "/";
+          touched.add(route);
+          touched.add(`${route} target`);
+        }
+        break;
+      }
+      ancestorAlias = `${ancestor.parent}Import`;
+      if (seen.has(ancestorAlias)) {
+        fail("route tree has a parent cycle");
+      }
+      seen.add(ancestorAlias);
+    }
+  }
+  return touched;
 };
 
 export const scopeBaseline = ({
   base,
   recorded,
   changedPaths,
+  baseRouteTree,
   routeTree,
   all = false,
 }: {
   base: Baseline;
   recorded: Baseline;
   changedPaths: string[];
+  baseRouteTree: string;
   routeTree: string;
   all?: boolean;
 }): Baseline => {
@@ -146,24 +188,20 @@ export const scopeBaseline = ({
     return recorded;
   }
   const changed = new Set(changedPaths.map(normalizeSource));
-  const touchedRoutes = new Set<string>();
-  for (const [source, routes] of sourceToRoute(routeTree)) {
-    if (changed.has(normalizeSource(source))) {
-      for (const route of routes) {
-        touchedRoutes.add(route);
-      }
-    }
-  }
+  const touchedRoutes = new Set([
+    ...touchedRoutesInTree(baseRouteTree, changed),
+    ...touchedRoutesInTree(routeTree, changed),
+  ]);
   const scoped: Baseline = {};
   for (const [route, entry] of Object.entries(recorded)) {
-    if (base[route] === undefined || touchedRoutes.has(route)) {
+    if (touchedRoutes.has(route)) {
       scoped[route] = entry;
-    } else {
+    } else if (base[route] !== undefined) {
       scoped[route] = base[route];
     }
   }
   for (const [route, entry] of Object.entries(base)) {
-    if (scoped[route] === undefined) {
+    if (scoped[route] === undefined && !touchedRoutes.has(route)) {
       scoped[route] = entry;
     }
   }
@@ -171,7 +209,7 @@ export const scopeBaseline = ({
 };
 
 const usage = `Usage:
-  bun scripts/network-baseline-scope.ts scope --base FILE --recorded FILE --changed FILE --route-tree FILE [--all]
+  bun scripts/network-baseline-scope.ts scope --base FILE --recorded FILE --changed FILE --base-route-tree FILE --route-tree FILE [--all]
   bun scripts/network-baseline-scope.ts validate FILE
 
 --changed is a newline-separated list of changed route source paths. scope validates both baselines and writes the scoped result to --recorded. validate checks the trusted artifact schema and size.`;
@@ -212,6 +250,7 @@ const main = (): void => {
     base,
     recorded,
     changedPaths,
+    baseRouteTree: readFileSync(option(args, "--base-route-tree"), "utf-8"),
     routeTree,
     all: args.includes("--all"),
   });

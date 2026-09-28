@@ -187,7 +187,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           git fetch --no-tags origin "$BASE_SHA"
           git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          git diff --name-only "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
+          git show "$BASE_SHA:apps/web/src/routeTree.gen.ts" > "$RUNNER_TEMP/base-route-tree.gen.ts"
+          git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
           recorded="$RUNNER_TEMP/recorded/network-baseline.json"
           cp "$recorded" "$RUNNER_TEMP/scoped-baseline.json"
           args=()
@@ -203,6 +204,7 @@ jobs:
             --base "$RUNNER_TEMP/base-baseline.json" \
             --recorded "$RUNNER_TEMP/scoped-baseline.json" \
             --changed "$RUNNER_TEMP/changed-routes" \
+            --base-route-tree "$RUNNER_TEMP/base-route-tree.gen.ts" \
             --route-tree "$GITHUB_WORKSPACE/apps/web/src/routeTree.gen.ts" "${args[@]}"
           cmp "$recorded" "$RUNNER_TEMP/scoped-baseline.json"
           cp "$recorded" "$GITHUB_WORKSPACE/apps/web/e2e/network-baseline.json"
