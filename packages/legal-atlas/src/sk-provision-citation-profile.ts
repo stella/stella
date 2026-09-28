@@ -32,6 +32,9 @@ const zb = (number: number, year: number): WorkIdentifier => ({
 /** The day 300/2005 and 301/2005 Z. z. replaced the 1961 criminal codes. */
 const CRIMINAL_RECODIFICATION = "2006-01-01";
 
+/** The day 140/1961 and 141/1961 Zb. took effect. */
+const CRIMINAL_CODES_1962 = "1962-01-01";
+
 /** The day 311/2001 Z. z. replaced 65/1965 Zb. */
 const LABOUR_CODE_RECODIFICATION = "2002-04-01";
 
@@ -39,18 +42,21 @@ const LABOUR_CODE_RECODIFICATION = "2002-04-01";
 // that name it, so the two tables cannot drift apart.
 const CRIMINAL_CODE_SUCCESSION = {
   older: zb(140, 1961),
+  olderFrom: CRIMINAL_CODES_1962,
   newer: zz(300, 2005),
   on: CRIMINAL_RECODIFICATION,
 };
 
 const CRIMINAL_PROCEDURE_SUCCESSION = {
   older: zb(141, 1961),
+  olderFrom: CRIMINAL_CODES_1962,
   newer: zz(301, 2005),
   on: CRIMINAL_RECODIFICATION,
 };
 
 const LABOUR_CODE_SUCCESSION = {
   older: zb(65, 1965),
+  olderFrom: "1966-01-01",
   newer: zz(311, 2001),
   on: LABOUR_CODE_RECODIFICATION,
 };
@@ -258,6 +264,7 @@ export const SK_PROFILE = {
     ...succession({
       spellings: ["zákon o civilnom letectve", "zákona o civilnom letectve"],
       older: zb(47, 1956),
+      olderFrom: "1956-10-01",
       newer: zz(143, 1998),
       on: "1998-07-01",
     }),
