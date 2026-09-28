@@ -10,6 +10,7 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   commitOrganizationFileBytes,
@@ -20,6 +21,7 @@ import {
   reserveOrganizationFileBytes,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -50,6 +52,26 @@ const counter = async () =>
     .from(organizationFileUsage)
     .where(eq(organizationFileUsage.organizationId, ids.orgA))
     .then((rows) => rows.at(0));
+const releaseConfirmedAbsentReservation = async (key: string) => {
+  const pending = await testDb
+    .select({ writeId: organizationFileObjects.writeId })
+    .from(organizationFileObjects)
+    .where(eq(organizationFileObjects.objectKey, key))
+    .then((rows) => rows.at(0));
+  expect(pending?.writeId).toBeTruthy();
+  if (!pending?.writeId) {
+    return;
+  }
+  await releaseOrganizationFileBytes(
+    {
+      status: "reserved",
+      organizationId: ids.orgA,
+      objectKey: key,
+      writeId: pending.writeId,
+    },
+    db(),
+  );
+};
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -151,6 +173,8 @@ describe("organization file usage", () => {
     expect(Result.isError(failed)).toBe(true);
     expect((await counter())?.reservedBytes).toBe(11n);
     await removeOrganizationFileBytes("fixture/write", db());
+    expect((await counter())?.reservedBytes).toBe(11n);
+    await releaseConfirmedAbsentReservation("fixture/write");
     expect((await counter())?.reservedBytes).toBe(0n);
 
     const written = await writeOrganizationFile({
@@ -228,6 +252,8 @@ describe("organization file usage", () => {
     expect((await counter())?.reservedBytes).toBe(23n);
     expect((await counter())?.committedBytes).toBe(0n);
     await removeOrganizationFileBytes("fixture/copy", db());
+    expect((await counter())?.reservedBytes).toBe(23n);
+    await releaseConfirmedAbsentReservation("fixture/copy");
   });
 
   test("missing capability leaves writes unbounded but recorded", async () => {
@@ -281,6 +307,8 @@ describe("organization file usage", () => {
   });
 
   test("ledger commit failure leaves a recoverable write identity", async () => {
+    const fake = startFakeS3();
+    const key = "fixture/commit-failure";
     let transactionCount = 0;
     const backingDb = db();
     const failingTransaction: typeof backingDb.transaction = async (fn) => {
@@ -291,19 +319,31 @@ describe("organization file usage", () => {
       return await backingDb.transaction(fn);
     };
     const written = await writeOrganizationFile({
-      ...input("fixture/commit-failure", 9),
+      ...input(key, 9),
       db: { transaction: failingTransaction },
-      write: async () => "confirmed",
+      write: async () => {
+        fake.put(envBase.S3_BUCKET, key, "confirmed", undefined, new Date());
+        return "confirmed";
+      },
     });
     expect(Result.isError(written)).toBe(true);
     const object = await testDb
       .select({ writeId: organizationFileObjects.writeId })
       .from(organizationFileObjects)
-      .where(eq(organizationFileObjects.objectKey, "fixture/commit-failure"))
+      .where(eq(organizationFileObjects.objectKey, key))
       .then((rows) => rows.at(0));
     expect(object?.writeId).toBeTruthy();
     expect((await counter())?.reservedBytes).toBe(9n);
-    await removeOrganizationFileBytes("fixture/commit-failure", db());
+    await testDb
+      .update(organizationFileObjects)
+      .set({ reservationStartedAt: new Date(Date.now() - 6 * 60_000) })
+      .where(eq(organizationFileObjects.objectKey, key));
+    const recovered = await reserveOrganizationFileBytes(input(key, 9), db());
+    expect(Result.isOk(recovered)).toBe(true);
+    expect((await counter())?.committedBytes).toBe(9n);
+    expect((await counter())?.reservedBytes).toBe(0n);
+    await removeOrganizationFileBytes(key, db());
+    fake.stop();
   });
 
   test("an obsolete write identity cannot settle a newer reservation", async () => {

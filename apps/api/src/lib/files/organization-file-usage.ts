@@ -637,12 +637,18 @@ export const removeOrganizationFileBytes = async (
             status: organizationFileObjects.status,
             sizeBytes: organizationFileObjects.sizeBytes,
             pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+            writeId: organizationFileObjects.writeId,
           })
           .from(organizationFileObjects)
           .where(eq(organizationFileObjects.objectKey, objectKey))
           .limit(1)
           .then((rows) => rows.at(0));
         if (!counter || !current) {
+          return;
+        }
+        // A timed-out write can arrive after the delete. Keep its identity
+        // until a later object-state check can safely settle the reservation.
+        if (current.writeId !== null) {
           return;
         }
         await tx

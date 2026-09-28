@@ -414,6 +414,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     }
     const headers: Record<string, string> = {
       "content-length": String(object.bytes.byteLength),
+      "last-modified": (modifiedAt.get(id) ?? FAKE_EPOCH).toUTCString(),
       // S3 answers every object read with a validator, and callers pass it
       // through to their own clients; a store with no ETag would let that
       // pass-through look tested when nothing had one to pass.

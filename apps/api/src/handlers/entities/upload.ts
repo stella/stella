@@ -914,19 +914,20 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
+  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    await writeS3ObjectWithRetry({
+      contentType: file.type,
+      data: storedBytes,
+      key: sourceKey,
+    });
+  }
   // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
   // so a database error here skips `catch` entirely (finally still runs).
   // Track intent to keep the object instead of relying on catch to clean it up.
   let keepUploadedFile = false;
   let writeOutcomeUncertain = false;
   try {
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
-      await writeS3ObjectWithRetry({
-        contentType: file.type,
-        data: storedBytes,
-        key: sourceKey,
-      });
-    } else {
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
       const organizationFileWrite = await writeOrganizationFile({
         organizationId,
         objectKey: sourceKey,
