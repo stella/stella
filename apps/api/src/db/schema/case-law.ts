@@ -733,10 +733,6 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
       .where(storedObservationHasDetail(t.metadata)),
     p
-      .index("case_law_decisions_browse_facet_count_idx")
-      .on(t.sourceId, t.country, t.court, t.decisionDate)
-      .where(storedObservationHasDetail(t.metadata)),
-    p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
     // The corpus status's newest row of one country: led by country so the

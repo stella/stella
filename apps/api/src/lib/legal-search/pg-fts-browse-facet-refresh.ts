@@ -10,7 +10,7 @@ type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 /** One refresh statement may run for at most 15 minutes; rollback keeps the old snapshot. */
 const BROWSE_FACET_REFRESH_STATEMENT_TIMEOUT = "15min";
 
-/** The published input; its four fields are covered by the partial index. */
+/** The published input; its four fields are covered by the search-candidate index. */
 export const pgFtsBrowseFacetPublishedQuery = (db: Pick<RefreshDb, "select">) =>
   db
     .select({

@@ -433,7 +433,7 @@ test(
 );
 
 test(
-  "the browse refresh uses its covering index and removes stale buckets",
+  "the browse refresh uses the existing covering index and removes stale buckets",
   async () => {
     await client.query("VACUUM ANALYZE case_law_decisions");
     const query = pgFtsBrowseFacetPublishedQuery(refreshDb).toSQL();
@@ -453,7 +453,7 @@ test(
       });
     });
     expect(plan.join("\n")).toMatch(
-      /Index Only Scan using case_law_decisions_browse_facet_count_idx on case_law_decisions/u,
+      /Index Only Scan using case_law_decisions_search_candidate_idx on case_law_decisions/u,
     );
 
     await db
