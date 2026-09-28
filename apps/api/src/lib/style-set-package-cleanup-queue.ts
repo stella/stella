@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -30,7 +31,7 @@ import {
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -266,7 +267,15 @@ export const deleteQueuedStyleSetPackages = async (
   const s3Keys = jobs
     .filter((job) => job.data.styleSetId === styleSetId)
     .map((job) => job.data.s3Key);
-  await Promise.all(s3Keys.map(async (s3Key) => await getS3().delete(s3Key)));
+  await Promise.all(
+    s3Keys.map(async (s3Key) => {
+      if (env.FEATURE_FILE_USAGE_LIMITS) {
+        await deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000));
+        return;
+      }
+      await getS3().delete(s3Key);
+    }),
+  );
 };
 
 /**
@@ -296,7 +305,11 @@ export const deleteUnreferencedStyleSetPackage = async (
     });
     return;
   }
-  await getS3().delete(s3Key);
+  if (env.FEATURE_FILE_USAGE_LIMITS) {
+    await deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000));
+  } else {
+    await getS3().delete(s3Key);
+  }
   // audit: skip — cleanup metadata on the already-audited style set.
   await db
     .update(styleSets)

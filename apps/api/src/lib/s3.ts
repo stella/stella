@@ -822,6 +822,16 @@ export const deleteS3ObjectWithSignal = async (
         { abortSignal: signal },
       ),
   );
+  const { env } = await import("@/api/env");
+  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    return;
+  }
+  const { removeOrganizationFileBytes } =
+    await import("@/api/lib/files/organization-file-usage");
+  const removed = await removeOrganizationFileBytes(key);
+  if (Result.isError(removed)) {
+    throw removed.error;
+  }
 };
 
 /** Publish one object while allowing the caller to cancel the HTTP request. */

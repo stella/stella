@@ -21,6 +21,7 @@ import {
   templateVersions,
 } from "@/api/db/schema";
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -29,8 +30,13 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  getS3,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
@@ -106,10 +112,23 @@ export const createStoredTemplate = async function* ({
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(organizationId, templateId);
 
-  await writeS3ObjectWithRetry({
-    data: new Uint8Array(buffer),
-    key: s3Key,
-  });
+  const writeObject = () =>
+    writeS3ObjectWithRetry({
+      data: new Uint8Array(buffer),
+      key: s3Key,
+    });
+  if (env.FEATURE_FILE_USAGE_LIMITS) {
+    yield* Result.await(
+      writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: buffer.byteLength,
+        write: writeObject,
+      }),
+    );
+  } else {
+    await writeObject();
+  }
 
   const versionId = createSafeId<"templateVersion">();
 
@@ -215,7 +234,10 @@ export const createStoredTemplate = async function* ({
   // (limit reached, or a lost race for the last slot) leaves an unreferenced
   // object behind. Best-effort delete it so failed creates don't accrue S3 junk.
   if (!txResult.ok) {
-    getS3().delete(s3Key).catch(captureError);
+    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+      ? deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000))
+      : getS3().delete(s3Key);
+    deleteCandidate.catch(captureError);
     return Result.err(
       txResult.reason === "duplicate_origin"
         ? new HandlerError({
@@ -229,7 +251,10 @@ export const createStoredTemplate = async function* ({
     );
   }
   if (!txResult.row) {
-    getS3().delete(s3Key).catch(captureError);
+    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+      ? deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000))
+      : getS3().delete(s3Key);
+    deleteCandidate.catch(captureError);
     return Result.err(
       new HandlerError({
         status: 500,

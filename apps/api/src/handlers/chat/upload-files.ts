@@ -10,6 +10,7 @@ import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_CSV_MIME_TYPE,
@@ -57,6 +58,7 @@ import {
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
@@ -670,6 +672,31 @@ export const uploadUserFile = async ({
       userId,
     });
 
+    let organizationId: SafeId<"organization"> | undefined;
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      const thread = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await tx.query.chatThreads.findFirst({
+              where: {
+                id: { eq: threadId },
+                userId: { eq: userId },
+              },
+              columns: { organizationId: true },
+            }),
+        ),
+      );
+      if (!thread) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Chat thread no longer exists",
+          }),
+        );
+      }
+      organizationId = thread.organizationId;
+    }
+
     const scanResult = await scanUpload({
       bytes: file.bytes,
       declaredMimeType: file.mimeType,
@@ -785,18 +812,23 @@ export const uploadUserFile = async ({
     let thumbnailFileId: string | null = null;
     let placeholder: string | null = null;
     let thumbnailKey: string | null = null;
-    const writeSourceResult = await Result.tryPromise({
-      try: async () =>
-        await withTimeout(
-          async (signal) =>
-            await putS3Object(s3Key, file.bytes, file.mimeType, signal),
-          {
-            label: "chat-attachment-put",
-            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-          },
-        ),
-      catch: (cause) => cause,
-    });
+    const writeSource = () =>
+      withTimeout(
+        async (signal) =>
+          await putS3Object(s3Key, file.bytes, file.mimeType, signal),
+        {
+          label: "chat-attachment-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    const writeSourceResult = env.FEATURE_FILE_USAGE_LIMITS
+      ? await writeOrganizationFile({
+          organizationId: organizationId ?? panic("Missing chat organization"),
+          objectKey: s3Key,
+          sizeBytes: file.bytes.byteLength,
+          write: writeSource,
+        })
+      : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
     if (Result.isError(writeSourceResult)) {
       const cleanupResult = await Result.tryPromise({
         try: async () =>
@@ -846,23 +878,32 @@ export const uploadUserFile = async ({
     }
 
     if (preparedThumbnail !== null) {
-      const writeThumbnailResult = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (signal) =>
-              await putS3Object(
-                preparedThumbnail.key,
-                preparedThumbnail.bytes,
-                THUMBNAIL_MIME_TYPE,
-                signal,
-              ),
-            {
-              label: "chat-thumbnail-put",
-              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
+      const writeThumbnail = () =>
+        withTimeout(
+          async (signal) =>
+            await putS3Object(
+              preparedThumbnail.key,
+              preparedThumbnail.bytes,
+              THUMBNAIL_MIME_TYPE,
+              signal,
+            ),
+          {
+            label: "chat-thumbnail-put",
+            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+          },
+        );
+      const writeThumbnailResult = env.FEATURE_FILE_USAGE_LIMITS
+        ? await writeOrganizationFile({
+            organizationId:
+              organizationId ?? panic("Missing chat organization"),
+            objectKey: preparedThumbnail.key,
+            sizeBytes: preparedThumbnail.bytes.byteLength,
+            write: writeThumbnail,
+          })
+        : await Result.tryPromise({
+            try: writeThumbnail,
+            catch: (cause) => cause,
+          });
       if (Result.isError(writeThumbnailResult)) {
         captureError(writeThumbnailResult.error, {
           stage: "chat-thumbnail-write",

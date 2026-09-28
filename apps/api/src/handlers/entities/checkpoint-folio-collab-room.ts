@@ -10,6 +10,7 @@ import {
   bufferObjectCleanupIntents,
   folioCollabRooms,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -34,6 +35,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -310,15 +312,30 @@ const checkpointFolioCollabRoom = createSafeHandler(
         });
       }
     };
-    const written = await Result.tryPromise({
-      try: async () =>
-        await writeS3ObjectWithRetry({
-          contentType: DOCX_MIME_TYPE,
-          data: checkpointBytes,
-          key: checkpointKey,
-        }),
-      catch: (cause) => new UnhandledException({ cause }),
-    });
+    const written = !env.FEATURE_FILE_USAGE_LIMITS
+      ? await Result.tryPromise({
+          try: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: DOCX_MIME_TYPE,
+              data: checkpointBytes,
+              key: checkpointKey,
+            }),
+          catch: (cause) => new UnhandledException({ cause }),
+        })
+      : Result.mapError(
+          await writeOrganizationFile({
+            organizationId: session.activeOrganizationId,
+            objectKey: checkpointKey,
+            sizeBytes: checkpointBytes.byteLength,
+            write: async () =>
+              await writeS3ObjectWithRetry({
+                contentType: DOCX_MIME_TYPE,
+                data: checkpointBytes,
+                key: checkpointKey,
+              }),
+          }),
+          (cause) => new UnhandledException({ cause }),
+        );
     if (Result.isError(written)) {
       await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
       return Result.err(written.error);

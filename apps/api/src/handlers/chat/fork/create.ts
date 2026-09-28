@@ -5,6 +5,7 @@ import { t } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
@@ -38,9 +39,10 @@ import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
-import { copyObject } from "@/api/lib/s3-presign";
+import { copyObject, headObject } from "@/api/lib/s3-presign";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
@@ -231,6 +233,56 @@ type UserFileCopyOutcome =
   | { kind: "copied"; copy: UserFileCopy; missingThumbnail: boolean }
   | { kind: "source-object-missing"; fileId: SafeId<"userFile"> };
 
+const copyUserFileObject = async ({
+  destinationKey,
+  organizationId,
+  sizeBytes,
+  sourceKey,
+}: {
+  destinationKey: string;
+  organizationId: SafeId<"organization">;
+  sizeBytes: number;
+  sourceKey: string;
+}): Promise<Result<void, HandlerError<500>>> => {
+  const copy = async () => {
+    const result = await copyObject(sourceKey, destinationKey);
+    if (Result.isError(result)) {
+      throw result.error.cause ?? result.error;
+    }
+    return result.value;
+  };
+  if (env.FEATURE_FILE_USAGE_LIMITS) {
+    const result = await writeOrganizationFile({
+      organizationId,
+      objectKey: destinationKey,
+      sizeBytes,
+      write: copy,
+    });
+    if (Result.isError(result)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to copy chat attachment storage object",
+          cause: result.error.cause,
+        }),
+      );
+    }
+    return Result.ok();
+  }
+
+  const result = await copyObject(sourceKey, destinationKey);
+  if (Result.isError(result)) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to copy chat attachment storage object",
+        cause: result.error.cause,
+      }),
+    );
+  }
+  return Result.ok();
+};
+
 /**
  * Copy one attachment's storage objects to keys minted for a fresh file id.
  * Destination keys are pushed onto `copiedS3Keys` before the copy starts: a
@@ -240,10 +292,12 @@ type UserFileCopyOutcome =
 const copyUserFileObjects = async ({
   copiedS3Keys,
   file,
+  organizationId,
   userId,
 }: {
   copiedS3Keys: string[];
   file: SourceUserFileRow;
+  organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 }): Promise<Result<UserFileCopyOutcome, HandlerError<500>>> => {
   const newFileId = createSafeId<"userFile">();
@@ -253,18 +307,17 @@ const copyUserFileObjects = async ({
     userId,
   });
   copiedS3Keys.push(copiedS3Key);
-  const copied = await copyObject(file.s3Key, copiedS3Key);
+  const copied = await copyUserFileObject({
+    destinationKey: copiedS3Key,
+    organizationId,
+    sizeBytes: file.sizeBytes,
+    sourceKey: file.s3Key,
+  });
   if (Result.isError(copied)) {
     if (isMissingS3ObjectError(copied.error.cause)) {
       return Result.ok({ kind: "source-object-missing", fileId: file.id });
     }
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to copy chat attachment storage object",
-        cause: copied.error,
-      }),
-    );
+    return Result.err(copied.error);
   }
 
   if (file.thumbnailFileId === null) {
@@ -287,16 +340,16 @@ const copyUserFileObjects = async ({
     userId,
   });
   copiedS3Keys.push(copiedThumbnailKey);
-  const thumbnailCopied = await copyObject(
-    createUserFileKey({
-      fileId: file.thumbnailFileId,
-      mimeType: THUMBNAIL_MIME_TYPE,
-      userId,
-    }),
-    copiedThumbnailKey,
-  );
-  if (Result.isError(thumbnailCopied)) {
-    if (isMissingS3ObjectError(thumbnailCopied.error.cause)) {
+  const sourceThumbnailKey = createUserFileKey({
+    fileId: file.thumbnailFileId,
+    mimeType: THUMBNAIL_MIME_TYPE,
+    userId,
+  });
+  const thumbnailHead = env.FEATURE_FILE_USAGE_LIMITS
+    ? await headObject(sourceThumbnailKey)
+    : undefined;
+  if (thumbnailHead !== undefined && Result.isError(thumbnailHead)) {
+    if (isMissingS3ObjectError(thumbnailHead.error.cause)) {
       return Result.ok({
         kind: "copied",
         copy: {
@@ -311,10 +364,31 @@ const copyUserFileObjects = async ({
     return Result.err(
       new HandlerError({
         status: 500,
-        message: "Failed to copy chat attachment thumbnail",
-        cause: thumbnailCopied.error,
+        message: "Failed to inspect chat attachment thumbnail storage object",
+        cause: thumbnailHead.error,
       }),
     );
+  }
+  const thumbnailCopied = await copyUserFileObject({
+    destinationKey: copiedThumbnailKey,
+    organizationId,
+    sizeBytes: thumbnailHead?.value.contentLength ?? file.sizeBytes,
+    sourceKey: sourceThumbnailKey,
+  });
+  if (Result.isError(thumbnailCopied)) {
+    if (isMissingS3ObjectError(thumbnailCopied.error.cause)) {
+      return Result.ok({
+        kind: "copied",
+        copy: {
+          copiedS3Key,
+          copiedThumbnailFileId: null,
+          newFileId,
+          source: file,
+        },
+        missingThumbnail: true,
+      });
+    }
+    return Result.err(thumbnailCopied.error);
   }
 
   return Result.ok({
@@ -601,6 +675,7 @@ export const createForkThread = ({
                 await copyUserFileObjects({
                   copiedS3Keys,
                   file,
+                  organizationId: session.activeOrganizationId,
                   userId: user.id,
                 }),
             ),

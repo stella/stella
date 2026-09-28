@@ -13,6 +13,7 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -47,6 +48,7 @@ import {
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -462,19 +464,40 @@ const processPdfDerivativeJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    await withTimeout(
-      async (signal) =>
-        await putS3ObjectWithSignal(
-          pdfKey,
-          new Uint8Array(conversionResult.value.buffer),
-          PDF_MIME_TYPE,
-          signal,
-        ),
-      {
-        label: "file-derivative-pdf-put",
-        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-      },
-    );
+    const pdfBytes = new Uint8Array(conversionResult.value.buffer);
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await withTimeout(
+        async (signal) =>
+          await putS3ObjectWithSignal(pdfKey, pdfBytes, PDF_MIME_TYPE, signal),
+        {
+          label: "file-derivative-pdf-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    } else {
+      const fileWrite = await writeOrganizationFile({
+        organizationId: branded.organizationId,
+        objectKey: pdfKey,
+        sizeBytes: pdfBytes.byteLength,
+        write: async () =>
+          await withTimeout(
+            async (signal) =>
+              await putS3ObjectWithSignal(
+                pdfKey,
+                pdfBytes,
+                PDF_MIME_TYPE,
+                signal,
+              ),
+            {
+              label: "file-derivative-pdf-put",
+              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+            },
+          ),
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
+    }
     writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
@@ -684,19 +707,44 @@ const processImageThumbnailJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    await withTimeout(
-      async (signal) =>
-        await putS3ObjectWithSignal(
-          thumbnailKey,
-          thumbnailResult.value.webp,
-          THUMBNAIL_MIME_TYPE,
-          signal,
-        ),
-      {
-        label: "file-derivative-thumbnail-put",
-        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
-      },
-    );
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await withTimeout(
+        async (signal) =>
+          await putS3ObjectWithSignal(
+            thumbnailKey,
+            thumbnailResult.value.webp,
+            THUMBNAIL_MIME_TYPE,
+            signal,
+          ),
+        {
+          label: "file-derivative-thumbnail-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
+    } else {
+      const fileWrite = await writeOrganizationFile({
+        organizationId: branded.organizationId,
+        objectKey: thumbnailKey,
+        sizeBytes: thumbnailResult.value.webp.byteLength,
+        write: async () =>
+          await withTimeout(
+            async (signal) =>
+              await putS3ObjectWithSignal(
+                thumbnailKey,
+                thumbnailResult.value.webp,
+                THUMBNAIL_MIME_TYPE,
+                signal,
+              ),
+            {
+              label: "file-derivative-thumbnail-put",
+              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+            },
+          ),
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
+    }
     writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {

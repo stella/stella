@@ -54,6 +54,17 @@ const usagePolicySeedSchema = v.pipe(
       null,
     ),
     priceBasis: v.optional(v.picklist(USAGE_POLICY_PRICE_BASES), "flat"),
+    storageBytesPerAssignment: v.optional(
+      v.nullable(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.maxValue(Number.MAX_SAFE_INTEGER),
+        ),
+      ),
+      null,
+    ),
     visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
     sortOrder: v.optional(
       v.pipe(
@@ -117,6 +128,10 @@ const seed = async (): Promise<void> => {
           priceCurrency: seedPolicy.priceCurrency,
           billingInterval: seedPolicy.billingInterval,
           priceBasis: seedPolicy.priceBasis,
+          storageBytesPerAssignment:
+            seedPolicy.storageBytesPerAssignment === null
+              ? null
+              : BigInt(seedPolicy.storageBytesPerAssignment),
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
         })
@@ -132,6 +147,10 @@ const seed = async (): Promise<void> => {
             priceCurrency: seedPolicy.priceCurrency,
             billingInterval: seedPolicy.billingInterval,
             priceBasis: seedPolicy.priceBasis,
+            storageBytesPerAssignment:
+              seedPolicy.storageBytesPerAssignment === null
+                ? null
+                : BigInt(seedPolicy.storageBytesPerAssignment),
             visibility: seedPolicy.visibility,
             sortOrder: seedPolicy.sortOrder,
           },

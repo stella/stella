@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
 import type { entityVersions } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -30,10 +31,12 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { copyOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
-import { copyObject } from "@/api/lib/s3-presign";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -334,7 +337,9 @@ export const copyFileObject = async ({
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
-}: CopyFileObjectOptions): Promise<Result<FileMapping, S3PresignError>> => {
+}: CopyFileObjectOptions): Promise<
+  Result<FileMapping, S3PresignError | OrganizationFileUsageError>
+> => {
   const newFileId = allocateFileObject();
   const targetKey = createFileKey({
     organizationId,
@@ -346,7 +351,21 @@ export const copyFileObject = async ({
   // request may still have completed in S3, so rollback must delete this key even
   // when the client never observes a successful response.
   copiedS3Keys.push(targetKey);
-  const copied = await copyObject(sourceKey, targetKey);
+  const copied = await (async () => {
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      return await copyObject(sourceKey, targetKey);
+    }
+    const source = await headObject(sourceKey);
+    if (Result.isError(source)) {
+      return Result.err(source.error);
+    }
+    return await copyOrganizationFile({
+      organizationId,
+      objectKey: targetKey,
+      sizeBytes: source.value.contentLength,
+      copy: async () => await copyObject(sourceKey, targetKey),
+    });
+  })();
   return copied.map(() => ({
     sourceEntityId,
     sourceFileId,
@@ -500,12 +519,13 @@ const remapFieldFileId = ({
  * it is reported: the object stays in the bucket, billed and unreferenced.
  */
 export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
-  const s3 = getS3();
   await Promise.all(
     keys.map(async (key) => {
-      await s3.delete(key).catch((error: unknown) => {
-        captureError(error, { source: "entity-copy-rollback" });
-      });
+      await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)).catch(
+        (error: unknown) => {
+          captureError(error, { source: "entity-copy-rollback" });
+        },
+      );
     }),
   );
 };

@@ -5,15 +5,21 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  getS3,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import {
   enqueueStyleSetPackageCleanup,
   STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
@@ -79,18 +85,30 @@ export const createStoredStyleSet = async ({
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await writeS3ObjectWithRetry({ data: buffer, key: s3Key }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Could not store the style set.",
-            cause,
-          }),
-      }),
-    );
+    const writePackage = () =>
+      writeS3ObjectWithRetry({ data: buffer, key: s3Key });
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      yield* Result.await(
+        writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: buffer.byteLength,
+          write: writePackage,
+        }),
+      );
+    } else {
+      yield* Result.await(
+        Result.tryPromise({
+          try: writePackage,
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Could not store the style set.",
+              cause,
+            }),
+        }),
+      );
+    }
 
     let persisted = false;
     try {
@@ -156,7 +174,13 @@ export const createStoredStyleSet = async ({
         // failure here costs a delay, not the object. Throwing from a
         // `finally` would also replace the rejection the caller must see.
         const cleanup = await Result.tryPromise({
-          try: async () => await getS3().delete(s3Key),
+          try: async () =>
+            env.FEATURE_FILE_USAGE_LIMITS
+              ? await deleteS3ObjectWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(10_000),
+                )
+              : await getS3().delete(s3Key),
           catch: (cause) =>
             new HandlerError({
               status: 500,
@@ -263,18 +287,30 @@ export const replaceStoredStyleSet = async ({
 
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await writeS3ObjectWithRetry({ data: buffer, key: s3Key }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Could not store the replacement style set.",
-            cause,
-          }),
-      }),
-    );
+    const writePackage = () =>
+      writeS3ObjectWithRetry({ data: buffer, key: s3Key });
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      yield* Result.await(
+        writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: buffer.byteLength,
+          write: writePackage,
+        }),
+      );
+    } else {
+      yield* Result.await(
+        Result.tryPromise({
+          try: writePackage,
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Could not store the replacement style set.",
+              cause,
+            }),
+        }),
+      );
+    }
 
     let persisted = false;
     try {
@@ -419,7 +455,13 @@ export const replaceStoredStyleSet = async ({
       if (!persisted) {
         // Fast path only; see `createStoredStyleSet`.
         const cleanup = await Result.tryPromise({
-          try: async () => await getS3().delete(s3Key),
+          try: async () =>
+            env.FEATURE_FILE_USAGE_LIMITS
+              ? await deleteS3ObjectWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(10_000),
+                )
+              : await getS3().delete(s3Key),
           catch: (cause) =>
             new HandlerError({
               status: 500,

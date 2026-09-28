@@ -20,6 +20,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,6 +35,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -833,12 +835,30 @@ export const storeFolioCollabSnapshot = async ({
       });
   };
   const written = await Result.tryPromise({
-    try: async () =>
-      await writeS3ObjectWithRetry({
-        contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        data: snapshotBytes,
-        key: nextKey,
-      }),
+    try: async () => {
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        return await writeS3ObjectWithRetry({
+          contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+          data: snapshotBytes,
+          key: nextKey,
+        });
+      }
+      const fileWrite = await writeOrganizationFile({
+        organizationId: value.organizationId,
+        objectKey: nextKey,
+        sizeBytes: snapshotBytes.byteLength,
+        write: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+            data: snapshotBytes,
+            key: nextKey,
+          }),
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
+      return fileWrite.value;
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(written)) {

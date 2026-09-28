@@ -21,6 +21,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
@@ -52,12 +53,17 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  getS3,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -273,7 +279,11 @@ const cleanupUploadedS3Keys = async ({
   workspaceId,
 }: CleanupUploadedS3KeysOptions): Promise<void> => {
   const results = await Promise.allSettled(
-    keys.map(async (key) => await getS3().delete(key)),
+    keys.map(async (key) =>
+      env.FEATURE_FILE_USAGE_LIMITS
+        ? await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000))
+        : await getS3().delete(key),
+    ),
   );
 
   for (const result of results) {
@@ -905,11 +915,43 @@ const uploadEntityHandler = async function* ({
 
   const s3Keys = [sourceKey];
 
-  await writeS3ObjectWithRetry({
-    contentType: file.type,
-    data: storedBytes,
-    key: sourceKey,
-  });
+  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    await writeS3ObjectWithRetry({
+      contentType: file.type,
+      data: storedBytes,
+      key: sourceKey,
+    });
+  } else {
+    const organizationFileWrite = await writeOrganizationFile({
+      organizationId,
+      objectKey: sourceKey,
+      sizeBytes: storedSizeBytes,
+      write: async () =>
+        await writeS3ObjectWithRetry({
+          contentType: file.type,
+          data: storedBytes,
+          key: sourceKey,
+        }),
+    });
+    if (Result.isError(organizationFileWrite)) {
+      let responseStatus: 409 | 413 | 503 = 503;
+      if (organizationFileWrite.error.reason === "capacity_exceeded") {
+        responseStatus = 413;
+      } else if (
+        organizationFileWrite.error.reason === "key_conflict" ||
+        organizationFileWrite.error.reason === "reservation_busy"
+      ) {
+        responseStatus = 409;
+      }
+      return Result.err(
+        new HandlerError({
+          status: responseStatus,
+          message: organizationFileWrite.error.message,
+          cause: organizationFileWrite.error,
+        }),
+      );
+    }
+  }
 
   // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
   // so a database error here skips `catch` entirely (finally still runs).

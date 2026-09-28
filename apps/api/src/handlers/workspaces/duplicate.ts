@@ -19,6 +19,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -40,6 +41,7 @@ import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entit
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { copyOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -51,8 +53,8 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { getS3 } from "@/api/lib/s3";
-import { copyObject } from "@/api/lib/s3-presign";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { copyObject, headObject } from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -357,7 +359,21 @@ const copyWorkspaceFile = async ({
   // request may still have completed in S3, so rollback must delete this key even
   // when the client never observes a successful response.
   copiedS3Keys.push(targetKey);
-  const copied = await copyObject(sourceKey, targetKey);
+  const copied = await (async () => {
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      return await copyObject(sourceKey, targetKey);
+    }
+    const source = await headObject(sourceKey);
+    if (Result.isError(source)) {
+      return Result.err(source.error);
+    }
+    return await copyOrganizationFile({
+      organizationId,
+      objectKey: targetKey,
+      sizeBytes: source.value.contentLength,
+      copy: async () => await copyObject(sourceKey, targetKey),
+    });
+  })();
   if (Result.isError(copied)) {
     throw copied.error;
   }
@@ -422,7 +438,10 @@ const cleanupCopiedS3Keys = async ({
 
   const cleanupResult = await Result.tryPromise(async () => {
     await Promise.all(
-      copiedS3Keys.map(async (key) => await getS3().delete(key)),
+      copiedS3Keys.map(
+        async (key) =>
+          await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)),
+      ),
     );
   });
 

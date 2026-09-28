@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -13,7 +14,7 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
 import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
@@ -112,7 +113,16 @@ export default createSafeRootHandler(
         try: async () =>
           await Promise.all([
             deleteQueuedStyleSetPackages(params.styleSetId),
-            ...deleted.s3Keys.map(async (s3Key) => await getS3().delete(s3Key)),
+            ...deleted.s3Keys.map(async (s3Key) => {
+              if (env.FEATURE_FILE_USAGE_LIMITS) {
+                await deleteS3ObjectWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(10_000),
+                );
+                return;
+              }
+              await getS3().delete(s3Key);
+            }),
           ]),
         catch: (cause) =>
           new HandlerError({

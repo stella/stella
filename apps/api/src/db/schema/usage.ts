@@ -123,6 +123,9 @@ export const usagePolicies = p.pgTable(
     // and deployments that have not opted in).
     dailyAllowanceMicroUnits: p.integer("daily_allowance_micro_units"),
     fallbackWeeklyMicroUnits: p.integer("fallback_weekly_micro_units"),
+    storageBytesPerAssignment: p.bigint("storage_bytes_per_assignment", {
+      mode: "bigint",
+    }),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -173,6 +176,10 @@ export const usagePolicies = p.pgTable(
     p.check(
       "usage_policies_fallback_weekly_nonneg",
       sql`fallback_weekly_micro_units IS NULL OR fallback_weekly_micro_units >= 0`,
+    ),
+    p.check(
+      "usage_policies_storage_bytes_nonneg",
+      sql`storage_bytes_per_assignment IS NULL OR storage_bytes_per_assignment >= 0`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
@@ -678,6 +685,78 @@ export const usageSeatAssignments = p.pgTable(
       for: "update",
       to: stella,
       using: sql`false`,
+    }),
+  ],
+);
+
+export const FILE_USAGE_OBJECT_STATUSES = ["reserved", "committed"] as const;
+const FILE_USAGE_OBJECT_STATUS_SQL_VALUES = FILE_USAGE_OBJECT_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
+
+export const organizationFileUsage = p.pgTable(
+  "organization_file_usage",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    committedBytes: p
+      .bigint("committed_bytes", { mode: "bigint" })
+      .notNull()
+      .default(0n),
+    reservedBytes: p
+      .bigint("reserved_bytes", { mode: "bigint" })
+      .notNull()
+      .default(0n),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  () => [
+    p.check(
+      "organization_file_usage_nonneg",
+      sql`committed_bytes >= 0 AND reserved_bytes >= 0`,
+    ),
+    p.pgPolicy("organization_file_usage_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+  ],
+);
+
+export const organizationFileObjects = p.pgTable(
+  "organization_file_objects",
+  {
+    objectKey: p.text("object_key").primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sizeBytes: p.bigint("size_bytes", { mode: "bigint" }).notNull(),
+    pendingSizeBytes: p.bigint("pending_size_bytes", { mode: "bigint" }),
+    status: p.text({ enum: FILE_USAGE_OBJECT_STATUSES }).notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("organization_file_objects_org_status_key_idx")
+      .on(table.organizationId, table.status, table.objectKey),
+    p.check("organization_file_objects_size_nonneg", sql`size_bytes >= 0`),
+    p.check(
+      "organization_file_objects_pending_size_nonneg",
+      sql`pending_size_bytes IS NULL OR pending_size_bytes >= 0`,
+    ),
+    p.check(
+      "organization_file_objects_pending_committed",
+      sql`status = 'committed' OR pending_size_bytes IS NULL`,
+    ),
+    p.check(
+      "organization_file_objects_status_domain",
+      sql`status IN (${sql.join(FILE_USAGE_OBJECT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("organization_file_objects_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
     }),
   ],
 );

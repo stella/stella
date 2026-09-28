@@ -8,6 +8,7 @@ import {
   templates,
   templateVersions,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -23,6 +24,7 @@ import {
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
@@ -153,16 +155,21 @@ const writeTemplateAttempt = async function* ({
   const intentIds = reservation.value;
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
-  const certainty = yield* Result.await(
-    Result.tryPromise(
-      async () =>
-        await writeObject({
-          key: s3Key,
-          data: bytes,
-          contentType: DOCX_MIME_TYPE,
-        }),
-    ),
-  );
+  const writeCandidate = () =>
+    writeObject({
+      key: s3Key,
+      data: bytes,
+      contentType: DOCX_MIME_TYPE,
+    });
+  const writeResult = env.FEATURE_FILE_USAGE_LIMITS
+    ? writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: bytes.byteLength,
+        write: writeCandidate,
+      })
+    : Result.tryPromise(writeCandidate);
+  const certainty = yield* Result.await(writeResult);
   switch (certainty) {
     case S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN:
       // An earlier timed-out PUT may still land after this version is later

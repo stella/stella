@@ -58,6 +58,7 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { removeOrganizationFileBytes } from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
@@ -592,6 +593,13 @@ export const finalizeEntityCreate = async function* ({
   const cleanupFinalObject = async (stage: string) => {
     await getS3()
       .delete(finalKey)
+      .then(async () => {
+        const removed = await removeOrganizationFileBytes(finalKey);
+        if (Result.isError(removed)) {
+          captureError(removed.error, { entityId, fieldId, stage });
+        }
+        return removed;
+      })
       .catch((deleteError: unknown) =>
         captureError(deleteError, {
           entityId,

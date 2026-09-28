@@ -478,6 +478,9 @@ export const envApiServerSchema = {
    * fall back to the instance model provider.
    */
   FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
+  FEATURE_FILE_USAGE_LIMITS: featureFlagSchema,
+
+  /** Enforces organization file byte reservations at storage writes. */
 
   /** Length of an organization's evaluation period, in days. */
   ORG_EVALUATION_PERIOD_DAYS: v.optional(

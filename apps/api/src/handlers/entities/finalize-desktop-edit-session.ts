@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -11,6 +11,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -44,10 +45,16 @@ import {
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  getS3,
+  readS3ArrayBuffer,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   processExtraction,
@@ -117,14 +124,16 @@ export const finalizeDesktopEditSessionHandler = async ({
   let shouldRollbackUploadedKeys = true;
 
   const deleteCheckpointKey = async (checkpointKey: string) => {
-    await getS3()
-      .delete(checkpointKey)
-      .catch((error: unknown) => {
-        captureError(error, {
-          checkpointKey,
-          sessionId,
-        });
+    await (
+      env.FEATURE_FILE_USAGE_LIMITS
+        ? deleteS3ObjectWithSignal(checkpointKey, AbortSignal.timeout(10_000))
+        : getS3().delete(checkpointKey)
+    ).catch((error: unknown) => {
+      captureError(error, {
+        checkpointKey,
+        sessionId,
       });
+    });
   };
 
   const deleteCheckpointKeyIfPresent = async (checkpointKey: string | null) => {
@@ -135,14 +144,16 @@ export const finalizeDesktopEditSessionHandler = async ({
   };
 
   const deleteUploadedKey = async (uploadedKey: string) => {
-    await getS3()
-      .delete(uploadedKey)
-      .catch((error: unknown) => {
-        captureError(error, {
-          rollbackKey: uploadedKey,
-          sessionId,
-        });
+    await (
+      env.FEATURE_FILE_USAGE_LIMITS
+        ? deleteS3ObjectWithSignal(uploadedKey, AbortSignal.timeout(10_000))
+        : getS3().delete(uploadedKey)
+    ).catch((error: unknown) => {
+      captureError(error, {
+        rollbackKey: uploadedKey,
+        sessionId,
       });
+    });
   };
 
   const recordAuditEvent = createAuditRecorder({
@@ -477,11 +488,37 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
       uploadedKeys.push(sourceKey);
 
-      await writeS3ObjectWithRetry({
-        contentType: canonicalMimeType,
-        data: storedBytes,
-        key: sourceKey,
-      });
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        await writeS3ObjectWithRetry({
+          contentType: canonicalMimeType,
+          data: storedBytes,
+          key: sourceKey,
+        });
+      } else {
+        const fileWrite = await writeOrganizationFile({
+          organizationId: authorizedSession.value.organizationId,
+          objectKey: sourceKey,
+          sizeBytes: storedSizeBytes,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: canonicalMimeType,
+              data: storedBytes,
+              key: sourceKey,
+            }),
+        });
+        if (Result.isError(fileWrite)) {
+          let responseStatus: 409 | 413 | 503 = 503;
+          if (fileWrite.error.reason === "capacity_exceeded") {
+            responseStatus = 413;
+          } else if (
+            fileWrite.error.reason === "key_conflict" ||
+            fileWrite.error.reason === "reservation_busy"
+          ) {
+            responseStatus = 409;
+          }
+          return status(responseStatus, { message: fileWrite.error.message });
+        }
+      }
 
       await insertEntityVersion(tx, {
         entityId: editSession.entityId,
