@@ -1,9 +1,11 @@
 import { panic, Result } from "better-result";
-import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -56,6 +58,7 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 /**
  * Legislation ingestion. The canonical, source-agnostic entry is
@@ -106,7 +109,25 @@ const sanitizeInput = (
       ? undefined
       : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
+  expression:
+    input.expression === undefined
+      ? undefined
+      : { publisherId: stripDangerousChars(input.expression.publisherId) },
 });
+
+/**
+ * The writer contract this code writes under. A database fence refuses a
+ * source-hash write from a transaction that has not declared it, so a writer
+ * built before publisher identities existed, whose lookup by version window
+ * can land on the wrong one of two same-day versions, cannot overwrite a row.
+ */
+export const LEGISLATION_WRITER_CONTRACT = "expression-v1";
+
+const declareWriterContract = async (tx: Transaction): Promise<void> => {
+  await tx.execute(
+    sql`SELECT set_config('stella.legislation_writer_contract', ${LEGISLATION_WRITER_CONTRACT}, true)`,
+  );
+};
 
 type PreserveLegislationCorpusWriteRetryInput = {
   documentId: SafeId<"legislationDocument">;
@@ -126,6 +147,7 @@ const preserveLegislationCorpusWriteRetry = async ({
   // after a failed object-storage write. Clear corpus-derived pointers so
   // reads use the fresh Postgres columns until S3 succeeds.
   await scopedDb(async (tx) => {
+    await declareWriterContract(tx);
     const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "legislation",
       entityId: documentId,
@@ -417,6 +439,206 @@ const storeSourceRaw = async ({
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
 };
 
+/**
+ * The disposition every write under this contract stores. The contract can
+ * only express a version with a placeable window, so each write states it
+ * effective; a row that says otherwise is a changed row, not an unchanged one.
+ */
+const STORED_DISPOSITION = {
+  windowDisposition: "effective",
+  windowDispositionBasis: null,
+} as const satisfies Pick<
+  typeof legislationDocuments.$inferInsert,
+  "windowDisposition" | "windowDispositionBasis"
+>;
+
+const hasStoredDisposition = (row: StoredVersion): boolean =>
+  row.windowDisposition === STORED_DISPOSITION.windowDisposition &&
+  row.windowDispositionBasis === STORED_DISPOSITION.windowDispositionBasis;
+
+const STORED_VERSION_COLUMNS = {
+  id: legislationDocuments.id,
+  sourceHash: legislationDocuments.sourceHash,
+  // The write the row records for its corpus payload, so the corpus
+  // write can refuse re-PUTting objects it already proved.
+  contentHash: legislationDocuments.contentHash,
+  textS3Key: legislationDocuments.textS3Key,
+  normalizedS3Key: legislationDocuments.normalizedS3Key,
+  astS3Key: legislationDocuments.astS3Key,
+  sourceRawS3Key: legislationDocuments.sourceRawS3Key,
+  sourceRawContentType: legislationDocuments.sourceRawContentType,
+  windowDisposition: legislationDocuments.windowDisposition,
+  windowDispositionBasis: legislationDocuments.windowDispositionBasis,
+};
+
+type StoredVersion = {
+  id: SafeId<"legislationDocument">;
+  sourceHash: string | null;
+  contentHash: string | null;
+  textS3Key: string | null;
+  normalizedS3Key: string | null;
+  astS3Key: string | null;
+  sourceRawS3Key: string | null;
+  sourceRawContentType: string | null;
+  windowDisposition: string;
+  windowDispositionBasis: string | null;
+};
+
+type StoredVersionLookup = {
+  input: LegislationDocumentInput;
+  scopedDb: ScopedDb;
+};
+
+const workOf = (input: LegislationDocumentInput): SQL | undefined =>
+  and(
+    eq(legislationDocuments.sourceId, input.sourceId),
+    eq(legislationDocuments.eli, input.eli),
+    eq(legislationDocuments.language, input.language),
+  );
+
+const selectStoredVersion = async (
+  scopedDb: ScopedDb,
+  where: SQL | undefined,
+): Promise<StoredVersion | undefined> =>
+  (
+    await scopedDb((tx) =>
+      tx
+        .select(STORED_VERSION_COLUMNS)
+        .from(legislationDocuments)
+        .where(where)
+        .limit(1),
+    )
+  ).at(0);
+
+const findByPublisherId = async ({
+  input,
+  publisherId,
+  scopedDb,
+}: StoredVersionLookup & {
+  publisherId: string;
+}): Promise<StoredVersion | undefined> =>
+  await selectStoredVersion(
+    scopedDb,
+    and(
+      workOf(input),
+      eq(legislationDocuments.publisherExpressionId, publisherId),
+    ),
+  );
+
+/**
+ * The evidence a row written before publisher identities carries of which
+ * version it holds: the version IRI every connector stored in its metadata,
+ * or, for a work kept as one text, the work itself. Null when the id names
+ * nothing a legacy row can be matched on, so nothing is adopted by guess.
+ */
+const legacyIdentityMatch = (
+  input: LegislationDocumentInput,
+  publisherId: string,
+  storedMetadata: SQLWrapper,
+): SQL | null => {
+  const separator = publisherId.indexOf(":");
+  if (separator <= 0) {
+    return null;
+  }
+  const native = publisherId.slice(separator + 1);
+  if (input.version.type === "unversioned") {
+    return native === `work:${input.eli}` ? sql`true` : null;
+  }
+  return sql`${storedMetadata}->>'versionIri' = ${native}`;
+};
+
+/**
+ * Give a row written before publisher identities its id, in place, so it keeps
+ * its UUID and everything that references it.
+ *
+ * A compare-and-set, not a read then a write: the row is chosen and claimed in
+ * one statement that only succeeds while its id is still null, so of two
+ * writers (or a writer and the backfill) claiming the same row exactly one
+ * wins and the other finds the row by its id afterwards. The window is the
+ * candidate, the stored version IRI the proof; a row whose IRI names a
+ * different version is never adopted.
+ */
+const claimLegacyVersion = async ({
+  input,
+  publisherId,
+  window,
+  scopedDb,
+}: StoredVersionLookup & {
+  publisherId: string;
+  window: StoredWindow;
+}): Promise<void> => {
+  const legacy = alias(legislationDocuments, "legacy");
+  const identity = legacyIdentityMatch(input, publisherId, legacy.metadata);
+  if (identity === null) {
+    return;
+  }
+  await scopedDb(async (tx) => {
+    await declareWriterContract(tx);
+    const unclaimed = tx
+      .select({ id: legacy.id })
+      .from(legacy)
+      .where(
+        and(
+          eq(legacy.sourceId, input.sourceId),
+          eq(legacy.eli, input.eli),
+          eq(legacy.language, input.language),
+          sql`${legacy.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`,
+          isNull(legacy.publisherExpressionId),
+          identity,
+        ),
+      )
+      .limit(1);
+    // audit: skip — background legislation ingestion; attaches the publisher's identity to an existing public row
+    await tx
+      .update(legislationDocuments)
+      // An identity attachment, not an edit: `updated_at` keeps its value.
+      .set({
+        publisherExpressionId: publisherId,
+        updatedAt: sql`${legislationDocuments.updatedAt}`,
+      })
+      .where(
+        and(
+          sql`${legislationDocuments.id} = (${unclaimed})`,
+          isNull(legislationDocuments.publisherExpressionId),
+        ),
+      );
+  });
+};
+
+/**
+ * The row this version is stored in, if any.
+ *
+ * By the publisher's id when the connector supplies one: first the row that
+ * already carries it, then a row written before ids existed that this version
+ * can be proven to be (claimed in place), then once more by id, which finds
+ * the row a concurrent claim or the backfill attached. The version-window
+ * lookup is only for input that carries no id.
+ */
+const findStoredVersion = async ({
+  input,
+  window,
+  scopedDb,
+}: StoredVersionLookup & {
+  window: StoredWindow;
+}): Promise<StoredVersion | undefined> => {
+  if (input.expression === undefined) {
+    return await selectStoredVersion(
+      scopedDb,
+      and(
+        workOf(input),
+        sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`,
+      ),
+    );
+  }
+  const { publisherId } = input.expression;
+  const stored = await findByPublisherId({ input, publisherId, scopedDb });
+  if (stored !== undefined) {
+    return stored;
+  }
+  await claimLegacyVersion({ input, publisherId, window, scopedDb });
+  return await findByPublisherId({ input, publisherId, scopedDb });
+};
+
 export type LegislationCorpusDependencies = {
   mode: CorpusStorageMode;
   write: typeof writeCorpusDocument;
@@ -458,34 +680,7 @@ export const processLegislationDocument = async (
   const sourceHash = legislationSourceHash(input, window);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
 
-  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`;
-
-  const [existing] = await scopedDb((tx) =>
-    tx
-      .select({
-        id: legislationDocuments.id,
-        sourceHash: legislationDocuments.sourceHash,
-        // The write the row records for its corpus payload, so the corpus
-        // write below can refuse re-PUTting objects it already proved.
-        contentHash: legislationDocuments.contentHash,
-        textS3Key: legislationDocuments.textS3Key,
-        normalizedS3Key: legislationDocuments.normalizedS3Key,
-        astS3Key: legislationDocuments.astS3Key,
-        sourceRawS3Key: legislationDocuments.sourceRawS3Key,
-        sourceRawContentType: legislationDocuments.sourceRawContentType,
-      })
-      .from(legislationDocuments)
-      .where(
-        and(
-          eq(legislationDocuments.sourceId, input.sourceId),
-          eq(legislationDocuments.eli, input.eli),
-          eq(legislationDocuments.language, input.language),
-          versionMatch,
-        ),
-      )
-      .limit(1),
-  );
-
+  let existing = await findStoredVersion({ input, window, scopedDb });
   const existingCorpusPlan =
     existing === undefined
       ? null
@@ -509,7 +704,11 @@ export const processLegislationDocument = async (
           existing.textS3Key === null &&
           existing.normalizedS3Key === null &&
           existing.astS3Key === null);
-  if (existing?.sourceHash === sourceHash && corpusAlreadySettled) {
+  if (
+    existing?.sourceHash === sourceHash &&
+    corpusAlreadySettled &&
+    hasStoredDisposition(existing)
+  ) {
     await settleLegislationCorpusProjection({
       documentId: existing.id,
       expectedSourceHash: sourceHash,
@@ -548,6 +747,7 @@ export const processLegislationDocument = async (
     documentUrl: input.documentUrl ?? null,
     metadata: input.metadata ?? {},
     sourceHash,
+    ...STORED_DISPOSITION,
     ...sourceRaw,
     ...(corpus.mode === "off"
       ? {
@@ -559,24 +759,61 @@ export const processLegislationDocument = async (
       : {}),
   };
 
-  const id = await scopedDb(async (tx) => {
-    // audit: skip — background legislation ingestion; public data, not user actions
-    if (existing) {
+  const updateStored = async (row: StoredVersion) =>
+    await scopedDb(async (tx) => {
+      await declareWriterContract(tx);
+      // audit: skip — background legislation ingestion; public data, not user actions
       await tx
         .update(legislationDocuments)
         .set({ ...values, updatedAt: new Date() })
-        .where(eq(legislationDocuments.id, existing.id));
-      return existing.id;
+        .where(eq(legislationDocuments.id, row.id));
+      return row.id;
+    });
+  const insertVersion = async () =>
+    await scopedDb(async (tx) => {
+      await declareWriterContract(tx);
+      // audit: skip — background legislation ingestion; public data, not user actions
+      const [row] = await tx
+        .insert(legislationDocuments)
+        .values({
+          ...values,
+          publisherExpressionId: input.expression?.publisherId ?? null,
+        })
+        .returning({ id: legislationDocuments.id });
+      if (!row) {
+        panic("Failed to insert legislation document");
+      }
+      return row.id;
+    });
+
+  let inserted = false;
+  let id: SafeId<"legislationDocument">;
+  if (existing) {
+    id = await updateStored(existing);
+  } else {
+    try {
+      id = await insertVersion();
+      inserted = true;
+    } catch (error) {
+      // A concurrent writer stored the same version first. Its row is this
+      // version's row, found once more by identity; anything else is a real
+      // conflict and is raised as one.
+      const concurrent =
+        input.expression !== undefined &&
+        isPgError(error, PG_ERROR.UNIQUE_VIOLATION)
+          ? await findByPublisherId({
+              input,
+              publisherId: input.expression.publisherId,
+              scopedDb,
+            })
+          : undefined;
+      if (concurrent === undefined) {
+        throw error;
+      }
+      existing = concurrent;
+      id = await updateStored(concurrent);
     }
-    const [row] = await tx
-      .insert(legislationDocuments)
-      .values(values)
-      .returning({ id: legislationDocuments.id });
-    if (!row) {
-      panic("Failed to insert legislation document");
-    }
-    return row.id;
-  });
+  }
 
   await reportWindowJunctions({ input, window, documentId: id, scopedDb });
 
@@ -636,7 +873,7 @@ export const processLegislationDocument = async (
   return {
     type: "stored",
     id,
-    inserted: !existing,
+    inserted,
     skipped: false,
     corpusWriteFailed,
   };
