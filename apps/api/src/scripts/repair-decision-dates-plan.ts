@@ -25,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -313,17 +314,6 @@ export const applyDecisionDateRepairsStatement = (
        AND ${OUT_OF_BOUNDS}
     RETURNING d.id
   `;
-};
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-export const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
 };
 
 type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];

@@ -14,6 +14,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { authSchema } from "@/api/db/auth-schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { escapeLike } from "@/api/lib/escape-like";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -773,21 +774,7 @@ const queryRows = async (
   if (Result.isError(queried)) {
     return queried;
   }
-  let rows: unknown[] | null = null;
-  if (Array.isArray(queried.value)) {
-    rows = queried.value;
-  } else if (isRecord(queried.value) && Array.isArray(queried.value["rows"])) {
-    rows = queried.value["rows"];
-  }
-  if (rows === null) {
-    return Result.err(
-      new BetterAuthAuditError({
-        code: "database-query-failed",
-        message: "Better Auth audit database returned an invalid result",
-      }),
-    );
-  }
-  return Result.ok(rows);
+  return Result.ok(executedRows(queried.value));
 };
 
 const requiredString = (value: unknown): string | null =>

@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.10.1
+
+### Patch Changes
+
+- [#4009](https://github.com/stella/stella/pull/4009) [`8a38fe2`](https://github.com/stella/stella/commit/8a38fe29b72b89a75c6940493cfc2e6c4e837a39) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `fast-xml-parser` to `^5.11.1`.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -31,6 +31,7 @@ import {
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
 const RECANONICALIZE_FLAG = "--recanonicalize";
@@ -92,7 +93,7 @@ const backfillTable = async (
            ORDER BY id
            LIMIT ${BATCH}`,
     );
-    const rows = (Array.isArray(result) ? result : []).flatMap((row) =>
+    const rows = executedRows(result).flatMap((row) =>
       isRecord(row) &&
       typeof row["id"] === "string" &&
       typeof row["text"] === "string"

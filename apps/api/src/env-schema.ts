@@ -330,6 +330,16 @@ export const envApiServerSchema = {
   FEATURE_CALENDAR: featureFlagSchema,
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
+  FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_LEASE_MS: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */

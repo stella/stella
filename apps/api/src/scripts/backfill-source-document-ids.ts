@@ -24,7 +24,7 @@
 import { sql } from "drizzle-orm";
 
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { isRecord } from "@/api/lib/type-guards";
+import { executedRows } from "@/api/lib/db/executed-rows";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
@@ -45,15 +45,6 @@ const ID_EXPRESSION_BY_ADAPTER: Record<string, string> = {
   "sk-courts": `metadata->>'guid'`,
   "cz-regional": `regexp_replace(source_url, '^.*/([^/?]+)/?(\\?.*)?$', '\\1')`,
   "pl-courts": `regexp_replace(source_url, '^.*/([^/?]+)/?(\\?.*)?$', '\\1')`,
-};
-
-const rowCount = (result: unknown): number => {
-  if (Array.isArray(result)) {
-    return result.length;
-  }
-  return isRecord(result) && Array.isArray(result["rows"])
-    ? result["rows"].length
-    : 0;
 };
 
 /**
@@ -88,7 +79,7 @@ const fillFrom = async (
     RETURNING d.id
   `);
 
-  const updated = rowCount(result);
+  const updated = executedRows(result).length;
   if (updated === 0) {
     return filled;
   }
