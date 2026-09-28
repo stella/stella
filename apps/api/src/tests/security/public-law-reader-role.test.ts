@@ -69,7 +69,6 @@ import {
 } from "@/api/lib/public-law-read-db";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -138,33 +137,9 @@ const forbiddenColumnRead = async (
     `SELECT ${quoted(column)} FROM ${quoted(relation)}`,
   );
 
-const pregrantProvisionColumns = new Set(
-  publicLawColumnPairs(PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION)
-    .filter(({ grant }) => grant === "permitted")
-    .map(({ relation, column }) => `${relation}.${column}`),
-);
-
-const pregrantReaderColumns = (relation: string, columns: string[]) =>
-  columns.filter(
-    (column) => !pregrantProvisionColumns.has(`${relation}.${column}`),
-  );
-
-const pregrantReaderRelations = Object.entries(
-  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-)
-  .filter(
-    ([relation, columns]) =>
-      pregrantReaderColumns(relation, Object.keys(columns)).length > 0,
-  )
-  .map(([relation]) => relation);
-
 const expectedQualifiedColumns = publicLawColumnPairs(
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
 )
-  .filter(
-    ({ relation, column }) =>
-      !pregrantProvisionColumns.has(`${relation}.${column}`),
-  )
   .map(({ relation, column }) => `${relation}.${column}`)
   .toSorted();
 
@@ -304,7 +279,7 @@ afterAll(async () => {
 });
 
 describe("public-law reader role", () => {
-  test("can read exactly the columns granted in this phase", async () => {
+  test("can read exactly the allowlisted columns", async () => {
     const result = await testDb.execute<{ qualified: string }>(sql`
       SELECT tables.relname || '.' || columns.attname AS qualified
       FROM pg_attribute AS columns
@@ -455,11 +430,12 @@ describe("public-law reader role", () => {
     });
   });
 
-  // A relation that is entirely permitted and ungranted cannot appear as
-  // over-privilege yet; exercise the relations this release actually grants.
+  // A release attests against its own map, and cannot know a relation a later
+  // map adds. Holding the later release's grants, it reads them as
+  // over-privilege.
   test("startup attestation under an older map refuses a later release's grants", async () => {
     const accepted: string[] = [];
-    for (const relation of pregrantReaderRelations) {
+    for (const relation of Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)) {
       const olderMap = Object.fromEntries(
         Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
           ([name]) => name !== relation,
@@ -644,16 +620,9 @@ describe("public-law reader role", () => {
       for (const [relation, columns] of Object.entries(
         PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
       )) {
-        const readableColumns = pregrantReaderColumns(
-          relation,
-          Object.keys(columns),
-        );
-        if (readableColumns.length === 0) {
-          continue;
-        }
         await tx.execute(
           sql.raw(
-            `SELECT ${readableColumns.map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
+            `SELECT ${Object.keys(columns).map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
           ),
         );
       }
@@ -1076,19 +1045,38 @@ describe("public-law reader role", () => {
     );
   });
 
-  test("has a SELECT policy on every granted relation and no other", async () => {
-    const result = await testDb.execute<{ tablename: string }>(sql`
-      SELECT tablename
+  // The provision extraction tables admit every role through their
+  // owner-access policy, so their rows reach the reader without a policy
+  // naming it; privileges decide access there.
+  test("a policy admits the reader on every allowlisted relation, and none names it elsewhere", async () => {
+    const result = await testDb.execute<{
+      tablename: string;
+      namesReader: boolean;
+    }>(sql`
+      SELECT tablename, ${READER_ROLE} = ANY (roles) AS "namesReader"
       FROM pg_policies
       WHERE schemaname = 'public'
-        AND ${READER_ROLE} = ANY (roles)
-        AND cmd = 'SELECT'
-      ORDER BY tablename
+        AND (
+          (${READER_ROLE} = ANY (roles) AND cmd = 'SELECT')
+          OR ('public' = ANY (roles) AND cmd IN ('SELECT', 'ALL'))
+        )
     `);
-
-    expect(result.rows.map(({ tablename }) => tablename)).toEqual(
-      pregrantReaderRelations.toSorted(),
+    const allowlisted = new Set(
+      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
     );
+    const admitted = new Set(result.rows.map(({ tablename }) => tablename));
+
+    expect(
+      [...allowlisted].filter((relation) => !admitted.has(relation)),
+    ).toEqual([]);
+    expect(
+      result.rows
+        .filter(
+          ({ tablename, namesReader }) =>
+            namesReader && !allowlisted.has(tablename),
+        )
+        .map(({ tablename }) => tablename),
+    ).toEqual([]);
   });
 
   test("keeps the previous reader policies during rollout", async () => {
