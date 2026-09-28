@@ -123,6 +123,7 @@
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/calculations": "workspace:*",
+    "@stll/invoicing": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/oxlint-config": "0.7.0",
     "@stll/property-testing": "workspace:*",
