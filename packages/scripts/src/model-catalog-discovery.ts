@@ -56,6 +56,10 @@ export const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-09-18: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "openai:gpt-5.6-sol":
     "2026-08-28: duplicate alias; OpenAI's gpt-5.6 alias routes to Sol and is the offered picker ID",
+  "openai:gpt-daybreak-blue-latest":
+    "2026-09-28: floating alias; do not offer or assign fixed-model metadata",
+  "openai:gpt-daybreak-red-latest":
+    "2026-09-28: floating alias; do not offer or assign fixed-model metadata",
 } as const satisfies Partial<Record<DiscoveryModelKey, DatedReviewReason>>;
 
 export type FindUnreviewedModelsOptions = {
