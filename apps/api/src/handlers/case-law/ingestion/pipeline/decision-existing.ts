@@ -306,6 +306,7 @@ export const resolveExistingDecisionPolicy = async ({
   existing,
   result,
   shape: {
+    incomingCarriesDocument,
     preservesExistingDetail,
     storedPartialObservation,
     storesUnpublishedWithoutDocument,
@@ -350,6 +351,9 @@ export const resolveExistingDecisionPolicy = async ({
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+    // A matching publisher hash cannot settle a row whose stored document
+    // is gone when this observation can restore it.
+    !(incomingCarriesDocument && !existing.hasStoredDocument) &&
     // A row stored with no document before the marker existed is still
     // public. The unchanged observation that would be skipped is the one
     // that can mark it, so it is written instead.

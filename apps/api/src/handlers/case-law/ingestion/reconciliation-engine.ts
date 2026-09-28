@@ -76,6 +76,7 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
+import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import {
@@ -396,11 +397,9 @@ type HeldDocumentIdsOptions = {
  * Which of these publisher document ids this source already holds, placed
  * where it belongs: a decision row of its own, or a supplement its judgment's
  * document holds in its current version with no standalone row left beside
- * it. A merged supplement has no published row, and reading it as missing
- * would re-walk its slice forever; a supplement stored but not placed (its
- * judgment's write failed after the supplement row committed) or whose
- * standalone row still stands is not held, so this walk lists it again and
- * places it.
+ * it. A merged supplement with no standalone row is held. An unmerged
+ * supplement with a textless, unmarked standalone row is listed again; its
+ * judgment's write or the row's absorption may still need to finish.
  *
  * An absorbed or redacted row counts as held whatever `requireDetail` says:
  * that is what took its detail, and a walk has nothing to place there.
@@ -419,6 +418,7 @@ const selectHeldDocumentIds = async (
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
         hasDetail:
           detail === undefined ? sql<boolean>`true` : sql<boolean>`${detail}`,
+        hasStoredDocument: rowHoldsDocument,
         // Taken out of the corpus by absorption or by a takedown: either
         // way settled, and nothing a listing walk could place again.
         settled: sql<boolean>`${decisionAbsorptionSql(caseLawDecisions.metadata)} is not null or ${caseLawDecisions.redactedAt} is not null`,
@@ -434,6 +434,9 @@ const selectHeldDocumentIds = async (
     supplements: await tx
       .select({
         sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
+        decisionId: caseLawDecisionSupplements.decisionId,
+        sourceHash: caseLawDecisionSupplements.sourceHash,
+        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -442,16 +445,21 @@ const selectHeldDocumentIds = async (
           inArray(caseLawDecisionSupplements.sourceDocumentId, [
             ...documentIds,
           ]),
-          isNotNull(caseLawDecisionSupplements.decisionId),
-          eq(
-            caseLawDecisionSupplements.mergedSourceHash,
-            caseLawDecisionSupplements.sourceHash,
-          ),
         ),
       )
       .limit(documentIds.length),
   }));
-  const merged = new Set(supplements.map((row) => row.sourceDocumentId));
+  const supplementStateById = new Map(
+    supplements.map(
+      (row) =>
+        [
+          row.sourceDocumentId,
+          row.decisionId !== null && row.mergedSourceHash === row.sourceHash
+            ? "merged"
+            : "unmerged",
+        ] as const,
+    ),
+  );
   const rowsById = new Map(
     decisions.flatMap((row) =>
       row.sourceDocumentId === null ? [] : [[row.sourceDocumentId, row]],
@@ -459,8 +467,17 @@ const selectHeldDocumentIds = async (
   );
   return documentIds.filter((sourceDocumentId) => {
     const row = rowsById.get(sourceDocumentId);
-    if (merged.has(sourceDocumentId)) {
+    const supplementState = supplementStateById.get(sourceDocumentId);
+    if (supplementState === "merged") {
       return row === undefined || row.settled;
+    }
+    if (
+      row !== undefined &&
+      supplementState === "unmerged" &&
+      !row.settled &&
+      !row.hasStoredDocument
+    ) {
+      return false;
     }
     return row !== undefined && (row.hasDetail || row.settled);
   });

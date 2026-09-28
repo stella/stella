@@ -10,7 +10,7 @@
  * megabytes, and two of the three callers ask it inside a loop.
  */
 
-import { sql } from "drizzle-orm";
+import { notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -26,6 +26,11 @@ import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-stora
 const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
   sql`coalesce(jsonb_array_length(case when jsonb_typeof(${column}) = 'array' then ${column} else '[]'::jsonb end), 0)`;
 
+type DecisionPayloadColumns = Pick<
+  typeof caseLawDecisions,
+  "fulltext" | "documentAst" | "sections" | "contentHash"
+>;
+
 /**
  * Whether the row's own Postgres columns hold a document.
  *
@@ -33,11 +38,31 @@ const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
  * rather than a document, and `{}` is the placeholder an adapter without
  * a parser emits, so neither counts.
  */
-export const pgPayloadCarriesDocument: SQL<boolean> = sql<boolean>`(
-  coalesce(${caseLawDecisions.fulltext}, '') <> ''
-  or ${jsonbArrayLength(sql`${caseLawDecisions.documentAst} -> 'blocks'`)} > 0
-  or ${jsonbArrayLength(caseLawDecisions.sections)} > 0
+const pgPayloadCarriesDocumentFor = ({
+  fulltext,
+  documentAst,
+  sections,
+}: DecisionPayloadColumns): SQL<boolean> => sql<boolean>`(
+  coalesce(${fulltext}, '') <> ''
+  or ${jsonbArrayLength(sql`${documentAst} -> 'blocks'`)} > 0
+  or ${jsonbArrayLength(sections)} > 0
 )`;
+
+export const pgPayloadCarriesDocument =
+  pgPayloadCarriesDocumentFor(caseLawDecisions);
+
+/** Whether either storage location holds a readable decision document. */
+export const rowHoldsDocumentFor = (
+  table: DecisionPayloadColumns,
+): SQL<boolean> => sql<boolean>`(
+  ${pgPayloadCarriesDocumentFor(table)}
+  or (
+    ${table.contentHash} is not null
+    and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
+  )
+)`;
+
+export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * The same question as `pgPayloadCarriesDocument`, asked of a payload
