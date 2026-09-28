@@ -38,7 +38,6 @@
     "apps/web/src/features/case-law/components/citation-timeline-panel.tsx": 4,
     "apps/web/src/features/statutes/components/statute-text.tsx": 5,
     "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx": 1,
-    "apps/web/src/routes/_protected.chat/index.tsx": 1,
     "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx": 1,
     "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 1,
     "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 5,

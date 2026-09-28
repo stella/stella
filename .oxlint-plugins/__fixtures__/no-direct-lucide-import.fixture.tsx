@@ -1,4 +1,4 @@
-/* oxlint-disable import/no-duplicates, no-duplicate-imports, unicorn/prefer-module, oxc/no-barrel-file -- fixture: each import form stands on its own line */
+/* oxlint-disable unicorn/prefer-module -- fixture: require is one of the import forms under test */
 
 // Passive regression fixture for
 // `no-direct-lucide-import/no-direct-lucide-import`.

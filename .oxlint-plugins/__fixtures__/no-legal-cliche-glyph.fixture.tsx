@@ -20,7 +20,7 @@ import {
 import { ScaleIcon as IconModuleScale } from "@stll/ui/icons";
 
 // oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the icon module may not re-export it either
-export { GavelIcon as ReexportedGavel } from "lucide-react";
+export { Gavel as ReexportedGavel } from "lucide-react";
 
 const Icon = ({ as: As }: { as: typeof Scale3dIcon }) => <As />;
 

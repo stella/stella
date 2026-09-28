@@ -9,8 +9,9 @@
 //   2. A bare or `Lucide`-prefixed name is imported under its `…Icon` spelling
 //      and aliased back to the local name, so no call site changes.
 //   3. A glyph with a semantic entry is imported under that entry's name and
-//      the local identifier is renamed to it (`WandSparklesIcon` becomes
-//      `AiActionIcon`). A glyph shared by several entries needs a per-file
+//      every reference to the local binding is renamed to it
+//      (`WandSparklesIcon` becomes `AiActionIcon`); strings, comments and
+//      property names keep their text. A glyph shared by several entries needs a per-file
 //      choice in SEMANTIC_REWRITES; an unlisted file stops the run.
 //   4. The plain re-export list at the bottom of the icon module is
 //      regenerated from every name imported from it.
@@ -22,6 +23,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
@@ -190,13 +192,99 @@ const mergeValueImports = (source: string, target: string): string => {
   });
 };
 
+type Edit = {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+};
+
+// The edit that renames one identifier, or null when it is a name rather than
+// a reference to the binding: a member (`x.Name`), an object key, a class or
+// type member, a JSX attribute, or the exported side of an export specifier.
+const identifierEdit = (
+  node: ts.Identifier,
+  sourceFile: ts.SourceFile,
+  to: string,
+): Edit | null => {
+  const { parent } = node;
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  if (ts.isShorthandPropertyAssignment(parent)) {
+    return { start, end, text: `${node.text}: ${to}` };
+  }
+  if (ts.isExportSpecifier(parent)) {
+    if (parent.propertyName === undefined) {
+      return { start, end, text: `${to} as ${node.text}` };
+    }
+    return parent.propertyName === node ? { start, end, text: to } : null;
+  }
+  const isName =
+    ((ts.isPropertyAccessExpression(parent) ||
+      ts.isQualifiedName(parent) ||
+      ts.isPropertyAssignment(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isEnumMember(parent) ||
+      ts.isBindingElement(parent)) &&
+      "name" in parent &&
+      parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node) ||
+    ts.isJsxAttribute(parent) ||
+    ts.isImportSpecifier(parent);
+  return isName ? null : { start, end, text: to };
+};
+
+/**
+ * Rename every reference to the given bindings and nothing else. Parsed, not
+ * matched as text, so a string literal, a comment, a test id or an object key
+ * that spells the same name keeps it.
+ */
+export const renameIdentifiers = (
+  file: string,
+  source: string,
+  renames: ReadonlyMap<string, string>,
+): string => {
+  if (renames.size === 0) {
+    return source;
+  }
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const edits: Edit[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      const to = renames.get(node.text);
+      const edit =
+        to === undefined ? null : identifierEdit(node, sourceFile, to);
+      if (edit !== null) {
+        edits.push(edit);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  let output = source;
+  for (const { start, end, text } of edits.toSorted(
+    (a, b) => b.start - a.start,
+  )) {
+    output = output.slice(0, start) + text + output.slice(end);
+  }
+  return output;
+};
+
 const LUCIDE_STATEMENT =
   /^(?<keyword>import|export)(?<typeKeyword>\s+type)?\s*\{(?<list>[^}]*)\}\s*from\s*["']lucide-react["'];?/gmu;
 
 const rewriteFile = (file: string, source: string): string => {
   const renames = new Map<string, string>();
   const target = iconSpecifierFor(file);
-  let output = source.replace(LUCIDE_STATEMENT, (...args: unknown[]) => {
+  const output = source.replace(LUCIDE_STATEMENT, (...args: unknown[]) => {
     const groups = args.at(-1) as Record<string, string | undefined>;
     const keyword = groups["keyword"] ?? "import";
     const typeKeyword = groups["typeKeyword"] === undefined ? "" : " type";
@@ -219,13 +307,7 @@ const rewriteFile = (file: string, source: string): string => {
     );
     return `${keyword}${typeKeyword} { ${uniqueSpecifiers(specifiers).map(printSpecifier).join(", ")} } from "${target}";`;
   });
-  for (const [from, to] of renames) {
-    output = output.replace(
-      new RegExp(`(?<![\\w$.])${escapeRegExp(from)}(?![\\w$])`, "gu"),
-      () => to,
-    );
-  }
-  return mergeValueImports(output, target);
+  return mergeValueImports(renameIdentifiers(file, output, renames), target);
 };
 
 const modulePath = path.join(REPO_ROOT, ICON_MODULE);
@@ -304,70 +386,76 @@ const renderGeneratedBlock = (
   return lines.join("\n");
 };
 
-const values = new Set<string>();
-const types = new Set<string>();
-// Written only once every file rewrote cleanly, so a failed run leaves the
-// tree untouched.
-const pendingWrites = new Map<string, string>();
+const main = (): void => {
+  const values = new Set<string>();
+  const types = new Set<string>();
+  // Written only once every file rewrote cleanly, so a failed run leaves the
+  // tree untouched.
+  const pendingWrites = new Map<string, string>();
 
-for (const file of listSourceFiles()) {
-  const absolute = path.join(REPO_ROOT, file);
-  const source = readFileSync(absolute, "utf-8");
-  const rewritten = source.includes("lucide-react")
-    ? rewriteFile(file, source)
-    : source;
-  if (rewritten !== source) {
-    changed.push(file);
-    pendingWrites.set(absolute, rewritten);
+  for (const file of listSourceFiles()) {
+    const absolute = path.join(REPO_ROOT, file);
+    const source = readFileSync(absolute, "utf-8");
+    const rewritten = source.includes("lucide-react")
+      ? rewriteFile(file, source)
+      : source;
+    if (rewritten !== source) {
+      changed.push(file);
+      pendingWrites.set(absolute, rewritten);
+    }
+    collectImportedNames(file, rewritten, values, types);
   }
-  collectImportedNames(file, rewritten, values, types);
-}
 
-for (const name of values) {
-  const glyph = glyphOf(name);
-  if (glyph === null) {
-    failures.push(
-      `'${name}' is imported from the icon module but is not a lucide icon.`,
+  for (const name of values) {
+    const glyph = glyphOf(name);
+    if (glyph === null) {
+      failures.push(
+        `'${name}' is imported from the icon module but is not a lucide icon.`,
+      );
+    } else if (SEMANTIC_REWRITES[glyph] !== undefined) {
+      failures.push(
+        `'${name}' has a semantic entry; import the entry instead of the plain glyph.`,
+      );
+    }
+  }
+
+  const startIndex = moduleSource.indexOf(GENERATED_START);
+  const endIndex = moduleSource.indexOf(GENERATED_END);
+  if (startIndex === -1 || endIndex === -1) {
+    failures.push(`${ICON_MODULE}: generated block markers are missing.`);
+  } else {
+    const nextModule =
+      moduleSource.slice(0, startIndex) +
+      renderGeneratedBlock(values, types) +
+      moduleSource.slice(endIndex + GENERATED_END.length);
+    if (nextModule !== moduleSource) {
+      changed.push(ICON_MODULE);
+      pendingWrites.set(modulePath, nextModule);
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exit(1);
+  }
+  if (!checkOnly) {
+    for (const [file, content] of pendingWrites) {
+      writeFileSync(file, content);
+    }
+  }
+  if (checkOnly && changed.length > 0) {
+    console.error(
+      `Icon imports need rewriting in ${changed.length} file(s); run bun scripts/codemod-icons.ts:\n${changed.join("\n")}`,
     );
-  } else if (SEMANTIC_REWRITES[glyph] !== undefined) {
-    failures.push(
-      `'${name}' has a semantic entry; import the entry instead of the plain glyph.`,
-    );
+    process.exit(1);
   }
-}
-
-const startIndex = moduleSource.indexOf(GENERATED_START);
-const endIndex = moduleSource.indexOf(GENERATED_END);
-if (startIndex === -1 || endIndex === -1) {
-  failures.push(`${ICON_MODULE}: generated block markers are missing.`);
-} else {
-  const nextModule =
-    moduleSource.slice(0, startIndex) +
-    renderGeneratedBlock(values, types) +
-    moduleSource.slice(endIndex + GENERATED_END.length);
-  if (nextModule !== moduleSource) {
-    changed.push(ICON_MODULE);
-    pendingWrites.set(modulePath, nextModule);
-  }
-}
-
-if (failures.length > 0) {
-  console.error(failures.join("\n"));
-  process.exit(1);
-}
-if (!checkOnly) {
-  for (const [file, content] of pendingWrites) {
-    writeFileSync(file, content);
-  }
-}
-if (checkOnly && changed.length > 0) {
-  console.error(
-    `Icon imports need rewriting in ${changed.length} file(s); run bun scripts/codemod-icons.ts:\n${changed.join("\n")}`,
+  console.log(
+    checkOnly
+      ? "Icon imports are routed through the icon module."
+      : `Rewrote ${changed.length} file(s).`,
   );
-  process.exit(1);
+};
+
+if (import.meta.main) {
+  main();
 }
-console.log(
-  checkOnly
-    ? "Icon imports are routed through the icon module."
-    : `Rewrote ${changed.length} file(s).`,
-);
