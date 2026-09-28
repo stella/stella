@@ -309,6 +309,18 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.workflow.start`                 | write              | stella:matters_write | —       | generic invoke → `stella capability matters workflow-start`                 |
 | `matters.workflow.targets.count`         | read               | stella:read          | —       | generic invoke → `stella capability matters workflow-targets-count`         |
 
+## number-series
+
+| Capability                     | Access | Scope                | Feature | Reachable via                                                     |
+| ------------------------------ | ------ | -------------------- | ------- | ----------------------------------------------------------------- |
+| `number-series.archive`        | write  | stella:billing_write | —       | generic invoke → `stella capability number-series archive`        |
+| `number-series.create`         | write  | stella:billing_write | —       | generic invoke → `stella capability number-series create`         |
+| `number-series.default.update` | write  | stella:billing_write | —       | generic invoke → `stella capability number-series default-update` |
+| `number-series.get`            | read   | stella:read          | —       | generic invoke → `stella capability number-series get`            |
+| `number-series.list`           | read   | stella:read          | —       | generic invoke → `stella capability number-series list`           |
+| `number-series.preview`        | read   | stella:read          | —       | generic invoke → `stella capability number-series preview`        |
+| `number-series.update`         | write  | stella:billing_write | —       | generic invoke → `stella capability number-series update`         |
+
 ## organization-settings
 
 | Capability                                                          | Access             | Scope              | Feature | Reachable via                                                                                          |
