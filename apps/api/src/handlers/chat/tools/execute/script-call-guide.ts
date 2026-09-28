@@ -85,7 +85,12 @@ const indexCatalog = (catalog: ScriptCallCatalog): ScriptCallIndex => {
   const readsByKey = new Map<string, string[]>();
   for (const name of catalog.readFunctions) {
     const key = toolNameKey(name);
-    readsByKey.set(key, [...(readsByKey.get(key) ?? []), name]);
+    const known = readsByKey.get(key);
+    if (known === undefined) {
+      readsByKey.set(key, [name]);
+    } else {
+      known.push(name);
+    }
   }
   const directByKey = new Map<string, string>();
   for (const name of catalog.directTools) {
@@ -154,23 +159,19 @@ const classifyIndexed = (
   if (key === "") {
     return { kind: "unknown", name };
   }
-  const reads = index.readsByKey.get(key) ?? [];
+  // Every stored list holds at least one name.
+  const reads = index.readsByKey.get(key);
+  const onlyRead = reads?.length === 1 ? reads[0] : undefined;
   const direct = index.directByKey.get(key);
   if (direct !== undefined) {
     // A read of the same name makes the intent ambiguous, so nothing runs:
     // the answer names both calls.
-    return {
-      kind: "direct-tool",
-      name,
-      tool: direct,
-      readInstead: reads.length === 1 ? reads[0] : undefined,
-    };
+    return { kind: "direct-tool", name, tool: direct, readInstead: onlyRead };
   }
-  const [onlyRead] = reads;
-  if (onlyRead !== undefined && reads.length === 1) {
+  if (onlyRead !== undefined) {
     return { kind: "run-read", name, target: onlyRead };
   }
-  if (reads.length > 1) {
+  if (reads !== undefined) {
     return {
       kind: "ambiguous-read",
       name,
@@ -265,15 +266,17 @@ export const scriptNameMessage = (
 
 const snakeCase = (name: string): string => name.replaceAll("-", "_");
 
-const camelCase = (name: string): string =>
-  snakeCase(name).replaceAll(/_+([a-z0-9])/gu, (_match, letter: string) =>
-    letter.toUpperCase(),
-  );
+const capitalized = (word: string): string =>
+  `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
 
-const pascalCase = (name: string): string => {
-  const camel = camelCase(name);
-  return `${camel.charAt(0).toUpperCase()}${camel.slice(1)}`;
+const camelCase = (name: string): string => {
+  const [first = "", ...rest] = snakeCase(name)
+    .split("_")
+    .filter((word) => word !== "");
+  return `${first}${rest.map(capitalized).join("")}`;
 };
+
+const pascalCase = (name: string): string => capitalized(camelCase(name));
 
 const READ_FUNCTION_PREFIX = "external_";
 
