@@ -115,6 +115,7 @@ import {
   isSearchCaseLawSuccess,
   type SearchCaseLawSuccess,
 } from "@/api/mcp/public-law-handlers";
+import { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import {
   defineTextFieldSpec,
@@ -2782,20 +2783,7 @@ const handleReadContactTool: TypedMcpToolHandler<
         id: { eq: contactId },
         organizationId: { eq: context.organizationId },
       },
-      columns: {
-        id: true,
-        type: true,
-        displayName: true,
-        firstName: true,
-        lastName: true,
-        organizationName: true,
-        emails: true,
-        phones: true,
-        dateOfBirthYear: true,
-        dateOfBirthMonth: true,
-        dateOfBirthDay: true,
-        nationalityCodes: true,
-      },
+      columns: READ_CONTACT_COLUMNS,
     }),
   );
 
