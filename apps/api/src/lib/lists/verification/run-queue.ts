@@ -17,11 +17,8 @@ import { and, asc, eq, inArray, lt, or } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import {
-  fields,
-  legalListClaims,
-  legalListVerificationRuns,
-} from "@/api/db/schema";
+import type { legalListClaims } from "@/api/db/schema";
+import { fields, legalListVerificationRuns } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
