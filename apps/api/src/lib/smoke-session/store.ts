@@ -21,6 +21,7 @@ import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
+import { recordNewOrganizationAccessState } from "@/api/lib/organization-access-state";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -108,9 +109,18 @@ const ensureSmokePrincipal = async (
     columns: { id: true },
   });
   if (!existingOrg) {
-    await rootDb.insert(organization).values({
-      ...org,
-      createdAt: now,
+    // A direct insert skips the organization plugin's creation hook, so the
+    // access state a real new organization gets is recorded here.
+    await rootDb.transaction(async (tx) => {
+      await tx.insert(organization).values({
+        ...org,
+        createdAt: now,
+      });
+      await recordNewOrganizationAccessState({
+        db: tx,
+        organizationId: brandPersistedOrganizationId(org.id),
+        now,
+      });
     });
   }
 

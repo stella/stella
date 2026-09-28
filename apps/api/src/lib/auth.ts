@@ -96,6 +96,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { recordNewOrganizationAccessState } from "@/api/lib/organization-access-state";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -854,6 +855,13 @@ const createAuth = () => {
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
+    // Insert-once on the owner connection, like the seeds below.
+    recordAccessState: async (organizationId: SafeId<"organization">) =>
+      await recordNewOrganizationAccessState({
+        db: rootDb,
+        organizationId,
+        now: new Date(),
+      }),
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.

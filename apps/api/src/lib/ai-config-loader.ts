@@ -22,7 +22,9 @@ import {
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mayUseInstanceModels } from "@/api/lib/organization-access-state";
 
 /** The one capability the loaders need: a single `organization_settings` select. */
 export type OrgSettingsReader = Pick<Transaction, "select">;
@@ -45,6 +47,24 @@ const selectAISettingsRow = async (
     .then((rows) => rows.at(0));
 
 /**
+ * A null config means "run on the instance provider"; throws when the org's
+ * access state bars that, as a deployment without instance keys would.
+ */
+const requireInstanceFallbackAllowed = async (
+  db: OrgSettingsReader,
+  organizationId: SafeId<"organization">,
+  orgAIConfig: OrgAIConfig | null,
+): Promise<OrgAIConfig | null> => {
+  if (
+    orgAIConfig === null &&
+    !(await mayUseInstanceModels(db, organizationId))
+  ) {
+    throw ownAIKeyRequiredError();
+  }
+  return orgAIConfig;
+};
+
+/**
  * For callers that are about to use the config for an AI call. Throws a
  * typed `ConfigurationError` on a corrupt stored row (see
  * `decryptOrgAIConfigRowOrThrow`) rather than silently falling back to no
@@ -64,11 +84,12 @@ export const loadOrgAIConfig = async (
     .from(organizationSettings)
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1);
-  return await decryptOrgAIConfigRowOrThrow({
+  const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
     decrypt: decryptAIConfig,
     organizationId,
     row: rows.at(0),
   });
+  return await requireInstanceFallbackAllowed(db, organizationId, orgAIConfig);
 };
 
 export type OrgAISettings = {
@@ -93,7 +114,11 @@ export const loadOrgAISettings = async (
     row,
   });
   return {
-    orgAIConfig,
+    orgAIConfig: await requireInstanceFallbackAllowed(
+      db,
+      organizationId,
+      orgAIConfig,
+    ),
     promptCachingEnabled: resolvePromptCachingPreference(row),
   };
 };
@@ -115,7 +140,9 @@ export type OrgSettingsForAuth = {
  * every request for the org. The decrypt failure is still captured (see
  * `decryptOrgAIConfigRow`) and reported as `orgAIConfigStatus:
  * "unreadable"`, which AI-invoking call sites must fail closed on rather
- * than reading the null as "this org has no config of its own".
+ * than reading the null as "this org has no config of its own". An org
+ * whose access state bars the instance provider reports `own_key_required`
+ * the same way, so non-AI requests keep working.
  */
 export const loadOrgSettingsForAuth = async (
   db: OrgSettingsReader,
@@ -128,13 +155,19 @@ export const loadOrgSettingsForAuth = async (
     organizationId,
     row,
   });
-  const orgAIConfig =
-    decryptResult.status === "ok" ? decryptResult.config : null;
-  const orgAIConfigStatus =
-    decryptResult.status === "ok"
-      ? ORG_AI_CONFIG_STATUS.ok
-      : ORG_AI_CONFIG_STATUS.unreadable;
   const promptCachingEnabled = resolvePromptCachingPreference(row);
+  if (decryptResult.status === "corrupt") {
+    return {
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      promptCachingEnabled,
+    };
+  }
 
+  const orgAIConfig = decryptResult.config;
+  const orgAIConfigStatus =
+    orgAIConfig === null && !(await mayUseInstanceModels(db, organizationId))
+      ? ORG_AI_CONFIG_STATUS.ownKeyRequired
+      : ORG_AI_CONFIG_STATUS.ok;
   return { orgAIConfig, orgAIConfigStatus, promptCachingEnabled };
 };
