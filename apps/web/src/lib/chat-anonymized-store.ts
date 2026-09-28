@@ -178,12 +178,20 @@ export const setChatAnonymized = (
     .setThreadAnonymized(getChatThreadKey(threadRef), anonymized);
 };
 
-export const useChatAnonymized = (threadRef: ChatThreadRef): boolean => {
-  const threadKey = getChatThreadKey(threadRef);
+export const useChatAnonymized = (threadRef: ChatThreadRef): boolean =>
+  useOptionalChatAnonymized(threadRef);
+
+/** {@link useChatAnonymized} for a caller that may have no thread: `false`. */
+export const useOptionalChatAnonymized = (
+  threadRef: ChatThreadRef | undefined,
+): boolean => {
+  const threadKey =
+    threadRef === undefined ? null : getChatThreadKey(threadRef);
   return useChatAnonymizedStore(
     (state) =>
+      threadKey !== null &&
       (state.sendModes[threadKey] ?? state.defaultSendMode) ===
-      CHAT_SEND_MODE.anonymized,
+        CHAT_SEND_MODE.anonymized,
   );
 };
 

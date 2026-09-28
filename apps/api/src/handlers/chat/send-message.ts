@@ -12,7 +12,6 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
-import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -138,6 +137,7 @@ import {
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
 import {
   areSubagentToolsRegistered,
   areTemplateAuthoringToolsRegistered,
@@ -1779,23 +1779,27 @@ export const createSendMessage = (
       // built this turn refuses to re-execute the identical call (see
       // `ChatToolDefectMemo`).
       const toolDefectMemo = createChatToolDefectMemo();
-      // Narrower than the combined `suggest_changes` gate below:
-      // only the file overlay (`file-chat-overlay.tsx`) mounts the
-      // auto-run watcher that resolves the folio-agents `read_document` /
-      // `find_text` tools via `addToolResult`. Template Studio has no such
-      // watcher, so a tool call there would hang the session until reload.
-      // Computed once and reused for tool registration (validation +
-      // streaming) and for the matching prompt guidance below.
-      const hasActiveDocxFileClient =
-        body.activeFile?.supportsDocxEdits === true;
-      // Which client executor resolves `suggest_changes`, hence which
-      // per-surface schema the model sees. Only Template Studio narrows to
-      // text replacements; the file overlay hosts both entity-backed files
-      // and unsaved generated drafts with the full operation set.
-      const docxSuggestionSurface =
-        body.activeTemplate !== undefined
-          ? DOCX_SUGGESTION_SURFACE.templateStudio
-          : DOCX_SUGGESTION_SURFACE.fileOverlay;
+      // `hasActiveDocxFileClient` is narrower than the combined
+      // `suggest_changes` gate: only the file overlay
+      // (`file-chat-overlay.tsx`) mounts the auto-run watcher that resolves
+      // the folio-agents `read_document` / `find_text` tools via
+      // `addToolResult`. Template Studio has no such watcher, so a tool call
+      // there would hang the session until reload. `docxSuggestionSurface`
+      // picks which client executor resolves `suggest_changes`, hence which
+      // per-surface schema the model sees. Computed once and reused for tool
+      // registration (validation + streaming), the matching prompt guidance
+      // below, and, from the same helper, the composer's skill-availability
+      // check.
+      const {
+        docxSuggestionSurface,
+        hasActiveDocxEditClient,
+        hasActiveDocxFileClient,
+      } = resolveChatDocumentClients({
+        activeFileSupportsDocxEdits:
+          body.activeFile?.supportsDocxEdits === true,
+        hasActiveDraft: body.activeDraft !== undefined,
+        hasActiveTemplate: body.activeTemplate !== undefined,
+      });
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
       // exclusive `suggest_changes` variants (client-executed queue for
       // manual, server-executed apply for auto) `getChatTools` registers,
@@ -2090,10 +2094,7 @@ export const createSendMessage = (
         const registeredDocxEditMode = resolveRegisteredDocxEditMode({
           activeFile: activeFileForTools,
           editApplyMode,
-          hasActiveDocxEditClient:
-            hasActiveDocxFileClient ||
-            body.activeDraft !== undefined ||
-            body.activeTemplate !== undefined,
+          hasActiveDocxEditClient,
           memberRole: memberRole.role,
           recordAuditEventAvailable: true,
           requestWorkspaceId: workspaceId,
@@ -2146,10 +2147,7 @@ export const createSendMessage = (
           userId: user.id,
           toolWorkspaceIds,
           activeFile: activeFileForTools,
-          hasActiveDocxEditClient:
-            hasActiveDocxFileClient ||
-            body.activeDraft !== undefined ||
-            body.activeTemplate !== undefined,
+          hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
           browserClient: resolveBrowserClientCapability(body.browserClient),
