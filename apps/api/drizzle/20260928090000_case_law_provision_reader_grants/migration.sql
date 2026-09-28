@@ -2,6 +2,12 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- Apply only after the release allowing these optional reader grants is deployed.
+CREATE POLICY "public_law_reader_access" ON "case_law_provision_extractions"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_provision_extraction_revisions_registry"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_provision_extraction_revisions"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION "case_law_provision_extraction_in_scope"(varchar, varchar)
   TO "stella_public_law_reader";--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION "case_law_provision_extraction_input_digest"(text, date, text, text, boolean)

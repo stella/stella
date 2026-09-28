@@ -1045,38 +1045,19 @@ describe("public-law reader role", () => {
     );
   });
 
-  // The provision extraction tables admit every role through their
-  // owner-access policy, so their rows reach the reader without a policy
-  // naming it; privileges decide access there.
-  test("a policy admits the reader on every allowlisted relation, and none names it elsewhere", async () => {
-    const result = await testDb.execute<{
-      tablename: string;
-      namesReader: boolean;
-    }>(sql`
-      SELECT tablename, ${READER_ROLE} = ANY (roles) AS "namesReader"
+  test("has a SELECT policy on every allowlisted relation and no other", async () => {
+    const result = await testDb.execute<{ tablename: string }>(sql`
+      SELECT tablename
       FROM pg_policies
       WHERE schemaname = 'public'
-        AND (
-          (${READER_ROLE} = ANY (roles) AND cmd = 'SELECT')
-          OR ('public' = ANY (roles) AND cmd IN ('SELECT', 'ALL'))
-        )
+        AND ${READER_ROLE} = ANY (roles)
+        AND cmd = 'SELECT'
+      ORDER BY tablename
     `);
-    const allowlisted = new Set(
-      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
-    );
-    const admitted = new Set(result.rows.map(({ tablename }) => tablename));
 
-    expect(
-      [...allowlisted].filter((relation) => !admitted.has(relation)),
-    ).toEqual([]);
-    expect(
-      result.rows
-        .filter(
-          ({ tablename, namesReader }) =>
-            namesReader && !allowlisted.has(tablename),
-        )
-        .map(({ tablename }) => tablename),
-    ).toEqual([]);
+    expect(result.rows.map(({ tablename }) => tablename)).toEqual(
+      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).toSorted(),
+    );
   });
 
   test("keeps the previous reader policies during rollout", async () => {
