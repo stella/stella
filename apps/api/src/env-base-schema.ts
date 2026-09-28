@@ -154,6 +154,7 @@ export const envBaseServerSchema = {
   STELLA_YARA_RULES_DIR: v.optional(v.string()),
   SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
   INGESTION_USER_AGENT: v.optional(v.string()),
+  SANCTIONS_EU_XML_URL: v.optional(v.pipe(v.string(), v.url())),
   DATABASE_URL: v.pipe(v.string(), v.url()),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
