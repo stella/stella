@@ -29,6 +29,7 @@ import {
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -118,17 +119,6 @@ export const buildCitationRows = async ({
       polarityRuleId: match?.ruleId ?? null,
     };
   });
-};
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
 };
 
 /** Each rule that labelled one of these citations, and how many it labelled. */
