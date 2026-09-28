@@ -10,7 +10,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import {
   rateLookupKey,
   resolveRatesInTransaction,
-} from "@/api/lib/billing-rates";
+} from "@/api/lib/billing/rates";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";

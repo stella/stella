@@ -6,8 +6,8 @@ import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { narrativeLanguageSchema } from "@/api/lib/narrative-language";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 import {

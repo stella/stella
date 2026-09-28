@@ -13,7 +13,11 @@ import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-i
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
+import {
+  NARRATIVE_LANGUAGE_MAX_LENGTH,
+  NARRATIVE_LANGUAGE_PATTERN,
+} from "@/api/lib/billing/narrative-language";
+import { resolveRate } from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -28,10 +32,6 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import {
-  NARRATIVE_LANGUAGE_MAX_LENGTH,
-  NARRATIVE_LANGUAGE_PATTERN,
-} from "@/api/lib/narrative-language";
 import {
   createCursorPage,
   decodePaginationCursor,

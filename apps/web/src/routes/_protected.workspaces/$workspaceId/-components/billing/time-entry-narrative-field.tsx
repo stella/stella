@@ -147,7 +147,7 @@ export const TimeEntryNarrativeField = ({
       />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${id}-language`}>{tCommon("language")}</Label>
-        <Combobox
+        <Combobox<LanguagePick>
           autoHighlight
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={languageOptions}
@@ -162,7 +162,7 @@ export const TimeEntryNarrativeField = ({
           />
           <ComboboxPopup>
             <ComboboxList>
-              {(item) => (
+              {(item: LanguagePick) => (
                 <ComboboxItem key={item.code} value={item}>
                   {item.label}
                   <span className="text-muted-foreground ms-2 uppercase">

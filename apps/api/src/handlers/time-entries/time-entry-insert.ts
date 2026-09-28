@@ -9,13 +9,13 @@ import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
 import {
   getTimePolicyViolation,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
+import { resolveRate } from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

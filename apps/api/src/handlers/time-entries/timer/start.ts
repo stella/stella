@@ -12,8 +12,8 @@ import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { resolveRate } from "@/api/lib/billing/rates";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

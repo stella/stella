@@ -24,9 +24,9 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { narrativeLanguageSchema } from "@/api/lib/narrative-language";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const SUGGESTION_UNAVAILABLE_HINT =
