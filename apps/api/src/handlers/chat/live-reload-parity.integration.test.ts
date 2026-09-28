@@ -1316,12 +1316,12 @@ const sendPastAnApproval = async () => {
   });
 };
 
-const replaceWaiting = async (calls: CallKind[]) => {
+const replaceWaiting = async (calls: CallKind[], reasoning: boolean) => {
   await inConversation(async (model, real) => {
-    await new SendUserMessage([[{ ...STEP, calls }]], "Draft the NDA").run(
-      model,
-      real,
-    );
+    await new SendUserMessage(
+      [[{ ...STEP, calls, reasoning }]],
+      "Draft the NDA",
+    ).run(model, real);
     // The fixture must reach the fault: every call still waits.
     expect(real.ledger.pending).toHaveLength(calls.length);
     await new SupersedeCards([TEXT_ANSWER], "Use the buyer's form").run(
@@ -2049,13 +2049,15 @@ describe("a conversation's live view", () => {
   );
 
   test.each([
-    ["an approval", ["approval"]],
-    ["an ask-user card", ["ask-user"]],
-    ["a mixed batch", ["approval", "ask-user", "approval"]],
-  ] satisfies [string, CallKind[]][])(
+    ["an approval", ["approval"], false],
+    ["an ask-user card", ["ask-user"], false],
+    ["a mixed batch", ["approval", "ask-user", "approval"], false],
+    // Its signed thinking stays on the one message holding all its calls.
+    ["a thought-out mixed batch", ["approval", "ask-user", "approval"], true],
+  ] satisfies [string, CallKind[], boolean][])(
     "lets a new message replace %s that still waits",
-    async (_label, calls) => {
-      await replaceWaiting(calls);
+    async (_label, calls, reasoning) => {
+      await replaceWaiting(calls, reasoning);
     },
     propertyTestTimeout(30_000),
   );

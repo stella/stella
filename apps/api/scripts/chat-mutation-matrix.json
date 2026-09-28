@@ -740,7 +740,7 @@
       "replace": "    closed.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "lets a new message replace a mixed batch that still waits"
+        "test": "lets a new message replace a thought-out mixed batch that still waits"
       },
       "oracle": "chat.provider.transcript-settled"
     },
