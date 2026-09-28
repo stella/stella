@@ -19,6 +19,10 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A thread an earlier release stored loads on the current code, serves
+   *  every message, part and answer it held, and keeps them once continued;
+   *  and what the current code stores has a fixture. */
+  persistedPastReleaseLoads: "chat.persisted.past-release-loads",
   /** A turn's run does not depend on the request that started it: once the
    *  handler hands its response back, nothing reads the request, and its end
    *  cuts no turn short whose response is read to the end. */
