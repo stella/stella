@@ -1,6 +1,6 @@
 {
   "shadcn/no-arbitrary-values": {
-    "apps/desktop/src/clipboard/ClipboardApp.tsx": 5,
+    "apps/desktop/src/clipboard/ClipboardApp.tsx": 4,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 2,
     "apps/desktop/src/mainview/App.tsx": 2,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 2,
@@ -8,7 +8,6 @@
     "apps/landing/src/components/react/ProductShowcase.tsx": 8,
     "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 6,
-    "apps/web/src/components/ai-suggestions/review-passage-side.tsx": 1,
     "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 3,
     "apps/web/src/components/auth/sign-in-panel.tsx": 3,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 10,
