@@ -68,6 +68,7 @@ import {
   type ChatRefRegistry,
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
+import type { ChatRefBinding } from "@/api/lib/chat/ref-token";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   streamChatChunks,
@@ -951,6 +952,26 @@ const recordedTool = ({
   };
 };
 
+/** `tool`, handing its input and output to `written` as it runs. */
+const writtenTool = ({
+  tool,
+  written,
+}: {
+  tool: AnyServerTool;
+  written: (value: unknown) => void;
+}): AnyServerTool => {
+  const execute = tool.execute ?? panic(`${tool.name} has no server execute`);
+  return {
+    ...tool,
+    execute: async (input: unknown, context?: unknown) => {
+      written(input);
+      const output: unknown = await execute(input, context);
+      written(output);
+      return output;
+    },
+  };
+};
+
 /** `execute_typescript` reports a failed run as `{ success: false, error }`. */
 const scriptFailureOf = (output: unknown): string | null => {
   if (!isRecord(output) || output["success"] !== false) {
@@ -993,12 +1014,15 @@ const chatMatterTools = ({
   record,
   skill,
   refRegistry,
+  written,
 }: {
   store: PlaybookStore;
   record: Recorder;
   skill: ActiveChatSkillContext;
   /** The registry of the chat request the call belongs to. */
   refRegistry: () => ChatRefRegistry;
+  /** Takes each script's input and output, as a stored tool call keeps them. */
+  written: (value: unknown) => void;
 }): AnyServerTool[] => {
   const listPlaybooks =
     getStaticMcpToolHandler(LIST_PLAYBOOKS) ??
@@ -1058,7 +1082,11 @@ const chatMatterTools = ({
       `chat code mode always has lazy reads, so ${DISCOVER_TOOLS} must exist`,
     );
   return [
-    recordedTool({ tool, record, failureOf: scriptFailureOf }),
+    recordedTool({
+      tool: writtenTool({ tool, written }),
+      record,
+      failureOf: scriptFailureOf,
+    }),
     recordedTool({ tool: discovery, record, failureOf: () => null }),
     ...(subagentsOfferedWith(skill)
       ? [
@@ -1162,14 +1190,17 @@ const createBehaviorTools = ({
     return payload;
   };
 
-  // Chat mints refs per request, and every ask-user answer and user message
-  // starts a new one. A script's output keeps the refs of its request, so a
-  // document ref listed before an answer no longer resolves after it; matter
-  // refs do, because each request offers the accessible matters first, in
-  // the same order. The eval answers inside one model turn; it starts a
-  // registry the same way at the same boundaries.
+  // Chat builds a registry per request, and every ask-user answer and user
+  // message starts a new one. Each request restores the bindings the
+  // thread's names ledger holds (`send-message.ts`, `thread-names.ts`): every
+  // ref the model was shown and that a stored part carries, so a document
+  // ref listed before an answer resolves to the same document after it. The
+  // eval answers inside one model turn; it starts a registry at the same
+  // boundaries, restored from the bindings its earlier requests stored.
+  const threadRefBindings = new Map<string, ChatRefBinding>();
+  let requestWritten: unknown[] = [];
   const createRequestRefRegistry = () => {
-    const registry = createChatRefRegistry();
+    const registry = createChatRefRegistry([...threadRefBindings.values()]);
     for (const matterId of ACCESSIBLE_MATTER_IDS) {
       registry.offerMatterRef(matterId);
     }
@@ -1180,9 +1211,22 @@ const createBehaviorTools = ({
   const requestRefRegistry = () => {
     const turn = currentTurn();
     if (request.turn !== turn || request.answers !== answers) {
+      // The request ends: store the bindings of what it wrote, as its
+      // assistant message would.
+      for (const binding of request.registry.collectRefBindings({
+        values: requestWritten,
+      })) {
+        if (!threadRefBindings.has(binding.ref)) {
+          threadRefBindings.set(binding.ref, binding);
+        }
+      }
+      requestWritten = [];
       request = { turn, answers, registry: createRequestRefRegistry() };
     }
     return request.registry;
+  };
+  const written = (value: unknown) => {
+    requestWritten.push(value);
   };
 
   const askUser = createOrgTools({
@@ -1192,6 +1236,7 @@ const createBehaviorTools = ({
   })[ASK_USER_TOOL_NAME].server((input) => {
     const questions = askedQuestionsOf(input);
     record({ name: ASK_USER_TOOL_NAME, input, questions });
+    written(input);
     answers += 1;
     return {
       answers: questions.map((question) => ({
@@ -1208,6 +1253,7 @@ const createBehaviorTools = ({
           record,
           skill,
           refRegistry: requestRefRegistry,
+          written,
         })
       : mcpMatterTools(record);
 
