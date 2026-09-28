@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -100,7 +100,10 @@ const admissionKeys = ({
   }),
 });
 
-const configuredPolicy = (): ActionAdmissionPolicy => {
+const configuredPolicy = (): Result<
+  ActionAdmissionPolicy,
+  ActionAdmissionError
+> => {
   const organizationConcurrency = env.ACTION_ADMISSION_ORG_CONCURRENCY;
   const userConcurrency = env.ACTION_ADMISSION_USER_CONCURRENCY;
   const leaseMs = env.ACTION_ADMISSION_LEASE_MS;
@@ -109,12 +112,14 @@ const configuredPolicy = (): ActionAdmissionPolicy => {
     userConcurrency === undefined ||
     leaseMs === undefined
   ) {
-    throw new ActionAdmissionError({
-      message: "Action admission configuration is incomplete",
-      reason: "unavailable",
-    });
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission configuration is incomplete",
+        reason: "unavailable",
+      }),
+    );
   }
-  return { organizationConcurrency, userConcurrency, leaseMs };
+  return Result.ok({ organizationConcurrency, userConcurrency, leaseMs });
 };
 
 type ActionAdmissionOptions = {
@@ -155,42 +160,51 @@ export const withActionAdmission = async <T>({
   timing = defaultTiming,
 }: Omit<ActionAdmissionOptions, "run"> & {
   run: (signal: AbortSignal) => Promise<T>;
-}): Promise<T> => {
+}): Promise<Result<T, unknown>> => {
   if (!enabled) {
-    return await run(new AbortController().signal);
+    return await Result.tryPromise({
+      try: async () => await run(new AbortController().signal),
+      catch: (error: unknown) => error,
+    });
   }
 
-  const limits = policy ?? configuredPolicy();
+  const resolvedPolicy =
+    policy === undefined ? configuredPolicy() : Result.ok(policy);
+  if (Result.isError(resolvedPolicy)) {
+    return resolvedPolicy;
+  }
+  const limits = resolvedPolicy.value;
   const keys = admissionKeys({ organizationId, userId });
   const leaseId = createId();
-  const execute = async (script: string, args: string[]) => {
-    try {
-      const client: RedisCommands =
-        redis ??
-        (await withCommandTimeout({
-          command: redisReady(),
+  const execute = async (script: string, args: string[]) =>
+    await Result.tryPromise({
+      try: async () => {
+        const client: RedisCommands =
+          redis ??
+          (await withCommandTimeout({
+            command: redisReady(),
+            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+            label: "action-admission-redis-connect",
+          }));
+        return await withCommandTimeout({
+          command: client.send("EVAL", [
+            script,
+            "2",
+            keys.organization,
+            keys.user,
+            ...args,
+          ]),
           commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-          label: "action-admission-redis-connect",
-        }));
-      return await withCommandTimeout({
-        command: client.send("EVAL", [
-          script,
-          "2",
-          keys.organization,
-          keys.user,
-          ...args,
-        ]),
-        commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-        label: "action-admission-redis-command",
-      });
-    } catch (error) {
-      throw new ActionAdmissionError({
-        message: "Action admission is unavailable",
-        reason: "unavailable",
-        cause: error,
-      });
-    }
-  };
+          label: "action-admission-redis-command",
+        });
+      },
+      catch: (error: unknown) =>
+        new ActionAdmissionError({
+          message: "Action admission is unavailable",
+          reason: "unavailable",
+          cause: error,
+        }),
+    });
 
   const initialAttemptAt = timing.now();
   const admitted = await execute(ACQUIRE_SCRIPT, [
@@ -199,24 +213,31 @@ export const withActionAdmission = async <T>({
     String(limits.userConcurrency),
     leaseId,
   ]);
-  if (admitted === 0) {
-    throw new ActionAdmissionError({
-      message: "Concurrent action limit reached",
-      reason: "busy",
-    });
+  if (Result.isError(admitted)) {
+    return admitted;
   }
-  if (admitted !== 1) {
-    throw new ActionAdmissionError({
-      message: "Action admission returned an invalid response",
-      reason: "unavailable",
-    });
+  if (admitted.value === 0) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Concurrent action limit reached",
+        reason: "busy",
+      }),
+    );
+  }
+  if (admitted.value !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
   const controller = new AbortController();
   let leaseLost: ActionAdmissionError | null = null;
   let stopped = false;
-  let cancelScheduled = () => undefined;
+  let cancelScheduled: () => void = () => undefined;
   let renewal: Promise<void> | null = null;
 
   const loseLease = () => {
@@ -234,9 +255,14 @@ export const withActionAdmission = async <T>({
   const scheduleRenewal = (delayMs: number) => {
     if (!stopped && leaseLost === null) {
       cancelScheduled = timing.schedule(() => {
-        renewal = renew().finally(() => {
-          renewal = null;
-        });
+        renewal = renew()
+          .catch((error: unknown) => {
+            captureError(error, { source: "action-admission", phase: "renew" });
+            loseLease();
+          })
+          .finally(() => {
+            renewal = null;
+          });
       }, delayMs);
     }
   };
@@ -247,28 +273,28 @@ export const withActionAdmission = async <T>({
       loseLease();
       return;
     }
-    try {
-      const result = await execute(RENEW_SCRIPT, [
-        leaseId,
-        String(limits.leaseMs),
-      ]);
-      if (result !== 1) {
+    const result = await execute(RENEW_SCRIPT, [
+      leaseId,
+      String(limits.leaseMs),
+    ]);
+    if (Result.isOk(result)) {
+      if (result.value !== 1) {
         loseLease();
         return;
       }
       leaseDeadline = attemptAt + limits.leaseMs;
       scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
-    } catch (error) {
-      captureError(error, { source: "action-admission", phase: "renew" });
-      const remaining = leaseDeadline - timing.now();
-      if (remaining <= 0) {
-        loseLease();
-        return;
-      }
-      scheduleRenewal(
-        Math.max(1, Math.min(Math.floor(limits.leaseMs / 4), remaining)),
-      );
+      return;
     }
+    captureError(result.error, { source: "action-admission", phase: "renew" });
+    const remaining = leaseDeadline - timing.now();
+    if (remaining <= 0) {
+      loseLease();
+      return;
+    }
+    scheduleRenewal(
+      Math.max(1, Math.min(Math.floor(limits.leaseMs / 4), remaining)),
+    );
   };
 
   if (timing.now() >= leaseDeadline) {
@@ -277,28 +303,31 @@ export const withActionAdmission = async <T>({
     scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
   }
 
+  let outcome: Result<T, unknown>;
   try {
-    controller.signal.throwIfAborted();
-    const result = await run(controller.signal);
-    if (leaseLost !== null) {
-      throw leaseLost;
-    }
-    return result;
-  } catch (error) {
-    if (leaseLost !== null) {
-      throw leaseLost;
-    }
-    throw error;
+    outcome = await Result.tryPromise({
+      try: async () => {
+        controller.signal.throwIfAborted();
+        return await run(controller.signal);
+      },
+      catch: (error: unknown) => error,
+    });
   } finally {
     stopped = true;
     cancelScheduled();
-    if (renewal !== null) {
-      await renewal;
-    }
-    await execute(RELEASE_SCRIPT, [leaseId]).catch((error: unknown) => {
+    await Promise.resolve(renewal);
+    const released = await execute(RELEASE_SCRIPT, [leaseId]);
+    if (Result.isError(released)) {
       // The lease expires on its own. A release outage must not make a
       // completed action look retryable and invite duplicate side effects.
-      captureError(error, { source: "action-admission", phase: "release" });
-    });
+      captureError(released.error, {
+        source: "action-admission",
+        phase: "release",
+      });
+    }
   }
+  if (controller.signal.aborted) {
+    return Result.err(controller.signal.reason);
+  }
+  return outcome;
 };

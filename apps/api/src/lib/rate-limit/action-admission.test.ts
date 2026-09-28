@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -24,13 +25,20 @@ const deferred = () => {
   return { promise, finish };
 };
 
-const failureOf = async (operation: Promise<unknown>) => {
-  try {
-    await operation;
-  } catch (error) {
-    return error;
+const failureOf = async (operation: Promise<Result<unknown, unknown>>) => {
+  const result = await operation;
+  if (Result.isError(result)) {
+    return result.error;
   }
   throw new Error("Expected admission to fail");
+};
+
+const valueOf = async <T>(operation: Promise<Result<T, unknown>>) => {
+  const result = await operation;
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  return result.value;
 };
 
 // Separate caller instances share this one command boundary, as separate API
@@ -161,22 +169,24 @@ describe("shared action admission", () => {
         return await redis.send(command, args);
       },
     });
-    expect(await admitted).toBe("served");
+    expect(await valueOf(admitted)).toBe("served");
     expect(commands).toBeGreaterThan(0);
   });
 
   test("disabled admission preserves the handler result without touching coordination", async () => {
-    const result = await withActionAdmission({
-      organizationId,
-      userId: firstUser,
-      enabled: false,
-      redis: {
-        send: async () => {
-          throw new Error("Disabled admission touched coordination");
+    const result = await valueOf(
+      withActionAdmission({
+        organizationId,
+        userId: firstUser,
+        enabled: false,
+        redis: {
+          send: async () => {
+            throw new Error("Disabled admission touched coordination");
+          },
         },
-      },
-      run: async () => ({ status: "served" }),
-    });
+        run: async () => ({ status: "served" }),
+      }),
+    );
     expect(result).toEqual({ status: "served" });
   });
 
@@ -229,14 +239,16 @@ describe("shared action admission", () => {
     ).toMatchObject({ reason: "busy" });
     first.finish();
     second.finish();
-    await Promise.all([firstCall, secondCall]);
+    await Promise.all([valueOf(firstCall), valueOf(secondCall)]);
     expect(
-      await withActionAdmission({
-        ...common,
-        userId: firstUser,
-        createId: () => "after-release",
-        run: async () => "served",
-      }),
+      await valueOf(
+        withActionAdmission({
+          ...common,
+          userId: firstUser,
+          createId: () => "after-release",
+          run: async () => "served",
+        }),
+      ),
     ).toBe("served");
   });
 
@@ -265,11 +277,13 @@ describe("shared action admission", () => {
       ),
     ).toBe(failure);
     expect(
-      await withActionAdmission({
-        ...common,
-        createId: () => "retry",
-        run: async () => "served",
-      }),
+      await valueOf(
+        withActionAdmission({
+          ...common,
+          createId: () => "retry",
+          run: async () => "served",
+        }),
+      ),
     ).toBe("served");
   });
 
@@ -295,14 +309,16 @@ describe("shared action admission", () => {
     await started.promise;
     redis.setTime(policy.leaseMs);
     expect(
-      await withActionAdmission({
-        ...common,
-        createId: () => "new",
-        run: async () => "served",
-      }),
+      await valueOf(
+        withActionAdmission({
+          ...common,
+          createId: () => "new",
+          run: async () => "served",
+        }),
+      ),
     ).toBe("served");
     pending.finish();
-    await firstCall;
+    await valueOf(firstCall);
   });
 
   test("a transient renewal failure retries before the lease expires", async () => {
@@ -351,7 +367,7 @@ describe("shared action admission", () => {
       ),
     ).toMatchObject({ reason: "busy" });
     pending.finish();
-    await firstCall;
+    await valueOf(firstCall);
   });
 
   test("a missing lease aborts and fails the admitted action", async () => {
@@ -373,16 +389,17 @@ describe("shared action admission", () => {
             "abort",
             () => {
               observedAbort = true;
-              reject(signal.reason);
+              reject(new Error("Action aborted", { cause: signal.reason }));
             },
             { once: true },
           );
         });
       },
     });
+    const failure = failureOf(admitted);
     await started.promise;
     await timing.fireNext();
-    expect(await failureOf(admitted)).toMatchObject({ reason: "unavailable" });
+    expect(await failure).toMatchObject({ reason: "unavailable" });
     expect(observedAbort).toBe(true);
   });
 });

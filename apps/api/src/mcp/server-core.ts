@@ -750,28 +750,31 @@ export const createMcpHttpRequestHandler = ({
         return await run();
       }
 
-      try {
-        return await withActionAdmission({
-          enabled: true,
-          organizationId: context.organizationId,
-          userId: context.userId,
-          run,
-        });
-      } catch (error) {
-        if (!ActionAdmissionError.is(error)) {
-          throw error;
-        }
-        if (error.reason === "busy") {
-          return mcpStructuredErrorResult({
-            code: "rate_limited",
-            message: "Concurrent action limit reached",
-            hint: "Wait for an active action to finish, then retry this call.",
-            retryable: true,
-          });
-        }
-        captureError(error, { phase: "action-admission", source: "mcp" });
-        return retryableToolErrorResult(mode);
+      const admitted = await withActionAdmission({
+        enabled: true,
+        organizationId: context.organizationId,
+        userId: context.userId,
+        run,
+      });
+      if (Result.isOk(admitted)) {
+        return admitted.value;
       }
+      if (
+        ActionAdmissionError.is(admitted.error) &&
+        admitted.error.reason === "busy"
+      ) {
+        return mcpStructuredErrorResult({
+          code: "rate_limited",
+          message: "Concurrent action limit reached",
+          hint: "Wait for an active action to finish, then retry this call.",
+          retryable: true,
+        });
+      }
+      captureError(admitted.error, {
+        phase: "action-admission",
+        source: "mcp",
+      });
+      return retryableToolErrorResult(mode);
     });
 
     return server;
