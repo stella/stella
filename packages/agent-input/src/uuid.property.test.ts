@@ -16,10 +16,12 @@ const SPELLINGS = [
   (id: string) => `{${id.replaceAll("-", "").toUpperCase()}}`,
 ] as const;
 
-const repeatedDigitArb = fc.constantFrom(..."0123456789abcdef").map((digit) => {
-  const hex = digit.repeat(32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-});
+const repeatedDigitArb = fc
+  .constantFrom(..."0123456789abcdef".split(""))
+  .map((digit) => {
+    const hex = digit.repeat(32);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  });
 
 const sentinelArb = fc.oneof(
   fc.constantFrom(...SENTINEL_UUIDS),

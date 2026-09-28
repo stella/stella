@@ -77,12 +77,12 @@ const courtVocabulary = (
     .toSorted((left, right) => Number(right.apex) - Number(left.apex))
     .map(({ value, aliases }) => ({ value, aliases }));
 
-export type CourtFilterReading =
+type CourtFilterReading =
   | { type: "court"; court: string; warning: AgentCaseLawSearchWarning | null }
   | { type: "dropped"; warning: AgentCaseLawSearchWarning };
 
 /** Read one court filter against a country's stored courts. */
-export const readCourtFilter = ({
+const readCourtFilter = ({
   country,
   court,
   courts,
@@ -205,7 +205,7 @@ const readCachedCourtNames = async (
  * null list leaves the filter as sent: the search then answers exactly as it
  * did before this reader existed, which is the honest degradation.
  */
-export const loadCaseLawCourtNames = async (
+const loadCaseLawCourtNames = async (
   context: McpRequestContext,
   country: string,
 ): Promise<readonly string[] | null> => {

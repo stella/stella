@@ -10,7 +10,7 @@ import { normalizeVocabularyValue } from "./vocabulary";
 
 /** Letters with and without the diacritics court names carry, so stripping
  *  them is a real change for most generated words. */
-const LETTERS = [..."aábcčdďeéěfghiíjklmnňoópqrřsštťuúůvwxyýzž"];
+const LETTERS = "aábcčdďeéěfghiíjklmnňoópqrřsštťuúůvwxyýzž".split("");
 
 const wordArb = fc
   .array(fc.constantFrom(...LETTERS), { minLength: 3, maxLength: 8 })

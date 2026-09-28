@@ -113,7 +113,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_dropped",
 ] as const;
 
-export type AgentCaseLawSearchWarningCode =
+type AgentCaseLawSearchWarningCode =
   (typeof AGENT_CASE_LAW_SEARCH_WARNING_CODES)[number];
 
 export type AgentCaseLawSearchWarning = {

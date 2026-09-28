@@ -7,7 +7,8 @@ import { ABSENT_PLACEHOLDERS, isAbsentPlaceholder } from "./absent";
 
 /** Mixed case, one character at a time, so `nOnE` and `N/a` are covered. */
 const randomCase = (word: string, flips: readonly boolean[]): string =>
-  [...word]
+  word
+    .split("")
     .map((char, index) =>
       flips[index % flips.length] === true ? char.toUpperCase() : char,
     )
