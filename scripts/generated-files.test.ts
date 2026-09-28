@@ -94,6 +94,13 @@ test("the route generator pin matches the plugin's resolved generator", () => {
       "@tanstack/router-generator@1.167.38",
     ),
   ).toBe(false);
+  expect(
+    routeGeneratorVersionsMatch(
+      undefined,
+      "1.167.38",
+      "@tanstack/router-generator@1.167.38",
+    ),
+  ).toBe(false);
 });
 
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
@@ -195,31 +202,14 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
   const steps = new Set(
     [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
   );
-  const pendingRouteTree = !existsSync(
-    "apps/web/scripts/generate-route-tree.ts",
-  );
   for (const entry of GENERATORS) {
     for (const glob of [...entry.inputs, ...entry.outputs]) {
-      // Both route-tree sources arrive with #4041, before this branch rebases.
-      if (
-        pendingRouteTree &&
-        entry.id === "route-tree" &&
-        [
-          "apps/web/scripts/generate-route-tree.ts",
-          "apps/web/route-tree.config.ts",
-        ].includes(glob)
-      ) {
-        continue;
-      }
       expect(
         tracked.some((file) => matchesGeneratedGlob(glob, file)),
         `${entry.id}: ${glob}`,
       ).toBe(true);
     }
-    if (
-      "checkedBy" in entry &&
-      !(pendingRouteTree && entry.id === "route-tree")
-    ) {
+    if ("checkedBy" in entry) {
       expect(
         steps.has(entry.checkedBy),
         `${entry.id}: ${entry.checkedBy}`,
@@ -248,9 +238,6 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     const packageJson = await Bun.file(`${root}/package.json`).json();
     const run = write.indexOf("run");
     const script = run !== -1 ? write[run + 1] : write[filter + 2];
-    if (pendingRouteTree && entry.id === "route-tree") {
-      continue;
-    }
     expect(script, `${entry.id} has a script`).toBeDefined();
     if (script === undefined) {
       continue;

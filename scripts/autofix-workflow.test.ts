@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 
 import { GENERATORS, orderGenerators } from "./generated-files";
 
@@ -274,12 +273,7 @@ describe("derived-file regeneration boundary", () => {
       } else {
         // The null-check families use the named CI guard paired in the manifest.
         expect(generator.checkedBy).toBeDefined();
-        if (
-          generator.id !== "route-tree" ||
-          existsSync("apps/web/scripts/generate-route-tree.ts")
-        ) {
-          expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
-        }
+        expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
       }
     }
   });

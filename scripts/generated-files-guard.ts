@@ -123,7 +123,10 @@ const checkRouteGeneratorVersion = async () => {
     new URL("apps/web/scripts/generate-route-tree.ts", ROOT),
   );
   if (!(await script.exists())) {
-    return;
+    panic("The route-tree generator script is missing");
+  }
+  if (typeof direct !== "string") {
+    panic("The direct router-generator pin is missing");
   }
   const plugin = lock["packages"]["@tanstack/router-plugin"];
   const generator = lock["packages"]["@tanstack/router-generator"];
