@@ -1,10 +1,10 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
-import { listSkillMetadata } from "@stll/skills";
+import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -241,26 +241,30 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     expect(lastRequest().toolNames).toEqual([]);
   });
 
-  test("advertises skill tools for a ref to a built-in skill", async () => {
-    const builtIn =
-      listSkillMetadata().at(0) ?? panic("no built-in skill ships");
-    const generate = buildTestAiFieldGenerator({
-      orgAIConfig,
-      organizationId,
-      skillContext,
-      tenantWorkspaceIds: [],
-    });
-    await generate?.({
-      prompt: `Draft this clause [${builtIn.name}](#stella-skill-ref=${builtIn.name}).`,
-      fieldPath: "scope",
-      values: {},
-    });
+  // A one-shot generator offers no tool besides the skill reads, so a
+  // built-in is wired only when it requires no other tool.
+  test.each(listSkillMetadata().map((skill) => [skill.name, skill] as const))(
+    "wires skill tools for a ref to the built-in %s only when it needs no other tool",
+    async (_name, builtIn) => {
+      const generate = buildTestAiFieldGenerator({
+        orgAIConfig,
+        organizationId,
+        skillContext,
+        tenantWorkspaceIds: [],
+      });
+      await generate?.({
+        prompt: `Draft this clause [${builtIn.name}](#stella-skill-ref=${builtIn.name}).`,
+        fieldPath: "scope",
+        values: {},
+      });
 
-    expect(lastRequest().toolNames).toEqual([
-      "load-skill",
-      "read-skill-resource",
-    ]);
-  });
+      expect(lastRequest().toolNames).toEqual(
+        readSkillRequiredTools(builtIn.metadata).length === 0
+          ? ["load-skill", "read-skill-resource"]
+          : [],
+      );
+    },
+  );
 
   test("passes no tools when the prompt has no skill reference", async () => {
     const generate = buildTestAiFieldGenerator({
