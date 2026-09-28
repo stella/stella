@@ -107,7 +107,7 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // retries only lock_not_available, each attempt waiting at most one second
   // and a failed attempt releasing what it took, a bounded number of times
   // under a bounded statement budget, changing no rows.
-  "20260930120000_legislation_expression_identity/migration.sql:290e5e1b0593059ef05e22ec0e35f168abd9d235e7aa933143b676b6a6726a7c",
+  "20261001120000_legislation_expression_identity/migration.sql:290e5e1b0593059ef05e22ec0e35f168abd9d235e7aa933143b676b6a6726a7c",
   // Acquires the decisions and the provision rows in writer order before the
   // provision span columns, the state foreign key and the enqueue trigger.
   // Same static retry body as above; it changes no rows.

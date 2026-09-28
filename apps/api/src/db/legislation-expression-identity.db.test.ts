@@ -15,7 +15,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
- * Migration `20260930120000_legislation_expression_identity`: the typed
+ * Migration `20261001120000_legislation_expression_identity`: the typed
  * columns, their value CHECKs, and the triggers that keep a publisher
  * expression id set once and under its source's namespace. The test database
  * is built from the Drizzle schema; the CHECK parity test below re-applies the
@@ -24,7 +24,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_SQL = readFileSync(
   new URL(
-    "../../drizzle/20260930120000_legislation_expression_identity/migration.sql",
+    "../../drizzle/20261001120000_legislation_expression_identity/migration.sql",
     import.meta.url,
   ),
   "utf-8",

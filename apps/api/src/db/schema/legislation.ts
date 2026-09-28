@@ -138,7 +138,7 @@ export const legislationSources = p.pgTable(
      * The prefix of every publisher expression id stored under this source
      * (`<namespace>:<publisher id>`). Set once, by whoever registers the
      * source, and never changed: a trigger (migration
-     * `20260930120000_legislation_expression_identity`) refuses both a change
+     * `20261001120000_legislation_expression_identity`) refuses both a change
      * and an id whose prefix does not match.
      */
     expressionNamespace: p.varchar("expression_namespace", { length: 32 }),
@@ -191,7 +191,7 @@ export const legislationDocuments = p.pgTable(
     /**
      * The publisher's own identity for this version, prefixed with the
      * source's namespace. Set once, from null, and never changed afterwards
-     * (trigger in migration `20260930120000_legislation_expression_identity`).
+     * (trigger in migration `20261001120000_legislation_expression_identity`).
      * Null only on rows written before the writer supplied it; a scheduler
      * task claims those from the stored version IRI.
      */
