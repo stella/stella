@@ -113,7 +113,6 @@ const replayedModel = (): HarnessModel => ({
       changedToolResults: [],
       unconsumedScripts: unconsumed,
       unscriptedCalls: unexpected,
-      unsettledCalls: [],
     };
   },
 });

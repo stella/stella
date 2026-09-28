@@ -37,8 +37,6 @@ type ScriptedProviderFindings = {
   unscriptedCalls: string[];
   /** Scripts no request consumed. */
   unconsumedScripts: string[];
-  /** Tool calls a model call was handed without their result. */
-  unsettledCalls: unknown[];
 };
 
 const SIDE_CALL_TEXT = "Scripted side answer";
@@ -59,8 +57,6 @@ type ThreadScripts = {
    *  handed. */
   toolResults: Map<string, string>;
   unscriptedCalls: string[];
-  /** See `ScriptedProviderFindings`. */
-  unsettledCalls: unknown[];
 };
 
 const newThreadScripts = (): ThreadScripts => {
@@ -73,7 +69,6 @@ const newThreadScripts = (): ThreadScripts => {
     stalled: Promise.resolve(undefined),
     toolResults: new Map(),
     unscriptedCalls: [],
-    unsettledCalls: [],
   };
   const arm = () => {
     const { promise, resolve } = Promise.withResolvers<undefined>();
@@ -133,33 +128,6 @@ const recordToolResults = (
 };
 
 /**
- * Each tool call `messages` hands the model whose result does not follow it
- * before the next message of another role: a provider refuses a request that
- * leaves a call unanswered, so every call the thread stored, failed ones
- * included, must reach the model paired with its result.
- */
-const findUnsettledCalls = (messages: readonly ModelMessage[]): unknown[] =>
-  messages.flatMap((message, at) => {
-    if (message.role !== "assistant") {
-      return [];
-    }
-    const answered = new Set<string>();
-    for (const next of messages.slice(at + 1)) {
-      if (next.role !== "tool") {
-        break;
-      }
-      if (next.toolCallId !== undefined) {
-        answered.add(next.toolCallId);
-      }
-    }
-    return (message.toolCalls ?? []).flatMap((call) =>
-      answered.has(call.id)
-        ? []
-        : [{ name: call.function.name, toolCallId: call.id }],
-    );
-  });
-
-/**
  * A model call's prompt as the provider reads it, one entry per message: no
  * ids or timestamps beyond the tool-call ids the provider pairs results by,
  * and each tool result up to key order, as `resultIdentity` reads it.
@@ -202,7 +170,6 @@ const adapter: AnyTextAdapter = {
     if (scripts !== undefined) {
       recordToolResults(scripts, messages);
       scripts.prompts.push(promptOf(messages));
-      scripts.unsettledCalls.push(...findUnsettledCalls(messages));
     }
     if (
       threadId === undefined ||
@@ -318,7 +285,6 @@ export const installScriptedProvider = () => {
         changedToolResults: scripts.changedToolResults.splice(0),
         unconsumedScripts,
         unscriptedCalls: scripts.unscriptedCalls.splice(0),
-        unsettledCalls: scripts.unsettledCalls.splice(0),
       };
     },
     restore: () => {

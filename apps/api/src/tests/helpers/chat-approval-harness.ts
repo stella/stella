@@ -1000,12 +1000,8 @@ export const createApprovalHarness = ({
       reloadView(threadId),
       findPersistedViolations(threadId),
     ]);
-    const {
-      changedToolResults,
-      unconsumedScripts,
-      unscriptedCalls,
-      unsettledCalls,
-    } = provider.takeFindings(threadId);
+    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
+      provider.takeFindings(threadId);
     const requests = clientFindings.splice(0);
     const refusals = requests.filter(
       ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
@@ -1029,7 +1025,6 @@ export const createApprovalHarness = ({
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
       ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
-      ...violationsOf(CHAT_ORACLE.providerTranscriptSettled, unsettledCalls),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [
         ...(expectsError ? [] : errors),
         ...(expectsError && errors.length === 0

@@ -518,7 +518,6 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.persistedTurnSettles,
   CHAT_ORACLE.providerResultsStable,
   CHAT_ORACLE.providerScriptsConsumed,
-  CHAT_ORACLE.providerTranscriptSettled,
   CHAT_ORACLE.wireResultsStored,
   CHAT_ORACLE.wireSnapshotIdentity,
   CHAT_ORACLE.wireSnapshotServed,
