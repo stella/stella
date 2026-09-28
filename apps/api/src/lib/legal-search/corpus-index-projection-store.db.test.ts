@@ -1692,9 +1692,13 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
         }),
     );
   try {
-    expect(unpark("  ")).rejects.toThrow(
-      "unpark reason must contain 1-256 characters",
+    const invalidReason = await unpark("  ").then(
+      () => null,
+      (error: unknown) => error,
     );
+    expect(invalidReason).toMatchObject({
+      message: "Corpus projection unpark reason must contain 1-256 characters",
+    });
     expect(await unpark("reviewed and corrected source")).toBe("unparked");
     expect(await unpark("reviewed and corrected source")).toBe("not_blocked");
     expect(info).toHaveBeenCalledTimes(1);
@@ -1722,6 +1726,55 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
     failureAttempts: 0,
     lastFailureKind: null,
   });
+});
+
+test("operator unpark waits while an intent remains outstanding", async () => {
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: FIRST_INTENT_ID,
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: DECISION_ID,
+    epoch: 1n,
+    fingerprint: FIRST_FINGERPRINT,
+    indexId: INDEX_ID,
+    status: "reserved",
+    leaseToken: FIRST_LEASE_TOKEN,
+    leaseExpiresAt: new Date(Date.now() + 60_000),
+  });
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "blocked",
+      appendMode: "single",
+      failureAttempts: 2,
+      lastFailureKind: "append_rejected",
+      lastFailureMessage: "rejected",
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  const info = spyOn(logger, "info");
+  try {
+    const result = await db.transaction(
+      async (tx) =>
+        await unparkCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          entityId: DECISION_ID,
+          reason: "cleanup has not settled",
+        }),
+    );
+    expect(result).toBe("cleanup_pending");
+    expect(info).not.toHaveBeenCalled();
+  } finally {
+    info.mockRestore();
+  }
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  expect(state).toEqual({ workStatus: "blocked", failureAttempts: 2 });
 });
 
 test("a changed desired epoch is not blocked by an old append failure", async () => {
