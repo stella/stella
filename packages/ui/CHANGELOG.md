@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.36.0
+
+### Minor Changes
+
+- [#3976](https://github.com/stella/stella/pull/3976) [`0dcdbf1`](https://github.com/stella/stella/commit/0dcdbf12af4bfcd80dfc9d3863258455580ad612) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `TextMark` and `textMarkClass` (`@stll/ui/text-mark`): one inline mark for words in running text, with `fill`, `underline`, `dotted`, `wavy` and `strike` variants, semantic and option-palette tones, and `rest`, `matched` and `active` states. `SEARCH_HIT_MARK`, `SEARCH_HIT_DESCENDANT_MARK_CLASS` and `textMarkHighlightRule` carry the search-hit mark to pre-highlighted markup and the CSS Custom Highlight API.
+
 ## 0.35.0
 
 ### Minor Changes
