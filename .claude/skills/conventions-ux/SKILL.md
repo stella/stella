@@ -1,6 +1,6 @@
 ---
 name: conventions-ux
-description: 'Apply when building or modifying user-facing UI components.'
+description: "Apply when building or modifying user-facing UI components."
 ---
 
 # UX Conventions
