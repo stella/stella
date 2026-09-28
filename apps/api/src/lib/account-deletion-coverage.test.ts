@@ -341,10 +341,13 @@ describe("account deletion FK coverage", () => {
     );
     expect(callerStart).toBeGreaterThanOrEqual(0);
     const callerEnd = deleteAccountSource.indexOf("\nconst ", callerStart);
-    const callerBody = new Set(deleteAccountSource.slice(
+    const callerBody = deleteAccountSource.slice(
       callerStart,
       callerEnd === -1 ? undefined : callerEnd,
-    ));
+    );
+    const awaitedNames = new Set(
+      [...callerBody.matchAll(/\bawait (\w+)\(/gu)].map((match) => match[1]),
+    );
 
     const stepNames = [
       ...stepsSource.matchAll(/^export const (\w+) = async\b/gmu),
@@ -358,9 +361,7 @@ describe("account deletion FK coverage", () => {
 
     const uncalled = stepNames.filter(
       (name) =>
-        name !== undefined &&
-        !helpers.has(name) &&
-        !callerBody.has(`await ${name}(`),
+        name !== undefined && !helpers.has(name) && !awaitedNames.has(name),
     );
     expect(uncalled).toEqual([]);
   });
