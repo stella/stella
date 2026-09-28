@@ -28,6 +28,7 @@ import {
   legalReaderAnnotations,
   notifications,
   savedSearches,
+  sellerProfiles,
   signals,
   WORK_OBLIGATION_STATUS,
   workObligations,
@@ -54,6 +55,8 @@ import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
+import getSellerProfile from "@/api/handlers/seller-profiles/get";
+import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
@@ -130,6 +133,9 @@ const savedSearchA = toSafeId<"savedSearch">(
 );
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
+);
+const sellerProfileB = toSafeId<"sellerProfile">(
+  "22222222-2222-4222-8222-222222222257",
 );
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
@@ -521,6 +527,29 @@ const isolationCases: IsolationCase[] = [
       expectRecordFieldEquals(result, "id", testIds.invoiceB1),
   },
   {
+    name: "seller profile read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getSellerProfile, workspaceA, {
+        params: { sellerProfileId: sellerProfileB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getSellerProfile, workspaceB, {
+        params: { sellerProfileId: sellerProfileB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", sellerProfileB),
+  },
+  {
+    name: "seller profile list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSellerProfiles, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listSellerProfiles, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, sellerProfileB),
+    expectPositive: (result) => expectPageContainsId(result, sellerProfileB),
+  },
+  {
     name: "time entry read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readTimeEntryById, workspaceA, {
@@ -793,6 +822,12 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(sellerProfiles).values({
+    id: sellerProfileB,
+    organizationId: ids.orgB,
+    legalName: "Seller profile B",
+    defaultCurrency: "CZK",
+  });
   await testDb.insert(entityVersions).values({
     id: compareTargetVersionB,
     workspaceId: ids.wsB1,

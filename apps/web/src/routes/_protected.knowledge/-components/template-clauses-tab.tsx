@@ -3,17 +3,6 @@ import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
-import {
-  AlertTriangleIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  Loader2Icon,
-  PlusIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  WandSparklesIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -27,6 +16,17 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  AlertTriangleIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Loader2Icon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  AiActionIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -466,7 +466,7 @@ export const OutdatedChanges = ({
           {summary.status === "loading" ? (
             <Loader2Icon className="size-3.5 animate-spin" />
           ) : (
-            <WandSparklesIcon className="size-3.5" />
+            <AiActionIcon className="size-3.5" />
           )}
         </Button>
       </div>

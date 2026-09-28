@@ -7,17 +7,17 @@ import {
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronRightIcon,
   FolderPlusIcon,
   GripVerticalIcon,
   PencilIcon,
   XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

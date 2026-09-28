@@ -2,10 +2,10 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
-import { ArrowDownIcon, DownloadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ArrowDownIcon, DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 

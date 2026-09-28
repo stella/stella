@@ -2,10 +2,10 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { DownloadIcon, EllipsisIcon, GitBranchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DownloadIcon, EllipsisIcon, GitBranchIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,

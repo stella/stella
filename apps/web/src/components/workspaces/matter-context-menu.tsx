@@ -11,17 +11,6 @@ import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  ArchiveRestoreIcon,
-  ClipboardCopyIcon,
-  ExternalLinkIcon,
-  PenLineIcon,
-  PinIcon,
-  PinOffIcon,
-  PlusIcon,
-  Trash2Icon,
-  UserPlusIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -38,6 +27,17 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  ArchiveRestoreIcon,
+  ClipboardCopyIcon,
+  ExternalLinkIcon,
+  PenLineIcon,
+  PinIcon,
+  PinOffIcon,
+  PlusIcon,
+  Trash2Icon,
+  UserPlusIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

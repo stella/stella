@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { useRef } from "react";
 
 import { panic } from "better-result";
-import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ComposerStatusRow } from "@stll/ui/composer";
+import { MessageSquarePlusIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import {

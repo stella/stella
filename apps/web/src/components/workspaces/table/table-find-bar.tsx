@@ -13,11 +13,11 @@
 import { useCallback, useId, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { Columns3Icon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Columns3Icon, SearchIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";

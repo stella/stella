@@ -2,16 +2,16 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
   EyeOffIcon,
   LockIcon,
   PencilLineIcon,
   RefreshCwIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";

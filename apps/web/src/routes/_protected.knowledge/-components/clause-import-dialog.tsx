@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,6 +13,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { FileInput } from "@stll/ui/file-input";
+import { UploadIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";

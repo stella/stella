@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { InboxIcon, MailIcon, PhoneIcon, Trash2Icon } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
+import { InboxIcon, MailIcon, PhoneIcon, Trash2Icon } from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { normalizeOptionalArray, optionalArray } from "@/lib/arrays";

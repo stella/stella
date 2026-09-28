@@ -22,7 +22,6 @@ import {
   stripSearchParams,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -37,6 +36,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { UploadIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";

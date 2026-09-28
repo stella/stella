@@ -8,21 +8,21 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
-import {
-  AtSignIcon,
-  BookOpenIcon,
-  CpuIcon,
-  MessageSquarePlusIcon,
-  PaperclipIcon,
-  PlusIcon,
-  ServerIcon,
-} from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
+import {
+  AtSignIcon,
+  CpuIcon,
+  MessageSquarePlusIcon,
+  PaperclipIcon,
+  PlusIcon,
+  ServerIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuCheckboxItem,
@@ -481,7 +481,7 @@ const ComposerSkillsSubmenu = ({
           handleSelect(item);
         }}
       >
-        <BookOpenIcon className="mt-0.5 self-start" />
+        <SkillIcon className="mt-0.5 self-start" />
         <span className="min-w-0 flex-1">
           <BidiText as="span" className="block truncate text-sm">
             {itemName(item)}
@@ -510,7 +510,7 @@ const ComposerSkillsSubmenu = ({
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuSkills, guideAnchorsEnabled)}
       >
-        <BookOpenIcon />
+        <SkillIcon />
         {/* Reuses the chat landing page's "Skills" section label (same
             value) instead of adding a duplicate key. */}
         {t("chat.landing.skills")}

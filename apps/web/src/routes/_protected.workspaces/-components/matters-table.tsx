@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -9,6 +8,7 @@ import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame } from "@stll/ui/frame";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { getInitials } from "@stll/ui/initials";
 import {
   SortableHead,

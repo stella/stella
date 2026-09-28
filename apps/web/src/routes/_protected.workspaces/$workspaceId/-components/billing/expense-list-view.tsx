@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";

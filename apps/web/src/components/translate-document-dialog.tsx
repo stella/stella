@@ -11,7 +11,6 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -26,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { LanguagesIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";

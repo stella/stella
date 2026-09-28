@@ -1,7 +1,7 @@
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronDownIcon, ChevronRightIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";

@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 
 import { Result } from "better-result";
-import { FunctionSquareIcon, HashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -9,6 +8,7 @@ import {
   NUMERIC_FUNCTION_NAMES,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
+import { FunctionSquareIcon, HashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";

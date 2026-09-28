@@ -1,7 +1,7 @@
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { MonitorIcon, MoonIcon, SunIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,

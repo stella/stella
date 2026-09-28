@@ -5,7 +5,6 @@ import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { Result } from "better-result";
-import { UserPlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -23,6 +22,7 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { UserPlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

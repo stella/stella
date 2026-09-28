@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
 import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+
 import {
   CircleAlertIcon,
   CircleCheckIcon,
@@ -11,8 +12,7 @@ import {
   LoaderCircleIcon,
   TriangleAlertIcon,
   XIcon,
-} from "lucide-react";
-
+} from "../icons";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
 

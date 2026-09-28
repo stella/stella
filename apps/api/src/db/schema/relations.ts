@@ -4,6 +4,7 @@ import {
   invoices,
   rateEntries,
   rateTables,
+  sellerProfiles,
   timeEntries,
 } from "./billing";
 import {
@@ -176,6 +177,7 @@ export const relations = defineRelations(
     reportExports,
     timeEntries,
     billingCodes,
+    sellerProfiles,
     rateTables,
     rateEntries,
     expenses,
@@ -982,6 +984,7 @@ export const relations = defineRelations(
         to: r.workspaces.id,
       }),
     },
+    sellerProfiles: {},
     timeEntries: {
       workspace: r.one.workspaces({
         from: r.timeEntries.workspaceId,

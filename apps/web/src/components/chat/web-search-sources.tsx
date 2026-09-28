@@ -1,6 +1,6 @@
-import { ChevronRightIcon, GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ChevronRightIcon, GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";

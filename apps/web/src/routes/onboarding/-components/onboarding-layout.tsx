@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-import { ArrowLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon } from "@stll/ui/icons";
 
 import Tooltip from "@/components/tooltip";
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";

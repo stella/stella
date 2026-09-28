@@ -1,12 +1,12 @@
 import { panic } from "better-result";
+
 import {
   ArrowUpIcon,
   CheckIcon,
   PlusIcon,
   UploadIcon,
   ZapIcon,
-} from "lucide-react";
-
+} from "@stll/ui/icons";
 import { PreviewPane } from "@stll/ui/preview-pane";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";

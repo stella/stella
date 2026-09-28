@@ -2380,6 +2380,11 @@ export const createSendMessage = (
                       tools: streamingTools,
                     });
                     if (Result.isError(validatedToolParts)) {
+                      // Nothing of this turn can be stored, so it ends
+                      // failed rather than running until its lease lapses.
+                      // The error below carries the cause to the stream's
+                      // failure report.
+                      await run.fail("persistence", true);
                       throw new HandlerError({
                         status: 500,
                         message: "Generated chat tool parts are invalid",

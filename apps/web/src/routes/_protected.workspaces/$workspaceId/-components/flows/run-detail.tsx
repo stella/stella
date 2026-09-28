@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -15,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { ArrowLeftIcon, FileTextIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";

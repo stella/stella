@@ -4,9 +4,9 @@ import { lazy, Suspense } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { UIMessage } from "@tanstack/ai-client";
-import { WandSparklesIcon } from "lucide-react";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+import { SkillIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
@@ -99,7 +99,7 @@ const renderFallbackChildren = (children: ReactNode): ReactNode => {
     nodes.push(
       <InlinePill
         key={`${match.index}-${match[2] ?? ""}`}
-        leadingIcon={<WandSparklesIcon className="size-3 shrink-0" />}
+        leadingIcon={<SkillIcon className="size-3 shrink-0" />}
         truncate
       >
         {label}

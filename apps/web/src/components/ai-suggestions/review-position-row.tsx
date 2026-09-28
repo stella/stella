@@ -8,11 +8,11 @@
  * `inspector-route-boundary.test.ts` enforces.
  */
 
-import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Menu,

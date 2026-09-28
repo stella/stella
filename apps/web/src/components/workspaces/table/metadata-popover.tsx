@@ -1,9 +1,9 @@
 import type { ComponentType } from "react";
 
-import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { EyeOffIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 

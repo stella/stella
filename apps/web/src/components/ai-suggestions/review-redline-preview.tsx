@@ -10,7 +10,6 @@
 import type { CSSProperties } from "react";
 
 import { panic } from "better-result";
-import { ArrowRightIcon } from "lucide-react";
 
 import { diffWordSegments } from "@stll/folio-react";
 import type {
@@ -18,6 +17,7 @@ import type {
   WordDiffSegment,
 } from "@stll/folio-react";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowRightIcon } from "@stll/ui/icons";
 import type { ReviewDiffSegmentType } from "@stll/ui/review-diff-text";
 import {
   ReviewDiffDeletion,

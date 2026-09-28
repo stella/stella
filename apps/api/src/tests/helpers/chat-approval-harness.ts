@@ -201,6 +201,7 @@ const statusResponse = (answer: unknown): Response => {
 export type HarnessModel = Pick<
   ReturnType<typeof installScriptedProvider>,
   | "modelOptionsOf"
+  | "promptsOf"
   | "restore"
   | "script"
   | "stalled"
@@ -1220,6 +1221,8 @@ export const createApprovalHarness = ({
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),
+    /** The prompt of each of `threadId`'s model calls so far. */
+    promptsOf: (threadId: SafeId<"chatThread">) => provider.promptsOf(threadId),
     /** Queues the model's runs for `threadId`'s next requests, one each. */
     script: (threadId: SafeId<"chatThread">, ...runs: ScriptedRun[]) => {
       provider.script(threadId, ...runs);

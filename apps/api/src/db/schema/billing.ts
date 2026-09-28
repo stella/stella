@@ -12,6 +12,7 @@ import {
   TIME_ENTRY_STATUSES,
   centsColumn,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -211,6 +212,52 @@ export const billingCodes = p.pgTable(
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
     ...wsOrganizationPolicies("billing_codes"),
+  ],
+);
+
+export const sellerProfiles = p.pgTable(
+  "seller_profiles",
+  {
+    id: pUuid<"sellerProfile">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    legalName: p.varchar("legal_name", { length: 512 }).notNull(),
+    registrationId: p.varchar("registration_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    addressLine1: p.varchar("address_line_1", { length: 512 }),
+    addressLine2: p.varchar("address_line_2", { length: 512 }),
+    city: p.varchar({ length: 256 }),
+    postalCode: p.varchar("postal_code", { length: 32 }),
+    country: p.varchar({ length: 128 }),
+    iban: p.varchar({ length: 34 }),
+    bic: p.varchar({ length: 11 }),
+    accountNumber: p.varchar("account_number", { length: 64 }),
+    defaultCurrency: p.varchar("default_currency", { length: 3 }).notNull(),
+    footerNotes: p.text("footer_notes"),
+    isDefault: p.boolean("is_default").notNull().default(false),
+    archivedAt: timestamptz("archived_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("seller_profiles_org_created_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(sql`${table.archivedAt} IS NULL`),
+    p
+      .uniqueIndex("seller_profiles_org_default_uidx")
+      .on(table.organizationId)
+      .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
+    p.check(
+      "seller_profiles_currency_check",
+      sql`${table.defaultCurrency} ~ '^[A-Z]{3}$'`,
+    ),
+    p.check(
+      "seller_profiles_archived_default_check",
+      sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    ...orgPolicies(),
   ],
 );
 

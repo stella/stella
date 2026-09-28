@@ -102,6 +102,7 @@
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
         "@stll/infosoud": "workspace:*",
+        "@stll/invoicing": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/locales": "workspace:*",

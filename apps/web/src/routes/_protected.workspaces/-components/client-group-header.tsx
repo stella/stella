@@ -1,8 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronRightIcon } from "lucide-react";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";

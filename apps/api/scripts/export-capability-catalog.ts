@@ -224,6 +224,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent), a report export is a genuine workspace write, so a
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
+  "seller-profiles": "stella:billing_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
