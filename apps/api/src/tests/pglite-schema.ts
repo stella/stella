@@ -62,7 +62,7 @@ const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
 );
 const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260928090000_case_law_provision_reader_grants",
+  "20260928120000_case_law_provision_reader_grants",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
