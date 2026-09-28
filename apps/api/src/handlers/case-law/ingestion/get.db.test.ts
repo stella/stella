@@ -252,3 +252,18 @@ test("reconciliation totals are grouped per source", async () => {
   });
   expect(quiet?.reconciliation).toBeNull();
 });
+
+test("keyset pages preserve exact fleet and reconciliation counts", async () => {
+  const singleRowPages = await getIngestionStatus(scopedDb, { pageSize: 1 });
+  const defaultPages = await getIngestionStatus(scopedDb);
+
+  expect(singleRowPages).toEqual(defaultPages);
+  expect(singleRowPages.totalEvents).toBe(3);
+  expect(
+    singleRowPages.sources.find((source) => source.name === "busy source")
+      ?.reconciliation,
+  ).toMatchObject({
+    parked: 1,
+    terminal: 1,
+  });
+});

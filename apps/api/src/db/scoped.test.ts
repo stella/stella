@@ -65,6 +65,20 @@ describe("createSafeDb failure classification", () => {
       throw new TypeError("Expected a DatabaseError");
     }
     expect(error.code).toBe(PG_ERROR.SERIALIZATION_FAILURE);
+    expect(error.driverCode).toBe("ERR_POSTGRES_SERVER_ERROR");
+  });
+
+  it("preserves a bare Bun idle code without SQLSTATE", async () => {
+    const error = await failedTransaction(
+      driverError({ code: "ERR_POSTGRES_IDLE_TIMEOUT" }),
+    );
+
+    expect(DatabaseError.is(error)).toBe(true);
+    if (!DatabaseError.is(error)) {
+      throw new TypeError("Expected a DatabaseError");
+    }
+    expect(error.code).toBeUndefined();
+    expect(error.driverCode).toBe("ERR_POSTGRES_IDLE_TIMEOUT");
   });
 
   it("classifies an unwrapped privilege rejection as an RLS failure", async () => {

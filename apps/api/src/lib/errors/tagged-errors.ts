@@ -172,6 +172,7 @@ export class HandlerError<
 
 export class DatabaseError extends TaggedError("DatabaseError")<{
   code?: string | undefined;
+  driverCode?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}
@@ -183,6 +184,7 @@ export class DatabaseError extends TaggedError("DatabaseError")<{
  */
 export class DatabaseRlsError extends TaggedError("DatabaseRlsError")<{
   code?: string;
+  driverCode?: string;
   message: string;
   cause?: unknown;
 }> {
