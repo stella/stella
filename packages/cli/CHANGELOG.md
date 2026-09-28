@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.2.3
+
+### Patch Changes
+
+- [#4061](https://github.com/stella/stella/pull/4061) [`df37af8`](https://github.com/stella/stella/commit/df37af8b6dc697c9ff45e3c43ab28769c657c796) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The AI availability command's description also covers whether a local development stack answers with canned replies.
+
 ## 2.2.2
 
 ### Patch Changes
