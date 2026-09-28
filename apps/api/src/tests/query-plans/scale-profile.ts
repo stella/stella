@@ -7,14 +7,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { HIGH_VOLUME_TABLES } from "../../db/high-volume-tables";
-
-// TODO(#4063): import PLAN_GUARD_TABLES when B1 lands.
-const PLAN_GUARD_TABLES = [
-  ...HIGH_VOLUME_TABLES,
-  "legislation_documents",
-  "legislation_search_documents",
-] as const;
+import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 type GuardedTable = (typeof PLAN_GUARD_TABLES)[number];
 

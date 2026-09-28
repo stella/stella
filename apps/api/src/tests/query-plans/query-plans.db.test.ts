@@ -6,6 +6,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import {
   createTestPglite,
@@ -27,15 +28,28 @@ import {
   PUBLIC_LAW_PLAN_DISPOSITION,
   QUERY_PLAN_REGISTRY,
 } from "@/api/tests/query-plans/registry";
-import { seedQueryPlanData } from "@/api/tests/query-plans/seed";
+import {
+  estimateHeapFetches,
+  injectScaleProfile,
+  SYNTHETIC_SCALE_PROFILE,
+} from "@/api/tests/query-plans/scale-profile";
+import {
+  QUERY_PLAN_ROW_COUNT,
+  seedQueryPlanData,
+} from "@/api/tests/query-plans/seed";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const UPDATE_PLAN_CONTRACTS =
   process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
+const SCALE_PROFILE =
+  process.env["STELLA_QUERY_PLAN_SCALE_PROFILE"] === "physical"
+    ? null
+    : SYNTHETIC_SCALE_PROFILE;
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 const observedContracts: Record<string, { scans: AccessPath[] }> = {};
+const scanReport: string[] = [];
 
 const observedPaths = (scans: readonly ScanOccurrence[]): AccessPath[] =>
   scans
@@ -71,6 +85,12 @@ beforeAll(
 );
 
 afterAll(async () => {
+  process.stdout.write(
+    `\nQuery-plan scan estimates (${SCALE_PROFILE === null ? "physical" : "synthetic"} stats; heap fetches are estimates):\n` +
+      `query | position | relation | scan | rows | estimated heap fetches\n${ 
+      scanReport.join("\n") 
+      }\n`,
+  );
   if (UPDATE_PLAN_CONTRACTS) {
     if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
       panic("Plan contract update did not observe every registry entry");
@@ -119,6 +139,17 @@ const explain = async (
     return await run(tx);
   });
 };
+
+test("every guarded table has the physical seed before statistics injection", async () => {
+  for (const table of PLAN_GUARD_TABLES) {
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT count(*)::integer AS count FROM ${sql.identifier(table)}
+      `),
+    ).at(0);
+    expect(row).toMatchObject({ count: QUERY_PLAN_ROW_COUNT });
+  }
+});
 
 for (const entry of QUERY_PLAN_REGISTRY) {
   test(
@@ -235,3 +266,42 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
     );
   }
 });
+
+test(
+  "reports registry scan rows and estimated heap fetches",
+  async () => {
+    if (SCALE_PROFILE !== null) {
+      await injectScaleProfile(db, SCALE_PROFILE);
+    }
+    for (const entry of QUERY_PLAN_REGISTRY) {
+      const scans = await explain(
+        entry.role,
+        entry.build,
+        "planMode" in entry ? entry.planMode : undefined,
+      );
+      for (const scan of scans) {
+        if (!guardedTables.has(scan.relation)) {
+          continue;
+        }
+        const heapFetches =
+          SCALE_PROFILE === null
+            ? null
+            : estimateHeapFetches(scan, SCALE_PROFILE);
+        scanReport.push(
+          [
+            entry.id,
+            scan.position,
+            scan.relation,
+            scan.nodeType,
+            scan.rows ?? "unknown",
+            heapFetches ?? "n/a",
+          ].join(" | "),
+        );
+      }
+    }
+    expect(scanReport.length).toBeGreaterThanOrEqual(
+      QUERY_PLAN_REGISTRY.length,
+    );
+  },
+  DB_TEST_TIMEOUT_MS,
+);
