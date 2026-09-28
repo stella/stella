@@ -434,7 +434,11 @@ const ComposerSkillItemBody = ({
   </>
 );
 
-/** A blocked row whose one click turns web search on, then inserts it. */
+/**
+ * A blocked row whose one click turns web search on and, once the thread
+ * has stored it, inserts the skill: a send reads the stored switch, so an
+ * insert before then could still be refused.
+ */
 const WebSearchFixSkillItem = ({
   item,
   message,
@@ -450,8 +454,11 @@ const WebSearchFixSkillItem = ({
   return (
     <MenuItem
       onClick={() => {
-        setWebSearch(true);
-        onSelect(item);
+        setWebSearch(true, {
+          onSaved: () => {
+            onSelect(item);
+          },
+        });
       }}
     >
       <ComposerSkillItemBody blocked item={item} secondary={message} />

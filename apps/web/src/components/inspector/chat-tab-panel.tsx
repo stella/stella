@@ -687,6 +687,7 @@ export const ChatTabPanel = ({
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
             skillChat={{
+              contextMatterIds: tab.contextMatterIds,
               document: null,
               threadRef,
               webSearch: {

@@ -124,6 +124,21 @@ describe("the composer asks about the chat it is in", () => {
         chat: chatWith({ available: true, enabled: true }),
       }),
     ).toEqual({ anonymized: false, browserExtension: true, webSearch: true });
+    // Pinned matters travel as the send carries them, in a stable order.
+    const OTHER_MATTER = "019a0000-0000-7000-8000-0000000000bb";
+    expect(
+      chatSkillAvailabilityQuery({
+        anonymized: false,
+        browserExtension: false,
+        chat: {
+          ...chatWith({ available: false, enabled: false }),
+          contextMatterIds: [OTHER_MATTER, MATTER_ID],
+        },
+      })?.contextMatterIds,
+    ).toEqual([
+      toSafeId<"workspace">(MATTER_ID),
+      toSafeId<"workspace">(OTHER_MATTER),
+    ]);
   });
 
   test("a chat whose web search is still loading asks nothing yet", () => {

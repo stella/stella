@@ -2648,6 +2648,7 @@ const FileChatOverlayInner = ({
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillChat={{
+            contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
             ...fileOverlaySkillDocument({
               activeFile,
               editMode: activeDocxEditModeState,

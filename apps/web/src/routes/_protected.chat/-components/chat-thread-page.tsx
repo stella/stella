@@ -756,6 +756,7 @@ export const ChatThreadPage = ({
                       hasPersistedThread: messages.length > 0,
                     }}
                     skillChat={{
+                      contextMatterIds: selectedContextMatterIds,
                       document: null,
                       threadRef,
                       webSearch: {

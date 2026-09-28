@@ -23,6 +23,7 @@ import { createListUnavailableChatSkills } from "@/api/handlers/chat/skill-avail
 import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
+import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -56,6 +57,7 @@ const SKILLS = {
   counterparty: COUNTERPARTY_CHECK_TOOL_NAME,
   matter: "create_matter_document",
   outline: `${GET_DOCUMENT_OUTLINE_TOOL_NAME} suggest_changes`,
+  pastChats: SEARCH_ALL_PAST_CHATS_TOOL_NAME,
   redline: "suggest_changes",
   web: WEB_SEARCH_TOOL_NAME,
 } as const;
@@ -171,6 +173,8 @@ type Chat = {
   /** An open file, and whether its file field is known. */
   file: false | { withField: boolean };
   matter: boolean;
+  /** The chat draws from a pinned matter. */
+  pinned?: boolean;
   webSearch: boolean;
 };
 
@@ -217,6 +221,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
               ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
             }),
         ...(chat.matter ? { workspaceId: ids.wsA1 } : {}),
+        ...(chat.pinned === true ? { contextMatterIds: [ids.wsA2] } : {}),
       },
     }),
   );
@@ -279,7 +284,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
           },
         }),
     ...(workspaceId === null ? {} : { workspaceId }),
-    contextMatterIds: [],
+    contextMatterIds: chat.pinned === true ? [ids.wsA2] : [],
     message,
     runId: `run-${message.id}`,
     sendMode: chat.anonymized
@@ -349,6 +354,15 @@ const CHATS: readonly (Chat & { name: string })[] = [
     browserExtension: false,
     file: false,
     matter: false,
+    webSearch: false,
+  },
+  {
+    name: "a global chat drawing from a pinned matter",
+    anonymized: false,
+    browserExtension: false,
+    file: false,
+    matter: false,
+    pinned: true,
     webSearch: false,
   },
   {

@@ -14,6 +14,7 @@ import { agentSkills } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
+import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,6 +56,11 @@ const SKILL = {
     tools: "create_matter_document",
   },
   nowhere: { slug: `nowhere-${RUN}`, tools: "no_chat_has_this_tool" },
+  // Registered once the chat is about some matter: its own or a pinned one.
+  pastChats: {
+    slug: `past-chats-${RUN}`,
+    tools: SEARCH_ALL_PAST_CHATS_TOOL_NAME,
+  },
   plain: { slug: `plain-${RUN}`, tools: null },
   // Any open document's review queue resolves `suggest_changes`.
   redline: { slug: `redline-${RUN}`, tools: "suggest_changes" },
@@ -191,7 +197,7 @@ describe("skills chat can offer", () => {
     expect(await decide({})).toEqual({ here: {}, unavailable: ["nowhere"] });
     expect(await decide({ workspaces: [] })).toEqual({
       here: {},
-      unavailable: ["matterDocument", "nowhere"],
+      unavailable: ["matterDocument", "nowhere", "pastChats"],
     });
   });
 
@@ -216,6 +222,7 @@ describe("skills chat can offer", () => {
         counterparty: [CHAT_SKILL_CONTEXT_NEED.rawSendMode],
         document: [CHAT_SKILL_CONTEXT_NEED.document],
         matterDocument: [CHAT_SKILL_CONTEXT_NEED.matter],
+        pastChats: [CHAT_SKILL_CONTEXT_NEED.matter],
         redline: [CHAT_SKILL_CONTEXT_NEED.document],
         webSearch: [CHAT_SKILL_CONTEXT_NEED.webSearch],
       },
@@ -229,6 +236,7 @@ describe("skills chat can offer", () => {
     expect(off.here).toEqual({
       document: [CHAT_SKILL_CONTEXT_NEED.document],
       matterDocument: [CHAT_SKILL_CONTEXT_NEED.matter],
+      pastChats: [CHAT_SKILL_CONTEXT_NEED.matter],
       redline: [CHAT_SKILL_CONTEXT_NEED.document],
       webSearch: [CHAT_SKILL_CONTEXT_NEED.webSearch],
     });
@@ -272,6 +280,15 @@ describe("skills chat can offer", () => {
       document: [CHAT_SKILL_CONTEXT_NEED.reviewEdits],
       redline: [CHAT_SKILL_CONTEXT_NEED.reviewEdits],
     });
+  });
+
+  test("a global chat drawing from a pinned matter searches that matter's chats", async () => {
+    const unpinned = await decide({ query: WIDEST });
+    expect(unpinned.here.pastChats).toEqual([CHAT_SKILL_CONTEXT_NEED.matter]);
+    const pinned = await decide({
+      query: { ...WIDEST, contextMatterIds: [ids.wsA1] },
+    });
+    expect(pinned.here.pastChats).toBeUndefined();
   });
 
   test("only an active matter lets a skill write into one", async () => {
@@ -322,6 +339,12 @@ describe("the composer's chat is authorized before it is evaluated", () => {
         ],
       }),
     ).toMatchObject({ code: 404 });
+  });
+
+  test("a pinned matter the caller cannot reach is refused", async () => {
+    expect(
+      await call({ query: { ...WIDEST, contextMatterIds: [ids.wsB1] } }),
+    ).toMatchObject({ code: 403 });
   });
 
   test("a matter the caller cannot reach is not found", async () => {

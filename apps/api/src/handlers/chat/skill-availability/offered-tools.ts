@@ -66,6 +66,8 @@ export type ChatSkillContext = {
     | undefined;
   anonymized: boolean;
   browserExtension: boolean;
+  /** The matters the chat draws from, already checked as accessible. */
+  contextMatterIds: readonly SafeId<"workspace">[];
   document: ChatSkillDocument | null;
   editApplyMode: ChatEditApplyMode;
   webSearch: boolean;
@@ -196,7 +198,7 @@ const chatContextToolNames = (
     organizationId: context.organizationId,
     orgAIConfig: context.orgAIConfig,
     pastChatScope: resolvePastChatScope({
-      contextMatterIds: [],
+      contextMatterIds: chatContext.contextMatterIds,
       threadWorkspaceId: chatContext.workspaceId,
     }),
     pinServerValidatedWorkspaceId: () => false,
@@ -222,7 +224,7 @@ const chatContextToolNames = (
     toolDefectMemo: createChatToolDefectMemo(),
     toolWorkspaceIds: resolveToolWorkspaceIds({
       accessibleWorkspaceIds: usableWorkspaceIds,
-      pinnedIds: [],
+      pinnedIds: chatContext.contextMatterIds,
     }),
     userId: context.userId,
     webSearchEnabled: chatContext.webSearch,
@@ -245,6 +247,7 @@ const widestChatContext = (
 ): ChatSkillContext => ({
   anonymized: false,
   browserExtension: true,
+  contextMatterIds: [],
   document: CHAT_SKILL_DOCUMENT.file,
   editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
   webSearch: true,

@@ -532,6 +532,7 @@ function ChatIndex() {
               models={composerModels}
               reservedCommands={{ hasPersistedThread: false }}
               skillChat={{
+                contextMatterIds,
                 document: null,
                 threadRef,
                 webSearch:

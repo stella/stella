@@ -7647,6 +7647,7 @@ export type WebRoutes = {
             workspaceId?: T9e07a7d6cd;
             documentId?: Tf742ada503;
             fileFieldId?: T6993bee61f;
+            contextMatterIds?: Array<T9e07a7d6cd>;
             editApplyMode?: "auto" | "manual";
             browserExtension?: false | true;
             webSearch?: false | true;

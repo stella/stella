@@ -36,6 +36,10 @@ const config = {
   query: t.Object({
     anonymized: t.Optional(t.BooleanString()),
     browserExtension: t.Optional(t.BooleanString()),
+    /** The matters the chat draws from, as a send's `contextMatterIds`. */
+    contextMatterIds: t.Optional(
+      t.Array(tSafeId("workspace"), { maxItems: LIMITS.workspacesCount }),
+    ),
     document: t.Optional(
       t.Union([
         t.Literal(CHAT_SKILL_DOCUMENT.file),
@@ -98,10 +102,8 @@ export const createListUnavailableChatSkills = ({
         query.webSearch,
       ];
       // Any field names the composer's chat; none asks about the widest.
-      const asksAboutChat = Object.values(query).some(
-        (value) => value !== undefined,
-      );
-      if (asksAboutChat && switches.some((value) => value === undefined)) {
+      const asksAboutChat = Object.keys(query).length > 0;
+      if (asksAboutChat && switches.includes(undefined)) {
         return badRequest(
           "anonymized, browserExtension and webSearch go together",
         );
@@ -124,16 +126,30 @@ export const createListUnavailableChatSkills = ({
         });
         const workspaceId =
           scope.scope === "workspace" ? scope.workspaceId : null;
-        const { documentId } = query;
+        const { contextMatterIds = [], documentId } = query;
+        const usableWorkspaceIds =
+          documentId === undefined && contextMatterIds.length === 0
+            ? new Set<string>()
+            : new Set<string>(
+                (yield* Result.await(
+                  Result.tryPromise(
+                    async () => await getAccessibleWorkspaces(),
+                  ),
+                )).flatMap((workspace) =>
+                  workspace.status === "deleting" ? [] : [workspace.id],
+                ),
+              );
+        // A send refuses pinned matters the caller cannot use; so does this.
+        if (!contextMatterIds.every((id) => usableWorkspaceIds.has(id))) {
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "contextMatterIds includes inaccessible matter",
+            }),
+          );
+        }
         let activeFile: ChatSkillContext["activeFile"];
         if (documentId !== undefined) {
-          const usableWorkspaceIds = new Set<string>(
-            (yield* Result.await(
-              Result.tryPromise(async () => await getAccessibleWorkspaces()),
-            )).flatMap((workspace) =>
-              workspace.status === "deleting" ? [] : [workspace.id],
-            ),
-          );
           const file = yield* Result.await(
             safeDb((tx) =>
               tx.query.entities.findFirst({
@@ -166,6 +182,7 @@ export const createListUnavailableChatSkills = ({
           activeFile,
           anonymized: query.anonymized === true,
           browserExtension: query.browserExtension === true,
+          contextMatterIds,
           document: query.document ?? null,
           editApplyMode: query.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE,
           webSearch: query.webSearch === true,

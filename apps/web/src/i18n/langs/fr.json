@@ -987,8 +987,8 @@
       "skillNeeds": {
         "browserExtension": "Connectez l'extension du navigateur pour utiliser cette compétence",
         "document": "Ouvrez un document pour utiliser cette compétence",
-        "matter": "Démarrez un chat dans un dossier pour utiliser cette compétence",
-        "rawSendMode": "Indisponible dans les chats anonymisés",
+        "matter": "Démarrez une conversation dans un dossier pour utiliser cette compétence",
+        "rawSendMode": "Indisponible dans les conversations anonymisées",
         "reviewEdits": "Passez les modifications en révision manuelle pour utiliser cette compétence",
         "webSearch": "Activez la recherche web pour utiliser cette compétence"
       }

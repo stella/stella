@@ -35,7 +35,7 @@ type ChatWebSearchToggleProps = {
  */
 export const useSetChatWebSearch = (
   threadRef: ChatThreadRef,
-): ((enabled: boolean) => void) => {
+): ((enabled: boolean, options?: { onSaved?: () => void }) => void) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const setEnabledPreference = useChatWebSearchPreferenceStore(
@@ -100,9 +100,14 @@ export const useSetChatWebSearch = (
     },
   });
 
-  return (nextEnabled: boolean) => {
+  return (nextEnabled, options) => {
     setEnabledPreference(nextEnabled);
-    mutate(nextEnabled);
+    mutate(nextEnabled, {
+      // Only once the thread stores it, so a send that follows reads it.
+      onSuccess: () => {
+        options?.onSaved?.();
+      },
+    });
   };
 };
 

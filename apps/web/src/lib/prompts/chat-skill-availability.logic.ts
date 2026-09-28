@@ -28,6 +28,8 @@ export type ComposerSkillDocument =
  * browser extension are read live from their own stores.
  */
 export type ComposerSkillChatContext = {
+  /** The matters the next send draws from (its `contextMatterIds`). */
+  contextMatterIds?: readonly string[] | undefined;
   document: ComposerSkillDocument | null;
   /** The edit mode the next send carries; absent, the send's default. */
   editApplyMode?: ChatEditApplyMode | undefined;
@@ -79,6 +81,7 @@ export const fileOverlaySkillDocument = ({
 export type ChatSkillAvailabilityQuery = {
   anonymized: boolean;
   browserExtension: boolean;
+  contextMatterIds?: SafeId<"workspace">[];
   document?: ComposerSkillDocument["kind"];
   documentId?: SafeId<"entity">;
   editApplyMode?: ChatEditApplyMode;
@@ -104,11 +107,18 @@ export const chatSkillAvailabilityQuery = ({
   if (chat.webSearch === null) {
     return null;
   }
-  const { document, threadRef } = chat;
+  const { contextMatterIds = [], document, threadRef } = chat;
   return {
     anonymized,
     browserExtension,
     webSearch: chat.webSearch.enabled,
+    ...(contextMatterIds.length === 0
+      ? {}
+      : {
+          contextMatterIds: contextMatterIds
+            .toSorted()
+            .map((id) => toSafeId<"workspace">(id)),
+        }),
     ...(chat.editApplyMode === undefined
       ? {}
       : { editApplyMode: chat.editApplyMode }),
@@ -259,6 +269,7 @@ export const chatSkillAvailabilityKey = (
         query.anonymized,
         query.browserExtension,
         query.webSearch,
+        query.contextMatterIds ?? [],
         query.document ?? null,
         query.documentId ?? null,
         query.editApplyMode ?? null,
