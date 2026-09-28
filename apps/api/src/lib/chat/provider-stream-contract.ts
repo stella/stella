@@ -10,7 +10,10 @@ import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { withDecidedStopReasons } from "@/api/lib/chat/provider-stop-reasons";
+import {
+  refuseTurnPausingRequest,
+  withDecidedStopReasons,
+} from "@/api/lib/chat/provider-stop-reasons";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
@@ -307,7 +310,9 @@ async function* withOneTerminalEvent(
  * member is the adapter's own, its methods bound to it, so class state
  * (private fields included) keeps working. `provider` names the table the
  * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
- * adapter that reports none (a mock) passes its terminal event through.
+ * adapter that reports none (a mock) passes its terminal event through. A
+ * request whose turn could pause, which no run can continue yet, is refused
+ * before it is sent (`refuseTurnPausingRequest`).
  */
 export const withProviderStreamContract = (
   adapter: AnyTextAdapter,
@@ -320,8 +325,9 @@ export const withProviderStreamContract = (
           provider,
           unfinishedCode: INCOMPLETE_STREAM_CODE,
         });
-  const chatStream: AnyTextAdapter["chatStream"] = (options) =>
-    withOneTerminalEvent(
+  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+    refuseTurnPausingRequest(provider, options);
+    return withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
           decided(withUniqueToolCallIds(adapter.chatStream(options), options)),
@@ -330,6 +336,7 @@ export const withProviderStreamContract = (
       ),
       options,
     );
+  };
   return new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {

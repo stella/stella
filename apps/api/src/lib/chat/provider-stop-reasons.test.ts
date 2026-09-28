@@ -1,6 +1,12 @@
 import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
-import { describe, expect, test } from "bun:test";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import {
+  codeExecutionTool,
+  webFetchTool,
+  webSearchTool,
+} from "@tanstack/ai-anthropic/tools";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -9,11 +15,25 @@ import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import {
   PROVIDER_STOP_REASONS,
   PROVIDER_STOPPED_CODE,
+  refuseTurnPausingRequest,
+  UNRECOGNIZED_STOP_REASON,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import type { StopOutcome } from "@/api/lib/chat/provider-stop-reasons";
-import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import {
+  INCOMPLETE_STREAM_CODE,
+  withProviderStreamContract,
+} from "@/api/lib/chat/provider-stream-contract";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const started: StreamChunk = {
   type: EventType.RUN_STARTED,
@@ -50,16 +70,22 @@ const finishedWith = (
   metadata: { providerStopReason: reason, ...extra },
 });
 
+/**
+ * `chunks` as an adapter streams them.
+ *
+ * @yields Each of `chunks`, in order.
+ */
+const streamOf = async function* (chunks: readonly StreamChunk[]) {
+  await Promise.resolve();
+  yield* chunks;
+};
+
 const decide = async (
   provider: TanStackAIProvider,
   chunks: readonly StreamChunk[],
 ): Promise<StreamChunk[]> => {
   const out: StreamChunk[] = [];
-  const source = async function* () {
-    await Promise.resolve();
-    yield* chunks;
-  };
-  for await (const chunk of withDecidedStopReasons(source(), {
+  for await (const chunk of withDecidedStopReasons(streamOf(chunks), {
     provider,
     unfinishedCode: INCOMPLETE_STREAM_CODE,
   })) {
@@ -87,7 +113,37 @@ const EXPECTED_ENDING = {
   content_filter: "finished:content_filter",
   unfinished: "error:provider_stream_incomplete",
   failed: "error:unknown",
+  unrecognized: "finished:stop",
 } as const satisfies Record<StopOutcome, string>;
+
+/** A reason no provider's table lists. */
+const UNLISTED = "A_REASON_NO_SDK_KNOWS";
+
+const reasoning: StreamChunk = {
+  type: EventType.REASONING_MESSAGE_CONTENT,
+  messageId: "reasoning",
+  delta: "Reading the clause first.",
+  timestamp: 1,
+};
+const blankDelta: StreamChunk = { ...delta, delta: " \n" };
+
+/** Each step shape, and whether an unlisted stop ending it finishes. */
+const UNLISTED_STEPS = {
+  "wrote text": { chunks: [started, delta], ending: "finished:stop" },
+  "wrote reasoning": { chunks: [started, reasoning], ending: "finished:stop" },
+  "wrote nothing": { chunks: [started], ending: "error:unknown" },
+  "wrote only whitespace": {
+    chunks: [started, blankDelta],
+    ending: "error:unknown",
+  },
+  "wrote text and called a tool": {
+    chunks: [started, delta, toolCall],
+    ending: "error:unknown",
+  },
+} as const satisfies Record<
+  string,
+  { chunks: readonly StreamChunk[]; ending: string }
+>;
 
 describe("a provider stop reason", () => {
   test("reads as a finished answer only when the model ended its turn", async () => {
@@ -105,18 +161,6 @@ describe("a provider stop reason", () => {
       }
     }
     expect(endings).toEqual(expected);
-  });
-
-  test("the SDK does not know fails the run, on every provider", async () => {
-    for (const provider of TANSTACK_AI_PROVIDERS) {
-      const chunks = await decide(provider, [
-        started,
-        delta,
-        finishedWith("A_REASON_NO_SDK_KNOWS"),
-      ]);
-      expect(endingOf(chunks)).toBe("error:unknown");
-      expect(chunks.at(-1)).toMatchObject({ code: PROVIDER_STOPPED_CODE });
-    }
   });
 
   test("that never arrived leaves the answer unfinished", async () => {
@@ -215,5 +259,208 @@ describe("a provider stop reason", () => {
     };
     const chunks = await decide("mistral", [started, delta, finished]);
     expect(chunks.at(-1)).toBe(finished);
+  });
+});
+
+describe("a stop reason no table lists", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
+  test("finishes a step that wrote an answer and called no tool, else fails it, on every provider", async () => {
+    const endings: Record<string, string> = {};
+    const expected: Record<string, string> = {};
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const [step, { chunks, ending }] of Object.entries(UNLISTED_STEPS)) {
+        const key = `${provider}/${step}`;
+        endings[key] = endingOf(
+          await decide(provider, [...chunks, finishedWith(UNLISTED)]),
+        );
+        expected[key] = ending;
+      }
+    }
+    expect(
+      endings,
+      JSON.stringify({ oracle: CHAT_ORACLE.providerWireFinish }),
+    ).toEqual(expected);
+  });
+
+  test("records its reason as unknown, keeping the provider's value out of the run", async () => {
+    const chunks = await decide("anthropic", [
+      started,
+      delta,
+      finishedWith(UNLISTED, { trace: "kept" }),
+    ]);
+    expect(chunks.at(-1)).toEqual({
+      type: EventType.RUN_FINISHED,
+      runId: "run",
+      threadId: "thread",
+      finishReason: "stop",
+      timestamp: 1,
+      usage,
+      metadata: { trace: "kept", stopReason: UNRECOGNIZED_STOP_REASON },
+    });
+  });
+
+  test("fails a step without an answer with no trace of the provider's value", async () => {
+    const chunks = await decide("google", [started, finishedWith(UNLISTED)]);
+    expect(chunks.at(-1)).toMatchObject({ code: PROVIDER_STOPPED_CODE });
+    expect(JSON.stringify(chunks.at(-1))).not.toContain(UNLISTED);
+  });
+
+  test("finishes an answer the adapter reported as a failure", async () => {
+    const reported: StreamChunk = {
+      type: EventType.RUN_ERROR,
+      message: "The response is incomplete.",
+      code: "incomplete",
+      timestamp: 1,
+      error: { message: "The response is incomplete.", code: "incomplete" },
+      metadata: { providerStopReason: UNLISTED },
+    };
+    expect(endingOf(await decide("openai", [started, delta, reported]))).toBe(
+      "finished:stop",
+    );
+    expect(await decide("openai", [started, reported])).toEqual([
+      started,
+      {
+        type: EventType.RUN_ERROR,
+        message: "The response is incomplete.",
+        code: "incomplete",
+        timestamp: 1,
+        error: { message: "The response is incomplete.", code: "incomplete" },
+      },
+    ]);
+  });
+
+  const REPORTED_RUNS = {
+    finishes: { provider: "mistral", chunks: [started, delta] },
+    fails: { provider: "bedrock", chunks: [started] },
+  } as const satisfies Record<
+    string,
+    { provider: TanStackAIProvider; chunks: readonly StreamChunk[] }
+  >;
+
+  const expectReported = async (
+    provider: TanStackAIProvider,
+    chunks: readonly StreamChunk[],
+  ) => {
+    await decide(provider, [...chunks, finishedWith(UNLISTED)]);
+    const reported = analytics
+      .exceptions()
+      .map(({ properties }) => properties)
+      .filter(
+        (properties) =>
+          properties["error.class"] === "UnrecognizedProviderStopReasonError",
+      );
+    expect(reported.map((properties) => properties["provider"])).toEqual([
+      provider,
+    ]);
+    expect(JSON.stringify(reported)).not.toContain(UNLISTED);
+    expect(
+      logs
+        .at("WARN")
+        .filter(
+          ({ message }) => message === "chat.provider_stop_reason_unrecognized",
+        )
+        .map(({ attributes }) => attributes),
+    ).toEqual([
+      expect.objectContaining({ provider, providerStopReason: UNLISTED }),
+    ]);
+  };
+
+  for (const [ending, { provider, chunks }] of Object.entries(REPORTED_RUNS)) {
+    test(`is reported when the run ${ending}, its value in the log only`, async () => {
+      await expectReported(provider, chunks);
+    });
+  }
+
+  test("a listed reason is not reported", async () => {
+    await decide("anthropic", [started, delta, finishedWith("end_turn")]);
+    expect(analytics.exceptions()).toEqual([]);
+  });
+});
+
+// `pause_turn` and `compaction` stay unfinished until a paused turn can be
+// sent again to continue it. Until then a request that can produce them
+// fails before it is sent: these are the switches that enable them.
+describe("an Anthropic request whose turn could pause", () => {
+  type Request = Parameters<AnyTextAdapter["chatStream"]>[0];
+  const request = (overrides: Partial<Request>): Request => ({
+    logger: resolveDebugOption(false),
+    messages: [],
+    model: "model",
+    ...overrides,
+  });
+  const PAUSING: Record<string, Partial<Request>> = {
+    "web search": {
+      tools: [
+        webSearchTool({ name: "web_search", type: "web_search_20250305" }),
+      ],
+    },
+    "web fetch": { tools: [webFetchTool()] },
+    "code execution": {
+      tools: [
+        codeExecutionTool({
+          name: "code_execution",
+          type: "code_execution_20250825",
+        }),
+      ],
+    },
+    compaction: {
+      modelOptions: {
+        context_management: { edits: [{ type: "compact_20260112" }] },
+      },
+    },
+  };
+
+  for (const [name, overrides] of Object.entries(PAUSING)) {
+    test(`is refused when it enables ${name}`, () => {
+      expect(() => {
+        refuseTurnPausingRequest("anthropic", request(overrides));
+      }).toThrow(/pause_turn or compaction/u);
+    });
+  }
+
+  test("goes through with the service's own tools and edits that keep the turn going", () => {
+    expect(() => {
+      refuseTurnPausingRequest(
+        "anthropic",
+        request({
+          tools: [{ name: "mcp__external__delete", description: "Delete." }],
+          modelOptions: {
+            context_management: {
+              edits: [{ type: "clear_tool_uses_20250919" }],
+            },
+          },
+        }),
+      );
+    }).not.toThrow();
+  });
+
+  test("is refused by the stream contract before the adapter is called", () => {
+    let called = false;
+    const adapter = asTestRaw<AnyTextAdapter>({
+      kind: "text",
+      model: "model",
+      name: "fixture",
+      label: () => "fixture",
+      chatStream: () => {
+        called = true;
+        return streamOf([]);
+      },
+    });
+    expect(() =>
+      withProviderStreamContract(adapter, "anthropic").chatStream(
+        request(PAUSING["web search"] ?? {}),
+      ),
+    ).toThrow(/pause_turn or compaction/u);
+    expect(called).toBe(false);
   });
 });

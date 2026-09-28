@@ -4,12 +4,24 @@ import type { FinishReason as GeminiFinishReason } from "@google/genai";
 import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@mistralai/mistralai/models/components";
 import type { ChatFinishReasonEnum as OpenRouterFinishReasons } from "@openrouter/sdk/models";
 import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import type {
+  AnthropicBashTool,
+  AnthropicCodeExecutionTool,
+  AnthropicComputerUseTool,
+  AnthropicMemoryTool,
+  AnthropicTextEditorTool,
+  AnthropicWebFetchTool,
+  AnthropicWebSearchTool,
+} from "@tanstack/ai-anthropic/tools";
 import { panic } from "better-result";
 import type OpenAI from "openai";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
+import { captureError } from "@/api/lib/analytics/capture";
+import { UnrecognizedProviderStopReasonError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 // What a provider's stated reason for ending a response means for the run.
@@ -17,7 +29,9 @@ import { isRecord } from "@/api/lib/type-guards";
 // (`metadata.providerStopReason`, added by the adapter patches), and the
 // decision lives here, in one table per provider keyed by the provider SDK's
 // own union. A reason an SDK upgrade adds fails the typecheck until it has an
-// outcome, so no reason reads as a finished answer by default.
+// outcome. A reason the provider sends before its SDK lists it is
+// `unrecognized`: reported, and a finished answer only when the step wrote
+// something the user sees and called no tool.
 
 /** What a stop reason means for the run. */
 export type StopOutcome =
@@ -33,8 +47,12 @@ export type StopOutcome =
    *  mid-stream, or no reason at all): the answer is not complete. */
   | "unfinished"
   /** The provider ended on a failure the answer cannot stand on (an invalid
-   *  tool call, an unsupported language, an unknown reason). */
-  | "failed";
+   *  tool call, an unsupported language). */
+  | "failed"
+  /** A reason no table lists. The step's answer stands when it wrote text
+   *  or reasoning the user sees and called no tool; otherwise the run
+   *  fails. */
+  | "unrecognized";
 
 type AnthropicStopReason = Anthropic.Beta.Messages.BetaStopReason;
 type OpenAIStopReason =
@@ -55,10 +73,11 @@ const ANTHROPIC = {
   model_context_window_exceeded: "length",
   refusal: "content_filter",
   // A server tool loop paused mid-turn; the turn continues only when the
-  // request is sent again.
+  // request is sent again, which Stella does not do yet. Until it does, no
+  // request may produce it (`refuseTurnPausingRequest`).
   pause_turn: "unfinished",
   // The context was compacted mid-turn; the turn continues only when the
-  // request is sent again.
+  // request is sent again. Refused the same way.
   compaction: "unfinished",
 } as const satisfies Record<AnthropicStopReason, StopOutcome>;
 
@@ -139,7 +158,7 @@ export const PROVIDER_STOP_REASONS: Readonly<
 };
 
 /** The outcome of `reason` from `provider`: `null` is a stream that ended
- *  without one, and a reason the SDK does not know is not a success. */
+ *  without one, and a reason the SDK does not know is `unrecognized`. */
 const stopOutcomeOf = (
   provider: TanStackAIProvider,
   reason: string | null,
@@ -148,7 +167,129 @@ const stopOutcomeOf = (
     return "unfinished";
   }
   const table = PROVIDER_STOP_REASONS[provider];
-  return Object.hasOwn(table, reason) ? (table[reason] ?? "failed") : "failed";
+  return Object.hasOwn(table, reason)
+    ? (table[reason] ?? "unrecognized")
+    : "unrecognized";
+};
+
+/** The stop reason a finish of an `unrecognized` stop records; the
+ *  provider's own value goes to the logs only. */
+export const UNRECOGNIZED_STOP_REASON = "unknown";
+
+/** The longest provider value a log line carries. */
+const LOGGED_REASON_MAX = 64;
+
+/** Report a stop reason no table lists, so the table gets it. */
+const reportUnrecognizedStopReason = (
+  provider: TanStackAIProvider,
+  reason: string,
+): void => {
+  captureError(
+    new UnrecognizedProviderStopReasonError({
+      message: `A ${provider} response ended with a stop reason no table lists`,
+    }),
+    { feature: "chat.provider_stop_reason", provider },
+  );
+  logger.warn("chat.provider_stop_reason_unrecognized", {
+    provider,
+    providerStopReason: reason.slice(0, LOGGED_REASON_MAX),
+  });
+};
+
+// Anthropic ends a turn with `pause_turn` when a server tool (one Anthropic
+// runs itself) loops long, and with `compaction` when it compacts the
+// context mid-turn. Either turn goes on only when the request is sent again,
+// which Stella does not do yet, so both read as unfinished (the table
+// above). Until continuation exists, a request that can produce them fails
+// loudly here rather than failing turns in production.
+
+type AnthropicNativeToolKind = (
+  | AnthropicBashTool
+  | AnthropicCodeExecutionTool
+  | AnthropicComputerUseTool
+  | AnthropicMemoryTool
+  | AnthropicTextEditorTool
+  | AnthropicWebFetchTool
+  | AnthropicWebSearchTool
+)["~toolKind"];
+
+/** Whether Anthropic runs the native tool itself, and so may pause the
+ *  turn, or hands it back to the client. */
+const ANTHROPIC_NATIVE_TOOLS = {
+  code_execution: "pauses",
+  web_fetch: "pauses",
+  web_search: "pauses",
+  bash: "client",
+  computer_use: "client",
+  memory: "client",
+  text_editor: "client",
+} as const satisfies Record<AnthropicNativeToolKind, "client" | "pauses">;
+
+type AnthropicContextEditType = NonNullable<
+  Anthropic.Beta.Messages.BetaContextManagementConfig["edits"]
+>[number]["type"];
+
+/** Whether a context edit may stop the turn to compact it. */
+const ANTHROPIC_CONTEXT_EDITS = {
+  compact_20260112: "pauses",
+  clear_thinking_20251015: "continues",
+  clear_tool_uses_20250919: "continues",
+} as const satisfies Record<AnthropicContextEditType, "continues" | "pauses">;
+
+/** The metadata key the Anthropic adapter reads a native tool's kind by. */
+const NATIVE_TOOL_KIND_KEY = "__kind";
+
+/** The native tool kind of `tool` when Anthropic runs it itself. */
+const pausingToolKind = (tool: unknown): string | undefined => {
+  const metadata: unknown = isRecord(tool) ? tool["metadata"] : undefined;
+  const marker = isRecord(metadata) ? metadata[NATIVE_TOOL_KIND_KEY] : null;
+  return Object.entries(ANTHROPIC_NATIVE_TOOLS).find(
+    ([kind, runs]) => runs === "pauses" && marker === `anthropic.${kind}`,
+  )?.[0];
+};
+
+/** The first context edit in `modelOptions` not known to keep the turn
+ *  going. */
+const pausingContextEdit = (modelOptions: unknown): string | undefined => {
+  const config: unknown = isRecord(modelOptions)
+    ? modelOptions["context_management"]
+    : undefined;
+  const edits: unknown = isRecord(config) ? config["edits"] : undefined;
+  if (!Array.isArray(edits)) {
+    return undefined;
+  }
+  for (const edit of edits) {
+    const type: unknown = isRecord(edit) ? edit["type"] : undefined;
+    const continues = Object.entries(ANTHROPIC_CONTEXT_EDITS).some(
+      ([known, effect]) => known === type && effect === "continues",
+    );
+    if (!continues) {
+      return typeof type === "string" ? type : "a context edit";
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Fails a request to Anthropic that enables a server tool or compaction:
+ * its turn could end with `pause_turn` or `compaction`, which Stella cannot
+ * continue yet. Remove once it can, with the table's two entries.
+ */
+export const refuseTurnPausingRequest = (
+  provider: TanStackAIProvider | undefined,
+  options: Parameters<AnyTextAdapter["chatStream"]>[0],
+): void => {
+  if (provider !== "anthropic") {
+    return;
+  }
+  const enabled =
+    (options.tools ?? []).map(pausingToolKind).find(Boolean) ??
+    pausingContextEdit(options.modelOptions);
+  if (enabled !== undefined) {
+    panic(
+      `The request enables ${enabled}, whose turns can end with pause_turn or compaction, which are not continued yet`,
+    );
+  }
 };
 
 /** The run error code of a provider stop the answer cannot stand on. */
@@ -207,6 +348,7 @@ const stoppedError = (
  * `unfinishedCode` is the run error code of an unfinished response.
  */
 const decidedTerminal = ({
+  answered,
   calledTools,
   chunk,
   outcome,
@@ -214,6 +356,8 @@ const decidedTerminal = ({
   run,
   unfinishedCode,
 }: {
+  /** The step wrote text or reasoning the user sees. */
+  answered: boolean;
   calledTools: boolean;
   chunk: TerminalChunk;
   outcome: StopOutcome;
@@ -223,7 +367,7 @@ const decidedTerminal = ({
 }): TerminalChunk => {
   const finished = (
     finishReason: NonNullable<RunFinishedChunk["finishReason"]>,
-  ): TerminalChunk => {
+  ): RunFinishedChunk => {
     const runId = chunk.runId ?? run?.runId;
     const threadId = chunk.threadId ?? run?.threadId;
     if (runId === undefined || threadId === undefined) {
@@ -236,6 +380,14 @@ const decidedTerminal = ({
       threadId,
       finishReason,
     };
+  };
+  const failed = (message: string): TerminalChunk => {
+    // A failure the adapter already reported keeps the provider's detail.
+    if (chunk.type === EventType.RUN_ERROR) {
+      const { metadata: _reported, ...reported } = chunk;
+      return { ...reported, ...metadataWithoutStopReason(chunk) };
+    }
+    return stoppedError(chunk, PROVIDER_STOPPED_CODE, message);
   };
   switch (outcome) {
     case "ended": {
@@ -253,16 +405,24 @@ const decidedTerminal = ({
       );
     }
     case "failed": {
-      // A failure the adapter already reported keeps the provider's detail.
-      if (chunk.type === EventType.RUN_ERROR) {
-        const { metadata: _reported, ...reported } = chunk;
-        return { ...reported, ...metadataWithoutStopReason(chunk) };
-      }
-      return stoppedError(
-        chunk,
-        PROVIDER_STOPPED_CODE,
+      return failed(
         `The provider ended the response with ${reason ?? "no stop reason"}.`,
       );
+    }
+    case "unrecognized": {
+      // A reason the provider added since its SDK: the answer the user saw
+      // stands, but a step that wrote nothing, or left calls to run, has no
+      // answer to stand on.
+      if (!answered || calledTools) {
+        return failed(
+          "The provider ended the response with a stop reason it does not document.",
+        );
+      }
+      const answer = finished("stop");
+      return {
+        ...answer,
+        metadata: { ...answer.metadata, stopReason: UNRECOGNIZED_STOP_REASON },
+      };
     }
     default: {
       outcome satisfies never;
@@ -270,6 +430,14 @@ const decidedTerminal = ({
     }
   }
 };
+
+/** Whether `chunk` writes text or reasoning the user sees. */
+const writesVisibleOutput = (chunk: StreamChunk): boolean =>
+  (chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+    chunk.type === EventType.TEXT_MESSAGE_CHUNK ||
+    chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+    chunk.type === EventType.REASONING_MESSAGE_CHUNK) &&
+  (chunk.delta ?? "").trim() !== "";
 
 /**
  * Every terminal event that carries a provider stop reason, rewritten to
@@ -286,6 +454,7 @@ export const withDecidedStopReasons = async function* (
   }: { provider: TanStackAIProvider; unfinishedCode: string },
 ): AsyncIterable<StreamChunk> {
   let run: { runId: string; threadId: string } | undefined;
+  let answered = false;
   let calledTools = false;
   for await (const chunk of chunks) {
     if (chunk.type === EventType.RUN_STARTED) {
@@ -294,6 +463,7 @@ export const withDecidedStopReasons = async function* (
     if (chunk.type === EventType.TOOL_CALL_START) {
       calledTools = true;
     }
+    answered ||= writesVisibleOutput(chunk);
     if (
       chunk.type !== EventType.RUN_FINISHED &&
       chunk.type !== EventType.RUN_ERROR
@@ -306,10 +476,15 @@ export const withDecidedStopReasons = async function* (
       yield chunk;
       continue;
     }
+    const outcome = stopOutcomeOf(provider, reason);
+    if (outcome === "unrecognized" && reason !== null) {
+      reportUnrecognizedStopReason(provider, reason);
+    }
     yield decidedTerminal({
+      answered,
       calledTools,
       chunk,
-      outcome: stopOutcomeOf(provider, reason),
+      outcome,
       reason,
       run,
       unfinishedCode,

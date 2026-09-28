@@ -703,6 +703,34 @@
       "oracle": "chat.provider-wire.finish"
     },
     {
+      "id": "unlisted-stop-answer-finishes",
+      "fix": "unlisted stop reasons",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet finishes when the step wrote an answer and called no tool, instead of failing the turn.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    : \"unrecognized\";",
+      "replace": "    : \"failed\";",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unlisted-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-silent-fails",
+      "fix": "unlisted stop reasons",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step wrote nothing the user sees, instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      if (!answered || calledTools) {",
+      "replace": "      if (calledTools) {",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "finishes a step that wrote an answer and called no tool, else fails it, on every provider"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
       "id": "split-multibyte-character-decoded",
       "fix": "#4002",
       "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
