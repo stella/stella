@@ -13,6 +13,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
   caseLawProvisionCitations: "case_law_provision_citations",
@@ -250,6 +251,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+  },
+  case_law_browse_facet_counts: {
+    kind: "required",
+    country: "required",
+    source_id: "required",
+    value: "required",
+    total: "required",
   },
   case_law_statute_citation_counts: {
     source_id: "required",

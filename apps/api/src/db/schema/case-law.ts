@@ -733,6 +733,10 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
       .where(storedObservationHasDetail(t.metadata)),
     p
+      .index("case_law_decisions_browse_facet_count_idx")
+      .on(t.sourceId, t.country, t.court, t.decisionDate)
+      .where(storedObservationHasDetail(t.metadata)),
+    p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
     // The corpus status's newest row of one country: led by country so the
@@ -2110,6 +2114,56 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+export const CASE_LAW_BROWSE_FACET_KINDS = [
+  "country",
+  "court",
+  "year",
+] as const;
+const CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES = CASE_LAW_BROWSE_FACET_KINDS.map(
+  (kind) => sql`${kind}`,
+);
+
+/** Per-source browse counts, so source redistribution is checked at read time. */
+export const caseLawBrowseFacetCounts = p.pgTable(
+  "case_law_browse_facet_counts",
+  {
+    kind: p.text({ enum: CASE_LAW_BROWSE_FACET_KINDS }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    value: p.varchar({ length: 512 }).notNull(),
+    total: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_browse_facet_counts_pkey",
+      columns: [t.kind, t.country, t.sourceId, t.value],
+    }),
+    p.check("case_law_browse_facet_counts_total_positive", sql`${t.total} > 0`),
+    p.check(
+      "case_law_browse_facet_counts_kind_valid",
+      sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("case_law_browse_facet_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_browse_facet_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_browse_facet_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS browse_facet_source
+        WHERE browse_facet_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`browse_facet_source.descriptor`)}
+      )`,
+    }),
   ],
 );
 
