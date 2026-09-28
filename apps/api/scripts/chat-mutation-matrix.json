@@ -659,6 +659,20 @@
         "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
       },
       "oracle": "chat.ledger.pending"
+    },
+    {
+      "id": "reader-decodes-v2-envelope",
+      "fix": "saved-state",
+      "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-parts.ts",
+      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.persisted.past-release-loads"
     }
   ]
 }
