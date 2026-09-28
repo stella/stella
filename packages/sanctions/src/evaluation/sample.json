@@ -1,0 +1,704 @@
+[
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "Vladimir Vladimirovitj PUTIN"
+    },
+    "expected": "eu:135909",
+    "heldOut": "Vladimir Vladimirovitj PUTIN"
+  },
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "General Taganda"
+    },
+    "expected": "un:6908021",
+    "heldOut": "General Taganda"
+  },
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "Doku Hamatovič Umarov"
+    },
+    "expected": "eu:6125",
+    "heldOut": "Doku Hamatovič Umarov"
+  },
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "Aliaksandr Ryhoravich LUKASHENKA"
+    },
+    "expected": "eu:126365",
+    "heldOut": "Aliaksandr Ryhoravich LUKASHENKA"
+  },
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "Jock Riak"
+    },
+    "expected": "un:6908457",
+    "heldOut": "Jock Riak"
+  },
+  {
+    "category": "held-out-variant",
+    "query": {
+      "name": "Floribert Njabu Ngabu"
+    },
+    "expected": "un:6908012",
+    "heldOut": "Floribert Njabu Ngabu"
+  },
+  {
+    "category": "held-out-cyrillic",
+    "query": {
+      "name": "Владимир Михайлович ГУНДЯЕВ"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": "Владимир Михайлович ГУНДЯЕВ"
+  },
+  {
+    "category": "held-out-cyrillic",
+    "query": {
+      "name": "Умаров Доку Хаматович"
+    },
+    "expected": "un:2960872",
+    "heldOut": "Умаров Доку Хаматович"
+  },
+  {
+    "category": "held-out-cyrillic",
+    "query": {
+      "name": "Ростислав Андреевич ЗОРИКОВ"
+    },
+    "expected": "cz:ZORIKOV Rostislav Andrejevič 1986-03-07",
+    "heldOut": "Ростислав Андреевич ЗОРИКОВ"
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Forces Democratiques Alliees-Armee Nationale de Liberation de l’Ouganda"
+    },
+    "expected": "un:6908402",
+    "heldOut": null
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Vladimir Michajlovic GUNDAJEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Rostislav Andrejevic ZORIKOV"
+    },
+    "expected": "cz:ZORIKOV Rostislav Andrejevič 1986-03-07",
+    "heldOut": null
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Vladimir Michajlovic GUNDYAYEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Doku Hamatovic Umarov"
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "diacritics-dropped",
+    "query": {
+      "name": "Vladimir Mikhailovich GUNDAJEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "Umarov Hamatovič Doku"
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "CO. SHIPPING SAMMA KOREA"
+    },
+    "expected": "eu:116198",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "AL-TIKRITI HUSSEIN SADDAM"
+    },
+    "expected": "un:6908048",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "Company Trading and Industrial Sanam"
+    },
+    "expected": "eu:3826",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "SOLEIMANI Gholamreza"
+    },
+    "expected": "eu:127388",
+    "heldOut": null
+  },
+  {
+    "category": "word-order",
+    "query": {
+      "name": "(Butaev) Butayev Lom-ali"
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Floribert Ngabu"
+    },
+    "expected": "un:6908012",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Ahmed Akhundzada Wazir"
+    },
+    "expected": "eu:521",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Vladimir PUTIN"
+    },
+    "expected": "eu:135909",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Vladimir GUNDYAYEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Floribert Ndjabu"
+    },
+    "expected": "un:6908012",
+    "heldOut": null
+  },
+  {
+    "category": "missing-middle-name",
+    "query": {
+      "name": "Vladimir GUNDYAYEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Dkokka Umarov"
+    },
+    "expected": "un:2960872",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Vlaimir Michajlovič GUNDYAYEV"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Vladimir Vladimiraovich PUTIN"
+    },
+    "expected": "eu:135909",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Hlas Evrpy"
+    },
+    "expected": "eu:165994",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Aleandr Grigorievich LUKASHENKO"
+    },
+    "expected": "eu:126365",
+    "heldOut": null
+  },
+  {
+    "category": "typo",
+    "query": {
+      "name": "Sanam Industrial Grooup"
+    },
+    "expected": "eu:3826",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "alexander grigorievitch lukashenko"
+    },
+    "expected": "eu:126365",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "hayi ahmad jan"
+    },
+    "expected": "eu:521",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "rostislaw andrejevič zorikov"
+    },
+    "expected": "cz:ZORIKOV Rostislav Andrejevič 1986-03-07",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "doku khamatovich umaroff"
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "yock riak"
+    },
+    "expected": "un:6908457",
+    "heldOut": null
+  },
+  {
+    "category": "transliteration",
+    "query": {
+      "name": "vladimir mikhailovich gunďajew"
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "Floribert Ngafu Ndjabu",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1971,
+        "month": 5,
+        "day": 23
+      }
+    },
+    "expected": "un:6908012",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "Vladimir Mikhailovich GUNĎAJVE",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1946,
+        "month": 11,
+        "day": 20
+      }
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "Lom-ali Buatyev (Butaev)",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1964,
+        "month": 4,
+        "day": 13
+      }
+    },
+    "expected": "un:2960872",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "DOKU KHAMTOVICH UMAROV",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1964,
+        "month": 4,
+        "day": 13
+      }
+    },
+    "expected": "un:2960872",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "Doku Khaqmatovich Umarov",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1964,
+        "month": 4,
+        "day": 13
+      }
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "typo-with-birth-date",
+    "query": {
+      "name": "Vladimir Mikhailovich GUNDYYAEV",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1946,
+        "month": 11,
+        "day": 20
+      }
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "Alexander Grigorievich LUKASHENKO",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1950,
+        "month": 7,
+        "day": 6
+      }
+    },
+    "expected": "eu:126365",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "Doku Hamatovič Umarov",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1953,
+        "month": 11,
+        "day": 20
+      }
+    },
+    "expected": "eu:6125",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "Lom-ali Butayev (Butaev)",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1970,
+        "month": 8,
+        "day": 9
+      }
+    },
+    "expected": "un:2960872",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "Jock Riak",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1953,
+        "month": 6,
+        "day": 12
+      }
+    },
+    "expected": "un:6908457",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "LEOPOLD MUJYAMBERE",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1973,
+        "month": 12,
+        "day": 19
+      }
+    },
+    "expected": "un:6908006",
+    "heldOut": null
+  },
+  {
+    "category": "stale-birth-date",
+    "query": {
+      "name": "Aleksandr Grigorjevitj LUKASJENKO",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1962,
+        "month": 10,
+        "day": 8
+      }
+    },
+    "expected": "eu:126365",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "Vladimir Mikhailovich GUNDAYEV",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1958,
+        "month": 9,
+        "day": 21
+      }
+    },
+    "expected": "cz:GUNĎAJEV Vladimir Michajlovič 1946-11-20",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "Gabrel Jok",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1958,
+        "month": 12,
+        "day": 5
+      }
+    },
+    "expected": "un:6908457",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "Vladimir Vladimirovitj PUqIN",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1941,
+        "month": 6,
+        "day": 16
+      }
+    },
+    "expected": "eu:135909",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "Floriert Ngabu Ndjabu",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1966,
+        "month": 6,
+        "day": 18
+      }
+    },
+    "expected": "un:6908012",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "FLORIBERT NGAU NJABU",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1961,
+        "month": 3,
+        "day": 9
+      }
+    },
+    "expected": "un:6908012",
+    "heldOut": null
+  },
+  {
+    "category": "misspelt-with-other-birth-date",
+    "query": {
+      "name": "Alexandr Grigorievich LUKASgENKO",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1943,
+        "month": 6,
+        "day": 4
+      }
+    },
+    "expected": "eu:126365",
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Karim Kozlov",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Tereza Jelínek",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Salma Farah",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Youssef Černý",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Ondřej Pokorný",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name",
+    "query": {
+      "name": "Eva Fiala",
+      "entityType": "person"
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Zdeněk Baláž",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1978,
+        "month": 8,
+        "day": 16
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Svetlana Veselý",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1978,
+        "month": 7,
+        "day": 4
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Nikolay Dvořák",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1971,
+        "month": 5,
+        "day": 1
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Hana Volkov",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1961,
+        "month": 11,
+        "day": 22
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Youssef Kováč",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1960,
+        "month": 3,
+        "day": 4
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  },
+  {
+    "category": "common-name-with-birth-date",
+    "query": {
+      "name": "Omar Darwish",
+      "entityType": "person",
+      "birthDate": {
+        "year": 1958,
+        "month": 5,
+        "day": 9
+      }
+    },
+    "expected": null,
+    "heldOut": null
+  }
+]

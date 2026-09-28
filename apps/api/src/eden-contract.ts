@@ -38,19 +38,35 @@ type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+type ApiWorkspaceRoutes = ApiV1Routes["workspaces"];
+type ApiWorkspaceByIdRoutes = ApiWorkspaceRoutes[":workspaceId"];
 
 /**
  * Main browser Eden route tree. Routes whose addition would breach the
  * recursive type-cost budget use their own small, typed Eden client instead.
  */
 type WebRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
+  v1: Omit<
+    ApiV1Routes,
+    "entities" | "memories" | "time-entries" | "workspaces"
+  > & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
       ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
         entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
           ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
         };
       };
+    };
+    workspaces: Omit<ApiWorkspaceRoutes, ":workspaceId"> & {
+      ":workspaceId": Omit<ApiWorkspaceByIdRoutes, "correspondence">;
+    };
+  };
+};
+
+type CorrespondenceRoutes = {
+  v1: {
+    workspaces: {
+      ":workspaceId": Pick<ApiWorkspaceByIdRoutes, "correspondence">;
     };
   };
 };
@@ -63,6 +79,7 @@ type WebRoutes = Omit<ApiRoutes, "v1"> & {
  */
 export type WebApiContract = {
   WebRoutes: WebRoutes;
+  CorrespondenceRoutes: CorrespondenceRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
   ChatMessage: ChatMessage;
