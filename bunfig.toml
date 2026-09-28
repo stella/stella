@@ -56,7 +56,14 @@ minimumReleaseAgeExcludes = [
   "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/folio-react", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/fuzzy-search", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/fuzzy-search-darwin-arm64", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/fuzzy-search-darwin-x64", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/fuzzy-search-linux-arm64-gnu", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/fuzzy-search-linux-x64-gnu", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
   "@stll/fuzzy-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/fuzzy-search-wasm32-wasi", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
+  "@stll/fuzzy-search-win32-x64-msvc", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
   "@stll/regex-set-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/template-conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   # A napi package must be listed WITH its platform subpackages. They publish

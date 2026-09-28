@@ -1274,7 +1274,6 @@ const runToolCallRoundTripProbe = async ({
   await runToolProbe({
     context,
     prompt: toolRoundTripPromptForProvider(context.provider),
-    requiredToolName: TOOL_ROUND_TRIP_NAME,
     role: TOOL_CALL_ROLE,
     signal,
     tool,
@@ -1360,7 +1359,6 @@ const runWeeklyToolShapeProbe = async ({
 type RunToolProbeOptions = {
   context: CanaryContext;
   prompt: string;
-  requiredToolName?: string;
   role: ModelRole;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
@@ -1368,36 +1366,19 @@ type RunToolProbeOptions = {
 
 type CanaryToolProbeModelOptions = {
   model: ResolvedTanStackTextModel;
-  requiredToolName: string | undefined;
 };
 
+// Tool choice stays with the model, as on every product request.
 export const canaryToolProbeModelOptions = ({
   model,
-  requiredToolName,
-}: CanaryToolProbeModelOptions) => {
-  const modelOptions = mergeGenerationOptions({
+}: CanaryToolProbeModelOptions) =>
+  mergeGenerationOptions({
     caching: NO_CACHING,
     model,
     maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
     serviceTier: "standard",
     temperature: 0,
   });
-  if (model.provider !== "anthropic" || requiredToolName === undefined) {
-    return modelOptions;
-  }
-
-  return {
-    ...modelOptions,
-    tool_choice: { type: "tool", name: requiredToolName },
-  };
-};
-
-export const canaryToolProbeIterationLimit = (
-  requiredToolName: string | undefined,
-): number =>
-  // A forced choice applies to every agent iteration. Stop after execution or
-  // Anthropic must call the same tool again instead of returning final text.
-  requiredToolName === undefined ? 2 : 1;
 
 // Every tool-execution probe gets the reasoning budget here, not at the call
 // site, so a caller cannot hand a reasoning-capable model a short-reply budget
@@ -1405,7 +1386,6 @@ export const canaryToolProbeIterationLimit = (
 const runToolProbe = async ({
   context: { config, provider },
   prompt,
-  requiredToolName,
   role,
   signal,
   tool,
@@ -1427,11 +1407,9 @@ const runToolProbe = async ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
-    agentLoopStrategy: maxIterations(
-      canaryToolProbeIterationLimit(requiredToolName),
-    ),
+    agentLoopStrategy: maxIterations(2),
     messages: [{ role: "user", content: prompt }],
-    modelOptions: canaryToolProbeModelOptions({ model, requiredToolName }),
+    modelOptions: canaryToolProbeModelOptions({ model }),
     tools: [projectedTool],
   });
   let output = "";

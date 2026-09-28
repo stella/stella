@@ -185,17 +185,17 @@ describe("stella CLI: registry drift reporting", () => {
     }
   });
 
-  test("--help, auth and compatibility say nothing about it", () => {
-    for (const args of [
-      ["--help"],
-      ["matter", "list", "--help"],
-      ["auth", "whoami"],
-      ["compatibility", "--help"],
-    ]) {
+  for (const args of [
+    ["--help"],
+    ["matter", "list", "--help"],
+    ["auth", "whoami"],
+    ["compatibility", "--help"],
+  ]) {
+    test(`${args.join(" ")} says nothing about it`, () => {
       const result = spawnDrifted(args);
       expect(driftLines(result.stderr.toString())).toEqual([]);
-    }
-  });
+    });
+  }
 
   test("--verbose lists every diverged tool", () => {
     const stderr = spawnDrifted([

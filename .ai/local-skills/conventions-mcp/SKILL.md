@@ -87,18 +87,35 @@ issues[] }` with codes from a closed set. `hint` names the corrective action,
     because guessing wrong is a wrong date or a factor of a thousand on an
     instrument. Null and the placeholder encodings are that rule for "absent"
     and live in the tool factory; the value kinds live in
-    `packages/agent-input/`. An opaque token the server issues extends "absent"
-    one step: a client filling every declared property invents a first-call
-    cursor (`" "`, `"0"`, `"start"`), so `cursorInput` reads a value outside
-    the class its encoders emit as no cursor, while a value inside that class
-    still reaches the decoder and still fails there; restarting a damaged
-    cursor at page one would repeat a page the caller already read. Cover each
-    kind with a property test over
-    its whole spelling class rather than the examples someone happened to
-    write down, and add a guard (an ownership row, a census test) so a new call
-    site cannot parse the kind itself. Never per-tool tolerance code, and never
-    a second reader: two lenient readers of one kind are worse than one strict
-    one, because they disagree.
+    `packages/agent-input/`: number (a page size clamps with a note), boolean,
+    date (a range bound reads `2020` as its first or last day and
+    `0001-01-01`/`9999-12-31` as no bound), uuid (the all-zero and example ids
+    are placeholders), filter (`" "`, `"all"`, `"-"` mean "not filtering"),
+    vocabulary (a data-owned value such as a court, read through case,
+    diacritics, abbreviations and English names), string list (a lone string is
+    a one-item list; only constrained tokens split on commas), ELI, country,
+    locale, enum. A repaired value returns a note ("Read X as Y") that reaches
+    the caller beside the result. A placeholder in an optional property is
+    absence on a read and an ask on a write, where an optional id can switch
+    update into create. An optional filter read against a data-owned vocabulary
+    (court) never empties a search: a value that names no stored value, or
+    several, is dropped with a warning naming the stored ones. A filter with no
+    such vocabulary yet reads only its placeholders, and an empty page under it
+    carries `no_hits_filtered` naming the values that would have matched; do
+    not advertise resolution a filter does not do. An opaque token the server issues extends "absent" one step: a
+    client filling every declared property invents a first-call cursor (`" "`,
+    `"0"`, `"start"`), so `cursorInput` reads a value outside the class its
+    encoders emit as no cursor, while a value inside that class still reaches
+    the decoder and fails through `invalidCursorResult`, which names the
+    restart; restarting a damaged or invented cursor at page one silently would
+    repeat a page the caller already read. Kinds a property's name implies
+    (`limit`, `date_from`, `date_to`) are bound by the factory, so a new tool
+    inherits them. Cover each kind with a property test over its whole spelling
+    class rather than the examples someone happened to write down, and add a
+    guard (an ownership row, a census test) so a new call site cannot parse the
+    kind itself. Never per-tool tolerance code, and never a second reader: two
+    lenient readers of one kind are worse than one strict one, because they
+    disagree.
 
 ## References Are Read Verbatim
 

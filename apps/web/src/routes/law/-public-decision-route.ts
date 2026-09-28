@@ -39,7 +39,7 @@ type PublicDecisionHeadContext = {
   params: PublicDecisionRouteParams;
 };
 
-export const publicDecisionHead = ({
+export const publicDecisionHead = async ({
   loaderData,
   params,
 }: PublicDecisionHeadContext) => {
@@ -47,7 +47,7 @@ export const publicDecisionHead = ({
     return { meta: [] };
   }
 
-  return createPublicCaseLawDecisionHead({
+  return await createPublicCaseLawDecisionHead({
     decision: loaderData,
     params,
   });

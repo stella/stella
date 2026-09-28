@@ -35,6 +35,17 @@ const selectScopedDb = (rows: readonly unknown[]): ScopedDb =>
     return await run(builder);
   });
 
+/** One matter row, so a list read answers with a page rather than its
+ *  empty-state guidance. */
+const ONE_MATTER_ROW = {
+  id: WS_UUID,
+  name: "Acme",
+  reference: "REF-1",
+  status: "active",
+  lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+};
+
 const buildContext = ({
   accessibleWorkspaceIds = [toSafeId<"workspace">(WS_UUID)],
   scopedDb = selectScopedDb([]),
@@ -104,6 +115,35 @@ describe("runRegistryReadTool", () => {
       toolName: "list_matters",
     }).unwrap();
     expect(dehydrated.args["matter_id"]).toBe(WS_UUID);
+  });
+
+  // The model is the caller in chat, so a repaired input's note has to reach
+  // it beside the payload, exactly as the MCP dispatch adds it.
+  test("carries a repaired input's note beside the projected payload", async () => {
+    const result = await runRegistryReadTool({
+      args: { limit: 500 },
+      context: buildContext({ scopedDb: selectScopedDb([ONE_MATTER_ROW]) }),
+      refRegistry: createChatRefRegistry(),
+      toolName: "list_matters",
+    });
+
+    const payload = result.unwrap();
+    expect(payload).toMatchObject({
+      matters: [{ id: "mat_1", name: "Acme" }],
+      inputRead: [expect.stringContaining("100")],
+    });
+    expect(containsRawUuid(payload)).toBe(false);
+  });
+
+  test("adds no note when every input was already canonical", async () => {
+    const result = await runRegistryReadTool({
+      args: { limit: 10 },
+      context: buildContext({ scopedDb: selectScopedDb([ONE_MATTER_ROW]) }),
+      refRegistry: createChatRefRegistry(),
+      toolName: "list_matters",
+    });
+
+    expect(result.unwrap()).not.toHaveProperty("inputRead");
   });
 
   test("maps an isError registry result to a ChatToolError", async () => {

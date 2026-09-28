@@ -92,3 +92,40 @@ export const askForFix = ({
  *  beside the hint. */
 export const askSentence = (ask: NormalizedAsk): string =>
   `${ask.received} is not ${ask.expected}.`;
+
+/**
+ * The input read as no value at all.
+ *
+ * An optional filter the agent is not setting still arrives filled in: `"any"`,
+ * `"-"`, the nil uuid, `9999-12-31` as an open bound. Each of those means "not
+ * filtering", and asking about it would send the model back to delete a value
+ * it only wrote because the schema had a slot. Only a reader that can see a
+ * placeholder returns this, and only on inputs the caller marked optional; the
+ * caller drops the property and surfaces `note` as a warning.
+ */
+export type NormalizedAbsent = {
+  ok: "absent";
+  /** The input as the agent sent it, quoted and bounded. */
+  received: string;
+  note: string;
+};
+
+/** A reader's outcome on an optional input, where a placeholder is no value. */
+export type NormalizedOptional<TValue> = Normalized<TValue> | NormalizedAbsent;
+
+/** The absent outcome, with the one "read X as no value" sentence every kind
+ *  reports it with. `reason` says why, when the spelling alone does not. */
+export const readAsAbsent = (
+  input: unknown,
+  reason?: string,
+): NormalizedAbsent => {
+  const received = describeInput(input);
+  return {
+    ok: "absent",
+    received,
+    note:
+      reason === undefined
+        ? `Read ${received} as no value.`
+        : `Read ${received} as no value: ${reason}.`,
+  };
+};

@@ -801,6 +801,12 @@
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
     },
+    "seo": {
+      "collectionName": "الاجتهاد القضائي في stella",
+      "description": "قاعدة بيانات عامة للاجتهاد القضائي تضم أحكامًا قضائية ومصادر قانونية قابلة للفهرسة.",
+      "homeDescription": "قاعدة بيانات قانونية عامة تضم أحكامًا قضائية وتشريعات موحّدة، يمكن البحث فيها بالمعرّف أو بالكلمات.",
+      "scopedDescription": "قاعدة بيانات عامة للاجتهاد القضائي في {scope} تضم أحكامًا قضائية ومصادر قانونية قابلة للفهرسة."
+    },
     "showWholeHeadnote": "عرض خلاصة الحكم كاملة",
     "sort": {
       "newest": "الأحدث",
@@ -1928,6 +1934,41 @@
       "organization": "مؤسسة",
       "person": "شخص"
     }
+  },
+  "correspondence": {
+    "addressTitle": "عنوان البريد الإلكتروني للملف",
+    "assertedOriginal": "الترويسات الأصلية (كما أوردها مُعيد التوجيه)",
+    "authResults": {
+      "fail": "فاشل",
+      "pass": "ناجح",
+      "unknown": "غير محدد"
+    },
+    "backToList": "العودة إلى المراسلات",
+    "createAddress": "إنشاء عنوان",
+    "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
+    "deliveredByAuthenticated": "تم التسليم بواسطة <address>{sender}</address> · تمت المصادقة",
+    "deliveryAuthentication": "مصادقة التسليم",
+    "empty": "لا توجد مراسلات بعد.",
+    "filers": "مقدمو المراسلات",
+    "forwardedBy": "تمت إعادة التوجيه بواسطة <address>{sender}</address>",
+    "forwardedByAuthenticated": "تمت إعادة التوجيه بواسطة <address>{sender}</address> · تمت المصادقة",
+    "inboundNotConfigured": "لم يتم إعداد البريد الوارد. اطلب من المسؤول إعداد نطاق البريد الوارد.",
+    "markHandled": "تحديد كمُعالج",
+    "markNew": "تحديد كجديد",
+    "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",
+    "originalSender": "المرسل الأصلي",
+    "originalSenderUnverified": "المرسل الأصلي (كما ورد، غير متحقق منه)",
+    "originalSignatureVerified": "تم التحقق من التوقيع الأصلي (<identifier>d={domain}</identifier>)",
+    "receivedAt": "تاريخ الاستلام",
+    "revokeAddress": "إلغاء العنوان",
+    "rotateAddress": "تغيير العنوان",
+    "sentAt": "أُرسل في",
+    "sharedMailboxFiler": "صندوق بريد مشترك {address}، وافق عليه {approver}",
+    "states": {
+      "handled": "مُعالج"
+    },
+    "title": "المراسلات",
+    "unknownApprover": "موافق غير معروف"
   },
   "docxReview": {
     "acceptAll": "قبول الكل",
@@ -4302,6 +4343,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
     "emptyDocument": "لا يتوفر نص لهذه النسخة.",
@@ -5359,6 +5401,7 @@
         },
         "targets": {
           "automation": "الأتمتة",
+          "correspondence": "المراسلة",
           "court": "سجل المحكمة",
           "document": "مستند",
           "documentReview": "مراجعة المستند",
