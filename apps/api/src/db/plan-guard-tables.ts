@@ -6,5 +6,3 @@ export const PLAN_GUARD_TABLES = [
   "legislation_documents",
   "legislation_search_documents",
 ] as const;
-
-export type PlanGuardTable = (typeof PLAN_GUARD_TABLES)[number];
