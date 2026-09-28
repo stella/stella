@@ -87,9 +87,9 @@ beforeAll(
 afterAll(async () => {
   process.stdout.write(
     `\nQuery-plan scan estimates (${SCALE_PROFILE === null ? "physical" : "synthetic"} stats; heap fetches are estimates):\n` +
-      `query | position | relation | scan | rows | estimated heap fetches\n${ 
-      scanReport.join("\n") 
-      }\n`,
+      `query | position | relation | scan | rows | estimated heap fetches\n${scanReport.join(
+        "\n",
+      )}\n`,
   );
   if (UPDATE_PLAN_CONTRACTS) {
     if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
