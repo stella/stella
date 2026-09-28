@@ -23749,6 +23749,13 @@ export type WebRoutes = {
                   createdAt: string;
                   startedAt: T432e07d100;
                   finishedAt: T432e07d100;
+                  blocks: Array<{
+                    ordinal: number;
+                    blockId: string;
+                    kind: ("docx-block" | "pdf-page");
+                    pageNumber: T688f6f1190;
+                    text: string;
+                  }>;
                   claims: Array<{
                     id: Tab9b292a50;
                     position: number;
