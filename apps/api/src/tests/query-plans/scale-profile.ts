@@ -20,6 +20,7 @@ type AttributeScale = {
   table: GuardedTable;
   column: string;
   nullFraction: number;
+  /** Negative values are a fraction of the synthetic table size. */
   distinctValues: number;
   mostCommonValues: readonly string[];
   mostCommonFrequencies: readonly number[];
@@ -105,6 +106,54 @@ export const SYNTHETIC_SCALE_PROFILE = {
       ],
       mostCommonFrequencies: [0.4, 0.3, 0.2, 0.1],
     },
+    {
+      table: "case_law_decisions",
+      column: "ecli",
+      nullFraction: 0.14,
+      distinctValues: -0.8,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "case_law_decisions",
+      column: "language_group_key",
+      nullFraction: 0.2,
+      distinctValues: -0.4,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "case_law_decisions",
+      column: "case_number",
+      nullFraction: 0,
+      distinctValues: -0.9,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "case_law_decision_identifiers",
+      column: "normalized_value",
+      nullFraction: 0,
+      distinctValues: -0.9,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "legislation_documents",
+      column: "slug",
+      nullFraction: 0,
+      distinctValues: -1,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "legislation_documents",
+      column: "eli",
+      nullFraction: 0,
+      distinctValues: -1,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
   ],
 } as const satisfies ScaleProfile;
 
@@ -174,23 +223,31 @@ export const injectScaleProfile = async (
   }
 
   for (const attribute of profile.attributes) {
-    const commonValues = sql`ARRAY[${sql.join(
-      attribute.mostCommonValues.map((value) => sql`${value}`),
-      sql`, `,
-    )}]::text[]::text`;
-    const commonFrequencies = sql`ARRAY[${sql.join(
-      attribute.mostCommonFrequencies.map((value) => sql`${value}::real`),
-      sql`, `,
-    )}]::real[]`;
+    // ANALYZE's physical-seed MCVs would otherwise survive a partial restore.
+    await db.execute(sql`
+      SELECT pg_clear_attribute_stats(
+        'public', ${attribute.table}::text, ${attribute.column}::text, false
+      )
+    `);
+    const commonStats =
+      attribute.mostCommonValues.length === 0
+        ? sql``
+        : sql`, 'most_common_vals', ARRAY[${sql.join(
+            attribute.mostCommonValues.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]::text,
+          'most_common_freqs', ARRAY[${sql.join(
+            attribute.mostCommonFrequencies.map((value) => sql`${value}::real`),
+            sql`, `,
+          )}]::real[]`;
     restored(
       await db.execute(sql`
         SELECT pg_restore_attribute_stats(
           'schemaname', 'public', 'relname', ${attribute.table}::text,
           'attname', ${attribute.column}::text, 'inherited', false,
           'null_frac', ${attribute.nullFraction}::real,
-          'n_distinct', ${attribute.distinctValues}::real,
-          'most_common_vals', ${commonValues},
-          'most_common_freqs', ${commonFrequencies}
+          'n_distinct', ${attribute.distinctValues}::real
+          ${commonStats}
         ) AS restored
       `),
       `${attribute.table}.${attribute.column}`,
@@ -230,7 +287,7 @@ const guardedTables: ReadonlySet<string> = new Set(PLAN_GUARD_TABLES);
 const isGuardedTable = (table: string): table is GuardedTable =>
   guardedTables.has(table);
 
-/** Estimated visibility misses, not measured EXPLAIN ANALYZE heap fetches. */
+/** Per-loop visibility-miss upper bound, before an ancestor LIMIT is applied. */
 export const estimateHeapFetches = (
   node: ScanEstimate,
   profile: ScaleProfile,

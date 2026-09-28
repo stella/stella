@@ -58,12 +58,15 @@ test(
         await db.execute(sql`
           CREATE TABLE ${sql.identifier(table)} (
             id uuid PRIMARY KEY, country varchar(3), language varchar(8),
-            type varchar(32), ecli text, decision_id uuid, normalized_value text
+            type varchar(32), ecli text, language_group_key text,
+            case_number text, decision_id uuid, normalized_value text,
+            slug text, eli text
           )
         `);
         await db.execute(sql`
           INSERT INTO ${sql.identifier(table)}
-            (id, country, language, type, ecli, decision_id, normalized_value)
+            (id, country, language, type, ecli, language_group_key,
+             case_number, decision_id, normalized_value, slug, eli)
           SELECT
             ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
             CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
@@ -73,9 +76,13 @@ test(
               WHEN 2 THEN 'neutral-citation' ELSE 'reporter-citation' END,
             CASE WHEN n % 7 = 0 THEN NULL
               ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
+            'qpg-language-group-' || (n % 180)::text,
+            'qpg-case-' || n::text,
             ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
             CASE WHEN n % 4 = 0 THEN 'eclieuc2024' || (n % 120)::text
-              ELSE 'other' END
+              ELSE 'other' END,
+            'qpg-slug-' || n::text,
+            '/eli/cz/sb/2024/' || n::text
           FROM generate_series(1, ${ROW_COUNT}) AS series(n)
         `);
         await db.execute(sql`ANALYZE ${sql.identifier(table)}`);
@@ -150,6 +157,26 @@ test(
         n_distinct: 3,
         values: "{CZE,SVK,POL}",
       });
+      for (const [table, column, expected] of [
+        ["case_law_decisions", "ecli", -0.8],
+        ["case_law_decisions", "language_group_key", -0.4],
+        ["case_law_decisions", "case_number", -0.9],
+        ["case_law_decision_identifiers", "normalized_value", -0.9],
+        ["legislation_documents", "slug", -1],
+        ["legislation_documents", "eli", -1],
+      ] as const) {
+        const row = executedRows(
+          await db.execute(sql`
+            SELECT n_distinct, most_common_vals::text AS values
+              FROM pg_stats
+             WHERE schemaname = 'public'
+               AND tablename = ${table}
+               AND attname = ${column}
+          `),
+        ).at(0);
+        expect(row?.["n_distinct"]).toBeCloseTo(expected);
+        expect([null, "{}"]).toContain(row?.["values"]);
+      }
 
       const oldNodes = await explainNodes(
         db,
