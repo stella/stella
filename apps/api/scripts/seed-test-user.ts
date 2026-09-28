@@ -31,6 +31,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 
 import {
   ALL_TEST_USER_IDS,
@@ -186,13 +187,17 @@ export const ensureOrganizationExists = async (organizationId: string) => {
   );
 
   // Listing document types is a pure read, and this seed inserts the org
-  // directly (bypassing the `afterCreateOrganization` hook that seeds it in
-  // production), so seed the starter taxonomy here for parity. Idempotent via
-  // the (organization_id, key) unique.
-  await db.transaction(
-    async (tx) =>
-      await ensureDefaultDocumentTypes(toSafeId<"organization">(org.id), tx),
-  );
+  // directly (bypassing the `afterCreateOrganization` hook that seeds it and
+  // records the access state in production), so do both here for parity.
+  // Both are idempotent.
+  const seededOrganizationId = toSafeId<"organization">(org.id);
+  await db.transaction(async (tx) => {
+    await recordNewOrganizationAccessState(tx, {
+      organizationId: seededOrganizationId,
+      now,
+    });
+    await ensureDefaultDocumentTypes(seededOrganizationId, tx);
+  });
 };
 
 export const ensureMembershipExists = async ({

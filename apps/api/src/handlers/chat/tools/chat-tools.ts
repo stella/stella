@@ -974,27 +974,26 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
 
   // Registry write projections: per-call mutation tools (save/delete/etc.),
-  // each behind approval. Gated on a non-empty workspace set exactly like the
-  // hand-written workspace mutation tool (`createWorkspaceTools`), so
-  // anonymous/public surfaces with no accessible workspace never receive write
-  // tools. Real per-workspace statuses are threaded through so the handlers'
-  // `ensureActiveWorkspace` gate keeps archived matters read-only.
-  const registryWriteTools =
-    toolWorkspaceIds.length === 0
-      ? {}
-      : buildChatWriteTools({
-          memberRole,
-          organizationId,
-          pinServerValidatedWorkspaceId,
-          recordAuditEvent,
-          refRegistry,
-          safeDb,
-          scopedDb,
-          toolDefectMemo,
-          toolWorkspaceIds,
-          userId,
-          workspaceStatusById,
-        });
+  // each behind approval. Registered whatever the caller's matter count: an
+  // organization with no matter yet still manages its library, templates,
+  // contacts and settings, and creates its first matter here. A write that
+  // acts inside a matter answers with a recoverable needs-a-matter result
+  // (`matterRequiredResult`) instead of disappearing. Role checks stay in the
+  // handlers. Real per-workspace statuses are threaded through so the
+  // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
+  const registryWriteTools = buildChatWriteTools({
+    memberRole,
+    organizationId,
+    pinServerValidatedWorkspaceId,
+    recordAuditEvent,
+    refRegistry,
+    safeDb,
+    scopedDb,
+    toolDefectMemo,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
+  });
 
   // Delegation is capped at one level: a subagent's own toolset (built by
   // re-invoking `getChatTools` at `delegationDepth + 1`) never registers

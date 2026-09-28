@@ -126,6 +126,7 @@ import {
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -854,6 +855,12 @@ const createAuth = () => {
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
+    // Insert-once on the owner connection, like the seeds below.
+    recordAccessState: async (organizationId: SafeId<"organization">) =>
+      await recordNewOrganizationAccessState(rootDb, {
+        organizationId,
+        now: new Date(),
+      }),
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
@@ -1695,6 +1702,7 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
+        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
         or(
           membershipExists,
           and(
@@ -1823,6 +1831,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
         or(
           membershipExists,
           and(

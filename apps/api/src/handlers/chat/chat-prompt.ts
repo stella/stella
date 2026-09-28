@@ -323,7 +323,7 @@ const buildCoreRuleSections = ({
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
   "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
   "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains. If the error names a server-side defect, never repeat the identical call — the server refuses re-execution for the rest of the turn; use another tool or state the limitation.",
-  "WRITES: Creating, updating, or deleting matter data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action.",
+  "WRITES: Creating, updating, or deleting matter data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action. Library, template, contact and organization writes need no matter; a write that works inside a matter says so when the user has none yet. Then offer to create one: ask with `ask-user` for its name and client, create it only once they agree, and retry the original write in the new matter. If their role cannot create matters, say who can instead.",
   "FRESH DATA: Answer questions about what currently exists in a matter (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — matter data changes between turns.",
   getExternalFactSourcingRule({
     skillCatalogStatus,
@@ -472,6 +472,12 @@ type BuildChatSystemPromptProps = {
    * also enforces the constraint at call time).
    */
   contextMatterIds: SafeId<"workspace">[];
+  /**
+   * The caller reaches at least one matter. False in an organization with no
+   * matter yet (or none shared with this member): the model is told up front
+   * to offer creating one before any write that works inside a matter.
+   */
+  hasReachableMatter: boolean;
   memberRole?: { role: string } | undefined;
   /**
    * The tool names this turn offers. A skill that requires a tool outside
@@ -644,6 +650,7 @@ export const buildChatSystemPromptParts = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  hasReachableMatter,
   memberRole,
   offeredToolNamesForSkills,
   organizationId,
@@ -752,6 +759,7 @@ export const buildChatSystemPromptParts = async ({
       workspaceId === null
         ? buildContextMatterScopeSection({
             contextMatterIds,
+            hasReachableMatter,
             refRegistry,
             scope: "global",
           })
@@ -876,19 +884,25 @@ export const buildChatSystemPromptParts = async ({
 type BuildContextMatterScopeSectionProps =
   | {
       contextMatterIds: SafeId<"workspace">[];
+      hasReachableMatter: boolean;
       refRegistry: ChatRefRegistry;
       scope: "global";
       workspaceId?: never;
     }
   | {
       contextMatterIds: SafeId<"workspace">[];
+      hasReachableMatter?: never;
       refRegistry: ChatRefRegistry;
       scope: "workspace";
       workspaceId: SafeId<"workspace">;
     };
 
-const buildContextMatterScopeSection = ({
+export const NO_MATTER_SCOPE_SECTION =
+  "MATTER SCOPE: The user has no matter yet. Library, template, contact and organization work needs none. Before any write that works inside a matter (tasks, documents, field values, time entries, running a playbook), offer to create a matter: ask with `ask-user` for its name and client, create it only once they agree, then continue in it.";
+
+export const buildContextMatterScopeSection = ({
   contextMatterIds,
+  hasReachableMatter,
   refRegistry,
   scope,
   workspaceId,
@@ -909,6 +923,9 @@ const buildContextMatterScopeSection = ({
         )
       : contextMatterIds;
 
+  if (scope === "global" && !hasReachableMatter) {
+    return NO_MATTER_SCOPE_SECTION;
+  }
   if (effective.length === 0) {
     return "MATTER SCOPE: No matters are pinned to this chat. The user may ask about anything across the matters they can access. Discover relevant matters with `read.listMatters` (paginated) before answering — do NOT ask the user to name a matter unless the question is genuinely ambiguous after lookup.";
   }

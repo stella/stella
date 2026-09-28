@@ -19,9 +19,51 @@ export type GuardedProviderHistory = v.InferOutput<
 >;
 
 /**
- * The provider's copy of `messages`: every call answered right after its
- * step, then run through the model-ingress guard, so the answers it adds pass
- * the guard like everything else the provider reads.
+ * `messages` with each tool call kept only in the first message holding it,
+ * together with its results. Some stored threads repeat a call in later
+ * messages of the thread, and a provider rejects a request in which a tool
+ * call id occurs twice. Returns `messages` when no call repeats.
+ */
+export const withoutRepeatedCalls = (
+  messages: readonly ChatMessage[],
+): readonly ChatMessage[] => {
+  const seen = new Set<string>();
+  const kept = messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const repeated = new Set(
+      message.parts.flatMap((part) =>
+        part.type === "tool-call" && seen.has(part.id) ? [part.id] : [],
+      ),
+    );
+    for (const part of message.parts) {
+      if (part.type === "tool-call") {
+        seen.add(part.id);
+      }
+    }
+    if (repeated.size === 0) {
+      return message;
+    }
+    return {
+      ...message,
+      parts: message.parts.filter((part) =>
+        part.type === "tool-call"
+          ? !repeated.has(part.id)
+          : part.type !== "tool-result" || !repeated.has(part.toolCallId),
+      ),
+    };
+  });
+  return kept.some((message, index) => message !== messages[index])
+    ? kept
+    : messages;
+};
+
+/**
+ * The provider's copy of `messages`: each tool call once, every call
+ * answered right after its step, then run through the model-ingress guard,
+ * so the answers it adds pass the guard like everything else the provider
+ * reads.
  */
 export const guardProviderHistory = ({
   messages,
@@ -33,7 +75,7 @@ export const guardProviderHistory = ({
   v.parse(
     providerHistorySchema,
     guardModelMessages({
-      messages: answerHistoryCallsInTheirStep(messages),
+      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),
       workspaceIds,
     }),
   );

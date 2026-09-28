@@ -20,6 +20,7 @@ import {
 
 import { entities, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -86,6 +87,7 @@ const accept = async (signalId: SafeId<"signal">) => {
       getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
       memberRole: { role: "owner" },
       orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       params: { signalId },
       promptCachingEnabled: false,
       recordAuditEvent,

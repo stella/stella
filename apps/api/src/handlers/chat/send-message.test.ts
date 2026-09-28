@@ -17,6 +17,7 @@ import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-ef
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
@@ -241,6 +242,7 @@ const createContext = ({
     getWorkspaceAccess: async () => null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},

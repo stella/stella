@@ -25,6 +25,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 
 const SMOKE_PRINCIPAL = {
   default: "default",
@@ -108,9 +109,17 @@ const ensureSmokePrincipal = async (
     columns: { id: true },
   });
   if (!existingOrg) {
-    await rootDb.insert(organization).values({
-      ...org,
-      createdAt: now,
+    // A direct insert skips the organization plugin's creation hook, so the
+    // access state a real new organization gets is recorded here.
+    await rootDb.transaction(async (tx) => {
+      await tx.insert(organization).values({
+        ...org,
+        createdAt: now,
+      });
+      await recordNewOrganizationAccessState(tx, {
+        organizationId: brandPersistedOrganizationId(org.id),
+        now,
+      });
     });
   }
 

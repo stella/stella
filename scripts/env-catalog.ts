@@ -117,6 +117,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
+  "FEATURE_ORG_ACCESS_STATE",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
@@ -136,6 +137,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
+  "ORG_EVALUATION_PERIOD_DAYS",
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
@@ -313,6 +315,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
+  FEATURE_ORG_ACCESS_STATE:
+    "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  ORG_EVALUATION_PERIOD_DAYS:
+    "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
     "Enable GitHub-sourced public skills in the authenticated catalogue.",
   FEATURE_TEMPLATE_PACKS:
@@ -465,6 +471,7 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
   S3_SECRET_ACCESS_KEY: 'S3_CREDENTIALS_PROVIDER is "env"',

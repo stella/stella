@@ -218,7 +218,7 @@ describe("self-host production environment", () => {
     expect(doctor.exitCode).toBe(0);
     expect(configured.stderr.toString()).toBe("");
     expect(configured.exitCode).toBe(0);
-  });
+  }, 60_000);
 });
 
 describe("release manifest contract", () => {

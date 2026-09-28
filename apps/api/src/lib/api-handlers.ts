@@ -16,9 +16,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -801,15 +800,18 @@ const createSafeScopedHandler = <
     }
 
     // A handler that declares AI usage must not run when this request could
-    // not read the org's stored config: `ctx.orgAIConfig` is null there, and
-    // resolving a model from it would silently run the org on the instance
-    // provider and meter the work against the wrong key source.
-    if (
-      config.requiresUsage &&
-      ctx.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable
-    ) {
-      const unreadable = storedAIConfigUnreadableError(undefined);
-      return toSafeStatusResponse(unreadable.status, safeErrorBody(unreadable));
+    // not read the org's stored config, or the org is barred from the
+    // instance provider: `ctx.orgAIConfig` is null there, and resolving a
+    // model from it would silently run the org on the instance provider and
+    // meter the work against the wrong key source.
+    const configStatusError = config.requiresUsage
+      ? orgAIConfigStatusError(ctx.orgAIConfigStatus)
+      : null;
+    if (configStatusError) {
+      return toSafeStatusResponse(
+        configStatusError.status,
+        safeErrorBody(configStatusError),
+      );
     }
 
     // Resolve the metering context only when enforcement is on. It reads
