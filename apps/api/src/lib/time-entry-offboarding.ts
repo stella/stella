@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -103,15 +104,17 @@ export const closeRemovedMemberActiveTimer = async ({
           timeLockedThroughMonth: true,
         },
       });
-      // Member removal already happened before this hook. Keep a locked timer
-      // intact for an administrator to resolve after the period is unlocked.
       if (
         getTimePeriodLockError(
           { ...DEFAULT_TIME_POLICY, ...settings },
           timer.dateWorked,
         )
       ) {
-        return;
+        throw new APIError("BAD_REQUEST", {
+          error: "time_period_locked",
+          message:
+            "The time period is locked. Move the locked-through month back before removing this member.",
+        });
       }
       const minimumUnitMinutes =
         settings?.timeMinimumUnitMinutes ??

@@ -15,4 +15,4 @@ ALTER TABLE "organization_settings"
   ADD CONSTRAINT "organization_settings_time_edit_window_check"
     CHECK ("time_edit_window_days" >= 0),
   ADD CONSTRAINT "organization_settings_time_locked_month_check"
-    CHECK ("time_locked_through_month" IS NULL OR EXTRACT(MONTH FROM "time_locked_through_month" + 1) <> EXTRACT(MONTH FROM "time_locked_through_month"));
+    CHECK ("time_locked_through_month" IS NULL OR (isfinite("time_locked_through_month") AND EXTRACT(MONTH FROM "time_locked_through_month" + 1) <> EXTRACT(MONTH FROM "time_locked_through_month")));

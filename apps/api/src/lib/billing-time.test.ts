@@ -81,6 +81,9 @@ describe("time policy", () => {
     };
     expect(getTimePolicyViolation(input)?.code).toBe("narrative_required");
     expect(
+      getTimePolicyViolation({ ...input, narrative: undefined }),
+    ).toBeNull();
+    expect(
       getTimePolicyViolation({
         ...input,
         policy: { ...DEFAULT_TIME_POLICY, timeNarrativeRequired: false },

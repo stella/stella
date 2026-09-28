@@ -6,16 +6,14 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  getTimePolicyViolation,
+  getTimePeriodLockError,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStop = createSafeHandler(
   {
@@ -27,14 +25,7 @@ const timerStop = createSafeHandler(
     permissions: { timeEntry: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
   },
-  async function* ({
-    safeDb,
-    session,
-    user,
-    workspaceId,
-    memberRole,
-    recordAuditEvent,
-  }) {
+  async function* ({ safeDb, session, user, workspaceId, recordAuditEvent }) {
     const policy = yield* Result.await(
       readTimePolicy({
         safeDb,
@@ -51,8 +42,6 @@ const timerStop = createSafeHandler(
           .select({
             id: timeEntries.id,
             dateWorked: timeEntries.dateWorked,
-            timezoneId: timeEntries.timezoneId,
-            narrative: timeEntries.narrative,
             timerStartedAt: timeEntries.timerStartedAt,
           })
           .from(timeEntries)
@@ -72,20 +61,10 @@ const timerStop = createSafeHandler(
           return null;
         }
 
-        const todayResult = formatTodayInTimeZone({
-          timezoneId: activeEntry.timezoneId,
-          now,
-        });
-        if (Result.isError(todayResult)) {
-          return { type: "violation" as const, error: todayResult.error };
-        }
-        const violation = getTimePolicyViolation({
+        const violation = getTimePeriodLockError(
           policy,
-          dateWorked: activeEntry.dateWorked,
-          today: todayResult.value,
-          canApprove: canApproveTimeEntries(memberRole),
-          narrative: activeEntry.narrative,
-        });
+          activeEntry.dateWorked,
+        );
         if (violation) {
           return { type: "violation" as const, error: violation };
         }

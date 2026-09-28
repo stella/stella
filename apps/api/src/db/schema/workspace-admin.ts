@@ -304,7 +304,7 @@ export const organizationSettings = p.pgTable(
     ),
     p.check(
       "organization_settings_time_locked_month_check",
-      sql`${table.timeLockedThroughMonth} IS NULL OR EXTRACT(MONTH FROM ${table.timeLockedThroughMonth} + 1) <> EXTRACT(MONTH FROM ${table.timeLockedThroughMonth})`,
+      sql`${table.timeLockedThroughMonth} IS NULL OR (isfinite(${table.timeLockedThroughMonth}) AND EXTRACT(MONTH FROM ${table.timeLockedThroughMonth} + 1) <> EXTRACT(MONTH FROM ${table.timeLockedThroughMonth}))`,
     ),
     p.check(
       "organization_settings_document_processing_mode_check",

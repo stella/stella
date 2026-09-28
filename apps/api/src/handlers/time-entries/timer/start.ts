@@ -43,8 +43,8 @@ const timerStart = createSafeHandler(
       "creating a draft time entry dated today in the timezoneId you pass " +
       "and optionally attached to a work item. The user's effective rate is " +
       "resolved at start and an entry with no resolvable rate is recorded as " +
-      "non-billable. A narrative is required when the organization's time " +
-      "policy requires one. Refused when the user already has a running timer.",
+      "non-billable. A narrative can be added before the draft is approved. " +
+      "Refused when the user already has a running timer.",
     permissions: { timeEntry: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: timerStartBodySchema,
@@ -75,7 +75,7 @@ const timerStart = createSafeHandler(
       dateWorked: todayStr,
       today: todayStr,
       canApprove: canApproveTimeEntries(memberRole),
-      narrative: body.narrative ?? "",
+      narrative: body.narrative,
     });
     if (violation) {
       return Result.err(violation);
