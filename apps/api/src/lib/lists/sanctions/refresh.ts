@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
 import {
@@ -359,18 +359,16 @@ const activateStagedEdition = async ({
       })
       .from(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId))
-      .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
       .limit(expectedEntries.length + 1);
+    const expectedById = new Map(
+      expectedEntries.map((entry) => [entry.sourceEntryId, entry.contentHash]),
+    );
     const matches =
       storedEntries.length === expectedEntries.length &&
-      storedEntries.every((stored, index) => {
-        const expected = expectedEntries.at(index);
-        return (
-          expected !== undefined &&
-          stored.sourceEntryId === expected.sourceEntryId &&
-          stored.contentHash === expected.contentHash
-        );
-      });
+      storedEntries.every(
+        (stored) =>
+          expectedById.get(stored.sourceEntryId) === stored.contentHash,
+      );
     if (!matches) {
       const now = new Date();
       await tx

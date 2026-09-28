@@ -427,3 +427,30 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test(
+  "activates a complete edition when database and JavaScript order source ids differently",
+  async () => {
+    const parsed = list("2026-07-29", 2);
+    const [first, second] = parsed.entries;
+    if (!first || !second) {
+      panic("Missing sanctions test entries");
+    }
+    first.sourceId = "\uE000";
+    second.sourceId = "\u{10000}";
+    const outcome = await refreshSanctionsSource({
+      db: scopedDb,
+      source: "cz",
+      signal: new AbortController().signal,
+      fetchMarker: markerFor(parsed),
+      fetchEdition: async () =>
+        Result.ok({ parsed, contentHash: "f".repeat(64) }),
+    });
+    expect(outcome).toEqual({
+      status: "activated",
+      source: "cz",
+      entryCount: 2,
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
