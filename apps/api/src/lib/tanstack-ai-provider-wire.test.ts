@@ -4,7 +4,7 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
@@ -189,7 +189,7 @@ describe("every adapter satisfies the wire contract", () => {
       async () => {
         await checkCassette(cassette);
       },
-      RETRY_TIMEOUT_MS,
+      propertyTestTimeout(RETRY_TIMEOUT_MS),
     );
   }
 });
@@ -296,7 +296,7 @@ describe("every adapter reads a stream cut anywhere as it reads it whole", () =>
       async () => {
         await checkSplit(cassette);
       },
-      RETRY_TIMEOUT_MS,
+      propertyTestTimeout(RETRY_TIMEOUT_MS),
     );
   }
 });
