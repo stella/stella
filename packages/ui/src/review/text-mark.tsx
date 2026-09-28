@@ -14,6 +14,21 @@ import { cn } from "../lib/utils";
  * so each variant and state is spelled once and every tone reuses it.
  */
 
+export const TextMark = ({
+  variant,
+  tone,
+  state,
+  weight,
+  className,
+  ...props
+}: TextMarkProps) => (
+  <mark
+    className={cn(textMarkClass({ variant, tone, state, weight }), className)}
+    data-slot="text-mark"
+    {...props}
+  />
+);
+
 export type TextMarkVariant =
   | "fill"
   | "underline"
@@ -52,21 +67,6 @@ export type TextMarkOptions = {
 };
 
 type TextMarkProps = ComponentProps<"mark"> & TextMarkOptions;
-
-export const TextMark = ({
-  variant,
-  tone,
-  state,
-  weight,
-  className,
-  ...props
-}: TextMarkProps) => (
-  <mark
-    className={cn(textMarkClass({ variant, tone, state, weight }), className)}
-    data-slot="text-mark"
-    {...props}
-  />
-);
 
 /** The CSS value of each tone's hue. */
 export const TEXT_MARK_TONE_COLOR = {
