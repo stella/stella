@@ -46,6 +46,7 @@ import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalization";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -700,9 +701,10 @@ const replayWouldChangeRow = async ({
     return true;
   }
   // Derived from the payload like the text is, so a parser that reads the
-  // reference or its kind differently changes the row.
+  // reference or its kind differently changes the row. Read as the write
+  // stores it, so a replay of an unchanged payload reaches a fixed point.
   if (
-    row.caseNumber !== result.caseNumber ||
+    row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
     return true;

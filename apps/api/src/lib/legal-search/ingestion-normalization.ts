@@ -181,6 +181,21 @@ export const observedDocketOf = (
 };
 
 /**
+ * The primary reference as the row stores it: control characters removed and,
+ * for a keyed observation, the docket's trailing sheet cut. A comparison with
+ * a stored row reads the observation through this, not raw, or a value the
+ * write would store unchanged reads as changed on every pass.
+ */
+export const storedCaseNumberOf = (
+  result: Parameters<typeof observedDocketOf>[0],
+): string => {
+  const docket = observedDocketOf(result);
+  return docket.type === "trimmed"
+    ? docket.caseNumber
+    : result.caseNumber.replace(DANGEROUS_CHARS, "");
+};
+
+/**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
  * backfill jobs produce the same canonical representation.
@@ -329,13 +344,9 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
-  const docket = observedDocketOf(result);
   return {
     ...result,
-    caseNumber:
-      docket.type === "trimmed"
-        ? docket.caseNumber
-        : result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    caseNumber: storedCaseNumberOf(result),
     caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
     identifiers,
     sourceDocumentId,

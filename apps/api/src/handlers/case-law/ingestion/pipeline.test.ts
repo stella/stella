@@ -53,6 +53,7 @@ import {
   observedDocketOf,
   sanitizeResult,
   partialObservationFromMetadata,
+  storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -231,6 +232,15 @@ describe("sanitizeResult — docket grammar", () => {
     const sanitized = sanitizeResult(input);
     expect(sanitized.caseNumber).toBe(caseNumber);
     expect(sanitized.metadata["caseNumber"]).toBe(raw);
+  });
+
+  test.each([
+    ["a trimmed sheet", "33 Cdo 1751/2023- II."],
+    ["a control character", "33 Cdo​ 1751/2023"],
+    ["a docket as written", "33 Cdo 1751/2023"],
+  ])("the stored reference of %s is the one the write stores", (_, raw) => {
+    const input = observed("CZE", raw);
+    expect(storedCaseNumberOf(input)).toBe(sanitizeResult(input).caseNumber);
   });
 
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
