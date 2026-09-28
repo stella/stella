@@ -18,7 +18,7 @@ const TOOL_NAME = "suggest_changes";
 const ACCEPTED = "accepted";
 /** Keys the generator may draw, so the forged key below can never collide. */
 const INPUT_KEYS = ["alpha", "beta", "gamma", "delta"] as const;
-/** Optional keys a strict provider schema widens to null at every level. */
+/** Optional keys a strict provider schema widens to null where declared. */
 const ABSENT_OPTIONAL_KEYS = ["omega", "sigma"] as const;
 const FORGED_KEY = "forged";
 
@@ -61,14 +61,11 @@ const inputArbitrary = fc.dictionary(
   { minKeys: 1, maxKeys: 4 },
 );
 
-const withNullWidenedOptionals = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((entry: unknown) => withNullWidenedOptionals(entry));
-  }
-  return isRecord(value) ? nullWidenedRecord(value) : value;
-};
-
-/** What a strict provider schema streams: absent optionals spelled as null. */
+/**
+ * What a strict provider schema streams: the absent optionals the schema
+ * declares, at the top level, spelled as null. The generated values below
+ * are undeclared, so the widening never reaches them.
+ */
 const nullWidenedRecord = (
   value: Record<string, unknown>,
 ): Record<string, unknown> => {
@@ -76,10 +73,7 @@ const nullWidenedRecord = (
   for (const key of ABSENT_OPTIONAL_KEYS) {
     widened[key] = null;
   }
-  for (const [key, entry] of Object.entries(value)) {
-    widened[key] = withNullWidenedOptionals(entry);
-  }
-  return widened;
+  return { ...widened, ...value };
 };
 
 /** A different serialization of the same value: reversed keys, indented. */
@@ -192,3 +186,55 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+test("keeps a null the tool's schema admits and omits one it refuses", () => {
+  const nullableTools = {
+    [TOOL_NAME]: {
+      name: TOOL_NAME,
+      description: "A tool with a required nullable field",
+      inputSchema: toTanStackToolSchema(
+        v.object({
+          instructions: v.nullable(v.string()),
+          note: v.optional(v.string()),
+        }),
+      ),
+    },
+  } satisfies ChatToolMap;
+  const input = { instructions: null };
+  // What a strict provider streams: the absent optional spelled as null too.
+  const argumentsText = JSON.stringify({ instructions: null, note: null });
+  const validate = (part: { input?: unknown }) =>
+    validateToolCallParts({
+      message: {
+        id: toSafeId<"chatMessage">("msg_nullable_tool_call"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: CALL_ID,
+            name: TOOL_NAME,
+            arguments: argumentsText,
+            ...part,
+            state: "input-complete",
+          },
+        ],
+      },
+      tools: nullableTools,
+    });
+
+  // The declared null is the value the call sets; only the refused one goes,
+  // whether the adapter's input came with the text or the text came alone.
+  for (const part of [{ input }, {}]) {
+    const validated = validate(part);
+    expect(Result.isOk(validated) && validated.value).toEqual([
+      {
+        type: "tool-call",
+        id: CALL_ID,
+        name: TOOL_NAME,
+        arguments: JSON.stringify(input),
+        input,
+        state: "input-complete",
+      },
+    ]);
+  }
+});

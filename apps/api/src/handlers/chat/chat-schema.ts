@@ -1,4 +1,8 @@
-import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
+import {
+  convertSchemaToJsonSchema,
+  isStandardSchema,
+  parseWithStandardSchema,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -56,6 +60,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
@@ -1817,17 +1822,31 @@ const parseJsonUnknown = (value: string): unknown => JSON.parse(value);
  * schema and persisted.
  *
  * A strict provider schema widens every optional field to nullable, so the raw
- * `arguments` text spells an absent optional as `null`. The adapter folds that
- * back before it attaches `input` to the call (`undoNullWidening`), but the
- * text keeps the provider's spelling, and the tool schema's `optional` fields
- * admit absence, not `null`. So `input` is the canonical copy: the text must
- * agree with it once nulls are folded on both sides (the same comparison a
- * continuation gets in `validateContinuationToolCallTransition`), and only
- * `input` meets the schema. A part with no `input` (rebuilt by a client, or
- * persisted before adapters attached one) has only the text, which is folded
- * the same way and then is the input, so a call has one canonical spelling
- * whichever copy arrived.
+ * `arguments` text spells an absent optional as `null`. Chat's provider stream
+ * folds that back before it attaches `input` to the call
+ * (`withModelPlaceholdersOmitted`), but the text keeps the provider's
+ * spelling, and the tool schema's `optional` fields admit absence, not
+ * `null`. So `input` is the canonical copy: the text must agree with it once
+ * both are folded by that same rule, and only `input` meets the schema. A part
+ * with no `input` (rebuilt by a client, or persisted before adapters attached
+ * one) has only the text, which is folded the same way and then is the input,
+ * so a call has one canonical spelling whichever copy arrived. The rule reads
+ * the schema, so a `null` the schema admits (a nullable field) stays.
  */
+/**
+ * A model's tool input under the placeholder rule chat's provider stream
+ * applies (`withDeclaredToolInput`), read off the JSON Schema the provider
+ * was handed for the tool.
+ */
+const withToolInputPlaceholdersOmitted = (
+  schema: unknown,
+  value: unknown,
+): unknown =>
+  withModelPlaceholdersOmitted(
+    isStandardSchema(schema) ? convertSchemaToJsonSchema(schema) : schema,
+    value,
+  );
+
 const validateCanonicalToolInput = ({
   parsedArguments,
   part,
@@ -1839,14 +1858,17 @@ const validateCanonicalToolInput = ({
 }): Result<unknown, HandlerError<400>> => {
   if (part.input === undefined) {
     return validateToolPayload({
-      payload: withNullsOmitted(parsedArguments),
+      payload: withToolInputPlaceholdersOmitted(schema, parsedArguments),
       payloadName: "arguments",
       schema,
       toolName: part.name,
     });
   }
   if (
-    !deepEquals(withNullsOmitted(parsedArguments), withNullsOmitted(part.input))
+    !deepEquals(
+      withToolInputPlaceholdersOmitted(schema, parsedArguments),
+      withToolInputPlaceholdersOmitted(schema, part.input),
+    )
   ) {
     return Result.err(
       new HandlerError({
