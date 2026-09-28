@@ -857,7 +857,7 @@ export const DecisionText = ({
   const t = useTranslations();
 
   const ast = parseDocumentAst(decision.documentAst);
-  const visibleBlocks = visibleDecisionBlocks(ast);
+  const visibleBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
   const topMatter = decisionTopMatter({
     blocks: visibleBlocks,
     textFields: decision.textFields,

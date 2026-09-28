@@ -199,13 +199,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast),
+    blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
     country: decision.country,
     decisionId,
     decisionDate: decision.decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast),
+    visibleDecisionBlocks(ast, decision.caseNumberType),
     decision.decisionDate,
   );
 

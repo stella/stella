@@ -249,10 +249,20 @@ const ast = {
 
 describe("visible decision blocks", () => {
   test("keeps semantic headings while removing separately rendered metadata", () => {
-    expect(visibleDecisionBlocks(ast).map((block) => block.id)).toEqual([
-      "title",
-      "body",
-    ]);
+    expect(
+      visibleDecisionBlocks(ast, DECISION_IDENTIFIER_TYPES.CASE_NUMBER).map(
+        (block) => block.id,
+      ),
+    ).toEqual(["title", "body"]);
+  });
+
+  test("keeps the docket header when the primary reference is not a docket", () => {
+    expect(
+      visibleDecisionBlocks(
+        ast,
+        DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      ).map((block) => block.id),
+    ).toEqual(["case-number", "title", "body"]);
   });
 
   test("repairs legacy same-line Roman headings after Odůvodnění", () => {
@@ -286,7 +296,10 @@ describe("visible decision blocks", () => {
     } as const satisfies DocumentAst;
 
     expect(
-      visibleDecisionBlocks(legacyAst).map((block) => ({
+      visibleDecisionBlocks(
+        legacyAst,
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      ).map((block) => ({
         anchorId: block.anchorId,
         level: block.type === "heading" ? block.level : null,
         text: block.plainText,
