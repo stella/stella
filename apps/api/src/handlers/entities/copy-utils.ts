@@ -366,14 +366,17 @@ export const copyFileObject = async ({
       copy: async () => await copyObject(sourceKey, targetKey),
     });
   })();
-  return copied.map(() => ({
+  if (Result.isError(copied)) {
+    return Result.err(copied.error);
+  }
+  return Result.ok({
     sourceEntityId,
     sourceFileId,
     sourceKey,
     targetKey,
     newFileId,
     mimeType,
-  }));
+  });
 };
 
 type CopyFileObjectsOptions = {

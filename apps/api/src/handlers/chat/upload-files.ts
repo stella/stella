@@ -812,8 +812,8 @@ export const uploadUserFile = async ({
     let thumbnailFileId: string | null = null;
     let placeholder: string | null = null;
     let thumbnailKey: string | null = null;
-    const writeSource = () =>
-      withTimeout(
+    const writeSource = async () =>
+      await withTimeout(
         async (signal) =>
           await putS3Object(s3Key, file.bytes, file.mimeType, signal),
         {
@@ -878,8 +878,8 @@ export const uploadUserFile = async ({
     }
 
     if (preparedThumbnail !== null) {
-      const writeThumbnail = () =>
-        withTimeout(
+      const writeThumbnail = async () =>
+        await withTimeout(
           async (signal) =>
             await putS3Object(
               preparedThumbnail.key,

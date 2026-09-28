@@ -516,7 +516,12 @@ export const finalizeDesktopEditSessionHandler = async ({
           ) {
             responseStatus = 409;
           }
-          return status(responseStatus, { message: fileWrite.error.message });
+          return {
+            error: {
+              message: fileWrite.error.message,
+              statusCode: responseStatus,
+            },
+          } as const;
         }
       }
 

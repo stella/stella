@@ -46,7 +46,6 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import {
   commitOrganizationFileBytes,
-  releaseOrganizationFileBytes,
   reserveOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
@@ -95,7 +94,6 @@ type PromoteTmpObjectOptions = {
   finalKey: string;
   storedBytes: Uint8Array;
   declaredMime: string;
-  uploadId: SafeId<"pendingUpload">;
   promotion: "copy" | "write";
 };
 
@@ -105,7 +103,6 @@ const promoteTmpObjectWithUsage = async ({
   finalKey,
   storedBytes,
   declaredMime,
-  uploadId,
   promotion,
 }: PromoteTmpObjectOptions) => {
   const reservation = await reserveOrganizationFileBytes({
@@ -134,13 +131,6 @@ const promoteTmpObjectWithUsage = async ({
             }),
         );
   if (promoted.status === "error") {
-    const released = await releaseOrganizationFileBytes(reservation.value);
-    if (Result.isError(released)) {
-      captureError(released.error, {
-        uploadId,
-        stage: "file-reservation-release",
-      });
-    }
     return Result.err(
       new UploadFinalizeError({
         status: 500,
@@ -588,7 +578,6 @@ const runFinalize = async function* ({
       finalKey,
       storedBytes,
       declaredMime: claimed.declaredMime,
-      uploadId: claimed.id,
       promotion: strippedArchive === null ? "copy" : "write",
     });
 

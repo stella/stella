@@ -181,6 +181,7 @@ const createHarness = ({
         Result.ok({
           contentLength: headSizes?.[key] ?? stored.byteLength,
           checksumSHA256: checksum,
+          lastModified: null,
         }),
       );
     },

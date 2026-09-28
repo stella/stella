@@ -21,7 +21,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
-import { userFiles } from "@/api/db/schema";
+import { chatThreads, userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
@@ -29,6 +29,10 @@ import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
+import {
+  removeOrganizationFileBytes,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import {
   deleteS3ObjectWithSignal,
@@ -66,7 +70,7 @@ type EntityFieldRow = {
 type ChatFileRow = Pick<
   typeof userFiles.$inferSelect,
   "id" | "userId" | "mimeType" | "s3Key"
->;
+> & { organizationId: SafeId<"organization"> };
 
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
@@ -85,6 +89,11 @@ const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
   });
   if (Result.isError(cleanup)) {
     console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
+    return;
+  }
+  const removed = await removeOrganizationFileBytes(thumbnailKey);
+  if (Result.isError(removed)) {
+    throw removed.error;
   }
 };
 
@@ -167,8 +176,10 @@ const backfillChatFiles = async (): Promise<number> => {
             userId: userFiles.userId,
             mimeType: userFiles.mimeType,
             s3Key: userFiles.s3Key,
+            organizationId: chatThreads.organizationId,
           })
           .from(userFiles)
+          .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
           .where(
             and(
               isNull(userFiles.thumbnailFileId),
@@ -206,11 +217,20 @@ const backfillChatFiles = async (): Promise<number> => {
         mimeType: THUMBNAIL_MIME_TYPE,
         userId: brandPersistedUserId(row.userId),
       });
-      await writeS3ObjectWithRetry({
-        contentType: THUMBNAIL_MIME_TYPE,
-        data: thumbnail.value.webp,
-        key: thumbnailKey,
+      const written = await writeOrganizationFile({
+        organizationId: row.organizationId,
+        objectKey: thumbnailKey,
+        sizeBytes: thumbnail.value.webp.byteLength,
+        write: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: THUMBNAIL_MIME_TYPE,
+            data: thumbnail.value.webp,
+            key: thumbnailKey,
+          }),
       });
+      if (Result.isError(written)) {
+        throw written.error;
+      }
       const updatedRows = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: one write per generated thumbnail so progress survives a stop

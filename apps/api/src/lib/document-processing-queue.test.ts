@@ -198,6 +198,7 @@ describe("OCR derivative durability", () => {
       "await readTenantS3ArrayBuffer(",
       "await createOcrSearchablePdf(",
       "await writeTenantS3Object(",
+      "await writeOrganizationFile(",
     ]) {
       expect(stageSource).toContain(storageCall);
     }

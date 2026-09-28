@@ -247,7 +247,7 @@ const copyUserFileObject = async ({
   const copy = async () => {
     const result = await copyObject(sourceKey, destinationKey);
     if (Result.isError(result)) {
-      throw result.error.cause ?? result.error;
+      throw result.error;
     }
     return result.value;
   };

@@ -155,21 +155,22 @@ const writeTemplateAttempt = async function* ({
   const intentIds = reservation.value;
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
-  const writeCandidate = () =>
-    writeObject({
+  const writeCandidate = async () =>
+    await writeObject({
       key: s3Key,
       data: bytes,
       contentType: DOCX_MIME_TYPE,
     });
-  const writeResult = env.FEATURE_FILE_USAGE_LIMITS
-    ? writeOrganizationFile({
-        organizationId,
-        objectKey: s3Key,
-        sizeBytes: bytes.byteLength,
-        write: writeCandidate,
-      })
-    : Result.tryPromise(writeCandidate);
-  const certainty = yield* Result.await(writeResult);
+  const certainty = env.FEATURE_FILE_USAGE_LIMITS
+    ? yield* Result.await(
+        writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: bytes.byteLength,
+          write: writeCandidate,
+        }),
+      )
+    : yield* Result.await(Result.tryPromise(writeCandidate));
   switch (certainty) {
     case S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN:
       // An earlier timed-out PUT may still land after this version is later

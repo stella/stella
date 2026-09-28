@@ -914,50 +914,53 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
-
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
-    await writeS3ObjectWithRetry({
-      contentType: file.type,
-      data: storedBytes,
-      key: sourceKey,
-    });
-  } else {
-    const organizationFileWrite = await writeOrganizationFile({
-      organizationId,
-      objectKey: sourceKey,
-      sizeBytes: storedSizeBytes,
-      write: async () =>
-        await writeS3ObjectWithRetry({
-          contentType: file.type,
-          data: storedBytes,
-          key: sourceKey,
-        }),
-    });
-    if (Result.isError(organizationFileWrite)) {
-      let responseStatus: 409 | 413 | 503 = 503;
-      if (organizationFileWrite.error.reason === "capacity_exceeded") {
-        responseStatus = 413;
-      } else if (
-        organizationFileWrite.error.reason === "key_conflict" ||
-        organizationFileWrite.error.reason === "reservation_busy"
-      ) {
-        responseStatus = 409;
-      }
-      return Result.err(
-        new HandlerError({
-          status: responseStatus,
-          message: organizationFileWrite.error.message,
-          cause: organizationFileWrite.error,
-        }),
-      );
-    }
-  }
-
   // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
   // so a database error here skips `catch` entirely (finally still runs).
   // Track intent to keep the object instead of relying on catch to clean it up.
   let keepUploadedFile = false;
+  let writeOutcomeUncertain = false;
   try {
+    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      await writeS3ObjectWithRetry({
+        contentType: file.type,
+        data: storedBytes,
+        key: sourceKey,
+      });
+    } else {
+      const organizationFileWrite = await writeOrganizationFile({
+        organizationId,
+        objectKey: sourceKey,
+        sizeBytes: storedSizeBytes,
+        write: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: file.type,
+            data: storedBytes,
+            key: sourceKey,
+          }),
+      });
+      if (Result.isError(organizationFileWrite)) {
+        // A storage timeout or failed ledger commit can leave an object behind.
+        // The reservation remains until object-state reconciliation settles it.
+        writeOutcomeUncertain =
+          organizationFileWrite.error.reason === "storage_unavailable";
+        let responseStatus: 409 | 413 | 503 = 503;
+        if (organizationFileWrite.error.reason === "capacity_exceeded") {
+          responseStatus = 413;
+        } else if (
+          organizationFileWrite.error.reason === "key_conflict" ||
+          organizationFileWrite.error.reason === "reservation_busy"
+        ) {
+          responseStatus = 409;
+        }
+        return Result.err(
+          new HandlerError({
+            status: responseStatus,
+            message: organizationFileWrite.error.message,
+            cause: organizationFileWrite.error,
+          }),
+        );
+      }
+    }
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
     const fieldId = createSafeId<"field">();
@@ -1284,7 +1287,7 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } finally {
-    if (!keepUploadedFile) {
+    if (!keepUploadedFile && !writeOutcomeUncertain) {
       await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
     }
   }

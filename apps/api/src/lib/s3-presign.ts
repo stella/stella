@@ -994,6 +994,7 @@ export type HeadObjectResult = {
   contentLength: number;
   /** Base64 SHA-256 stored on the object, if it was uploaded with one. */
   checksumSHA256: string | null;
+  lastModified: Date | null;
 };
 
 /**
@@ -1020,6 +1021,7 @@ export const headObject = async (
       return {
         contentLength: response.ContentLength ?? 0,
         checksumSHA256: response.ChecksumSHA256 ?? null,
+        lastModified: response.LastModified ?? null,
       };
     },
     catch: (cause) =>

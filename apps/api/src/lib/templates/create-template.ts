@@ -112,8 +112,8 @@ export const createStoredTemplate = async function* ({
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(organizationId, templateId);
 
-  const writeObject = () =>
-    writeS3ObjectWithRetry({
+  const writeObject = async () =>
+    await writeS3ObjectWithRetry({
       data: new Uint8Array(buffer),
       key: s3Key,
     });

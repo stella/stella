@@ -36,6 +36,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -93,6 +94,7 @@ import { createReconciliationProgress } from "@/api/lib/document-processing-reco
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -203,17 +205,32 @@ const writeOcrSearchablePdfDerivative = async ({
       }
       lifecycleSignal.throwIfAborted();
 
-      await writeTenantS3Object({
-        contentType: PDF_MIME_TYPE,
-        data: searchablePdf.value,
-        key: createOcrSearchablePdfKey({
-          organizationId: run.organizationId,
-          workspaceId: run.workspaceId,
-          runId: run.id,
-        }),
-        scope,
-        signal: lifecycleSignal,
+      const objectKey = createOcrSearchablePdfKey({
+        organizationId: run.organizationId,
+        workspaceId: run.workspaceId,
+        runId: run.id,
       });
+      const writePdf = async () =>
+        await writeTenantS3Object({
+          contentType: PDF_MIME_TYPE,
+          data: searchablePdf.value,
+          key: objectKey,
+          scope,
+          signal: lifecycleSignal,
+        });
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        await writePdf();
+        return;
+      }
+      const fileWrite = await writeOrganizationFile({
+        objectKey,
+        organizationId: run.organizationId,
+        sizeBytes: searchablePdf.value.byteLength,
+        write: writePdf,
+      });
+      if (Result.isError(fileWrite)) {
+        throw fileWrite.error;
+      }
     },
     catch: (cause) => cause,
   });

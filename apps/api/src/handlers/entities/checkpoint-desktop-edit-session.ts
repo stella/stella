@@ -258,6 +258,7 @@ export const checkpointDesktopEditSessionHandler = async ({
         organizationId: authorizedSession.value.organizationId,
         objectKey: key,
         sizeBytes: checkpointBytes.byteLength,
+        contentSha256Hex: sha256Hex,
         write: async () =>
           await writeS3ObjectWithRetry({ data: checkpointBytes, key }),
       });

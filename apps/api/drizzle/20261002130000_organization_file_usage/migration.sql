@@ -5,7 +5,7 @@ ALTER TABLE "usage_policies"
   ADD COLUMN "storage_bytes_per_assignment" bigint;--> statement-breakpoint
 ALTER TABLE "usage_policies"
   ADD CONSTRAINT "usage_policies_storage_bytes_nonneg"
-    CHECK ("storage_bytes_per_assignment" IS NULL OR "storage_bytes_per_assignment" >= 0);--> statement-breakpoint
+    CHECK ("storage_bytes_per_assignment" IS NULL OR "storage_bytes_per_assignment" >= 0) NOT VALID;--> statement-breakpoint
 
 CREATE TABLE "organization_file_usage" (
   "organization_id" varchar(128) PRIMARY KEY NOT NULL,
@@ -23,6 +23,9 @@ CREATE TABLE "organization_file_objects" (
   "organization_id" varchar(128) NOT NULL,
   "size_bytes" bigint NOT NULL,
   "pending_size_bytes" bigint,
+  "write_id" text,
+  "expected_sha256_hex" text,
+  "reservation_started_at" timestamptz,
   "status" text NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -32,6 +35,8 @@ CREATE TABLE "organization_file_objects" (
     CHECK ("pending_size_bytes" IS NULL OR "pending_size_bytes" >= 0),
   CONSTRAINT "organization_file_objects_pending_committed"
     CHECK ("status" = 'committed' OR "pending_size_bytes" IS NULL),
+  CONSTRAINT "organization_file_objects_reservation_identity"
+    CHECK (("write_id" IS NULL AND "reservation_started_at" IS NULL AND "expected_sha256_hex" IS NULL AND "pending_size_bytes" IS NULL) OR ("write_id" IS NOT NULL AND "reservation_started_at" IS NOT NULL)),
   CONSTRAINT "organization_file_objects_status_domain"
     CHECK ("status" IN ('reserved', 'committed')),
   CONSTRAINT "organization_file_objects_organization_id_organization_id_fk"

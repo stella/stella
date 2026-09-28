@@ -85,8 +85,8 @@ export const createStoredStyleSet = async ({
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
-    const writePackage = () =>
-      writeS3ObjectWithRetry({ data: buffer, key: s3Key });
+    const writePackage = async () =>
+      await writeS3ObjectWithRetry({ data: buffer, key: s3Key });
     if (env.FEATURE_FILE_USAGE_LIMITS) {
       yield* Result.await(
         writeOrganizationFile({
@@ -287,8 +287,8 @@ export const replaceStoredStyleSet = async ({
 
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
-    const writePackage = () =>
-      writeS3ObjectWithRetry({ data: buffer, key: s3Key });
+    const writePackage = async () =>
+      await writeS3ObjectWithRetry({ data: buffer, key: s3Key });
     if (env.FEATURE_FILE_USAGE_LIMITS) {
       yield* Result.await(
         writeOrganizationFile({

@@ -1,6 +1,8 @@
 import { Panic, panic, Result } from "better-result";
 import { and, count, eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import {
   organizationFileObjects,
   organizationFileUsage,
@@ -19,7 +21,6 @@ type OrganizationFileUsageErrorProps = {
   message: string;
   reason:
     | "capacity_exceeded"
-    | "capability_unavailable"
     | "key_conflict"
     | "reservation_busy"
     | "storage_unavailable";
@@ -62,6 +63,7 @@ export type FileUsageInput = {
   organizationId: SafeId<"organization">;
   objectKey: string;
   sizeBytes: number;
+  contentSha256Hex?: string | undefined;
 };
 
 export type FileUsageReservation =
@@ -71,11 +73,12 @@ export type FileUsageReservation =
       status: "reserved";
       organizationId: SafeId<"organization">;
       objectKey: string;
+      writeId: string;
     };
 
 const storageUnavailable = (cause: unknown) => {
   if (Panic.is(cause)) {
-    throw cause;
+    return panic("Organization file invariant failed", cause);
   }
   return new OrganizationFileUsageError({
     message: "Organization file usage is unavailable",
@@ -94,17 +97,138 @@ const fileUsageDb = async (): Promise<FileUsageDb> => {
   return openOrganizationFileUsageDb();
 };
 
+const FILE_RESERVATION_RECOVERY_DELAY_MS = 5 * 60_000;
+const FILE_RESERVATION_ABANDON_DELAY_MS = 60 * 60_000;
+const S3_LAST_MODIFIED_PRECISION_MS = 1000;
+
+const recoverOrganizationFileReservation = async (
+  organizationId: SafeId<"organization">,
+  objectKey: string,
+  db?: FileUsageDb,
+): Promise<Result<boolean, OrganizationFileUsageError>> => {
+  const pending = await Result.tryPromise({
+    try: async () =>
+      await (db ?? (await fileUsageDb())).transaction(
+        async (tx) =>
+          await tx
+            .select({
+              organizationId: organizationFileObjects.organizationId,
+              status: organizationFileObjects.status,
+              sizeBytes: organizationFileObjects.sizeBytes,
+              pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+              writeId: organizationFileObjects.writeId,
+              expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
+              reservationStartedAt:
+                organizationFileObjects.reservationStartedAt,
+            })
+            .from(organizationFileObjects)
+            .where(eq(organizationFileObjects.objectKey, objectKey))
+            .limit(1)
+            .then((rows) => rows.at(0)),
+      ),
+    catch: storageUnavailable,
+  });
+  if (Result.isError(pending)) {
+    return Result.err(pending.error);
+  }
+  const object = pending.value;
+  if (
+    !object ||
+    object.organizationId !== organizationId ||
+    (object.status === "committed" && object.pendingSizeBytes === null)
+  ) {
+    return Result.ok(false);
+  }
+  if (!object.writeId || !object.reservationStartedAt) {
+    return panic("File reservation has no write identity");
+  }
+  const ageMs =
+    Temporal.Now.instant().epochMilliseconds -
+    object.reservationStartedAt.getTime();
+  if (ageMs < FILE_RESERVATION_RECOVERY_DELAY_MS) {
+    return Result.ok(false);
+  }
+  const reservation = {
+    status: "reserved" as const,
+    organizationId,
+    objectKey,
+    writeId: object.writeId,
+  };
+  const abandonConfirmedNonwrite = async () => {
+    if (ageMs < FILE_RESERVATION_ABANDON_DELAY_MS) {
+      return Result.ok(false);
+    }
+    const released = await releaseOrganizationFileBytes(reservation, db);
+    return Result.isError(released)
+      ? Result.err(released.error)
+      : Result.ok(true);
+  };
+  const { headObject } = await import("@/api/lib/s3-presign");
+  const head = await headObject(objectKey);
+  if (Result.isError(head)) {
+    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
+    if (isMissingS3ObjectError(head.error.cause)) {
+      return await abandonConfirmedNonwrite();
+    }
+    return Result.err(storageUnavailable(head.error));
+  }
+  if (
+    head.value.contentLength !==
+    Number(object.pendingSizeBytes ?? object.sizeBytes)
+  ) {
+    return object.expectedSha256Hex === null
+      ? Result.ok(false)
+      : await abandonConfirmedNonwrite();
+  }
+  if (
+    object.expectedSha256Hex === null &&
+    (head.value.lastModified === null ||
+      head.value.lastModified.getTime() + S3_LAST_MODIFIED_PRECISION_MS <
+        object.reservationStartedAt.getTime())
+  ) {
+    return Result.ok(false);
+  }
+  if (object.expectedSha256Hex !== null) {
+    const { getS3ObjectWithSignal } = await import("@/api/lib/s3");
+    const read = await Result.tryPromise({
+      try: async () =>
+        await getS3ObjectWithSignal(objectKey, AbortSignal.timeout(30_000)),
+      catch: storageUnavailable,
+    });
+    if (Result.isError(read)) {
+      return Result.err(read.error);
+    }
+    const actualSha256Hex = new Bun.CryptoHasher("sha256")
+      .update(read.value)
+      .digest("hex");
+    if (actualSha256Hex !== object.expectedSha256Hex) {
+      return await abandonConfirmedNonwrite();
+    }
+  }
+  const committed = await commitOrganizationFileBytes(reservation, db);
+  return Result.isError(committed)
+    ? Result.err(committed.error)
+    : Result.ok(true);
+};
+
 /** The organization row is the lock for every object and byte transition. */
 export const reserveOrganizationFileBytes = async (
-  { organizationId, objectKey, sizeBytes }: FileUsageInput,
+  { organizationId, objectKey, sizeBytes, contentSha256Hex }: FileUsageInput,
   db?: FileUsageDb,
 ): Promise<Result<FileUsageReservation, OrganizationFileUsageError>> => {
   if (!env.FEATURE_FILE_USAGE_LIMITS) {
     return Result.ok({ status: "disabled" } as const);
   }
-  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0 || !objectKey) {
+  if (
+    !Number.isSafeInteger(sizeBytes) ||
+    sizeBytes < 0 ||
+    !objectKey ||
+    (contentSha256Hex !== undefined && !/^[\da-f]{64}$/u.test(contentSha256Hex))
+  ) {
     return panic("Invalid organization file reservation");
   }
+  const writeId = Bun.randomUUIDv7();
+  const reservationStartedAt = new Date();
   const reserved = await Result.tryPromise({
     try: async () =>
       await (db ?? (await fileUsageDb())).transaction(async (tx) => {
@@ -131,6 +255,7 @@ export const reserveOrganizationFileBytes = async (
             organizationId: organizationFileObjects.organizationId,
             sizeBytes: organizationFileObjects.sizeBytes,
             pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+            writeId: organizationFileObjects.writeId,
             status: organizationFileObjects.status,
           })
           .from(organizationFileObjects)
@@ -146,9 +271,6 @@ export const reserveOrganizationFileBytes = async (
             existing.pendingSizeBytes !== null
           ) {
             return { status: "reservation_busy" as const };
-          }
-          if (existing.sizeBytes === BigInt(sizeBytes)) {
-            return { status: "already_committed" as const };
           }
         }
 
@@ -172,23 +294,30 @@ export const reserveOrganizationFileBytes = async (
           .limit(1)
           .then((rows) => rows.at(0));
         if (
-          !entitlement ||
-          !isEntitlementConsumableAt(entitlement) ||
-          entitlement.storageBytesPerAssignment === null
+          entitlement &&
+          isEntitlementConsumableAt(entitlement) &&
+          entitlement.storageBytesPerAssignment !== null
         ) {
-          return { status: "capability_unavailable" as const };
+          const assignments = await tx
+            .select({ value: count() })
+            .from(usageSeatAssignments)
+            .where(eq(usageSeatAssignments.organizationId, organizationId))
+            .then((rows) => rows.at(0)?.value ?? 0);
+          const cap =
+            entitlement.storageBytesPerAssignment * BigInt(assignments);
+          const nextBytes =
+            counter.committedBytes + counter.reservedBytes + additionalBytes;
+          const shrinksExisting =
+            existing && BigInt(sizeBytes) < existing.sizeBytes;
+          if (nextBytes > cap && !shrinksExisting) {
+            return { status: "capacity_exceeded" as const };
+          }
         }
-        const assignments = await tx
-          .select({ value: count() })
-          .from(usageSeatAssignments)
-          .where(eq(usageSeatAssignments.organizationId, organizationId))
-          .then((rows) => rows.at(0)?.value ?? 0);
-        const cap = entitlement.storageBytesPerAssignment * BigInt(assignments);
         if (
-          additionalBytes > 0n &&
-          counter.committedBytes + counter.reservedBytes + additionalBytes > cap
+          existing?.sizeBytes === BigInt(sizeBytes) &&
+          contentSha256Hex === undefined
         ) {
-          return { status: "capacity_exceeded" as const };
+          return { status: "already_committed" as const };
         }
 
         if (existing) {
@@ -196,6 +325,9 @@ export const reserveOrganizationFileBytes = async (
             .update(organizationFileObjects)
             .set({
               pendingSizeBytes: BigInt(sizeBytes),
+              writeId,
+              expectedSha256Hex: contentSha256Hex ?? null,
+              reservationStartedAt,
               updatedAt: new Date(),
             })
             .where(eq(organizationFileObjects.objectKey, objectKey));
@@ -205,6 +337,9 @@ export const reserveOrganizationFileBytes = async (
             objectKey,
             sizeBytes: BigInt(sizeBytes),
             status: "reserved",
+            writeId,
+            expectedSha256Hex: contentSha256Hex ?? null,
+            reservationStartedAt,
           });
         }
         await tx
@@ -214,7 +349,12 @@ export const reserveOrganizationFileBytes = async (
             updatedAt: new Date(),
           })
           .where(eq(organizationFileUsage.organizationId, organizationId));
-        return { status: "reserved" as const, organizationId, objectKey };
+        return {
+          status: "reserved" as const,
+          organizationId,
+          objectKey,
+          writeId,
+        };
       }),
     catch: storageUnavailable,
   });
@@ -232,25 +372,33 @@ export const reserveOrganizationFileBytes = async (
           reason: "key_conflict",
         }),
       );
-    case "reservation_busy":
+    case "reservation_busy": {
+      const recovered = await recoverOrganizationFileReservation(
+        organizationId,
+        objectKey,
+        db,
+      );
+      if (Result.isError(recovered)) {
+        return Result.err(recovered.error);
+      }
+      if (recovered.value) {
+        return await reserveOrganizationFileBytes(
+          { organizationId, objectKey, sizeBytes, contentSha256Hex },
+          db,
+        );
+      }
       return Result.err(
         new OrganizationFileUsageError({
           message: "File write is already in progress",
           reason: "reservation_busy",
         }),
       );
+    }
     case "capacity_exceeded":
       return Result.err(
         new OrganizationFileUsageError({
           message: "Organization file capacity exceeded",
           reason: "capacity_exceeded",
-        }),
-      );
-    case "capability_unavailable":
-      return Result.err(
-        new OrganizationFileUsageError({
-          message: "Organization file capability is unavailable",
-          reason: "capability_unavailable",
         }),
       );
     default:
@@ -266,7 +414,7 @@ export const commitOrganizationFileBytes = async (
   if (reservation.status !== "reserved") {
     return Result.ok(undefined);
   }
-  return await Result.tryPromise({
+  const committed = await Result.tryPromise({
     try: async () =>
       await (db ?? (await fileUsageDb())).transaction(async (tx) => {
         const counter = await tx
@@ -288,6 +436,7 @@ export const commitOrganizationFileBytes = async (
             status: organizationFileObjects.status,
             sizeBytes: organizationFileObjects.sizeBytes,
             pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+            writeId: organizationFileObjects.writeId,
           })
           .from(organizationFileObjects)
           .where(
@@ -304,8 +453,11 @@ export const commitOrganizationFileBytes = async (
         if (!counter || !object) {
           return panic("File reservation disappeared before commit");
         }
+        if (object.writeId !== reservation.writeId) {
+          return "stale" as const;
+        }
         if (object.status === "committed" && object.pendingSizeBytes === null) {
-          return;
+          return undefined;
         }
         const nextSize = object.pendingSizeBytes ?? object.sizeBytes;
         const additionalBytes =
@@ -318,6 +470,9 @@ export const commitOrganizationFileBytes = async (
             status: "committed",
             sizeBytes: nextSize,
             pendingSizeBytes: null,
+            writeId: null,
+            expectedSha256Hex: null,
+            reservationStartedAt: null,
             updatedAt: new Date(),
           })
           .where(eq(organizationFileObjects.objectKey, reservation.objectKey));
@@ -338,9 +493,22 @@ export const commitOrganizationFileBytes = async (
               reservation.organizationId,
             ),
           );
+        return undefined;
       }),
     catch: storageUnavailable,
   });
+  if (Result.isError(committed)) {
+    return Result.err(committed.error);
+  }
+  if (committed.value === "stale") {
+    return Result.err(
+      new OrganizationFileUsageError({
+        message: "File reservation changed before commit",
+        reason: "reservation_busy",
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 export const releaseOrganizationFileBytes = async (
@@ -369,6 +537,7 @@ export const releaseOrganizationFileBytes = async (
             status: organizationFileObjects.status,
             sizeBytes: organizationFileObjects.sizeBytes,
             pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+            writeId: organizationFileObjects.writeId,
           })
           .from(organizationFileObjects)
           .where(
@@ -388,8 +557,11 @@ export const releaseOrganizationFileBytes = async (
         ) {
           return;
         }
+        if (object.writeId !== reservation.writeId) {
+          return;
+        }
         if (!counter) {
-          return panic("File counter disappeared before release");
+          panic("File counter disappeared before release");
         }
         if (object.status === "reserved") {
           await tx
@@ -400,7 +572,13 @@ export const releaseOrganizationFileBytes = async (
         } else {
           await tx
             .update(organizationFileObjects)
-            .set({ pendingSizeBytes: null, updatedAt: new Date() })
+            .set({
+              pendingSizeBytes: null,
+              writeId: null,
+              expectedSha256Hex: null,
+              reservationStartedAt: null,
+              updatedAt: new Date(),
+            })
             .where(
               eq(organizationFileObjects.objectKey, reservation.objectKey),
             );
@@ -501,13 +679,9 @@ export const writeOrganizationFile = async <T>(
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
-    const released = await releaseOrganizationFileBytes(
-      reservation.value,
-      input.db,
-    );
-    return Result.isError(released)
-      ? Result.err(released.error)
-      : Result.err(written.error);
+    // A timed-out object write can still complete. The reservation remains
+    // until a confirmed delete or object-state reconciliation settles it.
+    return Result.err(written.error);
   }
   const committed = await commitOrganizationFileBytes(
     reservation.value,
@@ -533,23 +707,9 @@ export const copyOrganizationFile = async <T, E>(
     catch: storageUnavailable,
   });
   if (Result.isError(copied)) {
-    const released = await releaseOrganizationFileBytes(
-      reservation.value,
-      input.db,
-    );
-    if (Result.isError(released)) {
-      return Result.err(released.error);
-    }
     return Result.err(copied.error);
   }
   if (Result.isError(copied.value)) {
-    const released = await releaseOrganizationFileBytes(
-      reservation.value,
-      input.db,
-    );
-    if (Result.isError(released)) {
-      return Result.err(released.error);
-    }
     return Result.err(copied.value.error);
   }
   const committed = await commitOrganizationFileBytes(
@@ -569,7 +729,7 @@ export const reconcileOrganizationFileObject = async (
   if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0 || !objectKey) {
     return panic("Invalid organization file reconciliation input");
   }
-  return await Result.tryPromise({
+  const reconciled = await Result.tryPromise({
     try: async () =>
       await (db ?? (await fileUsageDb())).transaction(async (tx) => {
         await tx
@@ -596,6 +756,7 @@ export const reconcileOrganizationFileObject = async (
             sizeBytes: organizationFileObjects.sizeBytes,
             pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
             status: organizationFileObjects.status,
+            writeId: organizationFileObjects.writeId,
           })
           .from(organizationFileObjects)
           .where(eq(organizationFileObjects.objectKey, objectKey))
@@ -603,6 +764,9 @@ export const reconcileOrganizationFileObject = async (
           .then((rows) => rows.at(0));
         if (existing && existing.organizationId !== organizationId) {
           return panic("File object belongs to another organization");
+        }
+        if (existing?.writeId) {
+          return "reservation_busy" as const;
         }
         const nextSize = BigInt(sizeBytes);
         if (!existing) {
@@ -623,11 +787,14 @@ export const reconcileOrganizationFileObject = async (
               sizeBytes: nextSize,
               pendingSizeBytes: null,
               status: "committed",
+              writeId: null,
+              expectedSha256Hex: null,
+              reservationStartedAt: null,
               updatedAt: new Date(),
             })
             .where(eq(organizationFileObjects.objectKey, objectKey));
         } else {
-          return;
+          return undefined;
         }
         await tx
           .update(organizationFileUsage)
@@ -642,7 +809,19 @@ export const reconcileOrganizationFileObject = async (
             updatedAt: new Date(),
           })
           .where(eq(organizationFileUsage.organizationId, organizationId));
+        return undefined;
       }),
     catch: storageUnavailable,
   });
+  if (Result.isError(reconciled)) {
+    return Result.err(reconciled.error);
+  }
+  return reconciled.value === "reservation_busy"
+    ? Result.err(
+        new OrganizationFileUsageError({
+          message: "File write is still reserved",
+          reason: "reservation_busy",
+        }),
+      )
+    : Result.ok(undefined);
 };

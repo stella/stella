@@ -53,7 +53,7 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
@@ -438,9 +438,10 @@ const cleanupCopiedS3Keys = async ({
 
   const cleanupResult = await Result.tryPromise(async () => {
     await Promise.all(
-      copiedS3Keys.map(
-        async (key) =>
-          await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)),
+      copiedS3Keys.map(async (key) =>
+        env.FEATURE_FILE_USAGE_LIMITS
+          ? await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000))
+          : await getS3().delete(key),
       ),
     );
   });

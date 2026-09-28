@@ -732,6 +732,9 @@ export const organizationFileObjects = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     sizeBytes: p.bigint("size_bytes", { mode: "bigint" }).notNull(),
     pendingSizeBytes: p.bigint("pending_size_bytes", { mode: "bigint" }),
+    writeId: p.text("write_id"),
+    expectedSha256Hex: p.text("expected_sha256_hex"),
+    reservationStartedAt: timestamptz("reservation_started_at"),
     status: p.text({ enum: FILE_USAGE_OBJECT_STATUSES }).notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -748,6 +751,10 @@ export const organizationFileObjects = p.pgTable(
     p.check(
       "organization_file_objects_pending_committed",
       sql`status = 'committed' OR pending_size_bytes IS NULL`,
+    ),
+    p.check(
+      "organization_file_objects_reservation_identity",
+      sql`(write_id IS NULL AND reservation_started_at IS NULL AND expected_sha256_hex IS NULL AND pending_size_bytes IS NULL) OR (write_id IS NOT NULL AND reservation_started_at IS NOT NULL)`,
     ),
     p.check(
       "organization_file_objects_status_domain",

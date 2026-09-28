@@ -36,6 +36,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -58,12 +59,11 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import { removeOrganizationFileBytes } from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -591,22 +591,17 @@ export const finalizeEntityCreate = async function* ({
     | { status: EntityCreateWriteFailureStatus };
 
   const cleanupFinalObject = async (stage: string) => {
-    await getS3()
-      .delete(finalKey)
-      .then(async () => {
-        const removed = await removeOrganizationFileBytes(finalKey);
-        if (Result.isError(removed)) {
-          captureError(removed.error, { entityId, fieldId, stage });
-        }
-        return removed;
-      })
-      .catch((deleteError: unknown) =>
-        captureError(deleteError, {
-          entityId,
-          fieldId,
-          stage,
-        }),
-      );
+    await (
+      env.FEATURE_FILE_USAGE_LIMITS
+        ? deleteS3ObjectWithSignal(finalKey, AbortSignal.timeout(10_000))
+        : getS3().delete(finalKey)
+    ).catch((deleteError: unknown) =>
+      captureError(deleteError, {
+        entityId,
+        fieldId,
+        stage,
+      }),
+    );
   };
 
   const parentId = purposeData.parentId ?? null;
