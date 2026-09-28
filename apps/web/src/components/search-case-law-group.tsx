@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Loader } from "@stll/ui/loader";
+import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
@@ -143,7 +144,10 @@ const SearchCaseLawResults = ({
             </span>
             {hit.headline && (
               <span
-                className="text-muted-foreground [&_mark]:bg-highlight [&_mark]:text-highlight-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:font-medium"
+                className={cn(
+                  "text-muted-foreground mt-0.5 line-clamp-2 text-xs",
+                  SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                )}
                 dangerouslySetInnerHTML={{
                   // safe-html: server-escaped + <mark>-highlighted by global search mappers
                   __html: hit.headline,

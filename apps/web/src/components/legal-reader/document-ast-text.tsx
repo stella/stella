@@ -16,10 +16,10 @@ import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
 } from "@stll/ui/review-diff-text";
+import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { SEARCH_MARK_CLASS_NAME } from "@/components/legal-reader/query-marks";
 import type {
   ReaderMark,
   ReaderMarkRange,
@@ -123,13 +123,6 @@ export const inlinesToPlainText = plainTextOf;
 export const getParagraphNumberPieceId = (blockId: string): string =>
   `paragraph-number:${blockId}`;
 
-/**
- * The one match the find is standing on. Same mark as the rest — the reader is
- * reading, not being pointed at — with a ring around it so stepping through
- * the matches is visible.
- */
-const ACTIVE_MATCH_RING = "ring-warning ring-1";
-
 type DiffMarkType = Exclude<ReaderMark["type"], "search">;
 
 /** What a screen reader hears before a changed run: sighted readers see the
@@ -175,16 +168,16 @@ const renderMark = ({
   switch (range.type) {
     case "search":
       return (
-        <mark
-          className={cn(
-            SEARCH_MARK_CLASS_NAME,
-            range.matchIndex === activeMatchIndex && ACTIVE_MATCH_RING,
-          )}
+        <TextMark
+          {...SEARCH_HIT_MARK}
           data-reader-match-index={range.matchIndex}
           key={key}
+          // The one match the find is standing on wears the active mark, so
+          // stepping through the matches is visible.
+          state={range.matchIndex === activeMatchIndex ? "active" : "rest"}
         >
           {text}
-        </mark>
+        </TextMark>
       );
     case "inserted":
       return (
