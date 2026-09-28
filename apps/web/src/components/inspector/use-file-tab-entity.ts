@@ -16,6 +16,7 @@ type FileTabEntityQueryInput = {
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
   isActive: boolean;
   isEmailViewerActive: boolean;
+  isPdfDisplay: boolean;
   minimized: boolean;
   needsPropertyResolution: boolean;
 };
@@ -25,12 +26,16 @@ const shouldQueryFileTabEntity = ({
   desktopEditFileType,
   isActive,
   isEmailViewerActive,
+  isPdfDisplay,
   minimized,
   needsPropertyResolution,
 }: FileTabEntityQueryInput) =>
   isEmailViewerActive ||
   needsPropertyResolution ||
-  (isActive && !minimized && canUpdateEntity && desktopEditFileType !== null);
+  (isActive &&
+    !minimized &&
+    canUpdateEntity &&
+    (desktopEditFileType !== null || isPdfDisplay));
 
 const getFileTabEntityState = ({
   entityData,
@@ -75,7 +80,7 @@ type UseFileTabEntityOptions = FileTabEntityQueryInput & { tab: FileTab };
 
 /**
  * The file tab's entity, read only while something needs it: the email chat
- * target, the DOCX field's property, or the desktop edit target.
+ * target, the DOCX field's property, or the desktop edit and signing targets.
  */
 export const useFileTabEntity = ({
   tab,

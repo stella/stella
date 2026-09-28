@@ -157,6 +157,50 @@ export const legalListVerificationRuns = p.pgTable(
   ],
 );
 
+/** Exact source text read by the engine, pinned with the run. */
+export const legalListVerificationBlocks = p.pgTable(
+  "legal_list_verification_blocks",
+  {
+    runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    ordinal: p.smallint().notNull(),
+    blockId: p.text("block_id").notNull(),
+    kind: p.text("kind", { enum: CLAIM_ANCHOR_TYPES }).notNull(),
+    pageNumber: p.integer("page_number"),
+    text: p.text().notNull(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.runId, table.ordinal] }),
+    p
+      .foreignKey({
+        name: "legal_list_verification_blocks_run_fk",
+        columns: [table.runId, table.workspaceId],
+        foreignColumns: [
+          legalListVerificationRuns.id,
+          legalListVerificationRuns.workspaceId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legal_list_verification_blocks_run_idx")
+      .on(table.workspaceId, table.runId, table.ordinal),
+    p.check(
+      "legal_list_verification_blocks_ordinal_check",
+      sql`${table.ordinal} >= 0 AND ${table.ordinal} < ${sql.raw(String(VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX))}`,
+    ),
+    p.check(
+      "legal_list_verification_blocks_kind_check",
+      sql`${table.kind} IN (${CLAIM_ANCHOR_TYPE_SQL_VALUES})`,
+    ),
+    p.check(
+      "legal_list_verification_blocks_page_check",
+      sql`(${table.kind} = 'docx-block' AND ${table.pageNumber} IS NULL)
+        OR (${table.kind} = 'pdf-page' AND ${table.pageNumber} > 0)`,
+    ),
+    ...wsPolicies(),
+  ],
+);
+
 /**
  * One claim the engine found in the run's document, with its verdict.
  * Immutable once written: reviewer dispositions live in

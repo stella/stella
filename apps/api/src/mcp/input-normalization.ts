@@ -1,9 +1,12 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
+import type { AgentInputPlaceholderPolicy } from "@stll/agent-input";
 import { normalizeAgentInput } from "@stll/agent-input";
 
 import { withNullOptionalsOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { MCP_AGENT_INPUT_READERS } from "@/api/mcp/agent-input-readers";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
@@ -103,11 +106,26 @@ export const findRemovedInputIssues = ({
   return issues;
 };
 
+/**
+ * Whether the call reads or writes. A placeholder in an optional property of
+ * a read is "not filtering" and is dropped with a note; on a write it may be
+ * an id that switches update into create, so it is asked about. Required, so
+ * a new dispatch surface has to say which it is.
+ */
+type BoundaryAccess = "read" | "write";
+
+const PLACEHOLDER_POLICY = {
+  read: "absent",
+  write: "ask",
+} as const satisfies Record<BoundaryAccess, AgentInputPlaceholderPolicy>;
+
 export const normalizeInputAtBoundary = ({
+  access,
   path = "",
   schema,
   value,
 }: {
+  access: BoundaryAccess;
   path?: string;
   schema: unknown;
   value: unknown;
@@ -115,6 +133,8 @@ export const normalizeInputAtBoundary = ({
   const withoutNullOptionals = withNullOptionalsOmitted(schema, value);
   const normalized = normalizeAgentInput({
     path,
+    placeholders: PLACEHOLDER_POLICY[access],
+    readers: MCP_AGENT_INPUT_READERS,
     schema,
     value: withoutNullOptionals,
   });
@@ -125,10 +145,12 @@ export const normalizeInputAtBoundary = ({
 };
 
 export const normalizeObjectInputAtBoundary = ({
+  access,
   exactProperties = [],
   schema,
   value,
 }: {
+  access: BoundaryAccess;
   /** Boundary-control booleans must retain literal JSON semantics. */
   exactProperties?: readonly string[];
   schema: unknown;
@@ -149,6 +171,8 @@ export const normalizeObjectInputAtBoundary = ({
       : schema;
   const withoutNullOptionals = withNullOptionalsOmitted(schema, value);
   const normalized = normalizeAgentInput({
+    placeholders: PLACEHOLDER_POLICY[access],
+    readers: MCP_AGENT_INPUT_READERS,
     schema: normalizationSchema,
     value: withoutNullOptionals,
   });
@@ -158,4 +182,31 @@ export const normalizeObjectInputAtBoundary = ({
   return isRecord(normalized.value)
     ? { ok: true, value: normalized.value, notes: normalized.notes }
     : panic("An object input schema normalized to a non-object value");
+};
+
+/**
+ * Carry the boundary's "read X as Y" notes to the caller beside the result.
+ *
+ * A note is what makes a repaired input safe to repair: the caller learns the
+ * value the server acted on, so a wrong reading is visible on this call
+ * rather than in the answer. It rides as its own text block after the
+ * payload rather than inside it, because the payload is the tool's validated
+ * output contract and a note is about the request, not the result. Repeated
+ * notes (one placeholder in every phrasing of a batch) are said once.
+ */
+export const withInputNotes = (
+  result: CallToolResult,
+  notes: readonly string[],
+): CallToolResult => {
+  const distinct = [...new Set(notes)];
+  if (distinct.length === 0) {
+    return result;
+  }
+  return {
+    ...result,
+    content: [
+      ...result.content,
+      { type: "text", text: `Input read: ${distinct.join(" ")}` },
+    ],
+  };
 };

@@ -9,7 +9,46 @@
     {
       "request": {
         "method": "POST",
-        "path": "/v1/messages?beta=true"
+        "path": "/v1/messages?beta=true",
+        "shape": {
+          "headers": {
+            "accept": "application/json",
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+          },
+          "body": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "messages": [
+              {
+                "role": "user",
+                "content": "[prompt]"
+              }
+            ],
+            "tools": [
+              {
+                "name": "mcp__external__delete",
+                "type": "custom",
+                "description": "Delete a draft by name.",
+                "input_schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["name"]
+                },
+                "cache_control": null
+              }
+            ],
+            "stream": true
+          }
+        }
       },
       "response": {
         "status": 529,

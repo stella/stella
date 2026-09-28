@@ -391,11 +391,14 @@ describe("Valibot-backed MCP tool definitions", () => {
           format: "date-time",
           description: "Inclusive ISO timestamp",
         },
+        // A bounded `limit` is a page size by convention: clamped, not refused.
         limit: {
           type: "integer",
           minimum: 1,
           maximum: 100,
-          description: "Maximum rows",
+          description:
+            "Maximum rows. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": { kind: "number", range: "clamp" },
         },
         score: {
           type: "number",

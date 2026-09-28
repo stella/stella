@@ -4,8 +4,9 @@ import { LIMITS } from "@/api/lib/limits";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   listStaticMcpToolDefinitions,
-  MCP_STATIC_TOOL_NAMES,
+  REGISTERED_MCP_TOOL_NAMES,
 } from "@/api/mcp/static-tool-definitions";
+import { namedToolNames as namedToolNamesIn } from "@/api/mcp/tool-mentions";
 
 /**
  * The order to drive the stella legislation corpus in. The tool descriptions
@@ -169,25 +170,9 @@ const FACTS: readonly ReferenceSection[] = [
   },
 ];
 
-/**
- * A multi-word snake_case token is what reads as a tool name to an agent, and
- * it is the same shape `resources.test.ts` scans this prose for. Single-word
- * registry names (`search`, `fetch`) are deliberately out of scope: they are
- * ordinary English words, and matching them here would read "no as-of filter
- * on the search" as naming a tool.
- */
-const TOOL_NAME_TOKEN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/gu;
-
-const REGISTRY_TOOL_NAMES: ReadonlySet<string> = new Set(MCP_STATIC_TOOL_NAMES);
-
-/** Every registry tool the text names, read off the text itself. */
-const namedToolNames = (text: string): readonly string[] => [
-  ...new Set(
-    [...text.matchAll(TOOL_NAME_TOKEN)]
-      .map(([token]) => token)
-      .filter((token) => REGISTRY_TOOL_NAMES.has(token)),
-  ),
-];
+/** Every registry tool the text names, read by the shared detector. */
+const namedToolNames = (text: string): readonly string[] =>
+  namedToolNamesIn(text, REGISTERED_MCP_TOOL_NAMES);
 
 const isServedOnSurface = (
   { detail, title }: ReferenceSection,
