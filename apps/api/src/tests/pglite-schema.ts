@@ -47,7 +47,7 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
 );
 const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260928180000_legislation_expression_identity",
+  "20260930120000_legislation_expression_identity",
   "migration.sql",
 );
 const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(

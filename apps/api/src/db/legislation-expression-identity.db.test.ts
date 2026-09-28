@@ -15,7 +15,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
- * Migration `20260928180000_legislation_expression_identity`: the typed
+ * Migration `20260930120000_legislation_expression_identity`: the typed
  * columns, their value CHECKs, and the triggers that keep a publisher
  * expression id set once and under its source's namespace. The test database
  * is built from the Drizzle schema; the CHECK parity test below re-applies the
@@ -24,7 +24,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_SQL = readFileSync(
   new URL(
-    "../../drizzle/20260928180000_legislation_expression_identity/migration.sql",
+    "../../drizzle/20260930120000_legislation_expression_identity/migration.sql",
     import.meta.url,
   ),
   "utf-8",
@@ -216,6 +216,38 @@ describe("legislation expression identity columns", () => {
       constraintNames.toSorted(),
     );
     expect(await definitions()).toEqual(fromSchema);
+  });
+
+  test("the lock acquisition waits at most a second per attempt, a bounded number of times", () => {
+    const block =
+      /SET LOCAL statement_timeout = '(?<budget>\d+)min';--> statement-breakpoint\s*DO \$\$(?<body>[\s\S]*?)\$\$;/u.exec(
+        MIGRATION_SQL,
+      )?.groups ?? panic("expected the lock acquisition block");
+    const body = block["body"] ?? "";
+    const budgetSeconds = Number(block["budget"]) * 60;
+
+    // Every attempt waits one second, never an escalated wait.
+    const waits = [
+      ...body.matchAll(/set_config\(\s*'lock_timeout',\s*'([^']*)'/gu),
+    ].map((match) => match[1]);
+    expect(waits).toEqual(["1s"]);
+    // A failed attempt is its own subtransaction: its rollback releases a
+    // documents lock taken while the sources lock was still out of reach.
+    expect(body).toMatch(
+      /BEGIN\s+LOCK TABLE "legislation_documents", "legislation_sources"\s+IN ACCESS EXCLUSIVE MODE;\s+EXIT;\s+EXCEPTION\s+WHEN lock_not_available THEN/u,
+    );
+    const attempts = Number(
+      /IF attempts >= (\d+) THEN\s+RAISE;/u.exec(body)?.[1] ??
+        panic("expected a bounded number of attempts"),
+    );
+    const longestPause = Number(
+      /pg_sleep\(1 \+ random\(\) \* (\d+)\)/u.exec(body)?.[1] ??
+        panic("expected a bounded pause between attempts"),
+    );
+    // The last attempt runs inside the statement budget.
+    expect(attempts * (1 + 1 + longestPause)).toBeLessThanOrEqual(
+      budgetSeconds,
+    );
   });
 
   test("the migration adds no window or presence CHECK", () => {
