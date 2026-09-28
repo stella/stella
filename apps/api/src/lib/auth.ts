@@ -1221,18 +1221,9 @@ const createAuth = () => {
             member: removedMember,
             organization: org,
           }) {
-            // Branded here, at the boundary: both ids are read off persisted
-            // rows by the plugin itself (the membership it just removed), not
-            // supplied by the caller, so this is where they become ownership
-            // ids for the tenant predicates the helper applies.
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
             await rootDb.transaction(async (tx) => {
-              await closeRemovedMemberActiveTimer({
-                organizationId,
-                tx,
-                userId,
-              });
               await revokeOrganizationMemberAuthArtifacts(tx, {
                 organizationId,
                 userId,
@@ -1247,6 +1238,38 @@ const createAuth = () => {
             // membership otherwise: it is authorized once at connect time and
             // only re-checked on the next event.
             await revokeUserSseAccess(userId, organizationId);
+          },
+          async beforeRemoveMember({
+            member: removedMember,
+            organization: org,
+          }) {
+            // Branded here, at the boundary: both ids are read off persisted
+            // rows by the plugin, not supplied by the caller, so these become ownership
+            // ids for the tenant predicates the helper applies.
+            const organizationId = brandPersistedOrganizationId(org.id);
+            const userId = brandPersistedUserId(removedMember.userId);
+            await rootDb.transaction(async (tx) => {
+              const timerClose = await closeRemovedMemberActiveTimer({
+                organizationId,
+                tx,
+                userId,
+              });
+              if (Result.isError(timerClose)) {
+                throw timerClose.error;
+              }
+              // Better Auth deletes the member after this hook, outside this
+              // transaction. Remove the exact row here so a timer cannot start
+              // between the timer check and membership removal.
+              await tx
+                .delete(member)
+                .where(
+                  and(
+                    eq(member.id, removedMember.id),
+                    eq(member.organizationId, organizationId),
+                    eq(member.userId, userId),
+                  ),
+                );
+            });
           },
         },
         async sendInvitationEmail(data, request) {

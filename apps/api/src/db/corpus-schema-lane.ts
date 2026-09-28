@@ -36,12 +36,14 @@
  * against each other for hours; a batch must not wait on that.
  *
  * Advisory locks need no grant, so the `stella_ingestion` role can take the
- * shared side. Only `better-result` is imported: `migrate.ts` ships as a
- * loose file with no path aliases, and `scoped.ts` must not pull the schema
+ * shared side. Imports stay relative and schema-free: `migrate.ts` ships as
+ * a loose file with no path aliases, and `scoped.ts` must not pull the schema
  * in.
  */
 
 import { TaggedError } from "better-result";
+
+import { executedRows } from "../lib/db/executed-rows";
 
 /** The `(int, int)` key of the lane, as `hashtext` renders the two halves. */
 export const CORPUS_SCHEMA_LANE = {
@@ -93,18 +95,7 @@ export const CORPUS_SCHEMA_LANE_LOCK_STATEMENTS = [
 
 /** Whether a try-lock result (either driver shape) reports the lane granted. */
 export const isCorpusSchemaLaneGranted = (result: unknown): boolean => {
-  let rows: unknown[] = [];
-  if (Array.isArray(result)) {
-    rows = result;
-  } else if (
-    typeof result === "object" &&
-    result !== null &&
-    "rows" in result &&
-    Array.isArray(result.rows)
-  ) {
-    rows = result.rows;
-  }
-  const row: unknown = rows.at(0);
+  const row = executedRows(result).at(0);
   return (
     typeof row === "object" &&
     row !== null &&

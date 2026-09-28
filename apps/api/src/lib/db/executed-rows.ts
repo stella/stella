@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord } from "../type-guards";
 
 /**
  * Rows from `execute` under either driver shape.

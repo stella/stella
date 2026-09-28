@@ -1,3 +1,5 @@
+import { APIError } from "better-auth/api";
+import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -7,7 +9,11 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { roundToBillingIncrement } from "@/api/lib/billing-time";
+import {
+  DEFAULT_TIME_POLICY,
+  getTimePeriodLockError,
+  roundToBillingIncrement,
+} from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -72,6 +78,7 @@ export const closeRemovedMemberActiveTimer = async ({
       ? await tx
           .select({
             billedMinutes: timeEntries.billedMinutes,
+            dateWorked: timeEntries.dateWorked,
             durationMinutes: timeEntries.durationMinutes,
             id: timeEntries.id,
             timerStartedAt: timeEntries.timerStartedAt,
@@ -91,12 +98,39 @@ export const closeRemovedMemberActiveTimer = async ({
       : [];
 
     if (timer?.timerStartedAt) {
+      const settings = await tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: organizationId } },
+        columns: {
+          timeMinimumUnitMinutes: true,
+          timeLockedThroughMonth: true,
+        },
+      });
+      if (
+        getTimePeriodLockError(
+          { ...DEFAULT_TIME_POLICY, ...settings },
+          timer.dateWorked,
+        )
+      ) {
+        return Result.err(
+          new APIError("BAD_REQUEST", {
+            error: "time_period_locked",
+            message:
+              "The time period is locked. Move the locked-through month back before removing this member.",
+          }),
+        );
+      }
+      const minimumUnitMinutes =
+        settings?.timeMinimumUnitMinutes ??
+        DEFAULT_TIME_POLICY.timeMinimumUnitMinutes;
       const now = new Date();
       const durationMinutes = Math.max(
         1,
         Math.round((now.getTime() - timer.timerStartedAt.getTime()) / 60_000),
       );
-      const billedMinutes = roundToBillingIncrement(durationMinutes);
+      const billedMinutes = roundToBillingIncrement(
+        durationMinutes,
+        minimumUnitMinutes,
+      );
       await tx
         .update(timeEntries)
         .set({
@@ -129,4 +163,5 @@ export const closeRemovedMemberActiveTimer = async ({
       });
     }
   }
+  return Result.ok(undefined);
 };

@@ -4,7 +4,12 @@ import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
 } from "@/api/db/schema";
-import { DEFAULT_DOCUMENT_PROCESSING_MODE } from "@/api/db/schema";
+import {
+  DEFAULT_DOCUMENT_PROCESSING_MODE,
+  DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  DEFAULT_TIME_NARRATIVE_REQUIRED,
+} from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -17,7 +22,7 @@ const config = {
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, practice jurisdictions, prompt " +
-    "caching, and memory extraction. An organization that has never saved " +
+    "caching, memory extraction, and time policy. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
@@ -31,6 +36,10 @@ type OrganizationSettingsRow = {
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
   memoryExtractionEnabled: boolean;
+  timeMinimumUnitMinutes: number;
+  timeEditWindowDays: number;
+  timeLockedThroughMonth: string | null;
+  timeNarrativeRequired: boolean;
 };
 
 export const projectOrganizationSettingsRow = (
@@ -45,6 +54,12 @@ export const projectOrganizationSettingsRow = (
   practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
   promptCachingEnabled: row?.promptCachingEnabled ?? true,
   memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+  timeMinimumUnitMinutes:
+    row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  timeEditWindowDays: row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
+  timeNarrativeRequired:
+    row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
 });
 
 const readOrganizationSettings = createSafeRootHandler(
@@ -61,6 +76,10 @@ const readOrganizationSettings = createSafeRootHandler(
             practiceJurisdictions: true,
             promptCachingEnabled: true,
             memoryExtractionEnabled: true,
+            timeMinimumUnitMinutes: true,
+            timeEditWindowDays: true,
+            timeLockedThroughMonth: true,
+            timeNarrativeRequired: true,
           },
         }),
       ),
