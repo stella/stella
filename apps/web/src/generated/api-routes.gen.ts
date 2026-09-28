@@ -3584,7 +3584,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
+                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone" | "custom_field" | "ignore");
                 }>;
                 readonly defaultType: T1dacb02040;
                 readonly delimiter: ("comma" | "semicolon" | "tab" | "labeled");
@@ -3848,7 +3848,7 @@ export type WebRoutes = {
             currency: Tbe0400fa4c;
             notes: Tbe0400fa4c;
             color: Tbe0400fa4c;
-            organizationId: Tb1d68817ba;
+            organizationId: T35ac07d7a8;
             prefix: Tbe0400fa4c;
             middleName: Tbe0400fa4c;
             suffix: Tbe0400fa4c;
@@ -4107,7 +4107,7 @@ export type WebRoutes = {
               currency: Tbe0400fa4c;
               notes: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: Tb1d68817ba;
+              organizationId: T35ac07d7a8;
               prefix: Tbe0400fa4c;
               middleName: Tbe0400fa4c;
               suffix: Tbe0400fa4c;
@@ -8366,7 +8366,7 @@ export type WebRoutes = {
                 invoiceNumber: string;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
-                organizationId: Tb1d68817ba;
+                organizationId: T35ac07d7a8;
                 timeEntries: Array<{
                   status: T61747391b1;
                   id: T094c3ba654;
@@ -10197,7 +10197,7 @@ export type WebRoutes = {
               connectors: Array<{
                 id: Ta10437f406;
                 slug: string;
-                organizationId: (null | Tb1d68817ba);
+                organizationId: (null | T35ac07d7a8);
                 displayName: string;
                 description: string;
                 url: string;
@@ -16703,6 +16703,289 @@ export type WebRoutes = {
         };
       };
     });
+    "seller-profiles": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<{
+              id: Tf6d6ffa107;
+              legalName: string;
+              registrationId: Tbe0400fa4c;
+              vatId: Tbe0400fa4c;
+              addressLine1: Tbe0400fa4c;
+              addressLine2: Tbe0400fa4c;
+              city: Tbe0400fa4c;
+              postalCode: Tbe0400fa4c;
+              country: Tbe0400fa4c;
+              iban: Tbe0400fa4c;
+              bic: Tbe0400fa4c;
+              accountNumber: Tbe0400fa4c;
+              defaultCurrency: string;
+              footerNotes: Tbe0400fa4c;
+              isDefault: Tfddd645dc8;
+              createdAt: string;
+              updatedAt: string;
+            }>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      post: {
+        body: {
+          country?: string;
+          iban?: string;
+          bic?: string;
+          postalCode?: string;
+          city?: string;
+          registrationId?: string;
+          accountNumber?: string;
+          vatId?: string;
+          addressLine1?: string;
+          addressLine2?: string;
+          footerNotes?: string;
+          legalName: string;
+          defaultCurrency: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: Tf6d6ffa107;
+            isDefault: Tfddd645dc8;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        get: {
+          body: Record<never, never>;
+          params: T16ddc96cbc;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tf6d6ffa107;
+              country: Tbe0400fa4c;
+              createdAt: string;
+              updatedAt: string;
+              iban: Tbe0400fa4c;
+              bic: Tbe0400fa4c;
+              postalCode: Tbe0400fa4c;
+              city: Tbe0400fa4c;
+              registrationId: Tbe0400fa4c;
+              organizationId: T35ac07d7a8;
+              accountNumber: Tbe0400fa4c;
+              legalName: string;
+              vatId: Tbe0400fa4c;
+              addressLine1: Tbe0400fa4c;
+              addressLine2: Tbe0400fa4c;
+              defaultCurrency: string;
+              footerNotes: Tbe0400fa4c;
+              isDefault: Tfddd645dc8;
+              archivedAt: Tdf2b0d1150;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        patch: {
+          body: {
+            country?: null | string;
+            iban?: null | string;
+            bic?: null | string;
+            postalCode?: null | string;
+            city?: null | string;
+            registrationId?: null | string;
+            accountNumber?: null | string;
+            legalName?: string;
+            vatId?: null | string;
+            addressLine1?: null | string;
+            addressLine2?: null | string;
+            defaultCurrency?: string;
+            footerNotes?: null | string;
+          };
+          params: T16ddc96cbc;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tf6d6ffa107;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        default: {
+          post: {
+            body: Record<never, never>;
+            params: T16ddc96cbc;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf6d6ffa107;
+                isDefault: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        archive: {
+          post: {
+            body: Record<never, never>;
+            params: T16ddc96cbc;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf6d6ffa107;
+                archived: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
     "external-preview": {
       get: {
         body: Record<never, never>;
@@ -27130,7 +27413,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: Tb1d68817ba;
+                organizationId: T35ac07d7a8;
                 contact: (null | {
                   type: T1dacb02040;
                   id: Tbf83a7d346;
@@ -27181,7 +27464,7 @@ export type WebRoutes = {
                 role: Tdedb951219;
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
-                organizationId: Tb1d68817ba;
+                organizationId: T35ac07d7a8;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -27689,7 +27972,7 @@ export type WebRoutes = {
               createdAt: string;
               billingReference: Tbe0400fa4c;
               color: Tbe0400fa4c;
-              organizationId: Tb1d68817ba;
+              organizationId: T35ac07d7a8;
               clientId: Tb411b93636;
               leadUserId: Tbe0400fa4c;
               stampedVersionCount: number;
@@ -32966,6 +33249,10 @@ type T16c6699378 = {
   readonly output: T0739338f2c;
 };
 
+type T16ddc96cbc = {
+  sellerProfileId: Tf6d6ffa107;
+};
+
 type T16de477cfb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "desktopEditHandoff";
 };
@@ -34062,6 +34349,10 @@ type T3582432480 = {
   output?: unknown;
 } & T4d73965770;
 
+type T35ac07d7a8 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "organization";
+};
+
 type T367a10cc51 = {
   readonly input: T466db84340;
   readonly output: T27875dbd24;
@@ -34769,7 +35060,7 @@ type T539e1e5c66 = {
 
 type T53be3fbe82 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
+  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone");
   rowNumber: number;
 };
 
@@ -37598,10 +37889,6 @@ type Tb165f0f166 = {
   }>;
 };
 
-type Tb1d68817ba = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "organization";
-};
-
 type Tb2028981db = {
   content: T26d760a340;
   question: string;
@@ -39166,6 +39453,10 @@ type Tf6cee77e2c = {
   authType: "bearer";
 } | {
   authType: "none";
+};
+
+type Tf6d6ffa107 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "sellerProfile";
 };
 
 type Tf72e5821b0 = {
