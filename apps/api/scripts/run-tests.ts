@@ -373,14 +373,6 @@ const buildTestDbSnapshot = async (): Promise<string> => {
   return snapshotPath;
 };
 
-const testProcessEnv: Record<string, string | undefined> = {
-  ...process.env,
-  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
-};
-if (dbTests.length > 0 || moduleMockTests.length > 0) {
-  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
-}
-
 type PlannedTestBatch = {
   isolate: boolean;
   kind: TestBatchKind;
@@ -462,6 +454,21 @@ const plannedBatches = orderBatchesForLanes([
     ),
   }),
 ]);
+
+const testProcessEnv: Record<string, string | undefined> = {
+  ...process.env,
+  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
+};
+// Only a run that selected a DB-backed or module-mock batch boots PGlite, so
+// a run of logic test files skips the snapshot build.
+if (
+  plannedBatches.some(
+    ({ kind }) =>
+      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+  )
+) {
+  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+}
 
 const testLanes = deriveTestLaneCount({
   availableParallelism: availableParallelism(),
