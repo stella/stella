@@ -3250,20 +3250,20 @@ test("an orphaned erasure cannot move its desired epoch alone", async () => {
 });
 
 test("an orphaned erasure applies only after its applied upsert settles", async () => {
-  const [lease] = await db.transaction(
-    async (tx) =>
-      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v5",
-        limit: 10,
-        leaseMs: 60_000,
-        newIntentId: () => FIRST_INTENT_ID,
-        newLeaseToken: () => FIRST_LEASE_TOKEN,
-      }),
-  );
-  if (lease === undefined) {
-    return panic("Expected a projection lease");
-  }
+  const lease =
+    (
+      await db.transaction(
+        async (tx) =>
+          await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+            family: "case_law",
+            generation: "case_law_v5",
+            limit: 10,
+            leaseMs: 60_000,
+            newIntentId: () => FIRST_INTENT_ID,
+            newLeaseToken: () => FIRST_LEASE_TOKEN,
+          }),
+      )
+    ).at(0) ?? panic("Expected a projection lease");
   // Accepted far enough in the past that the append is published, so the
   // cleanup the erasure schedules is claimable at once.
   const acceptedAt = new Date(
