@@ -8161,7 +8161,7 @@ export type WebRoutes = {
                         status: "cancelled";
                       } | {
                         id: T348bff1a92;
-                        reason: T5b6a988e20;
+                        reason: Tbcc05c4756;
                         status: "interrupted";
                       };
                     };
@@ -32321,7 +32321,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   execute?: T1209f7b6f8;
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
-  metadata?: T220eab46ee;
+  metadata?: Te863c9aa28;
 });
 
 export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T86d991e7c0 | Tf9529310eb | T97fca5e74e | T621420426b | T2dbe0476e0 | T5143c04283 | T5cbad7b267 | Tc1f6a75e68 | T08899c0691 | T3115fa37b5 | Tefe86bc66f | Tc6f6bfa330 | T516226b2c3 | T6947d07557 | Tde9fbd919d | T2a6713721b | T050ffb7f51 | T4c6fb063e8 | T347ea842b3 | Tc31abec450 | Te4cef2c4f1 | T64dd0ef184 | T7aace93e83 | Te903957931 | Td60cdaf8e2 | T8442475520 | Tf7f5c58163 | T6454934e85 | T7726303d04 | T698805d2cd | T5681b43fbc | T08bd31660c | T99632b6a0a | T0cbcac4402 | T3582432480 | T451ea4af96 | Te265963f83 | T4cff2c04a4 | T09ed4390f0 | T1c0b32c703 | T908548b020 | T4b0b703d9e | T0dfed83fbb | T28236c25e3 | T213cf195f4 | Tfed59c6977 | Te07b1866e3 | T645c36442e | T8df4d19800 | Ta20d5deb18 | Tc4d06db5b5 | T7a0429686a | Ta7584da43a | T5b1470ddab | T172316168a | T92cce81fcb | Tec808acc7a | T0b64e151e3 | T77dbcc2472 | Tb5de57bdb6 | Te6421fbbcc | T6b16466116 | Td7a976c35b | Te1e7a7564f | T0ef90f0d9a | T3953b344f7 | T812d2b310a | Tef6a8c50b8 | T74bd0da96e | Tbff0077d7c | T9f6ae92b98 | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_client_SubagentPart);
@@ -33512,102 +33512,6 @@ type T21d4acdd13 = {
 type T21e7b1b9fc = {
   countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: Tfddd645dc8;
-};
-
-type T220eab46ee = {
-  activeDraftContext?: undefined | {
-    type: "generated-document";
-    originChatMessageId: T66e92cdab1;
-    originChatThreadId: Taf779979ed;
-    toolCallId: string;
-    version: 1;
-  };
-  anonRestorations?: undefined | {
-    pairs: Array<Tc7eaf8104c>;
-  };
-  docxEditPreferences?: undefined | {
-    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
-    editApplyMode?: undefined | "auto" | "manual";
-  };
-  mentions?: undefined | {
-    mentions: Array<((Ta3fb0e1ff6 & {
-      category: "entity";
-      resource: T2a53b33d09;
-      workspaceId: Tbe0400fa4c;
-    }) | (Ta3fb0e1ff6 & {
-      category: "workspace";
-      resource: T4c3eeb6df3;
-    }))>;
-  };
-  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | (T41b8bd81bd & {
-    version: 1;
-  }) | (T41b8bd81bd & {
-    version: 2;
-    refs: Array<{
-      kind: "contact";
-      ref: string;
-      contact: T346ea860b1;
-    } | {
-      kind: "entity";
-      ref: string;
-      entity: T2a53b33d09;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "matter";
-      ref: string;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "property";
-      ref: string;
-      property: {
-        readonly type: "property";
-        readonly id: stll_api_contract_SafeId<"property">;
-      };
-    } | {
-      kind: "source";
-      ref: string;
-      href: `#stella-source=${string}`;
-    }>;
-  });
-  serverProvenance?: undefined | {
-    type: "search-summary";
-    version: 1;
-  };
-  sourceDocuments?: undefined | Array<Tcde02c03e1>;
-  turnOutcome?: undefined | {
-    type: "awaiting-user";
-    interaction: {
-      type: "approval";
-      toolCallId: string;
-    } | {
-      type: "ask-user";
-      toolCallId: string;
-    } | {
-      type: "client-tool";
-      toolCallId: string;
-    };
-  } | {
-    type: "completed";
-  } | {
-    type: "cancelled";
-    reason: T5e702ac6d9;
-  } | {
-    type: "failed";
-    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
-  } | {
-    type: "interrupted";
-    reason: T5b6a988e20;
-  };
-  usage?: undefined | {
-    totalTokens: number;
-    completionTokens: number;
-    promptTokens: number;
-  } & {
-    completionTokensDetails?: undefined | {
-      reasoningTokens?: number;
-    };
-  };
 };
 
 type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
@@ -35337,8 +35241,6 @@ type T5b398cdd9d = {
   version: 1;
 };
 
-type T5b6a988e20 = "timeout" | "client-disconnected";
-
 type T5bb4fea9f8 = {
   readonly input: Tab11ee99f7;
   readonly output: T8a03a9eca5;
@@ -36083,7 +35985,7 @@ type T6b4b00e15b = {
 type T6b718d91dc = {
   createdAt: string;
   id: T66e92cdab1;
-  metadata?: T220eab46ee;
+  metadata?: Te863c9aa28;
   role: Tbc3d04c5ab;
   parts: Array<(tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | {
     type: "tool-result";
@@ -38169,6 +38071,8 @@ type Tbca2f95139 = {
   dismissed: number;
 };
 
+type Tbcc05c4756 = "timeout" | "client-disconnected" | "owner-lost";
+
 type Tbcf5250947 = {
   readonly value: Td80ce08c34;
   readonly issues?: undefined;
@@ -39238,6 +39142,102 @@ type Te7be292eda = {
 type Te846513736 = {
   readonly value: Tf40440a0f9;
   readonly issues?: undefined;
+};
+
+type Te863c9aa28 = {
+  activeDraftContext?: undefined | {
+    type: "generated-document";
+    originChatMessageId: T66e92cdab1;
+    originChatThreadId: Taf779979ed;
+    toolCallId: string;
+    version: 1;
+  };
+  anonRestorations?: undefined | {
+    pairs: Array<Tc7eaf8104c>;
+  };
+  docxEditPreferences?: undefined | {
+    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
+    editApplyMode?: undefined | "auto" | "manual";
+  };
+  mentions?: undefined | {
+    mentions: Array<((Ta3fb0e1ff6 & {
+      category: "entity";
+      resource: T2a53b33d09;
+      workspaceId: Tbe0400fa4c;
+    }) | (Ta3fb0e1ff6 & {
+      category: "workspace";
+      resource: T4c3eeb6df3;
+    }))>;
+  };
+  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
+  refContext?: undefined | (T41b8bd81bd & {
+    version: 1;
+  }) | (T41b8bd81bd & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
+      ref: string;
+      contact: T346ea860b1;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: T2a53b33d09;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
+    }>;
+  });
+  serverProvenance?: undefined | {
+    type: "search-summary";
+    version: 1;
+  };
+  sourceDocuments?: undefined | Array<Tcde02c03e1>;
+  turnOutcome?: undefined | {
+    type: "awaiting-user";
+    interaction: {
+      type: "approval";
+      toolCallId: string;
+    } | {
+      type: "ask-user";
+      toolCallId: string;
+    } | {
+      type: "client-tool";
+      toolCallId: string;
+    };
+  } | {
+    type: "completed";
+  } | {
+    type: "cancelled";
+    reason: T5e702ac6d9;
+  } | {
+    type: "failed";
+    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
+  } | {
+    type: "interrupted";
+    reason: Tbcc05c4756;
+  };
+  usage?: undefined | {
+    totalTokens: number;
+    completionTokens: number;
+    promptTokens: number;
+  } & {
+    completionTokensDetails?: undefined | {
+      reasoningTokens?: number;
+    };
+  };
 };
 
 type Te89bc15241 = {
