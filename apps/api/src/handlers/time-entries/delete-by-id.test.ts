@@ -38,8 +38,10 @@ describe("deleteTimeEntryById", () => {
   test("rejects deleting a billed entry", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.BILLED,
             workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",
@@ -76,8 +78,10 @@ describe("deleteTimeEntryById", () => {
     let auditEventCount = 0;
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.WRITTEN_OFF,
             workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",

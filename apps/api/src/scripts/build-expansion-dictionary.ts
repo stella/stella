@@ -26,6 +26,7 @@ import { sql } from "drizzle-orm";
 
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { zstdCompress } from "@/api/lib/compression";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   type ExpansionBucket,
   foldExpansionKey,
@@ -151,9 +152,6 @@ const { ingestionDb } = await openCaseLawReadOnlySession();
 /** The keyset floor: uuids order lexically, so the nil uuid precedes them all. */
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
-const rowsOf = (result: unknown): Record<string, unknown>[] =>
-  Array.isArray(result) ? result.filter(isRecord) : [];
-
 type VocabularyChunk = {
   /** Exclusive upper bound reached, or null when the language is exhausted. */
   lastId: string | null;
@@ -184,7 +182,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
       sql`SELECT set_config('statement_timeout', ${CHUNK_STATEMENT_TIMEOUT}, true)`,
     );
 
-    const bounds = rowsOf(
+    const bounds = executedRows(
       await tx.execute(sql`
         SELECT max(decision_id)::text AS last_id, count(*)::int AS scanned
         FROM (
@@ -196,7 +194,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
           LIMIT ${chunkSize}
         ) chunk
       `),
-    );
+    ).filter(isRecord);
     const lastId = bounds.at(0)?.["last_id"];
     const scanned = Number(bounds.at(0)?.["scanned"] ?? 0);
     if (typeof lastId !== "string" || scanned === 0) {
@@ -208,7 +206,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
     // marks. Those are `\p{M}`, not `\p{L}`, so the token filter would drop
     // them and the corpus would silently lose the inflections of every
     // accented word that happened to arrive in NFD.
-    const stats = rowsOf(
+    const stats = executedRows(
       await tx.execute(sql`
         SELECT word, ndoc
         FROM ts_stat(
@@ -222,7 +220,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
           )
         )
       `),
-    );
+    ).filter(isRecord);
 
     // Shape-filtered here rather than after the whole scan: the frequency map
     // lives for the length of the build, and an OCR-heavy corpus produces

@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
@@ -73,18 +74,7 @@ const queryRows = async (
   if (Result.isError(queried)) {
     return queried;
   }
-  if (Array.isArray(queried.value)) {
-    return Result.ok(queried.value);
-  }
-  if (isRecord(queried.value) && Array.isArray(queried.value["rows"])) {
-    return Result.ok(queried.value["rows"]);
-  }
-  return Result.err(
-    new BetterAuthBackfillError({
-      code: "database-query-failed",
-      message: "Better Auth backfill database returned an invalid result",
-    }),
-  );
+  return Result.ok(executedRows(queried.value));
 };
 
 const requiredString = (value: unknown): string | null =>

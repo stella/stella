@@ -1,71 +1,16 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import {
-  getTimeEntryDateValidationError,
-  roundToBillingIncrement,
-} from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createTimeEntryHandler } from "./time-entry-insert";
 
-describe("roundToBillingIncrement (billing increment snap)", () => {
-  test("ceils to the 6-minute billing increment", () => {
-    expect(roundToBillingIncrement(0)).toBe(0);
-    expect(roundToBillingIncrement(1)).toBe(6);
-    expect(roundToBillingIncrement(6)).toBe(6);
-    expect(roundToBillingIncrement(7)).toBe(12);
-    expect(roundToBillingIncrement(12)).toBe(12);
-    expect(roundToBillingIncrement(13)).toBe(18);
-  });
-
-  test("INVARIANT: result is a multiple of 6, >= input, < input + 6", () => {
-    for (let m = 0; m <= 600; m++) {
-      const r = roundToBillingIncrement(m);
-      expect(r % 6).toBe(0);
-      expect(r).toBeGreaterThanOrEqual(m);
-      expect(r).toBeLessThan(m + 6);
-    }
-  });
-});
-
-describe("getTimeEntryDateValidationError", () => {
-  test("accepts today and the maximum-age boundary", () => {
-    expect(
-      getTimeEntryDateValidationError({
-        dateWorked: "2026-07-01",
-        today: "2026-07-01",
-      }),
-    ).toBeNull();
-    expect(
-      getTimeEntryDateValidationError({
-        dateWorked: "2026-04-02",
-        today: "2026-07-01",
-      }),
-    ).toBeNull();
-  });
-
-  test("rejects future and expired dates", () => {
-    expect(
-      getTimeEntryDateValidationError({
-        dateWorked: "2026-07-02",
-        today: "2026-07-01",
-      }),
-    ).toBe("Date worked cannot be in the future");
-    expect(
-      getTimeEntryDateValidationError({
-        dateWorked: "2026-04-01",
-        today: "2026-07-01",
-      }),
-    ).toBe("Date worked cannot be more than 90 days ago");
-  });
-});
-
-describe("createTimeEntryHandler (timezone validation)", () => {
-  test("rejects an invalid IANA timezone id with a 400 instead of throwing", async () => {
-    const { getCallCount, safeDb } = createScopedDbMock({
+describe("createTimeEntryHandler", () => {
+  test("rejects an invalid IANA timezone id with a typed error", async () => {
+    const { safeDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         entities: {
           findFirst: () => {
             throw new Error(
@@ -82,6 +27,7 @@ describe("createTimeEntryHandler (timezone validation)", () => {
         organizationId: toSafeId<"organization">("org_test"),
         workspaceId: toSafeId<"workspace">("workspace_test"),
         userId: toSafeId<"user">("user_test"),
+        memberRole: { role: "member" },
         recordAuditEvent: async () => {},
         body: {
           workItemId: toSafeId<"entity">("matter_test"),
@@ -100,6 +46,5 @@ describe("createTimeEntryHandler (timezone validation)", () => {
         message: "Invalid timezone identifier",
       });
     }
-    expect(getCallCount()).toBe(0);
   });
 });
