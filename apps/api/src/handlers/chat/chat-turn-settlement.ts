@@ -1,5 +1,6 @@
 import { uiMessageToModelMessages } from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import type {
@@ -7,6 +8,9 @@ import type {
   ChatPart,
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { guardModelMessages } from "@/api/lib/chat/model-ingress-guard";
+import type { GuardedModelMessages } from "@/api/lib/chat/model-ingress-guard";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 export type ToolCallState = ToolCallPart["state"];
@@ -446,7 +450,7 @@ export const answerCallsInTheirStep = (
 
 /** `messages` with every assistant message's calls answered in their own
  *  step (`answerCallsInTheirStep`), for a provider request. */
-export const answerHistoryCallsInTheirStep = (
+const answerHistoryCallsInTheirStep = (
   messages: readonly ChatMessage[],
 ): ChatMessage[] =>
   messages.map((message) => {
@@ -458,3 +462,35 @@ export const answerHistoryCallsInTheirStep = (
       ? message
       : { ...message, parts: [...parts] };
   });
+
+const providerHistorySchema = v.pipe(
+  v.custom<GuardedModelMessages<ChatMessage[]>>(Array.isArray),
+  v.brand("GuardedProviderHistory"),
+);
+
+/** The history a chat attempt hands the provider. Mintable only by
+ *  `guardProviderHistory`, so a history that skipped it fails typecheck at
+ *  the dispatch. */
+export type GuardedProviderHistory = v.InferOutput<
+  typeof providerHistorySchema
+>;
+
+/**
+ * The provider's copy of `messages`: every call answered right after its
+ * step, then run through the model-ingress guard, so the answers it adds pass
+ * the guard like everything else the provider reads.
+ */
+export const guardProviderHistory = ({
+  messages,
+  workspaceIds,
+}: {
+  messages: readonly ChatMessage[];
+  workspaceIds: readonly SafeId<"workspace">[];
+}): GuardedProviderHistory =>
+  v.parse(
+    providerHistorySchema,
+    guardModelMessages({
+      messages: answerHistoryCallsInTheirStep(messages),
+      workspaceIds,
+    }),
+  );

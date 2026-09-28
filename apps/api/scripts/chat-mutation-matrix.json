@@ -579,15 +579,14 @@
     {
       "id": "approval-answer-in-its-step-dispatched",
       "fix": "#4020",
-      "behaviour": "Every chat attempt hands the provider the history with each call answered in its own step.",
-      "status": "pending",
-      "reason": "The harness checks chat.provider.prefix-stable on every conversation only once its prompt ledger lands; this scenario then kills the entry.",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  const preparedMessages = answerHistoryCallsInTheirStep(guardedMessages);",
-      "replace": "  const preparedMessages = guardedMessages;",
+      "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
+      "replace": "      messages,",
       "scenario": {
-        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "accepts an approval of the call the model asks for after a denial"
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "keeps a denial ahead of the approved call it was answered with"
       },
       "oracle": "chat.provider.prefix-stable"
     }

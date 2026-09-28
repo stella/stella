@@ -6,9 +6,10 @@ import * as v from "valibot";
 
 import {
   answerCallsInTheirStep,
-  answerHistoryCallsInTheirStep,
+  guardProviderHistory,
   settleHistoryForRun,
 } from "@/api/handlers/chat/chat-turn-settlement";
+import type { GuardedChatSurfaces } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -121,9 +122,12 @@ const runRequest = async ({
     },
     structuredOutput: () => panic("No structured output in this test"),
   };
-  const messages = answerHistoryCallsInTheirStep(
-    settleHistoryForRun({ messages: history, resumedMessageId }),
-  );
+  // The history exactly as a chat attempt dispatches it: settled, then the
+  // provider's guarded copy, the only type the dispatch accepts.
+  const messages: GuardedChatSurfaces["messages"] = guardProviderHistory({
+    messages: settleHistoryForRun({ messages: history, resumedMessageId }),
+    workspaceIds: [],
+  });
   for await (const _chunk of chat({
     adapter,
     agentLoopStrategy: maxIterations(4),
