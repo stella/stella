@@ -17,9 +17,86 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const DELETING_WORKSPACE_STATUS = "deleting" as const;
+
+const myTimeEntryColumns = {
+  id: timeEntries.id,
+  workspaceId: workspaces.id,
+  workspaceName: workspaces.name,
+  workspaceReference: workspaces.reference,
+  dateWorked: timeEntries.dateWorked,
+  durationMinutes: timeEntries.durationMinutes,
+  billedMinutes: timeEntries.billedMinutes,
+  narrative: timeEntries.narrative,
+  billable: timeEntries.billable,
+  status: timeEntries.status,
+  source: timeEntries.source,
+  timerStartedAt: timeEntries.timerStartedAt,
+};
+
+type MyTimeEntrySourceRow = typeof timeEntries.$inferSelect & {
+  workspaceName: (typeof workspaces.$inferSelect)["name"];
+  workspaceReference: (typeof workspaces.$inferSelect)["reference"];
+};
+
+const toMyTimeEntryItem = (
+  row: Pick<MyTimeEntrySourceRow, keyof typeof myTimeEntryColumns>,
+) => ({
+  id: row.id,
+  workspaceId: row.workspaceId,
+  workspaceName: row.workspaceName,
+  workspaceReference: row.workspaceReference,
+  dateWorked: row.dateWorked,
+  durationMinutes: row.durationMinutes,
+  billedMinutes: row.billedMinutes,
+  narrative: row.narrative,
+  billable: row.billable,
+  status: row.status,
+  source: row.source,
+  timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+});
+
+const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
+  // The request is scoped to the active organization and signed-in user.
+  "organizationId",
+  "userId",
+  // The day view does not display work item, rate, or billing code details.
+  "workItemId",
+  "timezoneId",
+  "rateAtEntry",
+  "currency",
+  "invoiceNarrative",
+  "noCharge",
+  "taskCode",
+  "activityCode",
+  // Invoice and split identifiers are internal billing links.
+  "invoiceId",
+  "splitGroupId",
+  // Timer stop and audit timestamps are not used by the day view.
+  "timerStoppedAt",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
+
+type MissingMyTimeEntryColumn = UnprojectedColumns<
+  MyTimeEntrySourceRow,
+  ReturnType<typeof toMyTimeEntryItem>,
+  (typeof UNPROJECTED_MY_TIME_ENTRY_COLUMNS)[number]
+>;
+type UnexpectedMyTimeEntryColumn = UnbackedProjectionKeys<
+  MyTimeEntrySourceRow,
+  ReturnType<typeof toMyTimeEntryItem>,
+  (typeof UNPROJECTED_MY_TIME_ENTRY_COLUMNS)[number]
+>;
+
+true satisfies MissingMyTimeEntryColumn extends never ? true : never;
+true satisfies UnexpectedMyTimeEntryColumn extends never ? true : never;
 
 const config = {
   description:
@@ -74,20 +151,7 @@ const listMyTimeEntries = createSafeRootHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            id: timeEntries.id,
-            workspaceId: workspaces.id,
-            workspaceName: workspaces.name,
-            workspaceReference: workspaces.reference,
-            dateWorked: timeEntries.dateWorked,
-            durationMinutes: timeEntries.durationMinutes,
-            billedMinutes: timeEntries.billedMinutes,
-            narrative: timeEntries.narrative,
-            billable: timeEntries.billable,
-            status: timeEntries.status,
-            source: timeEntries.source,
-            timerStartedAt: timeEntries.timerStartedAt,
-          })
+          .select(myTimeEntryColumns)
           .from(timeEntries)
           .innerJoin(
             workspaces,
@@ -118,20 +182,7 @@ const listMyTimeEntries = createSafeRootHandler(
     });
     return Result.ok({
       ...page,
-      items: page.items.map((row) => ({
-        id: row.id,
-        workspaceId: row.workspaceId,
-        workspaceName: row.workspaceName,
-        workspaceReference: row.workspaceReference,
-        dateWorked: row.dateWorked,
-        durationMinutes: row.durationMinutes,
-        billedMinutes: row.billedMinutes,
-        narrative: row.narrative,
-        billable: row.billable,
-        status: row.status,
-        source: row.source,
-        timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
-      })),
+      items: page.items.map(toMyTimeEntryItem),
     });
   },
 );
