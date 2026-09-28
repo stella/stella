@@ -61,6 +61,7 @@ import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
@@ -710,6 +711,17 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
+    p
+      .index("case_law_decisions_live_legacy_raw_source_idx")
+      .on(t.sourceId, t.id)
+      .where(
+        liveCaseLawLegacyReferenceSql({
+          decisionId: t.id,
+          redactedAt: t.redactedAt,
+          sourceId: t.sourceId,
+          sourceRawS3Key: t.sourceRawS3Key,
+        }),
+      ),
     // The coverage page's week of one source's arrivals, answered from the
     // index alone. The cursor index above finds the same range and then
     // fetches every row in it to evaluate the publication gate, which reads
