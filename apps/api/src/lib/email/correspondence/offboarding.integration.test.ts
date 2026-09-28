@@ -62,7 +62,7 @@ const migrationOwnerPolicies = migrationStatements.filter((statement) =>
 );
 const inboundMigrationStatements = readFileSync(
   new URL(
-    "../../../../drizzle/20260928090200_inbound_token_lookup/migration.sql",
+    "../../../../drizzle/20260928150200_inbound_token_lookup/migration.sql",
     import.meta.url,
   ),
   "utf-8",
