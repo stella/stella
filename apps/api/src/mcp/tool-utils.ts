@@ -740,27 +740,46 @@ const sortedWords = (name: string): string =>
   name.split(/[._-]/u).toSorted().join(" ");
 
 /**
- * Up to `limit` known tool names closest to `target` by Levenshtein distance,
- * used to hint an agent that fat-fingered a tool name. The distance is the
- * smaller of the plain comparison and the word-order-insensitive one, so a name
- * whose words were regrouped (`widgets.delete-part` against
- * `widgets.parts.delete`) still finds its match. Only candidates within a
- * lenient edit budget (roughly half the longer name) are kept, so an unrelated
- * miss returns nothing rather than a confusing suggestion. No dependency: a tiny
- * DP implementation is enough for the short, small candidate set.
+ * A tool name as an agent may have meant it: lowercased, without separators
+ * and without a leading `external` (the prefix chat scripts put on read
+ * functions). `listMatters`, `LIST_MATTERS`, `list-matters` and
+ * `external_list_matters` all share the key of `list_matters`.
+ */
+export const toolNameKey = (name: string): string =>
+  name
+    .toLowerCase()
+    .replaceAll(/[-_.]/gu, "")
+    .replace(/^external/u, "");
+
+/**
+ * How far `target` is from the tool name `name`: the smallest of the plain
+ * edit distance, the word-order-insensitive one (`widgets.delete-part` against
+ * `widgets.parts.delete`) and the distance between their keys (case,
+ * separators and an `external_` prefix ignored).
+ */
+export const toolNameDistance = (target: string, name: string): number =>
+  Math.min(
+    levenshtein(target, name),
+    levenshtein(sortedWords(target), sortedWords(name)),
+    levenshtein(toolNameKey(target), toolNameKey(name)),
+  );
+
+/**
+ * Up to `limit` known tool names closest to `target` by
+ * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
+ * name. Only candidates within a lenient edit budget (roughly half the longer
+ * name) are kept, so an unrelated miss returns nothing rather than a confusing
+ * suggestion. No dependency: a tiny DP implementation is enough for the short,
+ * small candidate set.
  */
 export const closestToolNames = (
   target: string,
   candidates: readonly string[],
   limit = 3,
 ): string[] => {
-  const targetWords = sortedWords(target);
   const scored: { name: string; distance: number }[] = [];
   for (const name of candidates) {
-    const distance = Math.min(
-      levenshtein(target, name),
-      levenshtein(targetWords, sortedWords(name)),
-    );
+    const distance = toolNameDistance(target, name);
     if (distance <= Math.ceil(name.length / 2)) {
       scored.push({ name, distance });
     }
@@ -773,6 +792,24 @@ export const closestToolNames = (
     )
     .slice(0, limit)
     .map(({ name }) => name);
+};
+
+/** A tool name as agent-facing text quotes it. */
+export const quoteToolName = (name: string): string => `\`${name}\``;
+
+/**
+ * The one "did you mean" sentence every unknown-name answer uses (MCP
+ * `unknown_tool` hints, capability ids, chat script functions), over labels
+ * the caller already quoted. Empty when there is nothing to suggest.
+ */
+export const didYouMean = (labels: readonly string[]): string => {
+  const [only, ...rest] = labels;
+  if (only === undefined) {
+    return "";
+  }
+  return rest.length === 0
+    ? `Did you mean ${only}?`
+    : `Did you mean one of ${labels.join(", ")}?`;
 };
 
 const levenshtein = (a: string, b: string): number => {

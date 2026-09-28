@@ -464,7 +464,11 @@ export class SandboxError extends TaggedError("SandboxError")<{
     | "memory"
     | "host-call-limit"
     | "return-too-large"
-    | "non-serialisable-return";
+    | "non-serialisable-return"
+    // The script called something that is not a script function: a direct
+    // tool, an unavailable tool, or a misspelled function. The message names
+    // the call to make instead.
+    | "not-a-script-function";
   message: string;
   /**
    * Console output captured before the failure, so callers can surface the

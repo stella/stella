@@ -1009,6 +1009,20 @@
         "test": "lets a new message replace an ask-user card that still waits"
       },
       "oracle": "chat.provider.results-stable"
+    },
+    {
+      "id": "code-mode-misplaced-call-explained",
+      "fix": "#4083",
+      "behaviour": "A code-mode script that calls a direct tool gets back the tool's name and the instruction to call it outside the script, instead of a bare ReferenceError.",
+      "status": "active",
+      "file": "src/handlers/chat/tools/execute/chat-code-mode.ts",
+      "search": "      nameGuide: (bindingNames) =>\n        buildScriptCallGuide(\n          chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),\n        ),\n",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/code-mode-misplaced-call.integration.test.ts",
+        "test": "is told to call it directly, and the turn completes with the direct call"
+      },
+      "oracle": "chat.code-mode.misplaced-call-explained"
     }
   ]
 }
