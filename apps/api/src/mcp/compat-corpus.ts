@@ -57,6 +57,14 @@ import {
  * One corpus source's position, keyed by country. A key absent means that
  * country has not been asked yet (its first page); a key holding `null` means
  * its pages ended on an earlier call and it is not asked again.
+ *
+ * Keyed by country rather than by position in a list, so neither the order
+ * the countries are asked in nor a change to the practice jurisdictions
+ * between pages moves any country's place. A cursor minted before every
+ * admitted country was asked (while practice jurisdictions still selected
+ * countries, or before a country was admitted) resumes each country it names
+ * where it stopped and starts the others at their first page: nothing already
+ * returned repeats and nothing is skipped.
  */
 export type CorpusSubCursors = Readonly<Record<string, string | null>>;
 
@@ -75,37 +83,79 @@ export type CompatCorpusCountries = {
   legislation: readonly PublicLegislationCountry[];
 };
 
+/** A practice jurisdiction in the corpus's alpha-3 spelling. */
+export type PractisedCountry = { alpha3: string; isPrimary: boolean };
+
+const PRIMARY_RANK = 0;
+const PRACTISED_RANK = 1;
+const UNPRACTISED_RANK = 2;
+
 /**
- * Which corpus countries a query is about.
+ * Every admitted country, in the order this pair asks them: the primary
+ * practice jurisdiction first, then the other practised ones, then the rest,
+ * each group in admitted order.
  *
- * The organization's practice jurisdictions are the only jurisdiction signal
- * this pair has, so they select from what the corpus admits. An organization
- * that has not set any has not said it practises nowhere: it gets every
- * admitted country. One that practises only where this corpus holds nothing
- * gets no corpus hits, which is the same answer the named tools give it.
+ * Practice jurisdictions order the countries and never remove one. This pair
+ * takes a query and a cursor and nothing else, so a country it left out could
+ * not be asked for from here: an organization practising only where the
+ * corpus holds nothing would get no corpus hits and no way to change that,
+ * and one practising in a single country would never see the rest, with
+ * nothing in the answer saying so. Ranking keeps the signal without that dead
+ * end: the countries asked are exactly the admitted ones for every
+ * organization, and the practised ones lead. Their lead is the result order
+ * (hits are merged in country order) and the page-cap remainder
+ * (`corpusCountryQuotas` gives the extra hits to the first countries), so a
+ * practised country is also never given a smaller share than an unpractised
+ * one. The per-country quota floor stays one hit, which the cap assertion
+ * below guarantees for every admitted country.
+ */
+export const rankCorpusCountries = <TCountry extends string>(
+  admitted: readonly TCountry[],
+  practised: readonly PractisedCountry[],
+): readonly TCountry[] => {
+  const rankByCountry = new Map<string, number>();
+  for (const { alpha3, isPrimary } of practised) {
+    const rank = isPrimary ? PRIMARY_RANK : PRACTISED_RANK;
+    rankByCountry.set(
+      alpha3,
+      Math.min(rank, rankByCountry.get(alpha3) ?? UNPRACTISED_RANK),
+    );
+  }
+  return admitted
+    .map((country, index) => ({
+      country,
+      index,
+      rank: rankByCountry.get(country) ?? UNPRACTISED_RANK,
+    }))
+    .toSorted(
+      (left, right) => left.rank - right.rank || left.index - right.index,
+    )
+    .map(({ country }) => country);
+};
+
+/**
+ * The corpus countries a query is asked of: every admitted country, ranked by
+ * the organization's practice jurisdictions (the only jurisdiction signal this
+ * pair has). See {@link rankCorpusCountries} for why they rank and never
+ * select.
  */
 export const resolveCompatCorpusCountries = async (
   context: McpRequestContext,
 ): Promise<CompatCorpusCountries> => {
-  const practised: ReadonlySet<string> = new Set(
-    (await loadPracticeJurisdictions(context)).flatMap(({ countryCode }) => {
+  const practised = (await loadPracticeJurisdictions(context)).flatMap(
+    ({ countryCode, isPrimary }) => {
       // The column stores alpha-2 and the corpus keys on alpha-3; the shared
       // country reader is what converts between them everywhere else too.
       const normalized = normalizeCountry(countryCode, { spelling: "alpha-3" });
-      return normalized.ok ? [normalized.value.alpha3] : [];
-    }),
+      return normalized.ok
+        ? [{ alpha3: normalized.value.alpha3, isPrimary }]
+        : [];
+    },
   );
 
-  const admitted = <TCountry extends string>(
-    countries: readonly TCountry[],
-  ): readonly TCountry[] =>
-    practised.size === 0
-      ? countries
-      : countries.filter((country) => practised.has(country));
-
   return {
-    caseLaw: admitted(PUBLIC_CASE_LAW_COUNTRIES),
-    legislation: admitted(PUBLIC_LEGISLATION_COUNTRIES),
+    caseLaw: rankCorpusCountries(PUBLIC_CASE_LAW_COUNTRIES, practised),
+    legislation: rankCorpusCountries(PUBLIC_LEGISLATION_COUNTRIES, practised),
   };
 };
 
@@ -137,7 +187,7 @@ const EMPTY_PAGE: CorpusPage = { results: [], cursors: {} };
 /**
  * A source's page cap split across the countries it is asked for, summing to
  * exactly the cap: a floor share each, plus one extra hit to the first
- * `cap % countries` of them in admitted order.
+ * `cap % countries` of them in the order they are asked (practised first).
  *
  * The obvious equal floored share is wrong in both directions. Three countries
  * under a cap of five would each take one, spending three hits of the five;

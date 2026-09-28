@@ -46,10 +46,7 @@ import type {
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
-import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
@@ -231,10 +228,12 @@ const normalizeLegacyMessagePartsToTanStack = (
       continue;
     }
     if (isLegacyAnonRestorationsPart(part)) {
+      // Legacy parts predate thread-wide placeholder numbering, so a repeated
+      // placeholder here is expected history, not a fault: not reported.
       metadata.anonRestorations = mergeAnonRestorations(
         metadata.anonRestorations,
         part.data,
-      );
+      ).restorations;
       continue;
     }
     if (isLegacyMentionsPart(part)) {
@@ -1608,22 +1607,20 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
-const ANON_RESTORATION_CONFLICT_SINK = failureSink({
-  event: "chat.anon_restoration_conflict",
-  expected: [],
-});
-
 /**
  * One message's restorations, each placeholder once. A placeholder names one
  * original across a thread (`createChatThirdPartyBoundary` numbers every
  * request after the thread's earlier ones), so a pair naming another original
  * for a placeholder already held is a numbering fault: the first meaning
- * stays, and the fault is reported without its values.
+ * stays, and the count of such pairs is returned for the caller to report.
  */
 export const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
-): NonNullable<ChatMessageMetadata["anonRestorations"]> => {
+): {
+  conflicts: number;
+  restorations: NonNullable<ChatMessageMetadata["anonRestorations"]>;
+} => {
   const pairs = current === undefined ? [] : [...current.pairs];
   const named = new Map<string, string>();
   for (const { original, placeholder } of pairs) {
@@ -1641,15 +1638,7 @@ export const mergeAnonRestorations = (
       conflicts += 1;
     }
   }
-  if (conflicts > 0) {
-    observeFailure(
-      new TelemetryError({
-        message: "An anonymization placeholder named two originals",
-      }),
-      { sink: ANON_RESTORATION_CONFLICT_SINK },
-    );
-  }
-  return { pairs };
+  return { conflicts, restorations: { pairs } };
 };
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>

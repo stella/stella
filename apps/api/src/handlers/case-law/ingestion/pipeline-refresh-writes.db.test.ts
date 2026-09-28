@@ -371,6 +371,35 @@ test("a refresh that rewrites the decision's identifier rows moves updated_at", 
   expect((await storedRow(caseNumber)).updatedAt).toBe(rewritten.updatedAt);
 });
 
+test("a declared alias outlives refreshes and is no change of the decision", async () => {
+  const caseNumber = "30 Cdo 103/2024";
+  await ingest(withDocument(caseNumber, "page-v1"), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    INSERT INTO case_law_decision_identifiers
+      (decision_id, type, value, normalized_value, declared_at)
+    VALUES (${first.id}::uuid, 'ecli', 'ECLI:CZ:NS:2024:30.CDO.103.2024', 'czns202430cdo1032024', now())
+  `);
+
+  await ingest(withDocument(caseNumber, "page-v2"), canonical);
+  const refreshed = await storedRow(caseNumber);
+  const declared = async () =>
+    (
+      await db.execute(sql`
+        SELECT value FROM case_law_decision_identifiers
+         WHERE decision_id = ${first.id}::uuid AND declared_at IS NOT NULL
+      `)
+    ).rows;
+  expect(await declared()).toEqual([
+    { value: "ECLI:CZ:NS:2024:30.CDO.103.2024" },
+  ]);
+
+  // The same page again: the alias is not a difference the refresh acts on.
+  await ingest(withDocument(caseNumber, "page-v2"), canonical);
+  expect((await storedRow(caseNumber)).updatedAt).toBe(refreshed.updatedAt);
+  expect(await declared()).toHaveLength(1);
+});
+
 test.each([
   ["canonical", canonical],
   ["postgres-only", postgresOnly],

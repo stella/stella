@@ -801,6 +801,12 @@
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
+    "seo": {
+      "collectionName": "Stella kohtupraktika",
+      "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
+      "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
+      "scopedDescription": "Avalik kohtupraktika andmebaas ({scope}) indekseeritavate kohtulahendite ja õiguse allikatega."
+    },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
@@ -1928,6 +1934,41 @@
       "organization": "Organisatsioon",
       "person": "Isik"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Toimiku e-posti aadress",
+    "assertedOriginal": "Algsed päised (edasi saatja esitatud)",
+    "authResults": {
+      "fail": "Ebaõnnestunud",
+      "pass": "Läbitud",
+      "unknown": "Määramata"
+    },
+    "backToList": "Tagasi kirjavahetuse juurde",
+    "createAddress": "Loo aadress",
+    "deliveredBy": "Edastas <address>{sender}</address>",
+    "deliveredByAuthenticated": "Edastas <address>{sender}</address> · autenditud",
+    "deliveryAuthentication": "Edastuse autentimine",
+    "empty": "Kirjavahetust veel pole.",
+    "filers": "Esitajad",
+    "forwardedBy": "Edasi saatis <address>{sender}</address>",
+    "forwardedByAuthenticated": "Edasi saatis <address>{sender}</address> · autenditud",
+    "inboundNotConfigured": "Saabuv e-post pole seadistatud. Paluge administraatoril seadistada saabuva posti domeen.",
+    "markHandled": "Märgi käsitletuks",
+    "markNew": "Märgi uueks",
+    "noAddress": "Aktiivset e-posti aadressi pole.",
+    "originalSender": "Algne saatja",
+    "originalSenderUnverified": "Algne saatja (esitatud, kontrollimata)",
+    "originalSignatureVerified": "Algne allkiri kontrollitud (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Saabunud",
+    "revokeAddress": "Tühista aadress",
+    "rotateAddress": "Vaheta aadress",
+    "sentAt": "Saadetud",
+    "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
+    "states": {
+      "handled": "Käsitletud"
+    },
+    "title": "Kirjavahetus",
+    "unknownApprover": "Tundmatu kinnitaja"
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
@@ -4302,6 +4343,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
@@ -5359,6 +5401,7 @@
         },
         "targets": {
           "automation": "automatiseerimine",
+          "correspondence": "kirjavahetus",
           "court": "kohtukirje",
           "document": "dokument",
           "documentReview": "dokumendi ülevaatus",

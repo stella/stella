@@ -176,6 +176,7 @@ const readCountry = (
   value: Record<string, unknown>,
 ): Record<string, unknown> | { issues: readonly unknown[]; hint: string } => {
   const normalized = normalizeObjectInputAtBoundary({
+    access: tool === "set_practice_jurisdictions" ? "write" : "read",
     schema: schemaOf(tool),
     value,
   });
