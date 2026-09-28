@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/chat/provider-stop-reasons";
 import type { StopOutcome } from "@/api/lib/chat/provider-stop-reasons";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 
 const started: StreamChunk = {
   type: EventType.RUN_STARTED,
@@ -119,9 +120,12 @@ describe("a provider stop reason", () => {
   });
 
   test("that never arrived leaves the answer unfinished", async () => {
+    // The adapters now fail most such streams themselves; this is the
+    // decision for one that still finishes without a reason.
     for (const provider of TANSTACK_AI_PROVIDERS) {
       expect(
         endingOf(await decide(provider, [started, delta, finishedWith(null)])),
+        JSON.stringify({ oracle: CHAT_ORACLE.providerWireFinish, provider }),
       ).toBe("error:provider_stream_incomplete");
     }
   });

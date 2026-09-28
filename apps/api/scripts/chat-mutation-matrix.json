@@ -599,8 +599,8 @@
       "search": "    return \"unfinished\";",
       "replace": "    return \"ended\";",
       "scenario": {
-        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "satisfies the wire contract bedrock early-eof"
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "that never arrived leaves the answer unfinished"
       },
       "oracle": "chat.provider-wire.finish"
     },

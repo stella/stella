@@ -25,6 +25,11 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "provider_stream_incomplete"
+    "errorKind": "provider_stream_incomplete",
+    "usage": {
+      "promptTokens": 405,
+      "completionTokens": 9,
+      "totalTokens": 414
+    }
   }
 }
