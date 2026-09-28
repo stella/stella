@@ -1,0 +1,5 @@
+[install]
+# Bun reads bunfig.toml only from the directory it installs in, so the root
+# file's quarantine does not reach this standalone lockfile. Same 5-day
+# release-age quarantine as the repository root.
+minimumReleaseAge = 432_000

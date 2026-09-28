@@ -238,6 +238,30 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("the lockfile release-age guard follows every tracked lockfile", () => {
+  for (const file of [
+    "bun.lock",
+    ".claude/mcp/bun.lock",
+    "tools/nested/bun.lock",
+    "scripts/check-lockfile-release-ages.ts",
+    "scripts/check-stll-quarantine-excludes.ts",
+  ]) {
+    expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  for (const file of [
+    "package.json",
+    "bunfig.toml",
+    "apps/web/package.json",
+    "docs/bun.lock.md",
+  ]) {
+    expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
+      "false",
+    ]);
+  }
+});
+
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
 const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
