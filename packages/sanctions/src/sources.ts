@@ -13,9 +13,7 @@ import {
 } from "./values";
 
 type Licence = {
-  name: string;
   url: string;
-  status: "confirmed" | "unverified";
 };
 
 type Download =
@@ -58,9 +56,7 @@ export const SANCTIONS_SOURCES = {
     issuer: "EU",
     download: { kind: "direct", urls: [EU_XML] },
     licence: {
-      name: "European Commission reuse decision 2011/833/EU",
       url: "https://eur-lex.europa.eu/eli/dec/2011/833/oj/eng",
-      status: "confirmed",
     },
     editionMarker: { kind: "publisher-checksum", url: EU_CHECKSUM },
     access: { kind: "query-token", parameter: "token" },
@@ -70,9 +66,7 @@ export const SANCTIONS_SOURCES = {
     issuer: "UN",
     download: { kind: "direct", urls: [UN_XML] },
     licence: {
-      name: "UN website terms; list-specific reuse permission unverified",
       url: "https://www.un.org/Depts/los/LEGISLATIONANDTREATIES/terms_and_conditions.htm",
-      status: "unverified",
     },
     editionMarker: { kind: "publisher-page-date", url: UN_PAGE },
   },
@@ -85,9 +79,7 @@ export const SANCTIONS_SOURCES = {
       fileNamePattern: CZ_FILE,
     },
     licence: {
-      name: "Czech MFA open data; explicit reuse licence unverified",
       url: "https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html",
-      status: "unverified",
     },
     editionMarker: {
       kind: "dated-file-name",
@@ -100,9 +92,7 @@ export const SANCTIONS_SOURCES = {
     issuer: "US",
     download: { kind: "direct", urls: [SDN_XML] },
     licence: {
-      name: "US federal government public domain",
       url: "https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm",
-      status: "confirmed",
     },
     editionMarker: { kind: "http-last-modified", url: SDN_XML },
   },
@@ -111,9 +101,7 @@ export const SANCTIONS_SOURCES = {
     issuer: "US",
     download: { kind: "direct", urls: [NON_SDN_XML] },
     licence: {
-      name: "US federal government public domain",
       url: "https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm",
-      status: "confirmed",
     },
     editionMarker: { kind: "http-last-modified", url: NON_SDN_XML },
   },
