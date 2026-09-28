@@ -11,7 +11,7 @@ import {
   decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
-  normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { buildCitationRows } from "@/api/handlers/case-law/ingestion/pipeline/citations";
@@ -416,11 +416,12 @@ export const planDecisionWrite = async ({
     caseNumber: result.caseNumber,
     ecli: result.ecli ?? null,
     identifiers: result.identifiers,
+    jurisdiction: result.country,
   });
   const identifierRows = decisionIdentifiers.map((identifier) => ({
     type: identifier.type,
     value: identifier.value,
-    normalizedValue: normalizeDecisionIdentifier(identifier),
+    normalizedValue: normalizeDecisionIdentifierIn(result.country, identifier),
   }));
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),
