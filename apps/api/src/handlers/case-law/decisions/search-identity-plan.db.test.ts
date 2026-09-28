@@ -70,7 +70,6 @@ test(
         identity: {
           type: "identifier",
           kind: "ecli",
-          jurisdiction: "CZE",
           value: "ECLI:CZ:NS:2020:42.CDO.42.2020.1",
         },
         tx,
