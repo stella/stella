@@ -1,4 +1,5 @@
 import { APIError } from "better-auth/api";
+import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -110,11 +111,13 @@ export const closeRemovedMemberActiveTimer = async ({
           timer.dateWorked,
         )
       ) {
-        throw new APIError("BAD_REQUEST", {
-          error: "time_period_locked",
-          message:
-            "The time period is locked. Move the locked-through month back before removing this member.",
-        });
+        return Result.err(
+          new APIError("BAD_REQUEST", {
+            error: "time_period_locked",
+            message:
+              "The time period is locked. Move the locked-through month back before removing this member.",
+          }),
+        );
       }
       const minimumUnitMinutes =
         settings?.timeMinimumUnitMinutes ??
@@ -160,4 +163,5 @@ export const closeRemovedMemberActiveTimer = async ({
       });
     }
   }
+  return Result.ok(undefined);
 };

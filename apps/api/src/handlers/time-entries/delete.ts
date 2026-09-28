@@ -128,7 +128,9 @@ export const deleteTimeEntryHandler = async function* ({
     today,
     canApprove: canApproveTimeEntries(actor.memberRole),
   });
-  if (policyViolation) {return Result.err(policyViolation);}
+  if (policyViolation) {
+    return Result.err(policyViolation);
+  }
 
   if (existing.status === BILLING_STATUS.DRAFT) {
     const deleted = yield* Result.await(

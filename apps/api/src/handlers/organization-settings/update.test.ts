@@ -118,7 +118,10 @@ describe("updateOrganizationSettingsHandler", () => {
       timeLockedThroughMonth: null,
       timeNarrativeRequired: false,
     });
-    expect(auditEvent?.changes).toMatchObject({
+    const policyAuditEvent = Array.isArray(auditEvent)
+      ? auditEvent.at(0)
+      : auditEvent;
+    expect(policyAuditEvent?.changes).toMatchObject({
       timeMinimumUnitMinutes: { old: 6, new: 15 },
       timeEditWindowDays: { old: 90, new: 30 },
       timeLockedThroughMonth: { old: "2025-12-31", new: null },

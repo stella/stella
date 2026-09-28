@@ -1242,11 +1242,14 @@ const createAuth = () => {
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
             await rootDb.transaction(async (tx) => {
-              await closeRemovedMemberActiveTimer({
+              const timerClose = await closeRemovedMemberActiveTimer({
                 organizationId,
                 tx,
                 userId,
               });
+              if (Result.isError(timerClose)) {
+                throw timerClose.error;
+              }
               // Better Auth deletes the member after this hook, outside this
               // transaction. Remove the exact row here so a timer cannot start
               // between the timer check and membership removal.

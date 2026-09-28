@@ -748,13 +748,10 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ),
       ),
       time_locked_through_month: v.optional(
-        v.nullable(
-          v.pipe(
-            v.string(),
-            v.isoDate(),
-            v.description(
-              "Last day of the latest locked month, or null to unlock (update_org_settings)",
-            ),
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.isoDate())),
+          v.description(
+            "Last day of the latest locked month, or null to unlock (update_org_settings)",
           ),
         ),
       ),
