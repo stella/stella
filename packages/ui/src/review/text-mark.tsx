@@ -62,8 +62,8 @@ export type TextMarkWeight = "inherit" | "medium";
 export type TextMarkOptions = {
   variant: TextMarkVariant;
   tone: TextMarkTone;
-  state?: TextMarkState;
-  weight?: TextMarkWeight;
+  state?: TextMarkState | undefined;
+  weight?: TextMarkWeight | undefined;
 };
 
 type TextMarkProps = ComponentProps<"mark"> & TextMarkOptions;
