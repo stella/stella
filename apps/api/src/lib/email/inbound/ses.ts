@@ -254,9 +254,9 @@ export const readSesInboundDelivery = async ({
   }
   // SES evaluates DMARC against its own reading of the From header. A parser
   // differential must not let its verdict for one domain authorise another.
-  const providerFrom = mail.commonHeaders?.from ?? [];
+  const providerFrom = mail.commonHeaders?.from;
   const providerAuthor =
-    providerFrom.length === 1
+    providerFrom?.length === 1
       ? parseOneMailbox(providerFrom.at(0) ?? "")
       : null;
   const providerDomain = providerAuthor && mailboxDomain(providerAuthor);
