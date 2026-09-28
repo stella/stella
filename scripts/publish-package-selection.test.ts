@@ -1,8 +1,53 @@
 import { describe, expect, test } from "bun:test";
 
-import { selectPublishPackages } from "./publish-package-selection";
+import { loadChangesetPolicy } from "./changeset-guard";
+import { publishedPackageNames } from "./check-published-package-lists";
+import {
+  ALL_PACKAGE_ORDER,
+  selectPublishPackages,
+} from "./publish-package-selection";
+
+const workspaceDependencies = async (
+  packageName: string,
+): Promise<readonly string[]> => {
+  const manifest: unknown = await Bun.file(
+    new URL(`../packages/${packageName}/package.json`, import.meta.url),
+  ).json();
+  if (
+    typeof manifest !== "object" ||
+    manifest === null ||
+    !("dependencies" in manifest) ||
+    typeof manifest.dependencies !== "object" ||
+    manifest.dependencies === null
+  ) {
+    return [];
+  }
+  return Object.keys(manifest.dependencies).flatMap((name) =>
+    name.startsWith("@stll/") ? [name.slice("@stll/".length)] : [],
+  );
+};
 
 describe("publish package selection", () => {
+  test("publishes exactly the packages the release policy gates", () => {
+    expect(ALL_PACKAGE_ORDER.toSorted()).toEqual([
+      ...publishedPackageNames(loadChangesetPolicy().releasePaths),
+    ]);
+  });
+
+  test("publishes every package after the published packages it depends on", async () => {
+    const order: readonly string[] = ALL_PACKAGE_ORDER;
+    const misordered: string[] = [];
+    for (const [index, packageName] of order.entries()) {
+      for (const dependency of await workspaceDependencies(packageName)) {
+        const dependencyIndex = order.indexOf(dependency);
+        if (dependencyIndex > index) {
+          misordered.push(`${dependency} after ${packageName}`);
+        }
+      }
+    }
+    expect(misordered).toEqual([]);
+  });
+
   test("publish workflow delegates push selection to the tested resolver", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
