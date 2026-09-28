@@ -1,4 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
+import type { InferOk } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -140,6 +141,101 @@ const auditForFiler = ({
     },
   });
 
+type InboundCompletion = {
+  id: SafeId<"correspondence">;
+  scope: InboundMatterScope;
+  filer: InboundFiler;
+};
+
+// Stores each scanned attachment not yet linked to the filed correspondence.
+const finishInboundAttachments = async ({
+  completion: { id, scope, filer },
+  scannedFiles,
+  scopedDbForMatter,
+  createDocument,
+}: {
+  completion: InboundCompletion;
+  scannedFiles: readonly InferOk<Awaited<ReturnType<typeof scanUpload>>>[];
+  scopedDbForMatter: CreateInboundMailPersistenceOptions["scopedDbForMatter"];
+  createDocument: typeof createEntityFromBuffer;
+}): Promise<Result<undefined, InboundPersistenceError>> => {
+  const scopedDb = scopedDbForMatter(scope);
+  const recordAuditEvent = auditForFiler({ filer, ...scope });
+  const linked = await scopedDb((tx) =>
+    tx
+      .select({ ordinal: correspondenceAttachments.ordinal })
+      .from(correspondenceAttachments)
+      .where(
+        and(
+          eq(correspondenceAttachments.correspondenceId, id),
+          eq(correspondenceAttachments.workspaceId, scope.workspaceId),
+          eq(correspondenceAttachments.organizationId, scope.organizationId),
+        ),
+      )
+      .limit(scannedFiles.length + 1),
+  );
+  const completed = new Set(linked.map(({ ordinal }) => ordinal));
+  for (const [ordinal, file] of scannedFiles.entries()) {
+    if (completed.has(ordinal)) {
+      continue;
+    }
+    const aborted: {
+      error: InboundPersistenceError | InboundAttachmentAlreadyLinked | null;
+    } = { error: null };
+    const written = await Result.tryPromise({
+      try: async () =>
+        // db-await-in-loop: one stored document and ordinal claim per attachment, each in its own transaction so a retry resumes at the missing ordinals; bounded by CORRESPONDENCE_MAX_ATTACHMENTS
+        await createDocument({
+          scopedDb,
+          ...scope,
+          recordAuditEvent,
+          buffer: file.bytes,
+          fileName: sanitizeFilename(file.fileName),
+          mimeType: file.mimeType,
+          scanWarnings: file.scanWarnings ?? undefined,
+          afterCreate: async (tx, document) => {
+            const attachmentLink = await linkInboundAttachment({
+              tx,
+              correspondenceId: id,
+              scope,
+              entityId: document.entityId,
+              filename: document.fileName,
+              mediaType: file.mimeType,
+              byteSize: file.bytes.byteLength,
+              ordinal,
+            });
+            if (attachmentLink.isErr()) {
+              aborted.error = attachmentLink.error;
+              return tx.rollback();
+            }
+            return undefined;
+          },
+        }),
+      catch: (cause) =>
+        aborted.error ??
+        new InboundPersistenceError({
+          message: "Inbound attachment write could not complete",
+          cause,
+        }),
+    });
+    if (written.isErr()) {
+      if (InboundAttachmentAlreadyLinked.is(written.error)) {
+        continue;
+      }
+      return Result.err(written.error);
+    }
+    if (written.value.isErr()) {
+      return Result.err(
+        new InboundPersistenceError({
+          message: "Inbound attachment could not be created",
+          cause: written.value.error,
+        }),
+      );
+    }
+  }
+  return Result.ok(undefined);
+};
+
 // The transport retains the source until this resolves successfully. A retry
 // reuses the correspondence/filer rows and finishes only missing attachments.
 export const createInboundMailPersistence =
@@ -185,11 +281,11 @@ export const createInboundMailPersistence =
             scannedFiles.push(scanned.value);
           }
         }
-        const completions: {
-          id: SafeId<"correspondence">;
-          scope: InboundMatterScope;
-          filer: InboundFiler;
-        }[] = [];
+        // A delivery's recipient token resolves to one matter, so the store
+        // files at most one candidate; its attachments are finished below.
+        const filed: { completion: InboundCompletion | null } = {
+          completion: null,
+        };
         const persistRecord = createInboundMailStore({
           database,
           fileCandidate: async (candidate) => {
@@ -209,7 +305,7 @@ export const createInboundMailPersistence =
             });
             switch (created.type) {
               case "ok":
-                completions.push({
+                filed.completion = {
                   id: created.id,
                   filer: candidate.filer,
                   scope: {
@@ -220,7 +316,7 @@ export const createInboundMailPersistence =
                         ? candidate.filer.userId
                         : null,
                   },
-                });
+                };
                 return Result.ok({
                   status: created.created
                     ? ("filed" as const)
@@ -251,86 +347,18 @@ export const createInboundMailPersistence =
         if (outcome.isErr()) {
           return outcome;
         }
-        for (const { id, scope, filer } of completions) {
-          const scopedDb = scopedDbForMatter(scope);
-          const recordAuditEvent = auditForFiler({ filer, ...scope });
-          const linked = await scopedDb((tx) =>
-            tx
-              .select({ ordinal: correspondenceAttachments.ordinal })
-              .from(correspondenceAttachments)
-              .where(
-                and(
-                  eq(correspondenceAttachments.correspondenceId, id),
-                  eq(correspondenceAttachments.workspaceId, scope.workspaceId),
-                  eq(
-                    correspondenceAttachments.organizationId,
-                    scope.organizationId,
-                  ),
-                ),
-              )
-              .limit(scannedFiles.length + 1),
-          );
-          const completed = new Set(linked.map(({ ordinal }) => ordinal));
-          for (const [ordinal, file] of scannedFiles.entries()) {
-            if (completed.has(ordinal)) {
-              continue;
-            }
-            const aborted: {
-              error:
-                | InboundPersistenceError
-                | InboundAttachmentAlreadyLinked
-                | null;
-            } = { error: null };
-            const written = await Result.tryPromise({
-              try: async () =>
-                await createDocument({
-                  scopedDb,
-                  ...scope,
-                  recordAuditEvent,
-                  buffer: file.bytes,
-                  fileName: sanitizeFilename(file.fileName),
-                  mimeType: file.mimeType,
-                  scanWarnings: file.scanWarnings ?? undefined,
-                  afterCreate: async (tx, document) => {
-                    const attachmentLink = await linkInboundAttachment({
-                      tx,
-                      correspondenceId: id,
-                      scope,
-                      entityId: document.entityId,
-                      filename: document.fileName,
-                      mediaType: file.mimeType,
-                      byteSize: file.bytes.byteLength,
-                      ordinal,
-                    });
-                    if (attachmentLink.isErr()) {
-                      aborted.error = attachmentLink.error;
-                      return tx.rollback();
-                    }
-                    return undefined;
-                  },
-                }),
-              catch: (cause) =>
-                aborted.error ??
-                new InboundPersistenceError({
-                  message: "Inbound attachment write could not complete",
-                  cause,
-                }),
-            });
-            if (written.isErr()) {
-              if (InboundAttachmentAlreadyLinked.is(written.error)) {
-                continue;
-              }
-              return Result.err(written.error);
-            }
-            if (written.value.isErr()) {
-              return Result.err(
-                new InboundPersistenceError({
-                  message: "Inbound attachment could not be created",
-                  cause: written.value.error,
-                }),
-              );
-            }
-          }
+        const completion = filed.completion;
+        if (!completion) {
+          return outcome;
+        }
+        const finished = await finishInboundAttachments({
+          completion,
+          scannedFiles,
+          scopedDbForMatter,
+          createDocument,
+        });
+        if (finished.isErr()) {
+          return Result.err(finished.error);
         }
         return outcome;
       },
