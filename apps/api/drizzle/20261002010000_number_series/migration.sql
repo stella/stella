@@ -17,7 +17,7 @@ CREATE TABLE "number_series" (
 	CONSTRAINT "number_series_archived_default_check" CHECK ("archived_at" IS NULL OR NOT "is_default")
 );--> statement-breakpoint
 ALTER TABLE "number_series" ADD CONSTRAINT "number_series_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "number_series" ADD CONSTRAINT "number_series_seller_profile_id_fk" FOREIGN KEY ("seller_profile_id") REFERENCES "public"."seller_profiles"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "number_series" ADD CONSTRAINT "number_series_seller_profile_id_fk" FOREIGN KEY ("seller_profile_id") REFERENCES "public"."seller_profiles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "number_series_org_id_uidx" ON "number_series" USING btree ("organization_id","id");--> statement-breakpoint
 CREATE INDEX "number_series_org_created_idx" ON "number_series" USING btree ("organization_id","created_at","id") WHERE "archived_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "number_series_org_type_default_uidx" ON "number_series" USING btree ("organization_id","document_type") WHERE "is_default" AND "archived_at" IS NULL;--> statement-breakpoint

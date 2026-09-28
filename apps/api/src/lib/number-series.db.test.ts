@@ -7,8 +7,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   numberSeries,
@@ -219,6 +220,53 @@ describe("number series allocation", () => {
       await testDb
         .delete(sellerProfiles)
         .where(inArray(sellerProfiles.id, [sellerProfileId]));
+    }
+  });
+
+  test("deletes an organization with a series linked to its seller profile", async () => {
+    const organizationId = createSafeId<"organization">();
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(organization).values({
+      id: organizationId,
+      name: "Number series deletion test",
+      slug: `number-series-${organizationId}`,
+      createdAt: new Date(),
+    });
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId,
+      legalName: "Seller",
+      defaultCurrency: "EUR",
+    });
+    const seriesId = createSafeId<"numberSeries">();
+    await testDb.insert(numberSeries).values({
+      id: seriesId,
+      organizationId,
+      sellerProfileId,
+      documentType: "invoice",
+      name: "Invoice series",
+      pattern: "INV-{YYYY}-{SEQ}",
+      padding: 3,
+    });
+
+    try {
+      await expect(
+        (async () =>
+          await testDb
+            .delete(sellerProfiles)
+            .where(eq(sellerProfiles.id, sellerProfileId)))(),
+      ).rejects.toMatchObject({ cause: { code: "23503" } });
+      await testDb
+        .delete(organization)
+        .where(eq(organization.id, organizationId));
+    } finally {
+      await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
+      await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId));
+      await testDb
+        .delete(organization)
+        .where(eq(organization.id, organizationId));
     }
   });
 

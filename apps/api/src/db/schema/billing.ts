@@ -331,7 +331,7 @@ export const numberSeries = p.pgTable(
         foreignColumns: [sellerProfiles.id],
         name: "number_series_seller_profile_id_fk",
       })
-      .onDelete("restrict"),
+      .onDelete("no action"),
     p
       .uniqueIndex("number_series_org_id_uidx")
       .on(table.organizationId, table.id),
