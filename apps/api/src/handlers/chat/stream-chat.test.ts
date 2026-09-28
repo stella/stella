@@ -36,6 +36,7 @@ import {
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -1342,6 +1343,18 @@ describe("outgoing chat stream message ids", () => {
             {
               type: EventType.RUN_FINISHED,
               finishReason: "tool_calls",
+              // The engine hands the call out as an interrupt either way; only
+              // its input decides whether the turn may wait on it.
+              outcome: {
+                type: "interrupt",
+                interrupts: [
+                  {
+                    id: `interrupt-${callChunks[0].toolCallId}`,
+                    reason: "tool_call",
+                    toolCallId: callChunks[0].toolCallId,
+                  },
+                ],
+              },
               runId: "run-1",
               threadId: "thread-1",
             },
@@ -3395,7 +3408,7 @@ describe("guarded model-ingress seam", () => {
     const system = "You are stella. Matter scope: mat_1.";
 
     const surfaces: GuardedChatSurfaces = {
-      messages: guardModelMessages({ messages, workspaceIds }),
+      messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
@@ -3426,6 +3439,15 @@ describe("guarded model-ingress seam", () => {
     // reach the provider dispatch
     const bypass: GuardedChatSurfaces = unguarded;
     void bypass;
+
+    const unanswered = {
+      ...surfaces,
+      messages: guardModelMessages({ messages, workspaceIds }),
+    };
+    // @ts-expect-error a history whose calls were not answered in their step
+    // must not reach the provider dispatch
+    const skippedAnswers: GuardedChatSurfaces = unanswered;
+    void skippedAnswers;
   });
 });
 

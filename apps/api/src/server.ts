@@ -42,6 +42,7 @@ import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { documentsRoute } from "@/api/handlers/documents/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
+import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
@@ -146,6 +147,7 @@ import {
   completeRequest,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -496,8 +498,10 @@ const api = new Elysia()
   )
   // Mounted after the versioned group on purpose: a route added before it
   // deepens the type the group callback infers, which is already at
-  // TypeScript's instantiation limit for the browser's Eden client.
-  .use(feedbackRoute);
+  // TypeScript's instantiation limit for the browser's Eden client. The
+  // signing route carries the version prefix itself.
+  .use(feedbackRoute)
+  .use(pdfSigningSessionsRoute);
 
 export default api;
 
@@ -650,6 +654,7 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
+    closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });

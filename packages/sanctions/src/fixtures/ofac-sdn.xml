@@ -1,0 +1,48 @@
+<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation>
+    <Publish_Date>09/23/2026</Publish_Date>
+    <Record_Count>4</Record_Count>
+  </publshInformation>
+  <sdnEntry>
+    <uid>10001</uid>
+    <firstName>Alexei</firstName>
+    <lastName>PETROV</lastName>
+    <sdnType>Individual</sdnType>
+    <programList><program>CYBER2</program><program>RUSSIA-EO14024</program></programList>
+    <akaList>
+      <aka><uid>20001</uid><type>a.k.a.</type><category>strong</category><firstName>Aleksei</firstName><lastName>PETROV</lastName></aka>
+      <aka><uid>20002</uid><type>a.k.a.</type><category>weak</category><lastName>ALPHA</lastName></aka>
+    </akaList>
+    <dateOfBirthList>
+      <dateOfBirthItem><uid>30001</uid><dateOfBirth>10 Dec 1948</dateOfBirth><mainEntry>true</mainEntry></dateOfBirthItem>
+      <dateOfBirthItem><uid>30002</uid><dateOfBirth>circa 1951</dateOfBirth><mainEntry>false</mainEntry></dateOfBirthItem>
+      <dateOfBirthItem><uid>30003</uid><dateOfBirth>Sep 1952</dateOfBirth><mainEntry>false</mainEntry></dateOfBirthItem>
+    </dateOfBirthList>
+    <nationalityList><nationality><uid>40001</uid><country>Russian Federation</country><mainEntry>true</mainEntry></nationality></nationalityList>
+    <citizenshipList><citizenship><uid>40002</uid><country>Canada</country><mainEntry>false</mainEntry></citizenship></citizenshipList>
+    <idList>
+      <id><uid>50001</uid><idType>Passport</idType><idNumber>AB1234567</idNumber><idCountry>Russian Federation</idCountry></id>
+      <id><uid>50002</uid><idType>Gender</idType><idNumber>Male</idNumber></id>
+    </idList>
+    <addressList><address><uid>60001</uid><address1>10 Main Street</address1><address2>Suite 2</address2><city>Madrid</city><stateOrProvince>Madrid</stateOrProvince><postalCode>28001</postalCode><country>Spain</country></address></addressList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>10002</uid><lastName>NORTH HARBOR COMPANY</lastName><sdnType>Entity</sdnType>
+    <programList><program>CUBA</program></programList>
+    <akaList><aka><uid>20004</uid><type>f.k.a.</type><category>strong</category><lastName>NORTH HARBOR LTD</lastName></aka></akaList>
+    <idList><id><uid>50003</uid><idType>Company Number</idType><idNumber>01074897</idNumber><idCountry>United Kingdom</idCountry></id></idList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>10003</uid><lastName>BLUE HORIZON</lastName><sdnType>Vessel</sdnType>
+    <programList><program>IRAN</program></programList>
+    <akaList><aka><uid>20005</uid><type>f.k.a.</type><category>weak</category><lastName>BLUE STAR</lastName></aka></akaList>
+    <idList><id><uid>50004</uid><idType>Vessel Registration Identification</idType><idNumber>IMO 9187629</idNumber></id></idList>
+    <vesselInfo><callSign>CL2192</callSign><vesselType>General Cargo</vesselType><vesselFlag>Panama</vesselFlag></vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>10004</uid><lastName>SKY WING 01</lastName><sdnType>Aircraft</sdnType>
+    <programList><program>IRAN</program></programList>
+    <idList><id><uid>50005</uid><idType>Aircraft Tail Number</idType><idNumber>AB-12345</idNumber></id></idList>
+  </sdnEntry>
+</sdnList>

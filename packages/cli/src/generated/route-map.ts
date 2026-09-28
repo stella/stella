@@ -27612,7 +27612,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
                 description:
-                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set.",
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set, and its first source (document id, document name, locator), null when it has none.",
                 access: "read",
                 flags: [
                   {
@@ -29989,7 +29989,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "matters", "correspondence-get"],
                 capabilityId: "matters.correspondence.get",
                 description:
-                  "Read one matter correspondence record with its filers and attachments.",
+                  "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
                 access: "read",
                 flags: [
                   {
@@ -30049,7 +30049,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "matters", "correspondence-list"],
                 capabilityId: "matters.correspondence.list",
                 description:
-                  "List correspondence filed in a matter, newest received first.",
+                  "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
                 access: "read",
                 flags: [
                   {

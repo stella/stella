@@ -387,6 +387,11 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -778,6 +783,17 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "invoice-document",
+    capability:
+      "Invoice, advance, and credit note totals and Czech payment payloads",
+    owner: ["packages/invoicing/"],
+    summary:
+      "The package rounds VAT per line, sums document and rate totals in " +
+      "branded minor units, and returns SPAYD text for payable documents. " +
+      "QR matrix rendering remains with callers.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "text-folding",
     capability: "Diacritic and ASCII folding for search and slugs",
     owner: ["packages/text-normalize/"],
@@ -785,6 +801,19 @@ export const OWNERSHIP = [
       "Folding decides which strings compare equal, so search, highlighting, " +
       "and slugs have to agree on it. Build slug helpers on the folds exported " +
       "here rather than on a local regex.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "text-mark",
+    capability:
+      "Marking words in running text: search and find hits, reader highlights, verdict underlines",
+    owner: ["packages/ui/src/review/text-mark.tsx"],
+    summary:
+      "One inline mark with a fill or a line, a tone and an active state, so a " +
+      "found word, a note and a finding differ only in hue and line. Render " +
+      "`TextMark`, or take `textMarkClass` for markup that is not a `<mark>`; " +
+      "search hits use `SEARCH_HIT_MARK`. The `no-ad-hoc-text-mark` lint rule " +
+      "rejects a hand-styled `<mark>`.",
     enforcement: { kind: "none" },
   },
   {

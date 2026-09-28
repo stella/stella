@@ -36,10 +36,13 @@
         "src/server.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
+        // Callable receiver boundary for authenticated mail transport hosts.
+        "src/lib/email/inbound/runtime.ts",
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
+        "src/lib/ocr-searchable-pdf-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",

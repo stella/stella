@@ -29,6 +29,7 @@ import {
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
@@ -674,7 +675,10 @@ export const createTanStackTextAdapterFactory = (
   // read what production reads.
   const factory =
     activeMockTextAdapterFactory() ?? createProviderTextAdapterFactory(options);
-  return (modelId) => withProviderStreamContract(factory(modelId));
+  const stopReasons = TANSTACK_AI_PROVIDERS.find(
+    (provider) => provider === options.provider,
+  );
+  return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
 };
 
 const createProviderTextAdapterFactory = ({

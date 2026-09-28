@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -202,6 +203,29 @@ export const envApiServerSchema = {
   GOTENBERG_USERNAME: v.string(),
   GOTENBERG_PASSWORD: v.string(),
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * RFC 3161 timestamp authorities for PDF signing, in preference order,
+   * separated by commas or whitespace. Signing falls back to the next one
+   * when an authority fails. Unset (with `PDF_SIGNING_TSA_URL` unset too)
+   * signs at PAdES B-B.
+   */
+  PDF_SIGNING_TSA_URLS: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        isTimestampAuthorityUrlList,
+        "PDF_SIGNING_TSA_URLS must list http(s) URLs.",
+      ),
+    ),
+  ),
+  /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
+  PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * Trust anchors for timestamp authorities: PEM text, or a path to a PEM
+   * file. CA certificates, or an authority's own certificate to pin it.
+   * Unset: timestamps are embedded but not counted as trusted time.
+   */
+  PDF_SIGNING_TSA_TRUST_PEM: v.optional(v.string()),
 
   /**
    * Self-host escape hatch for deployments without SMTP/OAuth. When enabled,
@@ -297,6 +321,16 @@ export const envApiServerSchema = {
   FEATURE_CALENDAR: featureFlagSchema,
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
+  FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_LEASE_MS: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */

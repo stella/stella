@@ -282,12 +282,6 @@ type RepairPageRow = Awaited<ReturnType<typeof selectRepairPage>>[number];
 
 type RowRepairResult = {
   requeued: number;
-  /**
-   * `entities.createdBy` is nulled when the uploader's account is deleted,
-   * and a derivative job carries an actor. Such a field is counted rather
-   * than dropped quietly, so an unrepairable population stays visible.
-   */
-  unattributed: boolean;
   /** Kinds skipped as unreadable, for the caller's per-row audit record. */
   unrecognized: FileDerivativeKind[];
 };
@@ -297,12 +291,10 @@ const requeueRow = async (
   requeue: typeof requeueFileDerivative,
 ): Promise<RowRepairResult> => {
   if (row.content.type !== "file") {
-    return { requeued: 0, unattributed: false, unrecognized: [] };
+    return { requeued: 0, unrecognized: [] };
   }
-  if (row.createdBy === null) {
-    return { requeued: 0, unattributed: true, unrecognized: [] };
-  }
-  const userId = brandPersistedUserId(row.createdBy);
+  const userId =
+    row.createdBy === null ? null : brandPersistedUserId(row.createdBy);
   const { stuck, unrecognized } = triageFileDerivatives(row.content);
   for (const kind of unrecognized) {
     captureError(
@@ -337,7 +329,7 @@ const requeueRow = async (
   };
 
   await requeueFrom(0);
-  return { requeued, unattributed: false, unrecognized };
+  return { requeued, unrecognized };
 };
 
 const persistCursor = async ({
@@ -396,7 +388,6 @@ export const createRepairFileDerivativesTask =
 
     let requeued = 0;
     let scanned = 0;
-    let unattributed = 0;
     let unrecognized = 0;
 
     const repairFrom = async (index: number): Promise<void> => {
@@ -424,7 +415,6 @@ export const createRepairFileDerivativesTask =
         return;
       }
       requeued += outcome.value.requeued;
-      unattributed += outcome.value.unattributed ? 1 : 0;
       unrecognized += outcome.value.unrecognized.length;
       // Capture dedups identical errors inside its window, so with several
       // unreadable rows in one page only the first field id reaches
@@ -455,7 +445,6 @@ export const createRepairFileDerivativesTask =
     logger.info("scheduler.file_derivatives_repaired", {
       "fileDerivatives.requeued": requeued,
       "fileDerivatives.scanned": scanned,
-      "fileDerivatives.unattributed": unattributed,
       "fileDerivatives.unrecognized": unrecognized,
     });
   };

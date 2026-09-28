@@ -55,6 +55,9 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "ACTION_ADMISSION_LEASE_MS",
+  "ACTION_ADMISSION_ORG_CONCURRENCY",
+  "ACTION_ADMISSION_USER_CONCURRENCY",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -101,6 +104,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
+  "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CALENDAR",
@@ -137,6 +141,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
+  "PDF_SIGNING_TSA_URL",
+  "PDF_SIGNING_TSA_URLS",
+  "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -352,6 +359,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
+  PDF_SIGNING_TSA_URL:
+    "Single RFC 3161 timestamp authority for PDF signing, appended to PDF_SIGNING_TSA_URLS.",
+  PDF_SIGNING_TSA_TRUST_PEM:
+    "Trust anchors for PDF signing timestamps: PEM text or a path to a PEM file (CA certificates, or an authority's own certificate to pin it). Unset embeds timestamps without counting them as trusted time.",
+  PDF_SIGNING_TSA_URLS:
+    "RFC 3161 timestamp authorities for PDF signing in preference order, comma separated; the next one is tried when one fails. Unset signs at PAdES B-B.",
   PUBLIC_URL:
     "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
@@ -689,6 +702,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
+  "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
   "STELLA_WEB_PORT",
@@ -776,11 +790,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
+  "BASE_SHA",
   "CANARY_PORT",
   "CANARY_PROBE_TOKEN",
   "CANARY_SERVER_URL",
   "CANARY_SIGNING_SECRET",
   "CANARY_STATE_PATH",
+  "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
@@ -859,6 +875,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
+  "STELLA_TEST_RELEASE_NUMBERS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
   "WXT_STELLA_ORIGINS",

@@ -36,7 +36,7 @@
  *   Mgr. ...                          (signature)
  */
 
-import { PDF } from "@libpdf/core";
+import { PDF, SecurityError } from "@libpdf/core";
 
 import {
   isSkDecisionTitle,
@@ -98,6 +98,30 @@ type PdfLine = {
   /** 0-based page index from PDF extraction. */
   pageIndex: number;
 };
+
+/**
+ * libpdf's errors about the bytes it was handed. The package exports only
+ * `SecurityError` of them (an encrypted document), so the rest are named by
+ * the `name` each sets. A rename upstream makes that error unrecognised, which
+ * fails safe: it propagates instead of condemning the document.
+ */
+const LIBPDF_UNREADABLE_INPUT_ERROR_NAMES = new Set([
+  "UnrecoverableParseError",
+  "RecoverableParseError",
+  "XRefParseError",
+  "ObjectParseError",
+  "StructureError",
+  "DamagedFontError",
+]);
+
+/**
+ * Whether `parseSkDecisionPdf` failed because these bytes cannot be read,
+ * rather than because the parser or a dependency fails for every document.
+ */
+export const isUnreadablePdfError = (error: unknown): boolean =>
+  error instanceof SecurityError ||
+  (error instanceof Error &&
+    LIBPDF_UNREADABLE_INPUT_ERROR_NAMES.has(error.name));
 
 export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,

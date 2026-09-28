@@ -27,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -238,6 +242,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
+    "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
+  ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
@@ -258,6 +265,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
+  ]),
+  fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
+    "no-direct-pdf-save/no-direct-pdf-save",
   ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
@@ -735,6 +745,10 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // The upstream rule treats String#slice like Array#slice and can turn
+    // substring checks into single-character Set membership under --fix.
+    // It has no fix-only option.
+    "unicorn/prefer-set-has": "off",
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
     // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
@@ -1140,6 +1154,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -1194,6 +1209,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
+    "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -1206,6 +1222,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
@@ -2472,6 +2489,27 @@ export default defineConfig({
       },
     },
     {
+      // Words in running text are marked through `@stll/ui/text-mark`, so a
+      // search hit, a reader's highlight and a verdict underline share one
+      // shape and differ only in hue and line.
+      files: [...productUiFiles],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "error",
+      },
+    },
+    {
+      // The owner and its test spell the mark out; the review badge's
+      // `highlight` tone is a status colour, not a text mark.
+      files: [
+        "packages/ui/src/review/text-mark.tsx",
+        "packages/ui/src/review/text-mark.test.ts",
+        "packages/ui/src/review/review-status-badge.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
@@ -3288,6 +3326,16 @@ export default defineConfig({
       },
     },
     {
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/sql-perf.fixture.ts"],
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
@@ -3525,6 +3573,7 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+        "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
     },
     {
@@ -4235,6 +4284,7 @@ export default defineConfig({
         "apps/api/src/handlers/auth/ui-routes.ts",
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
         "apps/api/src/handlers/feedback/routes.ts",
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",

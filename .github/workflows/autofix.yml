@@ -144,14 +144,12 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.scope.outputs.run }}
+      ids: ${{ steps.scope.outputs.ids }}
+      allowed: ${{ steps.scope.outputs.allowed }}
     steps:
-      # The generators read apps/api, the workspace packages whose types reach
-      # the API, the web manifest, the formatter config, the dependency graph,
-      # their own sources and their own outputs; a pull request
-      # touching none of them cannot drift. The files API lists at most 3000
-      # files, so a list that long regenerates rather than guessing.
-      - name: Match generator inputs
-        id: scope
+      # Fetch paths before checking out pull request code. Only the planner
+      # files are needed in this job; generators run in the later job.
+      - name: Fetch changed paths
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -159,13 +157,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
-          inputs='^(apps/api/|packages/|apps/web/src/generated/|apps/web/package\.json$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
-          if [[ "$(wc -l <<<"$files")" -ge 3000 ]] || grep -qE "$inputs" <<<"$files"; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
+          gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
+
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: |
+            /scripts/
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # The manifest owns generator inputs and outputs. The files API lists at
+      # most 3000 files, so a list that long regenerates rather than guessing.
+      - name: Match generator inputs
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan --all < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           else
-            echo "No generator input changed; skipping regeneration."
-            echo "run=false" >> "$GITHUB_OUTPUT"
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           fi
 
   regenerate-derived-files:
@@ -201,40 +220,15 @@ jobs:
           cp apps/api/.env.example apps/api/.env
           cp apps/web/.env.example apps/web/.env
 
-      # Each step writes what a CI drift guard in ci.yml compares, with the
-      # command that guard names as its fix. The capability catalog runs
-      # before the CLI codegen, which reads it.
-      - name: Regenerate the capability catalog
-        run: bun apps/api/scripts/export-capability-catalog.ts
-
-      - name: Regenerate the CLI registry projections
-        run: (cd packages/cli && bun run codegen)
-
-      - name: Regenerate the MCP App bundles
-        run: (cd apps/api && bun run build:mcp-apps)
-
-      - name: Regenerate the web API types
-        run: bun --filter @stll/api gen:web-api-types
-
-      # --write records exact numbers, so it runs only when a row is past its
-      # tolerance; a within-tolerance change stays unrewritten. The drift
-      # lands as a reviewable diff on the pull request.
-      - name: Rewrite the MCP surface baseline when it drifted
-        working-directory: apps/api
-        run: |
-          if ! bun run mcp:surface-baseline --check; then
-            bun run mcp:surface-baseline --write
-          fi
-
-      - name: Regenerate the module ownership doc
-        run: bun scripts/ownership.ts --write
-
-      - name: Regenerate the design token docs
-        run: bun scripts/design-tokens-doc.ts --write
+      - name: Regenerate selected files
+        env:
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
 
       - name: Restrict regenerated changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -244,20 +238,7 @@ jobs:
             exit 1
           fi
 
-          generated=(
-            DESIGN.md
-            apps/api/mcp-surface-baseline.json
-            "apps/api/src/mcp/apps/*/generated/app.html.txt"
-            apps/api/src/mcp/generated/capability-dispatch.ts
-            apps/web/src/generated/api-routes.gen.ts
-            chatgpt-app-submission.json
-            docs/capability-coverage.md
-            docs/module-ownership.md
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
-            packages/cli/capability-catalog.json
-            packages/cli/skills
-            packages/cli/src/generated
-          )
+          IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           excludes=()
           for path in "${generated[@]}"; do
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { GENERATORS, orderGenerators } from "./generated-files";
+
 const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
@@ -210,67 +212,126 @@ describe("derived-file regeneration boundary", () => {
     expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
   });
 
-  test("runs the fix each CI drift guard names, catalog before CLI codegen", async () => {
+  test("runs the manifest plan and keeps the generated diff restricted", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
     const restrictionStep = job.indexOf("- name: Restrict regenerated changes");
-
-    // Each pair is the guard ci.yml runs and the fix this job runs for it.
-    const guards = [
-      [
-        "bun apps/api/scripts/export-capability-catalog.ts --check",
-        "bun apps/api/scripts/export-capability-catalog.ts\n",
-      ],
-      [
-        "(cd packages/cli && bun run codegen)",
-        "(cd packages/cli && bun run codegen)",
-      ],
-      [
-        "(cd apps/api && bun run build:mcp-apps)",
-        "(cd apps/api && bun run build:mcp-apps)",
-      ],
-      [
-        "bun --filter @stll/api gen:web-api-types --check",
-        "bun --filter @stll/api gen:web-api-types\n",
-      ],
-      ["bun run check:module-ownership", "bun scripts/ownership.ts --write"],
-      [
-        "bun run check:design-tokens",
-        "bun scripts/design-tokens-doc.ts --write",
-      ],
-      ["mcp-surface-baseline", "bun run mcp:surface-baseline --write"],
-    ] as const;
-    for (const [guard, fix] of guards) {
-      expect(ci).toContain(guard);
-      expect(job).toContain(fix);
-      expect(job.indexOf(fix)).toBeLessThan(restrictionStep);
-    }
-
-    expect(job.indexOf("export-capability-catalog.ts")).toBeLessThan(
-      job.indexOf("bun run codegen"),
+    const fetchStep = job.indexOf("- name: Fetch changed paths");
+    const checkoutStep = job.indexOf("- name: Checkout pull request head");
+    const planStep = job.indexOf("- name: Match generator inputs");
+    const runStep = job.indexOf("- name: Regenerate selected files");
+    expect(job).toContain("scripts/autofix-plan.ts plan");
+    expect(job).toContain('scripts/autofix-plan.ts run "$GENERATOR_IDS"');
+    expect(job).toContain(`allowed: \${{ steps.scope.outputs.allowed }}`);
+    expect(job).toContain(
+      `GENERATOR_ALLOWED: \${{ needs.regenerate-scope.outputs.allowed }}`,
     );
-    // The baseline records exact numbers, so it is rewritten only past its
-    // tolerance.
-    expect(job).toContain("if ! bun run mcp:surface-baseline --check; then");
+    expect(job).toContain(
+      "IFS='|' read -r -a generated <<< \"$GENERATOR_ALLOWED\"",
+    );
+    expect(fetchStep).toBeGreaterThanOrEqual(0);
+    expect(checkoutStep).toBeGreaterThan(fetchStep);
+    expect(planStep).toBeGreaterThan(checkoutStep);
+    expect(job.slice(checkoutStep, planStep)).toContain(
+      "sparse-checkout-cone-mode: false",
+    );
+    expect(job.slice(checkoutStep, planStep)).toContain("/scripts/");
+    expect(job.slice(checkoutStep, planStep)).toContain("/package.json");
+    expect(runStep).toBeGreaterThan(planStep);
+    expect(restrictionStep).toBeGreaterThan(runStep);
+    expect(job.slice(fetchStep, planStep)).toContain("GH_TOKEN:");
+    expect(job.slice(planStep, runStep)).not.toContain("GH_TOKEN:");
+    expect(
+      job.slice(restrictionStep, job.indexOf("- name: Push regenerated files")),
+    ).not.toContain("bun ");
+    expect(job).toContain(
+      'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
+    );
+    expect(job).toContain(`git diff --name-only -- . "\${excludes[@]}"`);
+    expect(job).toContain(
+      `git ls-files --others --exclude-standard -- . "\${excludes[@]}"`,
+    );
+    expect(job).not.toContain("inputs='^");
+    expect(job).not.toContain("generated=(");
+    const ordered = orderGenerators(
+      GENERATORS.filter((generator) => generator.autofix),
+    );
+    expect(
+      ordered.findIndex(({ id }) => id === "capability-catalog"),
+    ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
+    expect(ordered.map(({ id }) => id).toSorted()).toEqual(
+      [
+        "capability-catalog",
+        "cli-registry",
+        "mcp-app-bundles",
+        "web-api-types",
+        "mcp-surface",
+        "module-ownership",
+        "design-tokens",
+        "route-tree",
+      ].toSorted(),
+    );
+    for (const generator of ordered) {
+      if (generator.check) {
+        expect(ci).toContain("- name: Generated files manifest guard");
+        expect(ci).toContain("bun scripts/generated-files-guard.ts --guard-b");
+      } else {
+        // The null-check families use the named CI guard paired in the manifest.
+        expect(generator.checkedBy).toBeDefined();
+        expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
+      }
+    }
+  });
+
+  test("each named CI guard runs its generator command or check form", async () => {
+    const ci = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    for (const generator of orderGenerators(GENERATORS)) {
+      if (!generator.checkedBy) {
+        continue;
+      }
+      const marker = `- name: ${generator.checkedBy}\n`;
+      const start = ci.indexOf(marker);
+      expect(start, generator.id).toBeGreaterThanOrEqual(0);
+      const next = ci.indexOf("\n      - name:", start + marker.length);
+      const step = ci.slice(start, next === -1 ? undefined : next);
+      const runStart = step.indexOf("\n        run:");
+      expect(runStart, generator.id).toBeGreaterThanOrEqual(0);
+      const commands = new Set(
+        step
+          .slice(runStart)
+          .split("\n")
+          .map((line) => line.trim().replace(/^run: /u, "")),
+      );
+      const write: readonly string[] = generator.write;
+      const check = write.includes("--write")
+        ? write.map((part) => (part === "--write" ? "--check" : part))
+        : [...write, "--check"];
+      const render = (argv: readonly string[]) => {
+        const cwd = argv.at(1);
+        if (cwd?.startsWith("--cwd=")) {
+          return `(cd ${cwd.slice("--cwd=".length)} && bun ${argv.slice(2).join(" ")})`;
+        }
+        return argv.join(" ");
+      };
+      expect(
+        [write, check].some(
+          (argv) => commands.has(argv.join(" ")) || commands.has(render(argv)),
+        ),
+        `${generator.id}: ${generator.checkedBy}`,
+      ).toBe(true);
+    }
   });
 
   test("skips pull requests that touch no generator input", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     expect(job).toContain("needs: regenerate-scope");
     expect(job).toContain("if: needs.regenerate-scope.outputs.run == 'true'");
-    for (const input of [
-      "apps/api/",
-      "packages/",
-      "apps/web/src/generated/",
-      String.raw`apps/web/package\.json$`,
-      String.raw`\.oxfmtrc\.json$`,
-      String.raw`scripts/(ownership|design-tokens-doc)\.ts$`,
-      String.raw`bun\.lock$`,
-    ]) {
-      expect(job).toContain(input);
-    }
+    expect(job).toContain("scripts/autofix-plan.ts plan");
+    expect(job).toContain("scripts/autofix-plan.ts plan --all");
     // A capped file list regenerates rather than skipping.
     expect(job).toContain("-ge 3000");
   });

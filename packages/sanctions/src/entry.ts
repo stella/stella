@@ -2,7 +2,9 @@ import { TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
-export type SanctionsSource = "eu" | "un" | "cz";
+export type SanctionsSource = "eu" | "un" | "cz" | "us-sdn" | "us-non-sdn";
+
+export type SanctionsIssuer = "EU" | "UN" | "CZ" | "US" | "GB" | "CH" | "UA";
 
 /** Which edition of a list was read; callers record it next to a screening. */
 export type ListVersion = {
@@ -13,10 +15,15 @@ export type ListVersion = {
   fileId: string | null;
 };
 
-export type EntityType = "person" | "organisation";
+export type EntityType =
+  | "person"
+  | "organisation"
+  | "vessel"
+  | "aircraft"
+  | "unknown";
 
 /** Lists mark some aliases as weak (nicknames, call signs, partial names). */
-export type AliasQuality = "strong" | "weak";
+export type AliasQuality = "strong" | "weak" | "unknown";
 
 export type SanctionsName = {
   name: string;
@@ -63,7 +70,8 @@ export type IdentifierKind =
   | "registration"
   | "tax"
   | "imo"
-  | "other";
+  | "other"
+  | "unknown";
 
 export type Identifier = {
   kind: IdentifierKind;
@@ -85,6 +93,7 @@ export type Address = {
 
 export type SanctionsEntry = {
   source: SanctionsSource;
+  issuer: SanctionsIssuer;
   /** Stable id of the entry within its source list. */
   sourceId: string;
   /** Publisher-facing reference (EU reference number, UN permanent reference). */

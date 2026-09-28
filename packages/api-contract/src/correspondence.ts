@@ -1,5 +1,7 @@
 import type { SafeId } from "./safe-id";
 
+export const CORRESPONDENCE_MAX_BODY_CHARACTERS = 2_000_000;
+
 export const CORRESPONDENCE_CHANNELS = ["email"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
 
@@ -41,6 +43,20 @@ export const CORRESPONDENCE_DROP_REASONS = [
 ] as const;
 export type CorrespondenceDropReason =
   (typeof CORRESPONDENCE_DROP_REASONS)[number];
+
+export type CorrespondenceDrop = {
+  id: SafeId<"correspondenceDropLog">;
+  sender: string;
+  receivedAt: string;
+  reason: CorrespondenceDropReason;
+  setupHint: "configure_sender_spf_dkim_dmarc" | null;
+};
+
+export type CorrespondenceDropsPage = {
+  items: CorrespondenceDrop[];
+  nextCursor: string | null;
+  limit: number;
+};
 
 export type CorrespondenceAddress = {
   address: string;

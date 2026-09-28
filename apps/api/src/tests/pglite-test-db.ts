@@ -24,6 +24,7 @@ import {
   installPgliteCorpusProjectionRevisionFence,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
@@ -478,6 +479,9 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_shards" FROM stella
   `,
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_browse_facet_counts" FROM stella
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -631,6 +635,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
+  await installPglitePdfSigningTokenScopes(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
