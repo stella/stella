@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { refreshStatuteSitemapShards } from "@/api/lib/legislation/sitemap-shard-refresh";
+import { refreshStatuteSitemapShards } from "@/api/lib/legal-search/statute-sitemap-shard-refresh";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const REFRESH_STATUTE_SITEMAP_SHARDS_TASK =

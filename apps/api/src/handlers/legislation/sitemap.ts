@@ -6,12 +6,12 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import {
   SITEMAP_ALL_BUCKET,
   statuteBucketSql,
   statuteWorksQuery,
-} from "@/api/lib/legislation/sitemap-shard-sql";
+} from "@/api/lib/legal-search/statute-sitemap-shard-sql";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";

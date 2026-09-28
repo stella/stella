@@ -9,15 +9,15 @@ import {
   listStatuteSitemapStatutesHandler,
 } from "@/api/handlers/legislation/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  refreshStatuteSitemapShards,
+  STATUTE_SITEMAP_SHARD_SPLIT_THRESHOLD,
+} from "@/api/lib/legal-search/statute-sitemap-shard-refresh";
+import { statuteWorksQuery } from "@/api/lib/legal-search/statute-sitemap-shard-sql";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
-import {
-  refreshStatuteSitemapShards,
-  STATUTE_SITEMAP_SHARD_SPLIT_THRESHOLD,
-} from "@/api/lib/legislation/sitemap-shard-refresh";
-import { statuteWorksQuery } from "@/api/lib/legislation/sitemap-shard-sql";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   createTestPglite,

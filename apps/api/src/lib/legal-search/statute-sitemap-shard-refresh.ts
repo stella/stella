@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { statuteSitemapShards } from "@/api/db/schema";
-import { statuteWorksQuery } from "@/api/lib/legislation/sitemap-shard-sql";
+import { statuteWorksQuery } from "@/api/lib/legal-search/statute-sitemap-shard-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 

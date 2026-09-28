@@ -13,11 +13,11 @@ import {
   listStatuteSitemapStatutesHandler,
 } from "@/api/handlers/legislation/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
+import { refreshStatuteSitemapShards } from "@/api/lib/legal-search/statute-sitemap-shard-refresh";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
-import { refreshStatuteSitemapShards } from "@/api/lib/legislation/sitemap-shard-refresh";
 import {
   createTestPglite,
   withPublicLawReaderRole,
