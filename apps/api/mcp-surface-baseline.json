@@ -6,12 +6,12 @@
         "name": 1149,
         "title": 1184,
         "description": 28607,
-        "inputSchema": 75861,
+        "inputSchema": 80275,
         "outputSchema": 53543,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 173718,
+      "payloadUtf8Bytes": 178132,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -31,12 +31,12 @@
         "name": 247,
         "title": 255,
         "description": 5511,
-        "inputSchema": 14398,
+        "inputSchema": 14640,
         "outputSchema": 8229,
         "annotations": 1502,
         "instructions": 888
       },
-      "payloadUtf8Bytes": 31488,
+      "payloadUtf8Bytes": 31730,
       "largestDescription": {
         "tool": "compare_documents",
         "chars": 770
@@ -56,19 +56,19 @@
         "name": 472,
         "title": 496,
         "description": 12893,
-        "inputSchema": 22167,
+        "inputSchema": 26219,
         "outputSchema": 30621,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 71904,
+      "payloadUtf8Bytes": 75956,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
       },
       "largestInputSchema": {
         "tool": "search_case_law",
-        "chars": 2447
+        "chars": 3237
       },
       "largestOutputSchema": {
         "tool": "read_document",
@@ -81,19 +81,19 @@
         "name": 161,
         "title": 176,
         "description": 6055,
-        "inputSchema": 10039,
+        "inputSchema": 12263,
         "outputSchema": 8622,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 26870,
+      "payloadUtf8Bytes": 29094,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
       },
       "largestInputSchema": {
         "tool": "search_case_law",
-        "chars": 2447
+        "chars": 3237
       },
       "largestOutputSchema": {
         "tool": "search_case_law",
