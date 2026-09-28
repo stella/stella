@@ -1598,9 +1598,13 @@ const validateErrorToolCallPart = ({
     canonicalInput !== undefined && Result.isOk(canonicalInput)
       ? { type: "present" as const, value: canonicalInput.value }
       : verbatimToolInput(part.arguments);
-  const { input: _input, output: _output, ...call } = part;
+  const call: Record<string, unknown> = { ...part };
   const candidate: unknown = {
-    ...call,
+    ...Object.fromEntries(
+      Object.entries(call).filter(
+        ([key]) => key !== "input" && key !== "output",
+      ),
+    ),
     ...(input.type === "present" ? { input: input.value } : {}),
     ...(error === undefined ? {} : { output: { error } }),
   };

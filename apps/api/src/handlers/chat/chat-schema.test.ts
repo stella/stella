@@ -2032,15 +2032,14 @@ describe("validateMessage", () => {
         output: { error },
         state: "error",
       };
-      if (!isChatPart(sentCall)) {
-        return expect.unreachable("The sent call must be a chat part");
-      }
       const result = validateToolCallParts({
         message: {
           id: chatMessageId("msg_rejected_tool_input"),
           role: "assistant",
           parts: [
-            sentCall,
+            isChatPart(sentCall)
+              ? sentCall
+              : expect.unreachable("The sent call must be a chat part"),
             {
               type: "tool-result",
               toolCallId: "tool-call-1",
@@ -2052,9 +2051,9 @@ describe("validateMessage", () => {
         },
         tools: searchTools,
       });
-      if (!Result.isOk(result)) {
-        return expect.unreachable(result.error.message);
-      }
+      const parts = Result.isOk(result)
+        ? result.value
+        : expect.unreachable(result.error.message);
       // A name outside the registered catalog is not a typed chat part, so
       // the stored calls are compared as plain values.
       const expected: unknown = {
@@ -2066,21 +2065,21 @@ describe("validateMessage", () => {
         output: { error },
         state: "error",
       };
-      expect<unknown>(result.value[0]).toEqual(expected);
+      const validatedCall: unknown = parts[0];
+      expect(validatedCall).toEqual(expected);
 
       // Stored and read back, the call still says what the model sent.
       const message = toPersistableChatMessage({
         id: chatMessageId("msg_rejected_tool_input"),
         role: "assistant",
-        parts: result.value,
+        parts,
       });
-      expect<unknown>(
-        chatMessageFromPersisted({
-          content: chatMessageContentFromMessage(message),
-          id: message.id,
-          role: message.role,
-        }).parts[0],
-      ).toEqual(expected);
+      const reloadedCall: unknown = chatMessageFromPersisted({
+        content: chatMessageContentFromMessage(message),
+        id: message.id,
+        role: message.role,
+      }).parts[0];
+      expect(reloadedCall).toEqual(expected);
     },
   );
 
