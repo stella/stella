@@ -1,5 +1,5 @@
 import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import type { StreamChunk, UIMessage as StreamUIMessage } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
@@ -104,7 +104,9 @@ export const keepReasoningSteps = (
       return message;
     }
     const signature = reasoningSignature(message);
-    const settled: UIMessage = {
+    // The stream processor's message type: its thinking part keeps a step,
+    // which the client's narrower part type leaves out.
+    const settled: StreamUIMessage = {
       id: message.id,
       parts:
         message.content === "" && signature === undefined
