@@ -72,6 +72,8 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "rateAtEntry",
   "currency",
   "invoiceNarrative",
+  // Language metadata is used by the editing form, not this read-only summary.
+  "narrativeLanguage",
   "noCharge",
   "taskCode",
   "activityCode",

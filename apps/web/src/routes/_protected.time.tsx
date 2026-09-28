@@ -1,12 +1,12 @@
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
