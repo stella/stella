@@ -159,6 +159,7 @@ describe("native image capability evidence", () => {
   test.each([
     { message: "Unsupported MIME image/heic", cause: { status: 429 } },
     { message: "Unsupported MIME image/heic", error: { statusCode: 503 } },
+    { message: "Unsupported MIME image/heic", cause: { code: "429" } },
   ])(
     "nested operational evidence takes precedence over a wrapper message: %j",
     async (error) => {

@@ -104,7 +104,12 @@ const nativeImageFailureKind = (
   }
   for (const key of ["status", "statusCode", "code"]) {
     if (key in error) {
-      const status = Reflect.get(error, key);
+      const value: unknown = Reflect.get(error, key);
+      // Adapters relay an SDK status as `code: String(err.status)`.
+      const status =
+        typeof value === "string" && /^\d{3}$/u.test(value)
+          ? Number(value)
+          : value;
       if (
         typeof status === "number" &&
         (status === 401 || status === 403 || status === 429 || status >= 500)
