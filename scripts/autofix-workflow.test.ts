@@ -337,7 +337,8 @@ describe("changed-file autofix boundary", () => {
     const fix = job.slice(fixStep, restrictionStep);
 
     expect(job).toContain("needs: regenerate-scope");
-    expect(job).toContain("if: needs.regenerate-scope.result == 'success'");
+    expect(job).toContain("needs.regenerate-scope.result == 'success'");
+    expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
     expect(job).toContain("github.actor != 'autofix-ci[bot]'");
     expect(job.slice(generatorStep, fixStep)).toContain(
       "if: needs.regenerate-scope.outputs.run == 'true'",
@@ -359,6 +360,7 @@ describe("changed-file autofix boundary", () => {
       "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
     );
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
+    expect(fix).toContain('if [[ "$path" == .github/workflows/* ]]; then');
     expect(fix).toContain(
       `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
     );
@@ -376,10 +378,34 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(restrictionStep, pushStep)).toContain(
       'excludes+=(":(exclude,literal)$path")',
     );
+    expect(job.slice(restrictionStep, pushStep)).toContain(
+      'if [[ "$path" == .github/workflows/* ]]; then',
+    );
     expect(job).not.toContain("git commit");
     expect(job).not.toContain("git push");
     expect(job).toContain(
       "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a",
     );
+  });
+
+  test("skips an old head without the planner but detects a broken sparse checkout", async () => {
+    const job = jobOf(await Bun.file(WORKFLOW_URL).text());
+    const availability = job.indexOf("- name: Check planner availability");
+    const plan = job.indexOf("- name: Match generator inputs");
+    const scope = job.slice(availability, plan);
+
+    expect(availability).toBeGreaterThanOrEqual(0);
+    expect(plan).toBeGreaterThan(availability);
+    expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
+    expect(scope).toContain(
+      "scripts/autofix-plan.ts scripts/generated-files.ts",
+    );
+    expect(scope).toContain('git cat-file -e "HEAD:$path"');
+    expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');
+    expect(scope).toContain('echo "ready=true" >> "$GITHUB_OUTPUT"');
+    expect(job.slice(plan)).toContain(
+      "if: steps.planner.outputs.ready == 'true'",
+    );
+    expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
   });
 });

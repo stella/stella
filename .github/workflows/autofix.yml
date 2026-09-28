@@ -145,6 +145,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      ready: ${{ steps.planner.outputs.ready }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
@@ -176,10 +177,30 @@ jobs:
         with:
           bun-version-file: "package.json"
 
+      - name: Check planner availability
+        id: planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+            if [[ -f "$path" ]]; then
+              continue
+            fi
+            if git cat-file -e "HEAD:$path" 2>/dev/null; then
+              echo "::error::Sparse checkout omitted $path."
+              exit 1
+            fi
+            echo "::notice::Autofix requires a branch that includes $path."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          done
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       # The manifest owns generator inputs and outputs. The files API lists at
       # most 3000 files, so a list that long regenerates rather than guessing.
       - name: Match generator inputs
         id: scope
+        if: steps.planner.outputs.ready == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -192,7 +213,9 @@ jobs:
   regenerate-derived-files:
     name: Autofix changed files
     needs: regenerate-scope
-    if: needs.regenerate-scope.result == 'success'
+    if: >-
+      needs.regenerate-scope.result == 'success'
+      && needs.regenerate-scope.outputs.ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -251,6 +274,10 @@ jobs:
           lint_paths=()
           for path in "${changed[@]}"; do
             [[ -f "$path" && ! -L "$path" ]] || continue
+            # The GitHub App cannot update workflow files.
+            if [[ "$path" == .github/workflows/* ]]; then
+              continue
+            fi
             format_paths+=("./$path")
             if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
               lint_paths+=("./$path")
@@ -287,6 +314,9 @@ jobs:
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           excludes=()
           for path in "${changed[@]}"; do
+            if [[ "$path" == .github/workflows/* ]]; then
+              continue
+            fi
             excludes+=(":(exclude,literal)$path")
           done
           for path in "${generated[@]}"; do
