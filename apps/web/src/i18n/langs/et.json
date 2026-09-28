@@ -1796,6 +1796,7 @@
     "checking": "Kontrollin viidet {citation} …",
     "contradicts": "Räägib vastu",
     "doesNotAddress": "Ei käsitle",
+    "earlier": "Varasemad kontrollid",
     "failed": "Viite kontroll ei lõppenud. Proovige uuesti.",
     "goToParagraph": "Mine lõigu juurde",
     "noPassage": "Ükski lahendi üksik lõik seda järeldust ei kanna.",

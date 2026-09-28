@@ -1796,6 +1796,7 @@
     "checking": "{citation} wird geprüft …",
     "contradicts": "Widerspricht",
     "doesNotAddress": "Behandelt nicht",
+    "earlier": "Frühere Prüfungen",
     "failed": "Die Zitatprüfung wurde nicht abgeschlossen. Bitte erneut versuchen.",
     "goToParagraph": "Zum Absatz springen",
     "noPassage": "Keine einzelne Textstelle der Entscheidung trägt diesen Befund.",

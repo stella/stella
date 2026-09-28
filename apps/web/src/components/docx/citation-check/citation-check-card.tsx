@@ -7,9 +7,13 @@ import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { cn } from "@stll/ui/utils";
 
 import { CITATION_RELATION_DISPLAY } from "@/components/docx/citation-check/citation-check.logic";
-import type { CitationCheckState } from "@/components/docx/citation-check/use-citation-check";
+import type {
+  CitationCheckResult,
+  CitationCheckState,
+} from "@/components/docx/citation-check/use-citation-check";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 
 type CitationCheckCardProps = {
@@ -20,11 +24,14 @@ type CitationCheckCardProps = {
 };
 
 /**
- * What the check answered, beside the document rather than inside it.
+ * What the checks answered, beside the document rather than inside it.
  *
- * The finding is an opinion about the writer's sentence, not an edit to it,
- * so it never touches the text: the writer reads it, opens the decision or
- * the passage it rests on, and dismisses it. Docked to the inline start so it
+ * A finding is an opinion about the writer's sentence, not an edit to it, so
+ * it never touches the text: the writer reads it, opens the decision or the
+ * passage it rests on, and dismisses it. The newest answer is shown in full
+ * and the ones before it stay as a short stack, because the checks run as the
+ * writer moves through the document and an answer scrolled past is still the
+ * only record that the citation was read. Docked to the inline start so it
  * clears the review stepper, which owns the bottom centre.
  */
 export const CitationCheckCard = ({
@@ -33,10 +40,11 @@ export const CitationCheckCard = ({
   state,
 }: CitationCheckCardProps) => {
   const t = useTranslations();
-  if (state.status === "idle") {
+  const [latest, ...earlier] = state.results;
+  if (latest === undefined && state.pending === null) {
     return null;
   }
-  const { blockId } = state;
+  const latestBlockId = latest?.blockId ?? null;
 
   return (
     <aside
@@ -50,9 +58,9 @@ export const CitationCheckCard = ({
         <div className="flex items-center gap-1">
           {/* The writer keeps typing while the check runs, so the answer has
               to be able to point back at the paragraph it is about. */}
-          {blockId !== null && (
+          {latestBlockId !== null && (
             <Button
-              onClick={() => onRevealParagraph(blockId)}
+              onClick={() => onRevealParagraph(latestBlockId)}
               size="xs"
               variant="ghost"
             >
@@ -69,18 +77,25 @@ export const CitationCheckCard = ({
           </Button>
         </div>
       </header>
-      <CitationCheckBody state={state} />
+      {state.pending !== null && <Checking citation={state.pending.citation} />}
+      {latest !== undefined && <CitationCheckBody result={latest} />}
+      {earlier.length > 0 && (
+        <div className="border-border flex flex-col gap-1.5 border-t pt-2">
+          <span className="text-muted-foreground text-2xs font-medium">
+            {t("docxCitationCheck.earlier")}
+          </span>
+          {earlier.map((result) => (
+            <EarlierResult key={result.key} result={result} />
+          ))}
+        </div>
+      )}
     </aside>
   );
 };
 
-const CitationCheckBody = ({ state }: { state: CitationCheckState }) => {
+const CitationCheckBody = ({ result }: { result: CitationCheckResult }) => {
   const t = useTranslations();
-  switch (state.status) {
-    case "idle":
-      return null;
-    case "checking":
-      return <Checking citation={state.citation} />;
+  switch (result.status) {
     case "failed":
       return (
         <p className="text-destructive text-sm">
@@ -88,25 +103,74 @@ const CitationCheckBody = ({ state }: { state: CitationCheckState }) => {
         </p>
       );
     case "not_found":
-      return (
-        <BidiText as="p" className="text-destructive text-sm">
-          {t("docxCitationCheck.notFound", { citation: state.citation })}
-        </BidiText>
-      );
+      return <NotFound citation={result.citation} />;
     case "unavailable":
       return (
         <p className="text-muted-foreground text-sm">
-          {state.reason === "no_text"
+          {result.reason === "no_text"
             ? t("docxCitationCheck.unavailableNoText")
             : t("docxCitationCheck.unavailableDerivedAi")}
         </p>
       );
     case "checked":
-      return <CheckedReading state={state} />;
+      return <CheckedReading result={result} />;
     default:
-      state satisfies never;
-      return panic("Unhandled citation-check state");
+      result satisfies never;
+      return panic("Unhandled citation-check result");
   }
+};
+
+/** One answer from earlier in the session: how it read, and what it read. */
+const EarlierResult = ({ result }: { result: CitationCheckResult }) => {
+  const t = useTranslations();
+  switch (result.status) {
+    case "not_found":
+      return <NotFound citation={result.citation} className="text-xs" />;
+    case "failed":
+    case "unavailable":
+      // Nothing was decided about this reference, so the row says only that
+      // it was read: the reasons are long and belong to the answer in full.
+      return (
+        <BidiText as="p" className="text-muted-foreground text-xs">
+          {result.citation}
+        </BidiText>
+      );
+    case "checked": {
+      const display = CITATION_RELATION_DISPLAY[result.relation];
+
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <ReviewStatusBadge tone={display.tone} variant="solid">
+            {t(display.label)}
+          </ReviewStatusBadge>
+          <CitedDecisionLink decision={result.decision}>
+            <BidiText as="span" className="text-xs">
+              {result.decision.caseNumber}
+            </BidiText>
+          </CitedDecisionLink>
+        </div>
+      );
+    }
+    default:
+      result satisfies never;
+      return panic("Unhandled citation-check result");
+  }
+};
+
+const NotFound = ({
+  citation,
+  className = "text-sm",
+}: {
+  citation: string;
+  className?: string;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <BidiText as="p" className={cn("text-destructive", className)}>
+      {t("docxCitationCheck.notFound", { citation })}
+    </BidiText>
+  );
 };
 
 const Checking = ({ citation }: { citation: string }) => {
@@ -122,12 +186,12 @@ const Checking = ({ citation }: { citation: string }) => {
 };
 
 const CheckedReading = ({
-  state,
+  result,
 }: {
-  state: Extract<CitationCheckState, { status: "checked" }>;
+  result: Extract<CitationCheckResult, { status: "checked" }>;
 }) => {
   const t = useTranslations();
-  const display = CITATION_RELATION_DISPLAY[state.relation];
+  const display = CITATION_RELATION_DISPLAY[result.relation];
 
   return (
     <>
@@ -139,14 +203,14 @@ const CheckedReading = ({
           {/* A percent placeholder, not a pre-multiplied number: the locale
               decides the sign's position and whether a space precedes it. */}
           {t("docxCitationCheck.probability", {
-            probability: state.probability,
+            probability: result.probability,
           })}
         </span>
       </div>
-      <CitedDecisionLink decision={state.decision}>
-        <BidiText as="span">{state.decision.caseNumber}</BidiText>
+      <CitedDecisionLink decision={result.decision}>
+        <BidiText as="span">{result.decision.caseNumber}</BidiText>
       </CitedDecisionLink>
-      {state.passage === null ? (
+      {result.passage === null ? (
         <p className="text-muted-foreground text-xs">
           {t("docxCitationCheck.noPassage")}
         </p>
@@ -163,15 +227,15 @@ const CheckedReading = ({
             side="top"
           >
             <BidiText as="p" className="text-foreground text-sm">
-              {state.passage.text}
+              {result.passage.text}
             </BidiText>
           </PopoverPanel>
         </Popover>
       )}
-      {state.alternatives.length > 0 && (
+      {result.alternatives.length > 0 && (
         <p className="text-muted-foreground text-xs">
           {t("docxCitationCheck.alternatives", {
-            count: state.alternatives.length,
+            count: result.alternatives.length,
           })}
         </p>
       )}

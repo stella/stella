@@ -1796,6 +1796,7 @@
     "checking": "Verificando {citation} …",
     "contradicts": "Contraria",
     "doesNotAddress": "Não trata",
+    "earlier": "Verificações anteriores",
     "failed": "A verificação da citação não foi concluída. Tente novamente.",
     "goToParagraph": "Ir para o parágrafo",
     "noPassage": "Nenhum trecho isolado da decisão sustenta essa leitura.",

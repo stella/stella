@@ -1796,6 +1796,7 @@
     "checking": "Comprobando {citation} …",
     "contradicts": "Contradice",
     "doesNotAddress": "No aborda",
+    "earlier": "Comprobaciones anteriores",
     "failed": "La comprobación de la cita no se completó. Inténtalo de nuevo.",
     "goToParagraph": "Ir al párrafo",
     "noPassage": "Ningún pasaje concreto de la resolución sostiene esta lectura.",
