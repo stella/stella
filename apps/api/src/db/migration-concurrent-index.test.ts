@@ -102,6 +102,11 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // and its triggers. The same static retry body: only lock_not_available,
   // under a bounded statement budget, changing no rows.
   "20260926150000_legislation_payload_revision/migration.sql:e0b0bda4c5afe7b5e214268b05745e54eda8580496a5d5bb904349e2e0d4ab9b",
+  // Acquires legislation_documents and legislation_sources in writer order
+  // before the expression identity columns, CHECKs and triggers. The same
+  // static retry body: only lock_not_available, under a bounded statement
+  // budget, changing no rows.
+  "20260928180000_legislation_expression_identity/migration.sql:b5cdffe3667e15dba2e9d2fef524d90c04f7979f3800ff0f7c6f5128d452dad1",
   // Acquires the decisions and the provision rows in writer order before the
   // provision span columns, the state foreign key and the enqueue trigger.
   // Same static retry body as above; it changes no rows.
