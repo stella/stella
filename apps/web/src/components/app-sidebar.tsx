@@ -1492,6 +1492,7 @@ const MatterItem = ({
                   <MatterActivityRow>
                     <Link
                       activeProps={{ "data-active": true }}
+                      from="/_protected"
                       params={{ workspaceId: ws.id }}
                       to="/workspaces/$workspaceId/timesheets"
                     >
