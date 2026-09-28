@@ -17020,6 +17020,10 @@ export type WebRoutes = {
             practiceJurisdictions: Array<T21e7b1b9fc>;
             promptCachingEnabled: Tfddd645dc8;
             memoryExtractionEnabled: Tfddd645dc8;
+            timeMinimumUnitMinutes: number;
+            timeEditWindowDays: number;
+            timeLockedThroughMonth: Tbe0400fa4c;
+            timeNarrativeRequired: Tfddd645dc8;
           };
           400: T9a51b7d2bc;
           401: T9a51b7d2bc;
@@ -17182,12 +17186,20 @@ export type WebRoutes = {
           promptCachingEnabled?: false | true;
           documentProcessingMode?: "off" | "searchable-text";
           memoryExtractionEnabled?: false | true;
+          timeMinimumUnitMinutes?: number;
+          timeEditWindowDays?: number;
+          timeLockedThroughMonth?: null | string;
+          timeNarrativeRequired?: false | true;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
           200: {
+            timeNarrativeRequired?: false | true;
+            timeLockedThroughMonth?: null | string;
+            timeEditWindowDays?: number;
+            timeMinimumUnitMinutes?: number;
             memoryExtractionEnabled?: false | true;
             documentProcessingMode?: "off" | "searchable-text";
             promptCachingEnabled?: false | true;
@@ -29779,6 +29791,56 @@ export type CorrespondenceRoutes = {
     workspaces: {
       ":workspaceId": {
         correspondence: {
+          drops: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: T8d02a37b3f;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    id: (string & valibot_Brand<"SafeId"> & {
+                      readonly __safeIdType?: "correspondenceDropLog";
+                    });
+                    sender: string;
+                    receivedAt: string;
+                    reason: ("unknown_recipient" | "revoked_address" | "unauthorized_sender" | "authentication_failed" | "message_too_large" | "attachment_rejected" | "malformed_message");
+                    setupHint: (null | "configure_sender_spf_dkim_dmarc");
+                  }>;
+                  nextCursor: Tbe0400fa4c;
+                  limit: number;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        } & {
           get: {
             body: Record<never, never>;
             params: {

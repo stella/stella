@@ -387,6 +387,11 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -775,6 +780,17 @@ export const OWNERSHIP = [
       "and `formatMoneyCents` all ask `currencyMinorUnitDigits` here, and the " +
       "`no-literal-minor-unit-scale` rule reports a money value scaled by a " +
       "literal 100 anywhere in `apps/*/src` or `packages/*/src`.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "invoice-document",
+    capability:
+      "Invoice, advance, and credit note totals and Czech payment payloads",
+    owner: ["packages/invoicing/"],
+    summary:
+      "The package rounds VAT per line, sums document and rate totals in " +
+      "branded minor units, and returns SPAYD text for payable documents. " +
+      "QR matrix rendering remains with callers.",
     enforcement: { kind: "none" },
   },
   {

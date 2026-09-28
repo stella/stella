@@ -5,6 +5,7 @@
 import { uiMessageToModelMessages } from "@tanstack/ai";
 
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
+import { toolCallStepOf } from "@/api/lib/chat/tool-call-step";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
@@ -36,9 +37,23 @@ const trailingAnswerOf = (call: ToolCallPart): ToolResultPart | undefined => {
 const carriesApproval = (part: ChatPart | undefined): boolean =>
   part?.type === "tool-call" && "approval" in part;
 
+const stepOf = (call: ToolCallPart): string | undefined =>
+  toolCallStepOf("metadata" in call ? call.metadata : undefined);
+
 /**
- * Where the answer to the call at `callIndex` belongs: among its step's
- * results, the tool results right after the step's calls. The request that
+ * Whether `part` is a call of the same step as `call`. Two calls in a row
+ * belong to different steps when they name different ones; calls stored
+ * before steps were recorded name none, and read as one step.
+ */
+const callOfSameStep = (
+  call: ToolCallPart,
+  part: ChatPart | undefined,
+): boolean => part?.type === "tool-call" && stepOf(part) === stepOf(call);
+
+/**
+ * Where the answer to `call`, at `callIndex`, belongs: among its step's
+ * results, the tool results right after the step's calls (the calls in a row
+ * that name its step, `callOfSameStep`). The request that
  * answered the call sent the step's results stored by then, and after them,
  * in call order, the answers to the step's approvals; an approved call's
  * result is stored later, in place of its answer. So the answer goes before
@@ -47,10 +62,11 @@ const carriesApproval = (part: ChatPart | undefined): boolean =>
  */
 const answerIndexInStep = (
   parts: readonly ChatPart[],
+  call: ToolCallPart,
   callIndex: number,
 ): number => {
   let end = callIndex + 1;
-  while (parts[end]?.type === "tool-call") {
+  while (callOfSameStep(call, parts[end])) {
     end += 1;
   }
   const resultsStart = end;
@@ -99,7 +115,7 @@ export const answerCallsInTheirStep = (
       continue;
     }
     const answer = trailingAnswerOf(part);
-    const at = answerIndexInStep(parts, index);
+    const at = answerIndexInStep(parts, part, index);
     // A step that ends the message already has the SDK's answers after it.
     if (answer !== undefined && at < parts.length) {
       answers.push({ answer, at });

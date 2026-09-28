@@ -14,6 +14,7 @@ import {
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -160,15 +161,6 @@ type CourtActivityRead = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowsOf = (result: unknown): Record<string, unknown>[] => {
-  let rows: unknown = result;
-  if (!Array.isArray(result) && isRecord(result)) {
-    rows = result["rows"];
-  }
-  return Array.isArray(rows) ? rows.filter(isRecord) : [];
-};
-
 /**
  * The transaction's current statement timeout, so the bound this read sets can
  * be handed back. Null when the setting cannot be read, which leaves the bound
@@ -181,7 +173,8 @@ const readStatementTimeout = async (
   const result: unknown = await tx.execute(
     sql`SELECT current_setting('statement_timeout') AS statement_timeout`,
   );
-  const value = rowsOf(result).at(0)?.["statement_timeout"];
+  const row = executedRows(result).at(0);
+  const value = isRecord(row) ? row["statement_timeout"] : undefined;
   return typeof value === "string" ? value : null;
 };
 
@@ -274,8 +267,9 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
       );
     }
 
+    const rows = executedRows(result).filter(isRecord);
     return new Map(
-      rowsOf(result).flatMap((row) => {
+      rows.flatMap((row) => {
         const court = row["court"];
         if (typeof court !== "string") {
           return [];
