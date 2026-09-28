@@ -64,8 +64,34 @@ jobs:
           RECORDED_HEAD: ${{ steps.artifact.outputs.head }}
           RECORDED_BASE: ${{ steps.artifact.outputs.base }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_PULL_REQUESTS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
         run: |
           set -euo pipefail
+          # Artifact names are recorder-controlled; bind them to the trusted
+          # workflow_run identity before selecting a branch for an App commit.
+          case "$RUN_EVENT" in
+            pull_request)
+              if [[ "$RUN_HEAD_SHA" != "$RECORDED_HEAD" ]] \
+                || ! jq -e --argjson pr "$PR_NUMBER" 'type == "array" and any(.[]; .number == $pr)' <<< "$RUN_PULL_REQUESTS" > /dev/null; then
+                echo "::error::Recorded pull request identity does not match the triggering run"
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [[ "$RUN_HEAD_BRANCH" != "$BASE_BRANCH" ]]; then
+                echo "::error::Dispatch must run from the default branch"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported recording event: $RUN_EVENT"
+              exit 1
+              ;;
+          esac
           pr=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")
           if [[ "$(jq -r '.state' <<< "$pr")" != open \
             || "$(jq -r '.base.ref' <<< "$pr")" != "$BASE_BRANCH" \
@@ -74,9 +100,19 @@ jobs:
             echo "::error::The pull request head or base moved since recording"
             exit 1
           fi
+          head_repo=$(jq -r '.head.repo.full_name' <<< "$pr")
+          if [[ "$RUN_EVENT" == pull_request && "$head_repo" != "$RUN_HEAD_REPOSITORY" ]]; then
+            echo "::error::The pull request repository differs from the triggering run"
+            exit 1
+          fi
+          push_allowed=false
+          if [[ "$head_repo" == "$REPOSITORY" && "$RUN_HEAD_REPOSITORY" == "$REPOSITORY" ]]; then
+            push_allowed=true
+          fi
           {
+            echo "pr=$PR_NUMBER"
             echo "branch=$(jq -r '.head.ref' <<< "$pr")"
-            echo "same-repo=$(jq -r --arg repo "$REPOSITORY" '.head.repo.full_name == $repo' <<< "$pr")"
+            echo "push-allowed=$push_allowed"
           } >> "$GITHUB_OUTPUT"
 
       - name: Download recorded JSON
@@ -114,7 +150,7 @@ jobs:
           cp scripts/network-baseline-scope.ts "$RUNNER_TEMP/trusted-baseline/scripts/network-baseline-scope.ts"
 
       - name: Checkout the recorded pull request head
-        if: steps.artifact.outputs.found == 'true' && steps.pr.outputs.same-repo == 'true'
+        if: steps.artifact.outputs.found == 'true' && steps.pr.outputs.push-allowed == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.artifact.outputs.head }}
@@ -134,7 +170,7 @@ jobs:
           bun --no-install --no-env-file scripts/network-baseline-scope.ts validate "$RUNNER_TEMP/recorded/network-baseline.json"
 
       - name: Validate recorded data and route scope
-        if: steps.pr.outputs.same-repo == 'true'
+        if: steps.pr.outputs.push-allowed == 'true'
         env:
           BASE_SHA: ${{ steps.artifact.outputs.base }}
           HEAD_SHA: ${{ steps.artifact.outputs.head }}
@@ -172,7 +208,7 @@ jobs:
           cp "$recorded" "$GITHUB_WORKSPACE/apps/web/e2e/network-baseline.json"
 
       - name: Create CI-triggering app token
-        if: steps.pr.outputs.same-repo == 'true'
+        if: steps.pr.outputs.push-allowed == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -183,7 +219,7 @@ jobs:
       # The API signs the commit. append checks that the branch still points
       # at the recorded head, so a concurrent push cannot receive stale data.
       - name: Commit baseline to same-repository pull request
-        if: steps.pr.outputs.same-repo == 'true'
+        if: steps.pr.outputs.push-allowed == 'true'
         uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -193,11 +229,11 @@ jobs:
           commit-message: "chore(web): record network baseline"
 
       - name: Remove recording label
-        if: always() && steps.artifact.outputs.pr != ''
+        if: always() && steps.pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.artifact.outputs.pr }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
         run: |
           set -euo pipefail
           if gh api "repos/$REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -Fxq 'baseline:record'; then
