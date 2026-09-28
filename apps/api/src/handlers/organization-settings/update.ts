@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -66,7 +67,7 @@ export type UpdateOrganizationSettingsProps = {
 
 type UpdateBody = UpdateOrganizationSettingsProps["body"];
 type ExistingTimePolicy = Pick<
-  typeof organizationSettings.$inferSelect,
+  InferSelectModel<typeof organizationSettings>,
   | "timeMinimumUnitMinutes"
   | "timeEditWindowDays"
   | "timeLockedThroughMonth"
