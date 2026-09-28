@@ -15,7 +15,7 @@ type BillingCodesListParams = {
   mode: (typeof BILLING_CODE_QUERY_MODE)[keyof typeof BILLING_CODE_QUERY_MODE];
 };
 
-export const billingCodesKeys = {
+const billingCodesKeys = {
   all: billingCodesQueryRoot,
   list: ({ workspaceId, type, mode }: BillingCodesListParams) =>
     [...billingCodesKeys.all(workspaceId), type, mode] as const,
