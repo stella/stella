@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.1.2
+
+### Patch Changes
+
+- [#4024](https://github.com/stella/stella/pull/4024) [`feffab3`](https://github.com/stella/stella/commit/feffab369d1e8c336b8dbe08b95e550df53990dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose organization time policy fields through the generated capability catalog.
+
 ## 2.1.1
 
 ### Patch Changes
