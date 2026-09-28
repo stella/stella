@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "p. ej. Estándar 2025"
     },
     "revertToDraft": "Volver a borrador",
+    "savedNarratives": {
+      "empty": "Guarda una descripción para volver a usarla.",
+      "save": "Guardar descripción",
+      "title": "Descripciones guardadas"
+    },
     "selectMatter": "Seleccione un asunto...",
     "selectMatterToStart": "Seleccione un asunto para iniciar el temporizador",
     "selectedCount": "{count, plural, one {# seleccionado} other {# seleccionados}}",

@@ -93,9 +93,9 @@ marketing:reshoot` re-records only the stale captures (see
 5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow runs
    the same CLI coupling check and pushes the matching `vX.Y.Z` tag. The tag
    then triggers `release.yml`. If the check fails there (a CLI changeset
-   merged between the pull request check and the tag), apply it with `bun run
-   changeset:version` plus `bun run changeset --empty`, merge that, and
-   dispatch `tag-on-version-bump.yml` against `main` by hand.
+   merged between the pull request check and the tag), apply it with
+   `bun run changeset:version` plus `bun run changeset --empty`, merge that,
+   and dispatch `tag-on-version-bump.yml` against `main` by hand.
 6. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
    and promotes stable releases automatically; the release is published and
@@ -128,9 +128,9 @@ Package versions come from `.changeset/*.md`, and two flows apply them:
   CLI coupling gate has nothing to refuse.
 - `.github/workflows/release-pr.yml` maintains a Version Packages pull request
   for package releases between application releases. It stands down while a
-  ready pull request into `main` is open whose title starts with `chore:
-  release v` and whose head branch lives in this repository, since that release
-  applies the same entries; `workflow_dispatch` runs it anyway.
+  ready pull request into `main` is open whose title starts with
+  `chore: release v` and whose head branch lives in this repository, since that
+  release applies the same entries; `workflow_dispatch` runs it anyway.
 
 Both run the repository's `changeset:version` script, so neither can produce a
 different bump than the other.

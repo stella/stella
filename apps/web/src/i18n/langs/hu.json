@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "pl. Standard 2025"
     },
     "revertToDraft": "Visszaállítás tervezetre",
+    "savedNarratives": {
+      "empty": "Mentse a leírást későbbi használatra.",
+      "save": "Leírás mentése",
+      "title": "Mentett leírások"
+    },
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",

@@ -6795,6 +6795,15 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--narrative-language",
+                prop: "narrative_language",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "BCP-47 language tag for the narrative; pass null to clear",
+                required: false,
+              },
+              {
                 flag: "--invoice-narrative",
                 prop: "invoice_narrative",
                 kind: "nullable-string",
@@ -6898,6 +6907,21 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 10000,
                   description:
                     "Description of the work; required when creating",
+                },
+                narrative_language: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 2,
+                      maxLength: 64,
+                      pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "BCP-47 language tag for the narrative; pass null to clear",
                 },
                 invoice_narrative: {
                   anyOf: [
@@ -38732,6 +38756,277 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "saved-time-narratives": {
+          kind: "route",
+          children: {
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "create"],
+                capabilityId: "saved-time-narratives.create",
+                description:
+                  "Save a personal named time narrative for reuse across matters in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: true,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name", "narrative"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        narrative: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            delete: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "delete"],
+                capabilityId: "saved-time-narratives.delete",
+                description:
+                  "Delete a personal saved time narrative in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "list"],
+                capabilityId: "saved-time-narratives.list",
+                description:
+                  "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "update"],
+                capabilityId: "saved-time-narratives.update",
+                description:
+                  "Update a personal saved time narrative in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: false,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        narrative: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "seller-profiles": {
           kind: "route",
           children: {
@@ -48481,6 +48776,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "narrative",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     description: "Whether the entry is billable to the client",
@@ -48566,6 +48870,22 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 10000,
                           description: "Description of the work",
                           type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         billable: {
                           description:
@@ -49351,6 +49671,23 @@ export const generatedRouteMap: RouteNode = {
                                   description: "Description of the work",
                                   type: "string",
                                 },
+                                narrativeLanguage: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minLength: 2,
+                                      maxLength: 64,
+                                      pattern:
+                                        "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                                      description:
+                                        "BCP-47 language tag, or null when unspecified",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
                                 billable: {
                                   description:
                                     "Whether the entry is billable to the client",
@@ -49785,6 +50122,15 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "nullable-string",
                     repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
                     flag: "--invoice-narrative",
                     prop: "invoiceNarrative",
                     required: false,
@@ -49873,6 +50219,22 @@ export const generatedRouteMap: RouteNode = {
                           minLength: 0,
                           maxLength: 10000,
                           type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         invoiceNarrative: {
                           nullable: true,

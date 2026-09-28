@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
     "revertToDraft": "Revert to draft",
+    "savedNarratives": {
+      "empty": "Save a narrative to use it again.",
+      "save": "Save narrative",
+      "title": "Saved narratives"
+    },
     "selectMatter": "Select a matter...",
     "selectMatterToStart": "Select a matter to start timing",
     "selectedCount": "{count, plural, one {# selected} other {# selected}}",

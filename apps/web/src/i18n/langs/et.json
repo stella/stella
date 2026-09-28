@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "nt Standard 2025"
     },
     "revertToDraft": "Tagasta mustandiks",
+    "savedNarratives": {
+      "empty": "Salvesta kirjeldus, et seda uuesti kasutada.",
+      "save": "Salvesta kirjeldus",
+      "title": "Salvestatud kirjeldused"
+    },
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",

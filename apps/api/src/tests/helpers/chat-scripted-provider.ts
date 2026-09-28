@@ -4,7 +4,6 @@ import type {
   AnyTextAdapter,
   ModelMessage,
 } from "@tanstack/ai";
-import { Result } from "better-result";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -12,6 +11,11 @@ import { mockStructuredData } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
 import { toJsonValue } from "@/api/lib/json-value";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
+import {
+  createPromptPrefixLedger,
+  promptBlocksOf,
+} from "@/api/tests/helpers/chat-prompt-prefix";
+import type { PromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
   ScriptedProviderError,
   scriptedAdapterBase,
@@ -57,6 +61,9 @@ type ThreadScripts = {
   modelOptions: unknown[];
   /** Resolves the current `stalled` promise and arms the next one. */
   onStall: () => void;
+  /** The prompt of every scripted model call, in order, as blocks
+   *  (`chat.provider.prefix-stable`). */
+  promptLedger: PromptPrefixLedger;
   /** What each of the thread's model calls produced, in order. */
   produced: ProducedStep[];
   /** The prompt of every model call the thread made, in order. */
@@ -78,6 +85,7 @@ const newThreadScripts = (): ThreadScripts => {
     changedToolResults: [],
     modelOptions: [],
     onStall: () => undefined,
+    promptLedger: createPromptPrefixLedger(),
     produced: [],
     prompts: [],
     queue: [],
@@ -99,18 +107,15 @@ const newThreadScripts = (): ThreadScripts => {
 };
 
 /**
- * A tool result's content, its JSON in canonical key order: storing a result
- * reorders its keys (jsonb), which does not change what it says.
+ * A tool result's content as the model reads it: text exactly as handed over
+ * (its JSON keys are sorted before any request, so a stored result reads the
+ * same as the live one), parts with their keys in canonical order, since the
+ * provider adapter writes their fields itself.
  */
-const resultIdentity = (content: ModelMessage["content"]): string => {
-  if (typeof content !== "string") {
-    return stableStringify(toJsonValue(content));
-  }
-  const parsed = Result.try((): unknown => JSON.parse(content));
-  return Result.isOk(parsed)
-    ? stableStringify(toJsonValue(parsed.value))
-    : stableStringify(content);
-};
+const resultIdentity = (content: ModelMessage["content"]): string =>
+  typeof content === "string"
+    ? JSON.stringify(content)
+    : stableStringify(toJsonValue(content));
 
 /**
  * Records each tool result of an earlier turn that `messages` hands the
@@ -203,7 +208,9 @@ const adapter: AnyTextAdapter = {
     modelOptions,
     request,
     runId,
+    systemPrompts,
     threadId,
+    tools,
   }) {
     const scripts = threadId === undefined ? undefined : threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
@@ -245,6 +252,10 @@ const adapter: AnyTextAdapter = {
       active = { index: 0, run: next };
       runs.set(runId, active);
     }
+    // Read now: the engine keeps building on the arrays it hands over.
+    scripts.promptLedger.record(
+      promptBlocksOf({ messages, systemPrompts, tools }),
+    );
     const index = active.index;
     active.index += 1;
     const turn = active.run.at(index);
@@ -315,6 +326,10 @@ export const installScriptedProvider = () => {
     script: (threadId: string, ...scripted: readonly ScriptedRun[]) => {
       scriptsOf(threadId).queue.push(...scripted);
     },
+    /** The prompts of `threadId`'s scripted model calls
+     *  (`chat.provider.prefix-stable`). */
+    promptLedgerOf: (threadId: string): PromptPrefixLedger =>
+      scriptsOf(threadId).promptLedger,
     /** Resolves once `threadId`'s next request reaches a stalling turn. */
     stalled: async (threadId: string): Promise<void> => {
       await scriptsOf(threadId).stalled;

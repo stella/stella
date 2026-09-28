@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "z.B. Standard 2025"
     },
     "revertToDraft": "In Entwurf zurückversetzen",
+    "savedNarratives": {
+      "empty": "Speichern Sie eine Beschreibung zur erneuten Verwendung.",
+      "save": "Beschreibung speichern",
+      "title": "Gespeicherte Beschreibungen"
+    },
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",

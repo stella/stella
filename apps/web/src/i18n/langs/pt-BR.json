@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "por exemplo Padrão 2025"
     },
     "revertToDraft": "Reverter para rascunho",
+    "savedNarratives": {
+      "empty": "Salve uma descrição para usá-la novamente.",
+      "save": "Salvar descrição",
+      "title": "Descrições salvas"
+    },
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
