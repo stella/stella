@@ -7,6 +7,7 @@ import {
   envDocumentProcessingWorkerServerSchema,
 } from "@/api/env-document-processing-worker-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { runtimeMode } from "@/api/runtime-mode";
 
 const workerRuntimeEnv = resolveConfigurationPlaceholders({
   schema: envDocumentProcessingWorkerServerSchema,
@@ -25,8 +26,8 @@ const envDocumentProcessingWorkerSpecific = createEnv({
 const invariantViolation = documentProcessingEnvInvariantViolation({
   contentEncryptionKey:
     envDocumentProcessingWorkerSpecific.CONTENT_ENCRYPTION_KEY,
-  nodeEnv: process.env.NODE_ENV,
   redisUrl: envBase.REDIS_URL,
+  runtimeMode: runtimeMode(),
 });
 if (invariantViolation !== null) {
   panic(invariantViolation);

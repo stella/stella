@@ -16,6 +16,7 @@ import { subject as reportExportStatusSubject } from "@stll/transactional/emails
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
@@ -65,7 +66,7 @@ const resolveTransport = (): EmailTransport => {
         ...(env.SMTP_PASSWORD && {
           password: env.SMTP_PASSWORD,
         }),
-        requireTLS: !env.isDev,
+        requireTLS: !isLocalDevOpen(),
       });
     case undefined:
       return panic(

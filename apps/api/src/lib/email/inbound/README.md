@@ -78,7 +78,7 @@ write remains retryable; it never acknowledges an unrecorded rejection.
 With the development database, object storage and processing services configured:
 
 ```sh
-NODE_ENV=development bun scripts/ingest-mail.ts \
+NODE_ENV=development STELLA_LOCAL_DEV=1 bun scripts/ingest-mail.ts \
   --file message.eml \
   --mail-from member@example.test \
   --rcpt-to TOKEN@inbound.example.test \

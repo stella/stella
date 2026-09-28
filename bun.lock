@@ -109,6 +109,7 @@
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/runtime-mode": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -186,6 +187,7 @@
         "@hocuspocus/server": "^4.6.0",
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/runtime-mode": "workspace:*",
         "@stll/time": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "better-result": "catalog:",
@@ -666,7 +668,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.28",
+      "version": "0.1.29",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -918,6 +920,17 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/runtime-mode": {
+      "name": "@stll/runtime-mode",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/sanctions": {
       "name": "@stll/sanctions",
       "version": "0.0.0",
@@ -1089,7 +1102,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.36.0",
+      "version": "0.37.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1166,7 +1179,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.11.12",
+      "version": "0.11.13",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -2897,6 +2910,8 @@
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/runtime-mode": ["@stll/runtime-mode@workspace:packages/runtime-mode"],
 
     "@stll/sanctions": ["@stll/sanctions@workspace:packages/sanctions"],
 
