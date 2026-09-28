@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -20,7 +19,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createNumberSeries from "@/api/handlers/number-series/create";
 import updateNumberSeries from "@/api/handlers/number-series/update";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateNumber } from "@/api/lib/number-series";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -175,7 +174,7 @@ describe("number series allocation", () => {
       (await allocateInOrg(ids.orgA, firstSeries, issuedAt)).unwrap().number,
     ).toBe("INV-2027-001");
     const collision = await allocateInOrg(ids.orgA, secondSeries, issuedAt);
-    expect(Result.isError(collision)).toBe(true);
+    expect(collision.isErr()).toBe(true);
     const receipts = await testDb
       .select({ seriesId: numberSeriesAllocations.seriesId })
       .from(numberSeriesAllocations)
@@ -224,7 +223,9 @@ describe("number series allocation", () => {
   });
 
   test("deletes an organization with a series linked to its seller profile", async () => {
-    const organizationId = createSafeId<"organization">();
+    const organizationId = toSafeId<"organization">(
+      `org_${Bun.randomUUIDv7()}`,
+    );
     const sellerProfileId = createSafeId<"sellerProfile">();
     await testDb.insert(organization).values({
       id: organizationId,
@@ -323,7 +324,7 @@ describe("number series allocation", () => {
       orgBSeries,
       new Date("2026-03-02T12:00:00.000Z"),
     );
-    expect(Result.isError(otherOrgAllocation)).toBe(true);
+    expect(otherOrgAllocation.isErr()).toBe(true);
     const rootAllocation = await testDb.transaction(
       async (tx) =>
         await allocateNumber(
@@ -332,6 +333,6 @@ describe("number series allocation", () => {
           new Date("2026-03-02T12:00:00.000Z"),
         ),
     );
-    expect(Result.isError(rootAllocation)).toBe(true);
+    expect(rootAllocation.isErr()).toBe(true);
   });
 });
