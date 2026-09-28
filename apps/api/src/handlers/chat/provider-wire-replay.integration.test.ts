@@ -55,7 +55,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 

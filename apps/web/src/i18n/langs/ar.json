@@ -1063,8 +1063,8 @@
     },
     "messageTimestampToday": "اليوم، {time}",
     "mockModel": {
-      "description": "ردود ثابتة من النموذج التجريبي المحلي",
-      "label": "ذكاء اصطناعي تجريبي"
+      "description": "ردود ثابتة من نموذج المحاكاة المحلي",
+      "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",

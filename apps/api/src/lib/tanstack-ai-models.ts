@@ -343,7 +343,7 @@ const activeMockTextAdapterFactory = ():
  * provider (see `mockAnswersRequest`), so a caller shaping one request must ask
  * `isMockTextAdapter` about that request's adapter instead.
  */
-export const isMockTextAdapterActive = (): boolean =>
+const isMockTextAdapterActive = (): boolean =>
   activeMockTextAdapterFactory() !== undefined;
 
 /**
@@ -353,7 +353,7 @@ export const isMockTextAdapterActive = (): boolean =>
  * answer of a model the user chose. `"force"` keeps every request on the mock
  * for runs that must be deterministic whatever keys the database holds.
  */
-export const mockAnswersRequest = ({
+const mockAnswersRequest = ({
   organizationKey,
 }: {
   organizationKey: boolean;
@@ -361,14 +361,22 @@ export const mockAnswersRequest = ({
   isMockTextAdapterActive() &&
   (env.USE_MOCK_AI === "force" || !organizationKey);
 
-/** `mockAnswersRequest` for an organization's whole AI configuration. */
+/**
+ * `mockAnswersRequest` for an organization's whole AI configuration. Without
+ * an organization key the request runs on the deployment's provider, which
+ * dispatch refuses when none is offered (`REQUIRE_PERSONAL_AI_KEY`), so the
+ * mock answers only where that dispatch can reach it.
+ */
 export const mockAnswersForOrganization = (
   orgConfig: OrgAIConfig | null | undefined,
-): boolean =>
-  mockAnswersRequest({
-    organizationKey:
-      orgConfig?.providers.some((provider) => provider.apiKey !== "") ?? false,
-  });
+): boolean => {
+  const organizationKey =
+    orgConfig?.providers.some((provider) => provider.apiKey !== "") ?? false;
+  return (
+    mockAnswersRequest({ organizationKey }) &&
+    (organizationKey || hasTanStackInstanceProvider())
+  );
+};
 
 const mockTextAdapters = new WeakSet<AnyTextAdapter>();
 

@@ -63,7 +63,7 @@ const {
 } = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 
 beforeAll(() => {

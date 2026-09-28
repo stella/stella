@@ -37,8 +37,12 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
 env.BEDROCK_API_KEY = "test-bedrock-instance-key";
 env.MISTRAL_API_KEY = "test-mistral-instance-key";
+// Importing the scripted provider registers the dev mock; these cases resolve
+// real adapters unless one switches the mock on itself.
+env.USE_MOCK_AI = false;
 
 const {
+  clearByokAdapterCache,
   getTanStackTextModelInfoForRole,
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -978,6 +982,8 @@ describe("who answers while the local mock is on", () => {
   }) => {
     const provider = installScriptedProvider();
     env.USE_MOCK_AI = mode;
+    // A factory an earlier case cached must not answer for this one.
+    clearByokAdapterCache();
     try {
       const model = getTanStackTextModelForRole("chat", orgConfig, {
         organizationId: orgId,
@@ -1018,6 +1024,22 @@ describe("who answers while the local mock is on", () => {
       keySource: "byok",
       organizationMocked: true,
     });
+  });
+
+  test("reports no mock where dispatch refuses the deployment's provider", () => {
+    const provider = installScriptedProvider();
+    const requirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    env.USE_MOCK_AI = true;
+    env.REQUIRE_PERSONAL_AI_KEY = true;
+    try {
+      expect(mockAnswersForOrganization(null)).toBe(false);
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, { organizationId: orgId }),
+      ).toThrow(HandlerError);
+    } finally {
+      env.REQUIRE_PERSONAL_AI_KEY = requirePersonalKey;
+      provider.restore();
+    }
   });
 
   test("with the mock off, an organization key answers for real", () => {
