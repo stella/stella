@@ -1,4 +1,5 @@
 export { InvoicingInputError } from "./errors";
+export { normalizeIban, parseIban } from "./iban";
 export {
   calculateDocumentTotals,
   createInvoiceDocument,

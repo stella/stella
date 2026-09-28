@@ -179,10 +179,11 @@ const replayedModel = ({
   };
   return {
     modelOptionsOf: () => [],
-    promptsOf: () => {
+    promptLedgerOf: () => {
       recordNewRequests();
       return prompts;
     },
+    promptsOf: () => [],
     restore: () => undefined,
     script: (_threadId, ...runs) => {
       expect(runs).toEqual([]);
@@ -205,6 +206,8 @@ const replayedModel = ({
         unscriptedCalls: unexpected,
       };
     },
+    // The bodies the adapter sent, in its provider's wire format.
+    takeRequests: () => replay.takeRequests(),
   };
 };
 

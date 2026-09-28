@@ -2,6 +2,13 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
 import { Result } from "better-result";
+import type { PluggableList } from "unified";
+import { useTranslations } from "use-intl";
+
+import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
+import type { AIErrorKind } from "@stll/api-contract";
+import { copyToClipboard } from "@stll/clipboard";
+import { Button } from "@stll/ui/button";
 import {
   ChevronRightIcon,
   ClockIcon,
@@ -11,14 +18,7 @@ import {
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
-} from "lucide-react";
-import type { PluggableList } from "unified";
-import { useTranslations } from "use-intl";
-
-import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

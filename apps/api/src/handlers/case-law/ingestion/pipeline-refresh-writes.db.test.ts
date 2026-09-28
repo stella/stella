@@ -119,6 +119,7 @@ type StoredRow = {
   updatedAt: string;
   observationOrder: string | null;
   mirrorStatus: string;
+  sourceHash: string | null;
   contentHash: string | null;
   textKey: string | null;
   holdsInlineText: boolean;
@@ -131,6 +132,7 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
            updated_at::text AS updated_at,
            source_observation_order::text AS observation_order,
            corpus_mirror_status,
+           source_hash,
            content_hash,
            text_s3_key,
            fulltext IS NOT NULL AS holds_inline_text,
@@ -151,6 +153,8 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
         ? record["observation_order"]
         : null,
     mirrorStatus: String(record["corpus_mirror_status"]),
+    sourceHash:
+      typeof record["source_hash"] === "string" ? record["source_hash"] : null,
     contentHash:
       typeof record["content_hash"] === "string"
         ? record["content_hash"]
@@ -455,6 +459,90 @@ test("a document arriving for a document-less decision is still written", async 
   ).at(0);
   expect(await citationHeaders(decisionRow?.id ?? "")).toHaveLength(1);
 });
+
+test("a matching source hash refreshes a row whose stored document was removed", async () => {
+  const caseNumber = "30 Cdo 301/2024";
+  const document = withDocument(caseNumber, "same-page");
+  await ingest(document, canonical);
+  const first = await storedRow(caseNumber);
+  expect(first.sourceHash).toBe(document.rawHash);
+  expect(first.contentHash).not.toBeNull();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    })
+    .where(sql`${caseLawDecisions.id} = ${first.id}::uuid`);
+  const textless = await storedRow(caseNumber);
+  expect(textless.contentHash).toBeNull();
+  expect(textless.textKey).toBeNull();
+  expect(textless.sourceHash).toBe(document.rawHash);
+
+  const refreshed = await ingest(document, canonical);
+  const restored = await storedRow(caseNumber);
+  expect(restored.observationOrder).toBe(String(refreshed));
+  expect(restored.contentHash).toBe(first.contentHash);
+  expect(restored.textKey).toBe(first.textKey);
+});
+
+test("a matching source hash restores sections-only content", async () => {
+  const caseNumber = "30 Cdo 304/2024";
+  const document = {
+    ...withDocument(caseNumber, "sections-only"),
+    fulltext: undefined,
+    sections: [{ index: 0, type: "ruling", title: null, text: PRECEDENT }],
+  } satisfies IngestionResult;
+  await ingest(document, canonical);
+  const first = await storedRow(caseNumber);
+  expect(first.contentHash).not.toBeNull();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    })
+    .where(sql`${caseLawDecisions.id} = ${first.id}::uuid`);
+
+  const refreshed = await ingest(document, canonical);
+  const restored = await storedRow(caseNumber);
+  expect(restored.observationOrder).toBe(String(refreshed));
+  expect(restored.contentHash).toBe(first.contentHash);
+  expect(restored.textKey).toBe(first.textKey);
+});
+
+test.each([
+  ["canonical", canonical],
+  ["postgres-only", postgresOnly],
+] as const)(
+  "a matching source hash still skips stored text (%s)",
+  async (mode, corpus) => {
+    const caseNumber =
+      mode === "postgres-only" ? "30 Cdo 303/2024" : "30 Cdo 302/2024";
+    const document = withDocument(caseNumber, "same-page");
+    await ingest(document, corpus);
+    const first = await storedRow(caseNumber);
+    if (mode === "postgres-only") {
+      expect(first.contentHash).toBeNull();
+      expect(first.holdsInlineText).toBe(true);
+    } else {
+      expect(first.contentHash).not.toBeNull();
+    }
+    const packsBefore = transferred.length;
+
+    const observed = await ingest(document, corpus);
+    const unchanged = await storedRow(caseNumber);
+    expect(unchanged.observationOrder).toBe(String(observed));
+    expect(unchanged.contentHash).toBe(first.contentHash);
+    expect(unchanged.textKey).toBe(first.textKey);
+    expect(unchanged.updatedAt).toBe(first.updatedAt);
+    expect(transferred.length).toBe(packsBefore);
+  },
+);
 
 test("a refresh that moves the decision's language re-settles its kept citations", async () => {
   // Kept rows keep their answer unless something reopens them, and the citing

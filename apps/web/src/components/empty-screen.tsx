@@ -1,10 +1,10 @@
 import type { ComponentProps, ReactNode } from "react";
 
-import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@stll/ui/button";
+import { CircleHelpIcon, ExternalLinkIcon } from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { GuideAnchorProps } from "@/features/guides/guide-anchor";

@@ -1,9 +1,9 @@
 import { useId, useState } from "react";
 
-import { ChevronDownIcon, Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Textarea } from "@stll/ui/textarea";
@@ -95,7 +95,7 @@ export const AiRewriteControl = ({
             className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
           />
         ) : (
-          <WandSparklesIcon
+          <AiActionIcon
             aria-hidden
             className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
           />
@@ -167,7 +167,7 @@ export const AiRewriteControl = ({
               size="sm"
               type="button"
             >
-              <WandSparklesIcon aria-hidden className="size-3.5" />
+              <AiActionIcon aria-hidden className="size-3.5" />
               {t("editWithAI")}
             </Button>
           </div>

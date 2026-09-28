@@ -12,9 +12,9 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { KanbanIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
   buildKanbanBoardMatrix,

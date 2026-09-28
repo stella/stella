@@ -54,6 +54,11 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every request handed to a provider answers each tool call exactly once,
+   *  right after the message making it, with no result for a call it does
+   *  not hold; each signed thinking block stays, once and in order, first on
+   *  the message holding the calls it was produced with. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
    *  one before it: its tools, system prompt and messages, in cache order
    *  (`chat-prompt-prefix.ts`), so the provider's prompt cache holds. */

@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { ChevronDownIcon } from "lucide-react";
-
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import {
   Menu,

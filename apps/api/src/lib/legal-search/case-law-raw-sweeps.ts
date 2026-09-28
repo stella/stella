@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import {
   eraseRawDocument,
   isLegacyCaseLawRawKey,
@@ -177,7 +178,7 @@ export const readRawPrefixStates = async (
  * (the write and the layout backfill both copy them in before they point
  * the row at the payload). Scoped to one source's rows through its index.
  */
-export const sourceHasLiveLegacyReferences = async (
+export const liveLegacyReferenceQuery = (
   tx: Transaction,
   {
     sourceId,
@@ -187,9 +188,8 @@ export const sourceHasLiveLegacyReferences = async (
     /** A decision being erased, whose own row no longer counts. */
     exceptDecisionId?: SafeId<"caseLawDecision">;
   },
-): Promise<boolean> => {
-  const ownPrefix = sql`${`${RAW_SOURCE_FAMILY.CASE_LAW}/raw/`} || ${caseLawDecisions.sourceId}::text || '/documents/' || ${caseLawDecisions.id}::text || '/%'`;
-  const found = await tx
+) =>
+  tx
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
     .where(
@@ -198,12 +198,21 @@ export const sourceHasLiveLegacyReferences = async (
         exceptDecisionId === undefined
           ? undefined
           : ne(caseLawDecisions.id, exceptDecisionId),
-        isNull(caseLawDecisions.redactedAt),
-        sql`${caseLawDecisions.sourceRawS3Key} IS NOT NULL`,
-        sql`${caseLawDecisions.sourceRawS3Key} NOT LIKE ${ownPrefix}`,
+        liveCaseLawLegacyReferenceSql({
+          decisionId: caseLawDecisions.id,
+          redactedAt: caseLawDecisions.redactedAt,
+          sourceId: caseLawDecisions.sourceId,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        }),
       ),
     )
     .limit(1);
+
+export const sourceHasLiveLegacyReferences = async (
+  tx: Transaction,
+  options: Parameters<typeof liveLegacyReferenceQuery>[1],
+): Promise<boolean> => {
+  const found = await liveLegacyReferenceQuery(tx, options);
   return found.length > 0;
 };
 

@@ -1,12 +1,12 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlayIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { PlayIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

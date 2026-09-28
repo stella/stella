@@ -1,12 +1,12 @@
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   FoldHorizontalIcon,
   MinusIcon,
   PlusIcon,
   UnfoldHorizontalIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 
 export type ZoomDirection = "in" | "out";
 

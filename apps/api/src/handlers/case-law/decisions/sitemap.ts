@@ -112,7 +112,7 @@ const getShardDateRange = (
   return { end: `${endYear}-${endMonth}-01`, start: `${year}-${month}-01` };
 };
 
-const getShardConditions = ({
+export const getShardConditions = ({
   bucket = SITEMAP_ALL_BUCKET,
   country,
   month,
@@ -169,6 +169,33 @@ export const readSitemapDecisionAlternates = async (
     )
     .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
+
+export const sitemapShardDecisionsQuery = (
+  tx: CaseLawPublicReadTransaction,
+  conditions: readonly SQL[],
+) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      language: caseLawDecisions.language,
+      languageGroupKey: caseLawDecisions.languageGroupKey,
+      updatedAt: caseLawDecisions.updatedAt,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(
+      and(
+        redistributableCaseLawSource,
+        publishedCaseLawDecision,
+        ...conditions,
+      ),
+    )
+    .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
+    .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
 
 /**
  * The public sitemap index, read from the snapshot the scheduled refresh
@@ -238,31 +265,7 @@ export const listSitemapShardDecisionsHandler = async (
   }
 
   const queryResult = await caseLawDb(async (tx) => {
-    const rows = await tx
-      .select({
-        id: caseLawDecisions.id,
-        caseNumber: caseLawDecisions.caseNumber,
-        slug: caseLawDecisions.slug,
-        country: caseLawDecisions.country,
-        court: caseLawDecisions.court,
-        language: caseLawDecisions.language,
-        languageGroupKey: caseLawDecisions.languageGroupKey,
-        updatedAt: caseLawDecisions.updatedAt,
-      })
-      .from(caseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(
-        and(
-          redistributableCaseLawSource,
-          publishedCaseLawDecision,
-          ...conditions,
-        ),
-      )
-      .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
-      .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
+    const rows = await sitemapShardDecisionsQuery(tx, conditions);
 
     if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
       return { type: "capacityExceeded" as const };

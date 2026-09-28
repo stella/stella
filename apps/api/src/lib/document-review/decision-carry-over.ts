@@ -166,6 +166,7 @@ export const carryOverDecisions = async ({
     .where(
       and(
         eq(documentReviewFindings.workspaceId, workspaceId),
+        // sql-perf-allow: bounded by one current run and one previous run, each capped by DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX
         or(
           eq(documentReviewFindings.runId, runId),
           inArray(documentReviewFindings.runId, previousRun),

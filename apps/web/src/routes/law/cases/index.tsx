@@ -14,7 +14,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { panic, Result, UnhandledException } from "better-result";
-import { RefreshCwIcon, SearchXIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -38,6 +37,7 @@ import {
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";

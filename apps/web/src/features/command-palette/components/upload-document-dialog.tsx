@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -15,6 +14,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { UploadIcon } from "@stll/ui/icons";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";

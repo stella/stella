@@ -6,13 +6,18 @@ import {
   getRouteApi,
   useNavigate,
 } from "@tanstack/react-router";
-import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowLeftIcon,
+  BuildingIcon,
+  PlusIcon,
+  UserIcon,
+} from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";

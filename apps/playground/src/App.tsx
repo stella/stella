@@ -1,7 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
-import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "lucide-react";
-
 import { DocxEditor, createEmptyDocument } from "@stll/folio-react";
 import type {
   Document as FolioDocument,
@@ -9,6 +7,7 @@ import type {
   EditorMode,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 
 const ZOOM_MIN = 0.25;

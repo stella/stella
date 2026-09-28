@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
-import { SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
+import { SparklesIcon } from "@stll/ui/icons";
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;

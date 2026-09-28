@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { GitPullRequestIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { GitPullRequestIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";

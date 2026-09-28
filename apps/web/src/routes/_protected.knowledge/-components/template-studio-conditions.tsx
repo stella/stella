@@ -2,15 +2,6 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { panic } from "better-result";
-import {
-  ArrowLeftIcon,
-  CircleHelpIcon,
-  CopyIcon,
-  ListFilterIcon,
-  MessageCircleQuestionIcon,
-  PlusIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -20,6 +11,15 @@ import type { DirectiveRange } from "@stll/folio-react";
 import { serializeCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowLeftIcon,
+  CircleHelpIcon,
+  CopyIcon,
+  ListFilterIcon,
+  MessageCircleQuestionIcon,
+  PlusIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -527,7 +527,7 @@ const ConditionFieldEditor = ({
             size="sm"
             variant={sourceKind === "ai" ? "secondary" : "ghost"}
           >
-            <WandSparklesIcon className="size-3.5" />
+            <AiActionIcon className="size-3.5" />
             {t("templates.studio.conditionSourceAi")}
           </Button>
         </div>
@@ -689,7 +689,7 @@ export const ConditionBuilder = ({
           size="sm"
           variant={mode === "ai" ? "secondary" : "ghost"}
         >
-          <WandSparklesIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
           {t("templates.studio.conditionSourceAi")}
         </Button>
       </div>

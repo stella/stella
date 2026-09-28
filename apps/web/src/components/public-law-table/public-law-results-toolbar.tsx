@@ -1,10 +1,10 @@
 import type { ComponentType, ReactNode } from "react";
 
-import { AlignJustifyIcon, WrapTextIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { AlignJustifyIcon, WrapTextIcon, XIcon } from "@stll/ui/icons";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,

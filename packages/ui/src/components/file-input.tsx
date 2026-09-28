@@ -2,8 +2,7 @@
 
 import { useId } from "react";
 
-import { UploadIcon } from "lucide-react";
-
+import { UploadIcon } from "../icons";
 import { openFilePicker } from "../lib/file-picker";
 import { cn } from "../lib/utils";
 import { Button } from "./button";

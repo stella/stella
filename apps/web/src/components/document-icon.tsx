@@ -1,7 +1,12 @@
 import type { SVGProps } from "react";
 import { useId } from "react";
 
-import { File, FileImage, FileText, MailIcon } from "lucide-react";
+import {
+  FileIcon as File,
+  FileImageIcon as FileImage,
+  FileTextIcon as FileText,
+  MailIcon,
+} from "@stll/ui/icons";
 
 import { getDocumentIconKind } from "@/components/document-icon.logic";
 import { MarkdownIcon } from "@/components/markdown-icon";

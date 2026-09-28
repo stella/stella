@@ -747,6 +747,24 @@ export type WebRoutes = {
       };
     };
   };
+  smoke: {
+    session: {
+      post: {
+        body: unknown;
+        params: T5e3ac29766;
+        query: unknown;
+        headers: unknown;
+        response: {
+          200: (Response | {
+            cookieName: string;
+            cookieValue: string;
+            expiresAt: string;
+          });
+        };
+      };
+    };
+  };
+} & {
   "dev-public": {
     "last-otp": {
       get: {
@@ -769,23 +787,6 @@ export type WebRoutes = {
             property?: string;
             expected?: string;
           };
-        };
-      };
-    };
-  };
-  smoke: {
-    session: {
-      post: {
-        body: unknown;
-        params: T5e3ac29766;
-        query: unknown;
-        headers: unknown;
-        response: {
-          200: (Response | {
-            cookieName: string;
-            cookieValue: string;
-            expiresAt: string;
-          });
         };
       };
     };
@@ -3584,7 +3585,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
+                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone" | "custom_field" | "ignore");
                 }>;
                 readonly defaultType: T1dacb02040;
                 readonly delimiter: ("comma" | "semicolon" | "tab" | "labeled");
@@ -9651,13 +9652,9 @@ export type WebRoutes = {
                 post_claim_scopes?: Array<string>;
                 requiredFields?: Array<T81694d3f69>;
               } | {
-                readonly message: "Statute sitemap bucket shards exceed sitemap index capacity.";
-              } | {
-                readonly message: "Statute sitemap bucket rows missing for country shard.";
+                readonly message: "Statute sitemap shard count exceeds sitemap index capacity.";
               } | {
                 readonly message: "Statute sitemap bucket exceeds shard capacity.";
-              } | {
-                readonly message: "Statute sitemap shard count exceeds sitemap index capacity.";
               };
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
@@ -12057,164 +12054,6 @@ export type WebRoutes = {
               property?: string;
               expected?: string;
             };
-            500: never;
-          };
-        };
-      };
-    };
-    dev: {
-      seed: {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T1912688821;
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      seed: {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T1912688821;
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "seed-firm-knowledge": {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: {
-            jobId: string;
-          };
-          headers: Record<never, never>;
-          response: {
-            200: T270991263d;
-            401: never;
-            422: {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            };
-            500: never;
-          };
-        };
-      };
-    } & {
-      "seed-firm-knowledge": {
-        post: {
-          body: (null | {
-            matters?: number;
-            organizationId?: string;
-            incompleteMatterMode?: "skip" | "replace";
-            selectionSeed?: string;
-          });
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T270991263d;
-            401: never;
-            422: {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            };
-            500: never;
-          };
-        };
-      };
-    } & {
-      clean: {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "rebuild-search": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "clear-cache": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "public-law-connection": {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | Tb54386b5fb | T18754db7fb | T09d1419f79 | T7cacacdd34 | T238b2f5b62);
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "public-law-connection": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | Tb54386b5fb | T18754db7fb | T09d1419f79 | T7cacacdd34 | T238b2f5b62);
-            401: never;
             500: never;
           };
         };
@@ -16707,6 +16546,287 @@ export type WebRoutes = {
         };
       };
     });
+    "seller-profiles": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<{
+              id: Tf6d6ffa107;
+              legalName: string;
+              registrationId: Tbe0400fa4c;
+              vatId: Tbe0400fa4c;
+              addressLine1: Tbe0400fa4c;
+              addressLine2: Tbe0400fa4c;
+              city: Tbe0400fa4c;
+              postalCode: Tbe0400fa4c;
+              country: Tbe0400fa4c;
+              iban: Tbe0400fa4c;
+              bic: Tbe0400fa4c;
+              accountNumber: Tbe0400fa4c;
+              defaultCurrency: string;
+              footerNotes: Tbe0400fa4c;
+              isDefault: Tfddd645dc8;
+              createdAt: string;
+              updatedAt: string;
+            }>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      post: {
+        body: {
+          country?: string;
+          iban?: string;
+          bic?: string;
+          postalCode?: string;
+          city?: string;
+          registrationId?: string;
+          accountNumber?: string;
+          vatId?: string;
+          addressLine1?: string;
+          addressLine2?: string;
+          footerNotes?: string;
+          legalName: string;
+          defaultCurrency: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: Tf6d6ffa107;
+            isDefault: Tfddd645dc8;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        get: {
+          body: Record<never, never>;
+          params: T16ddc96cbc;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tf6d6ffa107;
+              country: Tbe0400fa4c;
+              createdAt: string;
+              updatedAt: string;
+              iban: Tbe0400fa4c;
+              bic: Tbe0400fa4c;
+              postalCode: Tbe0400fa4c;
+              city: Tbe0400fa4c;
+              registrationId: Tbe0400fa4c;
+              accountNumber: Tbe0400fa4c;
+              legalName: string;
+              vatId: Tbe0400fa4c;
+              addressLine1: Tbe0400fa4c;
+              addressLine2: Tbe0400fa4c;
+              defaultCurrency: string;
+              footerNotes: Tbe0400fa4c;
+              isDefault: Tfddd645dc8;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        patch: {
+          body: {
+            country?: null | string;
+            iban?: null | string;
+            bic?: null | string;
+            postalCode?: null | string;
+            city?: null | string;
+            registrationId?: null | string;
+            accountNumber?: null | string;
+            legalName?: string;
+            vatId?: null | string;
+            addressLine1?: null | string;
+            addressLine2?: null | string;
+            defaultCurrency?: string;
+            footerNotes?: null | string;
+          };
+          params: T16ddc96cbc;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tf6d6ffa107;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        default: {
+          post: {
+            body: Record<never, never>;
+            params: T16ddc96cbc;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf6d6ffa107;
+                isDefault: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":sellerProfileId": {
+        archive: {
+          post: {
+            body: Record<never, never>;
+            params: T16ddc96cbc;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf6d6ffa107;
+                archived: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
     "external-preview": {
       get: {
         body: Record<never, never>;
@@ -24544,6 +24664,183 @@ export type WebRoutes = {
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
             };
+          };
+        };
+      };
+    };
+  } & {
+    dev: T5e3ac29766;
+  } & {
+    dev: {
+      seed: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T92e9230d1b;
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      seed: {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T92e9230d1b;
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "seed-firm-knowledge": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            jobId: string;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: T13b00b267e;
+            401: never;
+            422: {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            };
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "seed-firm-knowledge": {
+        post: {
+          body: (null | {
+            matters?: number;
+            organizationId?: string;
+            incompleteMatterMode?: "skip" | "replace";
+            selectionSeed?: string;
+          });
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T13b00b267e;
+            401: never;
+            422: {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            };
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      clean: {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "rebuild-search": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "clear-cache": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "public-law-connection": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "public-law-connection": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            401: never;
+            500: never;
           };
         };
       };
@@ -32657,10 +32954,6 @@ type T09c57cc1dd = null | T0da73a8dae;
 
 type T09d040568c = "Internal Server Error" | T9a51b7d2bc;
 
-type T09d1419f79 = {
-  status: "connected";
-};
-
 type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
@@ -32943,6 +33236,26 @@ type T13442801e2 = {
 
 type T139d25f59c = "task" | "activity";
 
+type T13b00b267e = Response | {
+  status: "idle";
+  jobId: string;
+} | {
+  status: "running";
+  startedAt: string;
+  jobId: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+  jobId: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+  jobId: string;
+};
+
 type T13c40e7e09 = {
   status: "unverified";
 } | {
@@ -32968,6 +33281,10 @@ type T16bcee9e60 = {
 type T16c6699378 = {
   readonly input: T4c60d2e7ad;
   readonly output: T0739338f2c;
+};
+
+type T16ddc96cbc = {
+  sellerProfileId: Tf6d6ffa107;
 };
 
 type T16de477cfb = string & valibot_Brand<"SafeId"> & {
@@ -33005,28 +33322,8 @@ type T1856d5abc1 = {
   url: string;
 };
 
-type T18754db7fb = {
-  status: "connecting";
-};
-
 type T18f0d4543f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentReviewFinding";
-};
-
-type T1912688821 = Response | {
-  status: "idle";
-} | {
-  status: "running";
-  startedAt: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
 };
 
 type T19752008a0 = null | "reviewed" | "disputed";
@@ -33330,11 +33627,6 @@ type T22d9b74f40 = {
 
 type T23680c2d7b = "global" | "ch" | "eu";
 
-type T238b2f5b62 = {
-  status: "failed";
-  message: string;
-};
-
 type T239c95b432 = {
   readonly value: Taf56293cce;
   readonly issues?: undefined;
@@ -33397,26 +33689,6 @@ type T26d760a340 = {
 type T26ffdbcefc = {
   readonly value: T0739338f2c;
   readonly issues?: undefined;
-};
-
-type T270991263d = Response | {
-  status: "idle";
-  jobId: string;
-} | {
-  status: "running";
-  startedAt: string;
-  jobId: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-  jobId: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
-  jobId: string;
 };
 
 type T270af050c9 = {
@@ -33506,7 +33778,7 @@ type T270af050c9 = {
         rationale: Tbe0400fa4c;
         matchedRef?: T6b29dee50d | Tcbd1655cb4;
         consensus?: "mixed" | "single" | "consistent";
-        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
+        impact?: "neutral" | "unknown" | "favourable" | "unfavourable";
         explanation?: {
           type: "comparison";
           text: string;
@@ -33849,6 +34121,10 @@ type T2f575449b0 = string & valibot_Brand<"SafeId"> & {
 
 type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
 
+type T2fe5059b53 = {
+  status: "connected";
+};
+
 type T300701e436 = {
   workspaceId: T8d02a37b3f;
 };
@@ -34077,6 +34353,11 @@ type T369422441d = {
 };
 
 type T373044b8de = "workspace" | "download";
+
+type T37fe4edf98 = {
+  status: "unconfigured";
+  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
+};
 
 type T37fefd1259 = {
   entityId: string;
@@ -34773,7 +35054,7 @@ type T539e1e5c66 = {
 
 type T53be3fbe82 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
+  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone");
   rowNumber: number;
 };
 
@@ -34823,6 +35104,11 @@ type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
 
 type T561c958713 = {
   code?: string;
+  message: string;
+};
+
+type T563240ea85 = {
+  status: "failed";
   message: string;
 };
 
@@ -36219,11 +36505,6 @@ type T7c5bb3a7e5 = {
   }>;
 };
 
-type T7cacacdd34 = {
-  status: "disconnected";
-  reason: string;
-};
-
 type T7cf33d5fda = {
   documentTypeId: T1cbe63218a;
 };
@@ -36482,6 +36763,10 @@ type T880f60a469 = "Bad Request" | {
   requiredFields?: Array<T81694d3f69>;
 };
 
+type T8833b520cb = {
+  status: "connecting";
+};
+
 type T884a45faa8 = "message" | "document" | "folder" | "task" | "link";
 
 type T888f21ca4b = {
@@ -36725,6 +37010,22 @@ type T92cce81fcb = {
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type T92e9230d1b = Response | {
+  status: "idle";
+} | {
+  status: "running";
+  startedAt: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+};
 
 type T93760ea794 = {
   readonly input: T52fcbe1ef6;
@@ -37688,11 +37989,6 @@ type Tb44e1703bb = {
 
 type Tb532bdabe3 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateCategory";
-};
-
-type Tb54386b5fb = {
-  status: "unconfigured";
-  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
 };
 
 type Tb5de57bdb6 = {
@@ -38669,6 +38965,11 @@ type Tdf4839a002 = {
   workspaceId: string;
 };
 
+type Tdfa2695a01 = {
+  status: "disconnected";
+  reason: string;
+};
+
 type Tdfa6d7299b = {
   workspaceId: string;
 };
@@ -39170,6 +39471,10 @@ type Tf6cee77e2c = {
   authType: "bearer";
 } | {
   authType: "none";
+};
+
+type Tf6d6ffa107 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "sellerProfile";
 };
 
 type Tf72e5821b0 = {

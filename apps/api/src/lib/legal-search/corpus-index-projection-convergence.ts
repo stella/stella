@@ -86,6 +86,7 @@ const readOutstandingCorpusProjectionIntentTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
 ): Promise<boolean> => {
+  // sql-perf-allow: index corpus_index_projection_intents_work_idx and corpus_index_projection_states_applied_census_idx for one family/generation
   const result: unknown = await tx.execute(sql`
     SELECT EXISTS (
       SELECT 1

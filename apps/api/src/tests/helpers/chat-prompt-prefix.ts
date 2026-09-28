@@ -206,7 +206,7 @@ const divergenceOf = (previous: string, next: string) => {
  * Where `next` stops extending `previous`: the first block of `previous` it
  * does not repeat in place, or null when it begins with all of them.
  */
-export const prefixBreakOf = (previous: PromptBlocks, next: PromptBlocks) => {
+const prefixBreakOf = (previous: PromptBlocks, next: PromptBlocks) => {
   const at = previous.findIndex((block, index) => {
     const repeated = next.at(index);
     return (

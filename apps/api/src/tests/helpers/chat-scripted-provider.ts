@@ -1,4 +1,9 @@
-import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  ModelMessage,
+} from "@tanstack/ai";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -17,6 +22,10 @@ import {
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import type {
+  ProducedStep,
+  ProviderRequest,
+} from "@/api/tests/helpers/provider-request-transcript";
 
 // The scripted model behind the production chat pipeline. It registers
 // through the same seam the local mock model uses
@@ -52,9 +61,17 @@ type ThreadScripts = {
   modelOptions: unknown[];
   /** Resolves the current `stalled` promise and arms the next one. */
   onStall: () => void;
-  /** The prompt of every scripted model call, in order. */
-  prompts: PromptPrefixLedger;
+  /** The prompt of every scripted model call, in order, as blocks
+   *  (`chat.provider.prefix-stable`). */
+  promptLedger: PromptPrefixLedger;
+  /** What each of the thread's model calls produced, in order. */
+  produced: ProducedStep[];
+  /** The prompt of every model call the thread made, in order. */
+  prompts: string[][];
   queue: ScriptedRun[];
+  /** The model calls not yet taken by `takeRequests`, as handed to the
+   *  provider. */
+  requests: ProviderRequest[];
   /** Resolves once a request on the thread reaches a stalling turn. */
   stalled: Promise<undefined>;
   /** Per tool call id: the result the first model call that held one was
@@ -68,8 +85,11 @@ const newThreadScripts = (): ThreadScripts => {
     changedToolResults: [],
     modelOptions: [],
     onStall: () => undefined,
-    prompts: createPromptPrefixLedger(),
+    promptLedger: createPromptPrefixLedger(),
+    produced: [],
+    prompts: [],
     queue: [],
+    requests: [],
     stalled: Promise.resolve(undefined),
     toolResults: new Map(),
     unscriptedCalls: [],
@@ -128,9 +148,57 @@ const recordToolResults = (
   }
 };
 
+/**
+ * A model call's prompt as the provider reads it, one entry per message: no
+ * ids or timestamps beyond the tool-call ids the provider pairs results by,
+ * and each tool result up to key order, as `resultIdentity` reads it.
+ */
+const promptOf = (messages: readonly ModelMessage[]): string[] =>
+  messages.map((message) =>
+    stableStringify(
+      toJsonValue({
+        content:
+          message.role === "tool"
+            ? resultIdentity(message.content)
+            : message.content,
+        role: message.role,
+        toolCallId: message.toolCallId,
+        toolCalls: message.toolCalls?.map((call) => ({
+          arguments: call.function.arguments,
+          id: call.id,
+          name: call.function.name,
+        })),
+      }),
+    ),
+  );
+
 const threads = new Map<string, ThreadScripts>();
 /** Per run: the script it took and the next iteration to answer. */
 const runs = new Map<string, { index: number; run: ScriptedRun }>();
+
+/**
+ * Passes `chunks` through, recording into `step` the signed thinking and the
+ * tool calls they produce.
+ *
+ * @yields Each chunk of `chunks`, unchanged.
+ */
+async function* recordingProduced(
+  chunks: AsyncIterable<AdapterYieldChunk>,
+  step: { signatures: string[]; toolCallIds: string[] },
+): AsyncGenerator<AdapterYieldChunk> {
+  for await (const chunk of chunks) {
+    if (
+      chunk.type === EventType.STEP_FINISHED &&
+      chunk.signature !== undefined
+    ) {
+      step.signatures.push(chunk.signature);
+    }
+    if (chunk.type === EventType.TOOL_CALL_START) {
+      step.toolCallIds.push(chunk.toolCallId);
+    }
+    yield chunk;
+  }
+}
 
 const adapter: AnyTextAdapter = {
   ...scriptedAdapterBase,
@@ -146,8 +214,15 @@ const adapter: AnyTextAdapter = {
   }) {
     const scripts = threadId === undefined ? undefined : threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
+    scripts?.requests.push({
+      earlierSteps: [...scripts.produced],
+      format: "model-messages",
+      // As handed over: the engine goes on to change its own list.
+      messages: structuredClone(messages),
+    });
     if (scripts !== undefined) {
       recordToolResults(scripts, messages);
+      scripts.prompts.push(promptOf(messages));
     }
     if (
       threadId === undefined ||
@@ -178,7 +253,9 @@ const adapter: AnyTextAdapter = {
       runs.set(runId, active);
     }
     // Read now: the engine keeps building on the arrays it hands over.
-    scripts.prompts.record(promptBlocksOf({ messages, systemPrompts, tools }));
+    scripts.promptLedger.record(
+      promptBlocksOf({ messages, systemPrompts, tools }),
+    );
     const index = active.index;
     active.index += 1;
     const turn = active.run.at(index);
@@ -191,14 +268,19 @@ const adapter: AnyTextAdapter = {
     if (turn.type === "stall") {
       scripts.onStall();
     }
-    yield* scriptedTurnChunks(turn, {
-      index,
-      model,
-      runId,
-      // The engine hands the provider its run's signal on the request.
-      signal: request?.signal ?? undefined,
-      threadId,
-    });
+    const produced = { signatures: [], toolCallIds: [] };
+    scripts.produced.push(produced);
+    yield* recordingProduced(
+      scriptedTurnChunks(turn, {
+        index,
+        model,
+        runId,
+        // The engine hands the provider its run's signal on the request.
+        signal: request?.signal ?? undefined,
+        threadId,
+      }),
+      produced,
+    );
   },
   structuredOutput: async ({ outputSchema }) => {
     await Promise.resolve();
@@ -245,8 +327,8 @@ export const installScriptedProvider = () => {
     },
     /** The prompts of `threadId`'s scripted model calls
      *  (`chat.provider.prefix-stable`). */
-    promptsOf: (threadId: string): PromptPrefixLedger =>
-      scriptsOf(threadId).prompts,
+    promptLedgerOf: (threadId: string): PromptPrefixLedger =>
+      scriptsOf(threadId).promptLedger,
     /** Resolves once `threadId`'s next request reaches a stalling turn. */
     stalled: async (threadId: string): Promise<void> => {
       await scriptsOf(threadId).stalled;
@@ -256,6 +338,14 @@ export const installScriptedProvider = () => {
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: string): readonly unknown[] =>
       scriptsOf(threadId).modelOptions,
+    /** The prompt of each of `threadId`'s model calls so far, one entry per
+     *  message. */
+    promptsOf: (threadId: string): readonly (readonly string[])[] =>
+      scriptsOf(threadId).prompts,
+    /** `threadId`'s model calls since the last call, as handed to the
+     *  provider, cleared on read. */
+    takeRequests: (threadId: string): ProviderRequest[] =>
+      scriptsOf(threadId).requests.splice(0),
     takeFindings: (threadId: string): ScriptedProviderFindings => {
       const scripts = scriptsOf(threadId);
       const unconsumedScripts = scripts.queue

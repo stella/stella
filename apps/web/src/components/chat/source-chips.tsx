@@ -2,10 +2,10 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ExternalLinkIcon, LandmarkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
+import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";

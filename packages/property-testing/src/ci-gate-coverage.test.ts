@@ -45,7 +45,10 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  *   workflow by design (e.g. a live third-party API smoke suite that is a
  *   separate follow-up decision from the suite this change wires up).
  */
-const LOCAL_ONLY_GATES = new Set<string>();
+const LOCAL_ONLY_GATES = new Set<string>([
+  // Intentional contract regeneration writes reviewed fixtures; CI runs the read-only check.
+  "STELLA_UPDATE_PLAN_CONTRACTS",
+]);
 
 // Live-API smoke suites not wired into a workflow. Remove an entry once its
 // workflow job exists; the test below rejects entries that no longer declare a

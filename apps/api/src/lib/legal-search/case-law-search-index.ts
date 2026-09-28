@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { union } from "drizzle-orm/pg-core";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
@@ -235,9 +237,8 @@ export const backfillSearchIndex = async (
   // own efficient plan:
   //   - missing: NOT EXISTS scans created_at_idx and probes the
   //     search_documents PK per row, stopping at LIMIT.
-  //   - stale: inner join bounded by LIMIT; the row-level
-  //     updated_at comparison is unindexed but only evaluated
-  //     against joined rows, not the full table.
+  //   - stale: timestamp drift and missing previews have separate
+  //     candidate reads; UNION removes IDs selected by both.
   //
   // Reserve a quarter of the batch for stale so re-indexing of
   // updated decisions can't be starved by a sustained backlog of
@@ -273,49 +274,64 @@ export const backfillSearchIndex = async (
   );
 
   const staleLimit = batchSize - missing.length;
-  const stale = await scopedDb((tx) =>
-    tx
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .innerJoin(
-        caseLawSearchDocuments,
-        eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
-      )
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(
-        and(
-          isNull(caseLawDecisions.redactedAt),
-          redistributableCaseLawSource,
-          publishedCaseLawDecision,
-          or(
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
-            gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
-            notExists(
-              tx
-                .select({ one: sql`1` })
-                .from(caseLawSearchDocumentPreviewPassages)
-                .where(
-                  and(
-                    eq(
-                      caseLawSearchDocumentPreviewPassages.decisionId,
-                      caseLawDecisions.id,
-                    ),
-                    eq(
-                      caseLawSearchDocumentPreviewPassages.generation,
-                      caseLawSearchDocuments.previewGeneration,
-                    ),
-                  ),
-                ),
+  const stale = await scopedDb((tx) => {
+    const staleCandidates = (predicate: SQL) =>
+      tx
+        .select({
+          id: caseLawDecisions.id,
+          createdAt: caseLawDecisions.createdAt,
+        })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSearchDocuments,
+          eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
+        )
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            isNull(caseLawDecisions.redactedAt),
+            redistributableCaseLawSource,
+            publishedCaseLawDecision,
+            predicate,
+          ),
+        )
+        .orderBy(asc(caseLawDecisions.createdAt))
+        .limit(staleLimit);
+
+    const updated = staleCandidates(
+      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
+      gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
+    );
+    const missingPreview = staleCandidates(
+      notExists(
+        tx
+          .select({ one: sql`1` })
+          .from(caseLawSearchDocumentPreviewPassages)
+          .where(
+            and(
+              eq(
+                caseLawSearchDocumentPreviewPassages.decisionId,
+                caseLawDecisions.id,
+              ),
+              eq(
+                caseLawSearchDocumentPreviewPassages.generation,
+                caseLawSearchDocuments.previewGeneration,
+              ),
             ),
           ),
-        ),
-      )
-      .orderBy(asc(caseLawDecisions.createdAt))
-      .limit(staleLimit),
-  );
+      ),
+    );
+    // A later row in either branch cannot enter the merged first page.
+    const candidates = union(updated, missingPreview).as("stale_candidates");
+    return tx
+      .select({ id: candidates.id })
+      .from(candidates)
+      .orderBy(asc(candidates.createdAt))
+      .limit(staleLimit);
+  });
 
   const rows = [...missing, ...stale];
 

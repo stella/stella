@@ -2,13 +2,6 @@ import { useRef, useState, useSyncExternalStore } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import {
-  CheckIcon,
-  GlobeIcon,
-  LoaderIcon,
-  PencilIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -19,6 +12,13 @@ import {
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
+import {
+  CheckIcon,
+  GlobeIcon,
+  LoaderIcon,
+  PencilIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";

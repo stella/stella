@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -35,6 +36,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     request: recorderBindings.request,
     session: {
       activeOrganizationId: recorderBindings.organizationId,

@@ -47,10 +47,13 @@ export type DecryptOrgAIConfigRowResult =
  * `unreadable` means a stored row exists but did not decrypt, which is not
  * the same as "no config": a caller that treats it as absent would run the
  * org's traffic on the instance provider and meter it to the wrong source.
+ * `own_key_required` means the org has no config and its access state bars
+ * the instance provider. Only `ok` lets a null config reach the instance.
  */
 export const ORG_AI_CONFIG_STATUS = {
   ok: "ok",
   unreadable: "unreadable",
+  ownKeyRequired: "own_key_required",
 } as const;
 
 export type OrgAIConfigStatus =

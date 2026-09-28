@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -11,6 +12,7 @@ import {
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -64,6 +66,9 @@ export const resolveWorksAtDate = async (
   if (requests.length === 0) {
     return idByKey;
   }
+  if (requests.length > LIMITS.legislationResolveWorksMax) {
+    return panic("Too many works to resolve in one batch");
+  }
 
   const values = sql.join(
     requests.map(
@@ -73,6 +78,7 @@ export const resolveWorksAtDate = async (
     sql`, `,
   );
 
+  // sql-perf-allow: bounded by LIMITS.legislationResolveWorksMax exact country and ELI probes
   const resolved = executedRows(
     await tx.execute(sql`
       SELECT DISTINCT ON (w.key) w.key AS key, ${legislationDocuments.id} AS id

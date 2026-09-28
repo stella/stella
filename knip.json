@@ -79,12 +79,15 @@
       // tailwindcss: imported by the app's Tailwind entry and consumed by
       // @tailwindcss/vite at build time, never at runtime, so the production
       // gate must not read the CSS import as a runtime dependency (the same
-      // shape as apps/landing's @tailwindcss/postcss).
+      // shape as apps/landing's @tailwindcss/postcss). lucide-react: source
+      // imports it through @stll/ui/icons; the app keeps the dependency so
+      // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
         "react-grab",
         "@libpdf/core",
         "@stll/docx-core",
         "@stll/docx-utils",
+        "lucide-react",
         "tailwindcss"
       ]
     },
@@ -138,6 +141,9 @@
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]
+    },
+    "packages/runtime-mode": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]

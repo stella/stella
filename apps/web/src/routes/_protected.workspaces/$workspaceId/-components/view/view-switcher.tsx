@@ -1,21 +1,6 @@
 import { Fragment, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  BookmarkIcon,
-  BookmarkPlusIcon,
-  CalendarIcon,
-  CopyIcon,
-  FileCheckIcon,
-  FolderTreeIcon,
-  GanttChartIcon,
-  KanbanIcon,
-  LayoutDashboardIcon,
-  PencilIcon,
-  PlusIcon,
-  TableIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -33,6 +18,21 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import {
+  BookmarkIcon,
+  BookmarkPlusIcon,
+  CalendarIcon,
+  CopyIcon,
+  FileCheckIcon,
+  FolderTreeIcon,
+  GanttChartIcon,
+  KanbanIcon,
+  LayoutDashboardIcon,
+  PencilIcon,
+  PlusIcon,
+  TableIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

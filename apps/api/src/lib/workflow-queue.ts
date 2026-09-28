@@ -1587,9 +1587,13 @@ const processOneBatch = async ({
     // Broadcast so the frontend shows pending state.
     broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
 
-    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
+    const settings = await scopedDb(
       async (tx) => await loadOrgAISettings(tx, organizationId),
     );
+    if (Result.isError(settings)) {
+      throw settings.error;
+    }
+    const { orgAIConfig, promptCachingEnabled } = settings.value;
     const generateFn = getBatchGenerator();
 
     // Dispatch on tool type: ai-model columns run the LLM extraction; verdict

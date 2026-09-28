@@ -1,10 +1,10 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { ClockIcon } from "@stll/ui/icons";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
