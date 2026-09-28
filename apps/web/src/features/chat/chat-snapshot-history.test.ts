@@ -1,5 +1,5 @@
-import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import { uiMessagesToWire } from "@tanstack/ai";
+import type { UIMessage as StreamUIMessage } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -71,101 +71,77 @@ describe("keepPostedMessages", () => {
   });
 });
 
-type SnapshotMessages = Extract<
-  StreamChunk,
-  { type: EventType.MESSAGES_SNAPSHOT }
->["messages"];
-
 describe("keepReasoningSteps", () => {
-  const ANSWER_ID = "answer";
-  const timestamp = 0;
-
-  /** The snapshot an approval interrupt ends its run with: the answer's
-   *  reasoning ahead of the answer and the call that waits. */
-  const interruptSnapshot: SnapshotMessages = [
-    { content: "Draft the NDA", id: "user", role: "user" },
+  /** An answer that reasoned twice and waits on an approval, as the page
+   *  holds it when the run's interrupt snapshot arrives. */
+  const history: StreamUIMessage[] = [
     {
-      content: "Thinking first",
-      encryptedValue: "signature-first",
-      id: "reasoning-first",
-      role: "reasoning",
+      id: "user",
+      parts: [{ content: "Draft the NDA", type: "text" }],
+      role: "user",
     },
     {
-      content: "",
-      id: ANSWER_ID,
-      role: "assistant",
-      toolCalls: [
+      id: "answer",
+      parts: [
         {
-          function: { arguments: "{}", name: "delete" },
+          content: "Thinking first",
+          signature: "signature-first",
+          stepId: "thinking-first",
+          type: "thinking",
+        },
+        {
+          content: "Thinking second",
+          stepId: "thinking-second",
+          type: "thinking",
+        },
+        {
+          approval: { id: "approval_call-1", needsApproval: true },
+          arguments: "{}",
           id: "call-1",
-          type: "function",
+          input: {},
+          name: "delete",
+          state: "approval-requested",
+          type: "tool-call",
         },
       ],
+      role: "assistant",
     },
   ];
+  // The wire form the engine's snapshot carries, from TanStack's own
+  // converter: the reasoning fanned out ahead of the answer, with no step.
+  const snapshot = uiMessagesToWire(history, {
+    includeSnapshotStructuredOutput: true,
+  });
+  const reasoningIds = snapshot.flatMap(({ id, role }) =>
+    role === "reasoning" ? [id] : [],
+  );
 
-  /** The thinking the answer shows once the run that continues it streams
-   *  a new thinking step, after `snapshot` closed the first run. */
-  const thinkingAfterContinuation = (snapshot: SnapshotMessages) => {
-    const processor = new StreamProcessor();
-    processor.processChunk({
-      messages: snapshot,
-      timestamp,
-      type: EventType.MESSAGES_SNAPSHOT,
-    });
-    processor.prepareAssistantMessage();
-    const continuation: StreamChunk[] = [
+  test("gives every reasoning message's thinking a step of its own", () => {
+    // The fixture must reach the fault: both steps reach the wire, and there
+    // they name no step for TanStack's stream processor to key them by.
+    expect(reasoningIds).toHaveLength(2);
+    expect(JSON.stringify(snapshot)).not.toContain("stepId");
+
+    const kept = keepReasoningSteps(snapshot);
+    const thinking = kept
+      .filter(({ id }) => reasoningIds.includes(id))
+      .flatMap((served) => ("parts" in served ? served.parts : []));
+    expect(thinking).toEqual([
       {
-        messageId: ANSWER_ID,
-        role: "assistant",
-        timestamp,
-        type: EventType.TEXT_MESSAGE_START,
+        content: "Thinking first",
+        signature: "signature-first",
+        stepId: reasoningIds[0],
+        type: "thinking",
       },
-      { stepName: "thinking-second", timestamp, type: EventType.STEP_STARTED },
-      {
-        delta: "Thinking second",
-        messageId: "reasoning-second",
-        timestamp,
-        type: EventType.REASONING_MESSAGE_CONTENT,
-      },
-    ];
-    for (const chunk of continuation) {
-      processor.processChunk(chunk);
-    }
-    return processor
-      .getMessages()
-      .filter(({ id }) => id === ANSWER_ID)
-      .flatMap(({ parts }) =>
-        parts.flatMap((part) =>
-          part.type === "thinking"
-            ? [{ content: part.content, signature: part.signature }]
-            : [],
-        ),
-      );
-  };
-
-  test("keeps an earlier step's reasoning when the next run reasons again", () => {
-    // The fixture must reach the fault: taken as served, the snapshot's
-    // thinking is overwritten by the continuation's.
-    expect(thinkingAfterContinuation(interruptSnapshot)).toEqual([
-      { content: "Thinking second", signature: "signature-first" },
-    ]);
-
-    expect(
-      thinkingAfterContinuation(keepReasoningSteps(interruptSnapshot)),
-    ).toEqual([
-      { content: "Thinking first", signature: "signature-first" },
-      { content: "Thinking second", signature: undefined },
+      { content: "Thinking second", stepId: reasoningIds[1], type: "thinking" },
     ]);
   });
 
   test("leaves every message other than a reasoning one as served", () => {
-    const kept = keepReasoningSteps(interruptSnapshot);
-    expect(kept.map(({ id }) => id)).toEqual(
-      interruptSnapshot.map(({ id }) => id),
-    );
-    expect(kept.filter(({ id }) => id !== "reasoning-first")).toEqual(
-      interruptSnapshot.filter(({ id }) => id !== "reasoning-first"),
+    const kept = keepReasoningSteps(snapshot);
+    expect(kept.map(({ id }) => id)).toEqual(snapshot.map(({ id }) => id));
+    expect(kept.filter(({ id }) => !reasoningIds.includes(id))).toEqual(
+      snapshot.filter(({ id }) => !reasoningIds.includes(id)),
     );
   });
 });
