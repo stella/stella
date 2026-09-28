@@ -1023,6 +1023,20 @@
         "test": "is told to call it directly, and the turn completes with the direct call"
       },
       "oracle": "chat.code-mode.misplaced-call-explained"
+    },
+    {
+      "id": "completed-turn-follow-ups-outside-failure-boundary",
+      "fix": "#3798",
+      "behaviour": "A completed turn's follow-ups run after its settlement, so one that throws is reported and never marks the stored turn failed.",
+      "status": "active",
+      "file": "src/handlers/chat/send-message.ts",
+      "search": "                          await persistStreamedAssistantTurn(event),",
+      "replace": "                          await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value !== null) { await runCompletedTurnFollowUps(settled.value); } return settled; }),",
+      "scenario": {
+        "file": "src/handlers/chat/send-message.test.ts",
+        "test": "keeps a completed turn completed when a follow-up throws"
+      },
+      "oracle": "chat.persisted.turn-outcome"
     }
   ]
 }

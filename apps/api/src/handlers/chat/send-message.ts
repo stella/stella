@@ -448,6 +448,14 @@ type AssistantTurnFailure = {
   error: HandlerError<500>;
 };
 
+/** What a stored, completed turn's follow-ups read. */
+type CompletedTurnFollowUps = {
+  messagesAfterAssistantPersist: ReturnType<
+    typeof applyAssistantPersistencePlan
+  >;
+  resolvedResponseMessage: ChatMessage;
+};
+
 /**
  * Owns every resource that must be settled when a send stops before its run
  * starts. Starting the run hands the claimed turn over for good.
@@ -2394,12 +2402,7 @@ export const createSendMessage = (
         const runCompletedTurnFollowUps = async ({
           messagesAfterAssistantPersist,
           resolvedResponseMessage,
-        }: {
-          messagesAfterAssistantPersist: ReturnType<
-            typeof applyAssistantPersistencePlan
-          >;
-          resolvedResponseMessage: ChatMessage;
-        }) => {
+        }: CompletedTurnFollowUps) => {
           if (
             messagesAfterAssistantPersist !== null &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
@@ -2456,12 +2459,13 @@ export const createSendMessage = (
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,
                 // and nothing here settles the turn, which is the `onFinish`
-                // boundary's job.
+                // boundary's job. A completed turn returns what its
+                // follow-ups need.
                 const persistStreamedAssistantTurn = async ({
                   outcome,
                   responseMessage,
                 }: StreamChatFinishEvent): Promise<
-                  Result<void, AssistantTurnFailure>
+                  Result<CompletedTurnFollowUps | null, AssistantTurnFailure>
                 > => {
                   const validatedToolParts = validateToolCallParts({
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
@@ -2558,13 +2562,14 @@ export const createSendMessage = (
                       messages: latestMessagePlan.messages,
                       persistencePlan,
                     });
-                  if (storedOutcome.type === "completed") {
-                    await runCompletedTurnFollowUps({
-                      messagesAfterAssistantPersist,
-                      resolvedResponseMessage,
-                    });
-                  }
-                  return Result.ok();
+                  return Result.ok(
+                    storedOutcome.type === "completed"
+                      ? {
+                          messagesAfterAssistantPersist,
+                          resolvedResponseMessage,
+                        }
+                      : null,
+                  );
                 };
 
                 const chatResponse = await dependencies.streamResponse({
@@ -2603,6 +2608,21 @@ export const createSendMessage = (
                       const { code, error } = settled.error;
                       await run.fail(code, true);
                       throw error;
+                    }
+                    // The turn is stored from here, so a follow-up that
+                    // throws is reported and never reaches the boundary
+                    // above: a completed turn cannot then read as failed.
+                    if (settled.value !== null) {
+                      const followUps = settled.value;
+                      const followedUp = await Result.tryPromise(
+                        async () => await runCompletedTurnFollowUps(followUps),
+                      );
+                      if (Result.isError(followedUp)) {
+                        captureError(followedUp.error, {
+                          threadId: body.threadId,
+                          source: "send-message.completed-turn-follow-ups",
+                        });
+                      }
                     }
                   },
                   orgAIConfig,

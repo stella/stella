@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -27,6 +27,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -1513,5 +1514,63 @@ describe("assistant turn settlement", () => {
       status: 500,
     });
     expect(turnUpdates).toContainEqual(failedTurnUpdate("internal"));
+  });
+
+  test("keeps a completed turn completed when a follow-up throws", async () => {
+    let turnCompleted = (): boolean => false;
+    let followUpFailures = 0;
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      // The first transaction after the turn row reads completed is a
+      // follow-up's (the compaction mark), never the turn's settlement.
+      onSafeDbTransaction: () => {
+        if (!turnCompleted() || followUpFailures > 0) {
+          return;
+        }
+        followUpFailures += 1;
+        throw new Error("compaction mark failed");
+      },
+    });
+    turnCompleted = () =>
+      turnUpdates.some(
+        (update) =>
+          typeof update === "object" &&
+          update !== null &&
+          "status" in update &&
+          update.status === "completed",
+      );
+    // Long enough to cross any model's compaction trigger, so the follow-up
+    // writes the compaction mark.
+    const longReply = Array.from({ length: 128 }, (_, index) => ({
+      content: `${String(index)} ${"clause ".repeat(1200)}`,
+      type: "text" as const,
+    }));
+
+    const failure = await settlementFailure(
+      onFinish({
+        outcome: { type: "completed" },
+        responseMessage: completedMessage(longReply),
+      }),
+    );
+
+    // The fixture reached the fault: the follow-up's write threw.
+    expect(followUpFailures).toBe(1);
+    // The stored completion stays the turn's outcome.
+    const violations = violationsOf(
+      CHAT_ORACLE.persistedTurnOutcome,
+      turnUpdates.filter(
+        (update) =>
+          typeof update === "object" &&
+          update !== null &&
+          "status" in update &&
+          update.status === "failed",
+      ),
+    );
+    if (violations.length > 0) {
+      panic(`The turn breaks an invariant: ${JSON.stringify(violations)}`);
+    }
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(failure).toBeUndefined();
   });
 });
