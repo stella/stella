@@ -116,8 +116,8 @@ before it is read, and a subagent cannot ask them.
 
 As soon as you know the name, the side, and the first position, create the
 playbook: `name`, a one-line `description`, and that one position, all in
-the playbook's language. Never send `scope` unless the user typed buyer,
-seller, or neutral for their side; an option you wrote is your word, not
+the playbook's language. Never send `scope` unless the user chose buyer, seller
+or neutral themselves, in any language; an option you wrote is your word, not
 theirs, and a customer, supplier, recipient, discloser, controller, or
 processor gets no `scope.perspective`. Keep the
 returned `playbook_id` and `updatedAt`. The user sees the playbook fill in
