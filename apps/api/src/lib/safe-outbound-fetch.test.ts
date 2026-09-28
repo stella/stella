@@ -146,6 +146,35 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("rejects pre-aborted byte and stream requests without an unhandled error", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.end("unexpected");
+      },
+      async (port) => {
+        const controller = new AbortController();
+        const abortReason = new Error("pre-aborted");
+        controller.abort(abortReason);
+        for (const fetch of [
+          fetchWithResolvedAddress,
+          fetchStreamWithResolvedAddress,
+        ]) {
+          const result = await fetch({
+            addresses: [{ address: "127.0.0.1", family: 4 }],
+            maxBytes: 1024,
+            signal: controller.signal,
+            timeoutMs: 1000,
+            url: new URL(`http://example.test:${port}/pre-aborted`),
+          });
+          expect(Result.isError(result)).toBe(true);
+          if (Result.isError(result)) {
+            expect(result.error.cause).toBe(abortReason);
+          }
+        }
+      },
+    );
+  });
+
   test("returns streaming responses before the server closes the body", async () => {
     await withHttpServer(
       (_request, response) => {

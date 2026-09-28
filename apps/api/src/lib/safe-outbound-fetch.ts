@@ -75,6 +75,11 @@ const attachRequestGuards = ({
     signal?.removeEventListener("abort", abort);
     clearTimeout(timeout);
   };
+  request.on("error", (cause) => {
+    cleanup();
+    reject(cause);
+  });
+  request.on("close", cleanup);
   if (signal?.aborted) {
     const error = abortReasonToError(signal.reason);
     clearTimeout(timeout);
@@ -83,11 +88,6 @@ const attachRequestGuards = ({
     return null;
   }
   signal?.addEventListener("abort", abort, { once: true });
-  request.on("error", (cause) => {
-    cleanup();
-    reject(cause);
-  });
-  request.on("close", cleanup);
   return { clearHeaderTimeout: () => clearTimeout(timeout), cleanup };
 };
 
