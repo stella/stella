@@ -1,0 +1,47 @@
+# Reviewers the `review-gate` check waits for (scripts/review-gate.ts).
+#
+# The gate passes once every reviewer below has reported, or its timeout has
+# elapsed, and no review thread is unresolved. The trusted workflow reads
+# this file from the default branch, so a change here applies once it lands.
+#
+# mode:   shadow  - publish the check only.
+#         enforce - also dequeue a queued pull request whose verdict turns
+#                   to failure, once a fresh read right before the mutation
+#                   confirms it. Needs contents and pull-requests write on
+#                   the Review Gate workflow; a test holds the two together.
+# done:   what counts as a report. commit_status / check_run: that status or
+#         check run on the head commit, in one of the listed states. Any
+#         other terminal state is the reviewer erroring: the gate keeps
+#         waiting until the timeout. review_by: a submitted review by that
+#         login. reaction: a reaction by that login on the pull request.
+# scope:  head    - must report on the exact head commit (runs on every push).
+#         request - reports once per request (when the pull request opens, or
+#                   on `rerequest_comment` from someone with write access);
+#                   its report does not cover later pushes.
+# skip_*: waive the reviewer wait, never the unresolved-thread rule, and
+#         match only what a pull request cannot edit: its author, its diff.
+
+mode: shadow
+
+reviewers:
+  - name: CodeRabbit
+    done:
+      commit_status:
+        context: CodeRabbit
+        states: [success]
+    scope: head
+    timeout_minutes: 20
+
+  - name: Codex
+    done:
+      review_by: chatgpt-codex-connector
+      # No findings: a thumbs-up on the pull request instead of a review.
+      reaction:
+        by: chatgpt-codex-connector
+        content: THUMBS_UP
+    scope: request
+    rerequest_comment: "@codex review"
+    timeout_minutes: 15
+    skip_authors: ["dependabot[bot]"]
+
+skip_authors: ["github-actions[bot]"]

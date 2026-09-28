@@ -125,7 +125,7 @@ export const PersonalTimesheetDay = ({
     suggestion: TimeEntrySuggestion,
     values: Pick<
       ManualTimeEntryValues,
-      "durationMinutes" | "narrative" | "billable"
+      "durationMinutes" | "narrative" | "narrativeLanguage" | "billable"
     >,
   ) => {
     markBusy(suggestion.fingerprint);
@@ -139,6 +139,7 @@ export const PersonalTimesheetDay = ({
           type: "accept",
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
+          narrativeLanguage: values.narrativeLanguage,
           billable: values.billable,
         },
       });
@@ -211,12 +212,14 @@ export const PersonalTimesheetDay = ({
           dateWorked: date,
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
+          narrativeLanguage: null,
           billable: false,
         }
       : {
           dateWorked: editingEntry?.dateWorked ?? date,
           durationMinutes: editingEntry?.durationMinutes ?? 0,
           narrative: editingEntry?.narrative ?? "",
+          narrativeLanguage: editingEntry?.narrativeLanguage ?? null,
           billable: editingEntry?.billable ?? false,
         };
 
@@ -249,6 +252,7 @@ export const PersonalTimesheetDay = ({
               acceptSuggestion(suggestion, {
                 durationMinutes: suggestion.durationMinutes,
                 narrative,
+                narrativeLanguage: null,
                 billable: false,
               }).catch(reportFailure),
               "personal-timesheet-day.accept-suggestion",

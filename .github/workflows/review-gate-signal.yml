@@ -1,0 +1,24 @@
+name: Review Gate Signal
+
+# A doorbell for the Review Gate workflow. These events run the workflow
+# version from the pull request (or the merge group commit), so they must not
+# publish anything: this run has no permissions and does nothing. Review Gate
+# reacts to it starting (`workflow_run: requested`) from the default branch,
+# and re-reads everything from GitHub. Editing this file can only withhold a
+# signal, which the scheduled sweep covers.
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created]
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: "true"
