@@ -14,6 +14,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { formatMinutes } from "@/lib/format-duration";
 import { localISODate } from "@/lib/local-iso-date";
 import {
   ensureRouteInfiniteQueryData,
@@ -21,7 +22,6 @@ import {
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
-import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_protected/time")({
   loaderDeps: ({ search }) => ({ date: search.date }),
   beforeLoad: async ({ context }) => {
     if (!isTimeBillingRouteEnabled()) {
-      throw redirect({ to: "/workspaces" });
+      redirect({ to: "/workspaces", throw: true });
     }
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_protected/time")({
         permissions: { timeEntry: ["read"] },
       })
     ) {
-      throw redirect({ to: "/workspaces" });
+      redirect({ to: "/workspaces", throw: true });
     }
   },
   loader: async ({ context, deps }) => {

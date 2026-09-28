@@ -13,7 +13,7 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - retry cleanup removes
+-- stella-migration-safety: reviewed drop-object - retry cleanup removes
 -- only this migration's index if a cancelled concurrent build left it invalid.
 DROP INDEX CONCURRENTLY IF EXISTS "time_entries_org_user_date_id_idx";
 --> statement-breakpoint
