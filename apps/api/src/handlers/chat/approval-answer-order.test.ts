@@ -5,11 +5,9 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
-import {
-  answerCallsInTheirStep,
-  guardProviderHistory,
-  settleHistoryForRun,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import { answerCallsInTheirStep } from "@/api/handlers/chat/step-answers";
 import {
   processServerChatStream,
   toChatMessage,
@@ -19,12 +17,10 @@ import { createTurnMessageIdMapper } from "@/api/handlers/chat/stream-message-id
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  toolCallStepOf,
-  withProviderStreamContract,
-} from "@/api/lib/chat/provider-stream-contract";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { toolCallStepOf } from "@/api/lib/chat/tool-call-step";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -415,7 +411,8 @@ const unansweredCalls = (prompt: readonly string[]): string[] => {
       }
       answers.push(next.toolCallId ?? "");
     }
-    return calls.length === 0 || answers.toSorted().join(",") === calls.join(",")
+    return calls.length === 0 ||
+      answers.toSorted().join(",") === calls.join(",")
       ? []
       : [`${calls.join(",")} answered by [${answers.join(",")}]`];
   });

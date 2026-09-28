@@ -53,6 +53,10 @@ export const CHAT_ORACLE = {
   /** Every model request of a thread begins with the whole prompt of the
    *  one before it, so the provider's prompt cache holds. */
   providerPrefixStable: "chat.provider.prefix-stable",
+  /** Once a turn is over, every later model call of the thread is handed
+   *  each of its tool results the same way (up to key order): a request
+   *  reads the earlier turns as stored, as the next one will. */
+  providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",

@@ -35,10 +35,8 @@ import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
-import {
-  guardProviderHistory,
-  settleHistoryForRun,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -1345,6 +1343,18 @@ describe("outgoing chat stream message ids", () => {
             {
               type: EventType.RUN_FINISHED,
               finishReason: "tool_calls",
+              // The engine hands the call out as an interrupt either way; only
+              // its input decides whether the turn may wait on it.
+              outcome: {
+                type: "interrupt",
+                interrupts: [
+                  {
+                    id: `interrupt-${callChunks[0].toolCallId}`,
+                    reason: "tool_call",
+                    toolCallId: callChunks[0].toolCallId,
+                  },
+                ],
+              },
               runId: "run-1",
               threadId: "thread-1",
             },

@@ -198,3 +198,62 @@ export const normalizeNumber = (
   }
   return readValueAs(input, sign * magnitude);
 };
+
+export type NumberInRangeOptions = NumberOptions & {
+  minimum?: number | undefined;
+  maximum?: number | undefined;
+  /** A count: a fraction asks, since 12.5 results is no page size and
+   *  rounding either way would be a guess. */
+  integer?: boolean | undefined;
+};
+
+const rangeClause = ({ minimum, maximum }: NumberInRangeOptions): string => {
+  if (minimum !== undefined && maximum !== undefined) {
+    return ` from ${minimum} to ${maximum}`;
+  }
+  if (minimum !== undefined) {
+    return ` of at least ${minimum}`;
+  }
+  return maximum === undefined ? "" : ` of at most ${maximum}`;
+};
+
+/**
+ * Read a bounded count (a page size, a result limit) and clamp it into range.
+ *
+ * `limit: 500` against a cap of 100 has one sensible reading, the most the
+ * tool returns, and asking would cost a round trip to learn a number the note
+ * can state. The caller decides which fields clamp: a monetary amount out of
+ * range is a mistake to ask about, not a value to move.
+ */
+export const normalizeNumberInRange = (
+  input: unknown,
+  options: NumberInRangeOptions,
+): Normalized<number> => {
+  const read = normalizeNumber(input, options);
+  if (!read.ok) {
+    return read;
+  }
+  if (options.integer === true && !Number.isInteger(read.value)) {
+    return askForFix({
+      input,
+      expected: "a whole number",
+      hint: `Send a whole number${rangeClause(options)} as a JSON number.`,
+    });
+  }
+  const clampTo = (value: number, why: string): Normalized<number> => {
+    const clampNote = `Read ${read.value} as ${value}, ${why}.`;
+    return {
+      ok: true,
+      value,
+      note: read.note === undefined ? clampNote : `${read.note} ${clampNote}`,
+    };
+  };
+  const { minimum, maximum } = options;
+  if (maximum !== undefined && read.value > maximum) {
+    return clampTo(maximum, "the most this accepts");
+  }
+  if (minimum !== undefined && read.value < minimum) {
+    return clampTo(minimum, "the least this accepts");
+  }
+  return read;
+};

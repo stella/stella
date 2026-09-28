@@ -43,7 +43,7 @@ export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
  */
 export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: 3,
-  [ADAPTER_KEYS.CZ_NS]: 4,
+  [ADAPTER_KEYS.CZ_NS]: 5,
   [ADAPTER_KEYS.CZ_NSS]: 7,
   [ADAPTER_KEYS.CZ_US]: 6,
   [ADAPTER_KEYS.SK_COURTS]: 3,

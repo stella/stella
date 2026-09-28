@@ -190,6 +190,146 @@ const widenedSchema = (schema: Schema): Schema => {
   return widened;
 };
 
+type Path = readonly (number | string)[];
+
+/** `path` as the JSON pointer ajv reports an instance at. */
+const pointerOf = (path: Path): string =>
+  path
+    .map(
+      (step) => `/${String(step).replaceAll("~", "~0").replaceAll("/", "~1")}`,
+    )
+    .join("");
+
+/** The spelled nulls a validation is judging, as JSON pointers. */
+let judgedNulls: ReadonlySet<string> = new Set();
+
+// An undeclared field of an open object may hold anything but a judged null:
+// an open union branch takes any extra field without declaring what is in
+// it, so its tolerance neither declares a spelling nor makes a null a value.
+ajv.addKeyword({
+  keyword: "holdsNoJudgedNull",
+  schemaType: "boolean",
+  validate: (
+    _enabled: boolean,
+    _data: unknown,
+    _parent: unknown,
+    context?: { instancePath: string },
+  ) => {
+    const at = context?.instancePath ?? "";
+    return ![...judgedNulls].some(
+      (pointer) => pointer === at || pointer.startsWith(`${at}/`),
+    );
+  },
+});
+
+const UNDECLARED: Schema = { holdsNoJudgedNull: true };
+
+/** `schema` with every open object's undeclared fields held to `UNDECLARED`. */
+const declaredOnly = (schema: unknown): unknown => {
+  if (isUnknownArray(schema)) {
+    return schema.map(declaredOnly);
+  }
+  if (!isRecord(schema)) {
+    return schema;
+  }
+  const declared: Schema = Object.fromEntries(
+    Object.entries(schema).map(([keyword, entry]) => [
+      keyword,
+      keyword === "properties" && isRecord(entry)
+        ? Object.fromEntries(
+            Object.entries(entry).map(([name, property]) => [
+              name,
+              declaredOnly(property),
+            ]),
+          )
+        : declaredOnly(entry),
+    ]),
+  );
+  if (isRecord(schema["properties"]) && !("additionalProperties" in schema)) {
+    declared["additionalProperties"] = UNDECLARED;
+  }
+  return declared;
+};
+
+// Ajv compiles a schema once per object, so each case's schema is projected
+// once.
+const declaredOnlyOf = new WeakMap<Schema, Schema>();
+
+/** Whether `schema` takes `data` with each null at `judged` in a declared place. */
+const takesDeclared = (
+  schema: Schema,
+  data: unknown,
+  judged: readonly Path[],
+): boolean => {
+  const projected = declaredOnlyOf.get(schema) ?? declaredOnly(schema);
+  if (!isRecord(projected)) {
+    throw new TypeError("The projected schema is not an object");
+  }
+  declaredOnlyOf.set(schema, projected);
+  judgedNulls = new Set(judged.map(pointerOf));
+  try {
+    return ajv.validate(projected, data);
+  } finally {
+    judgedNulls = new Set();
+  }
+};
+
+/** Where `sent` spells a field `value` leaves out as null. */
+const spelledNullPaths = (
+  value: unknown,
+  sent: unknown,
+  path: Path = [],
+): Path[] => {
+  if (isUnknownArray(value) && isUnknownArray(sent)) {
+    return value.flatMap((entry, index) =>
+      spelledNullPaths(entry, sent[index], [...path, index]),
+    );
+  }
+  if (!isRecord(value) || !isRecord(sent)) {
+    return [];
+  }
+  return Object.entries(sent).flatMap(([key, entry]) => {
+    if (key in value) {
+      return spelledNullPaths(value[key], entry, [...path, key]);
+    }
+    return entry === null ? [[...path, key]] : [];
+  });
+};
+
+/** `value` with a null set at `path`. */
+const withNullAt = (value: unknown, path: Path): unknown => {
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    return null;
+  }
+  if (isUnknownArray(value) && typeof head === "number") {
+    return value.map((entry, index) =>
+      index === head ? withNullAt(entry, rest) : entry,
+    );
+  }
+  const record = isRecord(value) ? value : {};
+  return { ...record, [head]: withNullAt(record[head], rest) };
+};
+
+/**
+ * The input `sent` reads back as: `value`, plus each spelled null that a
+ * branch declaring its field takes. Each null is judged on its own, as the
+ * reader does, since sibling branches may each declare a different one.
+ */
+const expectedReading = (
+  schema: Schema,
+  value: unknown,
+  sent: unknown,
+): unknown => {
+  let reading = value;
+  for (const path of spelledNullPaths(value, sent)) {
+    if (takesDeclared(schema, withNullAt(value, path), [path])) {
+      reading = withNullAt(reading, path);
+    }
+  }
+  return reading;
+};
+
 const hasUnion = (schema: Schema): boolean =>
   JSON.stringify(schema).includes('"anyOf"');
 
@@ -214,12 +354,14 @@ test(
         expect(ajv.validate(widened, { root: null })).toBe(
           ajv.validate(schema, { root: null }),
         );
-        // Whatever the widened schema lets the model send reads back as the
-        // declared input it stands for; one a union already declares (a
-        // sibling branch taking null there) is read as itself.
-        if (ajv.validate(widened, sent)) {
+        // Whatever the widened schema declares the model may send reads back
+        // as the declared input it stands for; one a union already declares
+        // (a sibling branch declaring the field and taking null there) keeps
+        // that null. An open sibling that merely tolerates an undeclared
+        // field neither declares a spelling nor makes its null a value.
+        if (takesDeclared(widened, sent, spelledNullPaths(value, sent))) {
           expect(withModelPlaceholdersOmitted(schema, sent)).toEqual(
-            ajv.validate(schema, sent) ? sent : value,
+            expectedReading(schema, value, sent),
           );
         }
         // Outside unions, where a branch may require what a sibling leaves

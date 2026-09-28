@@ -99,6 +99,80 @@ export const caseLawSearchWarnings = ({
 };
 
 /**
+ * Warnings only an agent surface raises, about a filter value it had to read
+ * before searching. The web sends filters it took from its own facets, so it
+ * never meets these; they stay out of the shared contract for that reason.
+ *
+ * - `filter_read`: the value named one known value in another spelling (a
+ *   case, an abbreviation, an English name), and the search used that value.
+ * - `filter_dropped`: the value named no known value, or several, so the
+ *   search ran without that filter rather than returning nothing for it.
+ */
+export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
+  "filter_read",
+  "filter_dropped",
+] as const;
+
+type AgentCaseLawSearchWarningCode =
+  (typeof AGENT_CASE_LAW_SEARCH_WARNING_CODES)[number];
+
+export type AgentCaseLawSearchWarning = {
+  readonly code: CaseLawSearchWarningCode | AgentCaseLawSearchWarningCode;
+  readonly message: string;
+  readonly hint: string;
+};
+
+export const filterReadWarning = ({
+  filter,
+  received,
+  value,
+}: {
+  filter: string;
+  received: string;
+  value: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_read",
+  message: `Read ${filter} ${received} as "${value}".`,
+  hint: `Pass ${filter} "${value}" to search the same way without this note.`,
+});
+
+export const filterDroppedWarning = ({
+  filter,
+  received,
+  known,
+}: {
+  filter: string;
+  received: string;
+  /** The values the caller could have meant, most useful first; bounded. */
+  known: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_dropped",
+  message: `${received} names no single ${filter}, so this search ran without the ${filter} filter.`,
+  hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
+});
+
+/**
+ * The values a facet counted for an empty page's filters, appended to its
+ * `no_hits_filtered` hint so the next call can pick a value that exists
+ * rather than guess another. A facet counts its own dimension under the
+ * request's other filters, so these are the values that would have matched.
+ */
+export const withFacetValues = (
+  warning: CaseLawSearchWarning,
+  values: readonly { filter: string; values: readonly string[] }[],
+): CaseLawSearchWarning => {
+  const listed = values.filter((entry) => entry.values.length > 0);
+  if (warning.code !== "no_hits_filtered" || listed.length === 0) {
+    return warning;
+  }
+  const sentences = listed.map(
+    ({ filter, values: known }) =>
+      `${filter} values with hits under the other filters: ${known.map((value) => `"${value}"`).join(", ")}.`,
+  );
+  return { ...warning, hint: `${warning.hint} ${sentences.join(" ")}` };
+};
+
+/**
  * The producer of each code, for the census. A code is guidance a caller
  * reads verbatim, so one no search can produce has to be deleted rather than
  * left in the list; total over the code set, so a new code cannot land
@@ -111,4 +185,23 @@ export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning
+>;
+
+/** The agent-only codes' producers, total over their set like the above. */
+export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
+  filter_read: () =>
+    filterReadWarning({
+      filter: "court",
+      received: '"NS"',
+      value: "Nejvyšší soud",
+    }),
+  filter_dropped: () =>
+    filterDroppedWarning({
+      filter: "court",
+      received: '"Česká republika"',
+      known: 'Known values include "Nejvyšší soud".',
+    }),
+} as const satisfies Record<
+  AgentCaseLawSearchWarningCode,
+  () => AgentCaseLawSearchWarning
 >;

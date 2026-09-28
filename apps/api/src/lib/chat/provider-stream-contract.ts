@@ -9,9 +9,9 @@ import { Result, panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
-import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -242,24 +242,6 @@ const parsedArguments = (text: string | undefined): unknown => {
     parsed.value !== null
     ? parsed.value
     : undefined;
-};
-
-/**
- * The metadata key naming the model response (the step) a tool call came
- * from. Stored with the call, so the step a call belongs to stays readable
- * where nothing else in the message separates two steps: two calls in a row,
- * the first denied, the second asked for by the next response with no text
- * between them.
- */
-const TOOL_CALL_STEP_METADATA_KEY = "stellaStepId";
-
-/** The step a tool call's metadata names, if it names one. Calls stored
- *  before steps were recorded name none. */
-export const toolCallStepOf = (metadata: unknown): string | undefined => {
-  const step: unknown = isRecord(metadata)
-    ? metadata[TOOL_CALL_STEP_METADATA_KEY]
-    : undefined;
-  return typeof step === "string" ? step : undefined;
 };
 
 /**
