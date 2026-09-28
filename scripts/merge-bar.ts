@@ -262,6 +262,37 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
 
 const CI_PLAN_CHECK_RUN = "ci-plan";
 
+const latestRunByName = (
+  checkRuns: readonly CheckRunSnapshot[],
+): Map<string, CheckRunSnapshot> => {
+  const latestByName = new Map<string, CheckRunSnapshot>();
+  for (const run of checkRuns) {
+    const current = latestByName.get(run.name);
+    if (current === undefined || run.id > current.id) {
+      latestByName.set(run.name, run);
+    }
+  }
+  return latestByName;
+};
+
+/**
+ * Every required check has succeeded on the head. The queue accepts a direct
+ * enqueue only then; before it, "merge when ready" arms auto-merge instead.
+ */
+export const requiredChecksSucceeded = ({
+  checkRuns,
+  requiredCheckRuns,
+}: {
+  checkRuns: readonly CheckRunSnapshot[];
+  requiredCheckRuns: readonly string[];
+}): boolean => {
+  const latestByName = latestRunByName(checkRuns);
+  return requiredCheckRuns.every((name) => {
+    const run = latestByName.get(name);
+    return run?.status === "completed" && run.conclusion === "success";
+  });
+};
+
 // A direct merge needs every required check to have SUCCEEDED on the head:
 // the write is final. "Merge when ready" needs only that none has FAILED: a
 // check still running, or not yet created for a fresh push, is what GitHub
@@ -288,13 +319,7 @@ const evaluateRequiredCheck = ({
     };
   }
 
-  const latestByName = new Map<string, CheckRunSnapshot>();
-  for (const run of checkRuns) {
-    const current = latestByName.get(run.name);
-    if (current === undefined || run.id > current.id) {
-      latestByName.set(run.name, run);
-    }
-  }
+  const latestByName = latestRunByName(checkRuns);
   const required = requiredCheckRuns.flatMap((name) => {
     const run = latestByName.get(name);
     return run === undefined ? [] : [run];
@@ -546,23 +571,26 @@ const RELEASE_TITLE_PREFIX = "chore: release v";
 /**
  * A release pull request goes to the front of the merge queue: every pull
  * request that lands between the cut and the release's merge can invalidate
- * the cut. Recognized as in release-pr.yml's gate: a ready pull request from
- * this repository whose title starts with "chore: release v".
+ * the cut. Recognized as in release-pr.yml's gate: a ready pull request into
+ * main from this repository whose title starts with "chore: release v".
  */
 export const isReleasePullRequest = (
   pullRequest: Pick<
     PullRequestSnapshot,
-    "title" | "isDraft" | "isCrossRepository"
+    "title" | "isDraft" | "isCrossRepository" | "baseRefName"
   >,
 ): boolean =>
+  pullRequest.baseRefName === "main" &&
   pullRequest.title.startsWith(RELEASE_TITLE_PREFIX) &&
   !pullRequest.isDraft &&
   !pullRequest.isCrossRepository;
 
 export type MergeWhenReadyAction =
-  | { kind: "arm" }
+  // `jumpDeferred`: a jump was wanted, but the queue accepts one only once
+  // every required check has succeeded, so auto-merge is armed instead.
+  | { kind: "arm"; jumpDeferred: boolean }
   | { kind: "enqueue-jump" }
-  | { kind: "already-armed"; enabledAt: string }
+  | { kind: "already-armed"; enabledAt: string; jumpDeferred: boolean }
   | { kind: "already-queued"; entryId: string };
 
 /**
@@ -574,20 +602,27 @@ export type MergeWhenReadyAction =
 export const mergeWhenReadyAction = ({
   handoff,
   jump,
+  checksSucceeded,
 }: {
   handoff: MergeHandoff;
   jump: boolean;
+  checksSucceeded: boolean;
 }): MergeWhenReadyAction => {
   if (handoff.status === "queued") {
     return { kind: "already-queued", entryId: handoff.entryId };
   }
-  if (jump) {
+  if (jump && checksSucceeded) {
     return { kind: "enqueue-jump" };
   }
+  const jumpDeferred = jump;
   if (handoff.status === "armed") {
-    return { kind: "already-armed", enabledAt: handoff.enabledAt };
+    return {
+      kind: "already-armed",
+      enabledAt: handoff.enabledAt,
+      jumpDeferred,
+    };
   }
-  return { kind: "arm" };
+  return { kind: "arm", jumpDeferred };
 };
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
@@ -1131,18 +1166,27 @@ if (import.meta.main) {
       const action = mergeWhenReadyAction({
         handoff: pullRequest.handoff,
         jump,
+        checksSucceeded: requiredChecksSucceeded({
+          checkRuns: snapshot.checkRuns,
+          requiredCheckRuns: snapshot.requiredCheckRuns,
+        }),
       });
+      const deferredNote =
+        "; required checks are still running, so it is armed rather than " +
+        "moved to the front: run the bar again once they pass to jump";
       switch (action.kind) {
         case "already-queued":
           console.log(
-            `\nverdict: QUEUED — ${action.entryId}${jump
+            `\nverdict: QUEUED — ${action.entryId}${
+              jump
                 ? "; it keeps its place (dequeue it first to move it to the front)"
-                : ""}`,
+                : ""
+            }`,
           );
           break;
         case "already-armed":
           console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
+            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}${action.jumpDeferred ? deferredNote : ""}`,
           );
           break;
         case "enqueue-jump": {
@@ -1152,8 +1196,9 @@ if (import.meta.main) {
           });
           console.log(
             `\nverdict: QUEUED AT THE FRONT — ${snapshot.headShaBeforeMerge} ` +
-              `is at position ${position}${ 
-              options.jump ? "" : " (release pull request)"}`,
+              `is at position ${position}${
+                options.jump ? "" : " (release pull request)"
+              }`,
           );
           break;
         }
@@ -1162,8 +1207,7 @@ if (import.meta.main) {
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
           console.log(
-            `\nverdict: ARMED — ${outcome}; the queue merges ` +
-              `${snapshot.headShaBeforeMerge} once its checks pass`,
+            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass${action.jumpDeferred ? deferredNote : ""}`,
           );
           break;
         }
