@@ -29,6 +29,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -344,6 +345,7 @@ export const createApprovalHarness = ({
       getWorkspaceAccess: async () => await Promise.resolve(null),
       memberRole: { role: "owner" },
       orgAIConfig: organizationAIConfig,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),

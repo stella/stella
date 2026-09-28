@@ -398,7 +398,7 @@ describe("MCP template tools", () => {
     configureTemplateFieldsMock.mockReset();
     templateDecideConditionsLogicMock.mockReset();
     loadOrgAIConfigMock.mockReset();
-    loadOrgAIConfigMock.mockResolvedValue(null);
+    loadOrgAIConfigMock.mockResolvedValue(Result.ok(null));
     anonymizeTextFieldsMock.mockReset();
   });
 

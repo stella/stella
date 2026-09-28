@@ -409,8 +409,9 @@ const runAiStep = async ({
     documents,
   });
 
-  const orgAIConfig = await scopedDb(
-    async (tx) => await loadAIConfig(tx, organizationId),
+  const orgAIConfig = unwrapOrFlowStepError(
+    await scopedDb(async (tx) => await loadAIConfig(tx, organizationId)),
+    "AI is not available for this organization.",
   );
   // Every step settles against the organization's usage as it runs; the
   // initiator pre-flighted the whole run's estimate under the same action
