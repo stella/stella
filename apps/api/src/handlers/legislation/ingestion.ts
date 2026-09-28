@@ -525,26 +525,46 @@ const findByPublisherId = async ({
     ),
   );
 
+type LegacyRowColumns = {
+  metadata: SQLWrapper;
+  versionValidFrom: SQLWrapper;
+};
+
 /**
- * The evidence a row written before publisher identities carries of which
- * version it holds: the version IRI every connector stored in its metadata,
- * or, for a work kept as one text, the work itself. Null when the id names
- * nothing a legacy row can be matched on, so nothing is adopted by guess.
+ * Which row written before publisher identities this version is, and which to
+ * prefer when more than one could be.
+ *
+ * The stored version IRI is the proof, whatever the row's window says: a
+ * publisher that has since moved the version's start still names the same
+ * version, and adopting by the old start would leave that row behind and
+ * store the version twice. Only a row that stores no IRI falls back to the
+ * version window. A work kept as one text is its single windowless row.
+ * Null when the id names nothing a legacy row can be matched on, so nothing is
+ * adopted by guess.
  */
 const legacyIdentityMatch = (
   input: LegislationDocumentInput,
   publisherId: string,
-  storedMetadata: SQLWrapper,
-): SQL | null => {
+  window: StoredWindow,
+  legacy: LegacyRowColumns,
+): { match: SQL; preference: SQL } | null => {
   const separator = publisherId.indexOf(":");
   if (separator <= 0) {
     return null;
   }
   const native = publisherId.slice(separator + 1);
   if (input.version.type === "unversioned") {
-    return native === `work:${input.eli}` ? sql`true` : null;
+    return native === `work:${input.eli}`
+      ? { match: sql`${legacy.versionValidFrom} IS NULL`, preference: sql`0` }
+      : null;
   }
-  return sql`${storedMetadata}->>'versionIri' = ${native}`;
+  const storedIri = sql`(${legacy.metadata}->>'versionIri')`;
+  const provenByIri = sql`${storedIri} = ${native}`;
+  return {
+    match: sql`(${provenByIri} OR (coalesce(${storedIri}, '') = '' AND ${legacy.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}))`,
+    // An IRI match wins over a window-only one.
+    preference: sql`(${provenByIri}) IS TRUE DESC`,
+  };
 };
 
 /**
@@ -554,9 +574,12 @@ const legacyIdentityMatch = (
  * A compare-and-set, not a read then a write: the row is chosen and claimed in
  * one statement that only succeeds while its id is still null, so of two
  * writers (or a writer and the backfill) claiming the same row exactly one
- * wins and the other finds the row by its id afterwards. The window is the
- * candidate, the stored version IRI the proof; a row whose IRI names a
- * different version is never adopted.
+ * wins and the other finds the row by its id afterwards. A row whose IRI names
+ * a different version is never adopted.
+ *
+ * Bounded by the work: the candidates are the rows of one
+ * `(source, eli, language)`, reached through the ELI index, and a work holds
+ * one row per version.
  */
 const claimLegacyVersion = async ({
   input,
@@ -568,7 +591,7 @@ const claimLegacyVersion = async ({
   window: StoredWindow;
 }): Promise<void> => {
   const legacy = alias(legislationDocuments, "legacy");
-  const identity = legacyIdentityMatch(input, publisherId, legacy.metadata);
+  const identity = legacyIdentityMatch(input, publisherId, window, legacy);
   if (identity === null) {
     return;
   }
@@ -582,11 +605,11 @@ const claimLegacyVersion = async ({
           eq(legacy.sourceId, input.sourceId),
           eq(legacy.eli, input.eli),
           eq(legacy.language, input.language),
-          sql`${legacy.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`,
           isNull(legacy.publisherExpressionId),
-          identity,
+          identity.match,
         ),
       )
+      .orderBy(identity.preference, asc(legacy.id))
       .limit(1);
     // audit: skip — background legislation ingestion; attaches the publisher's identity to an existing public row
     await tx

@@ -225,6 +225,40 @@ describe("legislation writer identity", () => {
     expect(await claimsOf(legacy.id)).toBe(1);
   });
 
+  test("a legacy row whose start the publisher moved is adopted by its IRI, in place", async () => {
+    const act = "2011/88";
+    const iri = iriOf(act, "version-a");
+    const legacy = await store(
+      version({ act, validFrom: "2019-01-01", iri, withId: false }),
+    );
+
+    const moved = await store(version({ act, validFrom: "2019-02-01", iri }));
+
+    expect(moved).toMatchObject({ id: legacy.id, inserted: false });
+    expect(await rowsOf(act)).toEqual([
+      expect.objectContaining({
+        id: legacy.id,
+        publisherId: `${NAMESPACE}:${iri}`,
+        validFrom: "2019-02-01",
+      }),
+    ]);
+  });
+
+  test("a legacy row with no stored IRI is adopted by its window", async () => {
+    const act = "2010/87";
+    const legacyInput = version({
+      act,
+      validFrom: "2018-01-01",
+      withId: false,
+    });
+    const legacy = await store({ ...legacyInput, metadata: {} });
+
+    const adopted = await store(version({ act, validFrom: "2018-01-01" }));
+
+    expect(adopted).toMatchObject({ id: legacy.id, inserted: false });
+    expect(await rowsOf(act)).toHaveLength(1);
+  });
+
   test("an unchanged version still persists the id it was claimed with", async () => {
     const legacy = await store(
       version({ act: "2013/90", validFrom: "2020-01-01", withId: false }),
