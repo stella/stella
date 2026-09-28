@@ -801,8 +801,9 @@ jobs:
 
       - name: SQL performance suppression summary
         if: >-
-          github.event_name == 'pull_request'
-          || github.event_name == 'merge_group'
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
@@ -865,6 +866,7 @@ jobs:
           bun scripts/design-lint-baseline.ts --check
 
       - name: SQL performance baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
