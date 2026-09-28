@@ -1,3 +1,5 @@
+/* oxlint-disable no-direct-lucide-import/no-direct-lucide-import -- fixture: the glyphs come straight from lucide */
+
 // Passive regression fixture for
 // `no-legal-cliche-glyph/no-legal-cliche-glyph`.
 //
@@ -14,6 +16,12 @@ import {
   Scale as JusticeIcon,
 } from "lucide-react";
 
+// oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- through the shared icon module
+import { ScaleIcon as IconModuleScale } from "@stll/ui/icons";
+
+// oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the icon module may not re-export it either
+export { GavelIcon as ReexportedGavel } from "lucide-react";
+
 const Icon = ({ as: As }: { as: typeof Scale3dIcon }) => <As />;
 
 export const LegalClicheGlyphFixture = () => (
@@ -22,6 +30,8 @@ export const LegalClicheGlyphFixture = () => (
     <GavelIcon />
     {/* oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the prop reference */}
     <Icon as={JusticeIcon} />
+    {/* oxlint-disable-next-line no-legal-cliche-glyph/no-legal-cliche-glyph -- the icon module's binding */}
+    <IconModuleScale />
     {/* A geometry transform, not a balance: the rule matches exact names. */}
     {/* expect-clean: no-legal-cliche-glyph/no-legal-cliche-glyph */}
     <Scale3dIcon />

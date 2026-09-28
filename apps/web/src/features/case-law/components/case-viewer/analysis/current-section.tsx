@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 
-import { ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { FlatAnalysisHeading } from "@/features/case-law/components/case-viewer/analysis/types";

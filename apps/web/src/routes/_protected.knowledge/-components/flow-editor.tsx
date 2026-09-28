@@ -2,12 +2,6 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -23,6 +17,12 @@ import {
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowLeftIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

@@ -3,13 +3,6 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
-import {
-  BuildingIcon,
-  PlusIcon,
-  SearchIcon,
-  UserIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -34,6 +27,13 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
+import {
+  BuildingIcon,
+  PlusIcon,
+  SearchIcon,
+  UserIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";

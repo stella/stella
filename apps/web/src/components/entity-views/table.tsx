@@ -4,6 +4,12 @@ import type { ComponentType, ReactNode, RefObject } from "react";
 import { flexRender, useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { isTaskStatus, TASK_STATUS } from "@stll/api-contract";
+import { ENTITY_VIEW_COLUMNS } from "@stll/api-contract/entity-views";
+import { UserText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   CalendarIcon,
   CircleDotIcon,
@@ -12,13 +18,7 @@ import {
   ShapesIcon,
   TextIcon,
   UsersIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { isTaskStatus, TASK_STATUS } from "@stll/api-contract";
-import { ENTITY_VIEW_COLUMNS } from "@stll/api-contract/entity-views";
-import { UserText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";

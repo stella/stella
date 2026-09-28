@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 
-import { SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
 import { OutlineRail } from "@stll/ui/outline-rail";

@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 
 import { useDirection } from "@base-ui/react/direction-provider";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronRightIcon, PenLineIcon, UngroupIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon, PenLineIcon, UngroupIcon } from "@stll/ui/icons";
 import { MenuItem, MenuSeparator } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";

@@ -4,10 +4,10 @@
  */
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { FileCheckIcon, PlayIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";

@@ -1,11 +1,11 @@
 import { useId } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";

@@ -1,9 +1,9 @@
 import { useSelector } from "@tanstack/react-store";
 import type { ColumnPinningState } from "@tanstack/react-table";
-import { PinIcon, PinOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PinIcon, PinOffIcon } from "@stll/ui/icons";
 
 import type {
   TableColumn,

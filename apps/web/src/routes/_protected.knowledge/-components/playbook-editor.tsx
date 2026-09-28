@@ -2,14 +2,6 @@ import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  HistoryIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -27,6 +19,14 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import {
+  ArrowLeftIcon,
+  ChevronDownIcon,
+  HistoryIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";

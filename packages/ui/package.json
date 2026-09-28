@@ -59,6 +59,7 @@
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
+    "./icons": "./src/icons.ts",
     "./input": "./src/components/input.tsx",
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",

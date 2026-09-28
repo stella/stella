@@ -5,8 +5,8 @@ import type * as React from "react";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
-import { LoaderIcon } from "lucide-react";
 
+import { LoaderIcon } from "../icons";
 import {
   BUTTON_DISPOSITION,
   blockDisabledActivation,

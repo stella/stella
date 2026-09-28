@@ -2,14 +2,6 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LucideIcon } from "lucide-react";
-import {
-  BracesIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  SplitIcon,
-  TextQuoteIcon,
-} from "lucide-react";
 import type { Transaction } from "prosemirror-state";
 import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -30,6 +22,14 @@ import {
 } from "@stll/folio-react";
 import { isSafeFieldPath } from "@stll/template-conditions";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import type { LucideIcon } from "@stll/ui/icons";
+import {
+  BracesIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  SplitIcon,
+  TextQuoteIcon,
+} from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";

@@ -1,7 +1,7 @@
-import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { CheckIcon, XIcon } from "@stll/ui/icons";
 
 import type { MarkdownFileDraft } from "@/components/inspector/use-markdown-file-draft";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";

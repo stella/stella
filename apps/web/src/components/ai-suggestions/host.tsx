@@ -21,16 +21,6 @@ import type {
   RefObject,
 } from "react";
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-  MessageSquareIcon,
-  UserIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { resolveChatComposerAction } from "@stll/chat/composer";
@@ -48,6 +38,16 @@ import {
   COMPOSER_PLACEHOLDER_CLASS,
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  MessageSquareIcon,
+  UserIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -763,7 +763,7 @@ export const PromptBar = (props: PromptBarProps) => {
                 type="button"
                 variant="ghost"
               >
-                <WandSparklesIcon aria-hidden="true" className="size-4" />
+                <AiActionIcon aria-hidden="true" className="size-4" />
                 {preset.label}
               </Button>
             </span>
@@ -1208,7 +1208,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   if (filledBy === "ai") {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.draftedByAi")}
       </span>
     );
@@ -1217,7 +1217,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
         <UserIcon aria-hidden="true" className="size-3 shrink-0" />
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.textPlusAi")}
       </span>
     );

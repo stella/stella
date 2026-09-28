@@ -4,11 +4,11 @@
  */
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { HistoryIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { HistoryIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   Menu,

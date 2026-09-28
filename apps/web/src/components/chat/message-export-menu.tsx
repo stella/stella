@@ -2,12 +2,12 @@ import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { Result } from "better-result";
-import { Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { Loader2Icon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTitle } from "@stll/ui/popover";
 import {
   Select,

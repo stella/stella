@@ -2,16 +2,6 @@ import { useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  EllipsisVerticalIcon,
-  EyeOffIcon,
-  FileUpIcon,
-  GripVerticalIcon,
-  PaletteIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -30,6 +20,16 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  EllipsisVerticalIcon,
+  EyeOffIcon,
+  FileUpIcon,
+  GripVerticalIcon,
+  PaletteIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";

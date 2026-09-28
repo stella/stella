@@ -1,8 +1,8 @@
 "use client";
 
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
-import { ChevronDownIcon } from "lucide-react";
 
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 
 const Accordion = <Value = unknown,>(

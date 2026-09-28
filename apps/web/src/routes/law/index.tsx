@@ -13,13 +13,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { panic } from "better-result";
-import {
-  ActivityIcon,
-  BookOpenIcon,
-  HistoryIcon,
-  LandmarkIcon,
-  SearchIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -28,6 +21,13 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+import {
+  ActivityIcon,
+  CaseLawIcon,
+  HistoryIcon,
+  LandmarkIcon,
+  SearchIcon,
+} from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -254,7 +254,7 @@ function LawHomePending() {
 
 /** The section's mark over the question, as the chat home greets. */
 const LawHomeGreeting = ({ children }: { children: string }) => (
-  <LandingGreeting icon={<BookOpenIcon className="size-6" />}>
+  <LandingGreeting icon={<CaseLawIcon className="size-6" />}>
     {children}
   </LandingGreeting>
 );

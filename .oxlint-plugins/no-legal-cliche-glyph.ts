@@ -6,8 +6,8 @@
 //
 // Replacements, by what the glyph actually stands for:
 //   court            -> LandmarkIcon
-//   decision/opinion -> FileTextIcon, or BookOpenIcon for a collection
-//   the case-law section -> the glyph the sidebar's law entry already uses
+//   decision/opinion -> FileTextIcon, or LibraryIcon for a collection
+//   the case-law section -> CaseLawIcon from @stll/ui/icons
 //
 // Flagged, each at its own site so the replacement decision is reported where
 // it has to be made:
@@ -19,8 +19,10 @@
 //   any other lucide glyph, including the `Scale3d` family (a geometry
 //   transform, not a balance) and a local component named `Scale`.
 //
-// The bindings resolve through their `lucide-react` import, so a same-named
-// local component or a re-export from elsewhere is out of scope. `Hammer` and
+// The bindings resolve through their `lucide-react` import or the shared icon
+// module (`@stll/ui/icons`), and a re-export from lucide is reported too, so
+// the icon module cannot hand the glyph on. A same-named local component is
+// out of scope. `Hammer` and
 // `Weight` are not in the set: lucide draws them as a tool and a gym plate,
 // and neither reads as a gavel or a balance.
 
@@ -28,14 +30,25 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged } from "@oxlint/plugins";
 
 import {
+  canonicalModuleId,
   getImportLocalName,
   getImportedName,
+  getPropertyName,
   isAstNode,
   isIdentifier,
   jsxName,
+  repoRelativeFilename,
 } from "./utils.ts";
 
 const LUCIDE_MODULE = "lucide-react";
+const ICON_MODULE = "packages/ui/src/icons";
+
+// lucide itself, or the shared icon module that re-exports it (by package
+// name, or relatively from inside packages/ui).
+const isIconSource = (source: string, importerRepoPath: string): boolean =>
+  source === LUCIDE_MODULE ||
+  source === "@stll/ui/icons" ||
+  canonicalModuleId(source, importerRepoPath) === ICON_MODULE;
 
 // lucide exports the plain, `Icon`-suffixed and `Lucide`-prefixed alias of
 // every glyph, and each is a separate named export a caller can reach for.
@@ -85,9 +98,8 @@ export default eslintCompatPlugin({
             "and gavel glyphs are legal cliché: overdrawn across the " +
             "category, and this design system does not use them. Name the " +
             "concept instead — a court is <LandmarkIcon>, a decision is " +
-            "<FileTextIcon> (<BookOpenIcon> for a collection of them), and " +
-            "the case-law section takes the glyph its sidebar entry already " +
-            "uses.",
+            "<FileTextIcon> (<LibraryIcon> for a collection of them), and " +
+            "the case-law section is <CaseLawIcon> from '@stll/ui/icons'.",
         },
       },
       createOnce(context) {
@@ -112,7 +124,11 @@ export default eslintCompatPlugin({
                 !isAstNode(statement) ||
                 statement.type !== "ImportDeclaration" ||
                 !isAstNode(statement.source) ||
-                statement.source.value !== LUCIDE_MODULE ||
+                typeof statement.source.value !== "string" ||
+                !isIconSource(
+                  statement.source.value,
+                  repoRelativeFilename(context),
+                ) ||
                 !Array.isArray(statement.specifiers)
               ) {
                 continue;
@@ -130,7 +146,9 @@ export default eslintCompatPlugin({
             }
           },
           ImportDeclaration(node) {
-            if (node.source.value !== LUCIDE_MODULE) {
+            if (
+              !isIconSource(node.source.value, repoRelativeFilename(context))
+            ) {
               return;
             }
             if (!Array.isArray(node.specifiers)) {
@@ -138,6 +156,19 @@ export default eslintCompatPlugin({
             }
             for (const specifier of node.specifiers) {
               const imported = getImportedName(specifier);
+              if (imported !== null && BANNED_IMPORTS.has(imported)) {
+                report(specifier, imported);
+              }
+            }
+          },
+          // `export { GavelIcon } from "lucide-react"`: the icon module (or
+          // any file) handing the glyph on.
+          ExportNamedDeclaration(node) {
+            if (node.source?.value !== LUCIDE_MODULE) {
+              return;
+            }
+            for (const specifier of node.specifiers) {
+              const imported = getPropertyName(specifier.local);
               if (imported !== null && BANNED_IMPORTS.has(imported)) {
                 report(specifier, imported);
               }

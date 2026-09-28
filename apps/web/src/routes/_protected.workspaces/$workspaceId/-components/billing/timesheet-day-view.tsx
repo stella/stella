@@ -2,13 +2,13 @@ import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";

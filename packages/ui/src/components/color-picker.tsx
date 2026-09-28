@@ -4,8 +4,8 @@ import { Suspense, lazy, useState } from "react";
 import type * as React from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
+import { CheckIcon, ChevronDownIcon } from "../icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 

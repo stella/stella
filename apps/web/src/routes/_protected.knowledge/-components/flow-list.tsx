@@ -1,7 +1,7 @@
-import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
 import { FlowSwitch } from "@/components/flows/flow-switch";

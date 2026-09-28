@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
-import { ArrowDownIcon, ArrowUpIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -14,6 +13,7 @@ import {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";

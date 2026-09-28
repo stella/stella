@@ -8,11 +8,11 @@ import type {
   SetStateAction,
 } from "react";
 
-import { CheckIcon, GitCommitHorizontalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import { CheckIcon, GitCommitHorizontalIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

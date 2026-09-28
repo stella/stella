@@ -1,11 +1,12 @@
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
 import {
   CheckIcon,
   CircleDashedIcon,
   LoaderIcon,
   NetworkIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
+} from "@stll/ui/icons";
 
 import type {
   ChatUITools,

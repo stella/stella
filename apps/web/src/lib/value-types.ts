@@ -18,8 +18,8 @@ import {
   LandmarkIcon,
   TagsIcon,
   ToggleLeftIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 

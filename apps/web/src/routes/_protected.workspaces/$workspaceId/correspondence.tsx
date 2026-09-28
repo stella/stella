@@ -8,11 +8,11 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { CopyIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";

@@ -3,7 +3,6 @@ import { useId, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -16,6 +15,7 @@ import {
 } from "@stll/catalogue/schema";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
+import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

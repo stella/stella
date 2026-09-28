@@ -26,6 +26,13 @@ import {
   useMatch,
   useRouterState,
 } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/react/shallow";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronRightIcon,
   CircleHelpIcon,
@@ -37,14 +44,7 @@ import {
   PlusIcon,
   SearchIcon,
   UsersIcon,
-} from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/react/shallow";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
