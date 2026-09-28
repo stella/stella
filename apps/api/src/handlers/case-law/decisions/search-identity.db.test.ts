@@ -232,7 +232,12 @@ test("a docket or ECLI held in both the row and its identifiers is one hit", asy
   const byDocket = await findDecisionIdsByIdentity({
     caseLawDb,
     country: "CZE",
-    identity: { type: "identifier", kind: "docket", value: "23 Cdo 1572/2012" },
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "23 Cdo 1572/2012",
+    },
   });
   expect(byDocket).toEqual([supremeId]);
 
