@@ -711,6 +711,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
+    p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
     p
       .index("case_law_decisions_live_legacy_raw_source_idx")
       .on(t.sourceId, t.id)

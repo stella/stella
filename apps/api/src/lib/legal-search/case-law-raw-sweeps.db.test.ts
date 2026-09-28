@@ -3,6 +3,8 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -113,6 +115,68 @@ test(
     expect(plan.join("\n")).toContain(
       "case_law_decisions_live_legacy_raw_source_idx",
     );
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "migration indexes match the schema-built source indexes",
+  async () => {
+    for (const [directory, indexName] of [
+      [
+        "20260928160000_case_law_live_legacy_raw_source_idx",
+        "case_law_decisions_live_legacy_raw_source_idx",
+      ],
+      [
+        "20260928160100_case_law_source_id_page_idx",
+        "case_law_decisions_source_id_page_idx",
+      ],
+    ]) {
+      const migration = readFileSync(
+        nodePath.resolve(
+          import.meta.dir,
+          "../../../drizzle",
+          directory,
+          "migration.sql",
+        ),
+        "utf-8",
+      );
+      const create = migration
+        .split("--> statement-breakpoint")
+        .find((part) =>
+          part.includes(`CREATE INDEX CONCURRENTLY "${indexName}"`),
+        );
+      if (create === undefined) {
+        panic(`Migration has no CREATE INDEX for ${indexName}.`);
+      }
+      const copyName = `${indexName}_migration`;
+      await client.query(
+        create
+          .slice(create.indexOf("CREATE INDEX CONCURRENTLY"))
+          .trim()
+          .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
+          .replace(`"${indexName}"`, () => `"${copyName}"`),
+      );
+      const definitions = await client.query(
+        `SELECT pg_get_indexdef('${indexName}'::regclass) AS schema_definition,
+                pg_get_indexdef('${copyName}'::regclass) AS migration_definition`,
+      );
+      const row = definitions.rows.at(0);
+      if (!isRecord(row)) {
+        panic("Index comparison returned no row.");
+      }
+      const schemaDefinition = row["schema_definition"];
+      const migrationDefinition = row["migration_definition"];
+      if (
+        typeof schemaDefinition !== "string" ||
+        typeof migrationDefinition !== "string"
+      ) {
+        panic("Index comparison returned no definitions.");
+      }
+      expect(
+        schemaDefinition.replace(indexName, () => "comparison_index"),
+      ).toBe(migrationDefinition.replace(copyName, () => "comparison_index"));
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
