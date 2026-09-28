@@ -156,21 +156,84 @@ const lostParts = (stored: RawPart[], parts: RawPart[]): unknown[] => {
       ) {
         lost.push({ approved: approvedOf(part), toolCallId: callId });
       }
+      if (!Bun.deepEquals(inputOf(kept), inputOf(part))) {
+        lost.push({ input: inputOf(part), toolCallId: callId });
+      }
+      const output = outputOf(part);
       if (
-        part["output"] !== undefined &&
-        kept["output"] === undefined &&
-        !parts.some(
-          (candidate) =>
-            candidate["type"] === "tool-result" &&
-            callIdOf(candidate) === callId,
+        output !== undefined &&
+        !resultsOf(parts, callId).some((result) =>
+          Bun.deepEquals(result, output),
         )
       ) {
-        lost.push({ output: callId });
+        lost.push({ output, toolCallId: callId });
+      }
+    }
+    if (part["type"] === "tool-result") {
+      const content = parsedJson(part["content"]);
+      if (
+        typeof part["content"] === "string" &&
+        !resultsOf(parts, callId).some((result) =>
+          Bun.deepEquals(result, content),
+        )
+      ) {
+        lost.push({ result: content, toolCallId: callId });
       }
     }
   }
   return lost;
 };
+
+/** `text` parsed as JSON, or `text` itself when it is not JSON. */
+const parsedJson = (text: unknown): unknown => {
+  if (typeof text !== "string") {
+    return text;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+/**
+ * A tool call's input, in any envelope: v3's `{ status, value }` or
+ * `{ status: "raw", rawArguments }`, v2's bare `input`, or the `arguments`
+ * text a served call carries.
+ */
+const inputOf = (part: RawPart): unknown => {
+  const input = part["input"];
+  if (isRecord(input) && input["status"] === "parsed" && "value" in input) {
+    return input["value"];
+  }
+  if (isRecord(input) && input["status"] === "raw") {
+    return parsedJson(input["rawArguments"]);
+  }
+  return input === undefined ? parsedJson(part["arguments"]) : input;
+};
+
+/** A tool call's output: v3 stores it as `{ value }`, v2 and a served call
+ *  bare. */
+const outputOf = (part: RawPart): unknown => {
+  const output = part["output"];
+  return isRecord(output) &&
+    Object.keys(output).length === 1 &&
+    "value" in output
+    ? output["value"]
+    : output;
+};
+
+/** Every result `parts` carry for `callId`: the call's output, and each
+ *  tool result's content. */
+const resultsOf = (parts: RawPart[], callId: string): unknown[] =>
+  parts
+    .filter((candidate) => callIdOf(candidate) === callId)
+    .map((candidate) =>
+      candidate["type"] === "tool-call"
+        ? outputOf(candidate)
+        : parsedJson(candidate["content"]),
+    )
+    .filter((result) => result !== undefined);
 
 /** Everything a page serves of `threadId`, every page of it. */
 const readServed = async (

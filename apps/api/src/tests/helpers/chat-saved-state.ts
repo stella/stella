@@ -87,8 +87,8 @@ export const findUnlistedChatDataMigrations = (since: string): string[] =>
       statementsOf(name).some((statement) =>
         SAVED_STATE_TABLES.some((table) =>
           new RegExp(
-            String.raw`^\s*(UPDATE|INSERT INTO|DELETE FROM)\s+"?${table}"?\b`,
-            "mu",
+            String.raw`\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(ONLY\s+)?("?public"?\.)?"?${table}"?(\s|\(|$)`,
+            "imu",
           ).test(statement),
         ),
       ),

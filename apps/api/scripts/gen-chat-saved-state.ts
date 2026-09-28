@@ -11,8 +11,14 @@ import path from "node:path";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
 const TEST = "src/handlers/chat/saved-state-compat.integration.test.ts";
+const FIXTURES = path.join(
+  API_ROOT,
+  "src/handlers/chat/__fixtures__/saved-state",
+);
 
 const name = process.argv[2] ?? `main-${new Date().toISOString().slice(0, 10)}`;
+const target = path.join(FIXTURES, `${name}.json`);
+const startedAt = Date.now();
 const child = Bun.spawn(
   ["bun", "run", "test", TEST, "-t", "cover the shape the current code stores"],
   {
@@ -22,8 +28,12 @@ const child = Bun.spawn(
     stdout: "inherit",
   },
 );
-// The run itself still fails on the old fixture set; the file is written.
+// The run fails on the old fixture set once it has written the file, so
+// success is the file itself: written by this run, not left by an earlier one.
 await child.exited;
-console.log(
-  `Wrote ${path.join("src/handlers/chat/__fixtures__/saved-state", `${name}.json`)}`,
-);
+const written = Bun.file(target);
+if (!(await written.exists()) || written.lastModified < startedAt) {
+  console.error(`No fixture was written to ${target}`);
+  process.exit(1);
+}
+console.log(`Wrote ${target}`);
