@@ -17,7 +17,10 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
-import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import {
+  lockDesktopEditTarget,
+  lockDocxEditTarget,
+} from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -52,6 +55,11 @@ export type FileVersionWritePolicy =
     }
   | {
       type: "collaboration-room-publish";
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+      filePropertyId: SafeId<"property">;
+    }
+  | {
+      type: "pdf-signature";
       expectedCurrentVersionId: SafeId<"entityVersion">;
       filePropertyId: SafeId<"property">;
     };
@@ -294,8 +302,12 @@ export const writeFileVersion = async ({
       }
       break;
     }
-    case "collaboration-room-publish": {
-      await lockDocxEditTarget({
+    // A signed PDF and a published collaboration snapshot both replace one
+    // named file property from a pinned base, and both must not land while a
+    // desktop session holds that file open.
+    case "collaboration-room-publish":
+    case "pdf-signature": {
+      await lockDesktopEditTarget({
         entityId,
         propertyId: writePolicy.filePropertyId,
         tx,
@@ -321,7 +333,8 @@ export const writeFileVersion = async ({
 
   const locksFileProperty =
     writePolicy.type === "automatic-docx-edit" ||
-    writePolicy.type === "collaboration-room-publish";
+    writePolicy.type === "collaboration-room-publish" ||
+    writePolicy.type === "pdf-signature";
   const targetsFileProperty =
     locksFileProperty ||
     writePolicy.type === "append-derived-file-from-version";

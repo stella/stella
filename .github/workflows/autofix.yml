@@ -160,7 +160,7 @@ jobs:
         run: |
           set -euo pipefail
           files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
-          inputs='^(apps/api/|packages/|apps/web/src/generated/|apps/web/package\.json$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
+          inputs='^(apps/api/|packages/|apps/web/src/(generated/|routes/|routeTree\.gen\.ts$)|apps/web/(package\.json|vite\.config\.ts|route-tree\.config\.ts|scripts/generate-route-tree\.ts)$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
           if [[ "$(wc -l <<<"$files")" -ge 3000 ]] || grep -qE "$inputs" <<<"$files"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
@@ -216,6 +216,9 @@ jobs:
       - name: Regenerate the web API types
         run: bun --filter @stll/api gen:web-api-types
 
+      - name: Regenerate the route tree
+        run: bun --filter @stll/web generate:route-tree
+
       # --write records exact numbers, so it runs only when a row is past its
       # tolerance; a within-tolerance change stays unrewritten. The drift
       # lands as a reviewable diff on the pull request.
@@ -250,6 +253,7 @@ jobs:
             "apps/api/src/mcp/apps/*/generated/app.html.txt"
             apps/api/src/mcp/generated/capability-dispatch.ts
             apps/web/src/generated/api-routes.gen.ts
+            apps/web/src/routeTree.gen.ts
             chatgpt-app-submission.json
             docs/capability-coverage.md
             docs/module-ownership.md

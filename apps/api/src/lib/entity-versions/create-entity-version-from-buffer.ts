@@ -57,7 +57,7 @@ class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
   message: string;
 }> {}
 
-type EntityVersionTargetErrorCode = EntityVersionTargetError["code"];
+export type EntityVersionTargetErrorCode = EntityVersionTargetError["code"];
 
 type CreateEntityVersionFromBufferInput = {
   safeDb: SafeDb;

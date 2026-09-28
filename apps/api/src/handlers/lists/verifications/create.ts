@@ -18,7 +18,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
+import {
+  VERIFICATION_PIPELINE_VERSION,
+  VERIFICATION_RUN_ACTIVE_STATUSES,
+} from "@/api/lib/lists/verification/contract";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
 import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
@@ -189,6 +192,7 @@ const createVerification = createSafeHandler(
             contentSha256: file.sha256Hex,
             evidence: evidence.evidence,
             status: "queued",
+            pipelineVersion: VERIFICATION_PIPELINE_VERSION,
             requestedBy: user.id,
           })
           .onConflictDoNothing({

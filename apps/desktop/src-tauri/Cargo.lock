@@ -4756,6 +4756,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "stella-desktop-macos",
+ "stella-desktop-macos-signing",
  "sys-locale",
  "tauri",
  "tauri-build",
@@ -4790,6 +4791,17 @@ dependencies = [
  "objc2-foundation",
  "objc2-web-kit",
  "tauri",
+]
+
+[[package]]
+name = "stella-desktop-macos-signing"
+version = "0.0.1"
+dependencies = [
+ "core-foundation 0.10.1",
+ "hex",
+ "security-framework",
+ "security-framework-sys",
+ "sha2 0.11.0",
 ]
 
 [[package]]

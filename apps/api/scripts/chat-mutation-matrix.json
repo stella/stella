@@ -479,6 +479,34 @@
       "oracle": "chat.provider-wire.one-terminal"
     },
     {
+      "id": "openai-tool-schema-strict",
+      "fix": "maintenance",
+      "behaviour": "The OpenAI adapter offers a tool whose schema strict mode accepts as a strict tool.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/tools/function-tool.js",
+      "search": "\t\tparameters: jsonSchema,\n\t\tstrict: true",
+      "replace": "\t\tparameters: jsonSchema,\n\t\tstrict: false",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai tool-call"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
+      "id": "wire-request-shape-reads-init-headers",
+      "fix": "maintenance",
+      "behaviour": "A request's shape is read from what fetch sends, with the init's headers over the request's.",
+      "status": "active",
+      "file": "src/tests/helpers/provider-wire-replay.ts",
+      "search": "? new Request(input, init)",
+      "replace": "? input",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "a header fetch's init overrides is the header the request is pinned by"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
       "id": "new-message-resets-interrupts",
       "fix": "#3885",
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
@@ -633,6 +661,34 @@
       "oracle": "chat.wire.snapshot-served"
     },
     {
+      "id": "approval-answer-in-its-step",
+      "fix": "#4020",
+      "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "stays answered right after its step when the model asks for a call after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "approval-answer-in-its-step-dispatched",
+      "fix": "#4020",
+      "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
+      "replace": "      messages,",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "keeps a denial ahead of the approved call it was answered with"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
       "id": "interrupted-closes-cut-off-calls",
       "fix": "#3994",
       "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
@@ -659,6 +715,20 @@
         "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
       },
       "oracle": "chat.ledger.pending"
+    },
+    {
+      "id": "reader-decodes-v2-envelope",
+      "fix": "saved-state",
+      "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-parts.ts",
+      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.persisted.past-release-loads"
     },
     {
       "id": "snapshot-reasoning-keeps-its-step",
