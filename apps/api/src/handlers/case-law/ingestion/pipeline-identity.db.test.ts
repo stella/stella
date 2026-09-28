@@ -582,6 +582,61 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
     });
 
+    test("proves each legacy candidate when the cut and uncut dockets both hold one", async () => {
+      const uncut = "0T/46/2019- II.";
+      const siblingUrl = "https://publisher.test/cut-docket-sibling";
+      const legacyUrl = "https://publisher.test/uncut-docket-legacy";
+      await processDecision({
+        input: {
+          ...decisionAt("Cut docket sibling", undefined),
+          caseNumber: "0T/46/2019",
+          sourceUrl: siblingUrl,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket legacy", undefined),
+          caseNumber: uncut,
+          sourceUrl: legacyUrl,
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+      const [sibling] = await docketRows("0T/46/2019");
+      const [legacyRow] = await docketRows(uncut);
+
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket legacy", "uncut-docket-legacy-document"),
+          caseNumber: uncut,
+          legacySourceUrls: [legacyUrl],
+          rawHash: "hash-uncut-docket-legacy-identified",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      expect(await docketRows(uncut)).toEqual([]);
+      expect(await docketRows("0T/46/2019")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "uncut-docket-legacy-document",
+        },
+        {
+          id: sibling?.id ?? expect.unreachable(),
+          sourceDocumentId: null,
+        },
+      ]);
+    });
+
     test("keeps a legacy row whose ECLI names a sibling under the docket", async () => {
       const caseNumber = "Pl.ÚS 19/01";
       const legacyUrl = "https://publisher.test/sibling-ecli-legacy";

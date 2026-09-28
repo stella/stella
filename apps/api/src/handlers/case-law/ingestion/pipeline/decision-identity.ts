@@ -14,6 +14,7 @@ import {
   DECISION_DATE_OUT_OF_BOUNDS,
   DECISION_DOCKET_NOT_CANONICAL,
   MAX_LOGGED_DECISION_DATE_LENGTH,
+  MAX_LEGACY_DOCKET_CANDIDATES,
   MAX_LOGGED_DOCKET_LENGTH,
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -323,10 +324,10 @@ const findExistingDecisionTx = async (
   // release may adopt a legacy null-id row, but only after proving which
   // publisher document produced it. A docket can publish siblings, so
   // encounter order is not identity.
-  const legacy =
+  const legacyCandidates =
     identified || !observed.sourceDocumentId || claimedDecisionId !== undefined
-      ? undefined
-      : await tx.query.caseLawDecisions.findFirst({
+      ? []
+      : await tx.query.caseLawDecisions.findMany({
           where: {
             sourceId: { eq: sourceId },
             caseNumber: { in: legacyCaseNumbers },
@@ -334,31 +335,35 @@ const findExistingDecisionTx = async (
             sourceDocumentId: { isNull: true },
           },
           columns: IDENTITY_COLUMNS,
+          orderBy: { id: "asc" },
+          limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });
   // ECLIs compare the way identifiers are looked up: an adapter release
   // may spell the same identifier with different case or separators.
-  // The legacy candidate is already pinned to this document's docket.
-  const legacyEcliKey =
-    legacy?.ecli === null || legacy?.ecli === undefined
-      ? undefined
-      : ecliComparisonKey(legacy.ecli);
+  // Every legacy candidate is already pinned to this document's docket;
+  // each one is proved on its own, since siblings share that docket.
   const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
     (ecli) => {
       const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
       return key === undefined ? [] : [key];
     },
   );
-  const ecliMatches =
-    legacyEcliKey !== undefined && incomingEcliKeys.includes(legacyEcliKey);
-  const legacyEcliContradicts =
-    legacyEcliKey !== undefined && incomingEcliKeys.length > 0 && !ecliMatches;
-  const sourceUrlMatches =
-    legacy !== undefined &&
-    !legacyEcliContradicts &&
-    legacy.sourceUrl !== null &&
-    observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
-  const legacyMatches = ecliMatches || sourceUrlMatches;
-  const existing = identified ?? (legacyMatches ? legacy : undefined);
+  const legacyMatches = (legacy: (typeof legacyCandidates)[number]) => {
+    const legacyEcliKey =
+      legacy.ecli === null ? undefined : ecliComparisonKey(legacy.ecli);
+    const ecliMatches =
+      legacyEcliKey !== undefined && incomingEcliKeys.includes(legacyEcliKey);
+    const legacyEcliContradicts =
+      legacyEcliKey !== undefined &&
+      incomingEcliKeys.length > 0 &&
+      !ecliMatches;
+    const sourceUrlMatches =
+      !legacyEcliContradicts &&
+      legacy.sourceUrl !== null &&
+      observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
+    return ecliMatches || sourceUrlMatches;
+  };
+  const existing = identified ?? legacyCandidates.find(legacyMatches);
   return {
     claimedDecisionId,
     existing,

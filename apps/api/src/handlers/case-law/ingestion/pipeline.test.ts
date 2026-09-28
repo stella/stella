@@ -54,6 +54,7 @@ import {
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -235,7 +236,7 @@ describe("sanitizeResult — docket grammar", () => {
     expect(sanitizeResult(input).caseNumber).toBe("33 Cdo 1751/2023- II.");
   });
 
-  test.each([
+  test.each<[string, string, ObservedDocket["type"]]>([
     ["CZE", "21 Cdo 1234/2020-5", "kept"],
     ["HUN", "5.P.21.203/2004.", "kept"],
     ["CZE", "33 Cdo 1751/2023 civil", "unparsed"],

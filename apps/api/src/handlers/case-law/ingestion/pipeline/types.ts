@@ -48,6 +48,13 @@ export type DecisionRowWriteStatus =
 export const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
 
 /**
+ * Legacy null-id rows one docket may hold. A docket publishes a handful of
+ * documents at most; the bound keeps a pathological docket from loading an
+ * unbounded row set inside the identity transaction.
+ */
+export const MAX_LEGACY_DOCKET_CANDIDATES = 32;
+
+/**
  * Log event emitted when a source states a decision date the ingestion
  * boundary cannot accept — a non-calendar day or a year outside the range a
  * decision can carry. Reported at WARN: the document is still stored, with
